@@ -50,21 +50,21 @@ const LATEST_LEADS = [
   { who: "Ryan Whitfield", source: "Instagram ad", when: "1d" },
 ];
 
-/** The little pop strokes off the greeting's corners, like the mock. */
-function Pop({ flip = false }: { flip?: boolean }) {
+/** The pop strokes off the greeting's corners — big enough to notice. */
+function Pop({ mirror = false }: { mirror?: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
       aria-hidden
-      className={`h-5 w-5 text-ink ${flip ? "rotate-180" : ""}`}
+      className={`h-8 w-8 text-ink ${mirror ? "-scale-x-100" : ""}`}
       fill="none"
       stroke="currentColor"
-      strokeWidth={2.2}
+      strokeWidth={2}
       strokeLinecap="round"
     >
-      <path d="M4 14 L8 10" />
-      <path d="M9 6 L11 11" />
-      <path d="M16 4 L15 9" />
+      <path d="M3 15 L9 10" />
+      <path d="M9 4 L12 11" />
+      <path d="M18 3 L16 10" />
     </svg>
   );
 }
@@ -72,11 +72,11 @@ function Pop({ flip = false }: { flip?: boolean }) {
 /** Four bands, matching the portal's greeting — the OS should feel awake. */
 function greeting(): string {
   const h = new Date().getHours();
-  if (h < 5) return "Still up?";
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  if (h < 22) return "Good evening";
-  return "Still up?";
+  if (h < 5) return "Still up, James?";
+  if (h < 12) return "Good morning, James";
+  if (h < 17) return "Good afternoon, James";
+  if (h < 22) return "Good evening, James";
+  return "Still up, James?";
 }
 
 export default function Dashboard() {
@@ -93,27 +93,19 @@ export default function Dashboard() {
 
   return (
     <>
-      {/* ── One compact row: greeting + scribble left, search + bell right. */}
-      <div className="fade-up flex items-center justify-between gap-6">
-        <div className="flex items-end gap-4">
-          <div className="relative py-2">
-            <span className="absolute -left-5 -top-1"><Pop /></span>
-            <h1 className="text-[34px] leading-tight">{greeting()}</h1>
-            <span className="absolute -bottom-1 -right-6"><Pop flip /></span>
-            <p className="mt-1 text-[13px] text-muted">
-              Here&apos;s what&apos;s happening with your lettings business today.
-            </p>
-          </div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/illustrations/scribbles/s-100.svg"
-            alt=""
-            aria-hidden
-            className="hidden h-16 w-16 shrink-0 opacity-80 md:block"
-          />
+      {/* ── The header sits on a ledge: a rule right across, with the
+             looking-out-the-window illustration perched ON the line. */}
+      <div className="fade-up relative flex items-end justify-between gap-6 border-b border-line/80">
+        <div className="relative mt-2 pb-5">
+          <span className="absolute -left-8 -top-5"><Pop /></span>
+          <span className="absolute -right-9 -top-5"><Pop mirror /></span>
+          <h1 className="text-[30px] leading-tight">{greeting()}</h1>
+          <p className="mt-1 text-[13px] text-muted">
+            Here&apos;s what&apos;s happening with your lettings business today.
+          </p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="flex shrink-0 items-end gap-3 self-end pb-5">
           <label className="hidden w-60 items-center gap-2.5 rounded-full border border-line/80 px-4 py-2.5 transition-colors focus-within:border-ink sm:flex">
             <DoodleIcon name="search" size={15} className="shrink-0 text-muted" />
             <input
@@ -131,20 +123,28 @@ export default function Dashboard() {
             <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent" />
           </button>
         </div>
+
+        {/* Her floor line lands exactly on the page rule — sat on the ledge. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/illustrations/notioly/looking-out-the-window.svg"
+          alt=""
+          aria-hidden
+          className="pointer-events-none absolute bottom-0 right-[350px] hidden h-28 xl:block"
+        />
       </div>
 
       {/* ── Four across the top, outline only. */}
-      <div className="mt-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
         {STATS.map((s) => (
           <Link
             key={s.label}
             href={s.href}
             className="fade-up group rounded-2xl border border-line/80 p-4 transition-colors hover:border-ink/40"
           >
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-soft">
-                <DoodleIcon name={s.icon} size={19} className="text-accent-dark" />
-              </span>
+            {/* Bare icons — no circle behind them; the page breathes better. */}
+            <div className="flex items-center gap-2.5">
+              <DoodleIcon name={s.icon} size={20} className="text-accent-dark" />
               <span className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">
                 {s.label}
               </span>

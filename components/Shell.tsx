@@ -25,11 +25,12 @@ const BACK = [
   { href: "/finances", label: "Finances", icon: "wallet" },
 ];
 
-/** Clay is the house default; the attribute only exists for the others. */
+/** Clay is the house default; the attribute only exists for the others.
+ *  Each palette brings its own cut of the logo — the pin matches the accent. */
 const ACCENTS = [
-  { id: "", label: "Warm Clay", dot: "#de968f" },
-  { id: "blush", label: "Blush", dot: "#f0b3bb" },
-  { id: "red", label: "Classic Red", dot: "#e31f36" },
+  { id: "", label: "Warm Clay", dot: "#de968f", logo: "/brand/logo-clay.png" },
+  { id: "blush", label: "Blush", dot: "#f0b3bb", logo: "/brand/logo-blush.png" },
+  { id: "red", label: "Classic Red", dot: "#e31f36", logo: "/brand/logo-red.png" },
 ];
 
 function applyAccent(id: string) {
@@ -53,7 +54,7 @@ function NavLink({
       // Soft-tint active state: highlight by reducing contrast, not adding it.
       className={`hand flex items-center gap-3 rounded-xl py-2.5 text-[13.5px] transition-colors ${
         collapsed ? "justify-center px-0" : "px-3"
-      } ${active ? "bg-accent-soft font-medium" : "text-muted hover:bg-page hover:text-ink"}`}
+      } ${active ? "bg-accent-soft/50 font-medium" : "text-muted hover:bg-page hover:text-ink"}`}
     >
       <DoodleIcon
         name={item.icon}
@@ -106,23 +107,16 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           collapsed ? "w-[72px] px-2.5" : "w-60 px-4"
         }`}
       >
-        {/* Wordmark + the collapse toggle. */}
+        {/* Wordmark + the collapse toggle. The logo's pin follows the accent. */}
         <div className={`flex items-center ${collapsed ? "flex-col gap-2" : "justify-between"} px-1`}>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             <img
-              src="/illustrations/notioly/buildings.svg"
+              src={(ACCENTS.find((a) => a.id === accent) ?? ACCENTS[0]).logo}
               alt=""
               aria-hidden
-              className="h-8 w-8 shrink-0"
+              className="h-10 w-10 shrink-0 object-contain"
             />
-            {!collapsed && (
-              <div>
-                <div className="hand text-xl leading-none">TLE OS</div>
-                <div className="mt-0.5 text-[8.5px] font-bold uppercase tracking-wider text-accent-dark">
-                  Internal preview
-                </div>
-              </div>
-            )}
+            {!collapsed && <div className="hand text-xl leading-none">TLE OS</div>}
           </div>
           <button
             type="button"
@@ -134,7 +128,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        <nav className="mt-6 flex flex-col gap-1">
+        {/* The break bar, then the nav sits a touch lower. */}
+        <div className="mt-4 border-t border-line/70" />
+        <nav className="mt-4 flex flex-col gap-1">
           {FRONT.map((item) => (
             <NavLink
               key={item.href}
