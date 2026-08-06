@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
+import PageHeader from "@/components/PageHeader";
 import { Card, FlowTag, Pill } from "@/components/Wire";
 
 /**
@@ -50,25 +51,6 @@ const LATEST_LEADS = [
   { who: "Ryan Whitfield", source: "Instagram ad", when: "1d" },
 ];
 
-/** The pop strokes off the greeting's corners — big enough to notice. */
-function Pop({ mirror = false }: { mirror?: boolean }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden
-      className={`h-8 w-8 text-ink ${mirror ? "-scale-x-100" : ""}`}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-    >
-      <path d="M3 15 L9 10" />
-      <path d="M9 4 L12 11" />
-      <path d="M18 3 L16 10" />
-    </svg>
-  );
-}
-
 /** Four bands, matching the portal's greeting — the OS should feel awake. */
 function greeting(): string {
   const h = new Date().getHours();
@@ -93,47 +75,11 @@ export default function Dashboard() {
 
   return (
     <>
-      {/* ── The header sits on a ledge: a rule right across, with the
-             looking-out-the-window illustration perched ON the line. */}
-      <div className="fade-up relative flex items-end justify-between gap-6 border-b border-line/80 pt-10">
-        <div className="relative mb-2 pb-9 pl-2 pt-8">
-          {/* One flick off the top-left, its mirror off the bottom-right. */}
-          <span className="absolute -top-2 left-0"><Pop /></span>
-          <span className="absolute -right-12 bottom-4 rotate-180"><Pop /></span>
-          <h1 className="text-[30px] leading-tight">{greeting()}</h1>
-          <p className="mt-2.5 text-[13px] text-muted">
-            Here&apos;s what&apos;s happening with your lettings business today.
-          </p>
-        </div>
-
-        <div className="flex shrink-0 items-end gap-3 self-end pb-9">
-          <label className="hidden w-60 items-center gap-2.5 rounded-full border border-line/80 px-4 py-2.5 transition-colors focus-within:border-ink sm:flex">
-            <DoodleIcon name="search" size={15} className="shrink-0 text-muted" />
-            <input
-              type="text"
-              placeholder="Search properties, tenants…"
-              className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted/70"
-            />
-          </label>
-          <button
-            type="button"
-            className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line/80"
-            title="Notifications (wireframe)"
-          >
-            <DoodleIcon name="bell" size={17} className="text-ink" />
-            <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent" />
-          </button>
-        </div>
-
-        {/* Her floor line lands exactly on the page rule — sat on the ledge. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/illustrations/notioly/looking-out-the-window.svg"
-          alt=""
-          aria-hidden
-          className="pointer-events-none absolute bottom-0 right-[350px] hidden h-28 xl:block"
-        />
-      </div>
+      <PageHeader
+        title={greeting()}
+        blurb="Here's what's happening with your lettings business today."
+        illustration="/illustrations/notioly/looking-out-the-window.svg"
+      />
 
       {/* ── Four across the top, outline only. */}
       <div className="mt-10 grid grid-cols-2 gap-4 xl:grid-cols-4">

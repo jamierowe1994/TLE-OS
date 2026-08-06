@@ -133,7 +133,7 @@ export function Pill({
   } as const;
   return (
     <span
-      className={`inline-block rounded-full px-2.5 py-1 text-[11px] font-semibold ${tones[tone]}`}
+      className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${tones[tone]}`}
     >
       {children}
     </span>

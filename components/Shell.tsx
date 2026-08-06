@@ -225,7 +225,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             Preview
           </span>
         </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8 lg:px-12">
+        <main className="mx-auto w-full max-w-[1360px] flex-1 px-5 py-8 lg:px-12">
           {children}
         </main>
       </div>
