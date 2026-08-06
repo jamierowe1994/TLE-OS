@@ -95,17 +95,18 @@ export default function Dashboard() {
     <>
       {/* ── The header sits on a ledge: a rule right across, with the
              looking-out-the-window illustration perched ON the line. */}
-      <div className="fade-up relative flex items-end justify-between gap-6 border-b border-line/80">
-        <div className="relative mt-2 pb-5">
-          <span className="absolute -left-8 -top-5"><Pop /></span>
-          <span className="absolute -right-9 -top-5"><Pop mirror /></span>
+      <div className="fade-up relative flex items-end justify-between gap-6 border-b border-line/80 pt-10">
+        <div className="relative mb-2 pb-9 pl-2 pt-8">
+          {/* One flick off the top-left, its mirror off the bottom-right. */}
+          <span className="absolute -top-2 left-0"><Pop /></span>
+          <span className="absolute -right-12 bottom-4 rotate-180"><Pop /></span>
           <h1 className="text-[30px] leading-tight">{greeting()}</h1>
-          <p className="mt-1 text-[13px] text-muted">
+          <p className="mt-2.5 text-[13px] text-muted">
             Here&apos;s what&apos;s happening with your lettings business today.
           </p>
         </div>
 
-        <div className="flex shrink-0 items-end gap-3 self-end pb-5">
+        <div className="flex shrink-0 items-end gap-3 self-end pb-9">
           <label className="hidden w-60 items-center gap-2.5 rounded-full border border-line/80 px-4 py-2.5 transition-colors focus-within:border-ink sm:flex">
             <DoodleIcon name="search" size={15} className="shrink-0 text-muted" />
             <input
@@ -135,12 +136,12 @@ export default function Dashboard() {
       </div>
 
       {/* ── Four across the top, outline only. */}
-      <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="mt-10 grid grid-cols-2 gap-4 xl:grid-cols-4">
         {STATS.map((s) => (
           <Link
             key={s.label}
             href={s.href}
-            className="fade-up group rounded-2xl border border-line/80 p-4 transition-colors hover:border-ink/40"
+            className="fade-up group rounded-2xl border border-line/80 p-5 transition-colors hover:border-ink/40"
           >
             {/* Bare icons — no circle behind them; the page breathes better. */}
             <div className="flex items-center gap-2.5">
@@ -156,7 +157,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── Three working boxes. */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <Card title="Needs attention" tag={<Pill tone="accent">{ATTENTION.length - done.size}</Pill>}>
           <ul className="space-y-2.5">
             {ATTENTION.map((a) => {
@@ -228,7 +229,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── The journey, compact, along the bottom — the pipeline snapshot. */}
-      <div className="fade-up mt-4 rounded-2xl border border-line/80 p-5">
+      <div className="fade-up mt-6 rounded-2xl border border-line/80 p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-[15px]">Pipeline snapshot</h2>
           <FlowTag from="REX + PayProp" />
