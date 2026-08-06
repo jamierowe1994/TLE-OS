@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   TLE OS design tokens — lifted from the TLE portal so the wireframe reads as
+   the same product family on day one, and so merging the pages back into the
+   portal later is a copy-paste rather than a restyle.
+--------------------------------------------------------------------------- */
+
+:root {
+  --font-body: var(--font-montserrat), system-ui, -apple-system, sans-serif;
+  --font-heading: var(--font-shantell), var(--font-montserrat), system-ui, sans-serif;
+  --font-figures: var(--font-inter), var(--font-montserrat), system-ui, sans-serif;
+
+  /* Brand — The Lettings Expert */
+  --accent: #e31f36;
+  --accent-dark: #c11a2e;
+  --accent-soft: #fef2f2;
+
+  /* Warm eggshell canvas sampled from the Notioly artwork, so the
+     illustrations sit on their native colour; white stays for cards. */
+  --ink: #101014;
+  --muted: #6b6b70;
+  --line: #d9d5ca;
+  --page: #f2f0eb;
+  --card: #ffffff;
+
+  --radius-card: 16px;
+}
+
+@theme inline {
+  --color-accent: var(--accent);
+  --color-accent-dark: var(--accent-dark);
+  --color-accent-soft: var(--accent-soft);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-page: var(--page);
+  --color-card: var(--card);
+  --font-sans: var(--font-body);
+  --radius-card: 1rem;
+}
+
+body {
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5 {
+  font-family: var(--font-heading);
+  font-weight: 500;
+}
+
+/* The handwritten face on demand — the wordmark, section titles. */
+.hand { font-family: var(--font-heading); }
+/* Figures in a plain grotesque; a column of numbers wants Inter. */
+.figures { font-family: var(--font-figures); }
+
+/* ---------------------------------------------------------------------------
+   Wireframe furniture. The dashed outline is the visual grammar for "this is
+   a wireframe block, not a finished feature" — everything drawn with it is a
+   promise, not a screen.
+--------------------------------------------------------------------------- */
+.wire-dashed {
+  border: 1.5px dashed var(--line);
+  border-radius: var(--radius-card);
+}
+
+/* Motion — a single gentle entrance, matching the portal's fade-up. */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-up { animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-up { animation: none; }
+}

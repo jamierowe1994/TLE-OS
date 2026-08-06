@@ -1,0 +1,39 @@
+import { NextRequest, NextResponse } from "next/server";
+
+/**
+ * The whole site sits behind one shared access code (OS_ACCESS_CODE on
+ * Railway). This is a private preview for Susan and Howard, not a user
+ * system — the portal's real auth arrives when the two products merge.
+ *
+ * The cookie stores a SHA-256 of the code, never the code itself, so a
+ * leaked cookie value can't be typed into the key screen.
+ *
+ * With OS_ACCESS_CODE unset (local dev) the gate stands open.
+ */
+
+async function sha256(text: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+export async function middleware(req: NextRequest) {
+  const code = process.env.OS_ACCESS_CODE;
+  if (!code) return NextResponse.next();
+
+  const cookie = req.cookies.get("os-key")?.value;
+  if (cookie && cookie === (await sha256(code))) return NextResponse.next();
+
+  const url = req.nextUrl.clone();
+  url.pathname = "/key";
+  url.search = "";
+  return NextResponse.redirect(url);
+}
+
+export const config = {
+  // Everything except the key screen itself, its API, and static assets.
+  matcher: [
+    "/((?!key|api/key|_next|icons|illustrations|favicon.ico|robots.txt).*)",
+  ],
+};
