@@ -165,13 +165,6 @@ const STAGE_TONE: Record<Stage, "accent" | "neutral" | "good"> = {
   Waiting: "neutral",
 };
 
-const STATS = [
-  { label: "New leads today", icon: "target", value: "14", hint: "+3 since yesterday" },
-  { label: "Follow-ups due", icon: "calendar", value: "8", hint: "4 due today" },
-  { label: "Unassigned", icon: "user", value: "5", hint: "needs attention" },
-  { label: "Qualified this week", icon: "shield", value: "9", hint: "+2 vs last week" },
-];
-
 const ACTIONS = [
   { label: "Call", icon: "call" },
   { label: "Email", icon: "mail" },
@@ -194,7 +187,9 @@ function Filter({ label }: { label: string }) {
 }
 
 export default function Leads() {
-  const [openId, setOpenId] = useState<string | null>("l1");
+  // Closed on arrival: the page is the inbox, full width. The panel is a
+  // consequence of picking someone, never the state you land in.
+  const [openId, setOpenId] = useState<string | null>(null);
   const open = LEADS.find((l) => l.id === openId) ?? null;
 
   return (
@@ -210,24 +205,8 @@ export default function Leads() {
         <FlowTag from="portals → REX · social → GHL" to="REX" />
       </div>
 
-      {/* ── Four stats across the top. */}
-      <div className="mt-3 grid grid-cols-2 gap-4 xl:grid-cols-4">
-        {STATS.map((s) => (
-          <div key={s.label} className="fade-up rounded-2xl border border-line/80 p-5">
-            <div className="flex items-center gap-2.5">
-              <DoodleIcon name={s.icon} size={20} className="text-accent-dark" />
-              <span className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">
-                {s.label}
-              </span>
-            </div>
-            <p className="figures mt-3 text-[34px] leading-none">{s.value}</p>
-            <p className="mt-1.5 text-[11px] font-medium text-accent-dark">{s.hint}</p>
-          </div>
-        ))}
-      </div>
-
       {/* ── The inbox, with the open lead beside it. */}
-      <div className={`mt-6 grid gap-4 ${open ? "xl:grid-cols-[2fr_1fr]" : ""}`}>
+      <div className={`mt-4 grid gap-4 ${open ? "xl:grid-cols-[2fr_1fr]" : ""}`}>
         <div className="fade-up min-w-0 rounded-2xl border border-line/80 p-5">
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-2.5">

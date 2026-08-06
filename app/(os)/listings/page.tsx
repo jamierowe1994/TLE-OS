@@ -2,6 +2,7 @@
 
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
+import PropertyPhoto from "@/components/PropertyPhoto";
 import { FlowTag, Pill } from "@/components/Wire";
 import rexSample from "@/lib/rex-sample.json";
 
@@ -26,39 +27,11 @@ type SampleListing = {
   daysOnMarket: number | null;
   lastUpdated: string | null;
   imageCount: number;
-  image: string;
+  image: string | null;
 };
 
 const LISTINGS = rexSample.listings as SampleListing[];
 const C = rexSample.counts;
-
-const STATS = [
-  {
-    label: "Current rentals",
-    icon: "home",
-    value: String(C.currentRentals),
-    hint: "live in REX",
-  },
-  {
-    label: "Published",
-    icon: "megaphone",
-    value: String(C.published),
-    hint: `${Math.round((C.published / C.currentRentals) * 100)}% of the book`,
-  },
-  {
-    label: "Let agreed",
-    icon: "key",
-    value: String(C.letAgreed),
-    hint: `${C.available} still available`,
-  },
-  {
-    label: "Draft, unpublished",
-    icon: "info",
-    value: String(C.draft),
-    hint: "not on any portal",
-    alarm: true,
-  },
-];
 
 function statusOf(l: SampleListing): { label: string; tone: "good" | "accent" | "neutral" } {
   if (l.letAgreed) return { label: "Let agreed", tone: "neutral" };
@@ -98,38 +71,8 @@ export default function Listings() {
         </button>
       </div>
 
-      {/* ── Four stats, every one measured. */}
-      <div className="mt-3 grid grid-cols-2 gap-4 xl:grid-cols-4">
-        {STATS.map((s) => (
-          <div
-            key={s.label}
-            className={`fade-up rounded-2xl border p-5 ${
-              s.alarm ? "border-accent/60" : "border-line/80"
-            }`}
-          >
-            <div className="flex items-center gap-2.5">
-              <DoodleIcon name={s.icon} size={20} className="text-accent-dark" />
-              <span className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">
-                {s.label}
-              </span>
-            </div>
-            <p className="figures mt-3 text-[34px] leading-none">{s.value}</p>
-            <p className="mt-1.5 text-[11px] font-medium text-accent-dark">{s.hint}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* The finding worth the whole page. */}
-      <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
-        <span className="font-semibold text-ink">
-          56% of the current rental book is sitting in REX as an unpublished draft
-        </span>{" "}
-        — 165 of 293, measured by walking every row. Whatever the reason, no one can
-        see it on a page today. This is the sort of thing the overlay is for.
-      </p>
-
       {/* ── The board. */}
-      <div className="fade-up mt-6 rounded-2xl border border-line/80 p-5">
+      <div className="fade-up mt-4 rounded-2xl border border-line/80 p-5">
         <div className="flex flex-wrap items-center gap-2.5">
           <label className="flex min-w-44 flex-1 items-center gap-2.5 rounded-full border border-line/80 px-3.5 py-2 focus-within:border-ink">
             <DoodleIcon name="search" size={14} className="shrink-0 text-muted" />
@@ -141,6 +84,16 @@ export default function Listings() {
           </label>
           <Filter label="All branches" />
           <Filter label="All statuses" />
+          {/* The finding, as a filter rather than a banner: 165 of 293 current
+              rentals sit in REX as unpublished drafts — 56% of the book, on no
+              portal. Measured, and actionable right here. */}
+          <button
+            type="button"
+            className="flex items-center gap-2 whitespace-nowrap rounded-full border border-accent/60 px-3.5 py-2 text-[12px] font-medium text-accent-dark transition-colors hover:bg-accent-soft/40"
+          >
+            Unpublished drafts
+            <span className="figures">{C.draft}</span>
+          </button>
           <Filter label="All property types" />
         </div>
 
@@ -170,17 +123,14 @@ export default function Listings() {
                   >
                     <td className="py-3 pr-3">
                       <span className="flex items-center gap-3">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
+                        <PropertyPhoto
                           src={l.image}
-                          alt=""
-                          aria-hidden
-                          className="h-11 w-14 shrink-0 rounded-lg object-cover"
+                          className="h-11 w-14 shrink-0 rounded-lg"
                         />
                         <span className="min-w-0">
                           <span className="hand block truncate text-[13px]">{l.name}</span>
                           <span className="block truncate text-[10.5px] text-muted">
-                            {l.locality} · {l.imageCount} photos
+                            {l.locality} · {l.imageCount ? `${l.imageCount} photos` : "no photos"}
                           </span>
                         </span>
                       </span>

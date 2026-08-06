@@ -3,6 +3,20 @@
   "note": "Static one-off READ-ONLY pull of live REX current rental listings. Not a live hookup. Bedrooms are NOT in REX's listing projection (probed: describe + 4 extra_fields variants) so no bed count is included.",
   "listings": [
     {
+      "id": "277172",
+      "name": "Apartment 10, Bloomsbury Court Beck Street",
+      "locality": "Nottingham NG1 1DG",
+      "rent": 1650,
+      "letAgreed": false,
+      "publicationStatus": "draft",
+      "availableFrom": null,
+      "epcExpiry": null,
+      "daysOnMarket": 1129,
+      "lastUpdated": "8mo ago",
+      "imageCount": 0,
+      "image": null
+    },
+    {
       "id": "295517",
       "name": "183 Walesby Lane",
       "locality": "Newark NG22 9UY",
@@ -29,6 +43,20 @@
       "lastUpdated": "8mo ago",
       "imageCount": 1,
       "image": "/rex/295547.jpg"
+    },
+    {
+      "id": "295552",
+      "name": "53 William Street",
+      "locality": "Nottingham NG10 4GB",
+      "rent": 795,
+      "letAgreed": false,
+      "publicationStatus": "draft",
+      "availableFrom": null,
+      "epcExpiry": null,
+      "daysOnMarket": 1044,
+      "lastUpdated": "8mo ago",
+      "imageCount": 0,
+      "image": null
     },
     {
       "id": "299698",
@@ -73,6 +101,20 @@
       "image": "/rex/334480.jpg"
     },
     {
+      "id": "337806",
+      "name": "296 Uttoxeter Road",
+      "locality": "Derby DE3 9AG",
+      "rent": 1000,
+      "letAgreed": false,
+      "publicationStatus": "draft",
+      "availableFrom": null,
+      "epcExpiry": null,
+      "daysOnMarket": 977,
+      "lastUpdated": "3mo ago",
+      "imageCount": 0,
+      "image": null
+    },
+    {
       "id": "339326",
       "name": "2,, 10 Cardiff Grove",
       "locality": "Luton LU1 1QH",
@@ -87,32 +129,18 @@
       "image": "/rex/339326.jpg"
     },
     {
-      "id": "367819",
-      "name": "Flat A, 41 Milton Road",
-      "locality": "Luton LU1 5JB",
-      "rent": 1300,
+      "id": "340777",
+      "name": "3 Lark Close",
+      "locality": "Corby NN18 8RS",
+      "rent": 1250,
       "letAgreed": false,
-      "publicationStatus": "published",
-      "availableFrom": "2024-03-06",
-      "epcExpiry": "2029-06-04",
-      "daysOnMarket": 869,
-      "lastUpdated": "3d ago",
-      "imageCount": 7,
-      "image": "/rex/367819.jpg"
-    },
-    {
-      "id": "480975",
-      "name": "6 Hatfield Road",
-      "locality": "St. Albans AL1 3NS",
-      "rent": 1700,
-      "letAgreed": false,
-      "publicationStatus": "published",
-      "availableFrom": "2026-08-12",
-      "epcExpiry": "2030-01-31",
-      "daysOnMarket": 590,
-      "lastUpdated": "1mo ago",
-      "imageCount": 11,
-      "image": "/rex/480975.jpg"
+      "publicationStatus": "draft",
+      "availableFrom": null,
+      "epcExpiry": null,
+      "daysOnMarket": 957,
+      "lastUpdated": "8mo ago",
+      "imageCount": 0,
+      "image": null
     }
   ],
   "counts": {
