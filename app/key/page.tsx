@@ -47,7 +47,7 @@ export default function KeyPage() {
             className="w-full rounded-2xl border border-line bg-card px-5 py-3.5 text-center text-sm outline-none focus:border-ink"
           />
           {wrong && (
-            <p className="mt-3 text-xs font-medium text-accent">
+            <p className="mt-3 text-xs font-medium text-accent-dark">
               That&apos;s not it — check the code and try again.
             </p>
           )}

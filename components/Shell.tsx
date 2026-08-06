@@ -28,7 +28,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line/70 px-4 py-6 lg:flex">
         <div className="px-3">
           <div className="hand text-3xl leading-none">TLE OS</div>
-          <div className="mt-1.5 inline-block rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent">
+          <div className="mt-1.5 inline-block rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-dark">
             Internal preview
           </div>
         </div>
@@ -49,7 +49,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 <DoodleIcon
                   name={item.icon}
                   size={17}
-                  className={active ? "text-accent" : "text-muted"}
+                  className={active ? "text-accent-dark" : "text-muted"}
                 />
                 {item.label}
               </Link>
@@ -70,7 +70,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-line/70 px-5 py-4 lg:hidden">
           <span className="hand text-2xl">TLE OS</span>
-          <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent">
+          <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-dark">
             Preview
           </span>
         </header>

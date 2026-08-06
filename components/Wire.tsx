@@ -127,7 +127,8 @@ export function Pill({
 }) {
   const tones = {
     neutral: "bg-page text-muted",
-    accent: "bg-accent-soft text-accent",
+    // Deepened clay for the text — the accent itself is too soft at 11px.
+    accent: "bg-accent-soft text-accent-dark",
     good: "bg-[#e8f5ec] text-[#1e7a3c]",
   } as const;
   return (
