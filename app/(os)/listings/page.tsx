@@ -1,14 +1,17 @@
-import { Card, FlowTag, Ghost, PageHead, Pill } from "@/components/Wire";
+"use client";
+
+import DoodleIcon from "@/components/DoodleIcon";
+import PageHeader from "@/components/PageHeader";
+import { FlowTag, Pill } from "@/components/Wire";
 import rexSample from "@/lib/rex-sample.json";
 
 /**
- * The proof-of-concept page for the whole overlay: create a listing HERE,
- * push it INTO REX, and REX carries it to Rightmove.
+ * Listings: the marketing board, and the proof-of-concept for the whole
+ * overlay — create here, push to REX, REX syndicates to the portals.
  *
- * The properties below are REAL — a one-off, read-only pull of current REX
- * rental listings (photos included) taken 6 Aug 2026. Not a live hookup yet;
- * the point is that this exact data is reachable today with the access the
- * business already holds.
+ * Everything on this page is REAL, from a read-only pull on 6 Aug 2026:
+ * the properties, their photos, their rents, their ages, and the counts
+ * across the top (every current rental walked, 293 rows).
  */
 
 type SampleListing = {
@@ -16,93 +19,243 @@ type SampleListing = {
   name: string;
   locality: string;
   rent: number | null;
-  advertisedAs: string | null;
   letAgreed: boolean;
+  publicationStatus: string | null;
   availableFrom: string | null;
   epcExpiry: string | null;
+  daysOnMarket: number | null;
+  lastUpdated: string | null;
   imageCount: number;
   image: string;
 };
 
-// One row in the pull is a £4m sale miscategorised as a rental inside REX —
-// exactly the kind of thing the overlay exists to catch. Rentless rows stay out.
-const LISTINGS = (rexSample.listings as SampleListing[]).filter((l) => l.rent);
+const LISTINGS = rexSample.listings as SampleListing[];
+const C = rexSample.counts;
+
+const STATS = [
+  {
+    label: "Current rentals",
+    icon: "home",
+    value: String(C.currentRentals),
+    hint: "live in REX",
+  },
+  {
+    label: "Published",
+    icon: "megaphone",
+    value: String(C.published),
+    hint: `${Math.round((C.published / C.currentRentals) * 100)}% of the book`,
+  },
+  {
+    label: "Let agreed",
+    icon: "key",
+    value: String(C.letAgreed),
+    hint: `${C.available} still available`,
+  },
+  {
+    label: "Draft, unpublished",
+    icon: "info",
+    value: String(C.draft),
+    hint: "not on any portal",
+    alarm: true,
+  },
+];
+
+function statusOf(l: SampleListing): { label: string; tone: "good" | "accent" | "neutral" } {
+  if (l.letAgreed) return { label: "Let agreed", tone: "neutral" };
+  if (l.publicationStatus === "published") return { label: "Available", tone: "good" };
+  return { label: "Draft", tone: "accent" };
+}
+
+function Filter({ label }: { label: string }) {
+  return (
+    <button
+      type="button"
+      className="flex items-center gap-2 rounded-full border border-line/80 px-3.5 py-2 text-[12px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
+    >
+      {label}
+      <span className="text-[9px]">▾</span>
+    </button>
+  );
+}
 
 export default function Listings() {
   return (
     <>
-      <PageHead
+      <PageHeader
         title="Listings"
-        blurb="List a property here, once. The OS pushes it into REX; REX syndicates to the portals; enquiries flow back through the same pipe into Leads."
-      >
-        <span className="hand rounded-2xl bg-ink px-4 py-2.5 text-[13px] text-white">
-          + New listing
-        </span>
-      </PageHead>
+        blurb="Manage your properties and their marketing. List here once — the OS writes into REX, and REX syndicates to the portals."
+        illustration="/illustrations/notioly/moving.svg"
+        illustrationRight={430}
+      />
 
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-lg">On the market</h2>
-        <FlowTag from="REX (real data, static pull 6 Aug)" />
+      <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
+        <FlowTag from="REX (real data, pulled 6 Aug)" to="REX → portals" />
+        <button
+          type="button"
+          className="hand flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] text-white transition-opacity hover:opacity-90"
+        >
+          <span className="text-base leading-none">+</span> Add new listing
+        </button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {LISTINGS.map((l) => (
+      {/* ── Four stats, every one measured. */}
+      <div className="mt-3 grid grid-cols-2 gap-4 xl:grid-cols-4">
+        {STATS.map((s) => (
           <div
-            key={l.id}
-            className="fade-up overflow-hidden rounded-2xl border border-line/60 bg-card shadow-[0_1px_2px_rgba(16,16,20,0.04)]"
+            key={s.label}
+            className={`fade-up rounded-2xl border p-5 ${
+              s.alarm ? "border-accent/60" : "border-line/80"
+            }`}
           >
-            <div className="relative aspect-[4/3] bg-page">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={l.image}
-                alt={l.name}
-                className="h-full w-full object-cover"
-              />
-              {l.letAgreed && (
-                <span className="absolute left-3 top-3">
-                  <Pill tone="good">Let agreed</Pill>
-                </span>
-              )}
-              <span className="absolute bottom-3 right-3 rounded-full bg-ink/70 px-2 py-0.5 text-[10px] font-semibold text-white">
-                {l.imageCount} photos
+            <div className="flex items-center gap-2.5">
+              <DoodleIcon name={s.icon} size={20} className="text-accent-dark" />
+              <span className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">
+                {s.label}
               </span>
             </div>
-            <div className="p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="hand truncate text-[15px]">{l.name}</p>
-                  <p className="mt-0.5 text-xs text-muted">{l.locality}</p>
-                </div>
-                <p className="figures shrink-0 text-[19px] leading-tight">
-                  £{l.rent?.toLocaleString("en-GB")}
-                  <span className="text-[10px] text-muted"> pcm</span>
-                </p>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {l.epcExpiry ? (
-                  <Pill>EPC to {l.epcExpiry.slice(0, 4)}</Pill>
-                ) : (
-                  <Pill tone="accent">No EPC date</Pill>
-                )}
-                {l.availableFrom && <Pill>From {l.availableFrom}</Pill>}
-              </div>
-            </div>
+            <p className="figures mt-3 text-[34px] leading-none">{s.value}</p>
+            <p className="mt-1.5 text-[11px] font-medium text-accent-dark">{s.hint}</p>
           </div>
         ))}
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <Ghost
-          label="Create a listing"
-          detail="Photos, rent, description, compliance docs — one form, written into REX as the record. REX write capability is confirmed: every service takes create/update."
-          tag={<FlowTag to="REX → Rightmove" />}
-        />
-        <Ghost
-          label="Listing performance"
-          detail="Days on market and price changes — reconstructable per listing from REX AuditLogs' field-level history. (Portal click-throughs are NOT in REX; that needs Rightmove's own reporting.)"
-          tag={<FlowTag from="REX AuditLogs" />}
-        />
+      {/* The finding worth the whole page. */}
+      <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
+        <span className="font-semibold text-ink">
+          56% of the current rental book is sitting in REX as an unpublished draft
+        </span>{" "}
+        — 165 of 293, measured by walking every row. Whatever the reason, no one can
+        see it on a page today. This is the sort of thing the overlay is for.
+      </p>
+
+      {/* ── The board. */}
+      <div className="fade-up mt-6 rounded-2xl border border-line/80 p-5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <label className="flex min-w-44 flex-1 items-center gap-2.5 rounded-full border border-line/80 px-3.5 py-2 focus-within:border-ink">
+            <DoodleIcon name="search" size={14} className="shrink-0 text-muted" />
+            <input
+              type="text"
+              placeholder="Search properties…"
+              className="w-full bg-transparent text-[12px] outline-none placeholder:text-muted/70"
+            />
+          </label>
+          <Filter label="All branches" />
+          <Filter label="All statuses" />
+          <Filter label="All property types" />
+        </div>
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-left text-[12.5px]">
+            <thead>
+              <tr className="border-b border-line/70">
+                {["Property", "Status", "Rent", "Beds", "Age in REX", "Last updated", ""].map(
+                  (c, i) => (
+                    <th
+                      key={i}
+                      className="pb-2.5 pr-3 text-[9.5px] font-bold uppercase tracking-wider text-muted"
+                    >
+                      {c}
+                    </th>
+                  )
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {LISTINGS.map((l) => {
+                const st = statusOf(l);
+                return (
+                  <tr
+                    key={l.id}
+                    className="cursor-pointer border-b border-line/40 transition-colors last:border-0 hover:bg-page"
+                  >
+                    <td className="py-3 pr-3">
+                      <span className="flex items-center gap-3">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={l.image}
+                          alt=""
+                          aria-hidden
+                          className="h-11 w-14 shrink-0 rounded-lg object-cover"
+                        />
+                        <span className="min-w-0">
+                          <span className="hand block truncate text-[13px]">{l.name}</span>
+                          <span className="block truncate text-[10.5px] text-muted">
+                            {l.locality} · {l.imageCount} photos
+                          </span>
+                        </span>
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap py-3 pr-3">
+                      <Pill tone={st.tone}>{st.label}</Pill>
+                    </td>
+                    <td className="figures whitespace-nowrap py-3 pr-3">
+                      £{l.rent?.toLocaleString("en-GB")}
+                      <span className="text-[10px] text-muted"> pcm</span>
+                    </td>
+                    {/* Bedrooms are NOT in REX's listing projection — probed via
+                        describe and four extra_fields variants. Blank, not guessed. */}
+                    <td className="whitespace-nowrap py-3 pr-3 text-muted">—</td>
+                    <td className="figures whitespace-nowrap py-3 pr-3">
+                      {l.daysOnMarket?.toLocaleString("en-GB")}
+                      <span className="text-[10px] text-muted"> days</span>
+                    </td>
+                    <td className="whitespace-nowrap py-3 pr-3 text-[11px] text-muted">
+                      {l.lastUpdated}
+                    </td>
+                    <td className="py-3 pr-1 text-right text-muted">···</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line/70 pt-4">
+          <p className="text-[11px] text-muted">
+            Showing 1–{LISTINGS.length} of {C.currentRentals} current rentals
+          </p>
+          <div className="flex items-center gap-1.5">
+            {["‹", "1", "2", "3", "…", "37", "›"].map((p, i) => (
+              <button
+                key={i}
+                type="button"
+                className={`flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[11px] transition-colors ${
+                  p === "1"
+                    ? "bg-accent-soft/60 font-semibold text-accent-dark"
+                    : "text-muted hover:text-ink"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
+
+      {/* Two honest footnotes, so nobody builds on a number that isn't there. */}
+      <ul className="mt-4 space-y-1.5 text-[11px] leading-relaxed text-muted">
+        <li>
+          <span className="font-semibold">Beds</span> is blank on purpose — bedroom
+          counts aren&apos;t in REX&apos;s listing projection (checked via describe and
+          four extra_fields variants). They&apos;ll come from the property record or a
+          portal feed; not invented here.
+        </li>
+        <li>
+          <span className="font-semibold">Age in REX</span> is the record&apos;s own age,
+          not true days-on-market — every listing&apos;s publication timestamp is null,
+          so market date isn&apos;t recoverable from this call. Named for what it
+          actually measures.
+        </li>
+      </ul>
+
+      {/* The street, running off the bottom of the page. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/illustrations/buildings-street.png"
+        alt=""
+        aria-hidden
+        className="pointer-events-none mt-8 ml-auto hidden w-[420px] opacity-90 lg:block"
+      />
     </>
   );
 }
