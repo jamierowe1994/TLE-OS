@@ -1,0 +1,123 @@
+{
+  "pulledAt": "2026-08-06",
+  "note": "Static one-off pull of live REX current listings — NOT a live hookup.",
+  "listings": [
+    {
+      "id": "295517",
+      "name": "183 Walesby Lane",
+      "locality": "Newark NG22 9UY",
+      "rent": 750,
+      "advertisedAs": "£750",
+      "letAgreed": false,
+      "availableFrom": null,
+      "epcExpiry": null,
+      "category": "Residential Rental",
+      "imageCount": 11,
+      "image": "/rex/295517.jpg"
+    },
+    {
+      "id": "295547",
+      "name": "8 Recreation Terrace",
+      "locality": "Nottingham NG9 7FR",
+      "rent": 850,
+      "advertisedAs": null,
+      "letAgreed": false,
+      "availableFrom": null,
+      "epcExpiry": null,
+      "category": "Residential Rental",
+      "imageCount": 1,
+      "image": "/rex/295547.jpg"
+    },
+    {
+      "id": "299698",
+      "name": "57, Brindley Court Wilkins Drive",
+      "locality": "Derby DE24 8YR",
+      "rent": 400,
+      "advertisedAs": null,
+      "letAgreed": false,
+      "availableFrom": null,
+      "epcExpiry": null,
+      "category": "Residential Rental",
+      "imageCount": 12,
+      "image": "/rex/299698.jpg"
+    },
+    {
+      "id": "300102",
+      "name": "228a Chapter Road",
+      "locality": "London NW2 5NB",
+      "rent": 2400,
+      "advertisedAs": "£2,400",
+      "letAgreed": false,
+      "availableFrom": "2026-07-10",
+      "epcExpiry": "2034-11-15",
+      "category": "Residential Rental",
+      "imageCount": 11,
+      "image": "/rex/300102.jpg"
+    },
+    {
+      "id": "325696",
+      "name": "213 North Wingfield Road",
+      "locality": "Chesterfield S42 5LD",
+      "rent": null,
+      "advertisedAs": null,
+      "letAgreed": false,
+      "availableFrom": null,
+      "epcExpiry": "2030-08-17",
+      "category": "Residential Rental",
+      "imageCount": 18,
+      "image": "/rex/325696.jpg"
+    },
+    {
+      "id": "334480",
+      "name": "108 Cherry Tree Drive",
+      "locality": "Coventry CV4 8LZ",
+      "rent": 1975,
+      "advertisedAs": "£1,975",
+      "letAgreed": true,
+      "availableFrom": "2026-09-01",
+      "epcExpiry": "2035-10-11",
+      "category": "Residential Rental",
+      "imageCount": 1,
+      "image": "/rex/334480.jpg"
+    },
+    {
+      "id": "339326",
+      "name": "2,, 10 Cardiff Grove",
+      "locality": "Luton LU1 1QH",
+      "rent": 750,
+      "advertisedAs": "£750",
+      "letAgreed": false,
+      "availableFrom": "2023-12-12",
+      "epcExpiry": null,
+      "category": "Residential Rental",
+      "imageCount": 6,
+      "image": "/rex/339326.jpg"
+    },
+    {
+      "id": "367819",
+      "name": "Flat A, 41 Milton Road",
+      "locality": "Luton LU1 5JB",
+      "rent": 1300,
+      "advertisedAs": "£1,300",
+      "letAgreed": false,
+      "availableFrom": "2024-03-06",
+      "epcExpiry": "2029-06-04",
+      "category": "Residential Rental",
+      "imageCount": 7,
+      "image": "/rex/367819.jpg"
+    },
+    {
+      "id": "415656",
+      "name": "The Wood, 15 Webb Estate",
+      "locality": "Purley CR8 3LB",
+      "rent": null,
+      "advertisedAs": "Offers Over £4,000,000",
+      "letAgreed": false,
+      "availableFrom": null,
+      "epcExpiry": null,
+      "category": "Residential Rental",
+      "imageCount": 50,
+      "image": "/rex/415656.jpg"
+    }
+  ]
+}

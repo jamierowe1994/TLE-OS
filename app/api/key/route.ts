@@ -7,6 +7,13 @@ async function sha256(text: string): Promise<string> {
     .join("");
 }
 
+/** Sign out: drop the cookie; the middleware sends the next request to /key. */
+export async function DELETE() {
+  const res = NextResponse.json({ ok: true });
+  res.cookies.set("os-key", "", { httpOnly: true, path: "/", maxAge: 0 });
+  return res;
+}
+
 export async function POST(req: NextRequest) {
   const { code } = (await req.json().catch(() => ({}))) as { code?: string };
   const expected = process.env.OS_ACCESS_CODE;

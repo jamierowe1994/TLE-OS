@@ -9,12 +9,13 @@
 :root {
   --font-body: var(--font-montserrat), system-ui, -apple-system, sans-serif;
   --font-heading: var(--font-shantell), var(--font-montserrat), system-ui, sans-serif;
-  --font-figures: var(--font-inter), var(--font-montserrat), system-ui, sans-serif;
+  /* Figures on the hand face too — the reference mock's numbers are written,
+     and that is half of what makes it feel drawn rather than templated. */
+  --font-figures: var(--font-shantell), var(--font-montserrat), system-ui, sans-serif;
 
-  /* Brand — Warm Clay, the recruitment page's monochrome-plus-clay premise
-     carried into the OS. The letting-agent red stays on the public site; in
-     here the accent is the dusky pink, with a deepened clay for text so small
-     labels stay legible on the soft tint. */
+  /* Brand — Warm Clay by default, the recruitment page's monochrome-plus-clay
+     premise carried into the OS. The deepened value exists because small text
+     in the raw accent isn't legible on the soft tint. */
   --accent: #de968f;
   --accent-dark: #a85a51;
   --accent-soft: #ffe4df;
@@ -28,6 +29,23 @@
   --card: #ffffff;
 
   --radius-card: 16px;
+}
+
+/* ---------------------------------------------------------------------------
+   Accent customisation: every agent gets to pick their palette. The switcher
+   in the profile menu stamps data-accent on <html>; clay is the default and
+   needs no attribute. Everything downstream uses the tokens, so a theme is
+   three variables, not a restyle.
+--------------------------------------------------------------------------- */
+:root[data-accent="blush"] {
+  --accent: #f0b3bb;
+  --accent-dark: #b06a74;
+  --accent-soft: #fdeef0;
+}
+:root[data-accent="red"] {
+  --accent: #e31f36;
+  --accent-dark: #c11a2e;
+  --accent-soft: #fef2f2;
 }
 
 @theme inline {
@@ -50,15 +68,12 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Handwriting is the garnish, not the meal: page titles only. Everything
-   below h1 runs on the website face so the whimsy stays a highlight. */
-h1 {
+/* The reference look: handwriting carries the voice — headings, figures and
+   nav all run on the hand face; only small helper text stays on Montserrat
+   so dense labels remain effortless to read. */
+h1, h2, h3, h4, h5 {
   font-family: var(--font-heading);
   font-weight: 500;
-}
-h2, h3, h4, h5 {
-  font-family: var(--font-body);
-  font-weight: 600;
 }
 
 /* The handwritten face on demand — the wordmark, section titles. */

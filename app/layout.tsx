@@ -34,12 +34,12 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${montserrat.variable} ${shantell.variable} ${inter.variable} antialiased`}
-      >
-        {children}
-      </body>
+    // The font variables MUST live on <html>, not <body>: globals.css composes
+    // --font-heading out of them on :root, and a var() referencing a variable
+    // declared further down the tree is invalid at computed-value time — every
+    // heading silently falls back to system fonts.
+    <html lang="en" className={`${montserrat.variable} ${shantell.variable} ${inter.variable}`}>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }

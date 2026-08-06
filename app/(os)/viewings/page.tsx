@@ -5,9 +5,9 @@ export default function Viewings() {
     <>
       <PageHead
         title="Viewings"
-        blurb="Book from a lead in two taps. The diary lives here; every booking and outcome is written back to REX against the lead and the property."
+        blurb="Book from a lead in two taps. The diary lives here; every booking and outcome is written back to REX against the lead and the property. (Which REX service holds appointments is still to be confirmed against the census — flagged rather than assumed.)"
       >
-        <FlowTag to="REX" />
+        <FlowTag to="REX (service TBC)" />
       </PageHead>
 
       <div className="mb-4 grid gap-4 lg:grid-cols-3">

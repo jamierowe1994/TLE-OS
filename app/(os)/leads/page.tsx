@@ -10,9 +10,9 @@ export default function Leads() {
     <>
       <PageHead
         title="Leads"
-        blurb="Every enquiry from every portal in one inbox. Rightmove and Zoopla feed REX; the OS reads them the moment they land and writes every action back."
+        blurb="Every enquiry from every channel in one inbox. Rightmove and Zoopla land in REX; social campaigns land in GoHighLevel — the OS reads both the moment they arrive and writes every action back."
       >
-        <FlowTag from="Rightmove / Zoopla → REX" to="REX" />
+        <FlowTag from="portals → REX · social → GHL" to="REX" />
       </PageHead>
 
       <Card title="Inbox" tag={<Pill tone="accent">3 uncontacted</Pill>}>
@@ -46,6 +46,20 @@ export default function Leads() {
               "OnTheMarket",
               "Yesterday",
               <Pill key="s" tone="good">Viewing booked</Pill>,
+            ],
+            [
+              <span key="n" className="font-semibold">Chloe Adams</span>,
+              "Landlord enquiry — 3-bed, Coventry",
+              "Facebook ad",
+              "2 hrs ago",
+              <Pill key="s" tone="accent">Uncontacted</Pill>,
+            ],
+            [
+              <span key="n" className="font-semibold">Ryan Whitfield</span>,
+              "Valuation request",
+              "Instagram ad",
+              "Yesterday",
+              <Pill key="s">Contacted</Pill>,
             ],
           ]}
         />
