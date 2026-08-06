@@ -6,10 +6,11 @@ import { usePathname, useRouter } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
 
 /**
- * The OS chrome. The rail splits where the work splits: FRONT OF HOUSE is the
- * tenancy being made (lead → keys), BACK OFFICE is the book being run. The
- * profile lives at the foot with sign-out and the palette picker — every
- * agent gets to choose their accent, and the choice is three CSS variables.
+ * The OS chrome. The rail is its own encapsulated card — a thin outline the
+ * whole way round, floating on the eggshell — and collapses to icons + logo
+ * on the « button. FRONT OF HOUSE is the tenancy being made, BACK OFFICE is
+ * the book being run. The profile foots the rail with sign-out and the
+ * palette picker.
  */
 const FRONT = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
@@ -39,27 +40,27 @@ function applyAccent(id: string) {
 function NavLink({
   item,
   active,
+  collapsed,
 }: {
   item: { href: string; label: string; icon: string };
   active: boolean;
+  collapsed: boolean;
 }) {
   return (
     <Link
       href={item.href}
-      // The soft-tint active state from the reference: highlight by reducing
-      // contrast, not adding it — a wash of the accent, no card, no shadow.
-      className={`hand flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13.5px] transition-colors ${
-        active
-          ? "bg-accent-soft font-medium"
-          : "text-muted hover:bg-card/70 hover:text-ink"
-      }`}
+      title={collapsed ? item.label : undefined}
+      // Soft-tint active state: highlight by reducing contrast, not adding it.
+      className={`hand flex items-center gap-3 rounded-xl py-2.5 text-[13.5px] transition-colors ${
+        collapsed ? "justify-center px-0" : "px-3"
+      } ${active ? "bg-accent-soft font-medium" : "text-muted hover:bg-page hover:text-ink"}`}
     >
       <DoodleIcon
         name={item.icon}
         size={17}
         className={active ? "text-accent-dark" : "text-muted"}
       />
-      {item.label}
+      {!collapsed && item.label}
     </Link>
   );
 }
@@ -68,20 +69,28 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [accent, setAccent] = useState("");
 
-  // Rehydrate the saved palette before first paint matters little on a
-  // wireframe — a flash of clay is fine, correctness on nav isn't optional.
   useEffect(() => {
     const saved = localStorage.getItem("os-accent") ?? "";
     setAccent(saved);
     applyAccent(saved);
+    setCollapsed(localStorage.getItem("os-nav-collapsed") === "1");
   }, []);
 
   function pickAccent(id: string) {
     setAccent(id);
     localStorage.setItem("os-accent", id);
     applyAccent(id);
+  }
+
+  function toggleCollapsed() {
+    setCollapsed((c) => {
+      localStorage.setItem("os-nav-collapsed", c ? "0" : "1");
+      if (!c) setProfileOpen(false); // the panel has nowhere to live at 72px
+      return !c;
+    });
   }
 
   async function signOut() {
@@ -92,43 +101,71 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line/70 px-4 py-6 lg:flex">
-        {/* Wordmark: the little buildings over the name, like the mock. */}
-        <div className="flex items-center gap-2.5 px-3">
-          <img
-            src="/illustrations/notioly/buildings.svg"
-            alt=""
-            aria-hidden
-            className="h-9 w-9"
-          />
-          <div>
-            <div className="hand text-2xl leading-none">TLE OS</div>
-            <div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-accent-dark">
-              Internal preview
-            </div>
+      <aside
+        className={`sticky top-3 mb-3 ml-3 mt-3 hidden h-[calc(100vh-24px)] shrink-0 flex-col rounded-3xl border border-line/80 py-5 transition-[width] duration-300 lg:flex ${
+          collapsed ? "w-[72px] px-2.5" : "w-60 px-4"
+        }`}
+      >
+        {/* Wordmark + the collapse toggle. */}
+        <div className={`flex items-center ${collapsed ? "flex-col gap-2" : "justify-between"} px-1`}>
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/illustrations/notioly/buildings.svg"
+              alt=""
+              aria-hidden
+              className="h-8 w-8 shrink-0"
+            />
+            {!collapsed && (
+              <div>
+                <div className="hand text-xl leading-none">TLE OS</div>
+                <div className="mt-0.5 text-[8.5px] font-bold uppercase tracking-wider text-accent-dark">
+                  Internal preview
+                </div>
+              </div>
+            )}
           </div>
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            title={collapsed ? "Expand" : "Collapse"}
+            className="flex h-6 w-6 items-center justify-center rounded-full border border-line/80 text-[11px] text-muted transition-colors hover:text-ink"
+          >
+            {collapsed ? "»" : "«"}
+          </button>
         </div>
 
-        <nav className="mt-7 flex flex-col gap-1">
+        <nav className="mt-6 flex flex-col gap-1">
           {FRONT.map((item) => (
-            <NavLink key={item.href} item={item} active={pathname.startsWith(item.href)} />
+            <NavLink
+              key={item.href}
+              item={item}
+              active={pathname.startsWith(item.href)}
+              collapsed={collapsed}
+            />
           ))}
 
           {/* The fold between making tenancies and running the book. */}
           <div className="mb-1 mt-3 border-t border-line/70 pt-3">
-            <p className="px-3 pb-1 text-[9px] font-bold uppercase tracking-[0.14em] text-muted/70">
-              Back office
-            </p>
+            {!collapsed && (
+              <p className="px-3 pb-1 text-[9px] font-bold uppercase tracking-[0.14em] text-muted/70">
+                Back office
+              </p>
+            )}
           </div>
           {BACK.map((item) => (
-            <NavLink key={item.href} item={item} active={pathname.startsWith(item.href)} />
+            <NavLink
+              key={item.href}
+              item={item}
+              active={pathname.startsWith(item.href)}
+              collapsed={collapsed}
+            />
           ))}
         </nav>
 
         {/* ── Profile, at the foot ── */}
         <div className="mt-auto">
-          {profileOpen && (
-            <div className="fade-up mb-2 rounded-2xl border border-line/60 bg-card p-3">
+          {profileOpen && !collapsed && (
+            <div className="fade-up mb-2 rounded-2xl border border-line/80 p-3">
               <p className="text-[10px] font-bold uppercase tracking-wide text-muted">
                 Your accent
               </p>
@@ -158,19 +195,28 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           )}
           <button
             type="button"
-            onClick={() => setProfileOpen((o) => !o)}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-card/70"
+            // Collapsed, there's no room for the panel — the tap reopens the rail.
+            onClick={() => (collapsed ? toggleCollapsed() : setProfileOpen((o) => !o))}
+            className={`flex w-full items-center gap-3 rounded-xl py-2.5 text-left transition-colors hover:bg-page ${
+              collapsed ? "justify-center px-0" : "px-3"
+            }`}
           >
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[11px] font-bold text-accent-dark">
               TLE
             </span>
-            <span className="min-w-0 flex-1">
-              <span className="hand block truncate text-[13px]">The Lettings Experts</span>
-              <span className="block text-[10px] text-muted">Preview access</span>
-            </span>
-            <span className={`text-muted transition-transform ${profileOpen ? "rotate-180" : ""}`}>
-              ▾
-            </span>
+            {!collapsed && (
+              <>
+                <span className="min-w-0 flex-1">
+                  <span className="hand block truncate text-[13px]">The Lettings Experts</span>
+                  <span className="block text-[10px] text-muted">Preview access</span>
+                </span>
+                <span
+                  className={`text-muted transition-transform ${profileOpen ? "rotate-180" : ""}`}
+                >
+                  ▾
+                </span>
+              </>
+            )}
           </button>
         </div>
       </aside>
@@ -183,7 +229,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             Preview
           </span>
         </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-8 lg:px-10">
+        <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-7 lg:px-10">
           {children}
         </main>
       </div>
