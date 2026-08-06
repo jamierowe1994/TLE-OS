@@ -30,8 +30,11 @@ export default function PageHeader({
   title,
   blurb,
   illustration,
-  /** How far in from the right the illustration sits, clear of the search. */
-  illustrationRight = 350,
+  /** How far in from the right the illustration sits. The default clears the
+   *  search pill + bell (~290px) with a margin; now the figure fills the
+   *  header height it is much wider, so leaning further left collides with
+   *  the blurb. Override only if a page's art has unusual proportions. */
+  illustrationRight = 310,
 }: {
   title: string;
   blurb: string;
@@ -48,7 +51,7 @@ export default function PageHeader({
           <Pop />
         </span>
         <h1 className="text-[30px] leading-tight">{title}</h1>
-        <p className="mt-2.5 max-w-lg text-[13px] text-muted">{blurb}</p>
+        <p className="mt-2.5 max-w-md text-[13px] text-muted">{blurb}</p>
       </div>
 
       <div className="flex shrink-0 items-end gap-3 self-end pb-9">
@@ -70,14 +73,18 @@ export default function PageHeader({
         </button>
       </div>
 
-      {/* The figure's own floor line lands on the page rule — sat on the ledge. */}
+      {/* The figure's own floor line lands on the page rule — sat on the ledge.
+          It fills the header's full height rather than a fixed 112px: the box
+          is already the right size, so the illustration should use all of it
+          (inset-y-0 + h-full keeps the box's height untouched, since an
+          absolutely positioned child contributes nothing to layout). */}
       {illustration && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={illustration}
           alt=""
           aria-hidden
-          className="pointer-events-none absolute bottom-0 hidden h-28 xl:block"
+          className="pointer-events-none absolute inset-y-0 hidden h-full w-auto xl:block"
           style={{ right: illustrationRight }}
         />
       )}

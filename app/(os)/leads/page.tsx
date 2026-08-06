@@ -198,7 +198,6 @@ export default function Leads() {
         title="Leads"
         blurb="New enquiries from the portals, your ads and the website — ready to qualify and follow up."
         illustration="/illustrations/notioly/inbox.svg"
-        illustrationRight={400}
       />
 
       <div className="mt-10 flex items-center justify-between gap-3">

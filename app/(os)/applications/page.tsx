@@ -95,7 +95,6 @@ export default function Applications() {
         title="Applications"
         blurb="Every application from offer to keys, on the eight stages the business actually runs. Stage changes are written back to REX."
         illustration="/illustrations/notioly/checklist.svg"
-        illustrationRight={430}
       />
 
       <div className="mt-10">
