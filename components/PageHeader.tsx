@@ -102,7 +102,15 @@ export default function PageHeader({
   return (
     <>
       <div className="fade-up relative flex min-h-[212px] items-end justify-between gap-6 border-b border-line/80 pt-8">
-        <div className="mb-2 pb-9 pl-2 pt-8">
+        {/* The right padding is the figure's footprint reserved in advance.
+            The figure is absolutely positioned, so it can't push the text out
+            of its way — without this the blurb runs underneath it the moment
+            the window narrows. Each step matches the scale below. */}
+        <div
+          className={`mb-2 pb-9 pl-2 pt-8 ${
+            hasArt ? "pr-[120px] sm:pr-[165px] lg:pr-[220px] xl:pr-[250px]" : ""
+          }`}
+        >
           {/* The strokes belong to the TITLE, not the block. */}
           <div className="relative inline-block">
             <span className="absolute -left-9 -top-5">
@@ -126,10 +134,21 @@ export default function PageHeader({
           <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent" />
         </button>
 
-        {/* The figure, hard right, standing on the rule. */}
+        {/* The figure, hard right, standing on the rule.
+
+            Pinned to the bottom-right corner at EVERY width — it used to
+            vanish below 1280px, which meant most laptops never saw it.
+
+            Inset rather than flush: at right-0 the notification bell sat on
+            top of its head, and the inset is what the padding buys.
+
+            It shrinks by scaling the whole wrapper from the bottom-right
+            corner, so the figure and the dip in the rule scale together and
+            stay aligned — scaling the image alone would leave the trough
+            drawn for a figure that is no longer that size. */}
         {hasArt && (
           <div
-            className="pointer-events-none absolute bottom-0 right-0 hidden xl:block"
+            className="pointer-events-none absolute bottom-0 right-5 origin-bottom-right scale-[0.5] sm:right-8 sm:scale-[0.68] lg:right-12 lg:scale-[0.88] xl:right-14 xl:scale-100"
             style={{ height: illustrationHeight }}
           >
             <div className="relative h-full">
