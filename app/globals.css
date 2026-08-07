@@ -146,17 +146,15 @@ h1, h2, h3, h4, h5 {
    white rectangle. Blending does what transparency would:
      light — multiply drops the white and keeps the ink;
      dark  — invert first, then screen drops the resulting black.
-   The brightness step matters: the encoded plate measures 245-255, not pure
-   white, and multiplying 245/255 tints the page ~4% darker in a neat
-   rectangle. Clipping the near-whites to true 255 first makes it vanish.
-   Note this class does NOT stack with .art — both set `filter`. */
-.art-video {
-  mix-blend-mode: multiply;
-  filter: brightness(1.09) contrast(1.04);
-}
+   Requires a plate of TRUE white (255): an earlier encode measured 245-255
+   and multiply turned that into a faint 4%-darker rectangle, which needed a
+   brightness clip to hide. Re-exported clean, so no clip — and the ink stays
+   properly black instead of being lightened along with the plate.
+   Note this class does NOT stack with .art — both would set `filter`. */
+.art-video { mix-blend-mode: multiply; }
 :root[data-theme="dark"] .art-video {
   mix-blend-mode: screen;
-  filter: brightness(1.09) contrast(1.04) invert(1);
+  filter: invert(1);
 }
 
 /* ---------------------------------------------------------------------------

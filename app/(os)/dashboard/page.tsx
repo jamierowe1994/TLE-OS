@@ -216,7 +216,7 @@ export default function Dashboard() {
         {/* He stands ON the bottom edge — half in the box, half out — so the
             border reads as the ground he's on rather than a frame round him. */}
         <video
-          src="/illustrations/dog-wag.mp4"
+          src="/illustrations/dog-wag-2.mp4"
           autoPlay
           muted
           loop
