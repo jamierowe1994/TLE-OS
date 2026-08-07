@@ -64,6 +64,161 @@ const Empty = ({ children }: { children: React.ReactNode }) => (
   <p className="py-6 text-center text-[12px] text-muted">{children}</p>
 );
 
+/** The shell every step panel shares: scrim, sheet, title, Escape via ✕. */
+function StepModal({
+  title,
+  subtitle,
+  onClose,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+      <button
+        aria-label="Close"
+        onClick={onClose}
+        className="absolute inset-0 cursor-default bg-ink/45"
+      />
+      <div className="fade-up relative w-full max-w-lg overflow-hidden rounded-3xl border border-line/80 bg-page p-6 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-[19px] leading-tight">{title}</h2>
+            <p className="mt-0.5 text-[12px] text-muted">{subtitle}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line/80 text-[12px] text-muted transition-colors hover:text-ink"
+          >
+            ✕
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Recording the appraisal, right after it happened: where the value landed
+ * and what was actually said. The write-up becomes a real note on the record
+ * — the appraisal panel is where notes come FROM, not another place they go.
+ */
+function AppraisalForm({
+  leadName,
+  onClose,
+  onSave,
+}: {
+  leadName: string;
+  onClose: () => void;
+  onSave: (note: string) => void;
+}) {
+  const [value, setValue] = useState("");
+  const [text, setText] = useState("");
+  const first = leadName.split(" ")[0];
+
+  return (
+    <StepModal
+      title="Record the appraisal"
+      subtitle={`How did it go at ${first}'s?`}
+      onClose={onClose}
+    >
+      <label className="mb-3 block">
+        <span className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-muted">
+          Value discussed
+        </span>
+        <input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="e.g. £1,200 pcm"
+          className="figures w-full rounded-xl border border-line/80 bg-transparent px-3 py-2.5 text-[13.5px] outline-none focus:border-ink"
+        />
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-muted">
+          What was said
+        </span>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={5}
+          placeholder="Condition, their expectations, timescales, anything promised…"
+          className="w-full resize-none rounded-xl border border-line/80 bg-transparent px-3 py-2.5 text-[12.5px] leading-relaxed outline-none focus:border-ink"
+        />
+      </label>
+      <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
+        Bedrooms, bathrooms and type go in the property panel on the record — fill them
+        while it&apos;s fresh. This write-up saves as a note.
+      </p>
+      <div className="mt-4 flex justify-end">
+        <PressButton
+          onClick={() => onSave(value.trim() ? `Appraisal — ${value.trim()}. ${text}` : text)}
+          className="press-ring rounded-full bg-accent-dark px-6 py-2.5 text-[13px] font-semibold text-page"
+        >
+          Save & move to follow-up
+        </PressButton>
+      </div>
+    </StepModal>
+  );
+}
+
+/**
+ * The MA follow-up is a promise to ring somebody on a day. So it asks for the
+ * day, makes a task of it, and gets out of the way. The presentation that
+ * gets sent along links in later.
+ */
+function FollowUpForm({
+  leadName,
+  onClose,
+  onSet,
+}: {
+  leadName: string;
+  onClose: () => void;
+  onSet: (when: string) => void;
+}) {
+  const [date, setDate] = useState("");
+  const first = leadName.split(" ")[0];
+
+  return (
+    <StepModal
+      title="Set the follow-up"
+      subtitle={`When are you ringing ${first} back?`}
+      onClose={onClose}
+    >
+      <input
+        type="date"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+        className="figures w-full rounded-xl border border-line/80 bg-transparent px-3 py-2.5 text-[13.5px] outline-none focus:border-ink"
+      />
+      <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
+        Becomes a task on this record. The appraisal presentation to send with it links
+        in later.
+      </p>
+      <div className="mt-4 flex justify-end">
+        <PressButton
+          onClick={() => {
+            if (!date) return;
+            const label = new Date(`${date}T09:00`).toLocaleDateString("en-GB", {
+              weekday: "short", day: "numeric", month: "short",
+            });
+            onSet(label);
+          }}
+          className={`press-ring rounded-full px-6 py-2.5 text-[13px] font-semibold ${
+            date ? "bg-accent-dark text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
+          }`}
+        >
+          Set follow-up
+        </PressButton>
+      </div>
+    </StepModal>
+  );
+}
+
 export default function LeadDrawer({
   lead,
   onClose,
@@ -98,6 +253,10 @@ export default function LeadDrawer({
   const [booked, setBooked] = useState<LeadViewing[]>([]);
   const [handingOff, setHandingOff] = useState(false);
   const [tagging, setTagging] = useState(false);
+  // The booker serves two jobs; which one is decided at fire time.
+  const [bookMode, setBookMode] = useState<"viewing" | "appraisal">("viewing");
+  const [appraising, setAppraising] = useState(false);
+  const [following, setFollowing] = useState(false);
 
   useEffect(() => {
     if (!detail) return;
@@ -160,9 +319,13 @@ export default function LeadDrawer({
   /** Advance one step, if there's anywhere to go. */
   const advance = () => setStep((s) => Math.min(s + 1, track.length - 1));
 
-  /** What the Next-action button does — the step decides, not the button. */
+  /** What the Next-action button does — the step decides, not the button.
+      Imperatives open the work itself; only stray "none" steps advance dry. */
   function fire() {
-    if (here.action === "viewing") setBooking(true);
+    if (here.action === "viewing") { setBookMode("viewing"); setBooking(true); }
+    else if (here.action === "appraise") { setBookMode("appraisal"); setBooking(true); }
+    else if (here.action === "appraisal-form") setAppraising(true);
+    else if (here.action === "followup") setFollowing(true);
     else if (here.action === "sign") setSigning(true);
     else if (here.action === "send") setEmailing(true);
     else if (here.action === "handoff") setHandingOff(true);
@@ -285,7 +448,7 @@ export default function LeadDrawer({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-4">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pb-4 pt-4">
           {/* ── The person. One box: who they are, how to reach them, the
               property they rang about, and its photo — with tags at the foot,
               because tags describe the person, not the process. No avatar:
@@ -299,10 +462,16 @@ export default function LeadDrawer({
 
             {tab === null ? (
               <>
-                <div className="mt-5 flex flex-wrap items-start gap-x-10 gap-y-6">
+                {/* The row DISTRIBUTES rather than hugging the left: each column takes
+                    an equal share up to a cap, so an ultra-wide screen widens the
+                    breathing room instead of piling empty space after the photo. All
+                    three stretch to one height — the photo ends where the last
+                    contact row ends, because items-stretch makes that a rule rather
+                    than a coincidence. */}
+                <div className="mt-5 flex flex-wrap items-stretch justify-between gap-x-12 gap-y-6">
                   {/* Fixed-width columns: the rules under the rows stop where
                       the content stops instead of running the box's width. */}
-                  <section className="w-full max-w-[280px]">
+                  <section className="w-full min-w-[240px] flex-1 lg:max-w-[350px]">
                     <SectionHead>Contact details</SectionHead>
                     {/* Click a value to change it — a rule appears underneath
                         and it commits on blur or Enter. No Save button per
@@ -339,7 +508,7 @@ export default function LeadDrawer({
                   </section>
 
                   {!isTenant && (
-                    <section className="w-full max-w-[280px]">
+                    <section className="w-full min-w-[240px] flex-1 lg:max-w-[350px]">
                       <SectionHead>The property</SectionHead>
                       <PropertyFacts />
                     </section>
@@ -360,8 +529,10 @@ export default function LeadDrawer({
                       className="art ml-auto hidden h-36 shrink-0 self-end lg:block"
                     />
                   ) : (
-                    <div className="ml-auto hidden w-[260px] shrink-0 xl:block">
+                    <div className="hidden min-w-[300px] flex-1 self-stretch xl:block xl:max-w-[420px]">
                       <PhotoBox
+                        fill
+                        className="h-full"
                         label="Add a photo of the property"
                         refId={`lead-${lead.id}`}
                       />
@@ -429,8 +600,9 @@ export default function LeadDrawer({
               </>
             ) : (
               /* A tab is open: its panel takes the box over. Same place,
-                 different question — not a second page of cards underneath. */
-              <div className="fade-up mt-5">
+                 different question — not a second page of cards underneath.
+                 It scrolls within its own bounds; the page never does. */
+              <div className="fade-up mt-5 max-h-[46vh] overflow-y-auto pr-1">
                 {tab === "activity" && (
                   <>
                     <ul className="space-y-4">
@@ -689,7 +861,7 @@ export default function LeadDrawer({
               nervous — exactly what to do about it, and the button does that
               thing. Nobody should ever have to infer their next move from a
               diagram. ── */}
-          <div className="mt-4 rounded-3xl border border-line/80 bg-panel p-5">
+          <div className="mt-3 rounded-3xl border border-line/80 bg-panel p-5">
             <ProcessTimeline
               steps={track}
               current={step}
@@ -749,58 +921,62 @@ export default function LeadDrawer({
             </div>
           </div>
 
-          {/* ── Notes, and nothing else, along the bottom. No "lead summary"
-              card — the agent's own notes ARE the summary, and a paragraph
-              nobody wrote is a paragraph nobody trusts. ── */}
-          <div className="mt-4 rounded-3xl border border-line/80 bg-panel p-5">
+          {/* ── Notes fill whatever is left of the screen — the record wants
+              to END at the bottom edge, not scroll past it. Composer on the
+              left, the whole height, because writing is the job; the list on
+              the right is the thing that accumulates, so IT scrolls, inside
+              its own column, only when it has to. No "lead summary" card —
+              the agent's own notes ARE the summary. ── */}
+          <div className="mt-3 flex min-h-[200px] flex-1 flex-col rounded-3xl border border-line/80 bg-panel p-5">
             <SectionHead>Notes</SectionHead>
-            <div className="max-w-2xl rounded-xl border border-line/80 p-2.5">
-              <textarea
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                rows={2}
-                placeholder="Add a note — what was said, what to remember…"
-                className="w-full resize-none bg-transparent text-[12.5px] outline-none placeholder:text-muted/70"
-              />
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={addNote}
-                  disabled={!draft.trim()}
-                  className="rounded-full bg-accent-dark px-4 py-1.5 text-[11.5px] font-semibold text-page transition-opacity disabled:opacity-30"
-                >
-                  Save note
-                </button>
+            <div className="grid min-h-0 flex-1 gap-5 md:grid-cols-2">
+              <div className="flex min-h-0 flex-col rounded-xl border border-line/80 p-3">
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder="Add a note — what was said, what to remember…"
+                  className="min-h-0 w-full flex-1 resize-none bg-transparent text-[12.5px] leading-relaxed outline-none placeholder:text-muted/70"
+                />
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    onClick={addNote}
+                    disabled={!draft.trim()}
+                    className="rounded-full bg-accent-dark px-4 py-1.5 text-[11.5px] font-semibold text-page transition-opacity disabled:opacity-30"
+                  >
+                    Save note
+                  </button>
+                </div>
               </div>
-            </div>
 
-            <ul className="mt-4 max-w-2xl space-y-3">
-              {notes.map((n) => (
-                <li
-                  key={n.id}
-                  className={`rounded-xl p-3.5 ${n.pinned ? "bg-accent-soft/40" : "border border-line/60"}`}
-                >
-                  <p className="text-[12.5px] leading-relaxed">{n.text}</p>
-                  <div className="mt-2 flex items-center justify-between gap-3">
-                    <span className="text-[10.5px] text-muted">
-                      {n.author} · {n.when}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setNotes((cur) =>
-                          cur.map((x) => (x.id === n.id ? { ...x, pinned: !x.pinned } : x))
-                        )
-                      }
-                      className="text-[10.5px] font-semibold text-muted transition-colors hover:text-ink"
-                    >
-                      {n.pinned ? "Unpin" : "Pin"}
-                    </button>
-                  </div>
-                </li>
-              ))}
-              {!notes.length && <Empty>No notes yet — yours will be the first.</Empty>}
-            </ul>
+              <ul className="min-h-0 space-y-3 overflow-y-auto pr-1">
+                {notes.map((n) => (
+                  <li
+                    key={n.id}
+                    className={`rounded-xl p-3.5 ${n.pinned ? "bg-accent-soft/40" : "border border-line/60"}`}
+                  >
+                    <p className="text-[12.5px] leading-relaxed">{n.text}</p>
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <span className="text-[10.5px] text-muted">
+                        {n.author} · {n.when}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setNotes((cur) =>
+                            cur.map((x) => (x.id === n.id ? { ...x, pinned: !x.pinned } : x))
+                          )
+                        }
+                        className="text-[10.5px] font-semibold text-muted transition-colors hover:text-ink"
+                      >
+                        {n.pinned ? "Unpin" : "Pin"}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+                {!notes.length && <Empty>No notes yet — yours will be the first.</Empty>}
+              </ul>
+            </div>
           </div>
         </div>
       </aside>
@@ -819,6 +995,8 @@ export default function LeadDrawer({
       <ViewingBooker
         open={booking}
         onClose={() => setBooking(false)}
+        mode={bookMode}
+        address={contact.area || lead.preferred}
         lead={{
           name: lead.name,
           email: contact.email || lead.email,
@@ -837,9 +1015,46 @@ export default function LeadDrawer({
             },
             ...cur,
           ]);
-          if (here.action === "viewing") advance();
+          // Booking IS the step's work — the record moves itself on, and the
+          // next step's panel is one button away rather than a hunt.
+          if (here.action === "viewing" || here.action === "appraise") advance();
         }}
       />
+
+      {/* ── Recording the appraisal: what was found, what was said. Saving
+          writes a real note and moves the record to the follow-up. ── */}
+      {appraising && (
+        <AppraisalForm
+          leadName={lead.name}
+          onClose={() => setAppraising(false)}
+          onSave={(note) => {
+            if (note.trim()) {
+              setNotes((n) => [
+                { id: `n${Date.now()}`, author: "You", when: "Just now", text: note.trim() },
+                ...n,
+              ]);
+            }
+            setAppraising(false);
+            advance();
+          }}
+        />
+      )}
+
+      {/* ── Setting the MA follow-up: a date, a task, done. ── */}
+      {following && (
+        <FollowUpForm
+          leadName={lead.name}
+          onClose={() => setFollowing(false)}
+          onSet={(when) => {
+            setTasks((cur) => [
+              { id: `t${Date.now()}`, title: "MA follow-up call", due: when, done: false },
+              ...cur,
+            ]);
+            setFollowing(false);
+            advance();
+          }}
+        />
+      )}
 
       {/* The hand-off. Deliberately a confirmation and not a silent jump: the
           lead leaves this list and becomes a property, which is the single

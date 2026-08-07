@@ -13,13 +13,25 @@ import { leadSide } from "@/lib/leads-sample";
  * card can offer that action rather than a generic "mark as done" — booking a
  * viewing IS how you leave the viewing step.
  *
- * NOTE: the landlord track's first two steps are the ones James specified.
- * Everything after them is my reading of how a lettings sign-up runs and is
- * meant to be argued with — the labels are data, not structure, so changing
- * them is an edit to this file and nothing else.
+ * Both tracks now carry the business's own stage names (Susan's list, via
+ * James). The labels are data, not structure — changing one is an edit to
+ * this file and nothing else.
  */
 
-export type JourneyAction = "viewing" | "send" | "sign" | "handoff" | "none";
+/**
+ * What the Next-action button DOES. Imperatives, not confirmations — the
+ * button is the work, and pressing it opens the thing you do next rather
+ * than asking you to swear you already did it (James, 7 Aug 2026).
+ */
+export type JourneyAction =
+  | "viewing"        // book an applicant viewing
+  | "appraise"       // book the market appraisal into the diary
+  | "appraisal-form" // record the appraisal: property details + what was said
+  | "followup"       // set the MA follow-up
+  | "send"           // email properties
+  | "sign"           // prepare a document for signature
+  | "handoff"        // push the record to its next home
+  | "none";
 
 export type JourneyStep = {
   id: string;
@@ -98,43 +110,43 @@ export const LANDLORD_TRACK: JourneyStep[] = [
     id: "lead", label: "Lead", icon: "target",
     title: "New landlord lead",
     detail:
-      "They've come in from somewhere. Ring them, talk it through, and get the appraisal booked — a date, a time, and their address in the diary.",
-    action: "none", cta: "Appraisal booked",
+      "They've come in from somewhere. Ring them, talk it through, and get the appraisal in the diary — the button books it and sends the confirmation.",
+    action: "appraise", cta: "Book the appraisal",
   },
   {
     id: "appraisal", label: "Appraisal", icon: "calendar",
     title: "Market appraisal",
     detail:
-      "Go over, walk the property, and land on the value together. What you learn here fills the property panel on the left.",
-    action: "none", cta: "Appraisal held",
+      "Go over, walk the property, and land on the value together. Afterwards, write down what you found — the property panel fills from it.",
+    action: "appraisal-form", cta: "Record the appraisal",
   },
   {
     id: "followup", label: "MA follow-up", icon: "call",
     title: "Appraisal follow-up",
     detail:
-      "The call after the visit — this is where instructions are actually won. An appraisal nobody chased is a free valuation for another agent.",
-    action: "none", cta: "Followed up",
+      "The call after the visit — this is where instructions are actually won. Set when you'll make it; the presentation to send links in later.",
+    action: "followup", cta: "Set the follow-up",
   },
   {
     id: "terms", label: "Terms", icon: "file-contract",
     title: "Terms of business",
     detail:
       "Out for signature with the fee schedule and service level. Nothing goes on the market before this — it's the instruction.",
-    action: "sign", cta: "Prepare for signature",
+    action: "sign", cta: "Send the terms",
   },
   {
     id: "id", label: "ID & ownership", icon: "doc",
     title: "Landlord ID and proof of ownership",
     detail:
       "Photo ID plus proof they actually own the property — title register or Land Registry. Letting a property for somebody who doesn't own it is a story that ends in court.",
-    action: "none", cta: "ID & ownership verified",
+    action: "none", cta: "Verify ID & ownership",
   },
   {
     id: "aml", label: "AML", icon: "shield",
     title: "AML check",
     detail:
       "Anti-money-laundering due diligence on the landlord. A legal duty, not paperwork theatre — and it can't be backfilled after the tenancy starts.",
-    action: "none", cta: "AML passed",
+    action: "none", cta: "Run the AML check",
   },
   /* The last step IS the push. There's no separate "listing & photos" stage —
      building the listing happens on the listing side, and a dot that only

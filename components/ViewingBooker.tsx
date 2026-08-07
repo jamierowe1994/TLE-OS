@@ -55,6 +55,8 @@ export default function ViewingBooker({
   applicants,
   properties,
   agent,
+  mode = "viewing",
+  address = "",
   onBooked,
 }: {
   open: boolean;
@@ -66,6 +68,12 @@ export default function ViewingBooker({
   applicants?: Person[];
   properties: Listing[];
   agent: string;
+  /** "appraisal" books the AGENT to the landlord's own property: no property
+   *  picker (theirs is the only one), and the confirmation goes to the
+   *  landlord, not an applicant. */
+  mode?: "viewing" | "appraisal";
+  /** The landlord's address, for appraisal mode. */
+  address?: string;
   onBooked: (summary: { when: string; property: string; locality: string; who: string }) => void;
 }) {
   const today = useMemo(() => startOfDay(new Date()), []);
@@ -105,7 +113,7 @@ export default function ViewingBooker({
   if (!open) return null;
 
   const property = properties.find((p) => p.id === propertyId) ?? properties[0] ?? null;
-  const ready = Boolean(day && slot && property && chosen);
+  const ready = Boolean(day && slot && chosen && (mode === "appraisal" || property));
 
   const dayLabel = day
     ? day.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })
@@ -119,8 +127,49 @@ export default function ViewingBooker({
      on the previous screen — a template built up front goes stale the moment
      somebody changes the time. */
   function compose(): Outgoing[] {
-    if (!property || !day || !slot || !chosen) return [];
+    if (!day || !slot || !chosen) return [];
     const first = chosen.name.split(" ")[0];
+
+    if (mode === "appraisal") {
+      // Two messages: the landlord's confirmation, and the agent's own diary.
+      const where = address || "their property";
+      return [
+        {
+          key: "landlord",
+          role: "Landlord",
+          name: chosen.name,
+          email: chosen.email,
+          phone: chosen.phone,
+          channel: "email",
+          on: true,
+          subject: `Your market appraisal — ${shortDate} at ${slot}`,
+          emailBody:
+            `Hi ${first},\n\n` +
+            `Thanks for speaking today — your market appraisal is booked for ${dayLabel} at ${slot}.\n\n` +
+            `${where}\n\n` +
+            `${agent} will come to you, walk the property with you and talk through what it should achieve. ` +
+            `Nothing to prepare — half an hour of your time is all it takes.\n\n` +
+            `Kind regards,\n${agent}\nThe Lettings Experts`,
+          whatsappBody:
+            `Hi ${first}, your market appraisal is booked — ${shortDate} at ${slot}, at ${where}. ` +
+            `${agent} will come to you. Reply here if you need to move it.`,
+        },
+        {
+          key: "agent",
+          role: "Diary — for the person doing it",
+          name: agent,
+          email: `${agent.toLowerCase()}@thelettingexperts.co.uk`,
+          phone: "—",
+          channel: "email",
+          on: false,
+          subject: `Diary: MA at ${where}, ${shortDate} ${slot}`,
+          emailBody: `${dayLabel}, ${slot}\n${where}\n\nLandlord: ${chosen.name} · ${chosen.phone}`,
+          whatsappBody: `${shortDate} ${slot} — MA at ${where}. ${chosen.name}, ${chosen.phone}.`,
+        },
+      ];
+    }
+
+    if (!property) return [];
     const ll = landlordFor(property.id);
     const llFirst = ll.name.split(" ")[0];
     const where = `${property.name}, ${property.locality}`;
@@ -195,19 +244,23 @@ export default function ViewingBooker({
           <div className="min-w-0">
             <h2 className="text-[19px] leading-tight">
               {stage === "done"
-                ? "Viewing booked"
+                ? mode === "appraisal" ? "Appraisal booked" : "Viewing booked"
                 : stage === "who"
                   ? "Who do we tell?"
                   : stage === "applicant"
                     ? "Who's viewing?"
-                    : "Book a viewing"}
+                    : mode === "appraisal" ? "Book the appraisal" : "Book a viewing"}
             </h2>
             <p className="mt-0.5 truncate text-[12px] text-muted">
               {stage === "applicant"
                 ? properties[0]?.name ?? "Pick who's viewing"
                 : stage === "when"
                   ? `For ${chosen?.name ?? "—"}`
-                  : `${chosen?.name ?? "—"} · ${whenLabel}${property ? ` · ${property.name}` : ""}`}
+                  : `${chosen?.name ?? "—"} · ${whenLabel}${
+                      mode === "appraisal"
+                        ? address ? ` · ${address}` : ""
+                        : property ? ` · ${property.name}` : ""
+                    }`}
             </p>
           </div>
           <button
@@ -260,7 +313,13 @@ export default function ViewingBooker({
           {/* ══ WHEN ══ */}
           {stage === "when" && (
             <>
-              {properties.length > 1 && (
+              {mode === "appraisal" && address && (
+                <p className="mb-4 flex items-center gap-2 text-[12.5px] text-muted">
+                  <DoodleIcon name="home" size={14} />
+                  At {address} — their place, not ours.
+                </p>
+              )}
+              {mode === "viewing" && properties.length > 1 && (
                 <div className="mb-5">
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
                     Which property
@@ -390,11 +449,12 @@ export default function ViewingBooker({
               onSend={(sent) => {
                 setSentCount(sent.length);
                 setStage("done");
-                if (property) {
+                // Appraisals have no listing — the guard must not eat them.
+                if (mode === "appraisal" || property) {
                   onBooked({
                     when: whenLabel,
-                    property: property.name,
-                    locality: property.locality,
+                    property: mode === "appraisal" ? (address || "Appraisal") : property!.name,
+                    locality: mode === "appraisal" ? "Market appraisal" : property!.locality,
                     who: chosen?.name ?? "",
                   });
                 }
@@ -407,7 +467,9 @@ export default function ViewingBooker({
             <div className="flex flex-col items-center py-8 text-center">
               <DoneTick />
               <p className="hand mt-5 text-[20px]">{whenLabel}</p>
-              <p className="mt-1 text-[12.5px]">{property?.name}</p>
+              <p className="mt-1 text-[12.5px]">
+                {mode === "appraisal" ? address || "Market appraisal" : property?.name}
+              </p>
               <p className="mt-3 text-[12px] text-muted">
                 {sentCount
                   ? `${sentCount} message${sentCount === 1 ? "" : "s"} sent. In the diary and on the record.`

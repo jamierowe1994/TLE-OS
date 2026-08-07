@@ -1,93 +1,101 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 
 /**
  * The property, captured while you're on the phone to the landlord.
  *
- * These are the questions an agent asks anyway during a first call. Today the
- * answers go in a notes box, which means they're readable by a human and
- * useless to everything else — you cannot filter on a note, and you certainly
- * cannot push one into REX as a bedroom count. So they get fields.
+ * Four rows, drawn with EXACTLY the contact column's grammar — same icon
+ * size, same text size, same row rhythm, same hairlines — so the two columns
+ * read as one instrument, not two widgets that happened to land together.
  *
- * Kept to four inputs on purpose. The vacancy chain that used to follow
- * (vacant? → becoming vacant? → date) is parked: it grew the panel by three
- * questions and the record wants to be a one-pager.
+ * The type picker is ours, not the browser's: a native <select> was the one
+ * piece of stock UI on a page where everything else is drawn, and it looked
+ * like a form had wandered in.
  */
 
 const TYPES = ["Flat", "Terraced", "Semi-detached", "Detached", "Bungalow", "Maisonette", "HMO", "Room"];
 
-function Stepper({
-  label,
-  icon,
-  value,
-  onChange,
-}: {
-  label: string;
-  icon: string;
-  value: number;
-  onChange: (n: number) => void;
-}) {
+/** The row skeleton, lifted from DetailRow so the columns rhyme. */
+function Row({ icon, label, children }: { icon: string; label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-1.5">
-      <span className="flex items-center gap-2.5 text-[12.5px]">
-        <DoodleIcon name={icon} size={15} className="text-muted" />
-        {label}
-      </span>
-      <span className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => onChange(Math.max(0, value - 1))}
-          className="flex h-6 w-6 items-center justify-center rounded-full border border-line/80 text-[13px] leading-none text-muted transition-colors hover:border-ink/40 hover:text-ink"
-        >
-          −
-        </button>
-        <span className="figures w-6 text-center text-[13px]">{value}</span>
-        <button
-          type="button"
-          onClick={() => onChange(value + 1)}
-          className="flex h-6 w-6 items-center justify-center rounded-full border border-line/80 text-[13px] leading-none text-muted transition-colors hover:border-ink/40 hover:text-ink"
-        >
-          +
-        </button>
-      </span>
+    <div className="flex items-center gap-3 py-1.5">
+      <DoodleIcon name={icon} size={15} className="shrink-0 text-muted" />
+      <span className="min-w-0 flex-1 text-[13.5px]">{label}</span>
+      {children}
     </div>
   );
 }
 
-/** A yes/no that looks like a decision, not a dropdown. Parked with the
- * vacancy chain; exported for when it returns. */
-export function YesNo({
-  value,
-  onChange,
-}: {
-  value: boolean | null;
-  onChange: (v: boolean) => void;
-}) {
+function Stepper({ value, onChange }: { value: number; onChange: (n: number) => void }) {
   return (
-    <span className="flex shrink-0 rounded-full border border-line/80 p-0.5">
-      {[true, false].map((v) => (
-        <button
-          key={String(v)}
-          type="button"
-          onClick={() => onChange(v)}
-          className={`rounded-full px-3 py-1 text-[11px] font-semibold transition-colors ${
-            value === v ? "bg-accent-dark text-page" : "text-muted hover:text-ink"
-          }`}
-        >
-          {v ? "Yes" : "No"}
-        </button>
-      ))}
+    <span className="flex shrink-0 items-center gap-1">
+      <button
+        type="button"
+        onClick={() => onChange(Math.max(0, value - 1))}
+        className="flex h-6 w-6 items-center justify-center rounded-full border border-line/80 text-[13px] leading-none text-muted transition-colors hover:border-ink/40 hover:text-ink"
+      >
+        −
+      </button>
+      <span className="figures w-6 text-center text-[13px]">{value}</span>
+      <button
+        type="button"
+        onClick={() => onChange(value + 1)}
+        className="flex h-6 w-6 items-center justify-center rounded-full border border-line/80 text-[13px] leading-none text-muted transition-colors hover:border-ink/40 hover:text-ink"
+      >
+        +
+      </button>
     </span>
   );
 }
 
-export const Ask = ({ children }: { children: React.ReactNode }) => (
-  <div className="fade-up flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-line/50 pt-2.5">
-    {children}
-  </div>
-);
+/** The house-style dropdown: a pill that opens a drawn menu. */
+function TypePicker({ value, onChange }: { value: string; onChange: (t: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
+
+  return (
+    <div ref={box} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`flex items-center gap-2 rounded-full border px-3 py-1 text-[12px] transition-colors ${
+          value ? "border-line/80" : "border-dashed border-line text-muted"
+        } hover:border-ink/40`}
+      >
+        {value || "Choose…"}
+        <span className={`text-[8px] transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+      </button>
+
+      {open && (
+        <div className="fade-up absolute right-0 top-full z-30 mt-1.5 w-44 rounded-xl border border-line/80 bg-card p-1.5 shadow-[0_12px_32px_-12px_rgba(16,16,20,0.3)]">
+          {TYPES.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => { onChange(t); setOpen(false); }}
+              className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[12.5px] transition-colors hover:bg-page ${
+                t === value ? "font-semibold text-accent-dark" : ""
+              }`}
+            >
+              {t}
+              {t === value && <span className="text-[10px]">✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function PropertyFacts() {
   const [type, setType] = useState("");
@@ -95,41 +103,20 @@ export default function PropertyFacts() {
   const [baths, setBaths] = useState(0);
   const [receptions, setReceptions] = useState(0);
 
-  const answered = [type, beds, baths].filter(Boolean).length;
-
   return (
-    /* No card, no photo, no heading of its own. This sits inside the record's
-       own layout as a column beside the contact details — the heading and its
-       stroke belong to that layout, and the property photo is a big box on the
-       right rather than a thumbnail crammed in here. */
-    <div>
-      <label className="mb-2 block">
-        <select
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-          className="w-full rounded-lg border border-line/80 bg-transparent px-2.5 py-2 text-[12.5px] outline-none focus:border-ink"
-        >
-          <option value="">Property type…</option>
-          {TYPES.map((t) => (
-            <option key={t} value={t}>{t}</option>
-          ))}
-        </select>
-      </label>
-
-      <div className="divide-y divide-line/40">
-        <Stepper label="Bedrooms" icon="bed.png" value={beds} onChange={setBeds} />
-        <Stepper label="Bathrooms" icon="doc" value={baths} onChange={setBaths} />
-        <Stepper label="Receptions" icon="sofa.png" value={receptions} onChange={setReceptions} />
-      </div>
-
-      {/* The vacancy chain (vacant? → soon? → date) is parked on James's call,
-          7 Aug 2026 — it asked too many questions for this view. The YesNo /
-          Ask machinery stays, because it comes back somewhere quieter. */}
-
-      <p className="mt-3.5 border-t border-line/60 pt-2.5 text-[10px] leading-relaxed text-muted">
-        {answered}/3 captured. These are the fields REX wants on a property record —
-        captured here they can be pushed; captured in a note they can only be read.
-      </p>
+    <div className="divide-y divide-line/50">
+      <Row icon="home" label="Property type">
+        <TypePicker value={type} onChange={setType} />
+      </Row>
+      <Row icon="bed.png" label="Bedrooms">
+        <Stepper value={beds} onChange={setBeds} />
+      </Row>
+      <Row icon="doc" label="Bathrooms">
+        <Stepper value={baths} onChange={setBaths} />
+      </Row>
+      <Row icon="sofa.png" label="Receptions">
+        <Stepper value={receptions} onChange={setReceptions} />
+      </Row>
     </div>
   );
 }
