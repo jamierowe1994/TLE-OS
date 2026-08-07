@@ -87,9 +87,12 @@ export default function Dashboard() {
             href={s.href}
             /* The block backdrop: at rest it sits flat, on hover the tile
                steps up-left and a hard slab of ink appears along its right and
-               bottom edges. bg-card rather than bg-panel because a transparent
-               tile would let the slab show straight through it. */
-            className="fade-up block-pop group rounded-2xl border border-line/80 bg-card p-5 hover:border-ink"
+               bottom edges. bg-page, not bg-card: the tiles stay the canvas
+               colour with an outline — a white fill made them louder than
+               their contents — but the fill must still be OPAQUE, because a
+               transparent tile lets the slab show straight through it. Same
+               colour as the page, painted rather than absent. */
+            className="fade-up block-pop group rounded-2xl border border-line/80 bg-page p-5 hover:border-ink"
           >
             {/* Bare icons — no circle behind them; the page breathes better. */}
             <div className="flex items-center gap-2.5">
@@ -207,19 +210,27 @@ export default function Dashboard() {
 
           This export holds its framing (786px wide at every sample) on a
           true-255 plate, so multiply alone does the work — no counter-scale,
-          no brightness clip. The blend class rides the VIDEO, never a wrapper:
-          a transform or filter on an ancestor makes a stacking context, and a
-          mix-blend-mode child can only blend within its own. */}
+          no brightness clip.
+
+          The wrapper is ISOLATED and paints its own page colour. Left to blend
+          against the page itself, the dog was at the compositor's mercy: mid-
+          scroll Chrome promotes layers, the blend loses sight of the backdrop,
+          and the white plate flashes in — visible as "white at the top of the
+          scroll, transparent at the bottom". An isolated group with an opaque
+          eggshell floor gives multiply the same thing to blend into on every
+          frame, wherever the page happens to be. */}
       <div className="mt-2 flex justify-end pr-6">
-        <video
-          src="/illustrations/dog-wag-3.mp4"
-          autoPlay
-          muted
-          loop
-          playsInline
-          aria-hidden
-          className="art-video pointer-events-none hidden w-72 sm:block"
-        />
+        <div className="isolate hidden bg-page sm:block">
+          <video
+            src="/illustrations/dog-wag-3.mp4"
+            autoPlay
+            muted
+            loop
+            playsInline
+            aria-hidden
+            className="art-video pointer-events-none w-72"
+          />
+        </div>
       </div>
     </>
   );

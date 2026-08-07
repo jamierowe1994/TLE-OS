@@ -26,6 +26,7 @@ export default function PhotoBox({
   label = "Add a photo",
   scope = "photo",
   refId = "unfiled",
+  fill = false,
   onStored,
 }: {
   className?: string;
@@ -34,6 +35,9 @@ export default function PhotoBox({
   scope?: "photo" | "document";
   /** Which record this belongs to, so everything for it shares a prefix. */
   refId?: string;
+  /** Fill the height given instead of holding 4:3 — for when the photo IS
+   *  the column rather than a thumbnail in one. */
+  fill?: boolean;
   onStored?: (file: StoredFile) => void;
 }) {
   const [preview, setPreview] = useState<string | null>(null);
@@ -79,13 +83,15 @@ export default function PhotoBox({
   const shown = stored?.url ?? preview;
 
   return (
-    <div className={className}>
+    <div className={`${fill ? "flex h-full flex-col" : ""} ${className}`}>
       <div
         onDragOver={(e) => { e.preventDefault(); setOver(true); }}
         onDragLeave={() => setOver(false)}
         onDrop={(e) => { e.preventDefault(); setOver(false); take(e.dataTransfer.files); }}
         onClick={() => !busy && input.current?.click()}
-        className={`group relative flex aspect-[4/3] w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border transition-colors ${
+        className={`group relative flex ${
+          fill ? "min-h-0 flex-1" : "aspect-[4/3]"
+        } w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border transition-colors ${
           over
             ? "border-accent-dark bg-accent-soft/40"
             : error

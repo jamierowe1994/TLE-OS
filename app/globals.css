@@ -225,14 +225,14 @@ h1, h2, h3, h4, h5 {
     border-color 190ms ease;
 }
 .block-pop:hover {
-  transform: translate(-4px, -4px);
-  box-shadow: 8px 8px 0 0 var(--pop-color);
+  transform: translate(-3px, -3px);
+  box-shadow: 6px 6px 0 0 var(--pop-color);
 }
 .block-pop-accent { --pop-color: var(--accent-dark); }
 
 @media (prefers-reduced-motion: reduce) {
   .block-pop { transition: box-shadow 190ms ease; }
-  .block-pop:hover { transform: none; box-shadow: 6px 6px 0 0 var(--pop-color); }
+  .block-pop:hover { transform: none; box-shadow: 5px 5px 0 0 var(--pop-color); }
 }
 
 /* Pie slices arriving one after another, as if each were drawn in turn. The
