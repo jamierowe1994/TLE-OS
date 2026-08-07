@@ -234,3 +234,149 @@ export const LEADS: Lead[] = [
     activity: [act("megaphone", "Lead captured by Instagram campaign", "2 weeks ago")],
   },
 ];
+
+/* --------------------------------------------------------------------------
+   Lead detail — what the drawer shows behind each of its six tabs.
+
+   Only the fields a lettings business actually keeps. Notably NO AML: that's
+   a sales-side check and doesn't belong on a tenant record.
+-------------------------------------------------------------------------- */
+
+export type Task = { id: string; title: string; due: string; done: boolean };
+export type Note = { id: string; author: string; when: string; text: string; pinned?: boolean };
+export type DocTag =
+  | "Right to Rent"
+  | "Proof of income"
+  | "Reference"
+  | "Tenancy agreement"
+  | "ID"
+  | "Bank statement"
+  | "Guarantor"
+  | "Other";
+export type Doc = { id: string; name: string; tag: DocTag; size: string; when: string };
+export type LeadViewing = {
+  id: string;
+  when: string;
+  property: string;
+  locality: string;
+  outcome: "Booked" | "Attended" | "Applying" | "Thinking" | "Not for them" | "No show";
+};
+
+export const DOC_TAGS: DocTag[] = [
+  "Right to Rent", "Proof of income", "Reference", "Tenancy agreement",
+  "ID", "Bank statement", "Guarantor", "Other",
+];
+
+export type LeadDetail = {
+  tags: string[];
+  priority: "High" | "Medium" | "Low";
+  summary: string;
+  nextAction: { title: string; detail: string; due: string } | null;
+  tasks: Task[];
+  notes: Note[];
+  docs: Doc[];
+  viewings: LeadViewing[];
+  /** REX listing ids this lead has been matched to. */
+  interested: string[];
+};
+
+/**
+ * Detail per lead. Written out for the ones a demo actually opens; everything
+ * else gets a believable shell derived from the lead's own fields, so no row
+ * is a dead end.
+ */
+const DETAIL: Record<string, Partial<LeadDetail>> = {
+  l1: {
+    tags: ["Looking to rent", "2 bed", "Pet owner", "Urgent"],
+    priority: "High",
+    summary:
+      "Sarah is looking for a 2-bedroom flat with parking in Didsbury or Withington. Budget up to £1,200 pcm. Pet friendly essential — one small dog. Looking to move from 1 September.",
+    nextAction: {
+      title: "Follow-up call",
+      detail: "Call to discuss requirements and arrange viewings.",
+      due: "Due today, 14:00",
+    },
+    tasks: [
+      { id: "t1", title: "Call back — no answer first time", due: "Today, 14:00", done: false },
+      { id: "t2", title: "Send Didsbury shortlist", due: "Today", done: false },
+      { id: "t3", title: "Check pet policy on 12 Elm Gardens", due: "Tomorrow", done: false },
+      { id: "t4", title: "Auto-response email", due: "Sent", done: true },
+    ],
+    notes: [
+      {
+        id: "n1", author: "Kirstie", when: "Today, 09:31", pinned: true,
+        text: "Pet is a small dog — non-negotiable. Rule out anything with a no-pets clause before sending.",
+      },
+      {
+        id: "n2", author: "Kirstie", when: "Today, 09:28",
+        text: "Works in Media City, wants a short commute. Parking matters more than a second bathroom.",
+      },
+    ],
+    docs: [
+      { id: "d1", name: "Sarah Johnson — payslip Jul.pdf", tag: "Proof of income", size: "184 KB", when: "Today" },
+      { id: "d2", name: "Passport scan.jpg", tag: "ID", size: "1.2 MB", when: "Today" },
+      { id: "d3", name: "Share code screenshot.png", tag: "Right to Rent", size: "420 KB", when: "Today" },
+    ],
+    viewings: [
+      { id: "vw1", when: "Thu 6 Aug, 17:00", property: "Flat 2, Mercer Street", locality: "Manchester M4", outcome: "Booked" },
+    ],
+    interested: ["295517", "295547", "339326"],
+  },
+  l3: {
+    tags: ["Landlord", "Valuation wanted", "From Facebook"],
+    priority: "High",
+    summary:
+      "Chloe has a 3-bed in Coventry coming off another agent and wants a rental valuation. Came through the paid Facebook campaign, so she landed in GoHighLevel rather than REX.",
+    nextAction: {
+      title: "Book the appraisal",
+      detail: "She's free most weekday mornings — get it in the diary this week.",
+      due: "Due tomorrow",
+    },
+    tasks: [{ id: "t1", title: "Book market appraisal", due: "Tomorrow", done: false }],
+    notes: [
+      {
+        id: "n1", author: "System", when: "2 hours ago",
+        text: "Captured by the Facebook lead form and synced from GoHighLevel. No REX record yet.",
+      },
+    ],
+    docs: [],
+    viewings: [],
+    interested: [],
+  },
+};
+
+const DEFAULT_TASKS: Task[] = [
+  { id: "t1", title: "Make first contact", due: "Today", done: false },
+];
+
+/** Everything the drawer needs, whether or not this lead was written out. */
+export function leadDetail(lead: Lead): LeadDetail {
+  const d = DETAIL[lead.id] ?? {};
+  return {
+    tags: d.tags ?? [
+      lead.enquiry === "Landlord" ? "Landlord" : "Looking to rent",
+      lead.area,
+      lead.source,
+    ],
+    priority: d.priority ?? (lead.stage === "New" ? "High" : "Medium"),
+    summary:
+      d.summary ??
+      `${lead.name.split(" ")[0]} enquired about ${lead.area} at ${lead.budget}. ${
+        lead.notes || "No further detail captured yet."
+      }`,
+    nextAction:
+      d.nextAction ??
+      (lead.stage === "New"
+        ? { title: "First contact", detail: "Nobody has spoken to this lead yet.", due: "Overdue" }
+        : null),
+    tasks: d.tasks ?? DEFAULT_TASKS,
+    notes:
+      d.notes ??
+      (lead.notes
+        ? [{ id: "n1", author: lead.agent, when: lead.received, text: lead.notes }]
+        : []),
+    docs: d.docs ?? [],
+    viewings: d.viewings ?? [],
+    interested: d.interested ?? [],
+  };
+}

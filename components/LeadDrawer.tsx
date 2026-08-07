@@ -1,0 +1,709 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import DoodleIcon from "@/components/DoodleIcon";
+import PropertyPhoto from "@/components/PropertyPhoto";
+import { Pill } from "@/components/Wire";
+import {
+  DOC_TAGS,
+  leadDetail,
+  STAGE_TONE,
+  type Doc,
+  type DocTag,
+  type Lead,
+  type Note,
+  type Task,
+} from "@/lib/leads-sample";
+import rexSample from "@/lib/rex-sample.json";
+
+/**
+ * The lead record, as a sheet that slides in from the right over a scrim.
+ *
+ * Six tabs, because a lead is six different questions depending on who's
+ * asking: what do they want (Overview), what's been said (Activity), have we
+ * shown them anything (Viewings), what do I owe them (Tasks), what are they
+ * looking at (Properties), and what have they sent us (Documents).
+ */
+
+type TabKey = "overview" | "activity" | "viewings" | "tasks" | "properties" | "documents";
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "overview", label: "Overview" },
+  { key: "activity", label: "Activity" },
+  { key: "viewings", label: "Viewings" },
+  { key: "tasks", label: "Tasks" },
+  { key: "properties", label: "Properties" },
+  { key: "documents", label: "Documents" },
+];
+
+type Listing = {
+  id: string; name: string; locality: string; rent: number | null; image: string | null;
+};
+const LISTINGS = rexSample.listings as Listing[];
+
+function Card({
+  title,
+  icon,
+  action,
+  children,
+}: {
+  title: string;
+  icon: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-line/80 bg-panel p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h3 className="flex items-center gap-2.5 text-[14px]">
+          <DoodleIcon name={icon} size={17} className="text-accent-dark" />
+          {title}
+        </h3>
+        {action}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+const Empty = ({ children }: { children: React.ReactNode }) => (
+  <p className="py-6 text-center text-[12px] text-muted">{children}</p>
+);
+
+export default function LeadDrawer({
+  lead,
+  onClose,
+  onStep,
+}: {
+  lead: Lead | null;
+  onClose: () => void;
+  /** −1 / +1 through the list, so you can work a queue without going back. */
+  onStep: (delta: number) => void;
+}) {
+  const [shown, setShown] = useState(false);
+  const [tab, setTab] = useState<TabKey>("overview");
+
+  // Editable state, seeded per lead — the wireframe should feel like software,
+  // not a picture of software.
+  const detail = useMemo(() => (lead ? leadDetail(lead) : null), [lead]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [notes, setNotes] = useState<Note[]>([]);
+  const [docs, setDocs] = useState<Doc[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [draft, setDraft] = useState("");
+  const [renaming, setRenaming] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!detail) return;
+    setTasks(detail.tasks);
+    setNotes(detail.notes);
+    setDocs(detail.docs);
+    setTags(detail.tags);
+    setTab("overview");
+    setDraft("");
+  }, [detail]);
+
+  // Mount, then flip to shown on the next frame — a transform that starts and
+  // ends in the same paint doesn't animate.
+  useEffect(() => {
+    if (!lead) {
+      setShown(false);
+      return;
+    }
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, [lead]);
+
+  // Escape closes; arrows step. A record you can only leave with the mouse is
+  // a record nobody works through quickly.
+  useEffect(() => {
+    if (!lead) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowRight") onStep(1);
+      if (e.key === "ArrowLeft") onStep(-1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lead, onClose, onStep]);
+
+  if (!lead || !detail) return null;
+
+  const initials = lead.name.split(" ").map((n) => n[0]).join("");
+  const interested = LISTINGS.filter((l) => detail.interested.includes(l.id));
+
+  function addNote() {
+    if (!draft.trim()) return;
+    setNotes((n) => [
+      { id: `n${Date.now()}`, author: "You", when: "Just now", text: draft.trim() },
+      ...n,
+    ]);
+    setDraft("");
+  }
+
+  return (
+    <div className="fixed inset-0 z-[120]">
+      {/* The scrim — clicking anywhere on it closes, as asked. */}
+      <button
+        aria-label="Close"
+        onClick={onClose}
+        className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${
+          shown ? "opacity-100" : "opacity-0"
+        }`}
+      />
+
+      <aside
+        className={`absolute inset-y-0 right-0 flex w-full flex-col bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] lg:w-[76%] xl:w-[68%] ${
+          shown ? "translate-x-0" : "translate-x-full"
+        }`}
+        style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
+      >
+        {/* ── Sheet chrome ── */}
+        <div className="flex shrink-0 items-center justify-between gap-3 px-6 pt-5">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink"
+            title="Close (Esc)"
+          >
+            ✕
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onStep(-1)}
+              className="flex items-center gap-2 rounded-full border border-line/80 px-4 py-2 text-[12px] text-muted transition-colors hover:text-ink"
+            >
+              ← Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => onStep(1)}
+              className="flex items-center gap-2 rounded-full border border-line/80 px-4 py-2 text-[12px] text-muted transition-colors hover:text-ink"
+            >
+              Next →
+            </button>
+            <button
+              type="button"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink"
+              title="More"
+            >
+              ⋯
+            </button>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-4">
+          {/* ── Identity ── */}
+          <div className="relative rounded-3xl border border-line/80 bg-panel p-6">
+            <div className="flex items-start gap-4">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[16px] font-bold text-accent-dark">
+                {initials}
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-[26px] leading-tight">{lead.name}</h2>
+                <div className="mt-2">
+                  <Pill tone={STAGE_TONE[lead.stage]}>{lead.stage}</Pill>
+                </div>
+
+                <dl className="mt-4 space-y-1.5 text-[12.5px]">
+                  {[
+                    ["call", lead.phone],
+                    ["mail", lead.email],
+                    ["home", `${lead.area} · ${lead.preferred}`],
+                    ["target", `Source: ${lead.source} · ${lead.received}`],
+                  ].map(([icon, text]) => (
+                    <div key={icon} className="flex items-center gap-2.5">
+                      <DoodleIcon name={icon} size={14} className="shrink-0 text-muted" />
+                      <span className="break-all">{text}</span>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/illustrations/notioly/home-caring.svg"
+                alt=""
+                aria-hidden
+                className="art ml-auto hidden h-36 shrink-0 lg:block"
+              />
+            </div>
+
+            {/* Tags — the quick facts, addable. */}
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              {tags.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTags((cur) => cur.filter((x) => x !== t))}
+                  className="group flex items-center gap-1.5 rounded-full border border-line/80 px-3 py-1.5 text-[11.5px] transition-colors hover:border-ink/40"
+                  title="Remove tag"
+                >
+                  {t}
+                  <span className="text-muted opacity-0 transition-opacity group-hover:opacity-100">
+                    ✕
+                  </span>
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => {
+                  const t = window.prompt("New tag");
+                  if (t?.trim()) setTags((cur) => [...cur, t.trim()]);
+                }}
+                className="rounded-full border border-dashed border-line px-3 py-1.5 text-[11.5px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
+              >
+                + Add tag
+              </button>
+            </div>
+          </div>
+
+          {/* ── Tabs ── */}
+          <div className="mt-5 flex gap-1 overflow-x-auto border-b border-line/80">
+            {TABS.map((t) => {
+              const count =
+                t.key === "tasks" ? tasks.filter((x) => !x.done).length
+                : t.key === "documents" ? docs.length
+                : t.key === "viewings" ? detail.viewings.length
+                : t.key === "properties" ? interested.length
+                : 0;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setTab(t.key)}
+                  className={`hand relative whitespace-nowrap px-4 py-2.5 text-[13.5px] transition-colors ${
+                    tab === t.key ? "text-ink" : "text-muted hover:text-ink"
+                  }`}
+                >
+                  {t.label}
+                  {count > 0 && (
+                    <span className="figures ml-1.5 text-[10.5px] text-muted">{count}</span>
+                  )}
+                  {tab === t.key && (
+                    <span className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-accent-dark" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-5">
+            {/* ══ OVERVIEW ══ */}
+            {tab === "overview" && (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card title="Lead summary" icon="user">
+                  <p className="text-[12.5px] leading-relaxed">{detail.summary}</p>
+                  <dl className="mt-4 space-y-2 border-t border-line/70 pt-4 text-[12px]">
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-muted">Priority</dt>
+                      <dd
+                        className={
+                          detail.priority === "High" ? "font-semibold text-accent-dark" : ""
+                        }
+                      >
+                        {detail.priority}
+                      </dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-muted">Assigned to</dt>
+                      <dd>{lead.agent}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-muted">Desired move date</dt>
+                      <dd>{lead.moveDate}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-muted">Budget</dt>
+                      <dd className="figures">{lead.budget}</dd>
+                    </div>
+                  </dl>
+                </Card>
+
+                <Card title="Next action" icon="target">
+                  {detail.nextAction ? (
+                    <>
+                      <p className="text-[13px] font-semibold">{detail.nextAction.title}</p>
+                      <p className="mt-1.5 text-[12px] leading-relaxed text-muted">
+                        {detail.nextAction.detail}
+                      </p>
+                      <p className="mt-3 flex items-center gap-2 text-[11.5px] font-medium text-accent-dark">
+                        <DoodleIcon name="clock" size={13} />
+                        {detail.nextAction.due}
+                      </p>
+                      <button
+                        type="button"
+                        className="mt-4 w-full rounded-xl border border-line/80 py-2.5 text-[12px] font-medium transition-colors hover:border-ink/40"
+                      >
+                        Mark as complete
+                      </button>
+                    </>
+                  ) : (
+                    <Empty>Nothing outstanding.</Empty>
+                  )}
+                </Card>
+
+                <Card title="Recent activity" icon="analytics">
+                  <ul className="space-y-3">
+                    {lead.activity.map((a, i) => (
+                      <li key={i} className="flex items-start gap-2.5">
+                        <DoodleIcon name={a.icon} size={14} className="mt-0.5 shrink-0 text-accent-dark" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[12px] leading-snug">{a.text}</span>
+                          <span className="block text-[10.5px] text-muted">{a.when}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+
+                <Card
+                  title="Interested in"
+                  icon="home"
+                  action={
+                    <button className="text-[11.5px] font-semibold text-muted transition-colors hover:text-ink">
+                      + Add property
+                    </button>
+                  }
+                >
+                  {interested.length ? (
+                    <ul className="space-y-3">
+                      {interested.map((p) => (
+                        <li key={p.id} className="flex items-center gap-3">
+                          <PropertyPhoto src={p.image} className="h-10 w-12 shrink-0 rounded-lg" />
+                          <span className="min-w-0 flex-1">
+                            <span className="hand block truncate text-[12.5px]">{p.name}</span>
+                            <span className="block truncate text-[10.5px] text-muted">
+                              {p.locality}
+                            </span>
+                          </span>
+                          <span className="figures shrink-0 text-[12.5px]">
+                            £{p.rent?.toLocaleString("en-GB")}
+                            <span className="text-[10px] text-muted"> pcm</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <Empty>No properties matched yet.</Empty>
+                  )}
+                </Card>
+
+                <div className="lg:col-span-2">
+                  <Card title="Pinned notes" icon="note">
+                    {notes.filter((n) => n.pinned).length ? (
+                      <ul className="space-y-3">
+                        {notes
+                          .filter((n) => n.pinned)
+                          .map((n) => (
+                            <li key={n.id} className="rounded-xl bg-accent-soft/40 p-3.5">
+                              <p className="text-[12.5px] leading-relaxed">{n.text}</p>
+                              <p className="mt-1.5 text-[10.5px] text-muted">
+                                {n.author} · {n.when}
+                              </p>
+                            </li>
+                          ))}
+                      </ul>
+                    ) : (
+                      <Empty>Nothing pinned. Pin a note in Tasks to bring it here.</Empty>
+                    )}
+                  </Card>
+                </div>
+              </div>
+            )}
+
+            {/* ══ ACTIVITY ══ */}
+            {tab === "activity" && (
+              <Card title="Everything that's happened" icon="analytics">
+                <ul className="space-y-4">
+                  {lead.activity.map((a, i) => (
+                    <li key={i} className="flex items-start gap-3 border-b border-line/40 pb-4 last:border-0 last:pb-0">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft/60">
+                        <DoodleIcon name={a.icon} size={15} className="text-accent-dark" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[12.5px]">{a.text}</span>
+                        <span className="block text-[10.5px] text-muted">{a.when}</span>
+                      </span>
+                    </li>
+                  ))}
+                  {notes.map((n) => (
+                    <li key={n.id} className="flex items-start gap-3 border-b border-line/40 pb-4 last:border-0 last:pb-0">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft/60">
+                        <DoodleIcon name="note" size={15} className="text-accent-dark" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[12.5px]">{n.text}</span>
+                        <span className="block text-[10.5px] text-muted">
+                          Note by {n.author} · {n.when}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-4 border-t border-line/70 pt-3 text-[10.5px] text-muted">
+                  Emails in and out will thread here — REX AuditLogs already records
+                  field-level changes with actor and timestamp, so the history is real.
+                </p>
+              </Card>
+            )}
+
+            {/* ══ VIEWINGS ══ */}
+            {tab === "viewings" && (
+              <Card
+                title="Viewings"
+                icon="calendar"
+                action={
+                  <button className="text-[11.5px] font-semibold text-muted transition-colors hover:text-ink">
+                    + Book viewing
+                  </button>
+                }
+              >
+                {detail.viewings.length ? (
+                  <ul className="space-y-3">
+                    {detail.viewings.map((v) => (
+                      <li key={v.id} className="flex items-center gap-3 border-b border-line/40 pb-3 last:border-0 last:pb-0">
+                        <span className="figures w-32 shrink-0 text-[12px] text-accent-dark">
+                          {v.when}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[12.5px]">{v.property}</span>
+                          <span className="block truncate text-[10.5px] text-muted">{v.locality}</span>
+                        </span>
+                        <Pill tone={v.outcome === "Applying" ? "good" : "neutral"}>{v.outcome}</Pill>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <Empty>No viewings booked for this lead yet.</Empty>
+                )}
+              </Card>
+            )}
+
+            {/* ══ TASKS (and notes) ══ */}
+            {tab === "tasks" && (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card
+                  title="Tasks"
+                  icon="checklist"
+                  action={
+                    <button className="text-[11.5px] font-semibold text-muted transition-colors hover:text-ink">
+                      + Add task
+                    </button>
+                  }
+                >
+                  <ul className="space-y-2.5">
+                    {tasks.map((t) => (
+                      <li key={t.id}>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setTasks((cur) =>
+                              cur.map((x) => (x.id === t.id ? { ...x, done: !x.done } : x))
+                            )
+                          }
+                          className="flex w-full items-start gap-2.5 text-left"
+                        >
+                          <span
+                            className={`mt-0.5 flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[9px] transition-colors ${
+                              t.done
+                                ? "border-accent-dark bg-accent-soft text-accent-dark"
+                                : "border-line"
+                            }`}
+                          >
+                            {t.done && "✓"}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span
+                              className={`block text-[12.5px] leading-snug ${
+                                t.done ? "text-muted line-through opacity-60" : ""
+                              }`}
+                            >
+                              {t.title}
+                            </span>
+                            <span className="block text-[10.5px] text-muted">{t.due}</span>
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+
+                <Card title="Notes" icon="note">
+                  <div className="rounded-xl border border-line/80 p-2.5">
+                    <textarea
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      rows={2}
+                      placeholder="Add a note — what was said, what to remember…"
+                      className="w-full resize-none bg-transparent text-[12.5px] outline-none placeholder:text-muted/70"
+                    />
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={addNote}
+                        disabled={!draft.trim()}
+                        className="rounded-full bg-ink px-4 py-1.5 text-[11.5px] font-semibold text-page transition-opacity disabled:opacity-30"
+                      >
+                        Save note
+                      </button>
+                    </div>
+                  </div>
+
+                  <ul className="mt-4 space-y-3">
+                    {notes.map((n) => (
+                      <li
+                        key={n.id}
+                        className={`rounded-xl p-3.5 ${n.pinned ? "bg-accent-soft/40" : "border border-line/60"}`}
+                      >
+                        <p className="text-[12.5px] leading-relaxed">{n.text}</p>
+                        <div className="mt-2 flex items-center justify-between gap-3">
+                          <span className="text-[10.5px] text-muted">
+                            {n.author} · {n.when}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setNotes((cur) =>
+                                cur.map((x) => (x.id === n.id ? { ...x, pinned: !x.pinned } : x))
+                              )
+                            }
+                            className="text-[10.5px] font-semibold text-muted transition-colors hover:text-ink"
+                          >
+                            {n.pinned ? "Unpin" : "Pin"}
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                    {!notes.length && <Empty>No notes yet.</Empty>}
+                  </ul>
+                </Card>
+              </div>
+            )}
+
+            {/* ══ PROPERTIES ══ */}
+            {tab === "properties" && (
+              <Card
+                title="Properties"
+                icon="home"
+                action={
+                  <button className="text-[11.5px] font-semibold text-muted transition-colors hover:text-ink">
+                    + Add property
+                  </button>
+                }
+              >
+                {interested.length ? (
+                  <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                    {interested.map((p) => (
+                      <div key={p.id} className="overflow-hidden rounded-2xl border border-line/60">
+                        <PropertyPhoto src={p.image} className="h-32 w-full" />
+                        <div className="p-3.5">
+                          <p className="hand truncate text-[13px]">{p.name}</p>
+                          <p className="mt-0.5 truncate text-[10.5px] text-muted">{p.locality}</p>
+                          <p className="figures mt-2 text-[15px]">
+                            £{p.rent?.toLocaleString("en-GB")}
+                            <span className="text-[10px] text-muted"> pcm</span>
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Empty>
+                    Nothing matched yet — add a property to shortlist it against this lead.
+                  </Empty>
+                )}
+              </Card>
+            )}
+
+            {/* ══ DOCUMENTS ══ */}
+            {tab === "documents" && (
+              <Card
+                title="Documents"
+                icon="folder"
+                action={
+                  <button className="text-[11.5px] font-semibold text-muted transition-colors hover:text-ink">
+                    + Upload
+                  </button>
+                }
+              >
+                {docs.length ? (
+                  <ul className="space-y-2.5">
+                    {docs.map((d) => (
+                      <li
+                        key={d.id}
+                        className="flex flex-wrap items-center gap-3 border-b border-line/40 pb-3 last:border-0 last:pb-0"
+                      >
+                        <DoodleIcon name="doc" size={17} className="shrink-0 text-accent-dark" />
+                        <span className="min-w-0 flex-1">
+                          {renaming === d.id ? (
+                            <input
+                              autoFocus
+                              // Select the whole name on open: renaming a file
+                              // means replacing it, not appending to it.
+                              onFocus={(e) => e.target.select()}
+                              defaultValue={d.name}
+                              onBlur={(e) => {
+                                const v = e.target.value.trim();
+                                if (v) setDocs((cur) => cur.map((x) => (x.id === d.id ? { ...x, name: v } : x)));
+                                setRenaming(null);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                                if (e.key === "Escape") setRenaming(null);
+                              }}
+                              className="w-full rounded-lg border border-ink/40 bg-transparent px-2 py-1 text-[12.5px] outline-none"
+                            />
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setRenaming(d.id)}
+                              className="block max-w-full truncate text-left text-[12.5px] hover:underline"
+                              title="Click to rename"
+                            >
+                              {d.name}
+                            </button>
+                          )}
+                          <span className="block text-[10.5px] text-muted">
+                            {d.size} · {d.when}
+                          </span>
+                        </span>
+
+                        {/* The tag IS the filing system — a document nobody
+                            classified is a document nobody can find later. */}
+                        <select
+                          value={d.tag}
+                          onChange={(e) =>
+                            setDocs((cur) =>
+                              cur.map((x) =>
+                                x.id === d.id ? { ...x, tag: e.target.value as DocTag } : x
+                              )
+                            )
+                          }
+                          className="shrink-0 rounded-full border border-line/80 bg-transparent px-3 py-1.5 text-[11px] outline-none focus:border-ink"
+                        >
+                          {DOC_TAGS.map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <Empty>No documents yet. Upload right-to-rent, income proof or references.</Empty>
+                )}
+                <p className="mt-4 border-t border-line/70 pt-3 text-[10.5px] leading-relaxed text-muted">
+                  Lettings tags only — right to rent, income, references, guarantor. No AML here:
+                  that&apos;s a sales-side check and doesn&apos;t belong on a tenant record.
+                </p>
+              </Card>
+            )}
+          </div>
+        </div>
+      </aside>
+    </div>
+  );
+}

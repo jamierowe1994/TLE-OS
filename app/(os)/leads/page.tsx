@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import LeadDrawer from "@/components/LeadDrawer";
 import PageHeader from "@/components/PageHeader";
 import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
 import { FlowTag, Pill } from "@/components/Wire";
@@ -14,15 +15,6 @@ import { LEADS, STAGE_TONE, type Lead } from "@/lib/leads-sample";
  * in REX, paid social lands in GoHighLevel — and the page's job is that you
  * never have to care which. Every action written here goes back to REX.
  */
-
-const ACTIONS = [
-  { label: "Call", icon: "call" },
-  { label: "Email", icon: "mail" },
-  { label: "WhatsApp", icon: "message" },
-  { label: "Book viewing", icon: "calendar" },
-  { label: "Add note", icon: "pencil" },
-  { label: "Mark qualified", icon: "shield" },
-];
 
 function Filter({ label }: { label: string }) {
   return (
@@ -58,6 +50,15 @@ export default function Leads() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const open = LEADS.find((l) => l.id === openId) ?? null;
+
+  /** Previous/Next walk the whole book, not just the visible page. */
+  function step(delta: number) {
+    if (!open) return;
+    const i = LEADS.findIndex((l) => l.id === open.id);
+    const next = LEADS[(i + delta + LEADS.length) % LEADS.length];
+    setOpenId(next.id);
+    setPage(Math.floor(LEADS.indexOf(next) / PER_PAGE));
+  }
 
   // Defined once — a fresh array each render would restart the prefs effect.
   const defs = useMemo<ColumnDef<Lead>[]>(
@@ -105,7 +106,7 @@ export default function Leads() {
         <FlowTag from="portals → REX · social → GHL" to="REX" />
       </div>
 
-      <div className={`mt-4 grid gap-4 ${open ? "2xl:grid-cols-[2.4fr_1fr]" : ""}`}>
+      <div className="mt-4">
         <div className="fade-up min-w-0 rounded-2xl border border-line/80 bg-panel p-5">
           {/* Filters, with the column customiser at the end of the row. */}
           <div className="flex flex-wrap items-center gap-2.5">
@@ -172,97 +173,9 @@ export default function Leads() {
           </div>
         </div>
 
-        {/* ── The open lead. */}
-        {open && (
-          <aside className="fade-up h-fit rounded-2xl border border-line/80 bg-panel p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex min-w-0 items-start gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[12px] font-bold text-accent-dark">
-                  {open.name.split(" ").map((n) => n[0]).join("")}
-                </span>
-                <div className="min-w-0">
-                  <p className="hand truncate text-[17px] leading-tight">{open.name}</p>
-                  <p className="mt-1 break-all text-[11px] text-muted">{open.email}</p>
-                  <p className="truncate text-[11px] text-muted">{open.phone}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOpenId(null)}
-                className="shrink-0 text-muted transition-colors hover:text-ink"
-                title="Close"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Pill tone={STAGE_TONE[open.stage]}>{open.stage}</Pill>
-              <span className="text-[10.5px] text-muted">
-                {open.source} · {open.received}
-              </span>
-            </div>
-
-            <dl className="mt-5 space-y-2.5 border-t border-line/70 pt-4 text-[12px]">
-              {[
-                ["Enquiry type", open.enquiry],
-                ["Desired move date", open.moveDate],
-                ["Preferred area", open.preferred],
-                ["Budget / rent", open.budget],
-                ["Assigned agent", open.agent],
-              ].map(([k, v]) => (
-                <div key={k} className="flex items-baseline justify-between gap-3">
-                  <dt className="shrink-0 text-muted">{k}</dt>
-                  <dd className="text-right">{v}</dd>
-                </div>
-              ))}
-              {open.notes && (
-                <div className="pt-1">
-                  <dt className="text-muted">Notes</dt>
-                  <dd className="mt-1 leading-snug">{open.notes}</dd>
-                </div>
-              )}
-            </dl>
-
-            <div className="mt-5 grid grid-cols-3 gap-2 border-t border-line/70 pt-4">
-              {ACTIONS.map((a) => (
-                <button
-                  key={a.label}
-                  type="button"
-                  className="flex flex-col items-center gap-1.5 rounded-xl border border-line/80 px-2 py-2.5 text-[10px] font-medium transition-colors hover:border-ink/40"
-                >
-                  <DoodleIcon name={a.icon} size={16} className="text-accent-dark" />
-                  {a.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-5 border-t border-line/70 pt-4">
-              <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
-                Latest activity
-              </p>
-              <ul className="mt-3 space-y-3">
-                {open.activity.map((a, i) => (
-                  <li key={i} className="flex items-start gap-2.5">
-                    <DoodleIcon
-                      name={a.icon}
-                      size={14}
-                      className="mt-0.5 shrink-0 text-accent-dark"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[11.5px] leading-snug">{a.text}</span>
-                      <span className="block text-[10px] text-muted">{a.when}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-3 text-[10.5px] text-muted">
-                Reconstructable from REX AuditLogs — actor and timestamp per change.
-              </p>
-            </div>
-          </aside>
-        )}
       </div>
+
+      <LeadDrawer lead={open} onClose={() => setOpenId(null)} onStep={step} />
     </>
   );
 }
