@@ -9,13 +9,24 @@ export default function DoodleIcon({
   size = 18,
   className = "",
 }: {
-  /** Filename in /public/icons/doodle. Omit the extension for the SVG set;
-   * pass it in full (e.g. "bed.png") for the PNG masks. */
+  /**
+   * Two sets, chosen by whether the name has a folder in it:
+   *
+   *   "mail"        → /icons/doodle/mail.svg      the original doodle set
+   *   "pack/house"  → /icons/pack/house.svg       the 250-icon Icons pack
+   *
+   * The pack is the preferred set — more of it, and better drawn — with the
+   * doodle set as the fallback for anything it doesn't cover. Both are solid
+   * ink on transparent, so both mask identically and take currentColor.
+   *
+   * Extensions are implied except for the PNG masks ("bed.png").
+   */
   name: string;
   size?: number;
   className?: string;
 }) {
-  const url = `url(/icons/doodle/${name.includes(".") ? name : `${name}.svg`})`;
+  const file = name.includes(".") ? name : `${name}.svg`;
+  const url = `url(/icons/${name.includes("/") ? file : `doodle/${file}`})`;
   return (
     <span
       aria-hidden

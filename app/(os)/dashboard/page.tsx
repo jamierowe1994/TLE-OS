@@ -15,11 +15,13 @@ import { Card, FlowTag, Pill } from "@/components/Wire";
  * Every figure maps to a measured source; unknowns say TBC on the tile.
  */
 
+/* Icons from the Icons pack (the "pack/" prefix), which is the preferred set —
+   250 of them and better drawn than the original doodles. */
 const STATS = [
-  { label: "Leads today", icon: "target", value: "14", hint: "3 uncontacted", href: "/leads" },
-  { label: "On market", icon: "home", value: "24", hint: "2 under offer", href: "/listings" },
-  { label: "Applications", icon: "checklist", value: "6", hint: "1 stalled", href: "/applications" },
-  { label: "Occupancy", icon: "pie", value: "93%", hint: "of the managed book", href: "/portfolio" },
+  { label: "Leads today", icon: "pack/target", value: "14", hint: "3 uncontacted", href: "/leads" },
+  { label: "On market", icon: "pack/house", value: "24", hint: "2 under offer", href: "/listings" },
+  { label: "Applications", icon: "pack/checklist", value: "6", hint: "1 stalled", href: "/applications" },
+  { label: "Occupancy", icon: "pack/building", value: "93%", hint: "of the managed book", href: "/portfolio" },
 ];
 
 const PIPELINE = [
@@ -83,7 +85,11 @@ export default function Dashboard() {
           <Link
             key={s.label}
             href={s.href}
-            className="fade-up group rounded-2xl border border-line/80 bg-panel p-5 transition-colors hover:border-ink/40"
+            /* The block backdrop: at rest it sits flat, on hover the tile
+               steps up-left and a hard slab of ink appears along its right and
+               bottom edges. bg-card rather than bg-panel because a transparent
+               tile would let the slab show straight through it. */
+            className="fade-up block-pop group rounded-2xl border border-line/80 bg-card p-5 hover:border-ink"
           >
             {/* Bare icons — no circle behind them; the page breathes better. */}
             <div className="flex items-center gap-2.5">

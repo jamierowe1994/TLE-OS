@@ -200,6 +200,41 @@ h1, h2, h3, h4, h5 {
 .tick-draw { stroke-dasharray: 40; animation: tick-draw 0.45s 0.15s ease-out both; }
 .ring-pop { animation: ring-pop 0.4s cubic-bezier(0.3, 1.4, 0.5, 1) both; }
 
+/* ---------------------------------------------------------------------------
+   Block backdrops.
+
+   The house style for a raised surface: a slab of flat colour offset down and
+   right, hard-edged, no blur, no fade. It's the shadow an illustrator draws
+   rather than the one a renderer computes, which is why it belongs in a
+   product built out of ink lines.
+
+   At rest the slab is tucked exactly behind the element and invisible. On
+   hover the element steps up and left and the slab appears along the right and
+   bottom edges — one movement, two edges, no gradient anywhere.
+
+   --pop-color is the slab. Ink by default, so it inverts with the theme for
+   free: near-black on paper, near-white on charcoal. Add .block-pop-accent for
+   the brand colour instead.
+--------------------------------------------------------------------------- */
+.block-pop {
+  --pop-color: var(--ink);
+  box-shadow: 0 0 0 0 var(--pop-color);
+  transition:
+    transform 190ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 190ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 190ms ease;
+}
+.block-pop:hover {
+  transform: translate(-4px, -4px);
+  box-shadow: 8px 8px 0 0 var(--pop-color);
+}
+.block-pop-accent { --pop-color: var(--accent-dark); }
+
+@media (prefers-reduced-motion: reduce) {
+  .block-pop { transition: box-shadow 190ms ease; }
+  .block-pop:hover { transform: none; box-shadow: 6px 6px 0 0 var(--pop-color); }
+}
+
 /* Pie slices arriving one after another, as if each were drawn in turn. The
    stagger is set per slice on the element. */
 @keyframes slice-in {
