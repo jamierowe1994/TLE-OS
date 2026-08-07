@@ -210,19 +210,20 @@ export default function Dashboard() {
           At the foot of the content rather than pinned to the box: there's
           nothing below him to crowd, so he can be properly sized.
 
-          Both classes ride the VIDEO, never a wrapper. A transform on an
-          ancestor would create a stacking context, and a mix-blend-mode child
-          can only blend within its own — which is exactly how the white plate
-          came back as a solid block the first time. */}
+          This export holds its framing (786px wide at every sample) on a
+          true-255 plate, so multiply alone does the work — no counter-scale,
+          no brightness clip. The blend class rides the VIDEO, never a wrapper:
+          a transform or filter on an ancestor makes a stacking context, and a
+          mix-blend-mode child can only blend within its own. */}
       <div className="mt-2 flex justify-end pr-6">
         <video
-          src="/illustrations/dog-wag-2.mp4"
+          src="/illustrations/dog-wag-3.mp4"
           autoPlay
           muted
           loop
           playsInline
           aria-hidden
-          className="art-video wag-hold pointer-events-none hidden w-72 sm:block"
+          className="art-video pointer-events-none hidden w-72 sm:block"
         />
       </div>
     </>
