@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev -p 3200",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "check": "NEXT_DIST_DIR=.next-check next build"
   },
   "dependencies": {
     "next": "^15.3.0",

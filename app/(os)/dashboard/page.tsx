@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
+import LeadSourceChart from "@/components/LeadSourceChart";
 import PageHeader from "@/components/PageHeader";
 import WindowScene from "@/components/WindowScene";
 import { Card, FlowTag, Pill } from "@/components/Wire";
@@ -43,13 +44,6 @@ const TODAY = [
   { time: "13:00", what: "Market appraisal — 9 Granby Road", who: "New landlord" },
   { time: "15:30", what: "Viewing — 41 Harewood Road", who: "Marcus Bell" },
   { time: "17:00", what: "Viewing — Flat 2, Mercer Street", who: "Sophie Turner" },
-];
-
-const LATEST_LEADS = [
-  { who: "Sophie Turner", source: "Rightmove", when: "18m" },
-  { who: "Chloe Adams", source: "Facebook ad", when: "2h" },
-  { who: "Daniel Okafor", source: "Zoopla", when: "3h" },
-  { who: "Ryan Whitfield", source: "Instagram ad", when: "1d" },
 ];
 
 /** Four bands, matching the portal's greeting — the OS should feel awake. */
@@ -158,19 +152,13 @@ export default function Dashboard() {
           </Link>
         </Card>
 
-        <Card title="Latest leads" tag={<FlowTag from="REX + GHL" />}>
-          <ul className="space-y-2.5">
-            {LATEST_LEADS.map((l) => (
-              <li key={l.who} className="flex items-center justify-between gap-3">
-                <span className="min-w-0">
-                  <span className="hand block truncate text-[13px]">{l.who}</span>
-                  <span className="block text-[10.5px] text-muted">{l.source}</span>
-                </span>
-                <span className="shrink-0 text-[10.5px] text-muted">{l.when}</span>
-              </li>
-            ))}
-          </ul>
-          <Link href="/leads" className="mt-3 block text-[11px] font-semibold text-muted transition-colors hover:text-ink">
+        {/* This slot used to be Latest leads — four names, which the stat tile
+            above already counts and the nav is one click from. Where those
+            leads came FROM is the question this page couldn't answer, and it's
+            the one that decides where the marketing money goes. */}
+        <Card title="Lead sources" tag={<FlowTag from="REX + GHL" />}>
+          <LeadSourceChart />
+          <Link href="/leads" className="mt-4 block text-[11px] font-semibold text-muted transition-colors hover:text-ink">
             All leads →
           </Link>
         </Card>

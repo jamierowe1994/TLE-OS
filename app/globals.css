@@ -178,6 +178,15 @@ h1, h2, h3, h4, h5 {
 .press-wobble:active { transform: scale(0.96); }
 .press-wobble.is-pressed { animation: press-wobble 0.42s cubic-bezier(0.3, 1.4, 0.5, 1); }
 
+/* A ring that leaves the button on release — the click you can see. Spread
+   only, on a colour derived from the accent, so it works on every palette and
+   costs nothing when the button isn't being pressed. */
+@keyframes press-ring {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 70%, transparent); }
+  100% { box-shadow: 0 0 0 14px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+.press-ring.is-pressed { animation: press-wobble 0.42s cubic-bezier(0.3, 1.4, 0.5, 1), press-ring 0.5s ease-out; }
+
 /* The confirmation tick — draws itself, then the ring settles behind it. */
 @keyframes tick-draw {
   from { stroke-dashoffset: 40; }
@@ -191,11 +200,22 @@ h1, h2, h3, h4, h5 {
 .tick-draw { stroke-dasharray: 40; animation: tick-draw 0.45s 0.15s ease-out both; }
 .ring-pop { animation: ring-pop 0.4s cubic-bezier(0.3, 1.4, 0.5, 1) both; }
 
+/* Pie slices arriving one after another, as if each were drawn in turn. The
+   stagger is set per slice on the element. */
+@keyframes slice-in {
+  from { opacity: 0; transform: scale(0.8) rotate(-6deg); }
+  to   { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+.slice-in { animation: slice-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
 @media (prefers-reduced-motion: reduce) {
   .press-wobble.is-pressed,
+  .press-ring.is-pressed,
   .tick-draw,
+  .slice-in,
   .ring-pop { animation: none; }
   .tick-draw { stroke-dashoffset: 0; }
+  .slice-in { opacity: 1; }
 }
 
 /* ---------------------------------------------------------------------------

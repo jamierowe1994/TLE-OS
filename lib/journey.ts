@@ -19,7 +19,7 @@ import { leadSide } from "@/lib/leads-sample";
  * them is an edit to this file and nothing else.
  */
 
-export type JourneyAction = "viewing" | "send" | "sign" | "none";
+export type JourneyAction = "viewing" | "send" | "sign" | "handoff" | "none";
 
 export type JourneyStep = {
   id: string;
@@ -115,23 +115,18 @@ export const LANDLORD_TRACK: JourneyStep[] = [
     detail: "Photos, floorplan, description, price. Published to the portals from REX.",
     action: "none", cta: "Mark as live",
   },
+  /* The landlord track ENDS here, on purpose.
+     Everything past this point is about the property, not the person — the
+     viewings, the applicant, the referencing. Carrying on in the lead record
+     would mean tracking a property inside a contact, which is exactly the
+     mess that makes a CRM stop being trusted. So the last step hands over:
+     the lead becomes a listing, and Listings owns it from there. */
   {
-    id: "viewings", label: "Viewings", icon: "calendar",
-    title: "Arrange viewings",
-    detail: "Agree access, then book applicants in. The landlord gets told about every one.",
-    action: "viewing", cta: "Book a viewing",
-  },
-  {
-    id: "offer", label: "Let agreed", icon: "coin",
-    title: "Let agreed",
-    detail: "Offer accepted and referencing under way on the applicant.",
-    action: "send", cta: "Tell the landlord",
-  },
-  {
-    id: "managed", label: "Live", icon: "home",
-    title: "Tenancy live",
-    detail: "Tenant in, rent collected, property under management. The landlord record goes quiet until renewal.",
-    action: "none", cta: "Confirm move-in",
+    id: "handoff", label: "→ Listing", icon: "key",
+    title: "Push to a listing",
+    detail:
+      "This landlord is signed, compliant and live. From here it's a property, not a person — hand it to Listings and the viewings track picks it up.",
+    action: "handoff", cta: "Push to listings",
   },
 ];
 
@@ -153,7 +148,7 @@ export function startingStep(lead: Lead): number {
     case "New": return 0;
     case "Contacted": return 1;
     case "Waiting": return tenant ? 2 : 1;
-    case "Viewing booked": return 3;
+    case "Viewing booked": return tenant ? 3 : 4;
     case "Qualified": return tenant ? 5 : 4;
     case "Not proceeding": return 1;
     default: return 0;

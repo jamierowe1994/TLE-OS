@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DetailRow, DoneTick, PressButton } from "@/components/Bits";
@@ -110,6 +111,7 @@ export default function LeadDrawer({
   const [booking, setBooking] = useState(false);
   const [signing, setSigning] = useState(false);
   const [booked, setBooked] = useState<LeadViewing[]>([]);
+  const [handingOff, setHandingOff] = useState(false);
 
   useEffect(() => {
     if (!detail) return;
@@ -178,6 +180,7 @@ export default function LeadDrawer({
     if (here.action === "viewing") setBooking(true);
     else if (here.action === "sign") setSigning(true);
     else if (here.action === "send") setEmailing(true);
+    else if (here.action === "handoff") setHandingOff(true);
     else advance();
   }
 
@@ -446,27 +449,32 @@ export default function LeadDrawer({
                         </p>
                       )}
 
-                      <PressButton
-                        onClick={fire}
-                        className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-ink py-2.5 text-[12.5px] font-semibold text-page"
-                      >
-                        <DoodleIcon name={here.icon} size={14} />
-                        {here.cta}
-                      </PressButton>
-
-                      {/* Some steps finish without the system doing anything —
-                          a phone call happens on a phone. This is that. */}
-                      {here.action !== "none" && !finished && (
-                        <button
-                          type="button"
-                          onClick={advance}
-                          className="mt-2.5 w-full text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+                      {/* Sized to its words and left-aligned with everything
+                          else in the card — a full-width bar made a one-line
+                          action look like a form submission. */}
+                      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+                        <PressButton
+                          onClick={fire}
+                          className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-page"
                         >
-                          Already done — move on
-                        </button>
-                      )}
+                          <DoodleIcon name={here.icon} size={14} />
+                          {here.cta}
+                        </PressButton>
+
+                        {/* Some steps finish without the system doing anything
+                            — a phone call happens on a phone. This is that. */}
+                        {here.action !== "none" && !finished && (
+                          <button
+                            type="button"
+                            onClick={advance}
+                            className="text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+                          >
+                            Already done — move on
+                          </button>
+                        )}
+                      </div>
                       {finished && (
-                        <p className="mt-2.5 text-center text-[11px] text-muted">
+                        <p className="mt-2.5 text-[11px] text-muted">
                           Last step on the {isTenant ? "tenant" : "landlord"} track.
                         </p>
                       )}
@@ -497,7 +505,7 @@ export default function LeadDrawer({
                     isTenant && shortlist.length > 0 ? (
                       <PressButton
                         onClick={() => setEmailing(true)}
-                        className="flex items-center gap-2 rounded-full bg-ink px-3.5 py-2 text-[11.5px] font-semibold text-page"
+                        className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-2 text-[11.5px] font-semibold text-page"
                       >
                         <DoodleIcon name="mail" size={13} />
                         Email properties
@@ -641,7 +649,7 @@ export default function LeadDrawer({
                 action={
                   <PressButton
                     onClick={() => setBooking(true)}
-                    className="flex items-center gap-2 rounded-full bg-ink px-3.5 py-2 text-[11.5px] font-semibold text-page"
+                    className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-2 text-[11.5px] font-semibold text-page"
                   >
                     <DoodleIcon name="calendar" size={13} />
                     Book viewing
@@ -779,7 +787,7 @@ export default function LeadDrawer({
                   isTenant && shortlist.length > 0 ? (
                     <PressButton
                       onClick={() => setEmailing(true)}
-                      className="flex items-center gap-2 rounded-full bg-ink px-3.5 py-2 text-[11.5px] font-semibold text-page"
+                      className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-2 text-[11.5px] font-semibold text-page"
                     >
                       <DoodleIcon name="mail" size={13} />
                       Email properties
@@ -934,6 +942,48 @@ export default function LeadDrawer({
           if (here.action === "viewing") advance();
         }}
       />
+
+      {/* The hand-off. Deliberately a confirmation and not a silent jump: the
+          lead leaves this list and becomes a property, which is the single
+          most consequential thing an agent can do to a record. */}
+      {handingOff && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+          <button
+            aria-label="Close"
+            onClick={() => setHandingOff(false)}
+            className="absolute inset-0 cursor-default bg-ink/45"
+          />
+          <div className="fade-up relative w-full max-w-md overflow-hidden rounded-3xl border border-line/80 bg-page p-7 text-center shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+            <DoneTick />
+            <h2 className="hand mt-5 text-[20px]">Ready to become a listing</h2>
+            <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
+              {lead.name} is signed, compliant and live. Pushing creates the property in
+              Listings and closes this lead — the viewings and applicant track carries on
+              there, against the property rather than the person.
+            </p>
+            <div className="mt-6 flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setHandingOff(false)}
+                className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40"
+              >
+                Not yet
+              </button>
+              <Link
+                href="/listings"
+                className="press-ring press-wobble flex items-center gap-2 rounded-full bg-accent-dark px-6 py-2.5 text-[13px] font-semibold text-page"
+              >
+                <DoodleIcon name="key" size={15} />
+                Push to listings
+              </Link>
+            </div>
+            <p className="mt-4 text-[10.5px] text-muted">
+              Wireframe: this opens Listings. Creating the REX property record is the
+              write that isn&apos;t wired yet.
+            </p>
+          </div>
+        </div>
+      )}
 
       <SignaturePanel
         open={signing}
