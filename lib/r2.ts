@@ -59,3 +59,76 @@ export function r2(endpoint: string): S3Client {
     credentials: { accessKeyId: KEY, secretAccessKey: SECRET },
   });
 }
+
+/**
+ * Run something against R2, resolving the endpoint on the way.
+ *
+ * Every caller goes through here so the endpoint hunt lives in one place and
+ * every route inherits the memory of which hostname works.
+ */
+export async function withR2<T>(fn: (client: S3Client) => Promise<T>): Promise<T> {
+  let last: unknown;
+  for (const endpoint of candidateEndpoints()) {
+    try {
+      const out = await fn(r2(endpoint));
+      rememberEndpoint(endpoint);
+      return out;
+    } catch (e) {
+      last = e;
+    }
+  }
+  throw last;
+}
+
+/* --------------------------------------------------------------------------
+   What may be stored, and where.
+
+   The allowlist is server-side because the browser is not a gatekeeper — a
+   file input's `accept` attribute is a hint to the file picker, not a rule,
+   and anyone can post whatever they like to an open route. This is the only
+   place that decides.
+
+   Prefixes matter more than they look: photos and compliance documents carry
+   very different risk, and separating them at the key level is what lets them
+   later get different retention rules and different access checks without
+   moving a single object.
+-------------------------------------------------------------------------- */
+
+export const SCOPES = {
+  photo: {
+    prefix: "photos",
+    types: ["image/jpeg", "image/png", "image/webp", "image/avif", "image/heic"],
+    maxBytes: 15 * 1024 * 1024,
+  },
+  document: {
+    prefix: "documents",
+    types: [
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/heic",
+    ],
+    maxBytes: 25 * 1024 * 1024,
+  },
+} as const;
+
+export type Scope = keyof typeof SCOPES;
+
+export const isScope = (s: string): s is Scope => s in SCOPES;
+
+/** Anything that could climb out of its prefix, or upset a URL, is stripped. */
+export function safeName(name: string): string {
+  const cleaned = name
+    .replace(/[/\\]/g, "-")
+    .replace(/[^\w.\- ]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return (cleaned || "file").slice(-120);
+}
+
+/** A key is only ours if it sits under a prefix we issued. */
+export function keyIsOurs(key: string): boolean {
+  if (!key || key.includes("..") || key.startsWith("/")) return false;
+  return Object.values(SCOPES).some((s) => key.startsWith(`${s.prefix}/`));
+}

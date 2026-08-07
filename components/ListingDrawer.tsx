@@ -362,7 +362,11 @@ export default function ListingDrawer({
                     </div>
                   )}
                   {Array.from({ length: 3 }, (_, i) => (
-                    <PhotoBox key={i} label={i === 0 && !listing.image ? "Add the main photo" : "Add a photo"} />
+                    <PhotoBox
+                      key={i}
+                      refId={`listing-${listing.id}`}
+                      label={i === 0 && !listing.image ? "Add the main photo" : "Add a photo"}
+                    />
                   ))}
                 </div>
                 <p className="mt-4 border-t border-line/60 pt-3 text-[10.5px] leading-relaxed text-muted">

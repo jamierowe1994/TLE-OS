@@ -4,39 +4,79 @@ import { useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 
 /**
- * The place a property photo goes.
+ * The place a property photo goes — and now actually goes.
  *
  * A thin outlined box with a drawing in it, so an empty record still looks
- * composed rather than broken. Click it, or drop a file on it, or use the
- * upload button that appears on hover.
+ * composed rather than broken. Click it, drop a file on it, or use the upload
+ * button that appears on hover.
  *
- * IMPORTANT: nothing is stored. The preview is an object URL living in this
- * browser tab, and it is gone on refresh — photos need a bucket before this
- * means anything, and the box says so rather than implying an upload happened.
+ * The local preview shows IMMEDIATELY, before the upload finishes, because a
+ * box that sits blank for three seconds after you drop a file feels broken
+ * even though it's working. The real stored file takes over when it lands.
+ *
+ * If the upload fails the preview is thrown away rather than left sitting
+ * there — a picture on screen that isn't in the bucket is a lie the agent will
+ * believe.
  */
+
+export type StoredFile = { key: string; name: string; url: string };
 
 export default function PhotoBox({
   className = "",
   label = "Add a photo",
+  scope = "photo",
+  refId = "unfiled",
+  onStored,
 }: {
   className?: string;
   label?: string;
+  /** "photo" or "document" — decides the allowlist and where it's filed. */
+  scope?: "photo" | "document";
+  /** Which record this belongs to, so everything for it shares a prefix. */
+  refId?: string;
+  onStored?: (file: StoredFile) => void;
 }) {
-  const [src, setSrc] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [stored, setStored] = useState<StoredFile | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [over, setOver] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
   // Object URLs are a leak if you drop them on the floor.
-  useEffect(() => () => { if (src) URL.revokeObjectURL(src); }, [src]);
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
-  function take(files: FileList | null) {
+  async function take(files: FileList | null) {
     const f = files?.[0];
-    if (!f || !f.type.startsWith("image/")) return;
-    setSrc((old) => {
-      if (old) URL.revokeObjectURL(old);
-      return URL.createObjectURL(f);
-    });
+    if (!f) return;
+    setError(null);
+
+    const local = URL.createObjectURL(f);
+    setPreview((old) => { if (old) URL.revokeObjectURL(old); return local; });
+    setBusy(true);
+
+    try {
+      const body = new FormData();
+      body.append("file", f);
+      body.append("scope", scope);
+      body.append("ref", refId);
+      const res = await fetch("/api/r2/upload", { method: "POST", body });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error ?? "Upload failed.");
+      const file: StoredFile = { key: json.key, name: json.name, url: json.url };
+      setStored(file);
+      onStored?.(file);
+    } catch (e) {
+      // Don't leave a picture on screen that isn't in the bucket.
+      setPreview((old) => { if (old) URL.revokeObjectURL(old); return null; });
+      setStored(null);
+      setError(e instanceof Error ? e.message : "Upload failed.");
+    } finally {
+      setBusy(false);
+    }
   }
+
+  const shown = stored?.url ?? preview;
 
   return (
     <div className={className}>
@@ -44,14 +84,18 @@ export default function PhotoBox({
         onDragOver={(e) => { e.preventDefault(); setOver(true); }}
         onDragLeave={() => setOver(false)}
         onDrop={(e) => { e.preventDefault(); setOver(false); take(e.dataTransfer.files); }}
-        onClick={() => input.current?.click()}
+        onClick={() => !busy && input.current?.click()}
         className={`group relative flex aspect-[4/3] w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border transition-colors ${
-          over ? "border-accent-dark bg-accent-soft/40" : "border-dashed border-line hover:border-ink/40"
+          over
+            ? "border-accent-dark bg-accent-soft/40"
+            : error
+              ? "border-accent-dark"
+              : "border-dashed border-line hover:border-ink/40"
         }`}
       >
-        {src ? (
+        {shown ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt="" className="h-full w-full object-cover" />
+          <img src={shown} alt="" className="h-full w-full object-cover" />
         ) : (
           <div className="flex flex-col items-center gap-1.5 px-3 text-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -65,22 +109,32 @@ export default function PhotoBox({
           </div>
         )}
 
+        {busy && (
+          <span className="absolute inset-0 flex items-center justify-center bg-page/70">
+            <span className="block h-6 w-6 animate-spin rounded-full border-2 border-line border-t-accent-dark" />
+          </span>
+        )}
+
         {/* The upload affordance, only while pointing at it. */}
-        <span className="pointer-events-none absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border border-line/80 bg-page text-muted opacity-0 transition-opacity group-hover:opacity-100">
-          <DoodleIcon name="upload" size={13} />
-        </span>
+        {!busy && (
+          <span className="pointer-events-none absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full border border-line/80 bg-page text-muted opacity-0 transition-opacity group-hover:opacity-100">
+            <DoodleIcon name="upload" size={13} />
+          </span>
+        )}
 
         <input
           ref={input}
           type="file"
-          accept="image/*"
+          accept={scope === "photo" ? "image/*" : "image/*,application/pdf"}
           hidden
           onChange={(e) => take(e.target.files)}
         />
       </div>
-      {src && (
-        <p className="mt-1.5 text-[10px] leading-tight text-muted">
-          Preview only — held in this tab. Photos need the R2 bucket before they can reach REX.
+
+      {error && <p className="mt-1.5 text-[10.5px] leading-tight text-accent-dark">{error}</p>}
+      {stored && !error && (
+        <p className="mt-1.5 truncate text-[10px] leading-tight text-muted" title={stored.name}>
+          Stored · {stored.name}
         </p>
       )}
     </div>

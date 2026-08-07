@@ -357,7 +357,7 @@ export default function LeadDrawer({
               ) : (
                 <div className="ml-auto hidden w-[280px] shrink-0 xl:block">
                   <SectionHead>Photo</SectionHead>
-                  <PhotoBox label="Add a photo of the property" />
+                  <PhotoBox label="Add a photo of the property" refId={`lead-${lead.id}`} />
                 </div>
               )}
             </div>
