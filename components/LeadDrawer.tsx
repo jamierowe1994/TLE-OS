@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DetailRow, DoneTick, PressButton } from "@/components/Bits";
+import EmailProperties from "@/components/EmailProperties";
 import { Pill } from "@/components/Wire";
+import { leadSide } from "@/lib/leads-sample";
 import {
   DOC_TAGS,
   leadDetail,
@@ -97,6 +99,7 @@ export default function LeadDrawer({
   // Properties attached in-session, plus the tick that confirms one landed.
   const [added, setAdded] = useState<string[]>([]);
   const [justAdded, setJustAdded] = useState(false);
+  const [emailing, setEmailing] = useState(false);
 
   useEffect(() => {
     if (!detail) return;
@@ -142,6 +145,7 @@ export default function LeadDrawer({
   if (!lead || !detail) return null;
 
   const initials = lead.name.split(" ").map((n) => n[0]).join("");
+  const isTenant = leadSide(lead) === "tenant";
   const shortlist = LISTINGS.filter(
     (l) => detail.interested.includes(l.id) || added.includes(l.id)
   );
@@ -390,7 +394,23 @@ export default function LeadDrawer({
                   </ul>
                 </Card>
 
-                <Card title="Interested in" icon="home">
+                <Card
+                  title="Interested in"
+                  icon="home"
+                  action={
+                    /* Tenant-side only: emailing a shortlist to a landlord
+                       isn't a thing anyone does. */
+                    isTenant && shortlist.length > 0 ? (
+                      <PressButton
+                        onClick={() => setEmailing(true)}
+                        className="flex items-center gap-2 rounded-full bg-ink px-3.5 py-2 text-[11.5px] font-semibold text-page"
+                      >
+                        <DoodleIcon name="mail" size={13} />
+                        Email properties
+                      </PressButton>
+                    ) : null
+                  }
+                >
                   {shortlist.length ? (
                     <ul className="space-y-3">
                       {shortlist.map((p) => (
@@ -657,9 +677,15 @@ export default function LeadDrawer({
                 title="Properties"
                 icon="home"
                 action={
-                  <button className="text-[11.5px] font-semibold text-muted transition-colors hover:text-ink">
-                    + Add property
-                  </button>
+                  isTenant && shortlist.length > 0 ? (
+                    <PressButton
+                      onClick={() => setEmailing(true)}
+                      className="flex items-center gap-2 rounded-full bg-ink px-3.5 py-2 text-[11.5px] font-semibold text-page"
+                    >
+                      <DoodleIcon name="mail" size={13} />
+                      Email properties
+                    </PressButton>
+                  ) : null
                 }
               >
                 {shortlist.length ? (
@@ -773,6 +799,13 @@ export default function LeadDrawer({
           </div>
         </div>
       </aside>
+
+      <EmailProperties
+        open={emailing}
+        onClose={() => setEmailing(false)}
+        lead={{ name: lead.name, email: contact.email || lead.email }}
+        properties={shortlist}
+      />
     </div>
   );
 }
