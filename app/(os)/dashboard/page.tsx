@@ -176,7 +176,13 @@ export default function Dashboard() {
       </div>
 
       {/* ── The journey, compact, along the bottom — the pipeline snapshot. */}
-      <div className="fade-up mt-6 rounded-2xl border border-line/80 bg-panel p-5">
+      {/* The wrapper carries NO animation on purpose. `fade-up` leaves a
+          transform behind (fill-mode both), which creates a stacking context —
+          and a mix-blend-mode child can only blend against its own stacking
+          context, so the dog's white plate had nothing to multiply with and
+          rendered as a white block. Animate the box, hang the dog outside it. */}
+      <div className="relative mt-6">
+      <div className="fade-up rounded-2xl border border-line/80 bg-panel p-5 pb-14">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-[15px]">Pipeline snapshot</h2>
           <FlowTag from="REX + PayProp" />
@@ -204,6 +210,20 @@ export default function Dashboard() {
             );
           })}
         </div>
+
+        </div>
+
+        {/* He stands ON the bottom edge — half in the box, half out — so the
+            border reads as the ground he's on rather than a frame round him. */}
+        <video
+          src="/illustrations/dog-wag.mp4"
+          autoPlay
+          muted
+          loop
+          playsInline
+          aria-hidden
+          className="art-video pointer-events-none absolute -bottom-5 right-8 hidden w-36 sm:block"
+        />
       </div>
     </>
   );

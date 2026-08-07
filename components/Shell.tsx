@@ -26,12 +26,11 @@ const BACK = [
   { href: "/finances", label: "Finances", icon: "wallet" },
 ];
 
-/** Clay is the house default; the attribute only exists for the others.
- *  Each palette brings its own cut of the logo — the pin matches the accent. */
+/** Clay is the house default; the attribute only exists for the others. */
 const ACCENTS = [
-  { id: "", label: "Warm Clay", dot: "#de968f", logo: "/brand/logo-clay.png" },
-  { id: "blush", label: "Blush", dot: "#f0b3bb", logo: "/brand/logo-blush.png" },
-  { id: "red", label: "Classic Red", dot: "#e31f36", logo: "/brand/logo-red.png" },
+  { id: "", label: "Warm Clay", dot: "#de968f" },
+  { id: "blush", label: "Blush", dot: "#f0b3bb" },
+  { id: "red", label: "Classic Red", dot: "#e31f36" },
 ];
 
 function applyAccent(id: string) {
@@ -123,8 +122,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         {/* Wordmark + the collapse toggle. The logo's pin follows the accent. */}
         <div className={`flex items-center ${collapsed ? "flex-col gap-2" : "justify-between"} px-1`}>
           <div className="flex items-center gap-2">
+            {/* Monochrome ink, so `.art` alone flips it black → white in the
+                dark. It doesn't follow the accent — the mark is the mark. */}
             <img
-              src={(ACCENTS.find((a) => a.id === accent) ?? ACCENTS[0]).logo}
+              src="/brand/house.png"
               alt=""
               aria-hidden
               className="art h-10 w-10 shrink-0 object-contain"

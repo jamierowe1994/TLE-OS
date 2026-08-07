@@ -142,6 +142,23 @@ h1, h2, h3, h4, h5 {
 .art { transition: filter 0.4s ease; }
 :root[data-theme="dark"] .art { filter: invert(1) hue-rotate(180deg); }
 
+/* Video has no alpha channel, so a line-art clip arrives as black ink on a
+   white rectangle. Blending does what transparency would:
+     light — multiply drops the white and keeps the ink;
+     dark  — invert first, then screen drops the resulting black.
+   The brightness step matters: the encoded plate measures 245-255, not pure
+   white, and multiplying 245/255 tints the page ~4% darker in a neat
+   rectangle. Clipping the near-whites to true 255 first makes it vanish.
+   Note this class does NOT stack with .art — both set `filter`. */
+.art-video {
+  mix-blend-mode: multiply;
+  filter: brightness(1.09) contrast(1.04);
+}
+:root[data-theme="dark"] .art-video {
+  mix-blend-mode: screen;
+  filter: brightness(1.09) contrast(1.04) invert(1);
+}
+
 /* ---------------------------------------------------------------------------
    The theme change, painted on.
 
