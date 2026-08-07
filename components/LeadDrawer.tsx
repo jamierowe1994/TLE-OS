@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
-import { DetailRow, DoneTick, PressButton } from "@/components/Bits";
+import { DetailRow, DoneTick, PressButton, SectionHead } from "@/components/Bits";
 import EmailProperties from "@/components/EmailProperties";
+import PhotoBox from "@/components/PhotoBox";
 import ProcessTimeline from "@/components/ProcessTimeline";
 import PropertyFacts from "@/components/PropertyFacts";
 import ReferToAgent, { isSalesIntent, SALES_TAGS } from "@/components/ReferToAgent";
@@ -286,43 +287,65 @@ export default function LeadDrawer({
                   <Pill tone={STAGE_TONE[lead.stage]}>{lead.stage}</Pill>
                 </div>
 
-                {/* Click a value to change it — a rule appears underneath and
-                    it commits on blur or Enter. No Save button per field, and
-                    no edit mode for the whole record: changing a mobile number
-                    shouldn't feel like filling in a form. Copy sits on hover. */}
-                <div className="mt-5 max-w-sm divide-y divide-line/50">
-                  <DetailRow
-                    icon="call"
-                    label="mobile"
-                    value={contact.phone}
-                    copyable
-                    onChange={(v) => setContact((c) => ({ ...c, phone: v }))}
-                  />
-                  <DetailRow
-                    icon="mail"
-                    label="email"
-                    value={contact.email}
-                    copyable
-                    onChange={(v) => setContact((c) => ({ ...c, email: v }))}
-                  />
-                  <DetailRow
-                    icon="home"
-                    label="area"
-                    value={contact.area}
-                    onChange={(v) => setContact((c) => ({ ...c, area: v }))}
-                  />
-                  <DetailRow
-                    icon="target"
-                    label="source"
-                    value={`${lead.source} · ${lead.received}`}
-                  />
+                {/* Two columns of what you'd actually ask on the call, each
+                    under its own heading and stroke. Contact and property sit
+                    side by side rather than the property being squeezed into a
+                    narrow rail with dead space beside it. */}
+                <div
+                  className={`mt-7 grid gap-x-10 gap-y-7 ${
+                    isTenant ? "max-w-sm" : "lg:grid-cols-2"
+                  }`}
+                >
+                  <section>
+                    <SectionHead>Contact details</SectionHead>
+                    {/* Click a value to change it — a rule appears underneath
+                        and it commits on blur or Enter. No Save button per
+                        field, and no edit mode for the whole record: changing
+                        a mobile number shouldn't feel like filling in a form.
+                        Copy sits on hover. */}
+                    <div className="divide-y divide-line/50">
+                      <DetailRow
+                        icon="call"
+                        label="mobile"
+                        value={contact.phone}
+                        copyable
+                        onChange={(v) => setContact((c) => ({ ...c, phone: v }))}
+                      />
+                      <DetailRow
+                        icon="mail"
+                        label="email"
+                        value={contact.email}
+                        copyable
+                        onChange={(v) => setContact((c) => ({ ...c, email: v }))}
+                      />
+                      <DetailRow
+                        icon="home"
+                        label="area"
+                        value={contact.area}
+                        onChange={(v) => setContact((c) => ({ ...c, area: v }))}
+                      />
+                      <DetailRow
+                        icon="target"
+                        label="source"
+                        value={`${lead.source} · ${lead.received}`}
+                      />
+                    </div>
+                  </section>
+
+                  {!isTenant && (
+                    <section>
+                      <SectionHead>The property</SectionHead>
+                      <PropertyFacts />
+                    </section>
+                  )}
                 </div>
               </div>
 
-              {/* On a landlord record the space to the right earns its keep:
-                  the property they're ringing about, captured as fields while
-                  the call is happening. On a tenant record there is no
-                  property yet, so it stays decorative. */}
+              {/* The right-hand third. On a landlord record that's the
+                  property photo, big — it's the thing everyone looks at
+                  first and it was previously a thumbnail wedged into a
+                  narrow column. Tenants never have a photo, so they keep
+                  the drawing. */}
               {isTenant ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
@@ -332,8 +355,9 @@ export default function LeadDrawer({
                   className="art ml-auto hidden h-36 shrink-0 lg:block"
                 />
               ) : (
-                <div className="ml-auto hidden w-[260px] shrink-0 lg:block">
-                  <PropertyFacts />
+                <div className="ml-auto hidden w-[280px] shrink-0 xl:block">
+                  <SectionHead>Photo</SectionHead>
+                  <PhotoBox label="Add a photo of the property" />
                 </div>
               )}
             </div>

@@ -161,6 +161,42 @@ export function DetailRow({
   );
 }
 
+/**
+ * A marker stroke under a heading.
+ *
+ * Hand-drawn here rather than taken from the licensed set: all 150 scribbles
+ * are marks, arrows, sparkles and numbers — there is no underline among them.
+ * Stretches to whatever it sits under; preserveAspectRatio="none" only
+ * lengthens it, so the stroke keeps its weight at any width.
+ */
+export function Underline({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 120 10"
+      preserveAspectRatio="none"
+      aria-hidden
+      className={`block h-[7px] w-full text-accent-dark ${className}`}
+    >
+      <path
+        d="M1.5,6.4 C24,3.2 62,1.9 118.5,3.4 C62,6.6 25,7.9 1.5,6.4 Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/** A section heading with the stroke under it. */
+export function SectionHead({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-4">
+      <h4 className="hand text-[15px] leading-tight">{children}</h4>
+      <span className="mt-1 block max-w-[130px]">
+        <Underline />
+      </span>
+    </div>
+  );
+}
+
 /** The big tick after something lands. */
 export function DoneTick({ size = 56 }: { size?: number }) {
   return (

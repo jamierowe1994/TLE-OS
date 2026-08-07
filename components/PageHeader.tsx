@@ -8,22 +8,32 @@ import DoodleIcon from "@/components/DoodleIcon";
  * rule — the bell is chrome, the search belongs to the work underneath.
  */
 
-/** The pop strokes off the title's corners. */
+/**
+ * The pop strokes off the title's corners.
+ *
+ * Scribble 28 from the licensed set, not the three hand-plotted line segments
+ * that were here before — real tapered marker strokes, and vector, so they
+ * hold their shape at any size. Drawn through a CSS mask like the doodle icons
+ * because the source is a solid fill: that way it takes currentColor and the
+ * dark-mode flip is free.
+ */
 function Pop({ className = "" }: { className?: string }) {
+  const url = "url(/scribbles/flick.svg)";
   return (
-    <svg
-      viewBox="0 0 24 24"
+    <span
       aria-hidden
-      className={`h-8 w-8 text-ink ${className}`}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-    >
-      <path d="M3 15 L9 10" />
-      <path d="M9 4 L12 11" />
-      <path d="M18 3 L16 10" />
-    </svg>
+      className={`block h-9 w-9 bg-ink ${className}`}
+      style={{
+        WebkitMaskImage: url,
+        maskImage: url,
+        WebkitMaskRepeat: "no-repeat",
+        maskRepeat: "no-repeat",
+        WebkitMaskSize: "contain",
+        maskSize: "contain",
+        WebkitMaskPosition: "center",
+        maskPosition: "center",
+      }}
+    />
   );
 }
 

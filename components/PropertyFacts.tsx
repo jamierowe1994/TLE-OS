@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
-import PhotoBox from "@/components/PhotoBox";
 
 /**
  * The property, captured while you're on the phone to the landlord.
@@ -102,17 +101,11 @@ export default function PropertyFacts() {
     [type, beds, baths].filter(Boolean).length + (vacant === null ? 0 : 1);
 
   return (
-    <section className="rounded-2xl border border-line/80 p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="flex items-center gap-2.5 text-[13px]">
-          <DoodleIcon name="home" size={16} className="text-accent-dark" />
-          The property
-        </h3>
-        <span className="figures text-[10.5px] text-muted">{answered}/4</span>
-      </div>
-
-      <PhotoBox className="mb-3.5" label="Add a photo" />
-
+    /* No card, no photo, no heading of its own. This sits inside the record's
+       own layout as a column beside the contact details — the heading and its
+       stroke belong to that layout, and the property photo is a big box on the
+       right rather than a thumbnail crammed in here. */
+    <div>
       <label className="mb-2 block">
         <select
           value={type}
@@ -173,9 +166,9 @@ export default function PropertyFacts() {
       </div>
 
       <p className="mt-3.5 border-t border-line/60 pt-2.5 text-[10px] leading-relaxed text-muted">
-        These are the fields REX wants on a property record. Captured here they can be
-        pushed; captured in a note they can only be read.
+        {answered}/4 captured. These are the fields REX wants on a property record —
+        captured here they can be pushed; captured in a note they can only be read.
       </p>
-    </section>
+    </div>
   );
 }
