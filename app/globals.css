@@ -48,6 +48,29 @@
   --accent-soft: #fef2f2;
 }
 
+/* ---------------------------------------------------------------------------
+   Dark mode. Charcoal, never black — a true #000 makes the hand-drawn linework
+   look like it's floating in a void, and the whole product is built on the idea
+   of ink on paper. So: a warm-neutral charcoal page, a slightly lifted card,
+   and lines that are a LIGHTER charcoal rather than white, keeping the same
+   quiet outline effect the light theme has.
+
+   The accent tints are derived with color-mix rather than hand-picked, so all
+   three palettes (clay, blush, red) get a correct dark treatment for free.
+--------------------------------------------------------------------------- */
+:root[data-theme="dark"] {
+  --ink: #ecebe8;
+  --muted: #9b9a95;
+  --line: #3a3a3d;
+  --page: #1c1c1e;
+  --card: #232326;
+
+  /* Soft fills go dark-tinted; the "dark" accent goes LIGHTER, because on a
+     charcoal page the legible variant of a colour is the paler one. */
+  --accent-soft: color-mix(in srgb, var(--accent) 20%, #1c1c1e);
+  --accent-dark: color-mix(in srgb, var(--accent) 72%, white);
+}
+
 @theme inline {
   --color-accent: var(--accent);
   --color-accent-dark: var(--accent-dark);
@@ -98,6 +121,44 @@ h1, h2, h3, h4, h5 {
 }
 .fade-up { animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+/* ---------------------------------------------------------------------------
+   Illustrations in the dark.
+
+   The artwork is black ink on transparent, so on charcoal it disappears.
+   Inverting turns the ink white and keeps the paper transparent — exactly the
+   effect we want. The hue-rotate is what saves anything coloured: invert alone
+   would turn the logo's clay pin teal, and a 180° hue rotation puts it back.
+   Monochrome art is unaffected by the rotation, so one rule serves both.
+
+   NOT applied to property photographs — inverting a real photo is a horror.
+--------------------------------------------------------------------------- */
+.art { transition: filter 0.4s ease; }
+:root[data-theme="dark"] .art { filter: invert(1) hue-rotate(180deg); }
+
+/* ---------------------------------------------------------------------------
+   The theme change, painted on.
+
+   A circle of the incoming theme wipes out from wherever you clicked, so the
+   new palette looks brushed across the screen rather than snapped into place.
+   150% radius guarantees it reaches the far corner from any origin.
+--------------------------------------------------------------------------- */
+@keyframes paint-spread {
+  from { clip-path: circle(0% at var(--px, 50%) var(--py, 50%)); }
+  to { clip-path: circle(150% at var(--px, 50%) var(--py, 50%)); }
+}
+.paint-spread {
+  animation: paint-spread 1.05s cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 16px) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+.toast-in { animation: toast-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
 @media (prefers-reduced-motion: reduce) {
-  .fade-up { animation: none; }
+  .fade-up,
+  .paint-spread,
+  .toast-in { animation: none; }
+  .art { transition: none; }
 }

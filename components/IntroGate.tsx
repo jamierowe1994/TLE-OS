@@ -49,7 +49,7 @@ export default function IntroGate({ children }: { children: React.ReactNode }) {
               playsInline
               onEnded={dismiss}
               onError={dismiss}
-              className="block w-full"
+              className="art block w-full"
             />
             {/* The blend: the video's near-white plate melts into the eggshell
                 so it reads as drawn on the page, not embedded in it. */}

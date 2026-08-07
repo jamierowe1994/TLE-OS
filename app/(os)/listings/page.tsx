@@ -130,7 +130,7 @@ export default function Listings() {
         <FlowTag from="REX (real data, pulled 6 Aug)" to="REX → portals" />
         <button
           type="button"
-          className="hand flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] text-white transition-opacity hover:opacity-90"
+          className="hand flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] text-page transition-opacity hover:opacity-90"
         >
           <span className="text-base leading-none">+</span> Add new listing
         </button>
@@ -211,7 +211,7 @@ export default function Listings() {
         src="/illustrations/buildings-street.png"
         alt=""
         aria-hidden
-        className="pointer-events-none mt-8 ml-auto hidden w-[420px] opacity-90 lg:block"
+        className="art pointer-events-none mt-8 ml-auto hidden w-[420px] opacity-90 lg:block"
       />
     </>
   );

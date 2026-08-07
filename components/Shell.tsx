@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
+import { readTheme, type ThemeChoice } from "@/lib/theme";
 
 /**
  * The OS chrome. The rail is its own encapsulated card — a thin outline the
@@ -72,13 +73,25 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [accent, setAccent] = useState("");
+  const [theme, setTheme] = useState<ThemeChoice>("auto");
 
   useEffect(() => {
     const saved = localStorage.getItem("os-accent") ?? "";
     setAccent(saved);
     applyAccent(saved);
     setCollapsed(localStorage.getItem("os-nav-collapsed") === "1");
+    setTheme(readTheme() ?? "auto");
   }, []);
+
+  /** ThemeGate owns the paint transition; the click point seeds it. */
+  function pickTheme(next: ThemeChoice, e: React.MouseEvent) {
+    setTheme(next);
+    window.dispatchEvent(
+      new CustomEvent("os-set-theme", {
+        detail: { choice: next, origin: { x: e.clientX, y: e.clientY } },
+      })
+    );
+  }
 
   function pickAccent(id: string) {
     setAccent(id);
@@ -114,7 +127,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               src={(ACCENTS.find((a) => a.id === accent) ?? ACCENTS[0]).logo}
               alt=""
               aria-hidden
-              className="h-10 w-10 shrink-0 object-contain"
+              className="art h-10 w-10 shrink-0 object-contain"
             />
             {!collapsed && <div className="hand text-xl leading-none">TLE OS</div>}
           </div>
@@ -163,6 +176,26 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           {profileOpen && !collapsed && (
             <div className="fade-up mb-2 rounded-2xl border border-line/80 p-3">
               <p className="text-[10px] font-bold uppercase tracking-wide text-muted">
+                Appearance
+              </p>
+              <div className="mt-2 flex gap-1">
+                {(["light", "dark", "auto"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={(e) => pickTheme(t, e)}
+                    className={`flex-1 rounded-lg border px-1.5 py-1.5 text-[10.5px] font-medium capitalize transition-colors ${
+                      theme === t
+                        ? "border-accent-dark bg-accent-soft text-accent-dark"
+                        : "border-line/70 text-muted hover:text-ink"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+
+              <p className="mt-3 text-[10px] font-bold uppercase tracking-wide text-muted">
                 Your accent
               </p>
               <div className="mt-2 flex gap-2">

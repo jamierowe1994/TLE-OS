@@ -3,7 +3,9 @@
  *
  * "No photo" is a real state, not an error — 4 of the 10 sampled rentals have
  * no image at all — so the fallback is part of the design rather than a
- * broken-image box. Every surface that shows a property should use this.
+ * broken-image box. It is NOT inverted in dark mode: unlike the line-art
+ * illustrations it carries fills, and it stands in for a photograph — which
+ * stays light whatever the theme. Every surface that shows a property should use this.
  */
 export default function PropertyPhoto({
   src,

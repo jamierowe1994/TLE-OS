@@ -84,7 +84,7 @@ export default function PageHeader({
           src={illustration}
           alt=""
           aria-hidden
-          className="pointer-events-none absolute inset-y-0 hidden h-full w-auto xl:block"
+          className="art pointer-events-none absolute inset-y-0 hidden h-full w-auto xl:block"
           style={{ right: illustrationRight }}
         />
       )}

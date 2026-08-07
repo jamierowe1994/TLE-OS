@@ -54,7 +54,7 @@ export default function KeyPage() {
           <button
             type="submit"
             disabled={busy}
-            className="mt-4 w-full rounded-2xl bg-ink px-5 py-3.5 text-sm font-semibold text-white transition-opacity disabled:opacity-50"
+            className="mt-4 w-full rounded-2xl bg-ink px-5 py-3.5 text-sm font-semibold text-page transition-opacity disabled:opacity-50"
           >
             {busy ? "Checking…" : "Come in"}
           </button>
