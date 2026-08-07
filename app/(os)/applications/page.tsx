@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import PropertyPhoto from "@/components/PropertyPhoto";
+import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
 import { FlowTag, Pill } from "@/components/Wire";
 
 /**
@@ -89,6 +90,63 @@ export default function Applications() {
   const open = APPS.find((a) => a.id === openId) ?? null;
   const cur = open ? stageIdx(open.stageKey) : -1;
 
+  const defs = useMemo<ColumnDef<App>[]>(
+    () => [
+      {
+        key: "applicant", label: "Applicant", required: true,
+        render: (a) => (
+          <>
+            <span className="hand block whitespace-nowrap text-[13px]">{a.tenant}</span>
+            {a.flag && (
+              <span className="mt-1 inline-block">
+                <Pill tone="accent">{a.flag}</Pill>
+              </span>
+            )}
+          </>
+        ),
+      },
+      {
+        key: "property", label: "Property",
+        render: (a) => (
+          <span className="flex items-center gap-2.5">
+            <PropertyPhoto src={a.image} className="h-9 w-11 shrink-0 rounded-md" />
+            <span className="min-w-0">
+              <span className="block whitespace-nowrap">{a.property}</span>
+              <span className="block whitespace-nowrap text-[10.5px] text-muted">
+                {a.locality}
+              </span>
+            </span>
+          </span>
+        ),
+      },
+      { key: "rent", label: "Rent", cell: "figures whitespace-nowrap", render: (a) => a.rent },
+      { key: "moveIn", label: "Move-in", cell: "whitespace-nowrap text-muted", render: (a) => a.moveIn },
+      {
+        key: "stage", label: "Stage", cell: "whitespace-nowrap",
+        render: (a) => <Pill tone="neutral">{STAGES[stageIdx(a.stageKey)].label}</Pill>,
+      },
+      {
+        key: "checklist", label: "Checklist", cell: "whitespace-nowrap",
+        render: (a) => (
+          <span className="flex items-center gap-1">
+            {CHECKLIST.map((_, i) => (
+              <span
+                key={i}
+                className={`h-1.5 w-1.5 rounded-full ${i < a.ticked ? "bg-accent" : "bg-line"}`}
+              />
+            ))}
+            <span className="ml-1.5 text-[10px] text-muted">
+              {a.ticked}/{CHECKLIST.length}
+            </span>
+          </span>
+        ),
+      },
+      { key: "agent", label: "With", cell: "whitespace-nowrap text-muted", render: (a) => a.agent },
+    ],
+    []
+  );
+  const cols = useColumns<App>("applications", defs);
+
   return (
     <>
       <PageHeader
@@ -131,85 +189,16 @@ export default function Applications() {
       {/* ── The applications, with the open one beside them. */}
       <div className={`mt-4 grid gap-4 ${open ? "xl:grid-cols-[2fr_1fr]" : ""}`}>
         <div className="fade-up min-w-0 rounded-2xl border border-line/80 p-5">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-[12.5px]">
-              <thead>
-                <tr className="border-b border-line/70">
-                  {["Applicant", "Property", "Rent", "Move-in", "Stage", "Checklist", "With"].map(
-                    (c) => (
-                      <th
-                        key={c}
-                        className="pb-2.5 pr-3 text-[9.5px] font-bold uppercase tracking-wider text-muted"
-                      >
-                        {c}
-                      </th>
-                    )
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {APPS.map((a) => {
-                  const isOpen = a.id === openId;
-                  const st = STAGES[stageIdx(a.stageKey)];
-                  return (
-                    <tr
-                      key={a.id}
-                      onClick={() => setOpenId(isOpen ? null : a.id)}
-                      className={`cursor-pointer border-b border-line/40 transition-colors last:border-0 ${
-                        isOpen ? "bg-accent-soft/50" : "hover:bg-page"
-                      }`}
-                    >
-                      <td className="py-3 pr-3">
-                        <span className="hand block whitespace-nowrap text-[13px]">
-                          {a.tenant}
-                        </span>
-                        {a.flag && (
-                          <span className="mt-1 inline-block">
-                            <Pill tone="accent">{a.flag}</Pill>
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-3 pr-3">
-                        <span className="flex items-center gap-2.5">
-                          <PropertyPhoto
-                            src={a.image}
-                            className="h-9 w-11 shrink-0 rounded-md"
-                          />
-                          <span className="min-w-0">
-                            <span className="block truncate">{a.property}</span>
-                            <span className="block truncate text-[10.5px] text-muted">
-                              {a.locality}
-                            </span>
-                          </span>
-                        </span>
-                      </td>
-                      <td className="figures whitespace-nowrap py-3 pr-3">{a.rent}</td>
-                      <td className="whitespace-nowrap py-3 pr-3 text-muted">{a.moveIn}</td>
-                      <td className="whitespace-nowrap py-3 pr-3">
-                        <Pill tone="neutral">{st.label}</Pill>
-                      </td>
-                      <td className="whitespace-nowrap py-3 pr-3">
-                        <span className="flex items-center gap-1">
-                          {CHECKLIST.map((_, i) => (
-                            <span
-                              key={i}
-                              className={`h-1.5 w-1.5 rounded-full ${
-                                i < a.ticked ? "bg-accent" : "bg-line"
-                              }`}
-                            />
-                          ))}
-                          <span className="ml-1.5 text-[10px] text-muted">
-                            {a.ticked}/{CHECKLIST.length}
-                          </span>
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap py-3 pr-1 text-muted">{a.agent}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2.5">
+            <h2 className="text-[15px]">Live applications</h2>
+            <ColumnCustomiser cols={cols} />
           </div>
+          <DataTable
+            cols={cols}
+            rows={APPS}
+            activeId={openId}
+            onRowClick={(a) => setOpenId(a.id === openId ? null : a.id)}
+          />
         </div>
 
         {/* ── The open application: where it is, and what's left. */}

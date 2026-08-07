@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
+import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
 import { FlowTag, Pill } from "@/components/Wire";
+import { LEADS, STAGE_TONE, type Lead } from "@/lib/leads-sample";
 
 /**
  * Leads: one inbox for every channel, with the record open beside it.
@@ -12,158 +14,6 @@ import { FlowTag, Pill } from "@/components/Wire";
  * in REX, paid social lands in GoHighLevel — and the page's job is that you
  * never have to care which. Every action written here goes back to REX.
  */
-
-type Stage = "New" | "Contacted" | "Viewing booked" | "Qualified" | "Waiting";
-
-type Lead = {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  enquiry: string;
-  area: string;
-  budget: string;
-  source: string;
-  received: string;
-  stage: Stage;
-  moveDate: string;
-  preferred: string;
-  agent: string;
-  notes: string;
-  activity: { icon: string; text: string; when: string }[];
-};
-
-const LEADS: Lead[] = [
-  {
-    id: "l1",
-    name: "Sarah Johnson",
-    email: "sarah.j@email.com",
-    phone: "07712 345 678",
-    enquiry: "Letting",
-    area: "Didsbury",
-    budget: "£1,200 pcm",
-    source: "Rightmove",
-    received: "10m ago",
-    stage: "New",
-    moveDate: "1 September 2026",
-    preferred: "Didsbury, Withington",
-    agent: "Kirstie",
-    notes: "Looking for a 2-bed flat with parking. Pet friendly.",
-    activity: [
-      { icon: "target", text: "Lead received from Rightmove", when: "10 minutes ago" },
-      { icon: "mail", text: "Auto-response email sent", when: "9 minutes ago" },
-      { icon: "call", text: "Call attempted — no answer", when: "5 minutes ago" },
-      { icon: "calendar", text: "Follow-up due today", when: "Today at 14:00" },
-    ],
-  },
-  {
-    id: "l2",
-    name: "Tom Williams",
-    email: "tom.w@email.com",
-    phone: "07945 678 901",
-    enquiry: "Letting",
-    area: "Chorlton",
-    budget: "£1,000 pcm",
-    source: "Zoopla",
-    received: "25m ago",
-    stage: "Contacted",
-    moveDate: "15 September 2026",
-    preferred: "Chorlton",
-    agent: "Kirstie",
-    notes: "Sharer, needs two doubles.",
-    activity: [
-      { icon: "target", text: "Lead received from Zoopla", when: "25 minutes ago" },
-      { icon: "call", text: "Spoke — sending shortlist", when: "12 minutes ago" },
-    ],
-  },
-  {
-    id: "l3",
-    name: "Chloe Adams",
-    email: "chloe.a@email.com",
-    phone: "07890 123 456",
-    enquiry: "Landlord",
-    area: "Coventry",
-    budget: "3-bed to let",
-    source: "Facebook ad",
-    received: "2h ago",
-    stage: "New",
-    moveDate: "Flexible",
-    preferred: "Coventry CV4",
-    agent: "Unassigned",
-    notes: "Landlord enquiry from the paid campaign — wants a valuation.",
-    activity: [
-      { icon: "megaphone", text: "Lead captured by Facebook campaign", when: "2 hours ago" },
-      { icon: "link", text: "Synced from GoHighLevel", when: "2 hours ago" },
-    ],
-  },
-  {
-    id: "l4",
-    name: "Emma Brown",
-    email: "emma.b@email.com",
-    phone: "07890 123 456",
-    enquiry: "Letting",
-    area: "Didsbury",
-    budget: "£1,300 pcm",
-    source: "Website",
-    received: "3h ago",
-    stage: "Viewing booked",
-    moveDate: "1 October 2026",
-    preferred: "Didsbury",
-    agent: "Michael",
-    notes: "Booked in for Thursday at 17:00.",
-    activity: [
-      { icon: "target", text: "Enquiry from the website form", when: "3 hours ago" },
-      { icon: "calendar", text: "Viewing booked — Thu 17:00", when: "1 hour ago" },
-    ],
-  },
-  {
-    id: "l5",
-    name: "James Patel",
-    email: "james.p@email.com",
-    phone: "07411 222 333",
-    enquiry: "Letting",
-    area: "Withington",
-    budget: "£950 pcm",
-    source: "Instagram ad",
-    received: "4h ago",
-    stage: "Qualified",
-    moveDate: "20 August 2026",
-    preferred: "Withington, Fallowfield",
-    agent: "Kirstie",
-    notes: "Referencing pack sent.",
-    activity: [
-      { icon: "megaphone", text: "Lead captured by Instagram campaign", when: "4 hours ago" },
-      { icon: "shield", text: "Marked qualified", when: "2 hours ago" },
-    ],
-  },
-  {
-    id: "l6",
-    name: "Olivia Clark",
-    email: "olivia.c@email.com",
-    phone: "07789 444 555",
-    enquiry: "Letting",
-    area: "Chorlton",
-    budget: "£1,100 pcm",
-    source: "Referral",
-    received: "1d ago",
-    stage: "Waiting",
-    moveDate: "Not sure yet",
-    preferred: "Chorlton, Sale",
-    agent: "Unassigned",
-    notes: "Referred by an existing landlord. Waiting on her budget.",
-    activity: [
-      { icon: "user", text: "Referred by an existing landlord", when: "Yesterday" },
-    ],
-  },
-];
-
-const STAGE_TONE: Record<Stage, "accent" | "neutral" | "good"> = {
-  New: "accent",
-  Contacted: "neutral",
-  "Viewing booked": "neutral",
-  Qualified: "good",
-  Waiting: "neutral",
-};
 
 const ACTIONS = [
   { label: "Call", icon: "call" },
@@ -178,7 +28,7 @@ function Filter({ label }: { label: string }) {
   return (
     <button
       type="button"
-      className="flex items-center gap-2 rounded-full border border-line/80 px-3.5 py-2 text-[12px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
+      className="flex items-center gap-2 whitespace-nowrap rounded-full border border-line/80 px-3.5 py-2 text-[12px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
     >
       {label}
       <span className="text-[9px]">▾</span>
@@ -186,11 +36,62 @@ function Filter({ label }: { label: string }) {
   );
 }
 
+/** Source badge — the pipe matters, so it's shown as a chip not plain text. */
+function Source({ s }: { s: string }) {
+  const social = /facebook|instagram/i.test(s);
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${social ? "bg-accent" : "bg-muted/50"}`}
+        title={social ? "Paid social — via GoHighLevel" : "Portal or website — via REX"}
+      />
+      {s}
+    </span>
+  );
+}
+
+const PER_PAGE = 20;
+
 export default function Leads() {
   // Closed on arrival: the page is the inbox, full width. The panel is a
   // consequence of picking someone, never the state you land in.
   const [openId, setOpenId] = useState<string | null>(null);
+  const [page, setPage] = useState(0);
   const open = LEADS.find((l) => l.id === openId) ?? null;
+
+  // Defined once — a fresh array each render would restart the prefs effect.
+  const defs = useMemo<ColumnDef<Lead>[]>(
+    () => [
+      {
+        key: "name", label: "Lead", required: true,
+        render: (l) => <span className="hand whitespace-nowrap text-[13px]">{l.name}</span>,
+      },
+      {
+        key: "email", label: "Email",
+        // Its own column now: squeezed under the name it was always truncated,
+        // and an email you can't read is an email you can't act on.
+        cell: "whitespace-nowrap text-muted",
+        render: (l) => l.email,
+      },
+      { key: "phone", label: "Phone", optional: true, cell: "whitespace-nowrap text-muted", render: (l) => l.phone },
+      { key: "enquiry", label: "Enquiry", cell: "whitespace-nowrap text-muted", render: (l) => l.enquiry },
+      { key: "area", label: "Area", cell: "whitespace-nowrap", render: (l) => l.area },
+      { key: "budget", label: "Budget", cell: "figures whitespace-nowrap", render: (l) => l.budget },
+      { key: "source", label: "Source", cell: "text-muted", render: (l) => <Source s={l.source} /> },
+      { key: "received", label: "Received", cell: "whitespace-nowrap text-[11px] text-muted", render: (l) => l.received },
+      { key: "moveDate", label: "Move date", optional: true, cell: "whitespace-nowrap text-muted", render: (l) => l.moveDate },
+      { key: "agent", label: "Agent", optional: true, cell: "whitespace-nowrap text-muted", render: (l) => l.agent },
+      {
+        key: "stage", label: "Stage", cell: "whitespace-nowrap",
+        render: (l) => <Pill tone={STAGE_TONE[l.stage]}>{l.stage}</Pill>,
+      },
+    ],
+    []
+  );
+  const cols = useColumns<Lead>("leads", defs);
+
+  const pages = Math.ceil(LEADS.length / PER_PAGE);
+  const rows = LEADS.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
 
   return (
     <>
@@ -200,14 +101,13 @@ export default function Leads() {
         illustration="/illustrations/notioly/inbox.svg"
       />
 
-      <div className="mt-10 flex items-center justify-between gap-3">
+      <div className="mt-10">
         <FlowTag from="portals → REX · social → GHL" to="REX" />
       </div>
 
-      {/* ── The inbox, with the open lead beside it. */}
-      <div className={`mt-4 grid gap-4 ${open ? "xl:grid-cols-[2fr_1fr]" : ""}`}>
+      <div className={`mt-4 grid gap-4 ${open ? "2xl:grid-cols-[2.4fr_1fr]" : ""}`}>
         <div className="fade-up min-w-0 rounded-2xl border border-line/80 p-5">
-          {/* Filters */}
+          {/* Filters, with the column customiser at the end of the row. */}
           <div className="flex flex-wrap items-center gap-2.5">
             <label className="flex min-w-44 flex-1 items-center gap-2.5 rounded-full border border-line/80 px-3.5 py-2 focus-within:border-ink">
               <DoodleIcon name="search" size={14} className="shrink-0 text-muted" />
@@ -220,82 +120,54 @@ export default function Leads() {
             <Filter label="All sources" />
             <Filter label="All agents" />
             <Filter label="All stages" />
+            <ColumnCustomiser cols={cols} />
           </div>
 
-          {/* The list */}
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-left text-[12.5px]">
-              <thead>
-                <tr className="border-b border-line/70">
-                  {["Lead", "Enquiry", "Area", "Budget", "Source", "Received", "Stage"].map((c) => (
-                    <th
-                      key={c}
-                      className="pb-2.5 pr-3 text-[9.5px] font-bold uppercase tracking-wider text-muted"
-                    >
-                      {c}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {LEADS.map((l) => {
-                  const isOpen = l.id === openId;
-                  return (
-                    <tr
-                      key={l.id}
-                      onClick={() => setOpenId(isOpen ? null : l.id)}
-                      className={`cursor-pointer border-b border-line/40 transition-colors last:border-0 ${
-                        isOpen ? "bg-accent-soft/50" : "hover:bg-page"
-                      }`}
-                    >
-                      <td className="py-3 pr-3">
-                        <span className="flex items-start gap-2.5">
-                          <span
-                            className={`mt-0.5 flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full border-[1.5px] ${
-                              isOpen ? "border-accent-dark bg-accent-dark" : "border-line"
-                            }`}
-                          >
-                            {isOpen && <span className="h-1.5 w-1.5 rounded-full bg-white" />}
-                          </span>
-                          <span className="min-w-0">
-                            <span className="hand block truncate text-[13px]">{l.name}</span>
-                            <span className="block truncate text-[10.5px] text-muted">
-                              {l.email}
-                            </span>
-                          </span>
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap py-3 pr-3 text-muted">{l.enquiry}</td>
-                      <td className="whitespace-nowrap py-3 pr-3">{l.area}</td>
-                      <td className="figures whitespace-nowrap py-3 pr-3">{l.budget}</td>
-                      <td className="whitespace-nowrap py-3 pr-3 text-muted">{l.source}</td>
-                      <td className="whitespace-nowrap py-3 pr-3 text-[11px] text-muted">{l.received}</td>
-                      <td className="whitespace-nowrap py-3 pr-1">
-                        <Pill tone={STAGE_TONE[l.stage]}>{l.stage}</Pill>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="mt-4">
+            <DataTable
+              cols={cols}
+              rows={rows}
+              activeId={openId}
+              onRowClick={(l) => setOpenId(l.id === openId ? null : l.id)}
+            />
           </div>
 
-          <div className="mt-4 flex items-center justify-between border-t border-line/70 pt-4">
-            <p className="text-[11px] text-muted">Showing 1–6 of 42 leads</p>
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line/70 pt-4">
+            <p className="text-[11px] text-muted">
+              Showing {page * PER_PAGE + 1}–{Math.min((page + 1) * PER_PAGE, LEADS.length)} of{" "}
+              {LEADS.length} leads
+            </p>
             <div className="flex items-center gap-1.5">
-              {["‹", "1", "2", "3", "…", "7", "›"].map((p, i) => (
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[11px] text-muted transition-colors hover:text-ink disabled:opacity-30"
+              >
+                ‹
+              </button>
+              {Array.from({ length: pages }, (_, i) => (
                 <button
                   key={i}
                   type="button"
+                  onClick={() => setPage(i)}
                   className={`flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[11px] transition-colors ${
-                    p === "1"
+                    i === page
                       ? "bg-accent-soft/60 font-semibold text-accent-dark"
                       : "text-muted hover:text-ink"
                   }`}
                 >
-                  {p}
+                  {i + 1}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(pages - 1, p + 1))}
+                disabled={page >= pages - 1}
+                className="flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[11px] text-muted transition-colors hover:text-ink disabled:opacity-30"
+              >
+                ›
+              </button>
             </div>
           </div>
         </div>
@@ -310,7 +182,7 @@ export default function Leads() {
                 </span>
                 <div className="min-w-0">
                   <p className="hand truncate text-[17px] leading-tight">{open.name}</p>
-                  <p className="mt-1 truncate text-[11px] text-muted">{open.email}</p>
+                  <p className="mt-1 break-all text-[11px] text-muted">{open.email}</p>
                   <p className="truncate text-[11px] text-muted">{open.phone}</p>
                 </div>
               </div>
@@ -324,7 +196,7 @@ export default function Leads() {
               </button>
             </div>
 
-            <div className="mt-3 flex items-center gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <Pill tone={STAGE_TONE[open.stage]}>{open.stage}</Pill>
               <span className="text-[10.5px] text-muted">
                 {open.source} · {open.received}
@@ -344,10 +216,12 @@ export default function Leads() {
                   <dd className="text-right">{v}</dd>
                 </div>
               ))}
-              <div className="pt-1">
-                <dt className="text-muted">Notes</dt>
-                <dd className="mt-1 leading-snug">{open.notes}</dd>
-              </div>
+              {open.notes && (
+                <div className="pt-1">
+                  <dt className="text-muted">Notes</dt>
+                  <dd className="mt-1 leading-snug">{open.notes}</dd>
+                </div>
+              )}
             </dl>
 
             <div className="mt-5 grid grid-cols-3 gap-2 border-t border-line/70 pt-4">

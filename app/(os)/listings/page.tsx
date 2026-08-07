@@ -1,8 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import PropertyPhoto from "@/components/PropertyPhoto";
+import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
 import { FlowTag, Pill } from "@/components/Wire";
 import rexSample from "@/lib/rex-sample.json";
 
@@ -52,6 +54,70 @@ function Filter({ label }: { label: string }) {
 }
 
 export default function Listings() {
+  const defs = useMemo<ColumnDef<SampleListing>[]>(
+    () => [
+      {
+        key: "property", label: "Property", required: true,
+        render: (l) => (
+          <span className="flex items-center gap-3">
+            <PropertyPhoto src={l.image} className="h-11 w-14 shrink-0 rounded-lg" />
+            <span className="min-w-0">
+              <span className="hand block whitespace-nowrap text-[13px]">{l.name}</span>
+              <span className="block whitespace-nowrap text-[10.5px] text-muted">
+                {l.locality} · {l.imageCount ? `${l.imageCount} photos` : "no photos"}
+              </span>
+            </span>
+          </span>
+        ),
+      },
+      {
+        key: "status", label: "Status", cell: "whitespace-nowrap",
+        render: (l) => {
+          const st = statusOf(l);
+          return <Pill tone={st.tone}>{st.label}</Pill>;
+        },
+      },
+      {
+        key: "rent", label: "Rent", cell: "figures whitespace-nowrap",
+        render: (l) => (
+          <>
+            £{l.rent?.toLocaleString("en-GB")}
+            <span className="text-[10px] text-muted"> pcm</span>
+          </>
+        ),
+      },
+      {
+        // Bedrooms are NOT in REX's listing projection — probed via describe
+        // and four extra_fields variants. Blank, never guessed.
+        key: "beds", label: "Beds", cell: "whitespace-nowrap text-muted",
+        render: () => "—",
+      },
+      {
+        key: "age", label: "Age in REX", cell: "figures whitespace-nowrap",
+        render: (l) => (
+          <>
+            {l.daysOnMarket?.toLocaleString("en-GB")}
+            <span className="text-[10px] text-muted"> days</span>
+          </>
+        ),
+      },
+      {
+        key: "updated", label: "Last updated", cell: "whitespace-nowrap text-[11px] text-muted",
+        render: (l) => l.lastUpdated,
+      },
+      {
+        key: "available", label: "Available from", optional: true,
+        cell: "whitespace-nowrap text-muted", render: (l) => l.availableFrom ?? "—",
+      },
+      {
+        key: "epc", label: "EPC expiry", optional: true,
+        cell: "whitespace-nowrap text-muted", render: (l) => l.epcExpiry ?? "—",
+      },
+    ],
+    []
+  );
+  const cols = useColumns<SampleListing>("listings", defs);
+
   return (
     <>
       <PageHeader
@@ -94,69 +160,11 @@ export default function Listings() {
             <span className="figures">{C.draft}</span>
           </button>
           <Filter label="All property types" />
+          <ColumnCustomiser cols={cols} />
         </div>
 
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full text-left text-[12.5px]">
-            <thead>
-              <tr className="border-b border-line/70">
-                {["Property", "Status", "Rent", "Beds", "Age in REX", "Last updated", ""].map(
-                  (c, i) => (
-                    <th
-                      key={i}
-                      className="pb-2.5 pr-3 text-[9.5px] font-bold uppercase tracking-wider text-muted"
-                    >
-                      {c}
-                    </th>
-                  )
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {LISTINGS.map((l) => {
-                const st = statusOf(l);
-                return (
-                  <tr
-                    key={l.id}
-                    className="cursor-pointer border-b border-line/40 transition-colors last:border-0 hover:bg-page"
-                  >
-                    <td className="py-3 pr-3">
-                      <span className="flex items-center gap-3">
-                        <PropertyPhoto
-                          src={l.image}
-                          className="h-11 w-14 shrink-0 rounded-lg"
-                        />
-                        <span className="min-w-0">
-                          <span className="hand block truncate text-[13px]">{l.name}</span>
-                          <span className="block truncate text-[10.5px] text-muted">
-                            {l.locality} · {l.imageCount ? `${l.imageCount} photos` : "no photos"}
-                          </span>
-                        </span>
-                      </span>
-                    </td>
-                    <td className="whitespace-nowrap py-3 pr-3">
-                      <Pill tone={st.tone}>{st.label}</Pill>
-                    </td>
-                    <td className="figures whitespace-nowrap py-3 pr-3">
-                      £{l.rent?.toLocaleString("en-GB")}
-                      <span className="text-[10px] text-muted"> pcm</span>
-                    </td>
-                    {/* Bedrooms are NOT in REX's listing projection — probed via
-                        describe and four extra_fields variants. Blank, not guessed. */}
-                    <td className="whitespace-nowrap py-3 pr-3 text-muted">—</td>
-                    <td className="figures whitespace-nowrap py-3 pr-3">
-                      {l.daysOnMarket?.toLocaleString("en-GB")}
-                      <span className="text-[10px] text-muted"> days</span>
-                    </td>
-                    <td className="whitespace-nowrap py-3 pr-3 text-[11px] text-muted">
-                      {l.lastUpdated}
-                    </td>
-                    <td className="py-3 pr-1 text-right text-muted">···</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="mt-4">
+          <DataTable cols={cols} rows={LISTINGS} />
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line/70 pt-4">
