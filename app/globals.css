@@ -61,9 +61,14 @@
    three palettes (clay, blush, red) get a correct dark treatment for free.
 --------------------------------------------------------------------------- */
 :root[data-theme="dark"] {
-  --ink: #ecebe8;
-  --muted: #9b9a95;
-  --line: #3a3a3d;
+  /* Lifted for contrast. The first pass was too timid: figures, nav labels
+     and subtitles all sat too close to the page. Ink goes near-white (not
+     pure — pure white on charcoal glares), muted lifts a long way so
+     subtitles and hints stay readable, and the rim lightens so boxes and
+     bubbles actually describe an edge instead of hinting at one. */
+  --ink: #f4f3f0;
+  --muted: #b6b4ae;
+  --line: #4d4a52;
   --page: #1c1c1e;
   --card: #232326;
   /* In the dark an outline alone is too severe — the boxes read as cuts in
@@ -180,6 +185,42 @@ h1, h2, h3, h4, h5 {
 
 @media (prefers-reduced-motion: reduce) {
   .wag-hold { animation: none; transform: scale(0.93); }
+}
+
+/* ---------------------------------------------------------------------------
+   Buttons that answer back.
+
+   A press should be felt, not just registered: the button sinks slightly and
+   rocks a degree or two, so the click has weight. Short enough that it never
+   delays what the button actually does.
+--------------------------------------------------------------------------- */
+@keyframes press-wobble {
+  0%   { transform: scale(1) rotate(0deg); }
+  35%  { transform: scale(0.94) rotate(-1.6deg); }
+  65%  { transform: scale(1.02) rotate(1.1deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.press-wobble:active { transform: scale(0.96); }
+.press-wobble.is-pressed { animation: press-wobble 0.42s cubic-bezier(0.3, 1.4, 0.5, 1); }
+
+/* The confirmation tick — draws itself, then the ring settles behind it. */
+@keyframes tick-draw {
+  from { stroke-dashoffset: 40; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes ring-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.tick-draw { stroke-dasharray: 40; animation: tick-draw 0.45s 0.15s ease-out both; }
+.ring-pop { animation: ring-pop 0.4s cubic-bezier(0.3, 1.4, 0.5, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .press-wobble.is-pressed,
+  .tick-draw,
+  .ring-pop { animation: none; }
+  .tick-draw { stroke-dashoffset: 0; }
 }
 
 /* ---------------------------------------------------------------------------

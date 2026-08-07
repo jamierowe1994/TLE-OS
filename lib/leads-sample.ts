@@ -380,3 +380,34 @@ export function leadDetail(lead: Lead): LeadDetail {
     interested: d.interested ?? [],
   };
 }
+
+/**
+ * Where a lead can come from. Grouped, because "how did you hear about us"
+ * has four genuinely different answers and the pipe matters downstream:
+ * portals and the website land in REX, paid social lands in GoHighLevel,
+ * and word-of-mouth lands wherever whoever took the call put it.
+ */
+export const LEAD_SOURCES: { group: string; options: string[] }[] = [
+  {
+    group: "Portals",
+    options: ["Rightmove", "Zoopla", "OnTheMarket", "SpareRoom", "Gumtree"],
+  },
+  {
+    group: "Paid social",
+    options: ["Facebook ad", "Instagram ad", "TikTok ad", "Google Ads"],
+  },
+  {
+    group: "Owned",
+    options: ["Website", "Phone-in", "Walk-in", "Email enquiry", "Live chat"],
+  },
+  {
+    group: "Word of mouth",
+    options: ["Referral", "Existing landlord", "Existing tenant", "Event", "Board / signage"],
+  },
+  { group: "Other", options: ["Repeat customer", "Unknown"] },
+];
+
+/** Tenant-side or landlord-side — the split the nav filters on. */
+export function leadSide(lead: Lead): "tenant" | "landlord" {
+  return lead.enquiry === "Letting" ? "tenant" : "landlord";
+}

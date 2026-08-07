@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
 import { readTheme, type ThemeChoice } from "@/lib/theme";
 
@@ -13,14 +13,24 @@ import { readTheme, type ThemeChoice } from "@/lib/theme";
  * the book being run. The profile foots the rail with sign-out and the
  * palette picker.
  */
-const FRONT = [
+const FRONT: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
-  { href: "/leads", label: "Leads", icon: "target" },
+  // Tenant-side and landlord-side are different jobs — same inbox, different
+  // questions — so Leads opens rather than just navigating.
+  {
+    href: "/leads",
+    label: "Leads",
+    icon: "target",
+    children: [
+      { href: "/leads?side=tenant", label: "Tenant" },
+      { href: "/leads?side=landlord", label: "Landlord" },
+    ],
+  },
   { href: "/listings", label: "Listings", icon: "home" },
   { href: "/viewings", label: "Viewings", icon: "calendar" },
   { href: "/applications", label: "Applications", icon: "checklist" },
 ];
-const BACK = [
+const BACK: NavItem[] = [
   { href: "/property-management", label: "Property management", icon: "key" },
   { href: "/portfolio", label: "Portfolio", icon: "folder" },
   { href: "/finances", label: "Finances", icon: "wallet" },
@@ -33,6 +43,13 @@ const ACCENTS = [
   { id: "red", label: "Classic Red", dot: "#e31f36" },
 ];
 
+type NavItem = {
+  href: string;
+  label: string;
+  icon: string;
+  children?: { href: string; label: string }[];
+};
+
 function applyAccent(id: string) {
   if (id) document.documentElement.dataset.accent = id;
   else delete document.documentElement.dataset.accent;
@@ -42,32 +59,60 @@ function NavLink({
   item,
   active,
   collapsed,
+  currentHref,
 }: {
-  item: { href: string; label: string; icon: string };
+  item: NavItem;
   active: boolean;
   collapsed: boolean;
+  currentHref: string;
 }) {
+  // Children reveal when the section is active — an always-open tree is just
+  // a longer list, and a click-to-open one hides where you already are.
+  const showChildren = Boolean(item.children && active && !collapsed);
   return (
-    <Link
-      href={item.href}
-      title={collapsed ? item.label : undefined}
-      // Soft-tint active state: highlight by reducing contrast, not adding it.
-      className={`hand flex items-center gap-3 rounded-xl py-2.5 text-[13.5px] transition-colors ${
-        collapsed ? "justify-center px-0" : "px-3"
-      } ${active ? "bg-accent-soft/50 font-medium" : "text-muted hover:bg-page hover:text-ink"}`}
-    >
-      <DoodleIcon
-        name={item.icon}
-        size={17}
-        className={active ? "text-accent-dark" : "text-muted"}
-      />
-      {!collapsed && item.label}
-    </Link>
+    <>
+      <Link
+        href={item.href}
+        title={collapsed ? item.label : undefined}
+        // Soft-tint active state: highlight by reducing contrast, not adding it.
+        className={`hand flex items-center gap-3 rounded-xl py-2.5 text-[13.5px] transition-colors ${
+          collapsed ? "justify-center px-0" : "px-3"
+        } ${active ? "bg-accent-soft/50 font-medium" : "text-muted hover:bg-page hover:text-ink"}`}
+      >
+        <DoodleIcon
+          name={item.icon}
+          size={17}
+          className={active ? "text-accent-dark" : "text-muted"}
+        />
+        {!collapsed && item.label}
+      </Link>
+
+      {showChildren && (
+        <div className="fade-up ml-[26px] flex flex-col gap-0.5 border-l border-line/70 pl-2.5">
+          {item.children!.map((c) => {
+            const on = currentHref === c.href;
+            return (
+              <Link
+                key={c.href}
+                href={c.href}
+                className={`rounded-lg px-2.5 py-1.5 text-[12.5px] transition-colors ${
+                  on ? "font-medium text-accent-dark" : "text-muted hover:text-ink"
+                }`}
+              >
+                {c.label}
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 }
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const search = useSearchParams();
+  const currentHref = search.toString() ? `${pathname}?${search}` : pathname;
   const router = useRouter();
   const [profileOpen, setProfileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
@@ -151,6 +196,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               item={item}
               active={pathname.startsWith(item.href)}
               collapsed={collapsed}
+              currentHref={currentHref}
             />
           ))}
 
@@ -168,6 +214,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               item={item}
               active={pathname.startsWith(item.href)}
               collapsed={collapsed}
+              currentHref={currentHref}
             />
           ))}
         </nav>

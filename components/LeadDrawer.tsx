@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
+import { DetailRow, DoneTick, PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
 import {
   DOC_TAGS,
@@ -92,6 +93,10 @@ export default function LeadDrawer({
   const [tags, setTags] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [contact, setContact] = useState({ phone: "", email: "", area: "" });
+  // Properties attached in-session, plus the tick that confirms one landed.
+  const [added, setAdded] = useState<string[]>([]);
+  const [justAdded, setJustAdded] = useState(false);
 
   useEffect(() => {
     if (!detail) return;
@@ -101,7 +106,14 @@ export default function LeadDrawer({
     setTags(detail.tags);
     setTab("overview");
     setDraft("");
+    setAdded([]);
+    setJustAdded(false);
   }, [detail]);
+
+  useEffect(() => {
+    if (!lead) return;
+    setContact({ phone: lead.phone, email: lead.email, area: lead.preferred });
+  }, [lead]);
 
   // Mount, then flip to shown on the next frame — a transform that starts and
   // ends in the same paint doesn't animate.
@@ -130,7 +142,9 @@ export default function LeadDrawer({
   if (!lead || !detail) return null;
 
   const initials = lead.name.split(" ").map((n) => n[0]).join("");
-  const interested = LISTINGS.filter((l) => detail.interested.includes(l.id));
+  const shortlist = LISTINGS.filter(
+    (l) => detail.interested.includes(l.id) || added.includes(l.id)
+  );
 
   function addNote() {
     if (!draft.trim()) return;
@@ -206,19 +220,37 @@ export default function LeadDrawer({
                   <Pill tone={STAGE_TONE[lead.stage]}>{lead.stage}</Pill>
                 </div>
 
-                <dl className="mt-4 space-y-1.5 text-[12.5px]">
-                  {[
-                    ["call", lead.phone],
-                    ["mail", lead.email],
-                    ["home", `${lead.area} · ${lead.preferred}`],
-                    ["target", `Source: ${lead.source} · ${lead.received}`],
-                  ].map(([icon, text]) => (
-                    <div key={icon} className="flex items-center gap-2.5">
-                      <DoodleIcon name={icon} size={14} className="shrink-0 text-muted" />
-                      <span className="break-all">{text}</span>
-                    </div>
-                  ))}
-                </dl>
+                {/* Click a value to change it — a rule appears underneath and
+                    it commits on blur or Enter. No Save button per field, and
+                    no edit mode for the whole record: changing a mobile number
+                    shouldn't feel like filling in a form. Copy sits on hover. */}
+                <div className="mt-5 max-w-sm divide-y divide-line/50">
+                  <DetailRow
+                    icon="call"
+                    label="mobile"
+                    value={contact.phone}
+                    copyable
+                    onChange={(v) => setContact((c) => ({ ...c, phone: v }))}
+                  />
+                  <DetailRow
+                    icon="mail"
+                    label="email"
+                    value={contact.email}
+                    copyable
+                    onChange={(v) => setContact((c) => ({ ...c, email: v }))}
+                  />
+                  <DetailRow
+                    icon="home"
+                    label="area"
+                    value={contact.area}
+                    onChange={(v) => setContact((c) => ({ ...c, area: v }))}
+                  />
+                  <DetailRow
+                    icon="target"
+                    label="source"
+                    value={`${lead.source} · ${lead.received}`}
+                  />
+                </div>
               </div>
 
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -266,7 +298,7 @@ export default function LeadDrawer({
                 t.key === "tasks" ? tasks.filter((x) => !x.done).length
                 : t.key === "documents" ? docs.length
                 : t.key === "viewings" ? detail.viewings.length
-                : t.key === "properties" ? interested.length
+                : t.key === "properties" ? shortlist.length
                 : 0;
               return (
                 <button
@@ -358,18 +390,10 @@ export default function LeadDrawer({
                   </ul>
                 </Card>
 
-                <Card
-                  title="Interested in"
-                  icon="home"
-                  action={
-                    <button className="text-[11.5px] font-semibold text-muted transition-colors hover:text-ink">
-                      + Add property
-                    </button>
-                  }
-                >
-                  {interested.length ? (
+                <Card title="Interested in" icon="home">
+                  {shortlist.length ? (
                     <ul className="space-y-3">
-                      {interested.map((p) => (
+                      {shortlist.map((p) => (
                         <li key={p.id} className="flex items-center gap-3">
                           <PropertyPhoto src={p.image} className="h-10 w-12 shrink-0 rounded-lg" />
                           <span className="min-w-0 flex-1">
@@ -386,7 +410,52 @@ export default function LeadDrawer({
                       ))}
                     </ul>
                   ) : (
-                    <Empty>No properties matched yet.</Empty>
+                    <Empty>Nothing shortlisted yet.</Empty>
+                  )}
+
+                  {/* Confirmation is the point: attaching a property is the
+                      moment a lead becomes a viewing, so it gets a tick and
+                      the two things you'd obviously do next. */}
+                  {justAdded ? (
+                    <div className="fade-up mt-4 flex flex-col items-center rounded-2xl border border-line/70 py-5">
+                      <DoneTick size={44} />
+                      <p className="mt-2.5 text-[12.5px] font-semibold">Property attached</p>
+                      <div className="mt-3 flex flex-wrap justify-center gap-2">
+                        {[
+                          { label: "Schedule a viewing", icon: "calendar" },
+                          { label: "Send details", icon: "mail" },
+                        ].map((a) => (
+                          <PressButton
+                            key={a.label}
+                            className="flex items-center gap-2 rounded-full border border-line/80 px-3.5 py-2 text-[11.5px] transition-colors hover:border-ink/40"
+                          >
+                            <DoodleIcon name={a.icon} size={13} className="text-accent-dark" />
+                            {a.label}
+                          </PressButton>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setJustAdded(false)}
+                        className="mt-3 text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+                      >
+                        + Add another
+                      </button>
+                    </div>
+                  ) : (
+                    <PressButton
+                      onClick={() => {
+                        const next = LISTINGS.find(
+                          (l) => !shortlist.some((p) => p.id === l.id)
+                        );
+                        if (!next) return;
+                        setAdded((cur) => [...cur, next.id]);
+                        setJustAdded(true);
+                      }}
+                      className="mt-4 w-full rounded-xl border border-dashed border-line py-2.5 text-[12px] font-medium text-muted transition-colors hover:border-ink/40 hover:text-ink"
+                    >
+                      + Add property
+                    </PressButton>
                   )}
                 </Card>
 
@@ -593,9 +662,9 @@ export default function LeadDrawer({
                   </button>
                 }
               >
-                {interested.length ? (
+                {shortlist.length ? (
                   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                    {interested.map((p) => (
+                    {shortlist.map((p) => (
                       <div key={p.id} className="overflow-hidden rounded-2xl border border-line/60">
                         <PropertyPhoto src={p.image} className="h-32 w-full" />
                         <div className="p-3.5">

@@ -1,12 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
+import { PressButton } from "@/components/Bits";
 import LeadDrawer from "@/components/LeadDrawer";
+import NewLeadPanel from "@/components/NewLeadPanel";
 import PageHeader from "@/components/PageHeader";
 import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
-import { FlowTag, Pill } from "@/components/Wire";
-import { LEADS, STAGE_TONE, type Lead } from "@/lib/leads-sample";
+import { Pill } from "@/components/Wire";
+import { LEADS, STAGE_TONE, leadSide, type Lead } from "@/lib/leads-sample";
 
 /**
  * Leads: one inbox for every channel, with the record open beside it.
@@ -49,15 +52,25 @@ export default function Leads() {
   // consequence of picking someone, never the state you land in.
   const [openId, setOpenId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
-  const open = LEADS.find((l) => l.id === openId) ?? null;
+  const [creating, setCreating] = useState(false);
+  const params = useSearchParams();
+  const side = params.get("side"); // "tenant" | "landlord" | null (both)
 
-  /** Previous/Next walk the whole book, not just the visible page. */
+  // Tenant-side and landlord-side are different jobs with different questions,
+  // so the nav splits them and the list follows.
+  const book = useMemo(
+    () => (side ? LEADS.filter((l) => leadSide(l) === side) : LEADS),
+    [side]
+  );
+  const open = book.find((l) => l.id === openId) ?? null;
+
+  /** Previous/Next walk the whole filtered book, not just the visible page. */
   function step(delta: number) {
     if (!open) return;
-    const i = LEADS.findIndex((l) => l.id === open.id);
-    const next = LEADS[(i + delta + LEADS.length) % LEADS.length];
+    const i = book.findIndex((l) => l.id === open.id);
+    const next = book[(i + delta + book.length) % book.length];
     setOpenId(next.id);
-    setPage(Math.floor(LEADS.indexOf(next) / PER_PAGE));
+    setPage(Math.floor(book.indexOf(next) / PER_PAGE));
   }
 
   // Defined once — a fresh array each render would restart the prefs effect.
@@ -91,20 +104,24 @@ export default function Leads() {
   );
   const cols = useColumns<Lead>("leads", defs);
 
-  const pages = Math.ceil(LEADS.length / PER_PAGE);
-  const rows = LEADS.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
+  const pages = Math.max(1, Math.ceil(book.length / PER_PAGE));
+  const rows = book.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
 
   return (
     <>
       <PageHeader
-        title="Leads"
+        title={side === "tenant" ? "Tenant leads" : side === "landlord" ? "Landlord leads" : "Leads"}
         blurb="New enquiries from the portals, your ads and the website — ready to qualify and follow up."
         illustration="/illustrations/notioly/inbox.svg"
+        actions={
+          <PressButton
+            onClick={() => setCreating(true)}
+            className="flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page"
+          >
+            <span className="text-[15px] leading-none">+</span> New lead
+          </PressButton>
+        }
       />
-
-      <div className="mt-10">
-        <FlowTag from="portals → REX · social → GHL" to="REX" />
-      </div>
 
       <div className="mt-4">
         <div className="fade-up min-w-0 rounded-2xl border border-line/80 bg-panel p-5">
@@ -135,8 +152,8 @@ export default function Leads() {
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line/70 pt-4">
             <p className="text-[11px] text-muted">
-              Showing {page * PER_PAGE + 1}–{Math.min((page + 1) * PER_PAGE, LEADS.length)} of{" "}
-              {LEADS.length} leads
+              Showing {book.length ? page * PER_PAGE + 1 : 0}–
+              {Math.min((page + 1) * PER_PAGE, book.length)} of {book.length} leads
             </p>
             <div className="flex items-center gap-1.5">
               <button
@@ -176,6 +193,7 @@ export default function Leads() {
       </div>
 
       <LeadDrawer lead={open} onClose={() => setOpenId(null)} onStep={step} />
+      <NewLeadPanel open={creating} onClose={() => setCreating(false)} />
     </>
   );
 }

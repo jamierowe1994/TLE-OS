@@ -1,10 +1,11 @@
 import DoodleIcon from "@/components/DoodleIcon";
 
 /**
- * Every page opens on the same ledge: a rule right across, the title sat on
- * it with a pop stroke off its top-left and another off its bottom-right, the
- * search and bell to the right, and the illustration standing ON the line —
- * which dips around its feet, so the figure is in the page rather than on it.
+ * The shared page opening, in three fixed places so nothing drifts page to
+ * page: the title on the left with a pop stroke off each far corner, the
+ * illustration hard right standing on the rule (which dips around its feet),
+ * notifications pinned to the very top right, and the search bar BELOW the
+ * rule — the bell is chrome, the search belongs to the work underneath.
  */
 
 /** The pop strokes off the title's corners. */
@@ -27,17 +28,13 @@ function Pop({ className = "" }: { className?: string }) {
 }
 
 /**
- * The dip in the rule beneath the illustration.
- *
- * The header's own border-bottom is hidden behind a page-coloured plate here,
- * and redrawn as a path that eases down into a shallow trough and back up. The
- * figure then stands IN the line instead of on top of an unbroken one — the
- * same trick as a notch, but softened so it reads as the ground giving a
- * little under their weight.
+ * The dip in the rule beneath the illustration — the header's border is
+ * masked across this span and redrawn easing down into a shallow trough, so
+ * the figure stands IN the line rather than on an unbroken one.
  */
 function LineDip({ width }: { width: number }) {
   const h = 26;
-  const y = 1; // the rule sits at the top of this strip
+  const y = 1;
   const drop = 11;
   return (
     <svg
@@ -47,9 +44,7 @@ function LineDip({ width }: { width: number }) {
       className="pointer-events-none absolute bottom-0 h-[26px]"
       style={{ width, left: "50%", transform: "translateX(-50%)" }}
     >
-      {/* Cover the straight border across this span… */}
       <rect x="0" y="0" width={width} height={h} fill="var(--page)" />
-      {/* …then draw it again, dipping through the middle. */}
       <path
         d={`M 0 ${y}
             L ${width * 0.16} ${y}
@@ -70,47 +65,78 @@ export default function PageHeader({
   blurb,
   illustration,
   illustrationNode,
-  /** How far in from the right the illustration sits — clear of the search. */
-  illustrationRight = 330,
-  /** Illustration height. The header grows to hold it: the figure stands on
-   *  the rule and reaches most of the way up, stopping short of the top. */
+  /** Illustration height — it stands on the rule and reaches most of the way
+   *  up, stopping short of the top. */
   illustrationHeight = 216,
+  /** Actions that belong to the page, sitting on the search row. */
+  actions,
 }: {
   title: string;
   blurb: string;
   illustration?: string;
   /** A live illustration (e.g. the window scene) in place of a static file. */
   illustrationNode?: React.ReactNode;
-  illustrationRight?: number;
   illustrationHeight?: number;
+  actions?: React.ReactNode;
 }) {
   const hasArt = Boolean(illustration || illustrationNode);
-  // The dip spans a little less than the figure — a trough under their feet,
-  // not a canyon across the page.
   const dipWidth = Math.round(illustrationHeight * 0.72);
 
   return (
-    // min-h so the illustration has somewhere to stand even on a short title.
-    // min-h leaves headroom above the figure so it reaches high without
-    // spilling off the top of the page.
-    <div className="fade-up relative flex min-h-[248px] items-end justify-between gap-6 border-b border-line/80 pt-10">
-      <div className="mb-2 pb-9 pl-2 pt-8">
-        {/* The strokes belong to the TITLE, not the block — one off its
-            top-left, its mirror off its bottom-right. */}
-        <div className="relative inline-block">
-          <span className="absolute -left-9 -top-5">
-            <Pop />
-          </span>
-          <span className="absolute -bottom-1 -right-10 rotate-180">
-            <Pop />
-          </span>
-          <h1 className="text-[30px] leading-tight">{title}</h1>
+    <>
+      <div className="fade-up relative flex min-h-[240px] items-end justify-between gap-6 border-b border-line/80 pt-10">
+        <div className="mb-2 pb-9 pl-2 pt-8">
+          {/* The strokes belong to the TITLE, not the block. */}
+          <div className="relative inline-block">
+            <span className="absolute -left-9 -top-5">
+              <Pop />
+            </span>
+            <span className="absolute -bottom-1 -right-10 rotate-180">
+              <Pop />
+            </span>
+            <h1 className="text-[30px] leading-tight">{title}</h1>
+          </div>
+          <p className="mt-2.5 max-w-md text-[13px] text-muted">{blurb}</p>
         </div>
-        <p className="mt-2.5 max-w-md text-[13px] text-muted">{blurb}</p>
+
+        {/* Notifications, top right and nothing else up there. */}
+        <button
+          type="button"
+          className="absolute right-0 top-6 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line/80"
+          title="Notifications (wireframe)"
+        >
+          <DoodleIcon name="bell" size={17} className="text-ink" />
+          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent" />
+        </button>
+
+        {/* The figure, hard right, standing on the rule. */}
+        {hasArt && (
+          <div
+            className="pointer-events-none absolute bottom-0 right-0 hidden xl:block"
+            style={{ height: illustrationHeight }}
+          >
+            <div className="relative h-full">
+              <LineDip width={dipWidth} />
+              {illustrationNode ? (
+                <div className="relative aspect-square h-full">{illustrationNode}</div>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={illustration}
+                  alt=""
+                  aria-hidden
+                  className="art relative h-full w-auto"
+                />
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="flex shrink-0 items-end gap-3 self-end pb-9">
-        <label className="hidden w-60 items-center gap-2.5 rounded-full border border-line/80 px-4 py-2.5 transition-colors focus-within:border-ink sm:flex">
+      {/* Search sits UNDER the rule, in the same column it always did — it
+          belongs to the work below, not to the masthead above. */}
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <label className="flex w-full max-w-xs items-center gap-2.5 rounded-full border border-line/80 px-4 py-2.5 transition-colors focus-within:border-ink">
           <DoodleIcon name="search" size={15} className="shrink-0 text-muted" />
           <input
             type="text"
@@ -118,40 +144,8 @@ export default function PageHeader({
             className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted/70"
           />
         </label>
-        <button
-          type="button"
-          className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line/80"
-          title="Notifications (wireframe)"
-        >
-          <DoodleIcon name="bell" size={17} className="text-ink" />
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent" />
-        </button>
+        {actions}
       </div>
-
-      {/* The figure stands on the rule and overflows upward — an absolutely
-          positioned child adds nothing to layout, so the header keeps its
-          height however tall the art gets. */}
-      {hasArt && (
-        <div
-          className="pointer-events-none absolute bottom-0 hidden xl:block"
-          style={{ right: illustrationRight, height: illustrationHeight }}
-        >
-          <div className="relative h-full">
-            <LineDip width={dipWidth} />
-            {illustrationNode ? (
-              <div className="relative aspect-square h-full">{illustrationNode}</div>
-            ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={illustration}
-                alt=""
-                aria-hidden
-                className="art relative h-full w-auto"
-              />
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+    </>
   );
 }
