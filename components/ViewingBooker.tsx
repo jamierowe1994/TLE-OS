@@ -46,23 +46,31 @@ function monthGrid(anchor: Date) {
   return cells;
 }
 
+export type Person = { name: string; email: string; phone: string };
+
 export default function ViewingBooker({
   open,
   onClose,
   lead,
+  applicants,
   properties,
   agent,
   onBooked,
 }: {
   open: boolean;
   onClose: () => void;
-  lead: { name: string; email: string; phone: string };
+  /** Known from a lead record. Null when starting from a property instead. */
+  lead: Person | null;
+  /** Offered when there's no lead yet — booking from the listing side, where
+   *  you have the property and still have to say who's coming. */
+  applicants?: Person[];
   properties: Listing[];
   agent: string;
-  onBooked: (summary: { when: string; property: string; locality: string }) => void;
+  onBooked: (summary: { when: string; property: string; locality: string; who: string }) => void;
 }) {
   const today = useMemo(() => startOfDay(new Date()), []);
-  const [stage, setStage] = useState<"when" | "who" | "done">("when");
+  const [stage, setStage] = useState<"applicant" | "when" | "who" | "done">("when");
+  const [chosen, setChosen] = useState<Person | null>(lead);
   const [month, setMonth] = useState<Date>(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [day, setDay] = useState<Date | null>(null);
   const [slot, setSlot] = useState<string | null>(null);
@@ -75,7 +83,10 @@ export default function ViewingBooker({
   seed.current = properties;
   useEffect(() => {
     if (!open) return;
-    setStage("when");
+    // Starting from a property, the applicant is the first unknown; starting
+    // from a lead, it's already answered.
+    setChosen(lead);
+    setStage(lead ? "when" : "applicant");
     setDay(null);
     setSlot(null);
     setPropertyId(seed.current[0]?.id ?? "");
@@ -94,7 +105,7 @@ export default function ViewingBooker({
   if (!open) return null;
 
   const property = properties.find((p) => p.id === propertyId) ?? properties[0] ?? null;
-  const ready = Boolean(day && slot && property);
+  const ready = Boolean(day && slot && property && chosen);
 
   const dayLabel = day
     ? day.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })
@@ -108,8 +119,8 @@ export default function ViewingBooker({
      on the previous screen — a template built up front goes stale the moment
      somebody changes the time. */
   function compose(): Outgoing[] {
-    if (!property || !day || !slot) return [];
-    const first = lead.name.split(" ")[0];
+    if (!property || !day || !slot || !chosen) return [];
+    const first = chosen.name.split(" ")[0];
     const ll = landlordFor(property.id);
     const llFirst = ll.name.split(" ")[0];
     const where = `${property.name}, ${property.locality}`;
@@ -118,9 +129,9 @@ export default function ViewingBooker({
       {
         key: "applicant",
         role: "Applicant",
-        name: lead.name,
-        email: lead.email,
-        phone: lead.phone,
+        name: chosen.name,
+        email: chosen.email,
+        phone: chosen.phone,
         channel: "email",
         on: true,
         subject: `Viewing confirmed — ${property.name}, ${shortDate} at ${slot}`,
@@ -164,9 +175,9 @@ export default function ViewingBooker({
         on: false,
         subject: `Diary: ${property.name}, ${shortDate} ${slot}`,
         emailBody:
-          `${dayLabel}, ${slot}\n${where}\n\nApplicant: ${lead.name} · ${lead.phone}\n` +
+          `${dayLabel}, ${slot}\n${where}\n\nApplicant: ${chosen.name} · ${chosen.phone}\n` +
           `Landlord: ${ll.name} · ${ll.phone}`,
-        whatsappBody: `${shortDate} ${slot} — ${property.name}. ${lead.name}, ${lead.phone}.`,
+        whatsappBody: `${shortDate} ${slot} — ${property.name}. ${chosen.name}, ${chosen.phone}.`,
       },
     ];
   }
@@ -183,12 +194,20 @@ export default function ViewingBooker({
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line/70 px-6 py-4">
           <div className="min-w-0">
             <h2 className="text-[19px] leading-tight">
-              {stage === "done" ? "Viewing booked" : stage === "who" ? "Who do we tell?" : "Book a viewing"}
+              {stage === "done"
+                ? "Viewing booked"
+                : stage === "who"
+                  ? "Who do we tell?"
+                  : stage === "applicant"
+                    ? "Who's viewing?"
+                    : "Book a viewing"}
             </h2>
             <p className="mt-0.5 truncate text-[12px] text-muted">
-              {stage === "when"
-                ? `For ${lead.name}`
-                : `${lead.name} · ${whenLabel}${property ? ` · ${property.name}` : ""}`}
+              {stage === "applicant"
+                ? properties[0]?.name ?? "Pick who's viewing"
+                : stage === "when"
+                  ? `For ${chosen?.name ?? "—"}`
+                  : `${chosen?.name ?? "—"} · ${whenLabel}${property ? ` · ${property.name}` : ""}`}
             </p>
           </div>
           <button
@@ -201,6 +220,43 @@ export default function ViewingBooker({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          {/* ══ WHO'S VIEWING ══ */}
+          {stage === "applicant" && (
+            <ul className="space-y-2.5">
+              {(applicants ?? []).map((p) => {
+                const on = chosen?.email === p.email;
+                return (
+                  <li key={p.email}>
+                    <button
+                      type="button"
+                      onClick={() => setChosen(p)}
+                      className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors ${
+                        on ? "border-accent-dark bg-accent-soft/40" : "border-line/60 hover:border-ink/30"
+                      }`}
+                    >
+                      <span
+                        className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[9px] ${
+                          on ? "border-accent-dark bg-accent-dark text-page" : "border-line"
+                        }`}
+                      >
+                        {on && "✓"}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="hand block truncate text-[13.5px]">{p.name}</span>
+                        <span className="block truncate text-[10.5px] text-muted">{p.email}</span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+              {!applicants?.length && (
+                <p className="py-8 text-center text-[12.5px] text-muted">
+                  No applicants on the book yet — add a lead first.
+                </p>
+              )}
+            </ul>
+          )}
+
           {/* ══ WHEN ══ */}
           {stage === "when" && (
             <>
@@ -339,6 +395,7 @@ export default function ViewingBooker({
                     when: whenLabel,
                     property: property.name,
                     locality: property.locality,
+                    who: chosen?.name ?? "",
                   });
                 }
               }}
@@ -362,7 +419,24 @@ export default function ViewingBooker({
 
         {stage !== "who" && (
           <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line/70 px-6 py-4">
-            {stage === "when" ? (
+            {stage === "applicant" ? (
+              <>
+                <p className="min-w-0 truncate text-[12px] text-muted">
+                  {chosen ? chosen.name : "Pick who's coming to see it"}
+                </p>
+                <PressButton
+                  onClick={() => chosen && setStage("when")}
+                  className={`shrink-0 rounded-full px-6 py-2.5 text-[13px] font-semibold ${
+                    chosen ? "bg-accent-dark text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <DoodleIcon name="calendar" size={15} />
+                    Next — pick a time
+                  </span>
+                </PressButton>
+              </>
+            ) : stage === "when" ? (
               <>
                 <p className="min-w-0 truncate text-[12px] text-muted">
                   {ready ? `${dayLabel} at ${slot}` : "Pick a day and a time"}

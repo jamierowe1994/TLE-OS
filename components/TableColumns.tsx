@@ -256,7 +256,8 @@ export function DataTable<T extends { id: string }>({
 }: {
   cols: ReturnType<typeof useColumns<T>>;
   rows: T[];
-  onRowClick?: (row: T) => void;
+  /** Row and its index — the index is what lets a drawer walk the list. */
+  onRowClick?: (row: T, index: number) => void;
   activeId?: string | null;
   maxHeight?: number;
 }) {
@@ -276,12 +277,12 @@ export function DataTable<T extends { id: string }>({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
+          {rows.map((row, rowIndex) => {
             const active = activeId === row.id;
             return (
               <tr
                 key={row.id}
-                onClick={() => onRowClick?.(row)}
+                onClick={() => onRowClick?.(row, rowIndex)}
                 className={`border-b border-line/40 transition-colors last:border-0 ${
                   onRowClick ? "cursor-pointer" : ""
                 } ${active ? "bg-accent-soft/50" : "hover:bg-page"}`}

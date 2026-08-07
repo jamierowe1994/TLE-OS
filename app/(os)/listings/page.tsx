@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
+import ListingDrawer from "@/components/ListingDrawer";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
 import { FlowTag, Pill } from "@/components/Wire";
@@ -54,6 +55,10 @@ function Filter({ label }: { label: string }) {
 }
 
 export default function Listings() {
+  // Which row is open. Index rather than id so Previous/Next can walk the
+  // board without going back to it, same as the leads drawer.
+  const [openAt, setOpenAt] = useState<number | null>(null);
+
   const defs = useMemo<ColumnDef<SampleListing>[]>(
     () => [
       {
@@ -165,7 +170,7 @@ export default function Listings() {
         </div>
 
         <div className="mt-4">
-          <DataTable cols={cols} rows={LISTINGS} />
+          <DataTable cols={cols} rows={LISTINGS} onRowClick={(_r, i) => setOpenAt(i)} />
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line/70 pt-4">
@@ -205,6 +210,16 @@ export default function Listings() {
           actually measures.
         </li>
       </ul>
+
+      <ListingDrawer
+        listing={openAt == null ? null : LISTINGS[openAt]}
+        onClose={() => setOpenAt(null)}
+        onStep={(d) =>
+          setOpenAt((i) =>
+            i == null ? i : (i + d + LISTINGS.length) % LISTINGS.length
+          )
+        }
+      />
 
       {/* The street, running off the bottom of the page. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
