@@ -27,6 +27,8 @@
   --line: #d9d5ca;
   --page: #f2f0eb;
   --card: #ffffff;
+  /* Boxes sit ON the eggshell in daylight — outline only, no fill. */
+  --panel: transparent;
 
   --radius-card: 16px;
 }
@@ -64,6 +66,10 @@
   --line: #3a3a3d;
   --page: #1c1c1e;
   --card: #232326;
+  /* In the dark an outline alone is too severe — the boxes read as cuts in
+     the page rather than panels on it. A couple of points of lift is all it
+     takes to say "this is a container" without turning it into a slab. */
+  --panel: #212124;
 
   /* Soft fills go dark-tinted; the "dark" accent goes LIGHTER, because on a
      charcoal page the legible variant of a colour is the paler one. */
@@ -80,6 +86,7 @@
   --color-line: var(--line);
   --color-page: var(--page);
   --color-card: var(--card);
+  --color-panel: var(--panel);
   --font-sans: var(--font-body);
   --radius-card: 1rem;
 }

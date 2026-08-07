@@ -160,7 +160,7 @@ export default function Applications() {
       </div>
 
       {/* ── The pipeline: how many sit at each stage. */}
-      <div className="fade-up mt-4 rounded-2xl border border-line/80 p-5">
+      <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-[15px]">Pipeline</h2>
           <p className="text-[11px] text-muted">{APPS.length} live applications</p>
@@ -188,7 +188,7 @@ export default function Applications() {
 
       {/* ── The applications, with the open one beside them. */}
       <div className={`mt-4 grid gap-4 ${open ? "xl:grid-cols-[2fr_1fr]" : ""}`}>
-        <div className="fade-up min-w-0 rounded-2xl border border-line/80 p-5">
+        <div className="fade-up min-w-0 rounded-2xl border border-line/80 bg-panel p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2.5">
             <h2 className="text-[15px]">Live applications</h2>
             <ColumnCustomiser cols={cols} />
@@ -203,7 +203,7 @@ export default function Applications() {
 
         {/* ── The open application: where it is, and what's left. */}
         {open && (
-          <aside className="fade-up h-fit rounded-2xl border border-line/80 p-5">
+          <aside className="fade-up h-fit rounded-2xl border border-line/80 bg-panel p-5">
             <div className="flex items-start justify-between gap-3">
               <div className="flex min-w-0 items-start gap-3">
                 <PropertyPhoto src={open.image} className="h-12 w-14 shrink-0 rounded-lg" />

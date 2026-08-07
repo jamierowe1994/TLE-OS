@@ -137,7 +137,7 @@ export default function Listings() {
       </div>
 
       {/* ── The board. */}
-      <div className="fade-up mt-4 rounded-2xl border border-line/80 p-5">
+      <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
         <div className="flex flex-wrap items-center gap-2.5">
           <label className="flex min-w-44 flex-1 items-center gap-2.5 rounded-full border border-line/80 px-3.5 py-2 focus-within:border-ink">
             <DoodleIcon name="search" size={14} className="shrink-0 text-muted" />

@@ -123,7 +123,7 @@ export default function Viewings() {
         // One full-width list with day headers, not three narrow columns —
         // at a third of the width every applicant name truncated, which is
         // the one thing a diary must never do.
-        <div className="fade-up mt-4 rounded-2xl border border-line/80 p-5">
+        <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
           {DAYS.map((d) => (
             <div key={d.label} className="mb-5 last:mb-0">
               <div className="flex items-baseline gap-3 border-b border-line/70 pb-2">
@@ -144,7 +144,7 @@ export default function Viewings() {
           ))}
         </div>
       ) : (
-        <div className="fade-up mt-4 rounded-2xl border border-line/80 p-5">
+        <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
           <div className="mb-2 flex items-center justify-between gap-3">
             <h2 className="text-[15px]">Recent feedback</h2>
             <span className="text-[11px] text-muted">

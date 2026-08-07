@@ -61,7 +61,7 @@ export function Card({
   return (
     // No background: the boxes sit ON the eggshell, outline only — white
     // slabs were louder than their contents and the reference doesn't use them.
-    <section className={`fade-up rounded-2xl border border-line/80 p-5 ${className}`}>
+    <section className={`fade-up rounded-2xl border border-line/80 bg-panel p-5 ${className}`}>
       {(title || tag) && (
         <div className="mb-4 flex items-center justify-between gap-3">
           {title && <h2 className="text-[15px] font-semibold">{title}</h2>}
@@ -106,7 +106,7 @@ export function Stat({
   hint?: string;
 }) {
   return (
-    <div className="fade-up rounded-2xl border border-line/80 p-5">
+    <div className="fade-up rounded-2xl border border-line/80 bg-panel p-5">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
         {label}
       </p>

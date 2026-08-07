@@ -11,8 +11,8 @@ import DoodleIcon from "@/components/DoodleIcon";
  * ("leads", "listings", …) and persist in localStorage, so Leads and Listings
  * each remember their own layout independently.
  *
- * Reordering is drag-and-drop with the native HTML5 API: no library, and the
- * drag handle is the whole row so it works on a trackpad without precision.
+ * Reordering is pointer-driven (see ColumnCustomiser) — no library, live
+ * preview as you drag, and it works on touch.
  */
 
 export type ColumnDef<T> = {

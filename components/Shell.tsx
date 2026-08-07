@@ -116,7 +116,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <aside
-        className={`sticky top-3 mb-3 ml-3 mt-3 hidden h-[calc(100vh-24px)] shrink-0 flex-col rounded-3xl border border-line/80 py-5 transition-[width] duration-300 lg:flex ${
+        className={`sticky top-3 mb-3 ml-3 mt-3 hidden h-[calc(100vh-24px)] shrink-0 flex-col rounded-3xl border border-line/80 bg-panel py-5 transition-[width] duration-300 lg:flex ${
           collapsed ? "w-[72px] px-2.5" : "w-60 px-4"
         }`}
       >
@@ -174,7 +174,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         {/* ── Profile, at the foot ── */}
         <div className="mt-auto">
           {profileOpen && !collapsed && (
-            <div className="fade-up mb-2 rounded-2xl border border-line/80 p-3">
+            <div className="fade-up mb-2 rounded-2xl border border-line/80 bg-panel p-3">
               <p className="text-[10px] font-bold uppercase tracking-wide text-muted">
                 Appearance
               </p>

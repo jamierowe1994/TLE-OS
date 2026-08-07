@@ -87,7 +87,7 @@ export default function Dashboard() {
           <Link
             key={s.label}
             href={s.href}
-            className="fade-up group rounded-2xl border border-line/80 p-5 transition-colors hover:border-ink/40"
+            className="fade-up group rounded-2xl border border-line/80 bg-panel p-5 transition-colors hover:border-ink/40"
           >
             {/* Bare icons — no circle behind them; the page breathes better. */}
             <div className="flex items-center gap-2.5">
@@ -175,7 +175,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── The journey, compact, along the bottom — the pipeline snapshot. */}
-      <div className="fade-up mt-6 rounded-2xl border border-line/80 p-5">
+      <div className="fade-up mt-6 rounded-2xl border border-line/80 bg-panel p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-[15px]">Pipeline snapshot</h2>
           <FlowTag from="REX + PayProp" />

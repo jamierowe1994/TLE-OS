@@ -106,7 +106,7 @@ export default function Leads() {
       </div>
 
       <div className={`mt-4 grid gap-4 ${open ? "2xl:grid-cols-[2.4fr_1fr]" : ""}`}>
-        <div className="fade-up min-w-0 rounded-2xl border border-line/80 p-5">
+        <div className="fade-up min-w-0 rounded-2xl border border-line/80 bg-panel p-5">
           {/* Filters, with the column customiser at the end of the row. */}
           <div className="flex flex-wrap items-center gap-2.5">
             <label className="flex min-w-44 flex-1 items-center gap-2.5 rounded-full border border-line/80 px-3.5 py-2 focus-within:border-ink">
@@ -174,7 +174,7 @@ export default function Leads() {
 
         {/* ── The open lead. */}
         {open && (
-          <aside className="fade-up h-fit rounded-2xl border border-line/80 p-5">
+          <aside className="fade-up h-fit rounded-2xl border border-line/80 bg-panel p-5">
             <div className="flex items-start justify-between gap-3">
               <div className="flex min-w-0 items-start gap-3">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[12px] font-bold text-accent-dark">
