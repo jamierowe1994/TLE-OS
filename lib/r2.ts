@@ -27,14 +27,29 @@ const SECRET = process.env.R2_SECRET_ACCESS_KEY ?? "";
 /** Every variable present? Says nothing about whether they're correct. */
 export const r2Configured = Boolean(ACCOUNT && KEY && SECRET && R2_BUCKET);
 
+/**
+ * Confirmed 7 Aug 2026 against the live bucket: this account's bucket carries
+ * the EU jurisdiction, so the plain hostname answers "AccessDenied (403)" —
+ * note, NOT "no such bucket", which is what makes it such a misleading
+ * failure. The EU hostname is therefore tried first.
+ */
+const EU_FIRST = true;
+
+/** Remembered after the first success, so we stop paying for the 403. */
+let resolved: string | null = null;
+
+export function rememberEndpoint(endpoint: string) {
+  resolved = endpoint;
+}
+
 /** The hostnames worth trying, in order. */
 export function candidateEndpoints(): string[] {
   const explicit = process.env.R2_ENDPOINT;
   if (explicit) return [explicit.replace(/\/+$/, "")];
-  return [
-    `https://${ACCOUNT}.r2.cloudflarestorage.com`,
-    `https://${ACCOUNT}.eu.r2.cloudflarestorage.com`,
-  ];
+  if (resolved) return [resolved];
+  const plain = `https://${ACCOUNT}.r2.cloudflarestorage.com`;
+  const eu = `https://${ACCOUNT}.eu.r2.cloudflarestorage.com`;
+  return EU_FIRST ? [eu, plain] : [plain, eu];
 }
 
 export function r2(endpoint: string): S3Client {

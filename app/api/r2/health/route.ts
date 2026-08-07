@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ListObjectsV2Command } from "@aws-sdk/client-s3";
-import { candidateEndpoints, r2, r2Configured, R2_BUCKET } from "@/lib/r2";
+import { candidateEndpoints, r2, r2Configured, R2_BUCKET, rememberEndpoint } from "@/lib/r2";
 
 /**
  * Does R2 actually work?
@@ -41,6 +41,7 @@ export async function GET() {
       const out = await r2(endpoint).send(
         new ListObjectsV2Command({ Bucket: R2_BUCKET, MaxKeys: 5 })
       );
+      rememberEndpoint(endpoint);
       return NextResponse.json({
         ok: true,
         present,
