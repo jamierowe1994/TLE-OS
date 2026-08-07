@@ -4,11 +4,13 @@ import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PhotoBox from "@/components/PhotoBox";
 import PropertyPhoto from "@/components/PropertyPhoto";
+import Link from "next/link";
 import EmailToTenants from "@/components/EmailToTenants";
+import ProcessTimeline from "@/components/ProcessTimeline";
 import ViewingBooker, { type Person } from "@/components/ViewingBooker";
-import { PressButton } from "@/components/Bits";
+import { DoneTick, PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
-import { landlordFor } from "@/lib/journey";
+import { landlordFor, LISTING_TRACK, listingStartingStep } from "@/lib/journey";
 import { LEADS, leadSide } from "@/lib/leads-sample";
 
 /**
@@ -19,10 +21,10 @@ import { LEADS, leadSide } from "@/lib/leads-sample";
  * actually does with a live listing: get it in front of people, and get people
  * through the door. Everything else on the page is reference.
  *
- * The process track is deliberately ABSENT rather than invented. Susan is
- * being asked what the stages of a listing are, and the track is the spine of
- * this page — guessing it and retrofitting is how you end up with a screen
- * that argues with the way the job is done.
+ * The process track carries Susan's real stages (via James, 7 Aug 2026):
+ * live → viewings → offers → offer accepted → handover. It ends at handover
+ * because everything after "let agreed" is the applicant's pre-tenancy
+ * journey, and that runs on the Applications side with Kirstie.
  */
 
 export type Listing = {
@@ -127,12 +129,16 @@ export default function ListingDrawer({
   const [receptions, setReceptions] = useState(0);
   const [furnished, setFurnished] = useState("");
   const [booked, setBooked] = useState<{ when: string; who: string }[]>([]);
+  const [step, setStep] = useState(0);
+  const [handingOver, setHandingOver] = useState(false);
 
   useEffect(() => {
     if (!listing) return;
     setTab("overview");
     setType(""); setBeds(0); setBaths(0); setReceptions(0); setFurnished("");
     setBooked([]);
+    setStep(listingStartingStep(listing));
+    setHandingOver(false);
   }, [listing]);
 
   useEffect(() => {
@@ -155,6 +161,16 @@ export default function ListingDrawer({
   if (!listing) return null;
 
   const ll = landlordFor(listing.id);
+  const here = LISTING_TRACK[Math.min(step, LISTING_TRACK.length - 1)];
+  const advance = () => setStep((s) => Math.min(s + 1, LISTING_TRACK.length - 1));
+
+  /** The step decides what the button does, same as on a lead. */
+  function fire() {
+    if (here.action === "viewing") setBooking(true);
+    else if (here.action === "handoff") setHandingOver(true);
+    else advance();
+  }
+
   const status = listing.letAgreed
     ? { label: "Let agreed", tone: "neutral" as const }
     : listing.publicationStatus === "published"
@@ -259,12 +275,45 @@ export default function ListingDrawer({
               </div>
             </div>
 
-            {/* Where the track will go once Susan says what the stages are. */}
-            <div className="mt-6 rounded-xl border border-dashed border-line px-4 py-3 text-center">
-              <p className="text-[11px] leading-relaxed text-muted">
-                <span className="font-semibold text-ink">Listing process</span> — waiting on
-                Susan for the real stages. It slots in here, same rail as the lead tracks.
-              </p>
+          </div>
+
+          {/* ── The process, same grammar as the lead record: the rail says
+              where the property is, the sentence under it says what to do
+              about it, and the button does that thing. ── */}
+          <div className="mt-5 rounded-3xl border border-line/80 bg-panel p-6">
+            <ProcessTimeline
+              steps={LISTING_TRACK}
+              current={step}
+              onPick={setStep}
+            />
+
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-x-8 gap-y-4 border-t border-line/60 pt-5">
+              <div className="min-w-[240px] max-w-xl flex-1">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  Next action
+                </p>
+                <p className="hand mt-1.5 text-[17px] leading-snug">{here.title}</p>
+                <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{here.detail}</p>
+              </div>
+
+              <div className="flex shrink-0 flex-col items-end gap-2">
+                <PressButton
+                  onClick={fire}
+                  className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-6 py-3 text-[13px] font-semibold text-page"
+                >
+                  <DoodleIcon name={here.icon} size={15} />
+                  {here.cta}
+                </PressButton>
+                {here.action !== "none" && step < LISTING_TRACK.length - 1 && (
+                  <button
+                    type="button"
+                    onClick={advance}
+                    className="text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+                  >
+                    Already done — move on
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
@@ -433,6 +482,62 @@ export default function ListingDrawer({
           </div>
         </div>
       </aside>
+
+      {/* The handover. A confirmation that SHOWS what's being compiled —
+          Kirstie should receive a package, not a link and a shrug. */}
+      {handingOver && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+          <button
+            aria-label="Close"
+            onClick={() => setHandingOver(false)}
+            className="absolute inset-0 cursor-default bg-ink/45"
+          />
+          <div className="fade-up relative w-full max-w-md overflow-hidden rounded-3xl border border-line/80 bg-page p-7 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+            <div className="text-center">
+              <DoneTick />
+              <h2 className="hand mt-4 text-[20px]">Hand over to Kirstie</h2>
+              <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+                Everything below goes to Applications in one package. Pre-tenancy,
+                referencing, property prep and move-in run there.
+              </p>
+            </div>
+            <dl className="mt-5 space-y-2 rounded-2xl border border-line/70 p-4 text-[12.5px]">
+              {[
+                ["Property", listing.name],
+                ["Rent agreed", `£${listing.rent?.toLocaleString("en-GB")} pcm`],
+                ["Landlord", `${ll.name} · ${ll.phone}`],
+                ["Applicant", "From the accepted offer"],
+                ["Available from", listing.availableFrom ?? "Not set"],
+              ].map(([k, v]) => (
+                <div key={k} className="flex justify-between gap-4 border-b border-line/40 pb-2 last:border-0 last:pb-0">
+                  <dt className="shrink-0 text-muted">{k}</dt>
+                  <dd className="min-w-0 truncate text-right">{v}</dd>
+                </div>
+              ))}
+            </dl>
+            <div className="mt-5 flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => setHandingOver(false)}
+                className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40"
+              >
+                Not yet
+              </button>
+              <Link
+                href="/applications"
+                className="press-ring press-wobble flex items-center gap-2 rounded-full bg-accent-dark px-6 py-2.5 text-[13px] font-semibold text-page"
+              >
+                <DoodleIcon name="key" size={15} />
+                Hand over
+              </Link>
+            </div>
+            <p className="mt-4 text-center text-[10.5px] text-muted">
+              Wireframe: this opens Applications. Creating the application record is a
+              write that isn&apos;t wired yet.
+            </p>
+          </div>
+        </div>
+      )}
 
       <EmailToTenants open={emailing} onClose={() => setEmailing(false)} listing={listing} />
 

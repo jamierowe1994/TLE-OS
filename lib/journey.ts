@@ -84,49 +84,112 @@ export const TENANT_TRACK: JourneyStep[] = [
   },
 ];
 
+/**
+ * THE REAL STAGES — James's breakdown of Susan's full 19-step list,
+ * 7 Aug 2026. The landlord-lead track is everything up to and including
+ * property compliance; at that point it stops being a person and becomes a
+ * listing. These labels are the business's own words, not my reading.
+ */
 export const LANDLORD_TRACK: JourneyStep[] = [
   {
-    id: "created", label: "Appointment", icon: "user",
-    title: "Appointment or contact created",
-    detail: "The landlord is on the system and an appraisal is in the diary.",
-    action: "none", cta: "Appointment made",
+    id: "appraisal", label: "Appraisal", icon: "calendar",
+    title: "Market appraisal",
+    detail:
+      "Book it, hold it, then make the follow-up call. The follow-up is where instructions are actually won — an appraisal nobody chased is a free valuation for another agent.",
+    action: "none", cta: "Appraisal done & followed up",
   },
   {
-    id: "terms", label: "Terms sent", icon: "file-contract",
-    title: "Send the terms of business",
-    detail: "Terms out for signature, with the fee schedule and the service level they've chosen.",
+    id: "terms", label: "Terms", icon: "file-contract",
+    title: "Terms of business",
+    detail:
+      "Out for signature with the fee schedule and service level. Nothing goes on the market before this — it's the instruction.",
     action: "sign", cta: "Prepare for signature",
   },
   {
-    id: "signed", label: "Terms signed", icon: "shield",
-    title: "Terms signed",
-    detail: "Signed and filed. Nothing goes on the market before this — it's the instruction.",
-    action: "none", cta: "Mark as signed",
+    id: "listing", label: "Listing & photos", icon: "megaphone",
+    title: "Build the listing",
+    detail:
+      "Photos, description, rent, floorplan — drafted now so it can go live the moment the checks below clear. Drop photos onto this record and they're stored.",
+    action: "none", cta: "Listing drafted",
+  },
+  {
+    id: "id", label: "ID & ownership", icon: "doc",
+    title: "Landlord ID and proof of ownership",
+    detail:
+      "Photo ID plus proof they actually own the property — title register or Land Registry. Letting a property for somebody who doesn't own it is a story that ends in court.",
+    action: "none", cta: "ID & ownership verified",
+  },
+  {
+    id: "aml", label: "AML", icon: "shield",
+    title: "AML check",
+    detail:
+      "Anti-money-laundering due diligence on the landlord. A legal duty, not paperwork theatre — and it can't be backfilled after the tenancy starts.",
+    action: "none", cta: "AML passed",
   },
   {
     id: "compliance", label: "Compliance", icon: "checklist",
-    title: "Gather the compliance",
-    detail: "EPC, gas safety, EICR, and the licence if it needs one. Missing paperwork is the usual reason a let slips.",
+    title: "Property compliance",
+    detail:
+      "EPC, gas safety, EICR, and the licence if it needs one. Missing paperwork is the usual reason a let slips a week.",
     action: "none", cta: "Compliance complete",
   },
-  {
-    id: "market", label: "On the market", icon: "megaphone",
-    title: "Put it on the market",
-    detail: "Photos, floorplan, description, price. Published to the portals from REX.",
-    action: "none", cta: "Mark as live",
-  },
-  /* The landlord track ENDS here, on purpose.
-     Everything past this point is about the property, not the person — the
-     viewings, the applicant, the referencing. Carrying on in the lead record
-     would mean tracking a property inside a contact, which is exactly the
-     mess that makes a CRM stop being trusted. So the last step hands over:
-     the lead becomes a listing, and Listings owns it from there. */
+  /* The landlord track ENDS here, on purpose. Everything past this point is
+     about the property, not the person — carrying on in the lead record would
+     mean tracking a property inside a contact, which is exactly the mess that
+     makes a CRM stop being trusted. The push creates the listing, and the
+     listing track owns it from there. */
   {
     id: "handoff", label: "→ Listing", icon: "key",
     title: "Push to a listing",
     detail:
-      "This landlord is signed, compliant and live. From here it's a property, not a person — hand it to Listings and the viewings track picks it up.",
+      "Signed, verified, compliant. From here it's a property, not a person — push it to Listings and the marketing track picks it up.",
     action: "handoff", cta: "Push to listings",
+  },
+];
+
+/**
+ * The LISTING track — what the property does once it exists: go live, get
+ * viewed, take offers, and hand over. It ends at handover deliberately: from
+ * "let agreed" onward the work is the applicant's pre-tenancy journey
+ * (references, property prep, safety compliance, inventory, signing, monies,
+ * move-in), and that pipeline already lives on the Applications side with
+ * Kirstie. One record per phase, one owner per record.
+ */
+export const LISTING_TRACK: JourneyStep[] = [
+  {
+    id: "live", label: "On market", icon: "megaphone",
+    title: "Put it live",
+    detail:
+      "Publish to the portals via REX. A draft earns nothing — 56% of the current book is sitting unpublished.",
+    action: "none", cta: "Mark as live",
+  },
+  {
+    id: "viewings", label: "Viewings", icon: "calendar",
+    title: "Get people through the door",
+    detail:
+      "Email it to matching tenants, book the viewings in, and chase feedback the same day — the landlord is waiting on it.",
+    action: "viewing", cta: "Book a viewing",
+  },
+  {
+    id: "offers", label: "Offers", icon: "coin",
+    title: "Take offers",
+    detail:
+      "Log each offer and put it to the landlord with a recommendation. Every applicant who offered gets an answer either way.",
+    action: "none", cta: "Offer received",
+  },
+  {
+    id: "accepted", label: "Offer accepted", icon: "shield",
+    title: "Offer accepted",
+    detail:
+      "Landlord has said yes. Confirm to the applicant, take the holding deposit, and stop the viewings.",
+    action: "none", cta: "Accepted — confirm",
+  },
+  {
+    id: "handover", label: "Handover", icon: "key",
+    title: "Hand over to Kirstie",
+    detail:
+      "Compile everything — property, landlord, applicant, agreed rent, dates — and pass it to Applications. Pre-tenancy, referencing and move-in run there.",
+    action: "handoff", cta: "Hand over to Kirstie",
   },
 ];
 
@@ -148,11 +211,23 @@ export function startingStep(lead: Lead): number {
     case "New": return 0;
     case "Contacted": return 1;
     case "Waiting": return tenant ? 2 : 1;
-    case "Viewing booked": return tenant ? 3 : 4;
-    case "Qualified": return tenant ? 5 : 4;
+    // Landlord indices follow the REAL track: 0 appraisal, 1 terms,
+    // 2 listing & photos, 3 ID, 4 AML, 5 compliance, 6 push.
+    case "Viewing booked": return tenant ? 3 : 2;
+    case "Qualified": return tenant ? 5 : 5;
     case "Not proceeding": return 1;
     default: return 0;
   }
+}
+
+/** Where a listing starts on the LISTING track, from what REX already knows. */
+export function listingStartingStep(l: {
+  letAgreed: boolean;
+  publicationStatus: string | null;
+}): number {
+  if (l.letAgreed) return 3; // offer accepted, handover pending
+  if (l.publicationStatus === "published") return 1; // live — get viewings
+  return 0; // draft — first job is going live
 }
 
 /** A lead that has stopped. The rail says so rather than pretending. */
