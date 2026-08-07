@@ -2,18 +2,18 @@ import DoodleIcon from "@/components/DoodleIcon";
 
 /**
  * Every page opens on the same ledge: a rule right across, the title sat on
- * it with a pop stroke off the top-left and its mirror off the bottom-right,
- * search and notifications to the right, and an illustration perched ON the
- * line. One header component so the rhythm can never drift page to page.
+ * it with a pop stroke off its top-left and another off its bottom-right, the
+ * search and bell to the right, and the illustration standing ON the line —
+ * which dips around its feet, so the figure is in the page rather than on it.
  */
 
-/** The pop strokes off the title's corners — big enough to notice. */
-function Pop() {
+/** The pop strokes off the title's corners. */
+function Pop({ className = "" }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"
       aria-hidden
-      className="h-8 w-8 text-ink"
+      className={`h-8 w-8 text-ink ${className}`}
       fill="none"
       stroke="currentColor"
       strokeWidth={2}
@@ -26,16 +26,55 @@ function Pop() {
   );
 }
 
+/**
+ * The dip in the rule beneath the illustration.
+ *
+ * The header's own border-bottom is hidden behind a page-coloured plate here,
+ * and redrawn as a path that eases down into a shallow trough and back up. The
+ * figure then stands IN the line instead of on top of an unbroken one — the
+ * same trick as a notch, but softened so it reads as the ground giving a
+ * little under their weight.
+ */
+function LineDip({ width }: { width: number }) {
+  const h = 26;
+  const y = 1; // the rule sits at the top of this strip
+  const drop = 11;
+  return (
+    <svg
+      aria-hidden
+      viewBox={`0 0 ${width} ${h}`}
+      preserveAspectRatio="none"
+      className="pointer-events-none absolute bottom-0 h-[26px]"
+      style={{ width, left: "50%", transform: "translateX(-50%)" }}
+    >
+      {/* Cover the straight border across this span… */}
+      <rect x="0" y="0" width={width} height={h} fill="var(--page)" />
+      {/* …then draw it again, dipping through the middle. */}
+      <path
+        d={`M 0 ${y}
+            L ${width * 0.16} ${y}
+            C ${width * 0.3} ${y}, ${width * 0.3} ${y + drop}, ${width * 0.5} ${y + drop}
+            C ${width * 0.7} ${y + drop}, ${width * 0.7} ${y}, ${width * 0.84} ${y}
+            L ${width} ${y}`}
+        fill="none"
+        stroke="var(--line)"
+        strokeWidth="1"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
+
 export default function PageHeader({
   title,
   blurb,
   illustration,
   illustrationNode,
-  /** How far in from the right the illustration sits. The default clears the
-   *  search pill + bell (~290px) with a margin; now the figure fills the
-   *  header height it is much wider, so leaning further left collides with
-   *  the blurb. Override only if a page's art has unusual proportions. */
-  illustrationRight = 310,
+  /** How far in from the right the illustration sits — clear of the search. */
+  illustrationRight = 330,
+  /** Illustration height. The header grows to hold it: the figure stands on
+   *  the rule and reaches most of the way up, stopping short of the top. */
+  illustrationHeight = 216,
 }: {
   title: string;
   blurb: string;
@@ -43,17 +82,30 @@ export default function PageHeader({
   /** A live illustration (e.g. the window scene) in place of a static file. */
   illustrationNode?: React.ReactNode;
   illustrationRight?: number;
+  illustrationHeight?: number;
 }) {
+  const hasArt = Boolean(illustration || illustrationNode);
+  // The dip spans a little less than the figure — a trough under their feet,
+  // not a canyon across the page.
+  const dipWidth = Math.round(illustrationHeight * 0.72);
+
   return (
-    <div className="fade-up relative flex items-end justify-between gap-6 border-b border-line/80 pt-10">
-      <div className="relative mb-2 pb-9 pl-2 pt-8">
-        <span className="absolute -top-2 left-0">
-          <Pop />
-        </span>
-        <span className="absolute -right-12 bottom-4 rotate-180">
-          <Pop />
-        </span>
-        <h1 className="text-[30px] leading-tight">{title}</h1>
+    // min-h so the illustration has somewhere to stand even on a short title.
+    // min-h leaves headroom above the figure so it reaches high without
+    // spilling off the top of the page.
+    <div className="fade-up relative flex min-h-[248px] items-end justify-between gap-6 border-b border-line/80 pt-10">
+      <div className="mb-2 pb-9 pl-2 pt-8">
+        {/* The strokes belong to the TITLE, not the block — one off its
+            top-left, its mirror off its bottom-right. */}
+        <div className="relative inline-block">
+          <span className="absolute -left-9 -top-5">
+            <Pop />
+          </span>
+          <span className="absolute -bottom-1 -right-10 rotate-180">
+            <Pop />
+          </span>
+          <h1 className="text-[30px] leading-tight">{title}</h1>
+        </div>
         <p className="mt-2.5 max-w-md text-[13px] text-muted">{blurb}</p>
       </div>
 
@@ -76,29 +128,29 @@ export default function PageHeader({
         </button>
       </div>
 
-      {/* The figure's own floor line lands on the page rule — sat on the ledge.
-          It fills the header's full height rather than a fixed 112px: the box
-          is already the right size, so the illustration should use all of it
-          (inset-y-0 + h-full keeps the box's height untouched, since an
-          absolutely positioned child contributes nothing to layout). */}
-      {illustrationNode ? (
+      {/* The figure stands on the rule and overflows upward — an absolutely
+          positioned child adds nothing to layout, so the header keeps its
+          height however tall the art gets. */}
+      {hasArt && (
         <div
-          className="pointer-events-none absolute inset-y-0 hidden aspect-square h-full xl:block"
-          style={{ right: illustrationRight }}
+          className="pointer-events-none absolute bottom-0 hidden xl:block"
+          style={{ right: illustrationRight, height: illustrationHeight }}
         >
-          {illustrationNode}
+          <div className="relative h-full">
+            <LineDip width={dipWidth} />
+            {illustrationNode ? (
+              <div className="relative aspect-square h-full">{illustrationNode}</div>
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={illustration}
+                alt=""
+                aria-hidden
+                className="art relative h-full w-auto"
+              />
+            )}
+          </div>
         </div>
-      ) : (
-        illustration && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={illustration}
-            alt=""
-            aria-hidden
-            className="art pointer-events-none absolute inset-y-0 hidden h-full w-auto xl:block"
-            style={{ right: illustrationRight }}
-          />
-        )
       )}
     </div>
   );

@@ -176,13 +176,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── The journey, compact, along the bottom — the pipeline snapshot. */}
-      {/* The wrapper carries NO animation on purpose. `fade-up` leaves a
-          transform behind (fill-mode both), which creates a stacking context —
-          and a mix-blend-mode child can only blend against its own stacking
-          context, so the dog's white plate had nothing to multiply with and
-          rendered as a white block. Animate the box, hang the dog outside it. */}
-      <div className="relative mt-6">
-      <div className="fade-up rounded-2xl border border-line/80 bg-panel p-5 pb-14">
+      <div className="fade-up mt-6 rounded-2xl border border-line/80 bg-panel p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-[15px]">Pipeline snapshot</h2>
           <FlowTag from="REX + PayProp" />
@@ -210,11 +204,17 @@ export default function Dashboard() {
             );
           })}
         </div>
+      </div>
 
-        </div>
+      {/* ── He signs off the page ──
+          At the foot of the content rather than pinned to the box: there's
+          nothing below him to crowd, so he can be properly sized.
 
-        {/* He stands ON the bottom edge — half in the box, half out — so the
-            border reads as the ground he's on rather than a frame round him. */}
+          Both classes ride the VIDEO, never a wrapper. A transform on an
+          ancestor would create a stacking context, and a mix-blend-mode child
+          can only blend within its own — which is exactly how the white plate
+          came back as a solid block the first time. */}
+      <div className="mt-2 flex justify-end pr-6">
         <video
           src="/illustrations/dog-wag-2.mp4"
           autoPlay
@@ -222,7 +222,7 @@ export default function Dashboard() {
           loop
           playsInline
           aria-hidden
-          className="art-video pointer-events-none absolute -bottom-5 right-8 hidden w-36 sm:block"
+          className="art-video wag-hold pointer-events-none hidden w-72 sm:block"
         />
       </div>
     </>

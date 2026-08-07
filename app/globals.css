@@ -158,6 +158,31 @@ h1, h2, h3, h4, h5 {
 }
 
 /* ---------------------------------------------------------------------------
+   Cancelling a zoom that was baked into the render.
+
+   The wag clip doesn't hold its framing: measured frame by frame, the dog
+   grows ~15% across the four seconds (786px wide at t=0, 909px at t=3.9) and
+   then snaps back at the loop point. That snap is the jolt.
+
+   So the element counter-scales by the same amount over the same period,
+   linear and infinite. The two cancel: the dog holds its size, and because
+   both the video and the counter reset together there is nothing to jolt.
+   `steps` would stutter — this has to be continuous.
+--------------------------------------------------------------------------- */
+@keyframes wag-hold {
+  from { transform: scale(1); }
+  to { transform: scale(0.868); } /* 1 / 1.152, the measured growth */
+}
+.wag-hold {
+  transform-origin: 50% 100%; /* his feet stay put; he grows upward only */
+  animation: wag-hold 4.03s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wag-hold { animation: none; transform: scale(0.93); }
+}
+
+/* ---------------------------------------------------------------------------
    The theme change, painted on.
 
    A circle of the incoming theme wipes out from wherever you clicked, so the
