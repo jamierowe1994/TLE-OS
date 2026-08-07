@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { DoneTick, PressButton } from "@/components/Bits";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
@@ -32,13 +32,17 @@ export default function EmailProperties({
   const [chosen, setChosen] = useState<string[]>([]);
   const [stage, setStage] = useState<"pick" | "review" | "sent">("pick");
 
+  // Seeded on OPEN only — `properties` is built inline by the caller, so
+  // depending on it would silently re-tick everything mid-edit.
+  const seed = useRef(properties);
+  seed.current = properties;
   useEffect(() => {
     if (!open) return;
     // Everything shortlisted is pre-selected — the common case is "send them
     // all", so that should need no clicks at all.
-    setChosen(properties.map((p) => p.id));
+    setChosen(seed.current.map((p) => p.id));
     setStage("pick");
-  }, [open, properties]);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;

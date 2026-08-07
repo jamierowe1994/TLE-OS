@@ -5,6 +5,9 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DetailRow, DoneTick, PressButton } from "@/components/Bits";
 import EmailProperties from "@/components/EmailProperties";
+import ProcessTimeline from "@/components/ProcessTimeline";
+import SignaturePanel, { type Signer } from "@/components/SignaturePanel";
+import ViewingBooker from "@/components/ViewingBooker";
 import { Pill } from "@/components/Wire";
 import { leadSide } from "@/lib/leads-sample";
 import {
@@ -14,9 +17,11 @@ import {
   type Doc,
   type DocTag,
   type Lead,
+  type LeadViewing,
   type Note,
   type Task,
 } from "@/lib/leads-sample";
+import { isStalled, startingStep, trackFor } from "@/lib/journey";
 import rexSample from "@/lib/rex-sample.json";
 
 /**
@@ -100,6 +105,11 @@ export default function LeadDrawer({
   const [added, setAdded] = useState<string[]>([]);
   const [justAdded, setJustAdded] = useState(false);
   const [emailing, setEmailing] = useState(false);
+  // Where they are on their track, and the two panels a step can open.
+  const [step, setStep] = useState(0);
+  const [booking, setBooking] = useState(false);
+  const [signing, setSigning] = useState(false);
+  const [booked, setBooked] = useState<LeadViewing[]>([]);
 
   useEffect(() => {
     if (!detail) return;
@@ -111,7 +121,12 @@ export default function LeadDrawer({
     setDraft("");
     setAdded([]);
     setJustAdded(false);
+    setBooked([]);
   }, [detail]);
+
+  useEffect(() => {
+    if (lead) setStep(startingStep(lead));
+  }, [lead]);
 
   useEffect(() => {
     if (!lead) return;
@@ -149,6 +164,47 @@ export default function LeadDrawer({
   const shortlist = LISTINGS.filter(
     (l) => detail.interested.includes(l.id) || added.includes(l.id)
   );
+
+  const track = trackFor(lead);
+  const stalled = isStalled(lead);
+  const here = track[Math.min(step, track.length - 1)];
+  const finished = step >= track.length - 1;
+
+  /** Advance one step, if there's anywhere to go. */
+  const advance = () => setStep((s) => Math.min(s + 1, track.length - 1));
+
+  /** What the Next-action button does — the step decides, not the button. */
+  function fire() {
+    if (here.action === "viewing") setBooking(true);
+    else if (here.action === "sign") setSigning(true);
+    else if (here.action === "send") setEmailing(true);
+    else advance();
+  }
+
+  const viewings = [...booked, ...detail.viewings];
+
+  const signDoc = isTenant ? "Assured shorthold tenancy agreement" : "Terms of business";
+  const signMerges = isTenant
+    ? [
+        { label: "Property", value: shortlist[0]?.name ?? "Not chosen yet" },
+        { label: "Rent", value: shortlist[0] ? `£${shortlist[0].rent?.toLocaleString("en-GB")} pcm` : "—" },
+        { label: "Term", value: "12 months, 6-month break" },
+        { label: "Start date", value: lead.moveDate },
+        { label: "Deposit", value: "5 weeks' rent, protected in TDS" },
+      ]
+    : [
+        { label: "Landlord", value: lead.name },
+        { label: "Property", value: lead.preferred },
+        { label: "Service", value: "Fully managed" },
+        { label: "Management fee", value: "10% of rent collected + VAT" },
+        { label: "Set-up fee", value: "£300 + VAT" },
+      ];
+  const signers: Signer[] = isTenant
+    ? [
+        { id: "sg1", name: lead.name, email: contact.email || lead.email, role: "Tenant" },
+        { id: "sg2", name: "", email: "", role: "Guarantor" },
+      ]
+    : [{ id: "sg1", name: lead.name, email: contact.email || lead.email, role: "Landlord" }];
 
   function addNote() {
     if (!draft.trim()) return;
@@ -266,6 +322,18 @@ export default function LeadDrawer({
               />
             </div>
 
+            {/* Where they are in the process, directly under the contact
+                details — "who is this" and "where are we up to" is one
+                question, and it shouldn't need a tab. */}
+            <div className="mt-6 border-t border-line/60 pt-5">
+              <ProcessTimeline
+                steps={track}
+                current={step}
+                stalled={stalled}
+                onPick={setStep}
+              />
+            </div>
+
             {/* Tags — the quick facts, addable. */}
             <div className="mt-5 flex flex-wrap items-center gap-2">
               {tags.map((t) => (
@@ -301,7 +369,7 @@ export default function LeadDrawer({
               const count =
                 t.key === "tasks" ? tasks.filter((x) => !x.done).length
                 : t.key === "documents" ? docs.length
-                : t.key === "viewings" ? detail.viewings.length
+                : t.key === "viewings" ? detail.viewings.length + booked.length
                 : t.key === "properties" ? shortlist.length
                 : 0;
               return (
@@ -357,26 +425,52 @@ export default function LeadDrawer({
                   </dl>
                 </Card>
 
+                {/* The Next action card IS the process. It reads the step the
+                    timeline is showing and offers the one thing that moves it
+                    — booking a viewing is how you leave the viewing step, so
+                    the button books a viewing rather than ticking a box. */}
                 <Card title="Next action" icon="target">
-                  {detail.nextAction ? (
-                    <>
-                      <p className="text-[13px] font-semibold">{detail.nextAction.title}</p>
-                      <p className="mt-1.5 text-[12px] leading-relaxed text-muted">
-                        {detail.nextAction.detail}
-                      </p>
-                      <p className="mt-3 flex items-center gap-2 text-[11.5px] font-medium text-accent-dark">
-                        <DoodleIcon name="clock" size={13} />
-                        {detail.nextAction.due}
-                      </p>
-                      <button
-                        type="button"
-                        className="mt-4 w-full rounded-xl border border-line/80 py-2.5 text-[12px] font-medium transition-colors hover:border-ink/40"
-                      >
-                        Mark as complete
-                      </button>
-                    </>
+                  {stalled ? (
+                    <Empty>
+                      Not proceeding — {lead.name.split(" ")[0]} stopped at &ldquo;{here.label}
+                      &rdquo;. Pick a step above to restart them.
+                    </Empty>
                   ) : (
-                    <Empty>Nothing outstanding.</Empty>
+                    <>
+                      <p className="text-[13px] font-semibold">{here.title}</p>
+                      <p className="mt-1.5 text-[12px] leading-relaxed text-muted">{here.detail}</p>
+                      {detail.nextAction && (
+                        <p className="mt-3 flex items-center gap-2 text-[11.5px] font-medium text-accent-dark">
+                          <DoodleIcon name="clock" size={13} />
+                          {detail.nextAction.due}
+                        </p>
+                      )}
+
+                      <PressButton
+                        onClick={fire}
+                        className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-ink py-2.5 text-[12.5px] font-semibold text-page"
+                      >
+                        <DoodleIcon name={here.icon} size={14} />
+                        {here.cta}
+                      </PressButton>
+
+                      {/* Some steps finish without the system doing anything —
+                          a phone call happens on a phone. This is that. */}
+                      {here.action !== "none" && !finished && (
+                        <button
+                          type="button"
+                          onClick={advance}
+                          className="mt-2.5 w-full text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+                        >
+                          Already done — move on
+                        </button>
+                      )}
+                      {finished && (
+                        <p className="mt-2.5 text-center text-[11px] text-muted">
+                          Last step on the {isTenant ? "tenant" : "landlord"} track.
+                        </p>
+                      )}
+                    </>
                   )}
                 </Card>
 
@@ -442,11 +536,12 @@ export default function LeadDrawer({
                       <p className="mt-2.5 text-[12.5px] font-semibold">Property attached</p>
                       <div className="mt-3 flex flex-wrap justify-center gap-2">
                         {[
-                          { label: "Schedule a viewing", icon: "calendar" },
-                          { label: "Send details", icon: "mail" },
+                          { label: "Schedule a viewing", icon: "calendar", go: () => setBooking(true) },
+                          { label: "Send details", icon: "mail", go: () => setEmailing(true) },
                         ].map((a) => (
                           <PressButton
                             key={a.label}
+                            onClick={a.go}
                             className="flex items-center gap-2 rounded-full border border-line/80 px-3.5 py-2 text-[11.5px] transition-colors hover:border-ink/40"
                           >
                             <DoodleIcon name={a.icon} size={13} className="text-accent-dark" />
@@ -544,14 +639,18 @@ export default function LeadDrawer({
                 title="Viewings"
                 icon="calendar"
                 action={
-                  <button className="text-[11.5px] font-semibold text-muted transition-colors hover:text-ink">
-                    + Book viewing
-                  </button>
+                  <PressButton
+                    onClick={() => setBooking(true)}
+                    className="flex items-center gap-2 rounded-full bg-ink px-3.5 py-2 text-[11.5px] font-semibold text-page"
+                  >
+                    <DoodleIcon name="calendar" size={13} />
+                    Book viewing
+                  </PressButton>
                 }
               >
-                {detail.viewings.length ? (
+                {viewings.length ? (
                   <ul className="space-y-3">
-                    {detail.viewings.map((v) => (
+                    {viewings.map((v) => (
                       <li key={v.id} className="flex items-center gap-3 border-b border-line/40 pb-3 last:border-0 last:pb-0">
                         <span className="figures w-32 shrink-0 text-[12px] text-accent-dark">
                           {v.when}
@@ -802,9 +901,47 @@ export default function LeadDrawer({
 
       <EmailProperties
         open={emailing}
-        onClose={() => setEmailing(false)}
+        onClose={() => {
+          setEmailing(false);
+          // Sending the shortlist IS how you finish the shortlist step.
+          if (here.action === "send") advance();
+        }}
         lead={{ name: lead.name, email: contact.email || lead.email }}
         properties={shortlist}
+      />
+
+      <ViewingBooker
+        open={booking}
+        onClose={() => setBooking(false)}
+        lead={{
+          name: lead.name,
+          email: contact.email || lead.email,
+          phone: contact.phone || lead.phone,
+        }}
+        properties={shortlist.length ? shortlist : LISTINGS.slice(0, 4)}
+        agent={lead.agent === "Unassigned" ? "Kirstie" : lead.agent}
+        onBooked={(v) => {
+          setBooked((cur) => [
+            {
+              id: `vw${cur.length + 1}${v.when}`,
+              when: v.when,
+              property: v.property,
+              locality: v.locality,
+              outcome: "Booked",
+            },
+            ...cur,
+          ]);
+          if (here.action === "viewing") advance();
+        }}
+      />
+
+      <SignaturePanel
+        open={signing}
+        onClose={() => setSigning(false)}
+        document={signDoc}
+        merges={signMerges}
+        signers={signers}
+        onSent={() => here.action === "sign" && advance()}
       />
     </div>
   );
