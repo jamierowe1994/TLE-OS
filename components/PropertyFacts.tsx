@@ -11,9 +11,9 @@ import DoodleIcon from "@/components/DoodleIcon";
  * useless to everything else — you cannot filter on a note, and you certainly
  * cannot push one into REX as a bedroom count. So they get fields.
  *
- * Progressive on purpose: "vacant?" is one question until the answer is no,
- * and only then does it become two, and only then a date. Asking every
- * landlord for a vacancy date up front is how forms get abandoned.
+ * Kept to four inputs on purpose. The vacancy chain that used to follow
+ * (vacant? → becoming vacant? → date) is parked: it grew the panel by three
+ * questions and the record wants to be a one-pager.
  */
 
 const TYPES = ["Flat", "Terraced", "Semi-detached", "Detached", "Bungalow", "Maisonette", "HMO", "Room"];
@@ -56,8 +56,9 @@ function Stepper({
   );
 }
 
-/** A yes/no that looks like a decision, not a dropdown. */
-function YesNo({
+/** A yes/no that looks like a decision, not a dropdown. Parked with the
+ * vacancy chain; exported for when it returns. */
+export function YesNo({
   value,
   onChange,
 }: {
@@ -82,7 +83,7 @@ function YesNo({
   );
 }
 
-const Ask = ({ children }: { children: React.ReactNode }) => (
+export const Ask = ({ children }: { children: React.ReactNode }) => (
   <div className="fade-up flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-line/50 pt-2.5">
     {children}
   </div>
@@ -93,12 +94,8 @@ export default function PropertyFacts() {
   const [beds, setBeds] = useState(0);
   const [baths, setBaths] = useState(0);
   const [receptions, setReceptions] = useState(0);
-  const [vacant, setVacant] = useState<boolean | null>(null);
-  const [soon, setSoon] = useState<boolean | null>(null);
-  const [freeFrom, setFreeFrom] = useState("");
 
-  const answered =
-    [type, beds, baths].filter(Boolean).length + (vacant === null ? 0 : 1);
+  const answered = [type, beds, baths].filter(Boolean).length;
 
   return (
     /* No card, no photo, no heading of its own. This sits inside the record's
@@ -125,48 +122,12 @@ export default function PropertyFacts() {
         <Stepper label="Receptions" icon="sofa.png" value={receptions} onChange={setReceptions} />
       </div>
 
-      <div className="mt-3 space-y-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <span className="text-[12.5px]">Vacant now?</span>
-          <YesNo
-            value={vacant}
-            onChange={(v) => {
-              setVacant(v);
-              // Answering "yes" retires the follow-ups rather than leaving
-              // stale answers hanging off a question nobody is asking.
-              if (v) { setSoon(null); setFreeFrom(""); }
-            }}
-          />
-        </div>
-
-        {vacant === false && (
-          <Ask>
-            <span className="text-[12.5px]">Becoming vacant soon?</span>
-            <YesNo value={soon} onChange={(v) => { setSoon(v); if (!v) setFreeFrom(""); }} />
-          </Ask>
-        )}
-
-        {vacant === false && soon === true && (
-          <Ask>
-            <span className="text-[12.5px]">Free from</span>
-            <input
-              type="date"
-              value={freeFrom}
-              onChange={(e) => setFreeFrom(e.target.value)}
-              className="figures rounded-lg border border-line/80 bg-transparent px-2.5 py-1.5 text-[12px] outline-none focus:border-ink"
-            />
-          </Ask>
-        )}
-
-        {vacant === true && (
-          <p className="fade-up text-[11px] text-accent-dark">
-            Available immediately — it can go on the market as soon as compliance is in.
-          </p>
-        )}
-      </div>
+      {/* The vacancy chain (vacant? → soon? → date) is parked on James's call,
+          7 Aug 2026 — it asked too many questions for this view. The YesNo /
+          Ask machinery stays, because it comes back somewhere quieter. */}
 
       <p className="mt-3.5 border-t border-line/60 pt-2.5 text-[10px] leading-relaxed text-muted">
-        {answered}/4 captured. These are the fields REX wants on a property record —
+        {answered}/3 captured. These are the fields REX wants on a property record —
         captured here they can be pushed; captured in a note they can only be read.
       </p>
     </div>

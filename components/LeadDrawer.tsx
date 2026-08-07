@@ -291,7 +291,7 @@ export default function LeadDrawer({
               because tags describe the person, not the process. No avatar:
               nobody uploads headshots of applicants, and a circle of initials
               is a photo-shaped apology. ── */}
-          <div className="relative rounded-3xl border border-line/80 bg-panel p-6">
+          <div className="relative rounded-3xl border border-line/80 bg-panel p-5">
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-[26px] leading-tight">{lead.name}</h2>
               <Pill tone={STAGE_TONE[lead.stage]}>{lead.stage}</Pill>
@@ -299,10 +299,10 @@ export default function LeadDrawer({
 
             {tab === null ? (
               <>
-                <div className="mt-6 flex flex-wrap items-stretch gap-x-10 gap-y-7">
+                <div className="mt-5 flex flex-wrap items-start gap-x-10 gap-y-6">
                   {/* Fixed-width columns: the rules under the rows stop where
                       the content stops instead of running the box's width. */}
-                  <section className="w-full max-w-[260px]">
+                  <section className="w-full max-w-[280px]">
                     <SectionHead>Contact details</SectionHead>
                     {/* Click a value to change it — a rule appears underneath
                         and it commits on blur or Enter. No Save button per
@@ -339,16 +339,18 @@ export default function LeadDrawer({
                   </section>
 
                   {!isTenant && (
-                    <section className="w-full max-w-[250px]">
+                    <section className="w-full max-w-[280px]">
                       <SectionHead>The property</SectionHead>
                       <PropertyFacts />
                     </section>
                   )}
 
-                  {/* The rest of the row is the photo, full height. No
-                      heading — it's visibly a photo, and a label saying so
-                      was a label saying nothing. Tenants have no property to
-                      photograph, so they keep the drawing. */}
+                  {/* The photo, sized like a photo rather than a mural — the
+                      full-height version dominated the box and pushed the
+                      record off one page. No heading: it's visibly a photo,
+                      and a label saying so was a label saying nothing.
+                      Tenants have no property to photograph, so they keep
+                      the drawing. */}
                   {isTenant ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
                     <img
@@ -358,19 +360,17 @@ export default function LeadDrawer({
                       className="art ml-auto hidden h-36 shrink-0 self-end lg:block"
                     />
                   ) : (
-                    <div className="ml-auto hidden min-h-[360px] min-w-[280px] flex-1 self-stretch py-1 xl:block">
+                    <div className="ml-auto hidden w-[260px] shrink-0 xl:block">
                       <PhotoBox
-                        fill
                         label="Add a photo of the property"
                         refId={`lead-${lead.id}`}
-                        className="h-full"
                       />
                     </div>
                   )}
                 </div>
 
                 {/* Tags — the quick facts, addable, at the foot of the box. */}
-                <div className="mt-6 flex flex-wrap items-center gap-2 border-t border-line/60 pt-5">
+                <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-line/60 pt-4">
                   {tags.map((t) => (
                     <button
                       key={t}
@@ -689,7 +689,7 @@ export default function LeadDrawer({
               nervous — exactly what to do about it, and the button does that
               thing. Nobody should ever have to infer their next move from a
               diagram. ── */}
-          <div className="mt-5 rounded-3xl border border-line/80 bg-panel p-6">
+          <div className="mt-4 rounded-3xl border border-line/80 bg-panel p-5">
             <ProcessTimeline
               steps={track}
               current={step}
@@ -697,7 +697,7 @@ export default function LeadDrawer({
               onPick={setStep}
             />
 
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-x-8 gap-y-4 border-t border-line/60 pt-5">
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-x-8 gap-y-3 border-t border-line/60 pt-4">
               <div className="min-w-[240px] max-w-xl flex-1">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
                   Next action
@@ -752,7 +752,7 @@ export default function LeadDrawer({
           {/* ── Notes, and nothing else, along the bottom. No "lead summary"
               card — the agent's own notes ARE the summary, and a paragraph
               nobody wrote is a paragraph nobody trusts. ── */}
-          <div className="mt-5 rounded-3xl border border-line/80 bg-panel p-6">
+          <div className="mt-4 rounded-3xl border border-line/80 bg-panel p-5">
             <SectionHead>Notes</SectionHead>
             <div className="max-w-2xl rounded-xl border border-line/80 p-2.5">
               <textarea

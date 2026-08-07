@@ -103,13 +103,16 @@ export default function PhotoBox({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={shown} alt="" className="h-full w-full object-cover" />
         ) : (
-          <div className="flex flex-col items-center gap-1.5 px-3 text-center">
+          <div className="flex h-full flex-col items-center justify-center gap-1.5 px-3 py-2 text-center">
+            {/* The drawing carries the empty state — sized to the box rather
+                than a fixed thumbnail, so a big drop zone doesn't read as a
+                big void with a stamp in the corner. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/illustrations/notioly/moving.svg"
               alt=""
               aria-hidden
-              className="art h-14 w-14 opacity-45"
+              className="art h-24 max-h-[62%] w-auto opacity-45"
             />
             <span className="text-[10.5px] text-muted">{over ? "Drop it" : label}</span>
           </div>

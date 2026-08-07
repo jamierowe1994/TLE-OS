@@ -91,12 +91,29 @@ export const TENANT_TRACK: JourneyStep[] = [
  * listing. These labels are the business's own words, not my reading.
  */
 export const LANDLORD_TRACK: JourneyStep[] = [
+  /* Starts at LEAD, not at appraisal — James's correction, 7 Aug 2026. A lead
+     isn't an appraisal yet: someone has to ring the landlord, agree a date and
+     get the visit in the diary, and that's real work the rail must show. */
+  {
+    id: "lead", label: "Lead", icon: "target",
+    title: "New landlord lead",
+    detail:
+      "They've come in from somewhere. Ring them, talk it through, and get the appraisal booked — a date, a time, and their address in the diary.",
+    action: "none", cta: "Appraisal booked",
+  },
   {
     id: "appraisal", label: "Appraisal", icon: "calendar",
     title: "Market appraisal",
     detail:
-      "Book it, hold it, then make the follow-up call. The follow-up is where instructions are actually won — an appraisal nobody chased is a free valuation for another agent.",
-    action: "none", cta: "Appraisal done & followed up",
+      "Go over, walk the property, and land on the value together. What you learn here fills the property panel on the left.",
+    action: "none", cta: "Appraisal held",
+  },
+  {
+    id: "followup", label: "MA follow-up", icon: "call",
+    title: "Appraisal follow-up",
+    detail:
+      "The call after the visit — this is where instructions are actually won. An appraisal nobody chased is a free valuation for another agent.",
+    action: "none", cta: "Followed up",
   },
   {
     id: "terms", label: "Terms", icon: "file-contract",
@@ -104,13 +121,6 @@ export const LANDLORD_TRACK: JourneyStep[] = [
     detail:
       "Out for signature with the fee schedule and service level. Nothing goes on the market before this — it's the instruction.",
     action: "sign", cta: "Prepare for signature",
-  },
-  {
-    id: "listing", label: "Listing & photos", icon: "megaphone",
-    title: "Build the listing",
-    detail:
-      "Photos, description, rent, floorplan — drafted now so it can go live the moment the checks below clear. Drop photos onto this record and they're stored.",
-    action: "none", cta: "Listing drafted",
   },
   {
     id: "id", label: "ID & ownership", icon: "doc",
@@ -126,24 +136,16 @@ export const LANDLORD_TRACK: JourneyStep[] = [
       "Anti-money-laundering due diligence on the landlord. A legal duty, not paperwork theatre — and it can't be backfilled after the tenancy starts.",
     action: "none", cta: "AML passed",
   },
+  /* The last step IS the push. There's no separate "listing & photos" stage —
+     building the listing happens on the listing side, and a dot that only
+     existed to say "go over there" was a dot wasted. Compliance completes,
+     and the same breath pushes the record over. */
   {
     id: "compliance", label: "Compliance", icon: "checklist",
     title: "Property compliance",
     detail:
-      "EPC, gas safety, EICR, and the licence if it needs one. Missing paperwork is the usual reason a let slips a week.",
-    action: "none", cta: "Compliance complete",
-  },
-  /* The landlord track ENDS here, on purpose. Everything past this point is
-     about the property, not the person — carrying on in the lead record would
-     mean tracking a property inside a contact, which is exactly the mess that
-     makes a CRM stop being trusted. The push creates the listing, and the
-     listing track owns it from there. */
-  {
-    id: "handoff", label: "→ Listing", icon: "key",
-    title: "Push to a listing",
-    detail:
-      "Signed, verified, compliant. From here it's a property, not a person — push it to Listings and the marketing track picks it up.",
-    action: "handoff", cta: "Push to listings",
+      "EPC, gas safety, EICR, and the licence if it needs one. The moment these are in, this stops being a person and becomes a listing.",
+    action: "handoff", cta: "Push to a listing",
   },
 ];
 
@@ -211,9 +213,9 @@ export function startingStep(lead: Lead): number {
     case "New": return 0;
     case "Contacted": return 1;
     case "Waiting": return tenant ? 2 : 1;
-    // Landlord indices follow the REAL track: 0 appraisal, 1 terms,
-    // 2 listing & photos, 3 ID, 4 AML, 5 compliance, 6 push.
-    case "Viewing booked": return tenant ? 3 : 2;
+    // Landlord indices follow the REAL track: 0 lead, 1 appraisal,
+    // 2 MA follow-up, 3 terms, 4 ID, 5 AML, 6 compliance + push.
+    case "Viewing booked": return tenant ? 3 : 1;
     case "Qualified": return tenant ? 5 : 5;
     case "Not proceeding": return 1;
     default: return 0;
