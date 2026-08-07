@@ -30,6 +30,7 @@ export default function PageHeader({
   title,
   blurb,
   illustration,
+  illustrationNode,
   /** How far in from the right the illustration sits. The default clears the
    *  search pill + bell (~290px) with a margin; now the figure fills the
    *  header height it is much wider, so leaning further left collides with
@@ -39,6 +40,8 @@ export default function PageHeader({
   title: string;
   blurb: string;
   illustration?: string;
+  /** A live illustration (e.g. the window scene) in place of a static file. */
+  illustrationNode?: React.ReactNode;
   illustrationRight?: number;
 }) {
   return (
@@ -78,15 +81,24 @@ export default function PageHeader({
           is already the right size, so the illustration should use all of it
           (inset-y-0 + h-full keeps the box's height untouched, since an
           absolutely positioned child contributes nothing to layout). */}
-      {illustration && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={illustration}
-          alt=""
-          aria-hidden
-          className="art pointer-events-none absolute inset-y-0 hidden h-full w-auto xl:block"
+      {illustrationNode ? (
+        <div
+          className="pointer-events-none absolute inset-y-0 hidden aspect-square h-full xl:block"
           style={{ right: illustrationRight }}
-        />
+        >
+          {illustrationNode}
+        </div>
+      ) : (
+        illustration && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={illustration}
+            alt=""
+            aria-hidden
+            className="art pointer-events-none absolute inset-y-0 hidden h-full w-auto xl:block"
+            style={{ right: illustrationRight }}
+          />
+        )
       )}
     </div>
   );

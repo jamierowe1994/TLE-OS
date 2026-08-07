@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
+import WindowScene from "@/components/WindowScene";
 import { Card, FlowTag, Pill } from "@/components/Wire";
 
 /**
@@ -78,7 +79,7 @@ export default function Dashboard() {
       <PageHeader
         title={greeting()}
         blurb="Here's what's happening with your lettings business today."
-        illustration="/illustrations/notioly/looking-out-the-window.svg"
+        illustrationNode={<WindowScene />}
       />
 
       {/* ── Four across the top, outline only. */}
