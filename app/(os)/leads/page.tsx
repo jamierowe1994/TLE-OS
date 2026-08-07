@@ -113,6 +113,7 @@ export default function Leads() {
         title={side === "tenant" ? "Tenant leads" : side === "landlord" ? "Landlord leads" : "Leads"}
         blurb="New enquiries from the portals, your ads and the website — ready to qualify and follow up."
         illustration="/illustrations/notioly/inbox.svg"
+        lineBreak="sink"
         actions={
           <PressButton
             onClick={() => setCreating(true)}

@@ -28,34 +28,48 @@ function Pop({ className = "" }: { className?: string }) {
 }
 
 /**
- * The dip in the rule beneath the illustration — the header's border is
- * masked across this span and redrawn easing down into a shallow trough, so
- * the figure stands IN the line rather than on an unbroken one.
+ * How the figure meets the rule.
+ *
+ *   "none" — the line runs straight through. For anyone WALKING along it or
+ *            framed by it: there's no weight bearing down, so nothing bends.
+ *   "dip"  — a shallow trough. For someone STANDING on it: the line gives a
+ *            little but never parts.
+ *   "sink" — a deep trough with the line actually BROKEN where they sit. For
+ *            anyone whose weight is on it — the original line is removed and
+ *            redrawn around them, so they're in the line, not on top of it.
+ *
+ * The plate behind is page-coloured, which is what hides the header's own
+ * border-bottom across the span so the redrawn path can take its place.
  */
-function LineDip({ width }: { width: number }) {
-  const h = 26;
+export type LineBreak = "none" | "dip" | "sink";
+
+function LineDip({ width, mode }: { width: number; mode: LineBreak }) {
+  if (mode === "none") return null;
+
+  const h = 34;
   const y = 1;
-  const drop = 11;
+  const drop = mode === "sink" ? 17 : 9;
+  // The gap is what makes "sink" read as broken rather than merely bent.
+  const gap = mode === "sink" ? 0.2 : 0;
+
+  const left = `M 0 ${y}
+    L ${width * 0.14} ${y}
+    C ${width * 0.28} ${y}, ${width * (0.32 - gap / 2)} ${y + drop}, ${width * (0.5 - gap / 2)} ${y + drop}`;
+  const right = `M ${width * (0.5 + gap / 2)} ${y + drop}
+    C ${width * (0.68 + gap / 2)} ${y + drop}, ${width * 0.72} ${y}, ${width * 0.86} ${y}
+    L ${width} ${y}`;
+
   return (
     <svg
       aria-hidden
       viewBox={`0 0 ${width} ${h}`}
       preserveAspectRatio="none"
-      className="pointer-events-none absolute bottom-0 h-[26px]"
-      style={{ width, left: "50%", transform: "translateX(-50%)" }}
+      className="pointer-events-none absolute bottom-0"
+      style={{ width, height: h, left: "50%", transform: "translateX(-50%)" }}
     >
       <rect x="0" y="0" width={width} height={h} fill="var(--page)" />
-      <path
-        d={`M 0 ${y}
-            L ${width * 0.16} ${y}
-            C ${width * 0.3} ${y}, ${width * 0.3} ${y + drop}, ${width * 0.5} ${y + drop}
-            C ${width * 0.7} ${y + drop}, ${width * 0.7} ${y}, ${width * 0.84} ${y}
-            L ${width} ${y}`}
-        fill="none"
-        stroke="var(--line)"
-        strokeWidth="1"
-        vectorEffect="non-scaling-stroke"
-      />
+      <path d={left} fill="none" stroke="var(--line)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+      <path d={right} fill="none" stroke="var(--line)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
@@ -67,7 +81,9 @@ export default function PageHeader({
   illustrationNode,
   /** Illustration height — it stands on the rule and reaches most of the way
    *  up, stopping short of the top. */
-  illustrationHeight = 216,
+  illustrationHeight = 190,
+  /** How the rule behaves where the figure meets it. */
+  lineBreak = "dip",
   /** Actions that belong to the page, sitting on the search row. */
   actions,
 }: {
@@ -77,14 +93,15 @@ export default function PageHeader({
   /** A live illustration (e.g. the window scene) in place of a static file. */
   illustrationNode?: React.ReactNode;
   illustrationHeight?: number;
+  lineBreak?: LineBreak;
   actions?: React.ReactNode;
 }) {
   const hasArt = Boolean(illustration || illustrationNode);
-  const dipWidth = Math.round(illustrationHeight * 0.72);
+  const dipWidth = Math.round(illustrationHeight * (lineBreak === "sink" ? 0.82 : 0.66));
 
   return (
     <>
-      <div className="fade-up relative flex min-h-[240px] items-end justify-between gap-6 border-b border-line/80 pt-10">
+      <div className="fade-up relative flex min-h-[212px] items-end justify-between gap-6 border-b border-line/80 pt-8">
         <div className="mb-2 pb-9 pl-2 pt-8">
           {/* The strokes belong to the TITLE, not the block. */}
           <div className="relative inline-block">
@@ -102,7 +119,7 @@ export default function PageHeader({
         {/* Notifications, top right and nothing else up there. */}
         <button
           type="button"
-          className="absolute right-0 top-6 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line/80"
+          className="absolute right-0 top-0 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line/80"
           title="Notifications (wireframe)"
         >
           <DoodleIcon name="bell" size={17} className="text-ink" />
@@ -116,7 +133,7 @@ export default function PageHeader({
             style={{ height: illustrationHeight }}
           >
             <div className="relative h-full">
-              <LineDip width={dipWidth} />
+              <LineDip width={dipWidth} mode={lineBreak} />
               {illustrationNode ? (
                 <div className="relative aspect-square h-full">{illustrationNode}</div>
               ) : (

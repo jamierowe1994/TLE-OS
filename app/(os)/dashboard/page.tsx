@@ -80,6 +80,7 @@ export default function Dashboard() {
         title={greeting()}
         blurb="Here's what's happening with your lettings business today."
         illustrationNode={<WindowScene />}
+        lineBreak="none"
       />
 
       {/* ── Four across the top, outline only. */}

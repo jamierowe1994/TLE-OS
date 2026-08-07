@@ -124,6 +124,7 @@ export default function Listings() {
         title="Listings"
         blurb="Manage your properties and their marketing. List here once — the OS writes into REX, and REX syndicates to the portals."
         illustration="/illustrations/notioly/moving.svg"
+        lineBreak="none"
       />
 
       <div className="mt-10 flex flex-wrap items-center justify-between gap-3">

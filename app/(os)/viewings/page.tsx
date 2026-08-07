@@ -97,6 +97,7 @@ export default function Viewings() {
         title="Viewings"
         blurb="The week's diary. Book straight from a lead, then capture what the applicant actually thought — that feedback is what the landlord is waiting for."
         illustration="/illustrations/notioly/checking-the-calendar.svg"
+        lineBreak="dip"
       />
 
       <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
