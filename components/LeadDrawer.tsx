@@ -7,6 +7,8 @@ import PropertyPhoto from "@/components/PropertyPhoto";
 import { DetailRow, DoneTick, PressButton } from "@/components/Bits";
 import EmailProperties from "@/components/EmailProperties";
 import ProcessTimeline from "@/components/ProcessTimeline";
+import PropertyFacts from "@/components/PropertyFacts";
+import ReferToAgent, { isSalesIntent, SALES_TAGS } from "@/components/ReferToAgent";
 import SignaturePanel, { type Signer } from "@/components/SignaturePanel";
 import ViewingBooker from "@/components/ViewingBooker";
 import { Pill } from "@/components/Wire";
@@ -112,6 +114,7 @@ export default function LeadDrawer({
   const [signing, setSigning] = useState(false);
   const [booked, setBooked] = useState<LeadViewing[]>([]);
   const [handingOff, setHandingOff] = useState(false);
+  const [tagging, setTagging] = useState(false);
 
   useEffect(() => {
     if (!detail) return;
@@ -316,13 +319,23 @@ export default function LeadDrawer({
                 </div>
               </div>
 
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/illustrations/notioly/home-caring.svg"
-                alt=""
-                aria-hidden
-                className="art ml-auto hidden h-36 shrink-0 lg:block"
-              />
+              {/* On a landlord record the space to the right earns its keep:
+                  the property they're ringing about, captured as fields while
+                  the call is happening. On a tenant record there is no
+                  property yet, so it stays decorative. */}
+              {isTenant ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src="/illustrations/notioly/home-caring.svg"
+                  alt=""
+                  aria-hidden
+                  className="art ml-auto hidden h-36 shrink-0 lg:block"
+                />
+              ) : (
+                <div className="ml-auto hidden w-[260px] shrink-0 lg:block">
+                  <PropertyFacts />
+                </div>
+              )}
             </div>
 
             {/* Where they are in the process, directly under the contact
@@ -353,16 +366,46 @@ export default function LeadDrawer({
                   </span>
                 </button>
               ))}
-              <button
-                type="button"
-                onClick={() => {
-                  const t = window.prompt("New tag");
-                  if (t?.trim()) setTags((cur) => [...cur, t.trim()]);
-                }}
-                className="rounded-full border border-dashed border-line px-3 py-1.5 text-[11.5px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
-              >
-                + Add tag
-              </button>
+              {/* A menu rather than a prompt box. The sales tags have to be
+                  offered, not guessed at — a reveal nobody can find is a
+                  feature nobody has. */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setTagging((t) => !t)}
+                  className="rounded-full border border-dashed border-line px-3 py-1.5 text-[11.5px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
+                >
+                  + Add tag
+                </button>
+                {tagging && (
+                  <div className="fade-up absolute left-0 top-full z-20 mt-1.5 w-56 rounded-xl border border-line/80 bg-card p-1.5 shadow-[0_12px_32px_-12px_rgba(16,16,20,0.3)]">
+                    <p className="px-2 pb-1 pt-1.5 text-[9.5px] font-bold uppercase tracking-wide text-muted">
+                      Sales intent
+                    </p>
+                    {SALES_TAGS.filter((t) => !tags.includes(t)).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => { setTags((cur) => [...cur, t]); setTagging(false); }}
+                        className="block w-full rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-page"
+                      >
+                        {t}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTagging(false);
+                        const t = window.prompt("New tag");
+                        if (t?.trim()) setTags((cur) => [...cur, t.trim()]);
+                      }}
+                      className="mt-1 block w-full rounded-lg border-t border-line/50 px-2 py-1.5 text-left text-[12px] text-muted transition-colors hover:text-ink"
+                    >
+                      Something else…
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -395,6 +438,17 @@ export default function LeadDrawer({
               );
             })}
           </div>
+
+          {/* The reveal. Sits between the record and its tabs, across the full
+              width — a referral worth a fee should not be a link in a corner. */}
+          {isSalesIntent(tags) && (
+            <div className="mt-5">
+              <ReferToAgent
+                name={lead.name}
+                trigger={tags.find((t) => isSalesIntent([t])) ?? "for sale"}
+              />
+            </div>
+          )}
 
           <div className="mt-5">
             {/* ══ OVERVIEW ══ */}

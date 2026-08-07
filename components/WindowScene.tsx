@@ -116,6 +116,25 @@ export default function WindowScene({
 
   return (
     <div className={`relative ${className}`} title={sky ? `${sky.label} · Manchester` : undefined}>
+      {/*
+        Registered against the other page illustrations.
+
+        Every Notioly drawing is on a 520×520 canvas, but the ink inside sits
+        differently in each one. Measured: this frame's ink is 395 tall ending
+        at y458, where the leads inbox is 404 ending at y462. Rendered into the
+        same 190px box that left the window floating ~23px clear of the rule
+        and reading a size smaller than every other page — the container was
+        identical all along, the artwork just doesn't fill it the same way.
+
+        So: scale 404/395 and drop it so the ink bottom lands on 462, matching
+        leads exactly. Applied to the WRAPPER rather than to the frame, because
+        the sky is a separate SVG underneath and the two must move as one or
+        the sun leaves the window.
+      */}
+      <div
+        className="relative h-full w-full"
+        style={{ transformOrigin: "0 0", transform: "translate(-1.04%, -1.23%) scale(1.0228)" }}
+      >
       {/* The sky, behind the glass. */}
       <svg
         viewBox="0 0 520 520"
@@ -146,6 +165,7 @@ export default function WindowScene({
         aria-hidden
         className="art relative h-full w-full"
       />
+      </div>
     </div>
   );
 }
