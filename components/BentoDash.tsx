@@ -39,6 +39,16 @@ const DEFAULT_SIZES: Record<"s" | "m" | "l", [number, number]> = {
   s: [1, 1], m: [2, 1], l: [2, 2],
 };
 
+/** The tray's drawers — related widgets grouped so the bar stays short.
+ *  Only UNPLACED widgets show; a drawer with nothing left disappears. */
+const TRAY_GROUPS: { key: string; label: string; icon: string; types: string[] }[] = [
+  { key: "performance", label: "Performance", icon: "trend-up", types: ["leads-today", "lead-sources", "pipeline", "earnings", "applications"] },
+  { key: "social", label: "Social & ads", icon: "megaphone", types: ["facebook-leads", "instagram-leads", "ads-live"] },
+  { key: "book", label: "The book", icon: "folder", types: ["portfolio", "on-market", "occupancy", "recently-listed"] },
+  { key: "diary", label: "People & diary", icon: "calendar", types: ["today", "viewings-week", "attention"] },
+  { key: "compliance", label: "Compliance", icon: "shield", types: ["compliance-due"] },
+];
+
 type DragState = {
   id: string;
   fromTray: boolean;
@@ -58,10 +68,11 @@ export default function BentoDash() {
   const [drag, setDrag] = useState<DragState | null>(null);
   const [resize, setResize] = useState<ResizeState | null>(null);
   const [sizeMenu, setSizeMenu] = useState<string | null>(null);
-  const [overBin, setOverBin] = useState(false);
+  const [offBoard, setOffBoard] = useState(false);
+  const [trayGroup, setTrayGroup] = useState<string | null>(null);
 
   const gridRef = useRef<HTMLDivElement | null>(null);
-  const binRef = useRef<HTMLDivElement | null>(null);
+  const lastReorderAt = useRef<{ x: number; y: number } | null>(null);
   const rectsRef = useRef(new Map<string, { x: number; y: number }>());
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
@@ -84,21 +95,32 @@ export default function BentoDash() {
   }, [layout]);
 
   /* ── FLIP: whenever tiles land somewhere new, they slide there instead of
-     teleporting — this is the "squeeze apart" the drag is showing you. ── */
+     teleporting — this is the "squeeze apart" the drag is showing you.
+
+     The calm is in the measuring. The first cut recorded positions WHILE
+     tiles were mid-slide, so each reorder compounded the last one's offset
+     and tiles flew off the screen. Now: note where the tile visually is,
+     cancel its flight, measure its true resting place, and glide from the
+     one to the other — reorders mid-animation just bend the path. ── */
   useLayoutEffect(() => {
     const grid = gridRef.current;
     if (!grid) return;
     grid.querySelectorAll<HTMLElement>("[data-bid]").forEach((el) => {
       const id = el.dataset.bid!;
-      const now = el.getBoundingClientRect();
-      const prev = rectsRef.current.get(id);
-      if (prev && (Math.abs(prev.x - now.x) > 1 || Math.abs(prev.y - now.y) > 1) && id !== dragRef.current?.id) {
+      const anims = el.getAnimations();
+      const visual = anims.length ? el.getBoundingClientRect() : null;
+      anims.forEach((a) => a.cancel());
+      const final = el.getBoundingClientRect();
+      const from = visual ?? rectsRef.current.get(id) ?? null;
+      const dx = from ? from.x - final.x : 0;
+      const dy = from ? from.y - final.y : 0;
+      if (from && (Math.abs(dx) > 1 || Math.abs(dy) > 1) && id !== dragRef.current?.id) {
         el.animate(
-          [{ transform: `translate(${prev.x - now.x}px, ${prev.y - now.y}px)` }, { transform: "none" }],
-          { duration: 230, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
+          [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }],
+          { duration: 320, easing: "cubic-bezier(0.22, 1, 0.36, 1)" }
         );
       }
-      rectsRef.current.set(id, { x: now.x, y: now.y });
+      rectsRef.current.set(id, { x: final.x, y: final.y });
     });
   });
 
@@ -128,6 +150,11 @@ export default function BentoDash() {
   function moveDraggedTo(px: number, py: number) {
     const d = dragRef.current;
     if (!d) return;
+    // Hysteresis: a reorder is a decision, not a tremor. The board only
+    // reconsiders after the pointer has travelled a real distance from the
+    // last reorder — this is most of "calm".
+    const last = lastReorderAt.current;
+    if (last && Math.hypot(px - last.x, py - last.y) < 36) return;
     const target = insertionIndex(px, py, d.id);
     if (target == null) return;
     setLayout((cur) => {
@@ -136,11 +163,20 @@ export default function BentoDash() {
       let to = target > from ? target - 1 : target;
       to = Math.max(0, Math.min(cur.length - 1, to));
       if (to === from) return cur;
+      lastReorderAt.current = { x: px, y: py };
       const next = [...cur];
       const [m] = next.splice(from, 1);
       next.splice(to, 0, m);
       return next;
     });
+  }
+
+  /** Is this pointer off the board? Off the board is how a tile leaves. */
+  function isOffBoard(px: number, py: number): boolean {
+    const g = gridRef.current?.getBoundingClientRect();
+    if (!g) return false;
+    const M = 24; // a forgiving margin — "off" should feel deliberate
+    return px < g.x - M || px > g.right + M || py < g.y - M || py > g.bottom + M;
   }
 
   /* ── One pointer loop drives dragging, from tile or tray alike. ── */
@@ -165,10 +201,9 @@ export default function BentoDash() {
       }
       setDrag(dragRef.current);
       if (!moved) return;
-      const bin = binRef.current?.getBoundingClientRect();
-      const inBin = !!bin && ev.clientX > bin.x && ev.clientX < bin.right && ev.clientY > bin.y && ev.clientY < bin.bottom;
-      setOverBin(inBin);
-      if (!inBin) moveDraggedTo(ev.clientX, ev.clientY);
+      const off = isOffBoard(ev.clientX, ev.clientY);
+      setOffBoard(off);
+      if (!off) moveDraggedTo(ev.clientX, ev.clientY);
     };
 
     const onUp = (ev: PointerEvent) => {
@@ -177,12 +212,12 @@ export default function BentoDash() {
       window.removeEventListener("pointercancel", onUp);
       const d = dragRef.current;
       dragRef.current = null;
+      lastReorderAt.current = null;
       setDrag(null);
-      setOverBin(false);
+      setOffBoard(false);
       if (!d) return;
-      const bin = binRef.current?.getBoundingClientRect();
-      const inBin = !!bin && ev.clientX > bin.x && ev.clientX < bin.right && ev.clientY > bin.y && ev.clientY < bin.bottom;
-      if (d.moved && inBin) {
+      if (d.moved && isOffBoard(ev.clientX, ev.clientY)) {
+        // Flung off the board — it goes back to the tray.
         setLayout((cur) => cur.filter((i) => i.id !== d.id));
       } else if (!d.moved && !d.fromTray) {
         // A tap, not a drag: offer the sizes.
@@ -228,7 +263,13 @@ export default function BentoDash() {
       const dh = Math.round((ev.clientY - start.y0) / (ROW_PX + GAP_PX));
       const w = Math.min(COLS, Math.max(1, start.w0 + dw));
       const h = Math.min(MAX_H, Math.max(1, start.h0 + dh));
-      setLayout((cur) => cur.map((i) => (i.id === id ? { ...i, w, h } : i)));
+      // Only touch the layout when the snap actually changes — re-rendering
+      // the whole board on every pointer move is where flicker comes from.
+      setLayout((cur) => {
+        const item = cur.find((i) => i.id === id);
+        if (!item || (item.w === w && item.h === h)) return cur;
+        return cur.map((i) => (i.id === id ? { ...i, w, h } : i));
+      });
     };
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
@@ -296,9 +337,11 @@ export default function BentoDash() {
               }}
               className={`relative rounded-2xl border bg-page p-5 ${
                 customise
-                  ? `wiggle cursor-grab select-none border-dashed border-ink/40 ${
-                      isDragged ? "opacity-30" : ""
-                    }`
+                  ? `cursor-grab select-none border-dashed border-ink/40 ${
+                      /* The wiggle rests while anything is being moved or
+                         resized — hands need still targets. */
+                      drag?.moved || resize ? "" : "wiggle"
+                    } ${isDragged ? "opacity-30" : ""}`
                   : "block-pop fade-up overflow-hidden border-line/80 hover:border-ink"
               }`}
               style={{
@@ -397,16 +440,33 @@ export default function BentoDash() {
         )}
       </div>
 
+      {/* The instruction, while a tile is in hand. */}
+      {dragged && (
+        <div className="pointer-events-none fixed inset-x-0 top-5 z-[165] flex justify-center">
+          <span
+            className={`fade-up rounded-full px-5 py-2.5 text-[12.5px] font-semibold shadow-[0_14px_34px_-12px_rgba(0,0,0,0.35)] ${
+              offBoard ? "bg-accent-dark text-page" : "border border-line/80 bg-card text-ink"
+            }`}
+          >
+            {offBoard
+              ? "Let go to remove it from your view"
+              : "Drop it where it should live — or move it off the board to remove it"}
+          </span>
+        </div>
+      )}
+
       {/* The lifted tile, following the pointer. */}
       {dragged && drag && (
         <div
-          className="pointer-events-none fixed z-[160] rounded-2xl border border-ink/50 bg-page p-5 opacity-95 shadow-[0_30px_60px_-20px_rgba(0,0,0,0.45)]"
+          className={`pointer-events-none fixed z-[160] rounded-2xl border bg-page p-5 shadow-[0_30px_60px_-20px_rgba(0,0,0,0.45)] transition-[opacity,transform] duration-200 ${
+            offBoard ? "border-accent-dark opacity-60" : "border-ink/50 opacity-95"
+          }`}
           style={{
             left: drag.x - drag.dx,
             top: drag.y - drag.dy,
             width: drag.pw,
             height: drag.ph,
-            transform: "scale(1.03) rotate(0.6deg)",
+            transform: offBoard ? "scale(0.9) rotate(1.4deg)" : "scale(1.03) rotate(0.6deg)",
             overflow: "hidden",
           }}
         >
@@ -431,43 +491,69 @@ export default function BentoDash() {
         </div>
       )}
 
-      {/* ── The tray. ── */}
+      {/* ── The tray: only what's NOT on the board, in a few named drawers.
+          Tap a drawer, its widgets pop up, drag one out. A removed tile
+          reappears here the moment it's flung off the board. ── */}
       {customise && (
         <div className="fixed inset-x-0 bottom-5 z-[110] flex justify-center px-4">
-          <div className="fade-up flex max-w-full items-stretch gap-2 overflow-x-auto rounded-3xl border border-line/80 bg-card p-3 shadow-[0_20px_50px_-16px_rgba(0,0,0,0.35)]">
-            {Object.entries(WIDGETS).map(([type, def]) => (
-              <div
-                key={type}
-                onPointerDown={(e) => !placed.has(type) && beginTrayDrag(e, type)}
-                title={def.hint}
-                style={{ touchAction: "none" }}
-                className={`flex w-[92px] shrink-0 flex-col items-center gap-1.5 rounded-2xl border p-2.5 text-center transition-colors ${
-                  placed.has(type)
-                    ? "border-transparent opacity-35"
-                    : "cursor-grab border-line/60 hover:border-ink/40 active:cursor-grabbing"
-                }`}
-              >
-                <DoodleIcon name={def.icon} size={22} className="text-accent-dark" />
-                <span className="text-[9.5px] font-semibold leading-tight">{def.label}</span>
-              </div>
-            ))}
+          <div className="fade-up relative flex max-w-full items-stretch gap-2 overflow-visible rounded-3xl border border-line/80 bg-card p-3 shadow-[0_20px_50px_-16px_rgba(0,0,0,0.35)]">
+            {TRAY_GROUPS.map((g) => {
+              const avail = g.types.filter((t) => !placed.has(t));
+              if (!avail.length) return null;
+              const open = trayGroup === g.key;
+              return (
+                <div key={g.key} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setTrayGroup(open ? null : g.key)}
+                    className={`flex w-[96px] flex-col items-center gap-1.5 rounded-2xl border p-2.5 text-center transition-colors ${
+                      open ? "border-accent-dark bg-accent-soft/40" : "border-line/60 hover:border-ink/40"
+                    }`}
+                  >
+                    <DoodleIcon name={g.icon} size={22} className="text-accent-dark" />
+                    <span className="text-[9.5px] font-semibold leading-tight">{g.label}</span>
+                    <span className="figures text-[9px] text-muted">{avail.length}</span>
+                  </button>
 
-            <div
-              ref={binRef}
-              className={`ml-1 flex w-[92px] shrink-0 flex-col items-center justify-center gap-1.5 rounded-2xl border-2 border-dashed p-2.5 transition-all ${
-                overBin
-                  ? "scale-105 border-accent-dark bg-accent-soft/60 text-accent-dark"
-                  : "border-line text-muted"
-              }`}
-            >
-              <DoodleIcon name="cross" size={20} className="opacity-80" />
-              <span className="text-[9.5px] font-semibold">Drop to remove</span>
-            </div>
+                  {open && (
+                    <div className="fade-up absolute bottom-full left-1/2 z-10 mb-2.5 flex -translate-x-1/2 gap-2 rounded-2xl border border-line/80 bg-card p-2.5 shadow-[0_14px_34px_-12px_rgba(0,0,0,0.35)]">
+                      {avail.map((type) => {
+                        const def = WIDGETS[type];
+                        return (
+                          <div
+                            key={type}
+                            onPointerDown={(e) => {
+                              setTrayGroup(null);
+                              beginTrayDrag(e, type);
+                            }}
+                            title={def.hint}
+                            style={{ touchAction: "none" }}
+                            className="flex w-[92px] shrink-0 cursor-grab flex-col items-center gap-1.5 rounded-2xl border border-line/60 p-2.5 text-center transition-colors hover:border-ink/40 active:cursor-grabbing"
+                          >
+                            <DoodleIcon name={def.icon} size={22} className="text-accent-dark" />
+                            <span className="whitespace-nowrap text-[9.5px] font-semibold leading-tight">
+                              {def.label}
+                            </span>
+                            <span className="text-[8.5px] text-muted">drag me on</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {Object.keys(WIDGETS).every((t) => placed.has(t)) && (
+              <p className="flex items-center px-4 text-[11.5px] text-muted">
+                Everything&apos;s on the board — fling a tile off it to free one up.
+              </p>
+            )}
 
             <button
               type="button"
               onClick={() => setLayout(DEFAULT_LAYOUT)}
-              className="ml-1 flex w-[92px] shrink-0 flex-col items-center justify-center gap-1.5 rounded-2xl border border-line/60 p-2.5 text-muted transition-colors hover:border-ink/40 hover:text-ink"
+              className="ml-1 flex w-[96px] shrink-0 flex-col items-center justify-center gap-1.5 rounded-2xl border border-line/60 p-2.5 text-muted transition-colors hover:border-ink/40 hover:text-ink"
             >
               <DoodleIcon name="magic-wand" size={20} />
               <span className="text-[9.5px] font-semibold">Reset to default</span>
