@@ -70,9 +70,10 @@
   /* The faintest grey — a 50, maybe a 100, never more — so the nav and the
      boxes separate from the white page without any drama. And the rims come
      up one notch, purely so edges are findable. Reader accessibility, not
-     decoration (James, 8 Aug 2026; lightened a further ~20% same day). */
-  --panel: #f9f9f8;
-  --box: #fbfbfa;
+     decoration (James, 8 Aug 2026; lightened ~20% twice more same day —
+     it has landed where a whisper lands). */
+  --panel: #fbfbfa;
+  --box: #fcfcfc;
   --line: #cdc9c0;
   --art-wash: #f0efeb;
 }
