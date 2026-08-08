@@ -82,10 +82,24 @@ export async function GET(req: NextRequest) {
       if (!j?.formattedAddress) {
         return NextResponse.json({ configured: true, error: "not_found" }, { status: 404 });
       }
-      const postcode =
+      let postcode: string | null =
         (j.addressComponents ?? []).find(
           (c: { types?: string[] }) => c.types?.includes("postal_code")
         )?.longText ?? null;
+
+      // Some premises come back with NO postal_code component at all (183
+      // Walesby Lane did, live). The coordinates always know their postcode
+      // though — one reverse-geocode fills the gap, only when needed.
+      if (!postcode && j.location) {
+        const rg = await fetch(
+          `https://maps.googleapis.com/maps/api/geocode/json?latlng=${j.location.latitude},${j.location.longitude}&result_type=postal_code&key=${GOOGLE}`,
+          { cache: "no-store" }
+        ).then((r) => r.json()).catch(() => null);
+        postcode =
+          rg?.results?.[0]?.address_components?.find(
+            (c: { types?: string[] }) => c.types?.includes("postal_code")
+          )?.long_name ?? null;
+      }
       return NextResponse.json({
         configured: true,
         // The postcode joins the display address too — an agent reading a UK

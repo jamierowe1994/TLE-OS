@@ -150,7 +150,11 @@ export async function GET(req: NextRequest) {
       `https://rightmove.realtyapi.io/details/byaddress?address=${encodeURIComponent(`${address}, ${postcode}`)}`,
       raHeaders
     );
-    if (rm?.detail) {
+    // A listing with no link, agent or price is an empty claim — drop it
+    // rather than render a tag that says nothing.
+    const rmHasSubstance =
+      rm?.detail && (rm.detail.propertyUrl || rm.detail.branch?.displayName || rm.detail.price?.primary);
+    if (rmHasSubstance) {
       const resolved: string = rm.resolvedAddress ?? rm.detail.address ?? "";
       const exact = Boolean(num && houseNumber(resolved) === num);
       out.currentListing = {
