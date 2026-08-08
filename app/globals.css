@@ -33,6 +33,10 @@
      boxes are outlines); the light surface overrides it with the faintest
      grey so boxes read against pure white. */
   --box: var(--page);
+  /* A wash INSIDE the illustrations — the window frame, the lady's shirt.
+     Sits behind the ink, in the grey family of the surface it's on. The
+     dark theme gets it inverted for free via .art. */
+  --art-wash: #e9e7e1;
 
   --radius-card: 16px;
 }
@@ -66,10 +70,11 @@
   /* The faintest grey — a 50, maybe a 100, never more — so the nav and the
      boxes separate from the white page without any drama. And the rims come
      up one notch, purely so edges are findable. Reader accessibility, not
-     decoration (James, 8 Aug 2026). */
-  --panel: #f7f7f5;
-  --box: #fafaf9;
+     decoration (James, 8 Aug 2026; lightened a further ~20% same day). */
+  --panel: #f9f9f8;
+  --box: #fbfbfa;
   --line: #cdc9c0;
+  --art-wash: #f0efeb;
 }
 
 /* ---------------------------------------------------------------------------

@@ -140,7 +140,13 @@ export default function PageHeader({
             <div className="relative h-full">
               <LineDip width={dipWidth} mode={lineBreak} />
               {illustrationNode ? (
-                <div className="relative aspect-square h-full">{illustrationNode}</div>
+                /* EXPLICIT width, not aspect-square: at least one browser in
+                   the field sized the ratio box wrong and the figure drifted
+                   ~300px off the corner while the bell (plain right-0 in the
+                   same container) sat true. Pixels can't be misread. */
+                <div className="relative h-full" style={{ width: illustrationHeight }}>
+                  {illustrationNode}
+                </div>
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img

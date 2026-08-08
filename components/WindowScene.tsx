@@ -146,6 +146,26 @@ export default function WindowScene({
             <rect x={SKY.x} y={SKY.y} width={SKY.w} height={SKY.h} />
           </clipPath>
         </defs>
+        {/* The wash: the frame's band and the shirt, filled in the surface's
+            own grey BEHIND the ink — the drawing's lines are open, so the
+            fills are drawn shapes, slightly inset, the way a colourist works
+            under an inker. --art-wash inverts with the theme via .art. */}
+        <path
+          d="M36 66 H488 V450 H36 Z M62 92 H466 V434 H62 Z"
+          fillRule="evenodd"
+          fill="var(--art-wash)"
+        />
+        <path
+          d="M418 292
+             C404 299 395 308 391 320
+             C387 331 384 342 385 352
+             C394 359 403 363 412 369
+             C425 378 439 388 452 398
+             C459 390 463 378 465 362
+             C466 344 464 316 457 300
+             C445 291 430 288 418 292 Z"
+          fill="var(--art-wash)"
+        />
         {sky && (
           <g clipPath="url(#window-glass)" style={{ transition: "opacity 0.6s ease" }}>
             {deepNight &&
