@@ -31,6 +31,8 @@ export type WidgetDef = {
   hint: string;
   defaultW: number;
   defaultH: number;
+  /** The tap-to-size presets. Omitted = the global S 1×1 / M 2×1 / L 2×2. */
+  sizes?: { s: [number, number]; m: [number, number]; l: [number, number] };
   render: (w: number, h: number) => React.ReactNode;
 };
 
@@ -56,15 +58,16 @@ function BigCount({ value, hint }: { value: string; hint: string }) {
   );
 }
 
-/** Little bars, drawn flat — the trend at a glance. Deterministic data. */
+/** Little bars, drawn flat — the trend at a glance. Deterministic data.
+ *  Even gaps at a size the eye reads as deliberate (James, 8 Aug 2026). */
 function Bars({ data, tall = false }: { data: number[]; tall?: boolean }) {
   const max = Math.max(...data);
   return (
-    <div className={`flex items-end gap-[3px] ${tall ? "h-16" : "h-9"}`}>
+    <div className={`flex items-end gap-1.5 ${tall ? "h-16" : "h-9"}`}>
       {data.map((v, i) => (
         <div
           key={i}
-          className={`flex-1 rounded-t-[3px] ${i === data.length - 1 ? "bg-accent-dark" : "bg-accent-soft"}`}
+          className={`flex-1 rounded-t-[4px] ${i === data.length - 1 ? "bg-accent-dark" : "bg-accent-soft"}`}
           style={{ height: `${Math.max(8, (v / max) * 100)}%` }}
           title={String(v)}
         />
@@ -404,18 +407,21 @@ export const WIDGETS: Record<string, WidgetDef> = {
   attention: {
     label: "Needs attention", icon: "bell", hint: "the tickable worry list",
     defaultW: 1, defaultH: 2,
+    sizes: { s: [1, 1], m: [1, 2], l: [2, 2] },
     render: (w, h) => <AttentionWidget w={w} h={h} />,
   },
 
   today: {
     label: "Today", icon: "calendar", hint: "the diary — opens the full calendar",
     defaultW: 1, defaultH: 2,
+    sizes: { s: [1, 1], m: [1, 2], l: [2, 2] },
     render: (w, h) => <TodayWidget w={w} h={h} />,
   },
 
   "lead-sources": {
     label: "Lead sources", icon: "pie", hint: "top source → bars → the full chart",
     defaultW: 1, defaultH: 2,
+    sizes: { s: [1, 1], m: [1, 2], l: [2, 2] },
     render: (w, h) => (
       <>
         <div className="flex items-center justify-between gap-2">
@@ -439,6 +445,7 @@ export const WIDGETS: Record<string, WidgetDef> = {
   pipeline: {
     label: "Pipeline snapshot", icon: "trend-up", hint: "the journey in numbers; taller adds conversion",
     defaultW: 4, defaultH: 1,
+    sizes: { s: [2, 1], m: [4, 1], l: [4, 2] },
     render: (w, h) => {
       const STAGES = [
         { label: "Leads", value: 14, href: "/leads" },
@@ -580,6 +587,112 @@ export const WIDGETS: Record<string, WidgetDef> = {
         </Link>
       );
     },
+  },
+
+  portfolio: {
+    label: "Portfolio size", icon: "folder", hint: "the managed book, and how it's growing",
+    defaultW: 1, defaultH: 1,
+    render: (w, h) => (
+      <>
+        <Head icon="folder" label="Portfolio" />
+        {w === 1 && h === 1 ? (
+          <BigCount value="568" hint="+27 this year" />
+        ) : (
+          <>
+            <div className="mt-2 flex items-end gap-4">
+              <div>
+                <p className="figures text-[34px] leading-none">568</p>
+                <p className="mt-1 text-[11px] font-medium text-accent-dark">homes managed</p>
+              </div>
+              <div className="mb-1 min-w-0 flex-1">
+                <Bars data={[541, 544, 546, 549, 551, 553, 558, 560, 561, 563, 566, 568]} tall={h >= 2} />
+                <p className="mt-1 text-[9px] text-muted">12 months · +27</p>
+              </div>
+            </div>
+            {h >= 2 && (
+              <>
+                <p className="mt-4 text-[10px] font-semibold uppercase tracking-wide text-muted">This month</p>
+                <RowList
+                  rows={[
+                    { a: "+2", b: "New instructions taken on", c: "MA wins" },
+                    { a: "+1", b: "Switched from another agent" },
+                    { a: "−1", b: "Sold — landlord exited", c: "22 Ashfield Rd" },
+                  ]}
+                  max={3}
+                />
+              </>
+            )}
+          </>
+        )}
+      </>
+    ),
+  },
+
+  earnings: {
+    label: "Earnings this month", icon: "wallet", hint: "fees landed — net of VAT, by stream",
+    defaultW: 1, defaultH: 1,
+    render: (w, h) => (
+      <>
+        <Head icon="wallet" label="Earnings this month" />
+        {w === 1 && h === 1 ? (
+          <BigCount value="£38.4k" hint="net of VAT · +6% on last month" />
+        ) : (
+          <>
+            <div className="mt-2 flex items-end gap-4">
+              <div>
+                <p className="figures text-[34px] leading-none">£38.4k</p>
+                <p className="mt-1 text-[11px] font-medium text-accent-dark">+6% on last month</p>
+              </div>
+              <div className="mb-1 min-w-0 flex-1">
+                <Bars data={[31, 34, 33, 36, 32, 35, 37, 34, 38, 36, 36, 38]} tall={h >= 2} />
+                <p className="mt-1 text-[9px] text-muted">12 months · net of VAT</p>
+              </div>
+            </div>
+            {h >= 2 && (
+              <>
+                <p className="mt-4 text-[10px] font-semibold uppercase tracking-wide text-muted">By stream</p>
+                <RowList
+                  rows={[
+                    { a: "£29.1k", b: "Management fees", c: "76%" },
+                    { a: "£6.8k", b: "Letting & renewal fees", c: "18%" },
+                    { a: "£2.5k", b: "Other agency income", c: "6%" },
+                  ]}
+                  max={3}
+                />
+                {w >= 2 && (
+                  <p className="mt-3 border-t border-line/50 pt-2 text-[10px] text-muted">
+                    Counted the PayProp way: fees belong to the month the batch transferred,
+                    every figure net of VAT — so this always agrees with the bank.
+                  </p>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </>
+    ),
+  },
+
+  "recently-listed": {
+    label: "Recently listed", icon: "megaphone", hint: "what just went live, and is it moving",
+    defaultW: 1, defaultH: 1,
+    render: (w, h) => (
+      <>
+        <Head icon="megaphone" label="Recently listed" />
+        {w === 1 && h === 1 ? (
+          <BigCount value="3" hint="live this week" />
+        ) : (
+          <RowList
+            rows={[
+              { a: "1d", b: "12 Elm Gardens — £1,200 pcm", c: "4 enquiries" },
+              { a: "3d", b: "6 Sandpiper Way — £850 pcm", c: "2 viewings" },
+              { a: "5d", b: "Flat A, 41 Milton Road — £795 pcm", c: "quiet — check photos" },
+            ]}
+            max={h >= 2 ? 3 : 2}
+          />
+        )}
+      </>
+    ),
   },
 
   "viewings-week": {

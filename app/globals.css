@@ -243,11 +243,15 @@ h1, h2, h3, h4, h5 {
    enough to say "everything is loose now", never enough to read as an error.
 --------------------------------------------------------------------------- */
 @keyframes wiggle {
-  0%   { transform: rotate(-0.45deg); }
-  50%  { transform: rotate(0.45deg); }
-  100% { transform: rotate(-0.45deg); }
+  0%   { transform: rotate(-0.14deg); }
+  50%  { transform: rotate(0.14deg); }
+  100% { transform: rotate(-0.14deg); }
 }
-.wiggle { animation: wiggle 0.5s ease-in-out infinite; }
+/* Barely there on purpose (James, 8 Aug 2026): the first cut wobbled hard
+   enough that the corner handles were moving targets. This says "loose",
+   nothing more — and the handles themselves don't inherit it visually
+   because the amplitude is under a pixel at tile scale. */
+.wiggle { animation: wiggle 0.9s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   .wiggle { animation: none; }
