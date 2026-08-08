@@ -71,7 +71,10 @@ export async function GET(req: NextRequest) {
       const r = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(resolve)}`, {
         headers: {
           "X-Goog-Api-Key": GOOGLE!,
-          "X-Goog-FieldMask": "formattedAddress,location",
+          // addressComponents carries the postcode — formattedAddress alone
+          // sometimes omits it, and the property dossier can't run without
+          // one. Learned live: "Newark, UK" resolves fine and dossiers never.
+          "X-Goog-FieldMask": "formattedAddress,location,addressComponents",
         },
         cache: "no-store",
       });
@@ -79,10 +82,19 @@ export async function GET(req: NextRequest) {
       if (!j?.formattedAddress) {
         return NextResponse.json({ configured: true, error: "not_found" }, { status: 404 });
       }
+      const postcode =
+        (j.addressComponents ?? []).find(
+          (c: { types?: string[] }) => c.types?.includes("postal_code")
+        )?.longText ?? null;
       return NextResponse.json({
         configured: true,
-        address: j.formattedAddress,
-        postcode: null,
+        // The postcode joins the display address too — an agent reading a UK
+        // address without one reads it twice.
+        address:
+          postcode && !j.formattedAddress.includes(postcode)
+            ? j.formattedAddress.replace(/, UK$/, `, ${postcode}, UK`)
+            : j.formattedAddress,
+        postcode,
         lat: j.location?.latitude ?? null,
         lng: j.location?.longitude ?? null,
       });
