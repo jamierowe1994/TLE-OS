@@ -38,7 +38,7 @@ export type WidgetDef = {
 
 /* ── Shared bones ── */
 
-function Head({ icon, label }: { icon: string; label: string }) {
+export function Head({ icon, label }: { icon: string; label: string }) {
   return (
     <div className="flex items-center gap-2.5">
       <DoodleIcon name={icon} size={18} className="shrink-0 text-accent-dark" />
@@ -49,7 +49,7 @@ function Head({ icon, label }: { icon: string; label: string }) {
   );
 }
 
-function BigCount({ value, hint }: { value: string; hint: string }) {
+export function BigCount({ value, hint }: { value: string; hint: string }) {
   return (
     <>
       <p className="figures mt-3 text-[34px] leading-none">{value}</p>
@@ -60,7 +60,7 @@ function BigCount({ value, hint }: { value: string; hint: string }) {
 
 /** Little bars, drawn flat — the trend at a glance. Deterministic data.
  *  Even gaps at a size the eye reads as deliberate (James, 8 Aug 2026). */
-function Bars({ data, tall = false }: { data: number[]; tall?: boolean }) {
+export function Bars({ data, tall = false }: { data: number[]; tall?: boolean }) {
   const max = Math.max(...data);
   return (
     <div className={`flex items-end gap-1.5 ${tall ? "h-16" : "h-9"}`}>
@@ -77,7 +77,7 @@ function Bars({ data, tall = false }: { data: number[]; tall?: boolean }) {
 }
 
 /** A donut, drawn from the tokens — shares as arc lengths on one ring. */
-function Donut({
+export function Donut({
   parts,
   size = 84,
   centre,
@@ -123,7 +123,7 @@ function Donut({
 
 /** A line graph: the trend as a stroke, the area softly filled beneath it,
  *  a dot on where we are now. */
-function LineGraph({ data, tall = false }: { data: number[]; tall?: boolean }) {
+export function LineGraph({ data, tall = false }: { data: number[]; tall?: boolean }) {
   const W = 200;
   const H = tall ? 64 : 40;
   const min = Math.min(...data);
@@ -148,7 +148,7 @@ function LineGraph({ data, tall = false }: { data: number[]; tall?: boolean }) {
   );
 }
 
-function RowList({
+export function RowList({
   rows,
   max,
 }: {
@@ -903,4 +903,14 @@ export const DEFAULT_LAYOUT: { id: string; type: string; w: number; h: number }[
   { id: "d6", type: "today", w: 1, h: 2 },
   { id: "d7", type: "lead-sources", w: 2, h: 2 },
   { id: "d8", type: "pipeline", w: 4, h: 1 },
+];
+
+/** The dashboard's tray drawers. Finances has its own set. */
+export const DASH_TRAY_GROUPS = [
+  { key: "performance", label: "Performance", icon: "trend-up", types: ["leads-today", "lead-sources", "pipeline", "earnings", "applications"] },
+  { key: "social", label: "Social & ads", icon: "megaphone", types: ["facebook-leads", "instagram-leads", "ads-live"] },
+  { key: "book", label: "The book", icon: "folder", types: ["portfolio", "on-market", "occupancy", "recently-listed"] },
+  { key: "diary", label: "People & diary", icon: "calendar", types: ["today", "viewings-week", "attention"] },
+  { key: "management", label: "Management", icon: "setting", types: ["arrears", "maintenance", "renewals"] },
+  { key: "compliance", label: "Compliance", icon: "shield", types: ["compliance-due"] },
 ];

@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
-import { DEFAULT_LAYOUT, WIDGETS } from "@/components/widgets";
+import type { WidgetDef } from "@/components/widgets";
 
 /**
  * The bento board: the dashboard as a grid of widgets the agent owns.
@@ -27,7 +27,7 @@ import { DEFAULT_LAYOUT, WIDGETS } from "@/components/widgets";
 
 type Item = { id: string; type: string; w: number; h: number };
 
-const STORE = "tle-dash-layout-v1";
+export type TrayGroup = { key: string; label: string; icon: string; types: string[] };
 const COLS = 4;
 const ROW_PX = 150;
 const GAP_PX = 16;
@@ -38,17 +38,6 @@ const DRAG_THRESHOLD = 8;
 const DEFAULT_SIZES: Record<"s" | "m" | "l", [number, number]> = {
   s: [1, 1], m: [2, 1], l: [2, 2],
 };
-
-/** The tray's drawers — related widgets grouped so the bar stays short.
- *  Only UNPLACED widgets show; a drawer with nothing left disappears. */
-const TRAY_GROUPS: { key: string; label: string; icon: string; types: string[] }[] = [
-  { key: "performance", label: "Performance", icon: "trend-up", types: ["leads-today", "lead-sources", "pipeline", "earnings", "applications"] },
-  { key: "social", label: "Social & ads", icon: "megaphone", types: ["facebook-leads", "instagram-leads", "ads-live"] },
-  { key: "book", label: "The book", icon: "folder", types: ["portfolio", "on-market", "occupancy", "recently-listed"] },
-  { key: "diary", label: "People & diary", icon: "calendar", types: ["today", "viewings-week", "attention"] },
-  { key: "management", label: "Management", icon: "setting", types: ["arrears", "maintenance", "renewals"] },
-  { key: "compliance", label: "Compliance", icon: "shield", types: ["compliance-due"] },
-];
 
 type DragState = {
   id: string;
@@ -63,7 +52,23 @@ type DragState = {
 
 type ResizeState = { id: string; x0: number; y0: number; w0: number; h0: number; x: number; y: number };
 
-export default function BentoDash() {
+/** One board, any registry — the dashboard and Finances are the same
+ *  machine pointed at different widget sets. */
+export default function BentoDash({
+  registry,
+  defaultLayout,
+  trayGroups,
+  storeKey,
+}: {
+  registry: Record<string, WidgetDef>;
+  defaultLayout: Item[];
+  trayGroups: TrayGroup[];
+  storeKey: string;
+}) {
+  const WIDGETS = registry;
+  const DEFAULT_LAYOUT = defaultLayout;
+  const TRAY_GROUPS = trayGroups;
+  const STORE = storeKey;
   const [layout, setLayout] = useState<Item[]>(DEFAULT_LAYOUT);
   const [customise, setCustomise] = useState(false);
   const [drag, setDrag] = useState<DragState | null>(null);

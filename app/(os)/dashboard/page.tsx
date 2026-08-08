@@ -4,6 +4,7 @@ import BentoDash from "@/components/BentoDash";
 import BlendVideo from "@/components/BlendVideo";
 import PageHeader from "@/components/PageHeader";
 import WindowScene from "@/components/WindowScene";
+import { DASH_TRAY_GROUPS, DEFAULT_LAYOUT, WIDGETS } from "@/components/widgets";
 
 /**
  * The dashboard is now a bento board the agent owns. The DEFAULT layout is
@@ -38,7 +39,12 @@ export default function Dashboard() {
         flushRight
       />
 
-      <BentoDash />
+      <BentoDash
+        registry={WIDGETS}
+        defaultLayout={DEFAULT_LAYOUT}
+        trayGroups={DASH_TRAY_GROUPS}
+        storeKey="tle-dash-layout-v1"
+      />
 
       {/* ── He signs off the page ──
           Rendered through BlendVideo, not a bare <video>: Chrome composites

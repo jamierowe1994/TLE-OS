@@ -75,16 +75,25 @@ function NavLink({
         href={item.href}
         title={collapsed ? item.label : undefined}
         // Soft-tint active state: highlight by reducing contrast, not adding it.
-        className={`hand flex items-center gap-3 rounded-xl py-2.5 text-[13.5px] transition-colors ${
-          collapsed ? "justify-center px-0" : "px-3"
-        } ${active ? "bg-accent-soft/50 font-medium" : "text-muted hover:bg-page hover:text-ink"}`}
+        // The icon NEVER moves on collapse — padding stays constant and only
+        // the label folds away, which is what makes the animation read as one
+        // smooth motion instead of everything re-arranging at once.
+        className={`hand flex items-center rounded-xl px-3 py-2.5 text-[13.5px] transition-colors ${
+          active ? "bg-accent-soft/50 font-medium" : "text-muted hover:bg-page hover:text-ink"
+        }`}
       >
         <DoodleIcon
           name={item.icon}
           size={17}
-          className={active ? "text-accent-dark" : "text-muted"}
+          className={`shrink-0 ${active ? "text-accent-dark" : "text-muted"}`}
         />
-        {!collapsed && item.label}
+        <span
+          className={`overflow-hidden whitespace-nowrap transition-[max-width,opacity,margin] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            collapsed ? "ml-0 max-w-0 opacity-0" : "ml-3 max-w-[150px] opacity-100"
+          }`}
+        >
+          {item.label}
+        </span>
       </Link>
 
       {showChildren && (
@@ -160,13 +169,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <aside
-        className={`sticky top-3 mb-3 ml-3 mt-3 hidden h-[calc(100vh-24px)] shrink-0 flex-col rounded-3xl border border-line/80 bg-panel py-5 transition-[width] duration-300 lg:flex ${
+        className={`sticky top-3 mb-3 ml-3 mt-3 hidden h-[calc(100vh-24px)] shrink-0 flex-col overflow-hidden rounded-3xl border border-line/80 bg-panel py-5 transition-[width,padding] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] lg:flex ${
           collapsed ? "w-[72px] px-2.5" : "w-60 px-4"
         }`}
       >
         {/* Wordmark + the collapse toggle. The logo's pin follows the accent. */}
         <div className={`flex items-center ${collapsed ? "flex-col gap-2" : "justify-between"} px-1`}>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center">
             {/* Monochrome ink, so `.art` alone flips it black → white in the
                 dark. It doesn't follow the accent — the mark is the mark. */}
             <img
@@ -175,7 +184,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               aria-hidden
               className="art h-10 w-10 shrink-0 object-contain"
             />
-            {!collapsed && <div className="hand text-xl leading-none">TLE OS</div>}
+            <div
+              className={`hand overflow-hidden whitespace-nowrap text-xl leading-none transition-[max-width,opacity,margin] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                collapsed ? "ml-0 max-w-0 opacity-0" : "ml-2 max-w-[110px] opacity-100"
+              }`}
+            >
+              TLE OS
+            </div>
           </div>
           <button
             type="button"
@@ -202,11 +217,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
           {/* The fold between making tenancies and running the book. */}
           <div className="mb-1 mt-3 border-t border-line/70 pt-3">
-            {!collapsed && (
-              <p className="px-3 pb-1 text-[9px] font-bold uppercase tracking-[0.14em] text-muted/70">
-                Back office
-              </p>
-            )}
+            <p
+              className={`overflow-hidden whitespace-nowrap px-3 text-[9px] font-bold uppercase tracking-[0.14em] text-muted/70 transition-[max-height,opacity] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                collapsed ? "max-h-0 pb-0 opacity-0" : "max-h-5 pb-1 opacity-100"
+              }`}
+            >
+              Back office
+            </p>
           </div>
           {BACK.map((item) => (
             <NavLink
@@ -281,14 +298,18 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[11px] font-bold text-accent-dark">
               TLE
             </span>
+            <span
+              className={`min-w-0 flex-1 overflow-hidden transition-[max-width,opacity,margin] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                collapsed ? "ml-0 max-w-0 opacity-0" : "ml-0 max-w-[150px] opacity-100"
+              }`}
+            >
+              <span className="hand block truncate text-[13px]">The Lettings Experts</span>
+              <span className="block whitespace-nowrap text-[10px] text-muted">
+                Preview access · {process.env.NEXT_PUBLIC_BUILD}
+              </span>
+            </span>
             {!collapsed && (
               <>
-                <span className="min-w-0 flex-1">
-                  <span className="hand block truncate text-[13px]">The Lettings Experts</span>
-                  <span className="block text-[10px] text-muted">
-                    Preview access · {process.env.NEXT_PUBLIC_BUILD}
-                  </span>
-                </span>
                 <span
                   className={`text-muted transition-transform ${profileOpen ? "rotate-180" : ""}`}
                 >
