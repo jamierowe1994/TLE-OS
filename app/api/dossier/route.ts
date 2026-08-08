@@ -86,6 +86,13 @@ export async function GET(req: NextRequest) {
     sources: { homesearch: Boolean(HS_TOKEN), realtyapi: Boolean(RA_KEY) },
   };
 
+  // The UPRN anchor. Zoopla's address resolver silently substitutes
+  // neighbours ("4 Dover Close" comes back as number 1 — measured), and the
+  // trust check rightly refuses those, which costs us the photos. With a
+  // UPRN there is nothing to resolve: /history?uprn= returns the exact
+  // house. PropertyData used to supply this; Homesearch does now.
+  let uprn: string | null = null;
+
   /* ── Homesearch: the records. ── */
   if (HS_TOKEN) {
     const hsAuth = { Authorization: `Bearer ${HS_TOKEN}` };
@@ -97,10 +104,16 @@ export async function GET(req: NextRequest) {
     const hsTrusted = hsId && (!num || houseNumber(match.address_label ?? "") === num);
 
     if (hsTrusted) {
-      const [mat, val] = await Promise.all([
+      const [mat, val, addr] = await Promise.all([
         j(`${HS}/matinfo/basic/${hsId}`, hsAuth),
         j(`${HS}/property/quick_valuation/${hsId}`, hsAuth),
+        j(`${HS}/return_address_details/${hsId}`, hsAuth),
       ]);
+
+      if (addr?.uprn) {
+        uprn = String(addr.uprn);
+        out.uprn = uprn;
+      }
 
       if (mat) {
         if (mat.bedrooms) out.beds = mat.bedrooms;
@@ -161,17 +174,21 @@ export async function GET(req: NextRequest) {
       .trim();
     const raAddress = `${cleanAddress}, ${postcode}`;
 
+    // UPRN when we have one — exact house, no resolver in the loop. The
+    // address route stays as the fallback for anything Homesearch missed.
     const hist = await j(
-      `https://zoopla.realtyapi.io/history?address=${encodeURIComponent(raAddress)}`,
+      uprn
+        ? `https://zoopla.realtyapi.io/history?uprn=${uprn}`
+        : `https://zoopla.realtyapi.io/history?address=${encodeURIComponent(raAddress)}`,
       raHeaders
     );
     const detail = hist?.detail;
-    const zooplaTrusted = Boolean(
-      detail?.fullAddress && sharesNumber(address, detail.fullAddress)
-    );
+    const zooplaTrusted =
+      Boolean(uprn) ||
+      Boolean(detail?.fullAddress && sharesNumber(address, detail.fullAddress));
     if (debug) {
       out.zooplaDebug = {
-        sent: raAddress,
+        sent: uprn ? `uprn:${uprn}` : raAddress,
         message: hist?.message ?? null,
         resultCount: hist?.resultCount ?? null,
         matched: detail?.fullAddress ?? null,
