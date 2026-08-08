@@ -240,3 +240,45 @@ export function DoneTick({ size = 56 }: { size?: number }) {
     </svg>
   );
 }
+
+/**
+ * The confetti gun. Rendered once when something worth celebrating lands —
+ * a booking confirmed, an offer accepted. Deterministic "randomness" from
+ * the index (no Math.random, so renders are stable): each bit gets its own
+ * throw vector, tumble and delay as CSS variables, and one keyframe in
+ * globals.css does the rest. Position it inside a `relative` parent.
+ */
+export function ConfettiBurst({ bits = 26 }: { bits?: number }) {
+  const colors = ["var(--accent)", "var(--accent-dark)", "var(--ink)", "var(--accent-soft)"];
+  return (
+    <span aria-hidden className="pointer-events-none absolute inset-x-0 top-6 flex justify-center">
+      <span className="relative">
+        {Array.from({ length: bits }, (_, i) => {
+          // A fan: mostly upward, spread wide, longer throws in the middle.
+          const t = i / (bits - 1);
+          const angle = -170 + t * 160 + ((i * 37) % 11) * 3; // degrees
+          const power = 60 + ((i * 53) % 5) * 22;
+          const rad = (angle * Math.PI) / 180;
+          const cx = Math.cos(rad) * power;
+          const cy = Math.sin(rad) * power - 30;
+          return (
+            <span
+              key={i}
+              className="confetti-bit absolute rounded-[1px]"
+              style={{
+                width: i % 3 === 0 ? 7 : 5,
+                height: i % 4 === 0 ? 4 : 8,
+                background: colors[i % colors.length],
+                border: i % colors.length === 3 ? "1px solid var(--accent-dark)" : undefined,
+                ["--cx" as string]: `${cx}px`,
+                ["--cy" as string]: `${cy}px`,
+                ["--cr" as string]: `${((i * 97) % 2 ? 1 : -1) * (180 + ((i * 29) % 180))}deg`,
+                ["--cd" as string]: `${((i * 13) % 5) * 0.03}s`,
+              }}
+            />
+          );
+        })}
+      </span>
+    </span>
+  );
+}

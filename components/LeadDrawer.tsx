@@ -1174,6 +1174,7 @@ export default function LeadDrawer({
         onClose={() => setBooking(false)}
         mode={bookMode}
         address={contact.area || lead.preferred}
+        origin={lead.lat != null && lead.lng != null ? { lat: lead.lat, lng: lead.lng } : null}
         lead={{
           name: lead.name,
           email: contact.email || lead.email,

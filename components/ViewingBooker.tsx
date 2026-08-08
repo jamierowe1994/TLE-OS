@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
-import { DoneTick, PressButton } from "@/components/Bits";
-import PeopleFilterBar, { NO_FILTERS, passesFilters, type Filters } from "@/components/PeopleFilter";
+import { ConfettiBurst, DoneTick, PressButton } from "@/components/Bits";
+import PeopleFilterBar, { NO_FILTERS, passesFilters, milesBetween, type Filters } from "@/components/PeopleFilter";
 import SendFlow, { type Outgoing } from "@/components/SendFlow";
 import { dayKey, useForecast } from "@/lib/weather";
 import { landlordFor } from "@/lib/journey";
+import { DIARY, minutesOf } from "@/lib/diary";
 
 /**
  * Booking a viewing, in the order the job actually happens: which property,
@@ -35,6 +36,13 @@ const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 function startOfDay(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** The seven days of the week `offset` weeks from this one, Monday-first. */
+function weekOf(offset: number): Date[] {
+  const now = new Date();
+  const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7) + offset * 7);
+  return Array.from({ length: 7 }, (_, i) => new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i));
 }
 
 /** The six-week grid for a month, Monday-first. */
@@ -66,6 +74,7 @@ export default function ViewingBooker({
   mode = "viewing",
   address = "",
   occupant = null,
+  origin = null,
   onBooked,
 }: {
   open: boolean;
@@ -87,6 +96,10 @@ export default function ViewingBooker({
    *  heads-up about the visit, because strangers with keys is how landlords
    *  lose tenants' goodwill. */
   occupant?: Person | null;
+  /** Where the appointment being booked will be — lets the diary say how far
+   *  each existing appointment is from it, which is how a real day is
+   *  planned: not "am I free", but "can I get there". */
+  origin?: { lat: number; lng: number } | null;
   onBooked: (summary: { when: string; property: string; locality: string; who: string }) => void;
 }) {
   const today = useMemo(() => startOfDay(new Date()), []);
@@ -98,6 +111,11 @@ export default function ViewingBooker({
   const [propertyId, setPropertyId] = useState<string>(properties[0]?.id ?? "");
   const [sentCount, setSentCount] = useState(0);
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  // Week first: a booking decision is "which day this week or next", and the
+  // week view has room to show the day's other appointments. Month stays a
+  // toggle away for the long-range look.
+  const [view, setView] = useState<"week" | "month">("week");
+  const [week, setWeek] = useState(0);
 
   // Reset on OPEN only. The caller builds `properties` inline, so depending on
   // it here would throw the chosen day and time away on any parent re-render.
@@ -114,6 +132,8 @@ export default function ViewingBooker({
     setPropertyId(seed.current[0]?.id ?? "");
     setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
     setFilters(NO_FILTERS);
+    setView("week");
+    setWeek(0);
   }, [open, today]);
 
   useEffect(() => {
@@ -299,7 +319,7 @@ export default function ViewingBooker({
         className="absolute inset-0 cursor-default bg-ink/45"
       />
 
-      <div className="fade-up relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+      <div className="fade-up relative flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line/70 px-6 py-4">
           <div className="min-w-0">
             <h2 className="text-[19px] leading-tight">
@@ -416,103 +436,208 @@ export default function ViewingBooker({
                 </div>
               )}
 
-              <div className="grid gap-5 sm:grid-cols-[1fr_150px]">
-                {/* The calendar, given the room it deserves. */}
-                <div>
-                  <div className="mb-3 flex items-center justify-between gap-3">
+              {/* Week or month, the agent's choice — week is the default
+                  because that's the horizon a booking decision lives on. */}
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => (view === "week" ? setWeek((w) => w - 1) : setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1)))}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink"
+                  >
+                    ‹
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => (view === "week" ? setWeek((w) => w + 1) : setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1)))}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink"
+                  >
+                    ›
+                  </button>
+                </div>
+                <p className="hand text-[17px]">
+                  {view === "week"
+                    ? week === 0 ? "This week" : week === 1 ? "Next week" : weekOf(week)[0].toLocaleDateString("en-GB", { day: "numeric", month: "short" }) + " – " + weekOf(week)[6].toLocaleDateString("en-GB", { day: "numeric", month: "short" })
+                    : month.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
+                </p>
+                <div className="flex rounded-full border border-line/80 p-0.5">
+                  {(["week", "month"] as const).map((v) => (
                     <button
+                      key={v}
                       type="button"
-                      onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}
-                      className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink"
+                      onClick={() => setView(v)}
+                      className={`hand rounded-full px-3.5 py-1 text-[12px] transition-colors ${
+                        view === v ? "bg-accent-soft/70 font-medium text-accent-dark" : "text-muted hover:text-ink"
+                      }`}
                     >
-                      ‹
+                      {v === "week" ? "Week" : "Month"}
                     </button>
-                    <p className="hand text-[17px]">
-                      {month.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}
-                      className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink"
-                    >
-                      ›
-                    </button>
-                  </div>
+                  ))}
+                </div>
+              </div>
 
-                  <div className="grid grid-cols-7 gap-1">
-                    {DAY_NAMES.map((d) => (
-                      <div
-                        key={d}
-                        className="pb-1 text-center text-[10px] font-semibold uppercase tracking-wide text-muted"
-                      >
-                        {d}
-                      </div>
-                    ))}
-                    {cells.map((c) => {
-                      const outside = c.getMonth() !== month.getMonth();
+              <div className={`grid gap-5 ${view === "week" ? "sm:grid-cols-[1fr_120px]" : "sm:grid-cols-[1fr_150px]"}`}>
+                {view === "week" ? (
+                  /* ── The week: weather up top, big, then each day's other
+                     appointments with how far away they are — a booking is
+                     "can I get there", not just "am I free". ── */
+                  <div className="grid grid-cols-7 gap-1.5">
+                    {weekOf(week).map((c, i) => {
                       const past = c < today;
                       const isToday = c.getTime() === today.getTime();
                       const picked = day != null && c.getTime() === day.getTime();
+                      const wx = forecast[dayKey(c)];
+                      const offset = Math.round((c.getTime() - today.getTime()) / 86400000);
+                      const appts = DIARY.filter((a) => a.day === offset).sort(
+                        (a, b) => minutesOf(a.start) - minutesOf(b.start)
+                      );
                       return (
                         <button
                           key={c.toISOString()}
                           type="button"
                           disabled={past}
                           onClick={() => setDay(c)}
-                          title={
-                            forecast[dayKey(c)] && !past
-                              ? `${forecast[dayKey(c)].word}, ${forecast[dayKey(c)].temp}°`
-                              : undefined
-                          }
-                          className={`figures aspect-square rounded-xl border text-[13px] transition-all ${
+                          className={`flex min-h-[210px] flex-col rounded-xl border p-1.5 text-center transition-all ${
                             picked
-                              ? "border-accent-dark bg-accent-dark font-semibold text-page"
+                              ? "border-accent-dark bg-accent-soft/50"
                               : past
-                                ? "cursor-not-allowed border-transparent text-muted/30"
-                                : outside
-                                  ? "border-transparent text-muted/45 hover:border-line"
-                                  : "border-line/50 hover:border-ink/40"
+                                ? "cursor-not-allowed border-transparent opacity-35"
+                                : "border-line/50 hover:border-ink/40"
                           } ${isToday && !picked ? "ring-1 ring-inset ring-accent-dark/50" : ""}`}
                         >
-                          <span className="block leading-tight">{c.getDate()}</span>
-                          {forecast[dayKey(c)] && !past && (
-                            <span
-                              className={`block text-[9px] leading-tight ${
-                                picked ? "text-page/90" : "text-muted"
-                              }`}
-                            >
-                              {forecast[dayKey(c)].glyph} {forecast[dayKey(c)].temp}°
+                          <span className="text-[9.5px] font-semibold uppercase tracking-wide text-muted">
+                            {DAY_NAMES[i]}
+                          </span>
+                          <span className={`figures text-[16px] leading-tight ${picked ? "font-semibold text-accent-dark" : ""}`}>
+                            {c.getDate()}
+                          </span>
+                          {/* The sky, at the top where it informs the choice. */}
+                          {toLandlord && wx && !past ? (
+                            <span className="mt-1 block border-b border-line/40 pb-1.5">
+                              <span className="block text-[20px] leading-none">{wx.glyph}</span>
+                              <span className="figures block text-[11px] text-muted">{wx.temp}°</span>
                             </span>
+                          ) : (
+                            <span className="mt-1 block border-b border-line/40 pb-1.5" />
                           )}
+                          {/* What the day already holds, and how far away. */}
+                          <span className="mt-1.5 flex-1 space-y-1 overflow-hidden">
+                            {appts.map((a) => (
+                              <span key={a.id} className="block rounded-md bg-accent-soft/45 px-1 py-0.5 text-left">
+                                <span className="figures block text-[8.5px] leading-tight text-accent-dark">
+                                  {a.start}
+                                  {origin && a.lat != null && a.lng != null && (
+                                    <span className="text-muted">
+                                      {" "}· {Math.round(milesBetween(origin, { lat: a.lat, lng: a.lng }))} mi away
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="block truncate text-[9px] leading-tight">
+                                  {a.what.replace(/^[^—]+—\s*/, "")}
+                                </span>
+                              </span>
+                            ))}
+                            {!appts.length && !past && (
+                              <span className="block pt-2 text-[9px] text-muted/60">Clear day</span>
+                            )}
+                          </span>
                         </button>
                       );
                     })}
                   </div>
-                </div>
+                ) : (
+                  /* ── The month, for the long-range look. ── */
+                  <div>
+                    <div className="grid grid-cols-7 gap-1">
+                      {DAY_NAMES.map((d) => (
+                        <div
+                          key={d}
+                          className="pb-1 text-center text-[10px] font-semibold uppercase tracking-wide text-muted"
+                        >
+                          {d}
+                        </div>
+                      ))}
+                      {cells.map((c) => {
+                        const outside = c.getMonth() !== month.getMonth();
+                        const past = c < today;
+                        const isToday = c.getTime() === today.getTime();
+                        const picked = day != null && c.getTime() === day.getTime();
+                        return (
+                          <button
+                            key={c.toISOString()}
+                            type="button"
+                            disabled={past}
+                            onClick={() => setDay(c)}
+                            title={
+                              forecast[dayKey(c)] && !past
+                                ? `${forecast[dayKey(c)].word}, ${forecast[dayKey(c)].temp}°`
+                                : undefined
+                            }
+                            className={`figures aspect-square rounded-xl border text-[13px] transition-all ${
+                              picked
+                                ? "border-accent-dark bg-accent-dark font-semibold text-page"
+                                : past
+                                  ? "cursor-not-allowed border-transparent text-muted/30"
+                                  : outside
+                                    ? "border-transparent text-muted/45 hover:border-line"
+                                    : "border-line/50 hover:border-ink/40"
+                            } ${isToday && !picked ? "ring-1 ring-inset ring-accent-dark/50" : ""}`}
+                          >
+                            <span className="block leading-tight">{c.getDate()}</span>
+                            {forecast[dayKey(c)] && !past && (
+                              <span
+                                className={`block text-[9px] leading-tight ${
+                                  picked ? "text-page/90" : "text-muted"
+                                }`}
+                              >
+                                {forecast[dayKey(c)].glyph} {forecast[dayKey(c)].temp}°
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
-                {/* Times. */}
+                {/* ── The time, as a rolodex: the chosen slot biggest, its
+                    neighbours smaller, the rest fading away. One glance says
+                    what's picked; one click moves it. ── */}
                 <div className="flex min-h-0 flex-col">
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  <p className="mb-2 text-center text-[11px] font-semibold uppercase tracking-wide text-muted">
                     Time
                   </p>
                   {day ? (
-                    /* Runs the full height of the calendar beside it — a
-                       short scroll box next to a tall grid reads as broken. */
-                    <div className="grid max-h-[240px] grid-cols-2 gap-1.5 overflow-y-auto pr-1 sm:max-h-none sm:min-h-0 sm:flex-1 sm:grid-cols-1">
-                      {SLOTS.map((t) => (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => setSlot(t)}
-                          className={`figures rounded-lg border py-2 text-[12.5px] transition-colors ${
-                            slot === t
-                              ? "border-accent-dark bg-accent-dark font-semibold text-page"
-                              : "border-line/60 hover:border-ink/40"
-                          }`}
-                        >
-                          {t}
-                        </button>
-                      ))}
+                    <div className="flex flex-1 flex-col items-center justify-center gap-0.5">
+                      {SLOTS.map((t, i) => {
+                        const si = slot ? SLOTS.indexOf(slot) : -1;
+                        const d = si < 0 ? 99 : Math.abs(i - si);
+                        // No pick yet: everything mid-weight, waiting.
+                        const cls =
+                          si < 0
+                            ? "text-[13px] opacity-70"
+                            : d === 0
+                              ? "text-[21px] font-semibold text-accent-dark"
+                              : d === 1
+                                ? "text-[14px] opacity-75"
+                                : d === 2
+                                  ? "text-[11.5px] opacity-45"
+                                  : d === 3
+                                    ? "text-[10px] opacity-25"
+                                    : "hidden";
+                        return (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setSlot(t)}
+                            className={`figures block leading-tight transition-all duration-200 ${cls} ${
+                              si < 0 || d > 0 ? "hover:opacity-100 hover:text-ink" : ""
+                            }`}
+                          >
+                            {t}
+                          </button>
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="rounded-xl border border-dashed border-line px-3 py-6 text-center text-[11.5px] leading-relaxed text-muted">
@@ -547,7 +672,9 @@ export default function ViewingBooker({
 
           {/* ══ DONE ══ */}
           {stage === "done" && (
-            <div className="flex flex-col items-center py-8 text-center">
+            <div className="relative flex flex-col items-center py-8 text-center">
+              {/* The gun goes off, then the tick settles — booked should FEEL booked. */}
+              <ConfettiBurst />
               <DoneTick />
               <p className="hand mt-5 text-[20px]">{whenLabel}</p>
               <p className="mt-1 text-[12.5px]">

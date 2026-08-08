@@ -32,6 +32,7 @@ export type JourneyAction =
   | "send"           // email properties
   | "sign"           // prepare a document for signature
   | "handoff"        // push the record to its next home
+  | "review"         // put the applications in front of the landlord
   | "none";
 
 export type JourneyStep = {
@@ -175,24 +176,24 @@ export const LISTING_TRACK: JourneyStep[] = [
     action: "none", cta: "Mark as live",
   },
   {
-    id: "viewings", label: "Viewings", icon: "calendar",
+    id: "viewings", label: "Viewings & offers", icon: "calendar",
     title: "Get people through the door",
     detail:
-      "Email it to matching tenants, book the viewings in, and chase feedback the same day — the landlord is waiting on it.",
+      "Book viewings in and log each offer as it lands. The record stays HERE until the viewings stop — offers accumulate, nothing moves on by itself.",
     action: "viewing", cta: "Book a viewing",
   },
   {
-    id: "offers", label: "Offers", icon: "coin",
-    title: "Take offers",
+    id: "offers", label: "Landlord review", icon: "coin",
+    title: "Put the applications to the landlord",
     detail:
-      "Log each offer and put it to the landlord with a recommendation. Every applicant who offered gets an answer either way.",
-    action: "none", cta: "Offer received",
+      "Viewings have stopped. Send the landlord a link to every application — the offer, the situation, the agent's pick — and they choose or ring in.",
+    action: "review", cta: "Send the landlord the applications",
   },
   {
     id: "accepted", label: "Offer accepted", icon: "shield",
     title: "Offer accepted",
     detail:
-      "Landlord has said yes. Confirm to the applicant, take the holding deposit, and stop the viewings.",
+      "The landlord has chosen. Confirm to the applicant, take the holding deposit, and let the others down kindly — every applicant gets an answer.",
     action: "none", cta: "Accepted — confirm",
   },
   {

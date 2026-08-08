@@ -8,10 +8,11 @@ import Link from "next/link";
 import EmailToTenants from "@/components/EmailToTenants";
 import ProcessTimeline from "@/components/ProcessTimeline";
 import ViewingBooker, { type Person } from "@/components/ViewingBooker";
-import { DoneTick, PressButton } from "@/components/Bits";
+import { CopyButton, DoneTick, PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
 import { landlordFor, LISTING_TRACK, listingStartingStep } from "@/lib/journey";
 import { LEADS, leadSide } from "@/lib/leads-sample";
+import { DIARY } from "@/lib/diary";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -44,14 +45,23 @@ export type Listing = {
   tenant?: { name: string; email: string; phone: string } | null;
 };
 
-type TabKey = "overview" | "photos" | "viewings" | "applicants";
+type TabKey = "home" | "property" | "marketing" | "photos";
 
+/* Property and Marketing are EDIT tabs — the facts they hold moved up into
+   the header, so the tab is where you go to change them, not to read them.
+   Home is the working view: applications on the left, viewings on the right. */
 const TABS: { key: TabKey; label: string }[] = [
-  { key: "overview", label: "Overview" },
+  { key: "home", label: "Applications & viewings" },
+  { key: "property", label: "Property" },
+  { key: "marketing", label: "Marketing" },
   { key: "photos", label: "Photos" },
-  { key: "viewings", label: "Viewings" },
-  { key: "applicants", label: "Applicants" },
 ];
+
+/** One tenant on an offer — who they are and how they live. */
+type TenantIn = { name: string; number: string; mobile: string; situation: string };
+const BLANK_TENANT: TenantIn = { name: "", number: "", mobile: "", situation: "" };
+
+type Offer = { rent: string; tenants: TenantIn[] };
 
 const TYPES = ["Flat", "Terraced", "Semi-detached", "Detached", "Bungalow", "Maisonette", "HMO", "Room"];
 
@@ -123,7 +133,7 @@ export default function ListingDrawer({
   onStep: (delta: number) => void;
 }) {
   const [shown, setShown] = useState(false);
-  const [tab, setTab] = useState<TabKey>("overview");
+  const [tab, setTab] = useState<TabKey>("home");
   const [emailing, setEmailing] = useState(false);
   const [booking, setBooking] = useState(false);
 
@@ -135,14 +145,21 @@ export default function ListingDrawer({
   const [booked, setBooked] = useState<{ when: string; who: string }[]>([]);
   const [step, setStep] = useState(0);
   const [handingOver, setHandingOver] = useState(false);
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [topPick, setTopPick] = useState<number | null>(null);
+  const [offering, setOffering] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
+  const [draftRent, setDraftRent] = useState("");
+  const [draftTenants, setDraftTenants] = useState<TenantIn[]>([BLANK_TENANT]);
 
   useEffect(() => {
     if (!listing) return;
-    setTab("overview");
+    setTab("home");
     setType(""); setBeds(0); setBaths(0); setReceptions(0); setFurnished("");
     setBooked([]);
     setStep(listingStartingStep(listing));
     setHandingOver(false);
+    setOffers([]); setTopPick(null); setOffering(false); setReviewing(false);
   }, [listing]);
 
   useEffect(() => {
@@ -168,11 +185,27 @@ export default function ListingDrawer({
   const here = LISTING_TRACK[Math.min(step, LISTING_TRACK.length - 1)];
   const advance = () => setStep((s) => Math.min(s + 1, LISTING_TRACK.length - 1));
 
+  // What's already happened here, from the shared diary — same entries the
+  // calendar shows, filtered to this property.
+  const pastViewings = DIARY.filter(
+    (a) => a.kind === "viewing" && a.day < 0 && a.what.includes(listing.name)
+  );
+
   /** The step decides what the button does, same as on a lead. */
   function fire() {
     if (here.action === "viewing") setBooking(true);
+    else if (here.action === "review") offers.length && setReviewing(true);
     else if (here.action === "handoff") setHandingOver(true);
     else advance();
+  }
+
+  function saveOffer() {
+    const tenants = draftTenants.filter((t) => t.name.trim());
+    if (!draftRent.trim() || !tenants.length) return;
+    setOffers((cur) => [...cur, { rent: draftRent.trim(), tenants }]);
+    setOffering(false);
+    setDraftRent("");
+    setDraftTenants([BLANK_TENANT]);
   }
 
   const status = listing.letAgreed
@@ -232,7 +265,19 @@ export default function ListingDrawer({
 
               <div className="min-w-0 flex-1">
                 <h2 className="text-[24px] leading-tight">{listing.name}</h2>
-                <p className="mt-1 text-[12.5px] text-muted">{listing.locality}</p>
+                <p className="mt-1 text-[12.5px] text-muted">
+                  {listing.locality}
+                  {/* The property's facts live up HERE now — the tabs below
+                      are where you go to change them, not to find them. */}
+                  {(type || beds || baths || furnished) && (
+                    <span className="text-ink">
+                      {" · "}
+                      {[type, beds ? `${beds} bed` : "", baths ? `${baths} bath` : "", furnished]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </span>
+                  )}
+                </p>
                 <div className="mt-2.5 flex flex-wrap items-center gap-2">
                   <Pill tone={status.tone}>{status.label}</Pill>
                   <span className="figures text-[18px]">
@@ -318,21 +363,46 @@ export default function ListingDrawer({
               </div>
 
               <div className="flex shrink-0 flex-col items-end gap-2">
-                <PressButton
-                  onClick={fire}
-                  className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-6 py-3 text-[13px] font-semibold text-page"
-                >
-                  <DoodleIcon name={here.icon} size={15} />
-                  {here.cta}
-                </PressButton>
-                {here.action !== "none" && step < LISTING_TRACK.length - 1 && (
+                <div className="flex flex-wrap items-center justify-end gap-2.5">
+                  {/* Offers land WHILE viewings run — the two live together
+                      and the record doesn't move until the agent says the
+                      viewings have stopped. No "already done" shortcut: this
+                      process moves when the work moves, not before. */}
+                  {here.id === "viewings" && (
+                    <PressButton
+                      onClick={() => setOffering(true)}
+                      className="press-ring flex items-center gap-2 rounded-full border border-ink/25 px-5 py-3 text-[13px] font-semibold"
+                    >
+                      <DoodleIcon name="coin" size={15} />
+                      Make an offer
+                    </PressButton>
+                  )}
+                  <PressButton
+                    onClick={fire}
+                    className={`press-ring flex items-center gap-2 rounded-full px-6 py-3 text-[13px] font-semibold ${
+                      here.action === "review" && !offers.length
+                        ? "cursor-not-allowed bg-ink/30 text-page/60"
+                        : "bg-accent-dark text-page"
+                    }`}
+                  >
+                    <DoodleIcon name={here.icon} size={15} />
+                    {here.cta}
+                  </PressButton>
+                </div>
+                {here.id === "viewings" && (
                   <button
                     type="button"
-                    onClick={advance}
-                    className="text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+                    onClick={() => offers.length && advance()}
+                    className={`text-[11px] font-semibold transition-colors ${
+                      offers.length ? "text-muted hover:text-ink" : "cursor-not-allowed text-muted/40"
+                    }`}
+                    title={offers.length ? undefined : "No offers yet — nothing for the landlord to review"}
                   >
-                    Already done — move on
+                    Viewings have stopped → landlord review
                   </button>
+                )}
+                {here.action === "review" && !offers.length && (
+                  <p className="text-[10.5px] text-muted">No applications logged yet.</p>
                 )}
               </div>
             </div>
@@ -350,8 +420,10 @@ export default function ListingDrawer({
                 }`}
               >
                 {t.label}
-                {t.key === "viewings" && booked.length > 0 && (
-                  <span className="figures ml-1.5 text-[10.5px] text-muted">{booked.length}</span>
+                {t.key === "home" && offers.length + booked.length > 0 && (
+                  <span className="figures ml-1.5 text-[10.5px] text-muted">
+                    {offers.length + booked.length}
+                  </span>
                 )}
                 {tab === t.key && (
                   <span className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-accent-dark" />
@@ -361,9 +433,116 @@ export default function ListingDrawer({
           </div>
 
           <div className="mt-5">
-            {tab === "overview" && (
+            {tab === "home" && (
               <div className="grid gap-4 lg:grid-cols-2">
-                <Card title="The property" icon="home">
+                {/* ── Left: the applications, accumulating as they land. ── */}
+                <Card
+                  title="Applications"
+                  icon="coin"
+                  action={
+                    <PressButton
+                      onClick={() => setOffering(true)}
+                      className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-2 text-[11.5px] font-semibold text-page"
+                    >
+                      <DoodleIcon name="coin" size={13} />
+                      Make an offer
+                    </PressButton>
+                  }
+                >
+                  {offers.length ? (
+                    <ul className="space-y-3">
+                      {offers.map((o, i) => (
+                        <li key={i} className="rounded-xl border border-line/60 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="hand text-[13.5px]">
+                              {o.tenants.map((t) => t.name).join(" & ")}
+                            </span>
+                            <span className="figures text-[14px] text-accent-dark">
+                              £{o.rent}<span className="text-[10px] text-muted"> pcm</span>
+                            </span>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted">
+                            {o.tenants.map((t) => t.situation).filter(Boolean).join(" · ") ||
+                              "No situation notes yet."}
+                          </p>
+                          {/* The agent's pick — what the landlord's page stars. */}
+                          <button
+                            type="button"
+                            onClick={() => setTopPick(topPick === i ? null : i)}
+                            className={`mt-2 flex items-center gap-1.5 text-[11px] font-semibold transition-colors ${
+                              topPick === i ? "text-accent-dark" : "text-muted hover:text-ink"
+                            }`}
+                          >
+                            <DoodleIcon name="star" size={12} />
+                            {topPick === i ? "Our top pick" : "Mark as our pick"}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="py-6 text-center text-[12px] leading-relaxed text-muted">
+                      No offers yet. They land here as viewings happen —<br />
+                      the record doesn&apos;t move on until the viewings stop.
+                    </p>
+                  )}
+                </Card>
+
+                {/* ── Right: the viewings, coming and gone. ── */}
+                <div className="space-y-4">
+                  <Card
+                    title="Upcoming viewings"
+                    icon="calendar"
+                    action={
+                      <PressButton
+                        onClick={() => setBooking(true)}
+                        className="press-ring flex items-center gap-2 rounded-full border border-ink/25 px-3.5 py-2 text-[11.5px] font-semibold"
+                      >
+                        <DoodleIcon name="calendar" size={13} />
+                        Book viewing
+                      </PressButton>
+                    }
+                  >
+                    {booked.length ? (
+                      <ul className="space-y-2.5">
+                        {booked.map((v, i) => (
+                          <li key={i} className="flex items-center gap-3 border-b border-line/40 pb-2.5 last:border-0 last:pb-0">
+                            <span className="figures w-28 shrink-0 text-[12px] text-accent-dark">{v.when}</span>
+                            <span className="min-w-0 flex-1 truncate text-[12.5px]">{v.who}</span>
+                            <Pill tone="neutral">Booked</Pill>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="py-4 text-center text-[12px] text-muted">Nothing in the diary yet.</p>
+                    )}
+                  </Card>
+
+                  <Card title="Past viewings" icon="clock">
+                    {pastViewings.length ? (
+                      <ul className="space-y-2.5">
+                        {pastViewings.map((v) => (
+                          <li key={v.id} className="flex items-center gap-3 border-b border-line/40 pb-2.5 last:border-0 last:pb-0">
+                            <span className="w-28 shrink-0 text-[11px] text-muted">
+                              {v.day === -1 ? "Yesterday" : `${-v.day} days ago`} · {v.start}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate text-[12.5px]">{v.who}</span>
+                            <Pill tone="accent">Feedback due</Pill>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="py-4 text-center text-[12px] text-muted">
+                        Nobody&apos;s been through the door yet.
+                      </p>
+                    )}
+                  </Card>
+                </div>
+              </div>
+            )}
+
+            {tab === "property" && (
+              <Card title="The property — edit what's wrong" icon="home">
+                <div className="max-w-md">
                   <label className="mb-2 block">
                     <select
                       value={type}
@@ -392,35 +571,42 @@ export default function ListingDrawer({
                     </select>
                   </label>
                   <p className="mt-3.5 border-t border-line/60 pt-2.5 text-[10px] leading-relaxed text-muted">
-                    Bedroom counts aren&apos;t in REX&apos;s listing projection, which is why
-                    the board column is blank. Captured here, they can be written back.
+                    Everything here shows in the header the moment it&apos;s set. Bedroom
+                    counts aren&apos;t in REX&apos;s listing projection; captured here, they
+                    can be written back.
                   </p>
-                </Card>
+                </div>
+              </Card>
+            )}
 
-                <Card title="Marketing" icon="megaphone">
-                  <dl className="space-y-2 text-[12.5px]">
-                    {[
-                      ["Status", status.label],
-                      ["Rent", `£${listing.rent?.toLocaleString("en-GB")} pcm`],
-                      ["Available from", listing.availableFrom ?? "Not set"],
-                      ["Photos on file", String(listing.imageCount)],
-                      ["EPC expires", listing.epcExpiry ?? "Not recorded"],
-                      ["Age in REX", listing.daysOnMarket != null ? `${listing.daysOnMarket} days` : "—"],
-                    ].map(([k, v]) => (
-                      <div key={k} className="flex justify-between gap-4 border-b border-line/40 pb-2 last:border-0 last:pb-0">
-                        <dt className="text-muted">{k}</dt>
-                        <dd className="text-right">{v}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                  {listing.imageCount === 0 && (
-                    <p className="mt-3 rounded-lg bg-accent-soft/50 px-3 py-2 text-[11px] leading-relaxed text-accent-dark">
-                      No photos. A listing without photos gets almost no portal traffic —
-                      this is the single highest-value thing to fix on this record.
-                    </p>
-                  )}
-                </Card>
-              </div>
+            {tab === "marketing" && (
+              <Card title="Marketing — edit what's wrong" icon="megaphone">
+                <dl className="max-w-md space-y-2 text-[12.5px]">
+                  {[
+                    ["Status", status.label],
+                    ["Rent", `£${listing.rent?.toLocaleString("en-GB")} pcm`],
+                    ["Available from", listing.availableFrom ?? "Not set"],
+                    ["Photos on file", String(listing.imageCount)],
+                    ["EPC expires", listing.epcExpiry ?? "Not recorded"],
+                    ["Age in REX", listing.daysOnMarket != null ? `${listing.daysOnMarket} days` : "—"],
+                  ].map(([k, v]) => (
+                    <div key={k} className="flex justify-between gap-4 border-b border-line/40 pb-2 last:border-0 last:pb-0">
+                      <dt className="text-muted">{k}</dt>
+                      <dd className="text-right">{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+                {listing.imageCount === 0 && (
+                  <p className="mt-3 max-w-md rounded-lg bg-accent-soft/50 px-3 py-2 text-[11px] leading-relaxed text-accent-dark">
+                    No photos. A listing without photos gets almost no portal traffic —
+                    this is the single highest-value thing to fix on this record.
+                  </p>
+                )}
+                <p className="mt-3.5 max-w-md border-t border-line/60 pt-2.5 text-[10px] leading-relaxed text-muted">
+                  Editing these writes back to REX once the write path is wired —
+                  read-only facts until then.
+                </p>
+              </Card>
             )}
 
             {tab === "photos" && (
@@ -447,59 +633,6 @@ export default function ListingDrawer({
               </Card>
             )}
 
-            {tab === "viewings" && (
-              <Card
-                title="Viewings"
-                icon="calendar"
-                action={
-                  <PressButton
-                    onClick={() => setBooking(true)}
-                    className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-2 text-[11.5px] font-semibold text-page"
-                  >
-                    <DoodleIcon name="calendar" size={13} />
-                    Book viewing
-                  </PressButton>
-                }
-              >
-                {booked.length ? (
-                  <ul className="space-y-3">
-                    {booked.map((v, i) => (
-                      <li key={i} className="flex items-center gap-3 border-b border-line/40 pb-3 last:border-0 last:pb-0">
-                        <span className="figures w-32 shrink-0 text-[12px] text-accent-dark">{v.when}</span>
-                        <span className="min-w-0 flex-1 truncate text-[12.5px]">{v.who}</span>
-                        <Pill tone="neutral">Booked</Pill>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="py-6 text-center text-[12px] text-muted">
-                    Nothing booked on this property yet.
-                  </p>
-                )}
-              </Card>
-            )}
-
-            {tab === "applicants" && (
-              <Card
-                title="Applicants"
-                icon="user"
-                action={
-                  <PressButton
-                    onClick={() => setEmailing(true)}
-                    className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-2 text-[11.5px] font-semibold text-page"
-                  >
-                    <DoodleIcon name="mail" size={13} />
-                    Email to tenants
-                  </PressButton>
-                }
-              >
-                <p className="text-[12.5px] leading-relaxed text-muted">
-                  Applicants arrive here from the tenant book — a tenant stays a lead until
-                  they apply, and becomes an application at that point. Emailing this
-                  property out is what starts that.
-                </p>
-              </Card>
-            )}
           </div>
         </div>
       </aside>
@@ -556,6 +689,191 @@ export default function ListingDrawer({
               Wireframe: this opens Applications. Creating the application record is a
               write that isn&apos;t wired yet.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── The offer form: rent, then everyone who'd live there. ── */}
+      {offering && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+          <button
+            aria-label="Close"
+            onClick={() => setOffering(false)}
+            className="absolute inset-0 cursor-default bg-ink/45"
+          />
+          <div className="fade-up relative flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+            <div className="shrink-0 border-b border-line/70 px-6 py-4">
+              <h2 className="text-[19px] leading-tight">Make an offer</h2>
+              <p className="mt-0.5 text-[12px] text-muted">
+                {listing.name} · asking £{listing.rent?.toLocaleString("en-GB")} pcm
+              </p>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              <label className="block">
+                <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  Rent offered, pcm
+                </span>
+                <span className="flex items-center gap-2 rounded-xl border border-line/80 px-3.5 py-2.5 focus-within:border-ink">
+                  <span className="figures text-[14px] text-muted">£</span>
+                  <input
+                    value={draftRent}
+                    onChange={(e) => setDraftRent(e.target.value.replace(/[^\d,]/g, ""))}
+                    placeholder={listing.rent ? String(listing.rent) : "0"}
+                    className="figures w-full bg-transparent text-[14px] outline-none placeholder:text-muted/50"
+                  />
+                </span>
+              </label>
+
+              {draftTenants.map((t, i) => (
+                <div key={i} className="mt-4 rounded-2xl border border-line/70 p-4">
+                  <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                    Tenant {i + 1}
+                  </p>
+                  <div className="grid gap-2.5 sm:grid-cols-3">
+                    {(
+                      [
+                        ["name", "Name"],
+                        ["number", "Number"],
+                        ["mobile", "Mobile"],
+                      ] as const
+                    ).map(([k, label]) => (
+                      <input
+                        key={k}
+                        value={t[k]}
+                        onChange={(e) =>
+                          setDraftTenants((cur) =>
+                            cur.map((x, xi) => (xi === i ? { ...x, [k]: e.target.value } : x))
+                          )
+                        }
+                        placeholder={label}
+                        className="rounded-xl border border-line/80 bg-transparent px-3 py-2.5 text-[13px] outline-none transition-colors focus:border-ink"
+                      />
+                    ))}
+                  </div>
+                  <textarea
+                    value={t.situation}
+                    onChange={(e) =>
+                      setDraftTenants((cur) =>
+                        cur.map((x, xi) => (xi === i ? { ...x, situation: e.target.value } : x))
+                      )
+                    }
+                    placeholder="Their situation — job, income, pets, anything the landlord will ask about…"
+                    rows={2}
+                    className="mt-2.5 w-full resize-none rounded-xl border border-line/80 bg-transparent px-3 py-2.5 text-[12.5px] leading-relaxed outline-none transition-colors focus:border-ink"
+                  />
+                  {draftTenants.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setDraftTenants((cur) => cur.filter((_, xi) => xi !== i))}
+                      className="mt-2 text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+                    >
+                      Remove tenant {i + 1}
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => setDraftTenants((cur) => [...cur, BLANK_TENANT])}
+                className="mt-3 flex items-center gap-2 text-[12px] font-semibold text-accent-dark transition-opacity hover:opacity-70"
+              >
+                + Add another tenant
+              </button>
+            </div>
+            <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line/70 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => setOffering(false)}
+                className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40"
+              >
+                Cancel
+              </button>
+              <PressButton
+                onClick={saveOffer}
+                className={`press-ring rounded-full px-6 py-2.5 text-[13px] font-semibold ${
+                  draftRent.trim() && draftTenants.some((t) => t.name.trim())
+                    ? "bg-accent-dark text-page"
+                    : "cursor-not-allowed bg-ink/30 text-page/60"
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <DoodleIcon name="coin" size={14} />
+                  Log the offer
+                </span>
+              </PressButton>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── The landlord's page: every application, anonymised, the agent's
+          pick starred. Sent as a link; the landlord chooses or rings in. ── */}
+      {reviewing && (
+        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+          <button
+            aria-label="Close"
+            onClick={() => setReviewing(false)}
+            className="absolute inset-0 cursor-default bg-ink/45"
+          />
+          <div className="fade-up relative flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+            <div className="shrink-0 border-b border-line/70 px-6 py-4">
+              <h2 className="text-[19px] leading-tight">What {ll.name.split(" ")[0]} will see</h2>
+              <p className="mt-0.5 text-[12px] text-muted">
+                A link to this page goes to the landlord — no names, just the substance.
+                They pick, or they ring you.
+              </p>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              <ul className="space-y-3">
+                {offers.map((o, i) => (
+                  <li
+                    key={i}
+                    className={`rounded-2xl border p-4 ${
+                      topPick === i ? "border-accent-dark bg-accent-soft/30" : "border-line/70"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="hand text-[14px]">
+                        Applicant {String.fromCharCode(65 + i)}
+                        {o.tenants.length > 1 ? ` (party of ${o.tenants.length})` : ""}
+                      </span>
+                      <span className="figures text-[16px] text-accent-dark">
+                        £{o.rent}<span className="text-[10px] text-muted"> pcm</span>
+                      </span>
+                    </div>
+                    {topPick === i && (
+                      <p className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-accent-dark">
+                        <DoodleIcon name="star" size={12} /> The agency&apos;s pick
+                      </p>
+                    )}
+                    <p className="mt-1.5 text-[12px] leading-relaxed text-muted">
+                      {o.tenants.map((t) => t.situation).filter(Boolean).join(" · ") ||
+                        "Situation notes to follow."}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReviewing(false);
+                        advance();
+                      }}
+                      className="mt-3 rounded-full border border-ink/25 px-4 py-2 text-[11.5px] font-semibold transition-colors hover:border-ink"
+                    >
+                      Landlord picked this one →
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line/70 px-6 py-4">
+              <p className="text-[10.5px] text-muted">
+                Wireframe — the real link is a page the landlord signs into.
+              </p>
+              <CopyButton
+                value={`https://tle-os.co.uk/review/${listing.id} (wireframe)`}
+                label="Copy the landlord's link"
+              />
+            </div>
           </div>
         </div>
       )}
