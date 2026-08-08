@@ -78,6 +78,7 @@ export default function Dashboard() {
         blurb="Here's what's happening with your lettings business today."
         illustrationNode={<WindowScene />}
         lineBreak="none"
+        flushRight
       />
 
       {/* ── Four across the top, outline only. */}

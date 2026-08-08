@@ -9,35 +9,6 @@ import DoodleIcon from "@/components/DoodleIcon";
  */
 
 /**
- * The pop strokes off the title's corners.
- *
- * Scribble 28 from the licensed set, not the three hand-plotted line segments
- * that were here before — real tapered marker strokes, and vector, so they
- * hold their shape at any size. Drawn through a CSS mask like the doodle icons
- * because the source is a solid fill: that way it takes currentColor and the
- * dark-mode flip is free.
- */
-function Pop({ className = "" }: { className?: string }) {
-  const url = "url(/scribbles/flick.svg)";
-  return (
-    <span
-      aria-hidden
-      className={`block h-9 w-9 bg-ink ${className}`}
-      style={{
-        WebkitMaskImage: url,
-        maskImage: url,
-        WebkitMaskRepeat: "no-repeat",
-        maskRepeat: "no-repeat",
-        WebkitMaskSize: "contain",
-        maskSize: "contain",
-        WebkitMaskPosition: "center",
-        maskPosition: "center",
-      }}
-    />
-  );
-}
-
-/**
  * How the figure meets the rule.
  *
  *   "none" — the line runs straight through. For anyone WALKING along it or
@@ -94,6 +65,9 @@ export default function PageHeader({
   illustrationHeight = 190,
   /** How the rule behaves where the figure meets it. */
   lineBreak = "dip",
+  /** Pin the figure hard into the corner instead of the standard inset —
+   *  the dashboard's window lives in the corner of the room. */
+  flushRight = false,
   /** Actions that belong to the page, sitting on the search row. */
   actions,
 }: {
@@ -104,6 +78,7 @@ export default function PageHeader({
   illustrationNode?: React.ReactNode;
   illustrationHeight?: number;
   lineBreak?: LineBreak;
+  flushRight?: boolean;
   actions?: React.ReactNode;
 }) {
   const hasArt = Boolean(illustration || illustrationNode);
@@ -121,16 +96,9 @@ export default function PageHeader({
             hasArt ? "pr-[120px] sm:pr-[165px] lg:pr-[220px] xl:pr-[250px]" : ""
           }`}
         >
-          {/* The strokes belong to the TITLE, not the block. */}
-          <div className="relative inline-block">
-            <span className="absolute -left-9 -top-5">
-              <Pop />
-            </span>
-            <span className="absolute -bottom-1 -right-10 rotate-180">
-              <Pop />
-            </span>
-            <h1 className="text-[30px] leading-tight">{title}</h1>
-          </div>
+          {/* Flick strokes used to frame the title's corners; retired
+              (James, 8 Aug 2026) — the hand face carries the voice alone. */}
+          <h1 className="text-[30px] leading-tight">{title}</h1>
           <p className="mt-2.5 max-w-md text-[13px] text-muted">{blurb}</p>
         </div>
 
@@ -158,7 +126,11 @@ export default function PageHeader({
             drawn for a figure that is no longer that size. */}
         {hasArt && (
           <div
-            className="pointer-events-none absolute bottom-0 right-5 origin-bottom-right scale-[0.5] sm:right-8 sm:scale-[0.68] lg:right-12 lg:scale-[0.88] xl:right-14 xl:scale-100"
+            className={`pointer-events-none absolute bottom-0 origin-bottom-right scale-[0.5] sm:scale-[0.68] lg:scale-[0.88] xl:scale-100 ${
+              flushRight
+                ? "right-0 sm:right-1 lg:right-2 xl:right-2"
+                : "right-5 sm:right-8 lg:right-12 xl:right-14"
+            }`}
             style={{ height: illustrationHeight }}
           >
             <div className="relative h-full">
