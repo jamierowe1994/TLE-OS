@@ -6,7 +6,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import ViewingDrawer, { type Outcome } from "@/components/ViewingDrawer";
 import { FlowTag, Ghost, Pill } from "@/components/Wire";
-import { DIARY, minutesOf, type Appt } from "@/lib/diary";
+import { DIARY, minutesOf, VIEWING_OUTCOMES, type Appt } from "@/lib/diary";
 
 /**
  * Viewings: the week's diary, and every row opens into the whole story —
@@ -15,11 +15,7 @@ import { DIARY, minutesOf, type Appt } from "@/lib/diary";
  * diary as the calendar and the dashboard, so there is one truth.
  */
 
-const OUTCOMES: Record<string, Outcome> = {
-  "d-past-clark": "Applying",
-  "d-past-williams": "Thinking",
-  "d-past-patel": "Not for them",
-};
+const OUTCOMES: Record<string, Outcome> = VIEWING_OUTCOMES;
 
 function dayName(offset: number): string {
   if (offset === 0) return "Today";
@@ -189,7 +185,7 @@ export default function Viewings() {
         <button
           type="button"
           onClick={() => setCalOpen(true)}
-          className="block-pop flex items-center gap-3 rounded-2xl border border-line/80 bg-box p-5 text-left hover:border-ink"
+          className="flex items-center gap-3 rounded-2xl border border-line/80 bg-box p-5 text-left transition-colors hover:border-ink"
         >
           <DoodleIcon name="calendar" size={22} className="shrink-0 text-accent-dark" />
           <span className="min-w-0">

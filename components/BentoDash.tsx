@@ -393,7 +393,7 @@ export default function BentoDash({
                         ? "ring-2 ring-accent-dark/60"
                         : ""
                     }`
-                  : "block-pop fade-up overflow-hidden border-line/80 hover:border-ink"
+                  : "fade-up overflow-hidden border-line/80 hover:border-ink/60"
               }`}
               style={{
                 gridColumn: `span ${item.w} / span ${item.w}`,

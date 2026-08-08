@@ -6,7 +6,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import DiaryCalendar from "@/components/DiaryCalendar";
 import LeadSourceChart from "@/components/LeadSourceChart";
 import { FlowTag, Pill } from "@/components/Wire";
-import { todaysAppts, DIARY } from "@/lib/diary";
+import { todaysAppts, DIARY, VIEWING_OUTCOMES } from "@/lib/diary";
 import { dueWithin, CERT_META } from "@/lib/compliance";
 import { LEADS, leadSide } from "@/lib/leads-sample";
 
@@ -136,15 +136,22 @@ export function LineGraph({ data, tall = false }: { data: number[]; tall?: boole
   const line = pts.map(([x, y], i) => `${i ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
   const last = pts[pts.length - 1];
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} preserveAspectRatio="none">
-      <path
-        d={`${line} L ${last[0]} ${H} L 4 ${H} Z`}
-        fill="var(--accent-soft)"
-        opacity="0.55"
+    <span className="relative block w-full" style={{ height: H }}>
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full" preserveAspectRatio="none">
+        <path
+          d={`${line} L ${last[0]} ${H} L 4 ${H} Z`}
+          fill="var(--accent-soft)"
+          opacity="0.55"
+        />
+        <path d={line} fill="none" stroke="var(--accent-dark)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      </svg>
+      {/* The "now" dot lives OUTSIDE the stretched svg — a circle drawn
+          inside preserveAspectRatio="none" is an oval, and James saw it. */}
+      <span
+        className="absolute h-[7px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-dark"
+        style={{ left: `${(last[0] / W) * 100}%`, top: `${(last[1] / H) * 100}%` }}
       />
-      <path d={line} fill="none" stroke="var(--accent-dark)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={last[0]} cy={last[1]} r="3.4" fill="var(--accent-dark)" />
-    </svg>
+    </span>
   );
 }
 
@@ -878,24 +885,38 @@ export const WIDGETS: Record<string, WidgetDef> = {
   },
 
   "viewings-week": {
-    label: "Viewings this week", icon: "key", hint: "who's going through doors",
+    label: "Viewings", icon: "key", hint: "coming up — and what the last ones said",
     defaultW: 1, defaultH: 1,
+    sizes: { s: [1, 1], m: [1, 2], l: [2, 2] },
     render: (w, h) => {
       const week = DIARY.filter((a) => a.kind === "viewing" && a.day >= 0 && a.day <= 6);
+      const past = DIARY.filter((a) => a.kind === "viewing" && a.day < 0).sort((a, b) => b.day - a.day);
+      const rows = (list: typeof week, upcoming: boolean) =>
+        list.slice(0, h >= 2 ? 4 : 2).map((v) => ({
+          a: upcoming ? (v.day === 0 ? v.start : `+${v.day}d`) : `${-v.day}d ago`,
+          b: v.what.replace(/^[^—]+—\s*/, ""),
+          c: upcoming ? v.who : (VIEWING_OUTCOMES[v.id] ?? "feedback due"),
+        }));
       return (
         <>
-          <Head icon="key" label="Viewings this week" />
+          <Head icon="key" label="Viewings" />
           {w === 1 && h === 1 ? (
-            <BigCount value={String(week.length)} hint={`next: ${week[0]?.start ?? "—"} today`} />
+            <BigCount value={String(week.length)} hint={`${past.length} done — ${Object.values(VIEWING_OUTCOMES).filter((o) => o === "Applying").length} applying`} />
           ) : (
-            <RowList
-              rows={week.map((v) => ({
-                a: v.day === 0 ? v.start : `+${v.day}d`,
-                b: v.what.replace(/^[^—]+—\s*/, ""),
-                c: v.who,
-              }))}
-              max={h >= 2 ? 7 : 3}
-            />
+            <div className={w >= 2 ? "mt-4 grid grid-cols-2 gap-5" : "mt-4"}>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Coming up</p>
+                <RowList rows={rows(week, true)} max={h >= 2 ? 4 : 2} />
+              </div>
+              <div className={w >= 2 ? "" : "mt-4"}>
+                {/* The ones that HAPPENED — feedback is what landlords wait on,
+                    so the past earns equal billing with the future. */}
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                  Been — what they said
+                </p>
+                <RowList rows={rows(past, false)} max={h >= 2 ? 4 : 2} />
+              </div>
+            </div>
           )}
         </>
       );

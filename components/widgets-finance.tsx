@@ -214,13 +214,16 @@ export const FINANCE_WIDGETS: Record<string, WidgetDef> = {
   earnings: WIDGETS.earnings,
 };
 
+/* Squared off deliberately: fees 2×2 anchors the left, the four small
+   boxes stack the right two columns, and licence income runs full-width
+   underneath — no ragged edge anywhere (James, 8 Aug 2026). */
 export const FINANCE_DEFAULT_LAYOUT = [
   { id: "f1", type: "fees-month", w: 2, h: 2 },
   { id: "f2", type: "management-fees", w: 1, h: 1 },
   { id: "f3", type: "setup-fees", w: 1, h: 1 },
-  { id: "f4", type: "licence-income", w: 2, h: 1 },
   { id: "f5", type: "money-held", w: 1, h: 1 },
   { id: "f6", type: "arrears", w: 1, h: 1 },
+  { id: "f4", type: "licence-income", w: 4, h: 1 },
 ];
 
 export const FINANCE_TRAY_GROUPS = [

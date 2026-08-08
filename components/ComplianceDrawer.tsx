@@ -72,7 +72,7 @@ export default function ComplianceDrawer({
         }`}
       />
       <aside
-        className={`absolute inset-y-0 right-0 flex w-full max-w-xl flex-col bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] ${
+        className={`absolute inset-y-0 right-0 flex overflow-hidden rounded-l-2xl w-full max-w-xl flex-col bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] ${
           shown ? "translate-x-0" : "translate-x-full"
         }`}
         style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}

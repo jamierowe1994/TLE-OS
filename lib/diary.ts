@@ -185,3 +185,10 @@ export function todaysAppts(): Appt[] {
     (a, b) => minutesOf(a.start) - minutesOf(b.start)
   );
 }
+
+/** Feedback on past viewings — the wireframe's stand-in for REX outcomes. */
+export const VIEWING_OUTCOMES: Record<string, "Applying" | "Thinking" | "Not for them"> = {
+  "d-past-clark": "Applying",
+  "d-past-williams": "Thinking",
+  "d-past-patel": "Not for them",
+};
