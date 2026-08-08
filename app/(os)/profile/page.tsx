@@ -5,7 +5,10 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import { PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
-import { applyTheme, readTheme, writeTheme, type ThemeChoice } from "@/lib/theme";
+import {
+  applySurface, applyTheme, readSurface, readTheme, writeSurface, writeTheme,
+  type SurfaceChoice, type ThemeChoice,
+} from "@/lib/theme";
 
 /**
  * The profile: who this agent is, how their OS looks, what keeps THEM legal,
@@ -66,6 +69,7 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
   const [saved, setSaved] = useState(false);
   const [theme, setTheme] = useState<ThemeChoice>("auto");
+  const [surface, setSurface] = useState<SurfaceChoice>("medium");
   const [accent, setAccent] = useState("");
   const [connections, setConnections] = useState(CONNECTIONS);
 
@@ -75,8 +79,15 @@ export default function ProfilePage() {
       if (raw) setProfile({ ...DEFAULT_PROFILE, ...JSON.parse(raw) });
     } catch { /* default profile */ }
     setTheme(readTheme() ?? "auto");
+    setSurface(readSurface());
     setAccent(localStorage.getItem("os-accent") ?? "");
   }, []);
+
+  function pickSurface(s: SurfaceChoice) {
+    setSurface(s);
+    writeSurface(s);
+    applySurface(s);
+  }
 
   function save(next: Profile) {
     setProfile(next);
@@ -223,6 +234,38 @@ export default function ProfilePage() {
             <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
               Automatic follows the clock, not the operating system — the screen softens
               from 7pm to 7am.
+            </p>
+
+            <p className={`${label} mt-7`}>Surface</p>
+            <div className="flex gap-2">
+              {(
+                [
+                  { id: "light", name: "Light", dot: "#ffffff" },
+                  { id: "medium", name: "Medium", dot: "#f2f0eb" },
+                ] as const
+              ).map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => pickSurface(s.id)}
+                  className={`flex flex-1 items-center justify-center gap-2.5 rounded-xl border px-3 py-3 text-[12.5px] font-medium transition-colors ${
+                    surface === s.id
+                      ? "border-accent-dark bg-accent-soft text-accent-dark"
+                      : "border-line/70 text-muted hover:text-ink"
+                  }`}
+                >
+                  <span
+                    className="h-5 w-5 rounded-full border border-ink/15"
+                    style={{ backgroundColor: s.dot }}
+                  />
+                  {s.name}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
+              The page&apos;s paper: Medium is the warm eggshell, Light is plain white.
+              The jury&apos;s out — one of these will eventually win and the other goes.
+              Daylight only; the dark theme is its own paper.
             </p>
 
             <p className={`${label} mt-7`}>Your accent</p>

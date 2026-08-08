@@ -51,6 +51,17 @@
 }
 
 /* ---------------------------------------------------------------------------
+   The surface toggle: "medium" is the founding eggshell above; "light" is
+   plain white. Two options on purpose — the beige split the room, and one
+   of these will be removed once the room decides. Declared BEFORE the dark
+   block so that dark (same specificity, later in the file) always wins when
+   both attributes are present.
+--------------------------------------------------------------------------- */
+:root[data-surface="light"] {
+  --page: #ffffff;
+}
+
+/* ---------------------------------------------------------------------------
    Dark mode. Charcoal, never black — a true #000 makes the hand-drawn linework
    look like it's floating in a void, and the whole product is built on the idea
    of ink on paper. So: a warm-neutral charcoal page, a slightly lifted card,
