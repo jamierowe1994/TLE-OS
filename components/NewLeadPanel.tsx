@@ -37,6 +37,33 @@ const EMPTY: Draft = {
   source: "", enquiry: "Letting", notes: "",
 };
 
+/** What /api/dossier hands back — every field optional, absence is normal. */
+type Dossier = {
+  ok: boolean;
+  uprn?: string;
+  sqft?: number;
+  habitableRooms?: number;
+  beds?: number;
+  baths?: number;
+  epc?: { rating: string; date: string; current: boolean };
+  lastSale?: { price: number; date: string };
+  lastRent?: { price: number; date: string };
+  lastListing?: {
+    date: string; price: number; kind: "rent" | "sale";
+    url: string | null; image: string | null;
+  };
+  currentListing?: {
+    confidence: "exact" | "street"; price: string | null; agent: string | null;
+    status: string | null; url: string | null;
+  };
+};
+
+/** UK postcode, fished out of a formatted address. */
+function postcodeOf(address: string): string | null {
+  const m = address.match(/([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})/i);
+  return m ? m[1].toUpperCase() : null;
+}
+
 const NEXT_ACTIONS = [
   { label: "Schedule a viewing", icon: "calendar" },
   { label: "Send an email", icon: "mail" },
@@ -79,6 +106,12 @@ export default function NewLeadPanel({
   const [d, setD] = useState<Draft>(EMPTY);
   const [geo, setGeo] = useState<ResolvedAddress | null>(null);
   const [saved, setSaved] = useState(false);
+  // The fork: who is this lead? Everything downstream hangs off it.
+  const [kind, setKind] = useState<null | "tenant" | "landlord">(null);
+  const [dossier, setDossier] = useState<Dossier | null>(null);
+  const [dossierBusy, setDossierBusy] = useState(false);
+  const [beds, setBeds] = useState(0);
+  const [baths, setBaths] = useState(0);
 
   // The shortlist, and the picker you drag from.
   const [picked, setPicked] = useState<string[]>([]);
@@ -100,6 +133,10 @@ export default function NewLeadPanel({
     setSaved(false);
     setPicked([]);
     setPicking(false);
+    setKind(null);
+    setDossier(null);
+    setDossierBusy(false);
+    setBeds(0); setBaths(0);
     const id = requestAnimationFrame(() => setShown(true));
     return () => cancelAnimationFrame(id);
   }, [open]);
@@ -148,6 +185,33 @@ export default function NewLeadPanel({
 
   const ready = d.name.trim() && d.mobile.trim();
   const set = (k: keyof Draft) => (v: string) => setD((cur) => ({ ...cur, [k]: v }));
+
+  /** The address resolved — go and read the property's history. Runs once,
+      right at the start, so the agent never has to remember to ask. */
+  async function runDossier(g: ResolvedAddress) {
+    const pc = g.postcode ?? postcodeOf(g.address);
+    if (!pc) return;
+    setDossierBusy(true);
+    setDossier(null);
+    try {
+      const r = await fetch(
+        `/api/dossier?address=${encodeURIComponent(g.address)}&postcode=${encodeURIComponent(pc)}`,
+        { cache: "no-store" }
+      );
+      const jj: Dossier = await r.json();
+      if (jj.ok) {
+        setDossier(jj);
+        // Pre-populate, don't dictate: properties change, so the steppers
+        // stay editable — but the agent starts from knowledge, not zero.
+        if (jj.beds) setBeds(jj.beds);
+        if (jj.baths) setBaths(jj.baths);
+      }
+    } catch {
+      /* a dossier that fails is simply a dossier that isn't shown */
+    } finally {
+      setDossierBusy(false);
+    }
+  }
   const shortlist = LISTINGS.filter((l) => picked.includes(l.id));
   const available = LISTINGS.filter((l) => !picked.includes(l.id));
 
@@ -229,6 +293,280 @@ export default function NewLeadPanel({
                 >
                   Done for now
                 </button>
+              </div>
+            </div>
+          ) : kind === null ? (
+            /* ── The fork. Two halves, one question — who's ringing? A tenant
+                 goes to the person-first form; a landlord goes ADDRESS-first,
+                 because for a landlord the property IS the enquiry, and the
+                 dossier can be reading its history while the phone call is
+                 still on pleasantries. ── */
+            <div className="mx-auto flex h-full max-w-3xl flex-col gap-4 py-2">
+              {(
+                [
+                  {
+                    k: "tenant" as const,
+                    title: "Tenant",
+                    blurb: "Someone looking for a home — budget, area, viewings.",
+                    art: "/illustrations/notioly/home-caring.svg",
+                  },
+                  {
+                    k: "landlord" as const,
+                    title: "Landlord",
+                    blurb: "Someone with a property — we'll look it up as you type the address.",
+                    art: "/illustrations/notioly/moving.svg",
+                  },
+                ]
+              ).map((c) => (
+                <PressButton
+                  key={c.k}
+                  onClick={() => {
+                    setKind(c.k);
+                    if (c.k === "landlord") set("enquiry")("Landlord");
+                  }}
+                  className="block-pop flex min-h-0 flex-1 items-center gap-6 rounded-3xl border border-line/80 bg-page p-8 text-left hover:border-ink"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={c.art} alt="" aria-hidden className="art h-28 w-28 shrink-0" />
+                  <span className="min-w-0">
+                    <span className="hand block text-[24px] leading-tight">{c.title}</span>
+                    <span className="mt-1 block text-[13px] leading-relaxed text-muted">
+                      {c.blurb}
+                    </span>
+                  </span>
+                  <span className="ml-auto text-[20px] text-muted">→</span>
+                </PressButton>
+              ))}
+            </div>
+          ) : kind === "landlord" ? (
+            /* ── Landlord: address first, everything else follows from it. ── */
+            <div className="fade-up mx-auto max-w-3xl space-y-4">
+              <Section title="What's the address?" icon="home">
+                <AddressField
+                  value={d.address}
+                  onChange={set("address")}
+                  onResolved={(g) => {
+                    setGeo(g);
+                    void runDossier(g);
+                  }}
+                />
+                {dossierBusy && (
+                  <p className="mt-3 flex items-center gap-2.5 text-[12px] text-muted">
+                    <span className="block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+                    Reading the property&apos;s history…
+                  </p>
+                )}
+              </Section>
+
+              {dossier && (
+                <Section title="What we found" icon="analytics">
+                  {dossier.lastListing?.image && (
+                    <a
+                      href={dossier.lastListing.url ?? undefined}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mb-4 flex items-center gap-4 rounded-2xl border border-line/70 p-3 transition-colors hover:border-ink/40"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={dossier.lastListing.image}
+                        alt=""
+                        className="h-20 w-28 shrink-0 rounded-xl object-cover"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-semibold">
+                          {dossier.lastListing.kind === "rent" ? "Last let" : "Last marketed"} —{" "}
+                          £{dossier.lastListing.price.toLocaleString("en-GB")}
+                          {dossier.lastListing.kind === "rent" ? "" : ""}
+                        </span>
+                        <span className="block text-[11px] text-muted">
+                          {dossier.lastListing.date} · Zoopla — click for the listing and photos
+                        </span>
+                      </span>
+                      <span className="ml-auto shrink-0 text-[13px] text-muted">→</span>
+                    </a>
+                  )}
+
+                  {/* Every fact wears a tag. Absent facts wear nothing. */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {dossier.currentListing && (
+                      <a
+                        href={dossier.currentListing.url ?? undefined}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={`rounded-full px-3 py-1.5 text-[11.5px] font-semibold transition-opacity hover:opacity-80 ${
+                          dossier.currentListing.confidence === "exact"
+                            ? "bg-accent-dark text-page"
+                            : "bg-accent-soft text-accent-dark"
+                        }`}
+                      >
+                        {dossier.currentListing.confidence === "exact"
+                          ? `On the market now — ${dossier.currentListing.agent ?? "another agent"}${
+                              dossier.currentListing.price ? ` · ${dossier.currentListing.price}` : ""
+                            } →`
+                          : `A live listing on this road${
+                              dossier.currentListing.agent ? ` — ${dossier.currentListing.agent}` : ""
+                            } →`}
+                      </a>
+                    )}
+                    {dossier.lastRent && (
+                      <span className="rounded-full border border-line/80 px-3 py-1.5 text-[11.5px]">
+                        Last rented at £{dossier.lastRent.price.toLocaleString("en-GB")} ·{" "}
+                        {dossier.lastRent.date.slice(0, 4)}
+                      </span>
+                    )}
+                    {dossier.lastSale && (
+                      <span className="rounded-full border border-line/80 px-3 py-1.5 text-[11.5px]">
+                        Sold £{dossier.lastSale.price.toLocaleString("en-GB")} ·{" "}
+                        {dossier.lastSale.date.slice(0, 4)}
+                      </span>
+                    )}
+                    {dossier.epc && (
+                      <span
+                        className={`rounded-full border px-3 py-1.5 text-[11.5px] ${
+                          dossier.epc.current
+                            ? "border-line/80"
+                            : "border-accent-dark/50 text-accent-dark"
+                        }`}
+                      >
+                        EPC {dossier.epc.rating} · {dossier.epc.date?.slice(0, 4)}
+                        {dossier.epc.current ? " · in date, filed to Documents" : " · EXPIRED"}
+                      </span>
+                    )}
+                    {dossier.sqft && (
+                      <span className="rounded-full border border-line/80 px-3 py-1.5 text-[11.5px]">
+                        {dossier.sqft.toLocaleString("en-GB")} sq ft
+                      </span>
+                    )}
+                    {dossier.uprn && (
+                      <span
+                        className="rounded-full border border-dashed border-line px-3 py-1.5 text-[10.5px] text-muted"
+                        title="Matched to the national property register — lookups are exact, not guessed"
+                      >
+                        UPRN matched
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Pre-populated, editable — properties change. */}
+                  <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-line/60 pt-4">
+                    {(
+                      [
+                        { label: "Bedrooms", value: beds, setV: setBeds },
+                        { label: "Bathrooms", value: baths, setV: setBaths },
+                      ] as const
+                    ).map((st) => (
+                      <span key={st.label} className="flex items-center gap-3">
+                        <span className="text-[12.5px]">{st.label}</span>
+                        <span className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => st.setV(Math.max(0, st.value - 1))}
+                            className="flex h-6 w-6 items-center justify-center rounded-full border border-line/80 text-[13px] leading-none text-muted transition-colors hover:border-ink/40 hover:text-ink"
+                          >
+                            −
+                          </button>
+                          <span className="figures w-6 text-center text-[13px]">{st.value}</span>
+                          <button
+                            type="button"
+                            onClick={() => st.setV(st.value + 1)}
+                            className="flex h-6 w-6 items-center justify-center rounded-full border border-line/80 text-[13px] leading-none text-muted transition-colors hover:border-ink/40 hover:text-ink"
+                          >
+                            +
+                          </button>
+                        </span>
+                      </span>
+                    ))}
+                    <span className="text-[10.5px] text-muted">
+                      Pre-filled from the last listing — correct it if the property&apos;s changed.
+                    </span>
+                  </div>
+                </Section>
+              )}
+
+              <Section title="Contact details" icon="user">
+                <div className="space-y-3.5">
+                  <label className="block">
+                    <span className={label}>Name</span>
+                    <input
+                      value={d.name}
+                      onChange={(e) => set("name")(e.target.value)}
+                      placeholder="Chloe Adams"
+                      className={field}
+                    />
+                  </label>
+                  <div className="grid gap-3.5 sm:grid-cols-2">
+                    <label className="block">
+                      <span className={label}>Mobile</span>
+                      <input
+                        value={d.mobile}
+                        onChange={(e) => set("mobile")(e.target.value)}
+                        placeholder="07712 345 678"
+                        inputMode="tel"
+                        className={field}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className={label}>Email</span>
+                      <input
+                        value={d.email}
+                        onChange={(e) => set("email")(e.target.value)}
+                        placeholder="chloe@email.com"
+                        inputMode="email"
+                        className={field}
+                      />
+                    </label>
+                  </div>
+                  <label className="block">
+                    <span className={label}>Source</span>
+                    <select
+                      value={d.source}
+                      onChange={(e) => set("source")(e.target.value)}
+                      className={field}
+                    >
+                      <option value="">How did they find us?</option>
+                      {LEAD_SOURCES.map((g) => (
+                        <optgroup key={g.group} label={g.group}>
+                          {g.options.map((o) => (
+                            <option key={o} value={o}>
+                              {o}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className={label}>Notes</span>
+                    <textarea
+                      value={d.notes}
+                      onChange={(e) => set("notes")(e.target.value)}
+                      rows={3}
+                      placeholder="What did they say? Timescales, why they're moving agent, what they were promised…"
+                      className={`${field} resize-none leading-relaxed`}
+                    />
+                  </label>
+                </div>
+              </Section>
+
+              <div>
+                <PressButton
+                  onClick={() => {
+                    if (!ready) return;
+                    onCreated?.(d);
+                    setSaved(true);
+                  }}
+                  className={`w-full rounded-xl py-3.5 text-[14px] font-semibold transition-opacity ${
+                    ready ? "bg-ink text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
+                  }`}
+                >
+                  Add landlord lead
+                </PressButton>
+                {!ready && (
+                  <p className="mt-2 text-center text-[11px] text-muted">
+                    A name and a mobile is enough to start.
+                  </p>
+                )}
               </div>
             </div>
           ) : (
