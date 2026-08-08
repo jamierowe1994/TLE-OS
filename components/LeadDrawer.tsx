@@ -115,10 +115,12 @@ function AppraisalForm({
 }: {
   leadName: string;
   onClose: () => void;
-  onSave: (note: string) => void;
+  /** The write-up, and when the follow-up call happens ("" = none set). */
+  onSave: (note: string, followUp: string) => void;
 }) {
   const [value, setValue] = useState("");
   const [text, setText] = useState("");
+  const [followUp, setFollowUp] = useState("");
   const first = leadName.split(" ")[0];
 
   return (
@@ -150,69 +152,37 @@ function AppraisalForm({
           className="w-full resize-none rounded-xl border border-line/80 bg-transparent px-3 py-2.5 text-[12.5px] leading-relaxed outline-none focus:border-ink"
         />
       </label>
+      {/* The follow-up is set HERE, not on a separate step — one visit, one
+          panel. An appraisal recorded without a follow-up date is a lead
+          quietly handed to whichever agent rings them first. */}
+      <label className="mt-3 block">
+        <span className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-muted">
+          Follow-up call
+        </span>
+        <input
+          type="date"
+          value={followUp}
+          onChange={(e) => setFollowUp(e.target.value)}
+          className="figures w-full rounded-xl border border-line/80 bg-transparent px-3 py-2.5 text-[13.5px] outline-none focus:border-ink"
+        />
+      </label>
       <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
         Bedrooms, bathrooms and type go in the property panel on the record — fill them
-        while it&apos;s fresh. This write-up saves as a note.
-      </p>
-      <div className="mt-4 flex justify-end">
-        <PressButton
-          onClick={() => onSave(value.trim() ? `Appraisal — ${value.trim()}. ${text}` : text)}
-          className="press-ring rounded-full bg-accent-dark px-6 py-2.5 text-[13px] font-semibold text-page"
-        >
-          Save & move to follow-up
-        </PressButton>
-      </div>
-    </StepModal>
-  );
-}
-
-/**
- * The MA follow-up is a promise to ring somebody on a day. So it asks for the
- * day, makes a task of it, and gets out of the way. The presentation that
- * gets sent along links in later.
- */
-function FollowUpForm({
-  leadName,
-  onClose,
-  onSet,
-}: {
-  leadName: string;
-  onClose: () => void;
-  onSet: (when: string) => void;
-}) {
-  const [date, setDate] = useState("");
-  const first = leadName.split(" ")[0];
-
-  return (
-    <StepModal
-      title="Set the follow-up"
-      subtitle={`When are you ringing ${first} back?`}
-      onClose={onClose}
-    >
-      <input
-        type="date"
-        value={date}
-        onChange={(e) => setDate(e.target.value)}
-        className="figures w-full rounded-xl border border-line/80 bg-transparent px-3 py-2.5 text-[13.5px] outline-none focus:border-ink"
-      />
-      <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
-        Becomes a task on this record. The appraisal presentation to send with it links
-        in later.
+        while it&apos;s fresh. The write-up saves as a note; the follow-up becomes a task.
       </p>
       <div className="mt-4 flex justify-end">
         <PressButton
           onClick={() => {
-            if (!date) return;
-            const label = new Date(`${date}T09:00`).toLocaleDateString("en-GB", {
-              weekday: "short", day: "numeric", month: "short",
-            });
-            onSet(label);
+            const when = followUp
+              ? new Date(`${followUp}T09:00`).toLocaleDateString("en-GB", {
+                  weekday: "short", day: "numeric", month: "short",
+                })
+              : "";
+            onSave(value.trim() ? `Appraisal — ${value.trim()}. ${text}` : text, when);
           }}
-          className={`press-ring rounded-full px-6 py-2.5 text-[13px] font-semibold ${
-            date ? "bg-accent-dark text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
-          }`}
+          className="press-ring rounded-full bg-accent-dark px-6 py-2.5 text-[13px] font-semibold text-page"
         >
-          Set follow-up
+          Save appraisal & follow-up
         </PressButton>
       </div>
     </StepModal>
@@ -256,7 +226,9 @@ export default function LeadDrawer({
   // The booker serves two jobs; which one is decided at fire time.
   const [bookMode, setBookMode] = useState<"viewing" | "appraisal">("viewing");
   const [appraising, setAppraising] = useState(false);
-  const [following, setFollowing] = useState(false);
+  // Terms out for signature: the record WAITS here rather than advancing —
+  // it moves itself on when the signed copy comes back.
+  const [termsOut, setTermsOut] = useState(false);
 
   useEffect(() => {
     if (!detail) return;
@@ -269,6 +241,7 @@ export default function LeadDrawer({
     setAdded([]);
     setJustAdded(false);
     setBooked([]);
+    setTermsOut(false);
   }, [detail]);
 
   useEffect(() => {
@@ -325,7 +298,6 @@ export default function LeadDrawer({
     if (here.action === "viewing") { setBookMode("viewing"); setBooking(true); }
     else if (here.action === "appraise") { setBookMode("appraisal"); setBooking(true); }
     else if (here.action === "appraisal-form") setAppraising(true);
-    else if (here.action === "followup") setFollowing(true);
     else if (here.action === "sign") setSigning(true);
     else if (here.action === "send") setEmailing(true);
     else if (here.action === "handoff") setHandingOff(true);
@@ -893,7 +865,25 @@ export default function LeadDrawer({
                 )}
               </div>
 
-              {!stalled && (
+              {!stalled && here.id === "terms" && termsOut ? (
+                /* Sent, not signed. The process waits — pressing on would be
+                   marketing a property with no instruction behind it. It
+                   moves itself the moment the signed copy lands; the button
+                   below stands in for the DocuSign webhook until it's wired. */
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <p className="flex items-center gap-2 rounded-full border border-dashed border-accent-dark/50 px-5 py-2.5 text-[12.5px] font-medium text-accent-dark">
+                    <DoodleIcon name="clock" size={14} />
+                    Out for signature — waiting
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => { setTermsOut(false); advance(); }}
+                    className="text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+                  >
+                    Signed copy came back (wireframe)
+                  </button>
+                </div>
+              ) : !stalled && (
                 <div className="flex shrink-0 flex-col items-end gap-2">
                   <PressButton
                     onClick={fire}
@@ -1027,30 +1017,20 @@ export default function LeadDrawer({
         <AppraisalForm
           leadName={lead.name}
           onClose={() => setAppraising(false)}
-          onSave={(note) => {
+          onSave={(note, followUp) => {
             if (note.trim()) {
               setNotes((n) => [
                 { id: `n${Date.now()}`, author: "You", when: "Just now", text: note.trim() },
                 ...n,
               ]);
             }
+            if (followUp) {
+              setTasks((cur) => [
+                { id: `t${Date.now()}`, title: "MA follow-up call", due: followUp, done: false },
+                ...cur,
+              ]);
+            }
             setAppraising(false);
-            advance();
-          }}
-        />
-      )}
-
-      {/* ── Setting the MA follow-up: a date, a task, done. ── */}
-      {following && (
-        <FollowUpForm
-          leadName={lead.name}
-          onClose={() => setFollowing(false)}
-          onSet={(when) => {
-            setTasks((cur) => [
-              { id: `t${Date.now()}`, title: "MA follow-up call", due: when, done: false },
-              ...cur,
-            ]);
-            setFollowing(false);
             advance();
           }}
         />
@@ -1104,7 +1084,10 @@ export default function LeadDrawer({
         document={signDoc}
         merges={signMerges}
         signers={signers}
-        onSent={() => here.action === "sign" && advance()}
+        onSent={() => {
+          if (here.id === "terms") setTermsOut(true);
+          else if (here.action === "sign") advance();
+        }}
       />
     </div>
   );

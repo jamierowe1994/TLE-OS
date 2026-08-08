@@ -103,9 +103,13 @@ export const TENANT_TRACK: JourneyStep[] = [
  * listing. These labels are the business's own words, not my reading.
  */
 export const LANDLORD_TRACK: JourneyStep[] = [
-  /* Starts at LEAD, not at appraisal — James's correction, 7 Aug 2026. A lead
-     isn't an appraisal yet: someone has to ring the landlord, agree a date and
-     get the visit in the diary, and that's real work the rail must show. */
+  /* Starts at LEAD — a lead isn't an appraisal yet: someone has to ring the
+     landlord, agree a date and get the visit in the diary.
+
+     Reshaped 8 Aug 2026 (James): appraisal and its follow-up are ONE stage —
+     recording the appraisal sets the follow-up inside the same panel.
+     Take-on & photos returns, after terms. AML and compliance merge into one
+     box, and that box carries the push. Fewer dots, each one heavier. */
   {
     id: "lead", label: "Lead", icon: "target",
     title: "New landlord lead",
@@ -117,22 +121,22 @@ export const LANDLORD_TRACK: JourneyStep[] = [
     id: "appraisal", label: "Appraisal", icon: "calendar",
     title: "Market appraisal",
     detail:
-      "Go over, walk the property, and land on the value together. Afterwards, write down what you found — the property panel fills from it.",
+      "Go over, walk the property, and land on the value together. Record what you found — and set the follow-up call in the same breath, because that call is where instructions are won.",
     action: "appraisal-form", cta: "Record the appraisal",
-  },
-  {
-    id: "followup", label: "MA follow-up", icon: "call",
-    title: "Appraisal follow-up",
-    detail:
-      "The call after the visit — this is where instructions are actually won. Set when you'll make it; the presentation to send links in later.",
-    action: "followup", cta: "Set the follow-up",
   },
   {
     id: "terms", label: "Terms", icon: "file-contract",
     title: "Terms of business",
     detail:
-      "Out for signature with the fee schedule and service level. Nothing goes on the market before this — it's the instruction.",
+      "Out for signature with the fee schedule and service level. Once sent, the record WAITS here and moves itself on when the signed copy comes back.",
     action: "sign", cta: "Send the terms",
+  },
+  {
+    id: "takeon", label: "Take-on & photos", icon: "megaphone",
+    title: "Take-on & photos",
+    detail:
+      "The property's details and its photographs, captured while you're in the building anyway. Drop photos onto this record — they're stored, and the listing builds from them.",
+    action: "none", cta: "Take-on & photos done",
   },
   {
     id: "id", label: "ID & ownership", icon: "doc",
@@ -141,22 +145,14 @@ export const LANDLORD_TRACK: JourneyStep[] = [
       "Photo ID plus proof they actually own the property — title register or Land Registry. Letting a property for somebody who doesn't own it is a story that ends in court.",
     action: "none", cta: "Verify ID & ownership",
   },
+  /* AML and property compliance share the last box — one final checks stage,
+     and its button IS the door: the moment everything clears, the record
+     stops being a person and becomes a listing. */
   {
-    id: "aml", label: "AML", icon: "shield",
-    title: "AML check",
+    id: "checks", label: "AML & Compliance", icon: "shield",
+    title: "AML & property compliance",
     detail:
-      "Anti-money-laundering due diligence on the landlord. A legal duty, not paperwork theatre — and it can't be backfilled after the tenancy starts.",
-    action: "none", cta: "Run the AML check",
-  },
-  /* The last step IS the push. There's no separate "listing & photos" stage —
-     building the listing happens on the listing side, and a dot that only
-     existed to say "go over there" was a dot wasted. Compliance completes,
-     and the same breath pushes the record over. */
-  {
-    id: "compliance", label: "Compliance", icon: "checklist",
-    title: "Property compliance",
-    detail:
-      "EPC, gas safety, EICR, and the licence if it needs one. The moment these are in, this stops being a person and becomes a listing.",
+      "Anti-money-laundering due diligence on the landlord, plus EPC, gas safety, EICR and any licence. When these clear, push — there's nothing left that's about the person.",
     action: "handoff", cta: "Push to a listing",
   },
 ];
@@ -225,10 +221,10 @@ export function startingStep(lead: Lead): number {
     case "New": return 0;
     case "Contacted": return 1;
     case "Waiting": return tenant ? 2 : 1;
-    // Landlord indices follow the REAL track: 0 lead, 1 appraisal,
-    // 2 MA follow-up, 3 terms, 4 ID, 5 AML, 6 compliance + push.
+    // Landlord indices: 0 lead, 1 appraisal, 2 terms, 3 take-on,
+    // 4 ID, 5 AML & compliance + push.
     case "Viewing booked": return tenant ? 3 : 1;
-    case "Qualified": return tenant ? 5 : 5;
+    case "Qualified": return tenant ? 5 : 4;
     case "Not proceeding": return 1;
     default: return 0;
   }

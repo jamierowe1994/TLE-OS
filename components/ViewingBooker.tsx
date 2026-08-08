@@ -5,6 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DoneTick, PressButton } from "@/components/Bits";
 import SendFlow, { type Outgoing } from "@/components/SendFlow";
+import { dayKey, useForecast } from "@/lib/weather";
 import { landlordFor } from "@/lib/journey";
 
 /**
@@ -109,6 +110,11 @@ export default function ViewingBooker({
   }, [open, onClose]);
 
   const cells = useMemo(() => monthGrid(month), [month]);
+
+  // The forecast rides the calendar: picking a day for a visit, you can see
+  // whether it'll be a nice one. Fetched only while the booker is open, and
+  // its absence changes nothing but the corner of each cell.
+  const forecast = useForecast(open);
 
   if (!open) return null;
 
@@ -390,6 +396,11 @@ export default function ViewingBooker({
                           type="button"
                           disabled={past}
                           onClick={() => setDay(c)}
+                          title={
+                            forecast[dayKey(c)] && !past
+                              ? `${forecast[dayKey(c)].word}, ${forecast[dayKey(c)].temp}°`
+                              : undefined
+                          }
                           className={`figures aspect-square rounded-xl border text-[13px] transition-all ${
                             picked
                               ? "border-accent-dark bg-accent-dark font-semibold text-page"
@@ -400,7 +411,16 @@ export default function ViewingBooker({
                                   : "border-line/50 hover:border-ink/40"
                           } ${isToday && !picked ? "ring-1 ring-inset ring-accent-dark/50" : ""}`}
                         >
-                          {c.getDate()}
+                          <span className="block leading-tight">{c.getDate()}</span>
+                          {forecast[dayKey(c)] && !past && (
+                            <span
+                              className={`block text-[9px] leading-tight ${
+                                picked ? "text-page/90" : "text-muted"
+                              }`}
+                            >
+                              {forecast[dayKey(c)].glyph} {forecast[dayKey(c)].temp}°
+                            </span>
+                          )}
                         </button>
                       );
                     })}
@@ -501,7 +521,13 @@ export default function ViewingBooker({
             ) : stage === "when" ? (
               <>
                 <p className="min-w-0 truncate text-[12px] text-muted">
-                  {ready ? `${dayLabel} at ${slot}` : "Pick a day and a time"}
+                  {ready
+                    ? `${dayLabel} at ${slot}${
+                        day && forecast[dayKey(day)]
+                          ? ` · ${forecast[dayKey(day)].glyph} ${forecast[dayKey(day)].word.toLowerCase()}, ${forecast[dayKey(day)].temp}°`
+                          : ""
+                      }`
+                    : "Pick a day and a time"}
                 </p>
                 <PressButton
                   onClick={() => ready && setStage("who")}
