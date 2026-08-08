@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import InlineAddress from "@/components/InlineAddress";
 
 /* -------------------------------------------------------------------------
    Small shared controls. Kept together because they're the vocabulary the
@@ -139,12 +140,18 @@ export function DetailRow({
   value,
   onChange,
   copyable,
+  address,
+  onResolved,
 }: {
   icon: string;
   label: string;
   value: string;
   onChange?: (next: string) => void;
   copyable?: boolean;
+  /** Address rows look up as you type — suggestions from /api/address, and
+   *  the pick commits geotagged. Everything else stays a plain inline edit. */
+  address?: boolean;
+  onResolved?: (r: { address: string; lat: number | null; lng: number | null }) => void;
 }) {
   return (
     /* Fixed height, not padding: this row must land on the same horizontals
@@ -153,7 +160,14 @@ export function DetailRow({
     <div className="group/row flex h-[42px] items-center gap-3">
       <DoodleIcon name={icon} size={15} className="shrink-0 text-muted" />
       <span className="min-w-0 flex-1 text-[13.5px]">
-        {onChange ? (
+        {onChange && address ? (
+          <InlineAddress
+            value={value}
+            onChange={onChange}
+            onResolved={onResolved}
+            className="text-[13.5px]"
+          />
+        ) : onChange ? (
           <InlineField value={value} onChange={onChange} className="text-[13.5px]" />
         ) : (
           value

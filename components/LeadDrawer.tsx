@@ -632,11 +632,17 @@ export default function LeadDrawer({
                         copyable
                         onChange={(v) => setContact((c) => ({ ...c, email: v }))}
                       />
+                      {/* Landlords give a property address; tenants give an
+                          area. Both look up as they type — the pick commits
+                          the formatted address with its geotag resolved, and
+                          that geotag is what the take-on weather and the
+                          street photo will hang off. */}
                       <DetailRow
                         icon="home"
-                        label="area"
+                        label={isTenant ? "area" : "address"}
                         value={contact.area}
                         onChange={(v) => setContact((c) => ({ ...c, area: v }))}
+                        address
                       />
                       <DetailRow
                         icon="target"
