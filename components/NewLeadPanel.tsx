@@ -421,10 +421,10 @@ export default function NewLeadPanel({
                         {dossier.lastRent.date.slice(0, 4)}
                       </span>
                     )}
-                    {dossier.lastSale && (
+                    {dossier.areaRent && (
                       <span className="rounded-full border border-line/80 px-3 py-1.5 text-[11.5px]">
-                        Sold £{dossier.lastSale.price.toLocaleString("en-GB")} ·{" "}
-                        {dossier.lastSale.date.slice(0, 4)}
+                        {dossier.areaRent.beds}-beds here let at ~£
+                        {dossier.areaRent.avg.toLocaleString("en-GB")} pcm
                       </span>
                     )}
                     {dossier.epc && (
@@ -446,12 +446,6 @@ export default function NewLeadPanel({
                         Worth ~£{dossier.valuation.price.toLocaleString("en-GB")}
                       </span>
                     )}
-                    {dossier.areaRent && (
-                      <span className="rounded-full border border-line/80 px-3 py-1.5 text-[11.5px]">
-                        {dossier.areaRent.beds}-beds here let at ~£
-                        {dossier.areaRent.avg.toLocaleString("en-GB")} pcm
-                      </span>
-                    )}
                     {dossier.sqft && (
                       <span className="rounded-full border border-line/80 px-3 py-1.5 text-[11.5px]">
                         {dossier.sqft.toLocaleString("en-GB")} sq ft
@@ -460,6 +454,12 @@ export default function NewLeadPanel({
                     {dossier.tenure && (
                       <span className="rounded-full border border-line/80 px-3 py-1.5 text-[11.5px]">
                         {dossier.tenure}
+                      </span>
+                    )}
+                    {dossier.lastSale && (
+                      <span className="rounded-full border border-line/80 px-3 py-1.5 text-[11.5px]">
+                        Sold £{dossier.lastSale.price.toLocaleString("en-GB")} ·{" "}
+                        {dossier.lastSale.date.slice(0, 4)}
                       </span>
                     )}
                     {dossier.floodRisk && dossier.floodRisk !== "None" && (
