@@ -240,6 +240,17 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <div className="mt-auto">
           {profileOpen && !collapsed && (
             <div className="fade-up mb-2 rounded-2xl border border-line/80 bg-panel p-3">
+              {/* The full profile lives on its own page — this panel keeps
+                  the two-second jobs (theme, accent, sign out). */}
+              <Link
+                href="/profile"
+                onClick={() => setProfileOpen(false)}
+                className="mb-3 flex items-center gap-2 rounded-lg border border-line/70 px-2.5 py-2 text-[12px] font-semibold transition-colors hover:border-ink/40"
+              >
+                <DoodleIcon name="user" size={14} className="text-accent-dark" />
+                Your profile
+                <span className="ml-auto text-muted">→</span>
+              </Link>
               <p className="text-[10px] font-bold uppercase tracking-wide text-muted">
                 Appearance
               </p>
