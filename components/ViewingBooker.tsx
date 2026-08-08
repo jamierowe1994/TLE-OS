@@ -153,7 +153,37 @@ export default function ViewingBooker({
   const toLandlord = mode !== "viewing";
   const forecast = useForecast(open && toLandlord);
 
+  /* The rolodex answers the mouse wheel — that's what a roller is FOR. A
+     non-passive listener because the modal behind it scrolls too, and a
+     spin of the times must not drag the whole panel with it. */
+  const rolodexRef = useRef<HTMLDivElement | null>(null);
+  const lastSpin = useRef(0);
+  useEffect(() => {
+    const el = rolodexRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const now = performance.now();
+      if (now - lastSpin.current < 110 || Math.abs(e.deltaY) < 4) return;
+      lastSpin.current = now;
+      setSlot((s) => {
+        const i = SLOTS.indexOf(s ?? "12:00");
+        return SLOTS[Math.min(SLOTS.length - 1, Math.max(0, i + (e.deltaY > 0 ? 1 : -1)))];
+      });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [open, stage, day]);
+
   if (!open) return null;
+
+  /** Picking a day also seats the roller at midday — the rolodex must never
+      be empty, because "all the times at once" and "just the roller" looking
+      different is what made it feel broken. */
+  function pickDay(c: Date) {
+    setDay(c);
+    setSlot((s) => s ?? "12:00");
+  }
 
   const property = properties.find((p) => p.id === propertyId) ?? properties[0] ?? null;
   const ready = Boolean(day && slot && chosen && (toLandlord || property));
@@ -319,7 +349,7 @@ export default function ViewingBooker({
         className="absolute inset-0 cursor-default bg-ink/45"
       />
 
-      <div className="fade-up relative flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+      <div className={`fade-up relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)] ${toLandlord ? "max-w-5xl" : "max-w-4xl"}`}>
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line/70 px-6 py-4">
           <div className="min-w-0">
             <h2 className="text-[19px] leading-tight">
@@ -496,8 +526,10 @@ export default function ViewingBooker({
                           key={c.toISOString()}
                           type="button"
                           disabled={past}
-                          onClick={() => setDay(c)}
-                          className={`flex min-h-[210px] flex-col rounded-xl border p-1.5 text-center transition-all ${
+                          onClick={() => pickDay(c)}
+                          className={`flex flex-col rounded-xl border p-1.5 text-center transition-all ${
+                            toLandlord ? "min-h-[250px]" : "min-h-[210px]"
+                          } ${
                             picked
                               ? "border-accent-dark bg-accent-soft/50"
                               : past
@@ -567,7 +599,7 @@ export default function ViewingBooker({
                             key={c.toISOString()}
                             type="button"
                             disabled={past}
-                            onClick={() => setDay(c)}
+                            onClick={() => pickDay(c)}
                             title={
                               forecast[dayKey(c)] && !past
                                 ? `${forecast[dayKey(c)].word}, ${forecast[dayKey(c)].temp}°`
@@ -608,22 +640,40 @@ export default function ViewingBooker({
                     Time
                   </p>
                   {day ? (
-                    <div className="flex flex-1 flex-col items-center justify-center gap-0.5">
+                    /* The roller. A slot is ALWAYS seated (picking a day
+                       seats midday), so this only ever has one look: the
+                       chosen time big, the neighbours shrinking away. Spin
+                       the wheel over it, click a neighbour, or use the
+                       arrows — all three turn it. */
+                    <div
+                      ref={rolodexRef}
+                      className="flex flex-1 cursor-ns-resize select-none flex-col items-center justify-center gap-0.5"
+                      title="Scroll to change the time"
+                    >
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSlot((s) => SLOTS[Math.max(0, SLOTS.indexOf(s ?? "12:00") - 1)])
+                        }
+                        className="mb-1 text-[11px] text-muted transition-colors hover:text-ink"
+                        aria-label="Earlier"
+                      >
+                        ▲
+                      </button>
                       {SLOTS.map((t, i) => {
-                        const si = slot ? SLOTS.indexOf(slot) : -1;
-                        const d = si < 0 ? 99 : Math.abs(i - si);
-                        // No pick yet: everything mid-weight, waiting.
+                        const si = SLOTS.indexOf(slot ?? "12:00");
+                        const d = Math.abs(i - si);
                         const cls =
-                          si < 0
-                            ? "text-[13px] opacity-70"
-                            : d === 0
-                              ? "text-[21px] font-semibold text-accent-dark"
-                              : d === 1
-                                ? "text-[14px] opacity-75"
-                                : d === 2
-                                  ? "text-[11.5px] opacity-45"
-                                  : d === 3
-                                    ? "text-[10px] opacity-25"
+                          d === 0
+                            ? "text-[22px] font-semibold text-accent-dark"
+                            : d === 1
+                              ? "text-[14.5px] opacity-75"
+                              : d === 2
+                                ? "text-[12px] opacity-50"
+                                : d === 3
+                                  ? "text-[10.5px] opacity-30"
+                                  : d === 4
+                                    ? "text-[9.5px] opacity-15"
                                     : "hidden";
                         return (
                           <button
@@ -631,13 +681,25 @@ export default function ViewingBooker({
                             type="button"
                             onClick={() => setSlot(t)}
                             className={`figures block leading-tight transition-all duration-200 ${cls} ${
-                              si < 0 || d > 0 ? "hover:opacity-100 hover:text-ink" : ""
+                              d > 0 ? "hover:opacity-100 hover:text-ink" : ""
                             }`}
                           >
                             {t}
                           </button>
                         );
                       })}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSlot((s) =>
+                            SLOTS[Math.min(SLOTS.length - 1, SLOTS.indexOf(s ?? "12:00") + 1)]
+                          )
+                        }
+                        className="mt-1 text-[11px] text-muted transition-colors hover:text-ink"
+                        aria-label="Later"
+                      >
+                        ▼
+                      </button>
                     </div>
                   ) : (
                     <p className="rounded-xl border border-dashed border-line px-3 py-6 text-center text-[11.5px] leading-relaxed text-muted">
