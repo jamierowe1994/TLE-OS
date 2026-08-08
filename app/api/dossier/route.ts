@@ -233,6 +233,12 @@ export async function GET(req: NextRequest) {
         status: rm.detail.status?.label ?? null,
         agent: rm.detail.branch?.displayName ?? null,
         url: rm.detail.propertyUrl ?? null,
+        // Rightmove sends the full photo set and we were binning it — for
+        // most of the book Zoopla has NO listing history (verified: right
+        // house matched, zero listings), so this is often the only photo a
+        // dossier can have. Labelled by confidence in the UI: a street-level
+        // match's photo is presented as "on this road", never as the house.
+        image: rm.detail.photos?.[0]?.url ?? null,
       };
     }
   }

@@ -60,7 +60,7 @@ type Dossier = {
   };
   currentListing?: {
     confidence: "exact" | "street"; price: string | null; agent: string | null;
-    status: string | null; url: string | null;
+    status: string | null; url: string | null; image: string | null;
   };
 };
 
@@ -393,9 +393,43 @@ export default function NewLeadPanel({
                     </a>
                   )}
 
+                  {/* The live Rightmove listing, photo and all. The wording
+                      carries the confidence: an exact match is "this house",
+                      a street match says so — after Recreation Terrace, a
+                      photo never pretends to be a house it might not be. */}
+                  {dossier.currentListing?.image && (
+                    <a
+                      href={dossier.currentListing.url ?? undefined}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mb-4 flex items-center gap-4 rounded-2xl border border-line/70 p-3 transition-colors hover:border-ink/40"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={dossier.currentListing.image}
+                        alt=""
+                        className="h-20 w-28 shrink-0 rounded-xl object-cover"
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-semibold">
+                          {dossier.currentListing.confidence === "exact"
+                            ? "On the market now"
+                            : "A live listing on this road"}
+                          {dossier.currentListing.price ? ` — ${dossier.currentListing.price}` : ""}
+                        </span>
+                        <span className="block text-[11px] text-muted">
+                          {dossier.currentListing.agent ?? "Another agent"}
+                          {dossier.currentListing.status ? ` · ${dossier.currentListing.status}` : ""}
+                          {" · Rightmove — click for the listing and photos"}
+                        </span>
+                      </span>
+                      <span className="ml-auto shrink-0 text-[13px] text-muted">→</span>
+                    </a>
+                  )}
+
                   {/* Every fact wears a tag. Absent facts wear nothing. */}
                   <div className="flex flex-wrap items-center gap-2">
-                    {dossier.currentListing && (
+                    {dossier.currentListing && !dossier.currentListing.image && (
                       <a
                         href={dossier.currentListing.url ?? undefined}
                         target="_blank"
