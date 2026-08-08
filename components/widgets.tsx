@@ -1,0 +1,621 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import DoodleIcon from "@/components/DoodleIcon";
+import DiaryCalendar from "@/components/DiaryCalendar";
+import LeadSourceChart from "@/components/LeadSourceChart";
+import { FlowTag, Pill } from "@/components/Wire";
+import { todaysAppts, DIARY } from "@/lib/diary";
+import { dueWithin, CERT_META } from "@/lib/compliance";
+import { LEADS, leadSide } from "@/lib/leads-sample";
+
+/**
+ * The widget registry — every box the dashboard can hold.
+ *
+ * THE RULE OF SIZE: a widget doesn't just get bigger, it gets DEEPER.
+ *   1×1  — the number (a glance)
+ *   2×1  — the number with its trend (a direction)
+ *   1×2  — the list behind the number (the names)
+ *   2×2+ — the full picture (the chart, the breakdown, the money)
+ *
+ * Every renderer receives (w, h) and decides its own depth, so resizing in
+ * customise mode is the feature, not a layout accident.
+ */
+
+export type WidgetSize = { w: number; h: number };
+
+export type WidgetDef = {
+  label: string;
+  icon: string;
+  hint: string;
+  defaultW: number;
+  defaultH: number;
+  render: (w: number, h: number) => React.ReactNode;
+};
+
+/* ── Shared bones ── */
+
+function Head({ icon, label }: { icon: string; label: string }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <DoodleIcon name={icon} size={18} className="shrink-0 text-accent-dark" />
+      <span className="truncate text-[10.5px] font-semibold uppercase tracking-wide text-muted">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function BigCount({ value, hint }: { value: string; hint: string }) {
+  return (
+    <>
+      <p className="figures mt-3 text-[34px] leading-none">{value}</p>
+      <p className="mt-1.5 truncate text-[11px] font-medium text-accent-dark">{hint}</p>
+    </>
+  );
+}
+
+/** Little bars, drawn flat — the trend at a glance. Deterministic data. */
+function Bars({ data, tall = false }: { data: number[]; tall?: boolean }) {
+  const max = Math.max(...data);
+  return (
+    <div className={`flex items-end gap-[3px] ${tall ? "h-16" : "h-9"}`}>
+      {data.map((v, i) => (
+        <div
+          key={i}
+          className={`flex-1 rounded-t-[3px] ${i === data.length - 1 ? "bg-accent-dark" : "bg-accent-soft"}`}
+          style={{ height: `${Math.max(8, (v / max) * 100)}%` }}
+          title={String(v)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function RowList({
+  rows,
+  max,
+}: {
+  rows: { a: string; b: string; c?: string }[];
+  max: number;
+}) {
+  return (
+    <ul className="mt-3 space-y-2 overflow-hidden">
+      {rows.slice(0, max).map((r, i) => (
+        <li key={i} className="flex items-baseline gap-2.5 text-[12px]">
+          <span className="figures shrink-0 text-[11px] text-accent-dark">{r.a}</span>
+          <span className="min-w-0 flex-1 truncate">{r.b}</span>
+          {r.c && <span className="shrink-0 text-[10px] text-muted">{r.c}</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/* ── Sample series (no history store yet — these are the wireframe's truth) ── */
+const LEADS_12W = [8, 11, 9, 14, 12, 10, 15, 13, 17, 12, 16, 14];
+const LEADS_12M = [31, 28, 35, 42, 39, 45, 52, 48, 41, 44, 50, 47];
+const FB_8W = [2, 4, 3, 5, 4, 6, 5, 9];
+const IG_8W = [1, 1, 2, 3, 2, 2, 4, 4];
+const VOIDS = [
+  { name: "14 Portland Street", weeks: 6, rent: 795 },
+  { name: "Flat 3, King Edward House", weeks: 3, rent: 650 },
+  { name: "22 Ashfield Road", weeks: 2, rent: 725 },
+  { name: "9 Granby Road", weeks: 1, rent: 995 },
+];
+const ADS = [
+  { name: "2-bed launch — Didsbury", platform: "Facebook", leads: 6, spend: "£4.10/lead" },
+  { name: "Landlord switch offer", platform: "Instagram", leads: 3, spend: "£7.40/lead" },
+  { name: "Free valuation", platform: "Facebook", leads: 4, spend: "£5.20/lead" },
+];
+
+const tenantLeads = LEADS.filter((l) => leadSide(l) === "tenant");
+
+/* ── The Today widget carries its own calendar modal. ── */
+function TodayWidget({ w, h }: { w: number; h: number }) {
+  const [open, setOpen] = useState(false);
+  const today = todaysAppts();
+  const tomorrow = DIARY.filter((a) => a.day === 1);
+  const showTomorrow = w >= 2 || h >= 3;
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} className="block w-full text-left">
+        <div className="flex items-center justify-between gap-2">
+          <Head icon="calendar" label="Today" />
+          {w >= 2 && <FlowTag from="365 calendar (sign-in TBC)" />}
+        </div>
+        {h === 1 ? (
+          <BigCount value={String(today.length)} hint={`next at ${today[0]?.start ?? "—"}`} />
+        ) : (
+          <div className={showTomorrow && w >= 2 ? "mt-3 grid grid-cols-2 gap-4" : "mt-3"}>
+            <ul className="space-y-2.5">
+              {today.map((t) => (
+                <li key={t.id} className="flex items-baseline gap-3">
+                  <span className="figures w-11 shrink-0 text-[13px] text-accent-dark">{t.start}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[12.5px]">{t.what}</span>
+                    <span className="block truncate text-[10.5px] text-muted">{t.who}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {showTomorrow && (
+              <ul className="space-y-2.5">
+                <li className="text-[10px] font-semibold uppercase tracking-wide text-muted">Tomorrow</li>
+                {tomorrow.map((t) => (
+                  <li key={t.id} className="flex items-baseline gap-3">
+                    <span className="figures w-11 shrink-0 text-[13px] text-muted">{t.start}</span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-[12.5px]">{t.what}</span>
+                      <span className="block truncate text-[10.5px] text-muted">{t.who}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+        {h >= 2 && (
+          <span className="mt-3 block text-[11px] font-semibold text-muted">
+            Open the full calendar →
+          </span>
+        )}
+      </button>
+      <DiaryCalendar open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+/* ── Attention list, with its ticks. ── */
+function AttentionWidget({ h }: { w: number; h: number }) {
+  const ITEMS = [
+    { id: "leads", text: "3 leads uncontacted for over 24 hours", area: "Leads", hot: true },
+    { id: "gas", text: "Gas cert expires in 12 days — 41 Harewood Road", area: "Compliance", hot: true },
+    { id: "ref", text: "Referencing stalled 6 days — Flat 2, Mercer St", area: "Applications", hot: false },
+    { id: "money", text: "£1,240 reconciled in, not yet paid out", area: "Finances", hot: false },
+  ];
+  const [done, setDone] = useState<Set<string>>(new Set());
+  if (h === 1) {
+    return (
+      <>
+        <Head icon="bell" label="Needs attention" />
+        <BigCount value={String(ITEMS.length - done.size)} hint="open items" />
+      </>
+    );
+  }
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <Head icon="bell" label="Needs attention" />
+        <Pill tone="accent">{ITEMS.length - done.size}</Pill>
+      </div>
+      <ul className="mt-3.5 space-y-2.5">
+        {ITEMS.map((a) => {
+          const ticked = done.has(a.id);
+          return (
+            <li key={a.id}>
+              <button
+                type="button"
+                onClick={() =>
+                  setDone((cur) => {
+                    const next = new Set(cur);
+                    if (next.has(a.id)) next.delete(a.id);
+                    else next.add(a.id);
+                    return next;
+                  })
+                }
+                className="flex w-full items-start gap-2.5 text-left"
+              >
+                <span
+                  className={`mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors ${
+                    ticked ? "border-accent-dark bg-accent-soft text-accent-dark" : "border-line"
+                  }`}
+                >
+                  {ticked && <span className="text-[10px] leading-none">✓</span>}
+                </span>
+                <span className={`text-[12.5px] leading-snug ${ticked ? "text-muted line-through opacity-60" : ""}`}>
+                  {a.text}
+                  <span className={`ml-1.5 text-[10px] font-semibold ${a.hot ? "text-accent-dark" : "text-muted"}`}>
+                    {a.area}
+                  </span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
+/* ── The registry itself. ── */
+export const WIDGETS: Record<string, WidgetDef> = {
+  "leads-today": {
+    label: "Leads today", icon: "pack/target", hint: "count → trend → the names themselves",
+    defaultW: 1, defaultH: 1,
+    render: (w, h) => (
+      <>
+        <div className="flex items-center justify-between gap-2">
+          <Head icon="pack/target" label="Leads today" />
+          {w >= 2 && h >= 2 && <FlowTag from="REX + GHL" />}
+        </div>
+        {w === 1 && h === 1 && <BigCount value="14" hint="3 uncontacted" />}
+        {w >= 2 && h === 1 && (
+          <div className="mt-2 flex items-end gap-4">
+            <div>
+              <p className="figures text-[34px] leading-none">14</p>
+              <p className="mt-1 text-[11px] font-medium text-accent-dark">3 uncontacted</p>
+            </div>
+            <div className="mb-1 min-w-0 flex-1">
+              <Bars data={LEADS_12W} />
+              <p className="mt-1 text-[9px] text-muted">last 12 weeks</p>
+            </div>
+          </div>
+        )}
+        {w === 1 && h >= 2 && (
+          <>
+            <BigCount value="14" hint="3 uncontacted" />
+            <RowList
+              rows={tenantLeads.slice(0, h >= 3 ? 9 : 5).map((l) => ({ a: l.received, b: l.name, c: l.source }))}
+              max={h >= 3 ? 9 : 5}
+            />
+          </>
+        )}
+        {w >= 2 && h >= 2 && (
+          <div className="mt-3 grid grid-cols-2 gap-5">
+            <div>
+              <p className="figures text-[34px] leading-none">14</p>
+              <p className="mt-1 text-[11px] font-medium text-accent-dark">3 uncontacted today</p>
+              <div className="mt-3">
+                <Bars data={LEADS_12M} tall />
+                <p className="mt-1 text-[9px] text-muted">last 12 months · 502 leads</p>
+              </div>
+            </div>
+            <RowList
+              rows={tenantLeads.slice(0, h >= 3 ? 10 : 6).map((l) => ({ a: l.received, b: l.name, c: l.source }))}
+              max={h >= 3 ? 10 : 6}
+            />
+          </div>
+        )}
+      </>
+    ),
+  },
+
+  "on-market": {
+    label: "On market", icon: "pack/house", hint: "count → by status → the slow movers",
+    defaultW: 1, defaultH: 1,
+    render: (w, h) => (
+      <>
+        <Head icon="pack/house" label="On market" />
+        {w === 1 && h === 1 && <BigCount value="24" hint="2 under offer" />}
+        {(w >= 2 || h >= 2) && (
+          <>
+            <div className="mt-2 flex items-end gap-5">
+              <p className="figures text-[34px] leading-none">24</p>
+              <div className="mb-0.5 flex gap-4 text-[11px]">
+                <span><span className="figures text-[15px]">18</span> <span className="text-muted">available</span></span>
+                <span><span className="figures text-[15px]">2</span> <span className="text-muted">under offer</span></span>
+                <span><span className="figures text-[15px]">4</span> <span className="text-muted">let agreed</span></span>
+              </div>
+            </div>
+            {h >= 2 && (
+              <>
+                <p className="mt-4 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                  Slowest movers
+                </p>
+                <RowList
+                  rows={[
+                    { a: "44d", b: "8 Recreation Terrace", c: "no photos" },
+                    { a: "31d", b: "228a Chapter Road", c: "price?" },
+                    { a: "19d", b: "108 Cherry Tree Drive" },
+                    { a: "12d", b: "Flat 2, Mercer Street" },
+                  ]}
+                  max={w >= 2 ? 4 : 3}
+                />
+              </>
+            )}
+          </>
+        )}
+      </>
+    ),
+  },
+
+  applications: {
+    label: "Applications", icon: "pack/checklist", hint: "count → by stage → the stalled",
+    defaultW: 1, defaultH: 1,
+    render: (w, h) => (
+      <>
+        <Head icon="pack/checklist" label="Applications" />
+        {w === 1 && h === 1 && <BigCount value="6" hint="1 stalled" />}
+        {(w >= 2 || h >= 2) && (
+          <>
+            <div className="mt-2 flex items-end gap-5">
+              <p className="figures text-[34px] leading-none">6</p>
+              <div className="mb-0.5 flex gap-4 text-[11px]">
+                <span><span className="figures text-[15px]">2</span> <span className="text-muted">new</span></span>
+                <span><span className="figures text-[15px]">3</span> <span className="text-muted">referencing</span></span>
+                <span><span className="figures text-[15px]">1</span> <span className="text-muted">signing</span></span>
+              </div>
+            </div>
+            {h >= 2 && (
+              <>
+                <p className="mt-4 text-[10px] font-semibold uppercase tracking-wide text-muted">Needs a push</p>
+                <RowList
+                  rows={[
+                    { a: "6d", b: "Flat 2, Mercer St — referencing stalled", c: "chase" },
+                    { a: "2d", b: "Flat A, Milton Rd — awaiting guarantor" },
+                  ]}
+                  max={2}
+                />
+              </>
+            )}
+          </>
+        )}
+      </>
+    ),
+  },
+
+  occupancy: {
+    label: "Occupancy", icon: "pack/building", hint: "the % → the voids → what they cost",
+    defaultW: 1, defaultH: 1,
+    render: (w, h) => (
+      <>
+        <Head icon="pack/building" label="Occupancy" />
+        {w === 1 && h === 1 && <BigCount value="93%" hint="of the managed book" />}
+        {(w >= 2 || h >= 2) && (
+          <>
+            <div className="mt-2 flex items-end gap-4">
+              <p className="figures text-[34px] leading-none">93%</p>
+              <div className="mb-1.5 min-w-0 flex-1">
+                <div className="h-2.5 overflow-hidden rounded-full bg-accent-soft">
+                  <div className="h-full rounded-full bg-accent-dark" style={{ width: "93%" }} />
+                </div>
+                <p className="mt-1 text-[10px] text-muted">529 of 568 homes occupied</p>
+              </div>
+            </div>
+            {h >= 2 && (
+              <>
+                {/* The next stage of "93%": the 7% — who's empty, for how
+                    long, and what it costs. Occupancy is a rent number
+                    wearing a percentage. */}
+                <p className="mt-4 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                  The voids, and the rent they&apos;re not paying
+                </p>
+                <RowList
+                  rows={VOIDS.map((v) => ({
+                    a: `${v.weeks}w`, b: v.name, c: `−£${v.rent}/mo`,
+                  }))}
+                  max={w >= 2 ? 4 : 3}
+                />
+                {w >= 2 && (
+                  <p className="mt-3 border-t border-line/50 pt-2 text-[11px] font-semibold text-accent-dark">
+                    £3,165/month walking out the door — relet these first.
+                  </p>
+                )}
+              </>
+            )}
+          </>
+        )}
+      </>
+    ),
+  },
+
+  attention: {
+    label: "Needs attention", icon: "bell", hint: "the tickable worry list",
+    defaultW: 1, defaultH: 2,
+    render: (w, h) => <AttentionWidget w={w} h={h} />,
+  },
+
+  today: {
+    label: "Today", icon: "calendar", hint: "the diary — opens the full calendar",
+    defaultW: 1, defaultH: 2,
+    render: (w, h) => <TodayWidget w={w} h={h} />,
+  },
+
+  "lead-sources": {
+    label: "Lead sources", icon: "pie", hint: "top source → bars → the full chart",
+    defaultW: 1, defaultH: 2,
+    render: (w, h) => (
+      <>
+        <div className="flex items-center justify-between gap-2">
+          <Head icon="pie" label="Lead sources" />
+          {w >= 2 && <FlowTag from="REX + GHL" />}
+        </div>
+        {h === 1 ? (
+          <BigCount value="50%" hint="Portals — biggest source" />
+        ) : (
+          <div className="mt-2">
+            <LeadSourceChart />
+            <Link href="/leads" className="mt-3 block text-[11px] font-semibold text-muted transition-colors hover:text-ink">
+              All leads →
+            </Link>
+          </div>
+        )}
+      </>
+    ),
+  },
+
+  pipeline: {
+    label: "Pipeline snapshot", icon: "trend-up", hint: "the journey in numbers; taller adds conversion",
+    defaultW: 4, defaultH: 1,
+    render: (w, h) => {
+      const STAGES = [
+        { label: "Leads", value: 14, href: "/leads" },
+        { label: "Appointments", value: 9, href: "/viewings" },
+        { label: "Appraisals", value: 3 },
+        { label: "Properties", value: 24, href: "/listings" },
+        { label: "Applications", value: 6, href: "/applications" },
+        { label: "Portfolio", value: 568, href: "/portfolio" },
+        { label: "Move-ins", value: 2 },
+      ].slice(0, w >= 4 ? 7 : w >= 2 ? 4 : 2);
+      return (
+        <>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <Head icon="trend-up" label="Pipeline snapshot" />
+            {w >= 3 && <FlowTag from="REX + PayProp" />}
+          </div>
+          <div className={`grid gap-4 ${w >= 4 ? "grid-cols-7" : w >= 2 ? "grid-cols-4" : "grid-cols-2"}`}>
+            {STAGES.map((p, i) => {
+              const inner = (
+                <>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-accent" />
+                    <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted">
+                      {p.label}
+                    </span>
+                  </span>
+                  <span className="figures mt-1.5 block text-[24px] leading-none">{p.value}</span>
+                  {/* Taller: the story BETWEEN the numbers. */}
+                  {h >= 2 && i < STAGES.length - 1 && (
+                    <span className="figures mt-2 block text-[10.5px] text-accent-dark">
+                      {["64%", "33%", "—", "25%", "—", "0.4%"][i] ?? "—"} convert →
+                    </span>
+                  )}
+                </>
+              );
+              return p.href ? (
+                <Link key={p.label} href={p.href} className="min-w-0 transition-opacity hover:opacity-70">{inner}</Link>
+              ) : (
+                <div key={p.label} className="min-w-0">{inner}</div>
+              );
+            })}
+          </div>
+          {h >= 2 && (
+            <p className="mt-3 border-t border-line/50 pt-2 text-[10px] text-muted">
+              Conversion figures are placeholders until the history store lands — the shape is the point.
+            </p>
+          )}
+        </>
+      );
+    },
+  },
+
+  "facebook-leads": {
+    label: "Facebook leads", icon: "megaphone", hint: "via GoHighLevel",
+    defaultW: 1, defaultH: 1,
+    render: (w, h) => (
+      <>
+        <Head icon="megaphone" label="Facebook leads" />
+        {w === 1 && h === 1 ? (
+          <BigCount value="9" hint="+4 this week · via GHL" />
+        ) : (
+          <div className="mt-2 flex items-end gap-4">
+            <div>
+              <p className="figures text-[34px] leading-none">9</p>
+              <p className="mt-1 text-[11px] font-medium text-accent-dark">+4 this week</p>
+            </div>
+            <div className="mb-1 min-w-0 flex-1">
+              <Bars data={FB_8W} tall={h >= 2} />
+              <p className="mt-1 text-[9px] text-muted">8 weeks · via GoHighLevel</p>
+            </div>
+          </div>
+        )}
+      </>
+    ),
+  },
+
+  "instagram-leads": {
+    label: "Instagram leads", icon: "star", hint: "via GoHighLevel",
+    defaultW: 1, defaultH: 1,
+    render: (w, h) => (
+      <>
+        <Head icon="star" label="Instagram leads" />
+        {w === 1 && h === 1 ? (
+          <BigCount value="4" hint="+2 this week · via GHL" />
+        ) : (
+          <div className="mt-2 flex items-end gap-4">
+            <div>
+              <p className="figures text-[34px] leading-none">4</p>
+              <p className="mt-1 text-[11px] font-medium text-accent-dark">+2 this week</p>
+            </div>
+            <div className="mb-1 min-w-0 flex-1">
+              <Bars data={IG_8W} tall={h >= 2} />
+              <p className="mt-1 text-[9px] text-muted">8 weeks · via GoHighLevel</p>
+            </div>
+          </div>
+        )}
+      </>
+    ),
+  },
+
+  "ads-live": {
+    label: "Ads running", icon: "rocket", hint: "what's live and what each lead costs",
+    defaultW: 1, defaultH: 1,
+    render: (w, h) => (
+      <>
+        <Head icon="rocket" label="Ads running" />
+        {w === 1 && h === 1 ? (
+          <BigCount value="3" hint="13 leads this week" />
+        ) : (
+          <RowList
+            rows={ADS.map((a) => ({ a: String(a.leads), b: `${a.name} · ${a.platform}`, c: a.spend }))}
+            max={3}
+          />
+        )}
+      </>
+    ),
+  },
+
+  "compliance-due": {
+    label: "Compliance due", icon: "shield", hint: "certificates dying this month",
+    defaultW: 1, defaultH: 1,
+    render: (w, h) => {
+      const due = dueWithin(30);
+      return (
+        <Link href="/compliance" className="block">
+          <Head icon="shield" label="Compliance due" />
+          {w === 1 && h === 1 ? (
+            <BigCount value={String(due.length)} hint="expired or due in 30 days" />
+          ) : (
+            <RowList
+              rows={due.map((d) => ({
+                a: d.cert?.expires != null && d.cert.expires < 0 ? `${Math.abs(d.cert.expires)}d over` : `${d.cert?.expires}d`,
+                b: `${d.p.name} — ${CERT_META[d.key].short}`,
+                c: d.p.landlord,
+              }))}
+              max={h >= 2 ? (w >= 2 ? 8 : 6) : 3}
+            />
+          )}
+        </Link>
+      );
+    },
+  },
+
+  "viewings-week": {
+    label: "Viewings this week", icon: "key", hint: "who's going through doors",
+    defaultW: 1, defaultH: 1,
+    render: (w, h) => {
+      const week = DIARY.filter((a) => a.kind === "viewing" && a.day >= 0 && a.day <= 6);
+      return (
+        <>
+          <Head icon="key" label="Viewings this week" />
+          {w === 1 && h === 1 ? (
+            <BigCount value={String(week.length)} hint={`next: ${week[0]?.start ?? "—"} today`} />
+          ) : (
+            <RowList
+              rows={week.map((v) => ({
+                a: v.day === 0 ? v.start : `+${v.day}d`,
+                b: v.what.replace(/^[^—]+—\s*/, ""),
+                c: v.who,
+              }))}
+              max={h >= 2 ? 7 : 3}
+            />
+          )}
+        </>
+      );
+    },
+  },
+};
+
+/** The default board IS today's dashboard, box for box. */
+export const DEFAULT_LAYOUT: { id: string; type: string; w: number; h: number }[] = [
+  { id: "d1", type: "leads-today", w: 1, h: 1 },
+  { id: "d2", type: "on-market", w: 1, h: 1 },
+  { id: "d3", type: "applications", w: 1, h: 1 },
+  { id: "d4", type: "occupancy", w: 1, h: 1 },
+  { id: "d5", type: "attention", w: 1, h: 2 },
+  { id: "d6", type: "today", w: 1, h: 2 },
+  { id: "d7", type: "lead-sources", w: 2, h: 2 },
+  { id: "d8", type: "pipeline", w: 4, h: 1 },
+];

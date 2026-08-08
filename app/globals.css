@@ -239,6 +239,21 @@ h1, h2, h3, h4, h5 {
 }
 
 /* ---------------------------------------------------------------------------
+   Customise mode: the home-screen wiggle. Tiny, slow, staggered per tile —
+   enough to say "everything is loose now", never enough to read as an error.
+--------------------------------------------------------------------------- */
+@keyframes wiggle {
+  0%   { transform: rotate(-0.45deg); }
+  50%  { transform: rotate(0.45deg); }
+  100% { transform: rotate(-0.45deg); }
+}
+.wiggle { animation: wiggle 0.5s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wiggle { animation: none; }
+}
+
+/* ---------------------------------------------------------------------------
    The confetti gun. Fired once, when a booking lands: hand-cut paper bits
    thrown up and out from a point, tumbling as they go, gone in under a
    second. Each bit carries its own throw as CSS variables (--cx --cy --cr)
