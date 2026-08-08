@@ -29,6 +29,10 @@
   --card: #ffffff;
   /* Boxes sit ON the eggshell in daylight — outline only, no fill. */
   --panel: transparent;
+  /* What a BOX is painted with. On the eggshell it's simply the page (the
+     boxes are outlines); the light surface overrides it with the faintest
+     grey so boxes read against pure white. */
+  --box: var(--page);
 
   --radius-card: 16px;
 }
@@ -59,6 +63,13 @@
 --------------------------------------------------------------------------- */
 :root[data-surface="light"] {
   --page: #ffffff;
+  /* The faintest grey — a 50, maybe a 100, never more — so the nav and the
+     boxes separate from the white page without any drama. And the rims come
+     up one notch, purely so edges are findable. Reader accessibility, not
+     decoration (James, 8 Aug 2026). */
+  --panel: #f7f7f5;
+  --box: #fafaf9;
+  --line: #cdc9c0;
 }
 
 /* ---------------------------------------------------------------------------
@@ -103,6 +114,7 @@
   --color-page: var(--page);
   --color-card: var(--card);
   --color-panel: var(--panel);
+  --color-box: var(--box);
   --font-sans: var(--font-body);
   --radius-card: 1rem;
 }

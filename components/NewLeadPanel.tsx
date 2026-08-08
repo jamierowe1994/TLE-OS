@@ -330,7 +330,7 @@ export default function NewLeadPanel({
                     setKind(c.k);
                     if (c.k === "landlord") set("enquiry")("Landlord");
                   }}
-                  className="block-pop flex min-h-0 flex-1 items-center gap-6 rounded-3xl border border-line/80 bg-page p-8 text-left hover:border-ink"
+                  className="block-pop flex min-h-0 flex-1 items-center gap-6 rounded-3xl border border-line/80 bg-box p-8 text-left hover:border-ink"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={c.art} alt="" aria-hidden className="art h-28 w-28 shrink-0" />

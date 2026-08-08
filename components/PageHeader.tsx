@@ -68,6 +68,9 @@ export default function PageHeader({
   /** Pin the figure hard into the corner instead of the standard inset —
    *  the dashboard's window lives in the corner of the room. */
   flushRight = false,
+  /** The search bar under the rule. On by default; pages that aren't about
+   *  finding things (the profile) turn it off. */
+  search = true,
   /** Actions that belong to the page, sitting on the search row. */
   actions,
 }: {
@@ -79,6 +82,7 @@ export default function PageHeader({
   illustrationHeight?: number;
   lineBreak?: LineBreak;
   flushRight?: boolean;
+  search?: boolean;
   actions?: React.ReactNode;
 }) {
   const hasArt = Boolean(illustration || illustrationNode);
@@ -153,17 +157,21 @@ export default function PageHeader({
 
       {/* Search sits UNDER the rule, in the same column it always did — it
           belongs to the work below, not to the masthead above. */}
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-        <label className="flex w-full max-w-xs items-center gap-2.5 rounded-full border border-line/80 px-4 py-2.5 transition-colors focus-within:border-ink">
-          <DoodleIcon name="search" size={15} className="shrink-0 text-muted" />
-          <input
-            type="text"
-            placeholder="Search properties, tenants…"
-            className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted/70"
-          />
-        </label>
-        {actions}
-      </div>
+      {(search || actions) && (
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+          {search && (
+            <label className="flex w-full max-w-xs items-center gap-2.5 rounded-full border border-line/80 px-4 py-2.5 transition-colors focus-within:border-ink">
+              <DoodleIcon name="search" size={15} className="shrink-0 text-muted" />
+              <input
+                type="text"
+                placeholder="Search properties, tenants…"
+                className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted/70"
+              />
+            </label>
+          )}
+          {actions}
+        </div>
+      )}
     </>
   );
 }

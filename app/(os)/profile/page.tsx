@@ -44,16 +44,31 @@ const DEFAULT_PROFILE: Profile = {
   bio: "",
 };
 
-/** An agent's own paperwork — the person's compliance, not the property's. */
-const PERSONAL_COMPLIANCE = [
-  { label: "Propertymark / ARLA membership", state: "ok", note: "Renews in 8 months" },
-  { label: "Client Money Protection (CMP)", state: "ok", note: "Via agency scheme — certificate on file" },
-  { label: "Redress scheme (The Property Ombudsman)", state: "ok", note: "Agency membership covers you" },
-  { label: "HMRC anti-money-laundering registration", state: "due", note: "Renewal due in 24 days" },
-  { label: "ICO data-protection registration", state: "ok", note: "Renews annually — direct debit" },
-  { label: "Right to Rent training", state: "due", note: "Refresher overdue by 12 days" },
-  { label: "AML awareness refresher", state: "missing", note: "Not yet recorded — book the course" },
-] as const;
+/** The agency's packages — shown on the profile so the agent always knows
+ *  what they're on. Sample: this account sits on Growth. */
+const PLAN: "Starter" | "Growth" | "Pro" = "Growth";
+
+/**
+ * An agent's own paperwork — what a SELF-EMPLOYED lettings agent has to
+ * hold personally (not trade-body memberships they don't need). Expiry as
+ * day offsets, same convention as the rest of the sample book. `portal` is
+ * where Sort-it-now will take them once the renewals auto-connect.
+ */
+const PERSONAL_COMPLIANCE: {
+  label: string; expires: number | null; portal: string;
+}[] = [
+  { label: "ICO data-protection registration", expires: 240, portal: "ico.org.uk" },
+  { label: "Professional indemnity insurance", expires: 24, portal: "your broker" },
+  { label: "Public liability insurance", expires: 300, portal: "your broker" },
+  { label: "HMRC anti-money-laundering supervision", expires: 18, portal: "gov.uk/anti-money-laundering" },
+  { label: "Right to Rent training", expires: -12, portal: "the training portal" },
+];
+
+function dateFor(offset: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
 
 const CONNECTIONS = [
   { id: "m365", name: "Microsoft 365", what: "Your diary and email — powers the calendar and every send", state: "off", icon: "calendar" },
@@ -72,6 +87,8 @@ export default function ProfilePage() {
   const [surface, setSurface] = useState<SurfaceChoice>("medium");
   const [accent, setAccent] = useState("");
   const [connections, setConnections] = useState(CONNECTIONS);
+  /** Labels with a diary reminder set this session. */
+  const [reminders, setReminders] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     try {
@@ -120,6 +137,8 @@ export default function ProfilePage() {
         blurb="Who you are on every email and listing, how your OS looks, and the paperwork that keeps you — not just the properties — compliant."
         illustration="/illustrations/notioly/looking-for-something.svg"
         lineBreak="dip"
+        /* Nothing on this page is searched for — the bar would be furniture. */
+        search={false}
       />
 
       {/* ── Tabs, same grammar as the records. ── */}
@@ -154,6 +173,18 @@ export default function ProfilePage() {
                 <p className="mt-0.5 text-[12px] text-muted">
                   The Lettings Experts · {profile.patch}
                 </p>
+                {/* The package, always visible — nobody should have to ask
+                    what they're on. Starter → Growth → Pro. */}
+                <button
+                  type="button"
+                  onClick={() => setTab("ads")}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-[11px] font-semibold text-accent-dark transition-opacity hover:opacity-80"
+                  title="See what Pro adds"
+                >
+                  <DoodleIcon name="rocket" size={12} />
+                  {PLAN} plan
+                  {PLAN !== "Pro" && <span className="text-muted">· upgrade →</span>}
+                </button>
               </div>
               {saved && <Pill tone="good">Saved</Pill>}
             </div>
@@ -292,45 +323,92 @@ export default function ProfilePage() {
 
         {/* ══ PERSONAL COMPLIANCE ══ */}
         {tab === "compliance" && (
-          <div className="max-w-2xl">
+          <div className="max-w-3xl">
             <p className="mb-4 text-[12.5px] leading-relaxed text-muted">
-              The properties have their page — this one is YOURS. What a lettings agent
-              has to hold personally, and when each of them runs out.
+              The properties have their page — this one is YOURS: what a self-employed
+              lettings agent has to hold personally, when each runs out, and the
+              reminder that lands in your diary a month before it does.
             </p>
-            <ul className="space-y-2.5">
-              {PERSONAL_COMPLIANCE.map((c) => (
-                <li
-                  key={c.label}
-                  className={`flex flex-wrap items-center gap-3 rounded-2xl border p-4 ${
-                    c.state === "ok" ? "border-line/70" : "border-accent-dark/50 bg-accent-soft/20"
-                  }`}
-                >
-                  <DoodleIcon
-                    name={c.state === "ok" ? "shield" : "bell"}
-                    size={17}
-                    className="shrink-0 text-accent-dark"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[13px] font-semibold">{c.label}</span>
-                    <span className="block text-[11px] text-muted">{c.note}</span>
-                  </span>
-                  {c.state === "ok" ? (
-                    <Pill tone="good">In date</Pill>
-                  ) : c.state === "due" ? (
-                    <PressButton className="press-ring rounded-full bg-accent-dark px-4 py-2 text-[11.5px] font-semibold text-page">
-                      Sort it now
-                    </PressButton>
-                  ) : (
-                    <PressButton className="press-ring rounded-full border border-ink/25 px-4 py-2 text-[11.5px] font-semibold">
-                      Book the course
-                    </PressButton>
-                  )}
-                </li>
-              ))}
-            </ul>
+            <div className="overflow-x-auto rounded-2xl border border-line/70">
+              <table className="w-full min-w-[620px] text-left">
+                <thead>
+                  <tr className="border-b border-line/70 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                    <th className="px-4 py-3">What you hold</th>
+                    <th className="px-4 py-3">Expires</th>
+                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Reminder</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {PERSONAL_COMPLIANCE.map((c) => {
+                    const state =
+                      c.expires == null ? "missing" : c.expires < 0 ? "expired" : c.expires <= 45 ? "due" : "ok";
+                    const hasReminder = reminders.has(c.label);
+                    return (
+                      <tr key={c.label} className="border-b border-line/40 last:border-0">
+                        <td className="px-4 py-3.5">
+                          <span className="block text-[12.5px] font-semibold">{c.label}</span>
+                          <span className="block text-[10px] text-muted">renews via {c.portal}</span>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3.5">
+                          {c.expires != null ? (
+                            <>
+                              <span className="figures block text-[12.5px]">{dateFor(c.expires)}</span>
+                              <span className={`block text-[10px] ${state === "ok" ? "text-muted" : "font-semibold text-accent-dark"}`}>
+                                {c.expires < 0 ? `${Math.abs(c.expires)} days ago` : `in ${c.expires} days`}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-[11px] text-muted">no record</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          {state === "ok" ? (
+                            <Pill tone="good">In date</Pill>
+                          ) : state === "due" ? (
+                            <Pill tone="accent">Due soon</Pill>
+                          ) : (
+                            <Pill tone="accent">EXPIRED</Pill>
+                          )}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3.5">
+                          {c.expires != null && c.expires >= 30 ? (
+                            hasReminder ? (
+                              <span className="flex items-center gap-1.5 text-[11px] text-muted">
+                                <DoodleIcon name="bell" size={12} className="text-accent-dark" />
+                                In your diary · {dateFor(c.expires - 30)}
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setReminders((cur) => new Set(cur).add(c.label))}
+                                className="rounded-full border border-ink/25 px-3.5 py-1.5 text-[11px] font-semibold transition-colors hover:border-ink"
+                              >
+                                Set reminder
+                              </button>
+                            )
+                          ) : (
+                            <span className="text-[10px] text-muted">too close — sort it</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          {state !== "ok" && (
+                            <PressButton className="press-ring rounded-full bg-accent-dark px-4 py-2 text-[11px] font-semibold text-page">
+                              Sort it now
+                            </PressButton>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
             <p className="mt-4 text-[10.5px] leading-relaxed text-muted">
-              Wireframe — expiry dates will live on your agent record and chase you the
-              same way property compliance chases the landlords.
+              Reminders land in your diary 30 days before expiry — the minimum runway for
+              a renewal. &ldquo;Sort it now&rdquo; will open each provider&apos;s own portal
+              once the connections are wired; today it marks the intent.
             </p>
           </div>
         )}

@@ -174,7 +174,7 @@ export default function Viewings() {
         <button
           type="button"
           onClick={() => setCalOpen(true)}
-          className="block-pop flex items-center gap-3 rounded-2xl border border-line/80 bg-page p-5 text-left hover:border-ink"
+          className="block-pop flex items-center gap-3 rounded-2xl border border-line/80 bg-box p-5 text-left hover:border-ink"
         >
           <DoodleIcon name="calendar" size={22} className="shrink-0 text-accent-dark" />
           <span className="min-w-0">

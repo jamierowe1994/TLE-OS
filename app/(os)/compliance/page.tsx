@@ -127,7 +127,7 @@ export default function Compliance() {
             key={t.key}
             type="button"
             onClick={() => setFilter(filter === t.key ? "all" : t.key)}
-            className={`fade-up block-pop rounded-2xl border bg-page p-5 text-left ${
+            className={`fade-up block-pop rounded-2xl border bg-box p-5 text-left ${
               filter === t.key ? "border-ink" : "border-line/80 hover:border-ink"
             }`}
           >
@@ -144,7 +144,7 @@ export default function Compliance() {
       </div>
 
       {/* ── THE NEXT MONTH — the reason this page exists. ── */}
-      <div className="fade-up block-pop mt-6 rounded-2xl border border-line/80 bg-page p-5 hover:border-ink">
+      <div className="fade-up block-pop mt-6 rounded-2xl border border-line/80 bg-box p-5 hover:border-ink">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-[15px]">Coming out of compliance — the next month</h2>
           <FlowTag from="REX compliance entries" />

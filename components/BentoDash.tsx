@@ -373,7 +373,7 @@ export default function BentoDash({
                 const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
                 beginDrag(e, item.id, false, r.width, r.height);
               }}
-              className={`relative rounded-2xl border bg-page p-5 ${
+              className={`relative rounded-2xl border bg-box p-5 ${
                 customise
                   ? `cursor-grab select-none border-dashed border-ink/40 ${
                       /* The wiggle rests while anything is being moved or

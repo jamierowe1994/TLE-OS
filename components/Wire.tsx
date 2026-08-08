@@ -72,7 +72,7 @@ export function Card({
     <section
       onClick={onClick}
       className={`fade-up rounded-2xl border border-line/80 p-5 ${
-        pop ? "block-pop bg-page hover:border-ink" : "bg-panel"
+        pop ? "block-pop bg-box hover:border-ink" : "bg-panel"
       } ${onClick ? "cursor-pointer" : ""} ${className}`}
     >
       {(title || tag) && (
