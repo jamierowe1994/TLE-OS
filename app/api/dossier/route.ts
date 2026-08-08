@@ -24,8 +24,10 @@ export const runtime = "nodejs";
 
 const PD_KEY = process.env.PROPERTYDATA_API_KEY ?? "";
 const RA_KEY = process.env.REALTYAPI_KEY ?? "";
+const HS_TOKEN = process.env.HOMESEARCH_TOKEN ?? "";
 
 const PD = "https://api.propertydata.co.uk";
+const HS = "https://data.homesearch.co.uk/avi/api/v1";
 
 async function j(url: string, headers?: Record<string, string>) {
   try {
@@ -60,9 +62,78 @@ export async function GET(req: NextRequest) {
     sources: { propertydata: Boolean(PD_KEY), realtyapi: Boolean(RA_KEY) },
   };
 
-  /* ── PropertyData: the anchor. Sequential — their throttle is 4/10s. ── */
+  /* ── Homesearch first: one matinfo call carries what took PropertyData
+     three — floor area, EPC (with potential), tax band, tenure, title,
+     flood, broadband — and the valuation needs no guessed inputs. Probed
+     against 183 Walesby Lane: every figure agreed with PropertyData's, and
+     the extras were free. PropertyData below stays as the fallback. ── */
   let uprn: string | null = null;
-  if (PD_KEY) {
+  let recordsDone = false;
+  if (HS_TOKEN) {
+    const hsAuth = { Authorization: `Bearer ${HS_TOKEN}` };
+    const match = await j(
+      `${HS}/match_address?address=${encodeURIComponent(`${address} ${postcode}`)}`,
+      hsAuth
+    );
+    const hsId = match?.hs_id;
+    // Trust the match only if it kept our house number — same law as the
+    // portals, same Recreation Terrace reason.
+    const hsTrusted =
+      hsId && (!num || houseNumber(match.address_label ?? "") === num);
+
+    if (hsTrusted) {
+      const [mat, val] = await Promise.all([
+        j(`${HS}/matinfo/basic/${hsId}`, hsAuth),
+        j(`${HS}/property/quick_valuation/${hsId}`, hsAuth),
+      ]);
+
+      if (mat) {
+        recordsDone = true;
+        if (mat.bedrooms) out.beds = mat.bedrooms;
+        if (mat.floor_area) out.sqft = Math.round(mat.floor_area * 10.764);
+        if (mat.tax_band) out.taxBand = mat.tax_band;
+        if (mat.category) out.propertyType = mat.category;
+        if (mat.land_tenure) out.tenure = mat.land_tenure;
+        if (mat.title_number) out.titleNumber = mat.title_number;
+        if (mat.flood_risk) out.floodRisk = mat.flood_risk;
+        if (mat.energy_rating) {
+          const when = mat.energy_epc_date ? new Date(mat.energy_epc_date) : null;
+          const tenYears = 10 * 365.25 * 24 * 3600 * 1000;
+          out.epc = {
+            rating: mat.energy_rating,
+            score: mat.energy_score ?? null,
+            potential: mat.potential_energy_rating ?? null,
+            date: mat.energy_epc_date ?? null,
+            current: when ? Date.now() - when.getTime() < tenYears : false,
+          };
+        }
+      }
+      if (val?.price) {
+        out.valuation = {
+          price: val.price,
+          lastSold: val.price_last_sold ?? null,
+          lastSoldDate: val.last_sold_date ?? null,
+        };
+        if (val.price_last_sold) {
+          out.lastSale = { price: val.price_last_sold, date: val.last_sold_date ?? "" };
+        }
+      }
+
+      // What do 3-beds around here actually ask? Sector-level, bed-matched.
+      const sector = postcode.replace(/\s*\d[A-Z]{2}$/i, (m) => ` ${m.trim()[0]}`).trim();
+      const beds = (out.beds as number) || 0;
+      if (beds) {
+        const area = await j(
+          `${HS}/area_statistics/lettings/avg_price_on_market?sectors%5B%5D=${encodeURIComponent(sector)}&beds%5B%5D=${beds}`,
+          hsAuth
+        );
+        if (area?.avg_price) out.areaRent = { avg: area.avg_price, beds };
+      }
+    }
+  }
+
+  /* ── PropertyData: the fallback anchor when Homesearch isn't wired. ── */
+  if (PD_KEY && !recordsDone) {
     const pc = encodeURIComponent(postcode);
 
     const uprns = await j(`${PD}/uprns?key=${PD_KEY}&postcode=${pc}`);

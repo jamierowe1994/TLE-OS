@@ -45,7 +45,13 @@ type Dossier = {
   habitableRooms?: number;
   beds?: number;
   baths?: number;
-  epc?: { rating: string; date: string; current: boolean };
+  epc?: { rating: string; date: string; current: boolean; potential?: string | null };
+  taxBand?: string;
+  propertyType?: string;
+  tenure?: string;
+  floodRisk?: string;
+  valuation?: { price: number; lastSold: number | null; lastSoldDate: string | null };
+  areaRent?: { avg: number; beds: number };
   lastSale?: { price: number; date: string };
   lastRent?: { price: number; date: string };
   lastListing?: {
@@ -429,13 +435,36 @@ export default function NewLeadPanel({
                             : "border-accent-dark/50 text-accent-dark"
                         }`}
                       >
-                        EPC {dossier.epc.rating} · {dossier.epc.date?.slice(0, 4)}
+                        EPC {dossier.epc.rating}
+                        {dossier.epc.potential ? ` (potential ${dossier.epc.potential})` : ""} ·{" "}
+                        {dossier.epc.date?.slice(0, 4)}
                         {dossier.epc.current ? " · in date, filed to Documents" : " · EXPIRED"}
+                      </span>
+                    )}
+                    {dossier.valuation && (
+                      <span className="rounded-full bg-accent-soft px-3 py-1.5 text-[11.5px] font-semibold text-accent-dark">
+                        Worth ~£{dossier.valuation.price.toLocaleString("en-GB")}
+                      </span>
+                    )}
+                    {dossier.areaRent && (
+                      <span className="rounded-full border border-line/80 px-3 py-1.5 text-[11.5px]">
+                        {dossier.areaRent.beds}-beds here let at ~£
+                        {dossier.areaRent.avg.toLocaleString("en-GB")} pcm
                       </span>
                     )}
                     {dossier.sqft && (
                       <span className="rounded-full border border-line/80 px-3 py-1.5 text-[11.5px]">
                         {dossier.sqft.toLocaleString("en-GB")} sq ft
+                      </span>
+                    )}
+                    {dossier.tenure && (
+                      <span className="rounded-full border border-line/80 px-3 py-1.5 text-[11.5px]">
+                        {dossier.tenure}
+                      </span>
+                    )}
+                    {dossier.floodRisk && dossier.floodRisk !== "None" && (
+                      <span className="rounded-full border border-accent-dark/50 px-3 py-1.5 text-[11.5px] text-accent-dark">
+                        Flood risk: {dossier.floodRisk}
                       </span>
                     )}
                     {dossier.uprn && (
