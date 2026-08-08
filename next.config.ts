@@ -12,6 +12,12 @@ const nextConfig: NextConfig = {
   // Pin the workspace root — a stray lockfile in the user home directory
   // otherwise makes Next trace files from the wrong root.
   outputFileTracingRoot: __dirname,
+  // The build stamp, worn in the profile footer. Ends the "is this screen
+  // even running the new code?" conversation for good: a stale tab says an
+  // old name, and that's the whole diagnosis. Railway provides the sha.
+  env: {
+    NEXT_PUBLIC_BUILD: (process.env.RAILWAY_GIT_COMMIT_SHA ?? "").slice(0, 7) || "dev",
+  },
 };
 
 export default nextConfig;

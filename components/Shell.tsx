@@ -285,7 +285,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               <>
                 <span className="min-w-0 flex-1">
                   <span className="hand block truncate text-[13px]">The Lettings Experts</span>
-                  <span className="block text-[10px] text-muted">Preview access</span>
+                  <span className="block text-[10px] text-muted">
+                    Preview access · {process.env.NEXT_PUBLIC_BUILD}
+                  </span>
                 </span>
                 <span
                   className={`text-muted transition-transform ${profileOpen ? "rotate-180" : ""}`}
