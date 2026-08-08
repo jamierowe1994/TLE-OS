@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
@@ -19,15 +19,68 @@ import { LEADS, STAGE_TONE, leadSide, type Lead } from "@/lib/leads-sample";
  * never have to care which. Every action written here goes back to REX.
  */
 
-function Filter({ label }: { label: string }) {
+/** A filter that filters: pick a value, the list narrows, the chip wears
+ *  the choice; "All …" hands the rows back. */
+function Filter({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: string[];
+  value: string | null;
+  onChange: (v: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
   return (
-    <button
-      type="button"
-      className="flex items-center gap-2 whitespace-nowrap rounded-full border border-line/80 px-3.5 py-2 text-[12px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
-    >
-      {label}
-      <span className="text-[9px]">▾</span>
-    </button>
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-3.5 py-2 text-[12px] transition-colors ${
+          value
+            ? "border-accent-dark bg-accent-soft/50 font-semibold text-accent-dark"
+            : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
+        }`}
+      >
+        {value ?? label}
+        <span className="text-[9px]">▾</span>
+      </button>
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-[60] cursor-default"
+          />
+          <div className="fade-up absolute left-0 top-full z-[70] mt-1.5 max-h-72 min-w-[170px] overflow-y-auto rounded-2xl border border-line/80 bg-card p-1.5 shadow-[0_16px_40px_-14px_rgba(0,0,0,0.3)]">
+            <button
+              type="button"
+              onClick={() => { onChange(null); setOpen(false); }}
+              className={`block w-full rounded-lg px-3 py-2 text-left text-[12px] transition-colors hover:bg-accent-soft/40 ${
+                value === null ? "font-semibold text-accent-dark" : ""
+              }`}
+            >
+              {label}
+            </button>
+            {options.map((o) => (
+              <button
+                key={o}
+                type="button"
+                onClick={() => { onChange(o); setOpen(false); }}
+                className={`block w-full whitespace-nowrap rounded-lg px-3 py-2 text-left text-[12px] transition-colors hover:bg-accent-soft/40 ${
+                  value === o ? "font-semibold text-accent-dark" : ""
+                }`}
+              >
+                {o}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -45,23 +98,45 @@ function Source({ s }: { s: string }) {
   );
 }
 
-const PER_PAGE = 20;
-
 export default function Leads() {
   // Closed on arrival: the page is the inbox, full width. The panel is a
   // consequence of picking someone, never the state you land in.
   const [openId, setOpenId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [creating, setCreating] = useState(false);
+  // Stacks of 25 — enough by default, more when they want a long scroll.
+  const [perPage, setPerPage] = useState(25);
+  const [q, setQ] = useState("");
+  const [fSource, setFSource] = useState<string | null>(null);
+  const [fAgent, setFAgent] = useState<string | null>(null);
+  const [fStage, setFStage] = useState<string | null>(null);
   const params = useSearchParams();
   const side = params.get("side"); // "tenant" | "landlord" | null (both)
 
+  // The dropdowns offer what the book actually contains — no imagined values.
+  const sources = useMemo(() => [...new Set(LEADS.map((l) => l.source))].sort(), []);
+  const agents = useMemo(() => [...new Set(LEADS.map((l) => l.agent))].sort(), []);
+  const stages = useMemo(() => [...new Set(LEADS.map((l) => l.stage))], []);
+
   // Tenant-side and landlord-side are different jobs with different questions,
-  // so the nav splits them and the list follows.
-  const book = useMemo(
-    () => (side ? LEADS.filter((l) => leadSide(l) === side) : LEADS),
-    [side]
-  );
+  // so the nav splits them and the list follows. The filters stack on top.
+  const book = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return LEADS.filter((l) => {
+      if (side && leadSide(l) !== side) return false;
+      if (fSource && l.source !== fSource) return false;
+      if (fAgent && l.agent !== fAgent) return false;
+      if (fStage && l.stage !== fStage) return false;
+      if (needle && !`${l.name} ${l.email} ${l.area} ${l.preferred}`.toLowerCase().includes(needle))
+        return false;
+      return true;
+    });
+  }, [side, fSource, fAgent, fStage, q]);
+
+  // A filter change can strand the page number past the end of the list.
+  useEffect(() => {
+    setPage(0);
+  }, [side, fSource, fAgent, fStage, q, perPage]);
   const open = book.find((l) => l.id === openId) ?? null;
 
   /** Previous/Next walk the whole filtered book, not just the visible page. */
@@ -70,7 +145,7 @@ export default function Leads() {
     const i = book.findIndex((l) => l.id === open.id);
     const next = book[(i + delta + book.length) % book.length];
     setOpenId(next.id);
-    setPage(Math.floor(book.indexOf(next) / PER_PAGE));
+    setPage(Math.floor(book.indexOf(next) / perPage));
   }
 
   // Defined once — a fresh array each render would restart the prefs effect.
@@ -104,8 +179,8 @@ export default function Leads() {
   );
   const cols = useColumns<Lead>("leads", defs);
 
-  const pages = Math.max(1, Math.ceil(book.length / PER_PAGE));
-  const rows = book.slice(page * PER_PAGE, page * PER_PAGE + PER_PAGE);
+  const pages = Math.max(1, Math.ceil(book.length / perPage));
+  const rows = book.slice(page * perPage, page * perPage + perPage);
 
   return (
     <>
@@ -133,12 +208,14 @@ export default function Leads() {
               <input
                 type="text"
                 placeholder="Search leads…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
                 className="w-full bg-transparent text-[12px] outline-none placeholder:text-muted/70"
               />
             </label>
-            <Filter label="All sources" />
-            <Filter label="All agents" />
-            <Filter label="All stages" />
+            <Filter label="All sources" options={sources} value={fSource} onChange={setFSource} />
+            <Filter label="All agents" options={agents} value={fAgent} onChange={setFAgent} />
+            <Filter label="All stages" options={stages} value={fStage} onChange={setFStage} />
             <ColumnCustomiser cols={cols} />
           </div>
 
@@ -152,9 +229,21 @@ export default function Leads() {
           </div>
 
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line/70 pt-4">
-            <p className="text-[11px] text-muted">
-              Showing {book.length ? page * PER_PAGE + 1 : 0}–
-              {Math.min((page + 1) * PER_PAGE, book.length)} of {book.length} leads
+            <p className="flex items-center gap-2.5 text-[11px] text-muted">
+              Showing {book.length ? page * perPage + 1 : 0}–
+              {Math.min((page + 1) * perPage, book.length)} of {book.length} leads
+              <select
+                value={perPage}
+                onChange={(e) => setPerPage(Number(e.target.value))}
+                className="rounded-full border border-line/80 bg-transparent px-2.5 py-1 text-[11px] outline-none transition-colors hover:border-ink/40"
+                title="Leads per page"
+              >
+                {[25, 50, 75, 100].map((n) => (
+                  <option key={n} value={n}>
+                    {n} per page
+                  </option>
+                ))}
+              </select>
             </p>
             <div className="flex items-center gap-1.5">
               <button

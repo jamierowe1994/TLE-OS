@@ -307,40 +307,52 @@ export default function NewLeadPanel({
                  because for a landlord the property IS the enquiry, and the
                  dossier can be reading its history while the phone call is
                  still on pleasantries. ── */
-            <div className="mx-auto flex h-full max-w-3xl flex-col gap-4 py-2">
+            /* No boxes — two full-bleed halves split by one line, each an
+               illustration big enough to carry the choice and a word big
+               enough to read across the room (James, 8 Aug 2026). */
+            <div className="mx-auto flex h-full max-w-3xl flex-col justify-center">
               {(
                 [
                   {
                     k: "tenant" as const,
                     title: "Tenant",
                     blurb: "Someone looking for a home — budget, area, viewings.",
-                    art: "/illustrations/notioly/home-caring.svg",
+                    art: "/illustrations/notioly/place-search.svg",
                   },
                   {
                     k: "landlord" as const,
                     title: "Landlord",
                     blurb: "Someone with a property — we'll look it up as you type the address.",
-                    art: "/illustrations/notioly/moving.svg",
+                    art: "/illustrations/notioly/home-insurance.svg",
                   },
                 ]
-              ).map((c) => (
+              ).map((c, i) => (
                 <PressButton
                   key={c.k}
                   onClick={() => {
                     setKind(c.k);
                     if (c.k === "landlord") set("enquiry")("Landlord");
                   }}
-                  className="block-pop flex min-h-0 flex-1 items-center gap-6 rounded-3xl border border-line/80 bg-box p-8 text-left hover:border-ink"
+                  className={`group flex min-h-0 flex-1 items-center gap-10 px-8 py-6 text-left ${
+                    i === 1 ? "border-t border-line/70" : ""
+                  }`}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={c.art} alt="" aria-hidden className="art h-28 w-28 shrink-0" />
+                  <img
+                    src={c.art}
+                    alt=""
+                    aria-hidden
+                    className="art h-52 w-52 shrink-0 transition-transform duration-300 group-hover:scale-[1.05]"
+                  />
                   <span className="min-w-0">
-                    <span className="hand block text-[24px] leading-tight">{c.title}</span>
-                    <span className="mt-1 block text-[13px] leading-relaxed text-muted">
+                    <span className="hand block text-[42px] leading-tight">{c.title}</span>
+                    <span className="mt-2 block max-w-sm text-[14px] leading-relaxed text-muted">
                       {c.blurb}
                     </span>
                   </span>
-                  <span className="ml-auto text-[20px] text-muted">→</span>
+                  <span className="ml-auto text-[26px] text-muted transition-transform duration-300 group-hover:translate-x-1.5">
+                    →
+                  </span>
                 </PressButton>
               ))}
             </div>

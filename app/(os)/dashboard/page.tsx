@@ -52,13 +52,15 @@ export default function Dashboard() {
           mid-scroll — the white-plate flash. The isolated eggshell wrapper
           stays as the blend floor; BlendVideo makes what's blended a canvas,
           which the compositor treats as ordinary content on every frame. */}
-      <div className="mt-2 flex justify-end pr-6">
-        <div className="isolate hidden bg-page sm:block">
-          <BlendVideo
-            src="/illustrations/dog-wag-3.mp4"
-            className="art-video pointer-events-none w-72"
-          />
-        </div>
+      {/* The dog follows you now — pinned to the viewport's bottom corner,
+          padding along as the page scrolls. Multiply/screen blending keeps
+          him readable over whatever he wanders across; pointer-events-none
+          keeps him from ever standing between you and a button. */}
+      <div className="pointer-events-none fixed bottom-1 right-8 z-[95] hidden sm:block">
+        <BlendVideo
+          src="/illustrations/dog-wag-3.mp4"
+          className="art-video pointer-events-none w-64"
+        />
       </div>
     </>
   );

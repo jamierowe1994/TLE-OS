@@ -288,7 +288,7 @@ export function DataTable<T extends { id: string }>({
                 } ${active ? "bg-accent-soft/50" : "hover:bg-page"}`}
               >
                 {cols.visible.map((c) => (
-                  <td key={c.key} className={`py-3 pr-3 ${c.cell ?? ""}`}>
+                  <td key={c.key} className={`py-4 pr-3 ${c.cell ?? ""}`}>
                     {c.render(row)}
                   </td>
                 ))}
