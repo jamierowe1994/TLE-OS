@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import BlendVideo from "@/components/BlendVideo";
 import DoodleIcon from "@/components/DoodleIcon";
 import LeadSourceChart from "@/components/LeadSourceChart";
 import PageHeader from "@/components/PageHeader";
@@ -212,22 +213,15 @@ export default function Dashboard() {
           true-255 plate, so multiply alone does the work — no counter-scale,
           no brightness clip.
 
-          The wrapper is ISOLATED and paints its own page colour. Left to blend
-          against the page itself, the dog was at the compositor's mercy: mid-
-          scroll Chrome promotes layers, the blend loses sight of the backdrop,
-          and the white plate flashes in — visible as "white at the top of the
-          scroll, transparent at the bottom". An isolated group with an opaque
-          eggshell floor gives multiply the same thing to blend into on every
-          frame, wherever the page happens to be. */}
+          Rendered through BlendVideo, not a bare <video>: Chrome composites
+          video on its own hardware layer and can drop mix-blend-mode there
+          mid-scroll — the white-plate flash. The isolated eggshell wrapper
+          stays as the blend floor; BlendVideo makes what's blended a canvas,
+          which the compositor treats as ordinary content on every frame. */}
       <div className="mt-2 flex justify-end pr-6">
         <div className="isolate hidden bg-page sm:block">
-          <video
+          <BlendVideo
             src="/illustrations/dog-wag-3.mp4"
-            autoPlay
-            muted
-            loop
-            playsInline
-            aria-hidden
             className="art-video pointer-events-none w-72"
           />
         </div>
