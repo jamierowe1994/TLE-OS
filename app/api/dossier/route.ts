@@ -73,6 +73,9 @@ function looksLikeRent(price: number): boolean {
 export async function GET(req: NextRequest) {
   const address = req.nextUrl.searchParams.get("address")?.trim() ?? "";
   const postcode = req.nextUrl.searchParams.get("postcode")?.trim() ?? "";
+  // ?debug=1 exposes WHY a source produced nothing — which house the
+  // resolvers actually matched, and what the trust check decided. Reads only.
+  const debug = req.nextUrl.searchParams.get("debug") === "1";
   if (!address || !postcode) {
     return NextResponse.json({ ok: false, error: "address and postcode required" }, { status: 400 });
   }
@@ -166,6 +169,20 @@ export async function GET(req: NextRequest) {
     const zooplaTrusted = Boolean(
       detail?.fullAddress && sharesNumber(address, detail.fullAddress)
     );
+    if (debug) {
+      out.zooplaDebug = {
+        sent: raAddress,
+        message: hist?.message ?? null,
+        resultCount: hist?.resultCount ?? null,
+        matched: detail?.fullAddress ?? null,
+        trusted: zooplaTrusted,
+        listings: (detail?.historicListings ?? []).map(
+          (l: { date: string; price: number; images: string[] }) => ({
+            date: l.date, price: l.price, images: l.images?.length ?? 0,
+          })
+        ),
+      };
+    }
 
     if (detail && zooplaTrusted) {
       const listings: {
