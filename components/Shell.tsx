@@ -31,7 +31,7 @@ const FRONT: NavItem[] = [
   { href: "/applications", label: "Applications", icon: "checklist" },
 ];
 const BACK: NavItem[] = [
-  { href: "/property-management", label: "Property management", icon: "key" },
+  { href: "/compliance", label: "Compliance", icon: "shield" },
   { href: "/portfolio", label: "Portfolio", icon: "folder" },
   { href: "/finances", label: "Finances", icon: "wallet" },
 ];
