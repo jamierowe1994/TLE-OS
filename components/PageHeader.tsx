@@ -128,7 +128,7 @@ export default function PageHeader({
           <div
             className={`pointer-events-none absolute bottom-0 origin-bottom-right scale-[0.5] sm:scale-[0.68] lg:scale-[0.88] xl:scale-100 ${
               flushRight
-                ? "right-0 sm:right-1 lg:right-2 xl:right-2"
+                ? "right-0"
                 : "right-5 sm:right-8 lg:right-12 xl:right-14"
             }`}
             style={{ height: illustrationHeight }}

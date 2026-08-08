@@ -76,7 +76,10 @@ export default function Dashboard() {
       <PageHeader
         title={greeting()}
         blurb="Here's what's happening with your lettings business today."
-        illustrationNode={<WindowScene />}
+        /* translate-x cancels the empty margin drawn inside the artwork
+           itself (its ink stops 26/520 short of its own right edge), so the
+           frame genuinely touches the corner instead of hovering near it. */
+        illustrationNode={<WindowScene className="translate-x-[9px]" />}
         lineBreak="none"
         flushRight
       />
