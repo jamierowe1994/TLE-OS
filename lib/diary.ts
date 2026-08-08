@@ -31,6 +31,12 @@ export type Appt = {
    *  appointment is from the one being booked. Town-level is enough. */
   lat?: number;
   lng?: number;
+  /** How to reach the person it's with — the drawer's phone-them button. */
+  contact?: { email: string; phone: string };
+  /** The sitting tenant, when the property has one. null = vacant. A
+   *  tenanted viewing without a heads-up is the thing this data exists
+   *  to catch. */
+  tenant?: string | null;
   /** The record this appointment is a line in. */
   link?: { href: string; label: string };
   /** The messages the booking flow sends, and whether they went. */
@@ -67,6 +73,7 @@ export const DIARY: Appt[] = [
     id: "d-past-patel", day: -2, start: "14:30", mins: 30, kind: "viewing",
     what: "Viewing — 183 Walesby Lane", where: "New Ollerton NG22",
     who: "James Patel", agent: "Michael", lat: 53.199, lng: -1.02,
+    contact: { email: "james.patel@workmail.com", phone: "07700 900541" }, tenant: "Dean Halliwell",
     link: { href: "/listings", label: "183 Walesby Lane" },
     comms: [sent("Confirmation to James Patel"), sent("Heads-up to the current tenant")],
   },
@@ -74,6 +81,7 @@ export const DIARY: Appt[] = [
     id: "d-past-clark", day: -1, start: "11:00", mins: 30, kind: "viewing",
     what: "Viewing — 2, 10 Cardiff Grove", where: "Luton LU1",
     who: "Olivia Clark", agent: "Kirstie", lat: 51.879, lng: -0.415,
+    contact: { email: "olivia.clark@btinternet.com", phone: "07700 900112" }, tenant: null,
     link: { href: "/listings", label: "2, 10 Cardiff Grove" },
     comms: [sent("Confirmation to Olivia Clark")],
   },
@@ -81,6 +89,7 @@ export const DIARY: Appt[] = [
     id: "d-past-williams", day: -1, start: "16:00", mins: 30, kind: "viewing",
     what: "Viewing — 8 Recreation Terrace", where: "Nottingham NG9",
     who: "Tom Williams", agent: "Kirstie", lat: 52.928, lng: -1.274,
+    contact: { email: "t.williams84@outlook.com", phone: "07700 900389" }, tenant: null,
     link: { href: "/listings", label: "8 Recreation Terrace" },
     comms: [sent("Confirmation to Tom Williams")],
   },
@@ -90,6 +99,7 @@ export const DIARY: Appt[] = [
     id: "d-shah", day: 0, start: "10:15", mins: 30, kind: "viewing",
     what: "Viewing — 12 Elm Gardens", where: "Didsbury M20",
     who: "Priya Shah", agent: "Michael", lat: 53.417, lng: -2.231,
+    contact: { email: "priya.shah@gmail.com", phone: "07700 900234" }, tenant: null,
     link: { href: "/listings", label: "12 Elm Gardens" },
     comms: [sent("Confirmation to Priya Shah"), sent("Landlord told")],
   },
@@ -104,13 +114,17 @@ export const DIARY: Appt[] = [
     id: "d-bell", day: 0, start: "15:30", mins: 30, kind: "viewing",
     what: "Viewing — 41 Harewood Road", where: "Luton LU1",
     who: "Marcus Bell", agent: "Kirstie", lat: 51.879, lng: -0.415,
+    contact: { email: "marcus.bell@yahoo.co.uk", phone: "07700 900456" }, tenant: "The Ellis family",
     link: { href: "/listings", label: "41 Harewood Road" },
-    comms: [sent("Confirmation to Marcus Bell"), sent("Landlord told")],
+    // Tenanted, and the tenants have NOT been told — the exact miss this
+    // page exists to make loud.
+    comms: [sent("Confirmation to Marcus Bell"), sent("Landlord told"), unsent("Heads-up to The Ellis family")],
   },
   {
     id: "d-turner", day: 0, start: "17:00", mins: 30, kind: "viewing",
     what: "Viewing — Flat 2, Mercer Street", where: "Manchester M4",
     who: "Sophie Turner", agent: "Kirstie", lat: 53.484, lng: -2.23,
+    contact: { email: "sophie.turner@gmail.com", phone: "07700 900678" }, tenant: null,
     link: { href: "/listings", label: "Flat 2, Mercer Street" },
     // The one the diary exists to catch: booked, never confirmed.
     comms: [unsent("Confirmation to Sophie Turner"), sent("Landlord told")],
@@ -121,6 +135,7 @@ export const DIARY: Appt[] = [
     id: "d-okafor", day: 1, start: "09:30", mins: 30, kind: "viewing",
     what: "Viewing — 228a Chapter Road", where: "London NW2",
     who: "Daniel Okafor", agent: "Michael", lat: 51.56, lng: -0.21,
+    contact: { email: "daniel.okafor@gmail.com", phone: "07700 900801" }, tenant: null,
     link: { href: "/listings", label: "228a Chapter Road" },
     comms: [sent("Confirmation to Daniel Okafor")],
   },
@@ -128,8 +143,9 @@ export const DIARY: Appt[] = [
     id: "d-adams", day: 1, start: "14:00", mins: 30, kind: "viewing",
     what: "Viewing — 108 Cherry Tree Drive", where: "Coventry CV4",
     who: "Chloe Adams", agent: "Kirstie", lat: 52.38, lng: -1.55,
+    contact: { email: "chloe.adams.property@gmail.com", phone: "07700 900923" }, tenant: "Student let — five sharers",
     link: { href: "/listings", label: "108 Cherry Tree Drive" },
-    comms: [unsent("Confirmation to Chloe Adams"), sent("Landlord told")],
+    comms: [unsent("Confirmation to Chloe Adams"), sent("Landlord told"), sent("Heads-up to the sharers")],
   },
   {
     id: "d-movein", day: 2, start: "10:00", mins: 60, kind: "movein",
@@ -156,6 +172,7 @@ export const DIARY: Appt[] = [
     id: "d-nextweek-view", day: 7, start: "15:00", mins: 30, kind: "viewing",
     what: "Viewing — 12 Elm Gardens", where: "Didsbury M20",
     who: "Aisha Rahman", agent: "Kirstie", lat: 53.417, lng: -2.231,
+    contact: { email: "aisha.rahman@gmail.com", phone: "07700 900345" }, tenant: null,
     link: { href: "/listings", label: "12 Elm Gardens" },
     comms: [sent("Confirmation to Aisha Rahman"), sent("Landlord told")],
   },
