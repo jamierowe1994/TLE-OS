@@ -110,7 +110,7 @@ export default function Dashboard() {
 
       {/* ── Three working boxes. */}
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <Card title="Needs attention" tag={<Pill tone="accent">{ATTENTION.length - done.size}</Pill>}>
+        <Card pop title="Needs attention" tag={<Pill tone="accent">{ATTENTION.length - done.size}</Pill>}>
           <ul className="space-y-2.5">
             {ATTENTION.map((a) => {
               const ticked = done.has(a.id);
@@ -145,7 +145,7 @@ export default function Dashboard() {
           </ul>
         </Card>
 
-        <Card title="Today" tag={<FlowTag to="REX (service TBC)" />}>
+        <Card pop title="Today" tag={<FlowTag to="REX (service TBC)" />}>
           <ul className="space-y-2.5">
             {TODAY.map((t) => (
               <li key={t.time} className="flex items-baseline gap-3">
@@ -166,7 +166,7 @@ export default function Dashboard() {
             above already counts and the nav is one click from. Where those
             leads came FROM is the question this page couldn't answer, and it's
             the one that decides where the marketing money goes. */}
-        <Card title="Lead sources" tag={<FlowTag from="REX + GHL" />}>
+        <Card pop title="Lead sources" tag={<FlowTag from="REX + GHL" />}>
           <LeadSourceChart />
           <Link href="/leads" className="mt-4 block text-[11px] font-semibold text-muted transition-colors hover:text-ink">
             All leads →
@@ -175,7 +175,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── The journey, compact, along the bottom — the pipeline snapshot. */}
-      <div className="fade-up mt-6 rounded-2xl border border-line/80 bg-panel p-5">
+      <div className="fade-up block-pop mt-6 rounded-2xl border border-line/80 bg-page p-5 hover:border-ink">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-[15px]">Pipeline snapshot</h2>
           <FlowTag from="REX + PayProp" />

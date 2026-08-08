@@ -217,7 +217,10 @@ h1, h2, h3, h4, h5 {
    the brand colour instead.
 --------------------------------------------------------------------------- */
 .block-pop {
-  --pop-color: var(--ink);
+  /* Softened from raw ink (James, 8 Aug 2026): a ~700-weight slab. Mixed
+     from the tokens rather than hard-coded, so dark mode gets a dimmed
+     white slab for free instead of disappearing grey-on-charcoal. */
+  --pop-color: color-mix(in srgb, var(--ink) 72%, var(--page));
   box-shadow: 0 0 0 0 var(--pop-color);
   transition:
     transform 190ms cubic-bezier(0.22, 1, 0.36, 1),
