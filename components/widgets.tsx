@@ -76,6 +76,78 @@ function Bars({ data, tall = false }: { data: number[]; tall?: boolean }) {
   );
 }
 
+/** A donut, drawn from the tokens — shares as arc lengths on one ring. */
+function Donut({
+  parts,
+  size = 84,
+  centre,
+  sub,
+}: {
+  parts: { value: number; color: string }[];
+  size?: number;
+  centre: string;
+  sub?: string;
+}) {
+  const total = parts.reduce((n, p) => n + p.value, 0) || 1;
+  const r = 34;
+  const C = 2 * Math.PI * r;
+  let offset = 0;
+  return (
+    <span className="relative inline-block shrink-0" style={{ width: size, height: size }}>
+      <svg viewBox="0 0 84 84" className="h-full w-full -rotate-90">
+        {parts.map((p, i) => {
+          const len = (p.value / total) * C;
+          const el = (
+            <circle
+              key={i}
+              cx="42" cy="42" r={r}
+              fill="none"
+              stroke={p.color}
+              strokeWidth="9"
+              strokeDasharray={`${Math.max(0, len - 2)} ${C - len + 2}`}
+              strokeDashoffset={-offset}
+              strokeLinecap="butt"
+            />
+          );
+          offset += len;
+          return el;
+        })}
+      </svg>
+      <span className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="figures text-[15px] leading-none">{centre}</span>
+        {sub && <span className="mt-0.5 text-[7.5px] font-semibold uppercase tracking-wide text-muted">{sub}</span>}
+      </span>
+    </span>
+  );
+}
+
+/** A line graph: the trend as a stroke, the area softly filled beneath it,
+ *  a dot on where we are now. */
+function LineGraph({ data, tall = false }: { data: number[]; tall?: boolean }) {
+  const W = 200;
+  const H = tall ? 64 : 40;
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const span = max - min || 1;
+  const pts = data.map((v, i) => [
+    (i / (data.length - 1)) * (W - 8) + 4,
+    H - 6 - ((v - min) / span) * (H - 14),
+  ]);
+  const line = pts.map(([x, y], i) => `${i ? "L" : "M"} ${x.toFixed(1)} ${y.toFixed(1)}`).join(" ");
+  const last = pts[pts.length - 1];
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }} preserveAspectRatio="none">
+      <path
+        d={`${line} L ${last[0]} ${H} L 4 ${H} Z`}
+        fill="var(--accent-soft)"
+        opacity="0.55"
+      />
+      <path d={line} fill="none" stroke="var(--accent-dark)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={last[0]} cy={last[1]} r="3.4" fill="var(--accent-dark)" />
+    </svg>
+  );
+}
+
 function RowList({
   rows,
   max,
@@ -271,7 +343,7 @@ export const WIDGETS: Record<string, WidgetDef> = {
               <p className="figures text-[34px] leading-none">14</p>
               <p className="mt-1 text-[11px] font-medium text-accent-dark">3 uncontacted today</p>
               <div className="mt-3">
-                <Bars data={LEADS_12M} tall />
+                <LineGraph data={LEADS_12M} tall />
                 <p className="mt-1 text-[9px] text-muted">last 12 months · 502 leads</p>
               </div>
             </div>
@@ -368,13 +440,18 @@ export const WIDGETS: Record<string, WidgetDef> = {
         {w === 1 && h === 1 && <BigCount value="93%" hint="of the managed book" />}
         {(w >= 2 || h >= 2) && (
           <>
-            <div className="mt-2 flex items-end gap-4">
-              <p className="figures text-[34px] leading-none">93%</p>
-              <div className="mb-1.5 min-w-0 flex-1">
-                <div className="h-2.5 overflow-hidden rounded-full bg-accent-soft">
-                  <div className="h-full rounded-full bg-accent-dark" style={{ width: "93%" }} />
-                </div>
-                <p className="mt-1 text-[10px] text-muted">529 of 568 homes occupied</p>
+            <div className="mt-2 flex items-center gap-4">
+              <Donut
+                centre="93%"
+                sub="occupied"
+                parts={[
+                  { value: 529, color: "var(--accent-dark)" },
+                  { value: 39, color: "var(--accent-soft)" },
+                ]}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px]"><span className="figures text-[16px]">529</span> <span className="text-muted">occupied</span></p>
+                <p className="mt-1 text-[12px]"><span className="figures text-[16px]">39</span> <span className="text-muted">standing empty</span></p>
               </div>
             </div>
             {h >= 2 && (
@@ -644,7 +721,7 @@ export const WIDGETS: Record<string, WidgetDef> = {
                 <p className="mt-1 text-[11px] font-medium text-accent-dark">+6% on last month</p>
               </div>
               <div className="mb-1 min-w-0 flex-1">
-                <Bars data={[31, 34, 33, 36, 32, 35, 37, 34, 38, 36, 36, 38]} tall={h >= 2} />
+                <LineGraph data={[31, 34, 33, 36, 32, 35, 37, 34, 38, 36, 36, 38.4]} tall={h >= 2} />
                 <p className="mt-1 text-[9px] text-muted">12 months · net of VAT</p>
               </div>
             </div>
@@ -690,6 +767,101 @@ export const WIDGETS: Record<string, WidgetDef> = {
             ]}
             max={h >= 2 ? 3 : 2}
           />
+        )}
+      </>
+    ),
+  },
+
+  arrears: {
+    label: "Rent arrears", icon: "coin", hint: "who owes what, and for how long",
+    defaultW: 1, defaultH: 1,
+    render: (w, h) => (
+      <>
+        <Head icon="coin" label="Rent arrears" />
+        {w === 1 && h === 1 ? (
+          <BigCount value="£2,340" hint="3 tenancies behind" />
+        ) : (
+          <>
+            <div className="mt-2 flex items-center gap-4">
+              <Donut
+                centre="99.2%"
+                sub="collected"
+                parts={[
+                  { value: 99.2, color: "var(--accent-dark)" },
+                  { value: 0.8, color: "var(--accent-soft)" },
+                ]}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="figures text-[22px] leading-none">£2,340</p>
+                <p className="mt-1 text-[11px] text-muted">outstanding across 3 tenancies</p>
+              </div>
+            </div>
+            {h >= 2 && (
+              <RowList
+                rows={[
+                  { a: "£1,190", b: "Flat 2, Mercer Street", c: "34 days" },
+                  { a: "£750", b: "183 Walesby Lane", c: "12 days" },
+                  { a: "£400", b: "88 Kelvin Way", c: "5 days" },
+                ]}
+                max={3}
+              />
+            )}
+          </>
+        )}
+      </>
+    ),
+  },
+
+  maintenance: {
+    label: "Maintenance jobs", icon: "setting", hint: "what's open, what's urgent",
+    defaultW: 1, defaultH: 1,
+    render: (w, h) => (
+      <>
+        <Head icon="setting" label="Maintenance jobs" />
+        {w === 1 && h === 1 ? (
+          <BigCount value="7" hint="2 urgent" />
+        ) : (
+          <RowList
+            rows={[
+              { a: "2d", b: "Boiler down — Flat A, Milton Road", c: "URGENT" },
+              { a: "4d", b: "Leak under sink — 41 Harewood Road", c: "URGENT" },
+              { a: "6d", b: "Fence panel — 12 Elm Gardens" },
+              { a: "9d", b: "Extractor fan — 108 Cherry Tree Drive" },
+              { a: "15d", b: "Guttering — 8 Recreation Terrace" },
+            ]}
+            max={h >= 2 ? 5 : 3}
+          />
+        )}
+      </>
+    ),
+  },
+
+  renewals: {
+    label: "Tenancies ending", icon: "file-contract", hint: "renew or re-let — the next 60 days",
+    defaultW: 1, defaultH: 1,
+    render: (w, h) => (
+      <>
+        <Head icon="file-contract" label="Tenancies ending" />
+        {w === 1 && h === 1 ? (
+          <BigCount value="5" hint="in the next 60 days" />
+        ) : (
+          <>
+            <RowList
+              rows={[
+                { a: "12d", b: "Flat 2, Mercer Street", c: "renewal offered" },
+                { a: "23d", b: "6 Sandpiper Way", c: "no reply yet" },
+                { a: "31d", b: "44 Priory Court (rm 2)", c: "leaving — re-let" },
+                { a: "44d", b: "88 Kelvin Way", c: "renewal likely" },
+                { a: "58d", b: "183 Walesby Lane", c: "chase" },
+              ]}
+              max={h >= 2 ? 5 : 3}
+            />
+            {h >= 2 && w >= 2 && (
+              <p className="mt-3 border-t border-line/50 pt-2 text-[10px] text-muted">
+                Every unanswered renewal is a void in waiting — chase the quiet ones first.
+              </p>
+            )}
+          </>
         )}
       </>
     ),

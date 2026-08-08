@@ -46,6 +46,7 @@ const TRAY_GROUPS: { key: string; label: string; icon: string; types: string[] }
   { key: "social", label: "Social & ads", icon: "megaphone", types: ["facebook-leads", "instagram-leads", "ads-live"] },
   { key: "book", label: "The book", icon: "folder", types: ["portfolio", "on-market", "occupancy", "recently-listed"] },
   { key: "diary", label: "People & diary", icon: "calendar", types: ["today", "viewings-week", "attention"] },
+  { key: "management", label: "Management", icon: "setting", types: ["arrears", "maintenance", "renewals"] },
   { key: "compliance", label: "Compliance", icon: "shield", types: ["compliance-due"] },
 ];
 
@@ -72,7 +73,11 @@ export default function BentoDash() {
   const [trayGroup, setTrayGroup] = useState<string | null>(null);
 
   const gridRef = useRef<HTMLDivElement | null>(null);
-  const lastReorderAt = useRef<{ x: number; y: number } | null>(null);
+  // The dwell: a reorder happens only after the pointer has SETTLED on a
+  // spot. Fast passes across the board move nothing.
+  const pendingRef = useRef<{ index: number; since: number } | null>(null);
+  const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pendingIndex, setPendingIndex] = useState<number | null>(null);
   const rectsRef = useRef(new Map<string, { x: number; y: number }>());
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
@@ -147,28 +152,55 @@ export default function BentoDash() {
     return b.before ? b.idx : b.idx + 1;
   }
 
+  const DWELL_MS = 1300;
+
+  function clearPending() {
+    pendingRef.current = null;
+    setPendingIndex(null);
+    if (commitTimer.current) {
+      clearTimeout(commitTimer.current);
+      commitTimer.current = null;
+    }
+  }
+
+  function commitPending() {
+    const d = dragRef.current;
+    const p = pendingRef.current;
+    if (!d || !p) return;
+    setLayout((cur) => {
+      const from = cur.findIndex((i) => i.id === d.id);
+      if (from < 0 || p.index === from) return cur;
+      const next = [...cur];
+      const [m] = next.splice(from, 1);
+      next.splice(Math.max(0, Math.min(next.length, p.index)), 0, m);
+      return next;
+    });
+    clearPending();
+  }
+
+  /** Where the drag WOULD land — but nothing moves until the pointer has
+   *  sat there for the dwell. Moving fast across the board moves nothing;
+   *  settling somewhere for a moment is the instruction (James, 8 Aug 2026). */
   function moveDraggedTo(px: number, py: number) {
     const d = dragRef.current;
     if (!d) return;
-    // Hysteresis: a reorder is a decision, not a tremor. The board only
-    // reconsiders after the pointer has travelled a real distance from the
-    // last reorder — this is most of "calm".
-    const last = lastReorderAt.current;
-    if (last && Math.hypot(px - last.x, py - last.y) < 36) return;
     const target = insertionIndex(px, py, d.id);
     if (target == null) return;
-    setLayout((cur) => {
-      const from = cur.findIndex((i) => i.id === d.id);
-      if (from < 0) return cur;
-      let to = target > from ? target - 1 : target;
-      to = Math.max(0, Math.min(cur.length - 1, to));
-      if (to === from) return cur;
-      lastReorderAt.current = { x: px, y: py };
-      const next = [...cur];
-      const [m] = next.splice(from, 1);
-      next.splice(to, 0, m);
-      return next;
-    });
+    const from = layoutRef.current.findIndex((i) => i.id === d.id);
+    let to = target > from ? target - 1 : target;
+    to = Math.max(0, Math.min(layoutRef.current.length - 1, to));
+    if (to === from) {
+      clearPending();
+      return;
+    }
+    const p = pendingRef.current;
+    if (p && p.index === to) return; // timer's already running on this spot
+    clearPending();
+    pendingRef.current = { index: to, since: performance.now() };
+    setPendingIndex(to);
+    // The timeout does the committing, so holding perfectly STILL over a
+    // spot works too — pointer events stop when the hand does.
+    commitTimer.current = setTimeout(commitPending, DWELL_MS);
   }
 
   /** Is this pointer off the board? Off the board is how a tile leaves. */
@@ -203,7 +235,8 @@ export default function BentoDash() {
       if (!moved) return;
       const off = isOffBoard(ev.clientX, ev.clientY);
       setOffBoard(off);
-      if (!off) moveDraggedTo(ev.clientX, ev.clientY);
+      if (off) clearPending();
+      else moveDraggedTo(ev.clientX, ev.clientY);
     };
 
     const onUp = (ev: PointerEvent) => {
@@ -212,7 +245,7 @@ export default function BentoDash() {
       window.removeEventListener("pointercancel", onUp);
       const d = dragRef.current;
       dragRef.current = null;
-      lastReorderAt.current = null;
+      clearPending();
       setDrag(null);
       setOffBoard(false);
       if (!d) return;
@@ -341,7 +374,12 @@ export default function BentoDash() {
                       /* The wiggle rests while anything is being moved or
                          resized — hands need still targets. */
                       drag?.moved || resize ? "" : "wiggle"
-                    } ${isDragged ? "opacity-30" : ""}`
+                    } ${isDragged ? "opacity-30" : ""} ${
+                      /* Where the held tile will squeeze in when you settle. */
+                      drag?.moved && pendingIndex === idx && !isDragged
+                        ? "ring-2 ring-accent-dark/60"
+                        : ""
+                    }`
                   : "block-pop fade-up overflow-hidden border-line/80 hover:border-ink"
               }`}
               style={{
