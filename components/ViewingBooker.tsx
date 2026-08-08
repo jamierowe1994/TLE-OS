@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DoneTick, PressButton } from "@/components/Bits";
+import PeopleFilterBar, { NO_FILTERS, passesFilters, type Filters } from "@/components/PeopleFilter";
 import SendFlow, { type Outgoing } from "@/components/SendFlow";
 import { dayKey, useForecast } from "@/lib/weather";
 import { landlordFor } from "@/lib/journey";
@@ -47,7 +48,13 @@ function monthGrid(anchor: Date) {
   return cells;
 }
 
-export type Person = { name: string; email: string; phone: string };
+export type Person = {
+  name: string;
+  email: string;
+  phone: string;
+  lat?: number;
+  lng?: number;
+};
 
 export default function ViewingBooker({
   open,
@@ -58,6 +65,7 @@ export default function ViewingBooker({
   agent,
   mode = "viewing",
   address = "",
+  occupant = null,
   onBooked,
 }: {
   open: boolean;
@@ -75,6 +83,10 @@ export default function ViewingBooker({
   mode?: "viewing" | "appraisal" | "takeon";
   /** The landlord's address, for appraisal mode. */
   address?: string;
+  /** The sitting tenant, when the property has one — they get a courtesy
+   *  heads-up about the visit, because strangers with keys is how landlords
+   *  lose tenants' goodwill. */
+  occupant?: Person | null;
   onBooked: (summary: { when: string; property: string; locality: string; who: string }) => void;
 }) {
   const today = useMemo(() => startOfDay(new Date()), []);
@@ -85,6 +97,7 @@ export default function ViewingBooker({
   const [slot, setSlot] = useState<string | null>(null);
   const [propertyId, setPropertyId] = useState<string>(properties[0]?.id ?? "");
   const [sentCount, setSentCount] = useState(0);
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
 
   // Reset on OPEN only. The caller builds `properties` inline, so depending on
   // it here would throw the chosen day and time away on any parent re-render.
@@ -100,6 +113,7 @@ export default function ViewingBooker({
     setSlot(null);
     setPropertyId(seed.current[0]?.id ?? "");
     setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
+    setFilters(NO_FILTERS);
   }, [open, today]);
 
   useEffect(() => {
@@ -195,7 +209,32 @@ export default function ViewingBooker({
     const llFirst = ll.name.split(" ")[0];
     const where = `${property.name}, ${property.locality}`;
 
+    const occupantMsg: Outgoing[] = occupant
+      ? [
+          {
+            key: "occupant",
+            role: "Current tenant — a courtesy heads-up",
+            name: occupant.name,
+            email: occupant.email,
+            phone: occupant.phone,
+            channel: "email",
+            on: true,
+            subject: `A viewing at your home — ${shortDate} at ${slot}`,
+            emailBody:
+              `Hi ${occupant.name.split(" ")[0]},\n\n` +
+              `Just to let you know we'll be bringing someone to view the property on ${dayLabel} at ${slot}. ` +
+              `${agent} will accompany them, and it should take no more than twenty minutes.\n\n` +
+              `If that time doesn't work for you, reply here and we'll move it — your say comes first.\n\n` +
+              `Kind regards,\n${agent}\nThe Lettings Experts`,
+            whatsappBody:
+              `Hi ${occupant.name.split(" ")[0]}, heads-up — viewing at yours ${shortDate} at ${slot}, ` +
+              `${agent} accompanying, ~20 mins. Reply if that time's bad and we'll move it.`,
+          },
+        ]
+      : [];
+
     return [
+      ...occupantMsg,
       {
         key: "applicant",
         role: "Applicant",
@@ -296,8 +335,10 @@ export default function ViewingBooker({
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           {/* ══ WHO'S VIEWING ══ */}
           {stage === "applicant" && (
+            <>
+            <PeopleFilterBar filters={filters} onChange={setFilters} />
             <ul className="space-y-2.5">
-              {(applicants ?? []).map((p) => {
+              {(applicants ?? []).filter((p) => passesFilters(p, filters)).map((p) => {
                 const on = chosen?.email === p.email;
                 return (
                   <li key={p.email}>
@@ -328,7 +369,14 @@ export default function ViewingBooker({
                   No applicants on the book yet — add a lead first.
                 </p>
               )}
+              {applicants && applicants.length > 0 &&
+                !applicants.some((p) => passesFilters(p, filters)) && (
+                <p className="py-8 text-center text-[12.5px] text-muted">
+                  Nobody matches those filters — widen the radius or clear the search.
+                </p>
+              )}
             </ul>
+            </>
           )}
 
           {/* ══ WHEN ══ */}

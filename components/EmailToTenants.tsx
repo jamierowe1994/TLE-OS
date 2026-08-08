@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DoneTick, PressButton } from "@/components/Bits";
+import PeopleFilterBar, { NO_FILTERS, passesFilters, type Filters } from "@/components/PeopleFilter";
 import { LEADS, leadSide, type Lead } from "@/lib/leads-sample";
 
 /**
@@ -55,8 +56,9 @@ function matchesFor(listing: Listing): Match[] {
       if (sameArea) why.push("Right area");
 
       return { lead: l, why, strong: affordable && sameArea };
-    })
-    .sort((a, b) => b.why.length - a.why.length || a.lead.name.localeCompare(b.lead.name));
+    });
+  // No re-sort: the book is newest-first, and "most recent first" is the
+  // order agents asked for. The strong matches are pre-ticked, not promoted.
 }
 
 export default function EmailToTenants({
@@ -70,6 +72,7 @@ export default function EmailToTenants({
 }) {
   const [chosen, setChosen] = useState<string[]>([]);
   const [stage, setStage] = useState<"pick" | "review" | "sent">("pick");
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
 
   const matches = useMemo(() => (listing ? matchesFor(listing) : []), [listing]);
 
@@ -81,6 +84,7 @@ export default function EmailToTenants({
     if (!open) return;
     setChosen(seed.current.filter((m) => m.strong).map((m) => m.lead.id));
     setStage("pick");
+    setFilters(NO_FILTERS);
   }, [open]);
 
   useEffect(() => {
@@ -94,6 +98,9 @@ export default function EmailToTenants({
 
   const picked = matches.filter((m) => chosen.includes(m.lead.id));
   const strongCount = matches.filter((m) => m.strong).length;
+  const visible = matches.filter((m) =>
+    passesFilters({ name: m.lead.name, lat: m.lead.lat, lng: m.lead.lng }, filters)
+  );
 
   return (
     <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
@@ -142,8 +149,9 @@ export default function EmailToTenants({
                   ? `${strongCount} on the book match this on budget and area, and are ticked. The rest are here to add by hand.`
                   : "Nobody matches on both budget and area, so nothing is ticked — pick by hand."}
               </p>
+              <PeopleFilterBar filters={filters} onChange={setFilters} />
               <ul className="space-y-2.5">
-                {matches.map((m) => {
+                {visible.map((m) => {
                   const on = chosen.includes(m.lead.id);
                   return (
                     <li key={m.lead.id}>
@@ -187,6 +195,11 @@ export default function EmailToTenants({
                     </li>
                   );
                 })}
+                {!visible.length && (
+                  <p className="py-6 text-center text-[12px] text-muted">
+                    Nobody matches those filters — widen the radius or clear the search.
+                  </p>
+                )}
               </ul>
             </>
           )}

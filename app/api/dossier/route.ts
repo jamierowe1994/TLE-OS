@@ -45,6 +45,26 @@ function houseNumber(address: string): string | null {
   return m ? m[1].toLowerCase() : null;
 }
 
+/**
+ * Every building-ish number in an address, postcode digits excluded. Two
+ * sources describing one property can order "Flat 2" and "10" differently —
+ * comparing only the FIRST number made the trust check drop honest matches
+ * (and their photos) on flats. Sharing ANY number is the honest test.
+ */
+function addressNumbers(address: string): Set<string> {
+  const noPc = address.replace(/[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}/gi, "");
+  return new Set(
+    (noPc.match(/\b\d+[a-zA-Z]?\b/g) ?? []).map((n) => n.toLowerCase())
+  );
+}
+
+function sharesNumber(a: string, b: string): boolean {
+  const an = addressNumbers(a);
+  if (!an.size) return false;
+  for (const n of addressNumbers(b)) if (an.has(n)) return true;
+  return false;
+}
+
 /** Zoopla history prices: small numbers are rents, big ones are sale prices. */
 function looksLikeRent(price: number): boolean {
   return price > 0 && price < 10000;
@@ -128,13 +148,24 @@ export async function GET(req: NextRequest) {
   if (RA_KEY) {
     const raHeaders = { "x-realtyapi-key": RA_KEY };
 
+    // The resolver gets one clean address: strip the ", UK" tail and any
+    // embedded postcode, then append the postcode exactly once.
+    const cleanAddress = address
+      .replace(/,?\s*UK\s*$/i, "")
+      .replace(/[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}/gi, "")
+      .replace(/\s*,\s*,/g, ",")
+      .replace(/,\s*$/, "")
+      .trim();
+    const raAddress = `${cleanAddress}, ${postcode}`;
+
     const hist = await j(
-      `https://zoopla.realtyapi.io/history?address=${encodeURIComponent(`${address}, ${postcode}`)}`,
+      `https://zoopla.realtyapi.io/history?address=${encodeURIComponent(raAddress)}`,
       raHeaders
     );
     const detail = hist?.detail;
-    const zooplaTrusted =
-      detail?.fullAddress && num && houseNumber(detail.fullAddress) === num;
+    const zooplaTrusted = Boolean(
+      detail?.fullAddress && sharesNumber(address, detail.fullAddress)
+    );
 
     if (detail && zooplaTrusted) {
       const listings: {
@@ -169,14 +200,14 @@ export async function GET(req: NextRequest) {
     }
 
     const rm = await j(
-      `https://rightmove.realtyapi.io/details/byaddress?address=${encodeURIComponent(`${address}, ${postcode}`)}`,
+      `https://rightmove.realtyapi.io/details/byaddress?address=${encodeURIComponent(raAddress)}`,
       raHeaders
     );
     const rmHasSubstance =
       rm?.detail && (rm.detail.propertyUrl || rm.detail.branch?.displayName || rm.detail.price?.primary);
     if (rmHasSubstance) {
       const resolved: string = rm.resolvedAddress ?? rm.detail.address ?? "";
-      const exact = Boolean(num && houseNumber(resolved) === num);
+      const exact = sharesNumber(address, resolved);
       out.currentListing = {
         confidence: exact ? "exact" : "street",
         address: resolved,

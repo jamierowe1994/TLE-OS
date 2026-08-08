@@ -40,6 +40,8 @@ export type Listing = {
   lastUpdated: string | null;
   imageCount: number;
   image: string | null;
+  /** The sitting tenant, when the property is occupied. */
+  tenant?: { name: string; email: string; phone: string } | null;
 };
 
 type TabKey = "overview" | "photos" | "viewings" | "applicants";
@@ -107,6 +109,8 @@ const APPLICANTS: Person[] = LEADS.filter((l) => leadSide(l) === "tenant").map((
   name: l.name,
   email: l.email,
   phone: l.phone,
+  lat: l.lat,
+  lng: l.lng,
 }));
 
 export default function ListingDrawer({
@@ -269,6 +273,23 @@ export default function ListingDrawer({
                 <p className="mt-1 flex items-center gap-2 truncate text-[11.5px] text-muted">
                   <DoodleIcon name="mail" size={13} /> {ll.email}
                 </p>
+                {/* The people the property comes with. A tenanted viewing
+                    without a heads-up is how goodwill dies — so the tenant
+                    lives on the record, and the booker offers to tell them. */}
+                {listing.tenant && (
+                  <div className="mt-3 border-t border-line/60 pt-2.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
+                      Current tenant
+                    </p>
+                    <p className="hand mt-1 text-[13px]">{listing.tenant.name}</p>
+                    <p className="mt-1 flex items-center gap-2 text-[11px] text-muted">
+                      <DoodleIcon name="call" size={12} /> {listing.tenant.phone}
+                    </p>
+                    <p className="mt-0.5 flex items-center gap-2 truncate text-[11px] text-muted">
+                      <DoodleIcon name="mail" size={12} /> {listing.tenant.email}
+                    </p>
+                  </div>
+                )}
                 <p className="mt-3 border-t border-line/60 pt-2.5 text-[10px] leading-relaxed text-muted">
                   Stand-in until the REX property record is joined in.
                 </p>
@@ -546,6 +567,7 @@ export default function ListingDrawer({
         onClose={() => setBooking(false)}
         lead={null}
         applicants={APPLICANTS}
+        occupant={listing.tenant ?? null}
         properties={[listing]}
         agent="Kirstie"
         onBooked={(v) => setBooked((cur) => [{ when: v.when, who: v.who }, ...cur])}

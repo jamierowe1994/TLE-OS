@@ -30,6 +30,10 @@ export type Lead = {
   preferred: string;
   agent: string;
   notes: string;
+  /** Approximate geotag for radius search — real leads get exact ones from
+   *  the address lookup; the demo book carries town-level points. */
+  lat?: number;
+  lng?: number;
   activity: { icon: string; text: string; when: string }[];
 };
 
@@ -46,7 +50,7 @@ const act = (icon: string, text: string, when: string) => ({ icon, text, when })
 
 export const LEADS: Lead[] = [
   {
-    id: "l1", name: "Sarah Johnson", email: "sarah.johnson@gmail.com", phone: "07712 345 678",
+    id: "l1", lat: 53.4166, lng: -2.231, name: "Sarah Johnson", email: "sarah.johnson@gmail.com", phone: "07712 345 678",
     enquiry: "Letting", area: "Didsbury", budget: "£1,200 pcm", source: "Rightmove",
     received: "10m ago", stage: "New", moveDate: "1 Sep 2026",
     preferred: "Didsbury, Withington", agent: "Kirstie",
@@ -59,7 +63,7 @@ export const LEADS: Lead[] = [
     ],
   },
   {
-    id: "l2", name: "Tom Williams", email: "t.williams84@outlook.com", phone: "07945 678 901",
+    id: "l2", lat: 53.4444, lng: -2.276, name: "Tom Williams", email: "t.williams84@outlook.com", phone: "07945 678 901",
     enquiry: "Letting", area: "Chorlton", budget: "£1,000 pcm", source: "Zoopla",
     received: "25m ago", stage: "Contacted", moveDate: "15 Sep 2026",
     preferred: "Chorlton", agent: "Kirstie", notes: "Sharer, needs two doubles.",
@@ -69,7 +73,7 @@ export const LEADS: Lead[] = [
     ],
   },
   {
-    id: "l3", name: "Chloe Adams", email: "chloe.adams.property@gmail.com", phone: "07890 123 456",
+    id: "l3", lat: 52.3792, lng: -1.5615, name: "Chloe Adams", email: "chloe.adams.property@gmail.com", phone: "07890 123 456",
     enquiry: "Landlord", area: "Coventry", budget: "3-bed to let", source: "Facebook ad",
     received: "2h ago", stage: "New", moveDate: "Flexible",
     preferred: "Coventry CV4", agent: "Unassigned",
@@ -80,7 +84,7 @@ export const LEADS: Lead[] = [
     ],
   },
   {
-    id: "l4", name: "Emma Brown", email: "emma.brown1992@hotmail.co.uk", phone: "07890 123 456",
+    id: "l4", lat: 53.418, lng: -2.229, name: "Emma Brown", email: "emma.brown1992@hotmail.co.uk", phone: "07890 123 456",
     enquiry: "Letting", area: "Didsbury", budget: "£1,300 pcm", source: "Website",
     received: "3h ago", stage: "Viewing booked", moveDate: "1 Oct 2026",
     preferred: "Didsbury", agent: "Michael", notes: "Booked in for Thursday at 17:00.",
@@ -90,7 +94,7 @@ export const LEADS: Lead[] = [
     ],
   },
   {
-    id: "l5", name: "James Patel", email: "james.patel@workmail.com", phone: "07411 222 333",
+    id: "l5", lat: 53.431, lng: -2.227, name: "James Patel", email: "james.patel@workmail.com", phone: "07411 222 333",
     enquiry: "Letting", area: "Withington", budget: "£950 pcm", source: "Instagram ad",
     received: "4h ago", stage: "Qualified", moveDate: "20 Aug 2026",
     preferred: "Withington, Fallowfield", agent: "Kirstie", notes: "Referencing pack sent.",
@@ -100,7 +104,7 @@ export const LEADS: Lead[] = [
     ],
   },
   {
-    id: "l6", name: "Olivia Clark", email: "olivia.clark@btinternet.com", phone: "07789 444 555",
+    id: "l6", lat: 53.442, lng: -2.28, name: "Olivia Clark", email: "olivia.clark@btinternet.com", phone: "07789 444 555",
     enquiry: "Letting", area: "Chorlton", budget: "£1,100 pcm", source: "Referral",
     received: "1d ago", stage: "Waiting", moveDate: "Not sure yet",
     preferred: "Chorlton, Sale", agent: "Unassigned",
@@ -108,126 +112,126 @@ export const LEADS: Lead[] = [
     activity: [act("user", "Referred by an existing landlord", "Yesterday")],
   },
   {
-    id: "l7", name: "Daniel Okafor", email: "d.okafor@gmail.com", phone: "07533 987 221",
+    id: "l7", lat: 53.4715, lng: -2.296, name: "Daniel Okafor", email: "d.okafor@gmail.com", phone: "07533 987 221",
     enquiry: "Letting", area: "Salford", budget: "£1,150 pcm", source: "Rightmove",
     received: "1d ago", stage: "Contacted", moveDate: "5 Sep 2026",
     preferred: "Salford Quays", agent: "Michael", notes: "Wants a balcony if possible.",
     activity: [act("target", "Lead received from Rightmove", "Yesterday")],
   },
   {
-    id: "l8", name: "Ryan Whitfield", email: "ryan.whitfield.rentals@gmail.com", phone: "07822 664 190",
+    id: "l8", lat: 51.8787, lng: -0.4149, name: "Ryan Whitfield", email: "ryan.whitfield.rentals@gmail.com", phone: "07822 664 190",
     enquiry: "Valuation", area: "Luton", budget: "Owner-occupier", source: "Instagram ad",
     received: "1d ago", stage: "Contacted", moveDate: "n/a",
     preferred: "Luton LU1", agent: "Kirstie", notes: "Considering letting rather than selling.",
     activity: [act("megaphone", "Lead captured by Instagram campaign", "Yesterday")],
   },
   {
-    id: "l9", name: "Aisha Rahman", email: "aisha.rahman@nhs.net", phone: "07701 556 233",
+    id: "l9", lat: 53.4419, lng: -2.217, name: "Aisha Rahman", email: "aisha.rahman@nhs.net", phone: "07701 556 233",
     enquiry: "Letting", area: "Fallowfield", budget: "£900 pcm", source: "Zoopla",
     received: "2d ago", stage: "Viewing booked", moveDate: "1 Sep 2026",
     preferred: "Fallowfield", agent: "Michael", notes: "Shift worker — evenings only for viewings.",
     activity: [act("calendar", "Viewing booked — Sat 11:00", "2 days ago")],
   },
   {
-    id: "l10", name: "George Mensah", email: "g.mensah@yahoo.co.uk", phone: "07984 220 117",
+    id: "l10", lat: 53.436, lng: -2.194, name: "George Mensah", email: "g.mensah@yahoo.co.uk", phone: "07984 220 117",
     enquiry: "Letting", area: "Levenshulme", budget: "£1,050 pcm", source: "OnTheMarket",
     received: "2d ago", stage: "New", moveDate: "12 Sep 2026",
     preferred: "Levenshulme", agent: "Unassigned", notes: "",
     activity: [act("target", "Lead received from OnTheMarket", "2 days ago")],
   },
   {
-    id: "l11", name: "Hannah Price", email: "hannah.price@gmail.com", phone: "07445 812 909",
+    id: "l11", lat: 51.7527, lng: -0.3394, name: "Hannah Price", email: "hannah.price@gmail.com", phone: "07445 812 909",
     enquiry: "Letting", area: "St Albans", budget: "£1,700 pcm", source: "Website",
     received: "3d ago", stage: "Qualified", moveDate: "14 Aug 2026",
     preferred: "St Albans AL1", agent: "Michael", notes: "Move-in monies due Friday.",
     activity: [act("shield", "Marked qualified", "3 days ago")],
   },
   {
-    id: "l12", name: "Liam Doyle", email: "liam.doyle@glasgowmail.com", phone: "07771 330 445",
+    id: "l12", lat: 55.8791, lng: -4.308, name: "Liam Doyle", email: "liam.doyle@glasgowmail.com", phone: "07771 330 445",
     enquiry: "Letting", area: "Glasgow", budget: "£1,300 pcm", source: "Rightmove",
     received: "3d ago", stage: "Qualified", moveDate: "20 Aug 2026",
     preferred: "Glasgow G12", agent: "Kirstie", notes: "Agreement out for signature.",
     activity: [act("doc", "Tenancy agreement sent", "3 days ago")],
   },
   {
-    id: "l13", name: "Sophie Turner", email: "sophie.turner.mcr@gmail.com", phone: "07612 774 008",
+    id: "l13", lat: 53.484, lng: -2.235, name: "Sophie Turner", email: "sophie.turner.mcr@gmail.com", phone: "07612 774 008",
     enquiry: "Letting", area: "Manchester", budget: "£995 pcm", source: "Rightmove",
     received: "4d ago", stage: "Waiting", moveDate: "12 Sep 2026",
     preferred: "Northern Quarter", agent: "Kirstie", notes: "Referencing stalled — chasing employer.",
     activity: [act("clock", "Referencing stalled 6 days", "4 days ago")],
   },
   {
-    id: "l14", name: "Marcus Bell", email: "marcus.bell@protonmail.com", phone: "07300 991 662",
+    id: "l14", lat: 51.88, lng: -0.418, name: "Marcus Bell", email: "marcus.bell@protonmail.com", phone: "07300 991 662",
     enquiry: "Letting", area: "Luton", budget: "£1,150 pcm", source: "OnTheMarket",
     received: "4d ago", stage: "Viewing booked", moveDate: "1 Sep 2026",
     preferred: "Luton LU1", agent: "Kirstie", notes: "",
     activity: [act("calendar", "Viewing booked — today 15:30", "4 days ago")],
   },
   {
-    id: "l15", name: "Priya Shah", email: "priya.shah.work@gmail.com", phone: "07890 445 112",
+    id: "l15", lat: 53.415, lng: -2.232, name: "Priya Shah", email: "priya.shah.work@gmail.com", phone: "07890 445 112",
     enquiry: "Letting", area: "Didsbury", budget: "£1,750 pcm", source: "Website",
     received: "5d ago", stage: "Qualified", moveDate: "1 Oct 2026",
     preferred: "Didsbury M20", agent: "Michael", notes: "PLC in progress.",
     activity: [act("shield", "Pre-let compliance started", "5 days ago")],
   },
   {
-    id: "l16", name: "Nathan Cole", email: "nathan.cole88@gmail.com", phone: "07455 003 771",
+    id: "l16", lat: 52.927, lng: -1.273, name: "Nathan Cole", email: "nathan.cole88@gmail.com", phone: "07455 003 771",
     enquiry: "Letting", area: "Nottingham", budget: "£850 pcm", source: "Facebook ad",
     received: "5d ago", stage: "Contacted", moveDate: "1 Oct 2026",
     preferred: "Nottingham NG9", agent: "Unassigned", notes: "",
     activity: [act("megaphone", "Lead captured by Facebook campaign", "5 days ago")],
   },
   {
-    id: "l17", name: "Beatrice Okonkwo", email: "beatrice.okonkwo@outlook.com", phone: "07533 220 984",
+    id: "l17", lat: 52.895, lng: -1.435, name: "Beatrice Okonkwo", email: "beatrice.okonkwo@outlook.com", phone: "07533 220 984",
     enquiry: "Landlord", area: "Derby", budget: "2 properties", source: "Referral",
     received: "6d ago", stage: "New", moveDate: "Flexible",
     preferred: "Derby DE24", agent: "Unassigned", notes: "Two flats coming off another agent.",
     activity: [act("user", "Referred by an existing landlord", "6 days ago")],
   },
   {
-    id: "l18", name: "Callum Fraser", email: "c.fraser@hotmail.com", phone: "07711 664 003",
+    id: "l18", lat: 53.2, lng: -1.01, name: "Callum Fraser", email: "c.fraser@hotmail.com", phone: "07711 664 003",
     enquiry: "Letting", area: "Newark", budget: "£750 pcm", source: "Zoopla",
     received: "6d ago", stage: "Not proceeding", moveDate: "n/a",
     preferred: "Newark NG22", agent: "Michael", notes: "Found somewhere else.",
     activity: [act("cross", "Marked not proceeding", "6 days ago")],
   },
   {
-    id: "l19", name: "Maya Lindqvist", email: "maya.lindqvist@gmail.com", phone: "07822 110 553",
+    id: "l19", lat: 51.56, lng: -0.214, name: "Maya Lindqvist", email: "maya.lindqvist@gmail.com", phone: "07822 110 553",
     enquiry: "Letting", area: "London", budget: "£2,400 pcm", source: "Rightmove",
     received: "1w ago", stage: "Viewing booked", moveDate: "1 Nov 2026",
     preferred: "London NW2", agent: "Michael", notes: "Relocating — viewing by video first.",
     activity: [act("calendar", "Video viewing booked", "1 week ago")],
   },
   {
-    id: "l20", name: "Ade Bamgbose", email: "ade.bamgbose@gmail.com", phone: "07900 447 218",
+    id: "l20", lat: 52.38, lng: -1.56, name: "Ade Bamgbose", email: "ade.bamgbose@gmail.com", phone: "07900 447 218",
     enquiry: "Letting", area: "Coventry", budget: "£1,975 pcm", source: "Website",
     received: "1w ago", stage: "Qualified", moveDate: "1 Sep 2026",
     preferred: "Coventry CV4", agent: "Kirstie", notes: "Family of four, needs a garden.",
     activity: [act("shield", "Marked qualified", "1 week ago")],
   },
   {
-    id: "l21", name: "Grace Whitmore", email: "grace.whitmore@icloud.com", phone: "07445 990 226",
+    id: "l21", lat: 53.509, lng: -2.265, name: "Grace Whitmore", email: "grace.whitmore@icloud.com", phone: "07445 990 226",
     enquiry: "Valuation", area: "Salford", budget: "Owner-occupier", source: "Facebook ad",
     received: "1w ago", stage: "Contacted", moveDate: "n/a",
     preferred: "Salford M7", agent: "Kirstie", notes: "Wants a rental appraisal on a 3-bed.",
     activity: [act("megaphone", "Lead captured by Facebook campaign", "1 week ago")],
   },
   {
-    id: "l22", name: "Oscar Rehman", email: "oscar.rehman@gmail.com", phone: "07377 552 041",
+    id: "l22", lat: 53.43, lng: -2.228, name: "Oscar Rehman", email: "oscar.rehman@gmail.com", phone: "07377 552 041",
     enquiry: "Letting", area: "Withington", budget: "£1,050 pcm", source: "OnTheMarket",
     received: "1w ago", stage: "Waiting", moveDate: "Dec 2026",
     preferred: "Withington", agent: "Unassigned", notes: "Not moving until December.",
     activity: [act("clock", "Long lead time — recontact in October", "1 week ago")],
   },
   {
-    id: "l23", name: "Isabelle Novak", email: "isabelle.novak@gmail.com", phone: "07600 883 194",
+    id: "l23", lat: 51.337, lng: -0.114, name: "Isabelle Novak", email: "isabelle.novak@gmail.com", phone: "07600 883 194",
     enquiry: "Letting", area: "Purley", budget: "£1,400 pcm", source: "Zoopla",
     received: "2w ago", stage: "Not proceeding", moveDate: "n/a",
     preferred: "Purley CR8", agent: "Michael", notes: "Budget didn't stretch.",
     activity: [act("cross", "Marked not proceeding", "2 weeks ago")],
   },
   {
-    id: "l24", name: "Freddie Ansah", email: "freddie.ansah.rentals@gmail.com", phone: "07988 211 447",
+    id: "l24", lat: 53.437, lng: -2.19, name: "Freddie Ansah", email: "freddie.ansah.rentals@gmail.com", phone: "07988 211 447",
     enquiry: "Letting", area: "Levenshulme", budget: "£1,050 pcm", source: "Instagram ad",
     received: "2w ago", stage: "Contacted", moveDate: "1 Oct 2026",
     preferred: "Levenshulme M19", agent: "Kirstie", notes: "",

@@ -14,7 +14,8 @@
       "daysOnMarket": 1129,
       "lastUpdated": "8mo ago",
       "imageCount": 0,
-      "image": null
+      "image": null,
+      "tenant": null
     },
     {
       "id": "295517",
@@ -28,7 +29,12 @@
       "daysOnMarket": 1044,
       "lastUpdated": "8mo ago",
       "imageCount": 11,
-      "image": "/rex/295517.jpg"
+      "image": "/rex/295517.jpg",
+      "tenant": {
+        "name": "Dean Halliwell",
+        "email": "dean.halliwell@gmail.com",
+        "phone": "07700 220 118"
+      }
     },
     {
       "id": "295547",
@@ -42,7 +48,8 @@
       "daysOnMarket": 1044,
       "lastUpdated": "8mo ago",
       "imageCount": 1,
-      "image": "/rex/295547.jpg"
+      "image": "/rex/295547.jpg",
+      "tenant": null
     },
     {
       "id": "295552",
@@ -56,7 +63,8 @@
       "daysOnMarket": 1044,
       "lastUpdated": "8mo ago",
       "imageCount": 0,
-      "image": null
+      "image": null,
+      "tenant": null
     },
     {
       "id": "299698",
@@ -70,7 +78,8 @@
       "daysOnMarket": 1038,
       "lastUpdated": "8mo ago",
       "imageCount": 12,
-      "image": "/rex/299698.jpg"
+      "image": "/rex/299698.jpg",
+      "tenant": null
     },
     {
       "id": "300102",
@@ -84,7 +93,12 @@
       "daysOnMarket": 1037,
       "lastUpdated": "2mo ago",
       "imageCount": 11,
-      "image": "/rex/300102.jpg"
+      "image": "/rex/300102.jpg",
+      "tenant": {
+        "name": "Amara Okoye",
+        "email": "amara.okoye@outlook.com",
+        "phone": "07811 335 902"
+      }
     },
     {
       "id": "334480",
@@ -98,7 +112,12 @@
       "daysOnMarket": 989,
       "lastUpdated": "3mo ago",
       "imageCount": 1,
-      "image": "/rex/334480.jpg"
+      "image": "/rex/334480.jpg",
+      "tenant": {
+        "name": "The Hughes family",
+        "email": "r.hughes82@gmail.com",
+        "phone": "07922 610 447"
+      }
     },
     {
       "id": "337806",
@@ -112,7 +131,8 @@
       "daysOnMarket": 977,
       "lastUpdated": "3mo ago",
       "imageCount": 0,
-      "image": null
+      "image": null,
+      "tenant": null
     },
     {
       "id": "339326",
@@ -126,7 +146,8 @@
       "daysOnMarket": 968,
       "lastUpdated": "3mo ago",
       "imageCount": 6,
-      "image": "/rex/339326.jpg"
+      "image": "/rex/339326.jpg",
+      "tenant": null
     },
     {
       "id": "340777",
@@ -140,7 +161,8 @@
       "daysOnMarket": 957,
       "lastUpdated": "8mo ago",
       "imageCount": 0,
-      "image": null
+      "image": null,
+      "tenant": null
     }
   ],
   "counts": {
