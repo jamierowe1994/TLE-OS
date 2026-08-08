@@ -52,6 +52,7 @@ export function Card({
   tag,
   className = "",
   pop = false,
+  onClick,
   children,
 }: {
   title?: string;
@@ -60,15 +61,19 @@ export function Card({
   /** The block backdrop on hover. Forces an opaque page-coloured fill,
    *  because a transparent card would let the slab show through itself. */
   pop?: boolean;
+  /** Makes the whole card a target — the Today box opening into the
+   *  calendar. Links inside still win their own clicks. */
+  onClick?: () => void;
   children: React.ReactNode;
 }) {
   return (
     // No background: the boxes sit ON the eggshell, outline only — white
     // slabs were louder than their contents and the reference doesn't use them.
     <section
+      onClick={onClick}
       className={`fade-up rounded-2xl border border-line/80 p-5 ${
         pop ? "block-pop bg-page hover:border-ink" : "bg-panel"
-      } ${className}`}
+      } ${onClick ? "cursor-pointer" : ""} ${className}`}
     >
       {(title || tag) && (
         <div className="mb-4 flex items-center justify-between gap-3">

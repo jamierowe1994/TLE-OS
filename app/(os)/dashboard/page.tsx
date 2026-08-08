@@ -3,11 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import BlendVideo from "@/components/BlendVideo";
+import DiaryCalendar from "@/components/DiaryCalendar";
 import DoodleIcon from "@/components/DoodleIcon";
 import LeadSourceChart from "@/components/LeadSourceChart";
 import PageHeader from "@/components/PageHeader";
 import WindowScene from "@/components/WindowScene";
 import { Card, FlowTag, Pill } from "@/components/Wire";
+import { todaysAppts } from "@/lib/diary";
 
 /**
  * The reference layout, made ours: four stats across the top, three working
@@ -42,12 +44,9 @@ const ATTENTION = [
   { id: "money", text: "£1,240 reconciled in, not yet paid out", area: "Finances", hot: false },
 ];
 
-const TODAY = [
-  { time: "10:15", what: "Viewing — 12 Elm Gardens", who: "Priya Shah" },
-  { time: "13:00", what: "Market appraisal — 9 Granby Road", who: "New landlord" },
-  { time: "15:30", what: "Viewing — 41 Harewood Road", who: "Marcus Bell" },
-  { time: "17:00", what: "Viewing — Flat 2, Mercer Street", who: "Sophie Turner" },
-];
+// The Today box reads from the same diary the full calendar draws, so the
+// two can never disagree about what the day holds.
+const TODAY = todaysAppts();
 
 /** Four bands, matching the portal's greeting — the OS should feel awake. */
 function greeting(): string {
@@ -61,6 +60,7 @@ function greeting(): string {
 
 export default function Dashboard() {
   const [done, setDone] = useState<Set<string>>(new Set());
+  const [diaryOpen, setDiaryOpen] = useState(false);
 
   function toggle(id: string) {
     setDone((prev) => {
@@ -145,11 +145,19 @@ export default function Dashboard() {
           </ul>
         </Card>
 
-        <Card pop title="Today" tag={<FlowTag to="REX (service TBC)" />}>
+        {/* Clicking anywhere on Today opens the full week — the box is the
+            summary, the calendar is the thing itself. */}
+        <Card
+          pop
+          className="group"
+          title="Today"
+          tag={<FlowTag from="365 calendar (sign-in TBC)" />}
+          onClick={() => setDiaryOpen(true)}
+        >
           <ul className="space-y-2.5">
             {TODAY.map((t) => (
-              <li key={t.time} className="flex items-baseline gap-3">
-                <span className="figures w-11 shrink-0 text-[13px] text-accent-dark">{t.time}</span>
+              <li key={t.id} className="flex items-baseline gap-3">
+                <span className="figures w-11 shrink-0 text-[13px] text-accent-dark">{t.start}</span>
                 <span className="min-w-0">
                   <span className="block truncate text-[12.5px]">{t.what}</span>
                   <span className="block text-[10.5px] text-muted">{t.who}</span>
@@ -157,9 +165,9 @@ export default function Dashboard() {
               </li>
             ))}
           </ul>
-          <Link href="/viewings" className="mt-3 block text-[11px] font-semibold text-muted transition-colors hover:text-ink">
-            Full diary →
-          </Link>
+          <span className="mt-3 block text-[11px] font-semibold text-muted transition-colors group-hover:text-ink">
+            Open the full calendar →
+          </span>
         </Card>
 
         {/* This slot used to be Latest leads — four names, which the stat tile
@@ -226,6 +234,8 @@ export default function Dashboard() {
           />
         </div>
       </div>
+
+      <DiaryCalendar open={diaryOpen} onClose={() => setDiaryOpen(false)} />
     </>
   );
 }

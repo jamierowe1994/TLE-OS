@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import DiaryCalendar from "@/components/DiaryCalendar";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import PropertyPhoto from "@/components/PropertyPhoto";
@@ -89,6 +90,7 @@ function Row({ v, showDate }: { v: Viewing; showDate?: boolean }) {
 
 export default function Viewings() {
   const [tab, setTab] = useState<"diary" | "recent">("diary");
+  const [calOpen, setCalOpen] = useState(false);
   const total = DAYS.reduce((n, d) => n + d.viewings.length, 0);
 
   return (
@@ -161,10 +163,22 @@ export default function Viewings() {
       )}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <Ghost
-          label="Week calendar"
-          detail="Drag to rebook, colour by negotiator, and see the gaps worth filling."
-        />
+        {/* Was a ghost; now it's real. Same calendar the dashboard's Today
+            box opens, so there is exactly one diary in the product. */}
+        <button
+          type="button"
+          onClick={() => setCalOpen(true)}
+          className="block-pop flex items-center gap-3 rounded-2xl border border-line/80 bg-page p-5 text-left hover:border-ink"
+        >
+          <DoodleIcon name="calendar" size={22} className="shrink-0 text-accent-dark" />
+          <span className="min-w-0">
+            <span className="hand block text-[14px]">Week calendar</span>
+            <span className="block text-[11px] text-muted">
+              The full grid — every appointment, clickable through to its file.
+            </span>
+          </span>
+          <span className="ml-auto text-[13px] text-muted">→</span>
+        </button>
         <Ghost
           label="Landlord feedback report"
           detail="Every viewing and its outcome, per property — the thing landlords chase for."
@@ -177,6 +191,8 @@ export default function Viewings() {
         unconfirmed</span> — flagged rather than assumed, and worth settling before this
         page is wired, since every booking here has to land somewhere real.
       </p>
+
+      <DiaryCalendar open={calOpen} onClose={() => setCalOpen(false)} />
     </>
   );
 }
