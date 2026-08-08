@@ -203,9 +203,9 @@ function TodayWidget({ w, h }: { w: number; h: number }) {
         {h === 1 ? (
           <BigCount value={String(today.length)} hint={`next at ${today[0]?.start ?? "—"}`} />
         ) : (
-          <div className={showTomorrow && w >= 2 ? "mt-3 grid grid-cols-2 gap-4" : "mt-3"}>
+          <div className={showTomorrow && w >= 2 ? "mt-5 grid grid-cols-2 gap-4" : "mt-5"}>
             <ul className="space-y-2.5">
-              {today.map((t) => (
+              {today.slice(0, 4).map((t) => (
                 <li key={t.id} className="flex items-baseline gap-3">
                   <span className="figures w-11 shrink-0 text-[13px] text-accent-dark">{t.start}</span>
                   <span className="min-w-0">
@@ -218,7 +218,7 @@ function TodayWidget({ w, h }: { w: number; h: number }) {
             {showTomorrow && (
               <ul className="space-y-2.5">
                 <li className="text-[10px] font-semibold uppercase tracking-wide text-muted">Tomorrow</li>
-                {tomorrow.map((t) => (
+                {tomorrow.slice(0, 4).map((t) => (
                   <li key={t.id} className="flex items-baseline gap-3">
                     <span className="figures w-11 shrink-0 text-[13px] text-muted">{t.start}</span>
                     <span className="min-w-0">
@@ -233,7 +233,7 @@ function TodayWidget({ w, h }: { w: number; h: number }) {
         )}
         {h >= 2 && (
           <span className="mt-3 block text-[11px] font-semibold text-muted">
-            Open the full calendar →
+            {today.length > 4 ? `+${today.length - 4} more today — open the full calendar →` : "Open the full calendar →"}
           </span>
         )}
       </button>
@@ -251,6 +251,7 @@ function AttentionWidget({ h }: { w: number; h: number }) {
     { id: "money", text: "£1,240 reconciled in, not yet paid out", area: "Finances", hot: false },
   ];
   const [done, setDone] = useState<Set<string>>(new Set());
+  const [showAll, setShowAll] = useState(false);
   if (h === 1) {
     return (
       <>
@@ -265,8 +266,8 @@ function AttentionWidget({ h }: { w: number; h: number }) {
         <Head icon="bell" label="Needs attention" />
         <Pill tone="accent">{ITEMS.length - done.size}</Pill>
       </div>
-      <ul className="mt-3.5 space-y-2.5">
-        {ITEMS.map((a) => {
+      <ul className="mt-5 space-y-2.5">
+        {(showAll ? ITEMS : ITEMS.slice(0, 4)).map((a) => {
           const ticked = done.has(a.id);
           return (
             <li key={a.id}>
@@ -300,6 +301,15 @@ function AttentionWidget({ h }: { w: number; h: number }) {
           );
         })}
       </ul>
+      {ITEMS.length > 4 && !showAll && (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="mt-3 text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+        >
+          Show all {ITEMS.length} →
+        </button>
+      )}
     </>
   );
 }

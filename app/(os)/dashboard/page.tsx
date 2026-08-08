@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import BentoDash from "@/components/BentoDash";
 import BlendVideo from "@/components/BlendVideo";
 import PageHeader from "@/components/PageHeader";
@@ -26,6 +27,7 @@ function greeting(): string {
 }
 
 export default function Dashboard() {
+  const [customising, setCustomising] = useState(false);
   return (
     <>
       <PageHeader
@@ -37,6 +39,20 @@ export default function Dashboard() {
         illustrationNode={<WindowScene className="translate-x-[9px]" />}
         lineBreak="none"
         flushRight
+        /* Customise rides the search row — one line of chrome, not two. */
+        actions={
+          <button
+            type="button"
+            onClick={() => setCustomising((c) => !c)}
+            className={`flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-medium transition-colors ${
+              customising
+                ? "bg-accent-dark font-semibold text-page"
+                : "border border-line/80 text-muted hover:border-ink hover:text-ink"
+            }`}
+          >
+            {customising ? "Done" : "✨ Customise"}
+          </button>
+        }
       />
 
       <BentoDash
@@ -44,6 +60,7 @@ export default function Dashboard() {
         defaultLayout={DEFAULT_LAYOUT}
         trayGroups={DASH_TRAY_GROUPS}
         storeKey="tle-dash-layout-v1"
+        control={{ on: customising, set: setCustomising }}
       />
 
       {/* ── He signs off the page ──
@@ -56,10 +73,13 @@ export default function Dashboard() {
           padding along as the page scrolls. Multiply/screen blending keeps
           him readable over whatever he wanders across; pointer-events-none
           keeps him from ever standing between you and a button. */}
-      <div className="pointer-events-none fixed bottom-1 right-8 z-[95] hidden sm:block">
+      <div className="pointer-events-none fixed bottom-0 right-8 z-[95] hidden sm:block">
+        {/* keyed: real alpha, no blending — a fixed layer drops blends, which
+            is how the white box came back. .art inverts him in the dark. */}
         <BlendVideo
+          keyed
           src="/illustrations/dog-wag-3.mp4"
-          className="art-video pointer-events-none w-64"
+          className="art pointer-events-none block w-64"
         />
       </div>
     </>

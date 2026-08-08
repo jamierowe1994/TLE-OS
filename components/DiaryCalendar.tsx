@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
+import DiaryGrid from "@/components/DiaryGrid";
 import { FlowTag } from "@/components/Wire";
 import { DIARY, KIND_META, minutesOf, type Appt } from "@/lib/diary";
 
@@ -96,7 +98,11 @@ export default function DiaryCalendar({
 
   if (!open) return null;
 
-  return (
+  // PORTALED to <body>: this modal can be opened from inside a bento tile,
+  // and a tile's hover transform makes `fixed` position against the TILE —
+  // the calendar was rendering inside the box and strobing as the transform
+  // toggled. A portal escapes any transformed ancestor for good.
+  return createPortal(
     <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
       <button
         aria-label="Close"
@@ -153,109 +159,11 @@ export default function DiaryCalendar({
         <div className="flex min-h-0 flex-1">
           {/* ── The grid. ── */}
           <div className="min-w-0 flex-1 overflow-auto">
-            <div className="min-w-[760px]">
-              {/* Day headers — sticky, so the week survives scrolling. */}
-              <div className="sticky top-0 z-10 grid grid-cols-[52px_repeat(7,1fr)] border-b border-line/70 bg-page">
-                <div />
-                {columns.map((c, i) => {
-                  const isToday = c.offset === 0;
-                  return (
-                    <div
-                      key={i}
-                      className={`border-l border-line/40 px-2 py-2.5 text-center ${
-                        isToday ? "bg-accent-soft/40" : ""
-                      }`}
-                    >
-                      <span
-                        className={`text-[10px] font-semibold uppercase tracking-wide ${
-                          isToday ? "text-accent-dark" : "text-muted"
-                        }`}
-                      >
-                        {DAY_NAMES[i]}
-                      </span>
-                      <span
-                        className={`figures block text-[17px] leading-tight ${
-                          isToday ? "text-accent-dark" : ""
-                        }`}
-                      >
-                        {fmtDay(c.date)}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Hours down, days across. */}
-              <div className="grid grid-cols-[52px_repeat(7,1fr)]">
-                {/* The time gutter. */}
-                <div className="relative" style={{ height: gridH }}>
-                  {hours.map((h) => (
-                    <span
-                      key={h}
-                      className="figures absolute right-2 -translate-y-1/2 text-[10px] text-muted"
-                      style={{ top: (h * 60 - DAY_START) * PX_PER_MIN }}
-                    >
-                      {String(h).padStart(2, "0")}:00
-                    </span>
-                  ))}
-                </div>
-
-                {columns.map((c, i) => {
-                  const appts = DIARY.filter((a) => a.day === c.offset);
-                  const isToday = c.offset === 0;
-                  const past = c.offset < 0;
-                  return (
-                    <div
-                      key={i}
-                      className={`relative border-l border-line/40 ${
-                        isToday ? "bg-accent-soft/20" : ""
-                      }`}
-                      style={{ height: gridH }}
-                    >
-                      {/* The hour rules. */}
-                      {hours.map((h) => (
-                        <span
-                          key={h}
-                          className="absolute inset-x-0 border-t border-line/40"
-                          style={{ top: (h * 60 - DAY_START) * PX_PER_MIN }}
-                        />
-                      ))}
-
-                      {appts.map((a) => {
-                        const top = (minutesOf(a.start) - DAY_START) * PX_PER_MIN;
-                        const h = Math.max(a.mins * PX_PER_MIN, 26);
-                        const on = selId === a.id;
-                        return (
-                          <button
-                            key={a.id}
-                            type="button"
-                            onClick={() => setSelId(on ? null : a.id)}
-                            className={`absolute inset-x-1 overflow-hidden rounded-lg border px-1.5 py-1 text-left transition-colors ${
-                              on
-                                ? "border-accent-dark bg-accent-soft"
-                                : past
-                                  ? "border-line/70 bg-page opacity-60 hover:opacity-100"
-                                  : "border-accent-dark/40 bg-accent-soft/55 hover:border-accent-dark"
-                            }`}
-                            style={{ top: top + 1, height: h - 2 }}
-                          >
-                            <span className="figures block text-[9px] leading-none text-accent-dark">
-                              {a.start}
-                            </span>
-                            <span className="hand block truncate text-[10.5px] leading-tight">
-                              {a.what.replace(/^[^—]+—\s*/, "")}
-                            </span>
-                            {h > 44 && (
-                              <span className="block truncate text-[9px] text-muted">{a.who}</span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <DiaryGrid
+              week={week}
+              selApptId={selId}
+              onAppt={(id) => setSelId(selId === id ? null : id)}
+            />
           </div>
 
           {/* ── The appointment's file, down the right. ── */}
@@ -353,6 +261,7 @@ export default function DiaryCalendar({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

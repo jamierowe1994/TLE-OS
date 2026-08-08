@@ -35,6 +35,19 @@ function dayDate(offset: number): string {
   return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
 
+function Legend({ past }: { past?: boolean }) {
+  return (
+    <div className="mb-3 hidden items-center gap-3 border-b border-line/70 pb-2 text-[9px] font-bold uppercase tracking-[0.12em] text-muted/70 sm:flex">
+      <span className="w-16 shrink-0">{past ? "When" : "Time"}</span>
+      <span className="min-w-0 flex-1">Applicant · property</span>
+      <span className="w-[74px] shrink-0">Occupancy</span>
+      <span className="w-16 shrink-0">Agent</span>
+      <span className="w-[110px] shrink-0 text-right">{past ? "Outcome" : "Messages"}</span>
+      <span className="w-3" />
+    </div>
+  );
+}
+
 export default function Viewings() {
   const [tab, setTab] = useState<"diary" | "recent">("diary");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -79,17 +92,17 @@ export default function Viewings() {
             </span>
           </span>
           {/* Tenanted is a fact the agent needs BEFORE opening the row. */}
-          {a.tenant && (
-            <span className="hidden shrink-0 text-[10px] font-semibold text-accent-dark sm:block">
-              TENANTED
-            </span>
-          )}
-          <span className="hidden shrink-0 text-[11px] text-muted sm:block">{a.agent}</span>
-          {a.day < 0 && outcome ? (
-            <Pill tone={outcome === "Applying" ? "good" : "neutral"}>{outcome}</Pill>
-          ) : (
-            <Pill tone={state.tone}>{state.label}</Pill>
-          )}
+          <span className="hidden w-[74px] shrink-0 text-[10px] font-semibold text-accent-dark sm:block">
+            {a.tenant ? "TENANTED" : ""}
+          </span>
+          <span className="hidden w-16 shrink-0 truncate text-[11px] text-muted sm:block">{a.agent}</span>
+          <span className="flex w-[110px] shrink-0 justify-end">
+            {a.day < 0 && outcome ? (
+              <Pill tone={outcome === "Applying" ? "good" : "neutral"}>{outcome}</Pill>
+            ) : (
+              <Pill tone={state.tone}>{state.label}</Pill>
+            )}
+          </span>
           <span className="text-[12px] text-muted">›</span>
         </button>
       </li>
@@ -127,6 +140,7 @@ export default function Viewings() {
 
       {tab === "diary" ? (
         <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
+          <Legend />
           {days.map((d) => {
             const list = upcoming.filter((a) => a.day === d);
             return (
@@ -162,6 +176,7 @@ export default function Viewings() {
               What the applicant said, ready for the landlord
             </span>
           </div>
+          <Legend past />
           <ul>
             {recent.map((a) => (
               <Row key={a.id} a={a} showDay />

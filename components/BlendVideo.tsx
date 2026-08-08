@@ -23,10 +23,18 @@ import { useEffect, useRef } from "react";
 export default function BlendVideo({
   src,
   className = "",
+  keyed = false,
 }: {
   src: string;
   /** Goes on the canvas — put the blend classes (e.g. art-video) here. */
   className?: string;
+  /** TRUE ALPHA instead of blending: every frame's white plate is keyed out
+   *  per-pixel (alpha = how dark the ink is), so the canvas needs no
+   *  mix-blend-mode at all. Use for FIXED elements — a fixed layer is
+   *  compositor-promoted and Chrome drops blends across that boundary,
+   *  which is how the white box came back. Pair with `.art`, not
+   *  `.art-video`, so dark mode inverts the keyed ink like any drawing. */
+  keyed?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -35,7 +43,7 @@ export default function BlendVideo({
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (!video || !canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: keyed });
     if (!ctx) return;
 
     let raf = 0;
@@ -48,6 +56,17 @@ export default function BlendVideo({
           canvas.height = video.videoHeight;
         }
         ctx.drawImage(video, 0, 0);
+        if (keyed && canvas.width) {
+          const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const d = frame.data;
+          for (let i = 0; i < d.length; i += 4) {
+            // Luminance → alpha: white vanishes, ink stays ink.
+            const luma = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0;
+            d[i + 3] = 255 - luma;
+            d[i] = d[i + 1] = d[i + 2] = 16; // the house ink
+          }
+          ctx.putImageData(frame, 0, 0);
+        }
       }
       raf = requestAnimationFrame(draw);
     };

@@ -59,18 +59,24 @@ export default function BentoDash({
   defaultLayout,
   trayGroups,
   storeKey,
+  control,
 }: {
   registry: Record<string, WidgetDef>;
   defaultLayout: Item[];
   trayGroups: TrayGroup[];
   storeKey: string;
+  /** Externally-owned customise state — lets the page put the button in its
+   *  own header row instead of the board carrying one. */
+  control?: { on: boolean; set: (b: boolean) => void };
 }) {
   const WIDGETS = registry;
   const DEFAULT_LAYOUT = defaultLayout;
   const TRAY_GROUPS = trayGroups;
   const STORE = storeKey;
   const [layout, setLayout] = useState<Item[]>(DEFAULT_LAYOUT);
-  const [customise, setCustomise] = useState(false);
+  const [internalCustomise, setInternalCustomise] = useState(false);
+  const customise = control ? control.on : internalCustomise;
+  const setCustomise = control ? control.set : setInternalCustomise;
   const [drag, setDrag] = useState<DragState | null>(null);
   const [resize, setResize] = useState<ResizeState | null>(null);
   const [sizeMenu, setSizeMenu] = useState<string | null>(null);
@@ -332,6 +338,7 @@ export default function BentoDash({
 
   return (
     <>
+      {!control && (
       <div className="mb-3 mt-8 flex justify-end">
         {customise ? (
           <PressButton
@@ -351,10 +358,11 @@ export default function BentoDash({
           </button>
         )}
       </div>
+      )}
 
       <div
         ref={gridRef}
-        className="relative grid grid-cols-4 gap-4 [grid-auto-flow:dense]"
+        className={`relative grid grid-cols-4 gap-4 [grid-auto-flow:dense] ${control ? "mt-5" : ""}`}
         style={{ gridAutoRows: ROW_PX }}
       >
         {layout.map((item, idx) => {
@@ -549,8 +557,8 @@ export default function BentoDash({
                   <button
                     type="button"
                     onClick={() => setTrayGroup(open ? null : g.key)}
-                    className={`flex w-[96px] flex-col items-center gap-1.5 rounded-2xl border p-2.5 text-center transition-colors ${
-                      open ? "border-accent-dark bg-accent-soft/40" : "border-line/60 hover:border-ink/40"
+                    className={`block-pop flex w-[96px] flex-col items-center gap-1.5 rounded-2xl border p-2.5 text-center ${
+                      open ? "border-accent-dark bg-accent-soft/40" : "border-line/60 bg-box hover:border-ink/40"
                     }`}
                   >
                     <DoodleIcon name={g.icon} size={22} className="text-accent-dark" />
@@ -571,7 +579,7 @@ export default function BentoDash({
                             }}
                             title={def.hint}
                             style={{ touchAction: "none" }}
-                            className="flex w-[92px] shrink-0 cursor-grab flex-col items-center gap-1.5 rounded-2xl border border-line/60 p-2.5 text-center transition-colors hover:border-ink/40 active:cursor-grabbing"
+                            className="block-pop flex w-[92px] shrink-0 cursor-grab flex-col items-center gap-1.5 rounded-2xl border border-line/60 bg-box p-2.5 text-center hover:border-ink/40 active:cursor-grabbing"
                           >
                             <DoodleIcon name={def.icon} size={22} className="text-accent-dark" />
                             <span className="whitespace-nowrap text-[9.5px] font-semibold leading-tight">

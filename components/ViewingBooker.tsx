@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
+import { createPortal } from "react-dom";
+import DiaryGrid from "@/components/DiaryGrid";
 import { ConfettiBurst, DoneTick, PressButton } from "@/components/Bits";
 import PeopleFilterBar, { NO_FILTERS, passesFilters, milesBetween, type Filters } from "@/components/PeopleFilter";
 import SendFlow, { type Outgoing } from "@/components/SendFlow";
@@ -23,38 +25,11 @@ type Listing = {
   id: string; name: string; locality: string; rent: number | null; image: string | null;
 };
 
-const SLOTS = (() => {
-  const out: string[] = [];
-  for (let h = 9; h <= 18; h++) {
-    out.push(`${String(h).padStart(2, "0")}:00`);
-    if (h < 18) out.push(`${String(h).padStart(2, "0")}:30`);
-  }
-  return out;
-})();
-
-const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-
 function startOfDay(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-/** The seven days of the week `offset` weeks from this one, Monday-first. */
-function weekOf(offset: number): Date[] {
-  const now = new Date();
-  const mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7) + offset * 7);
-  return Array.from({ length: 7 }, (_, i) => new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i));
-}
 
-/** The six-week grid for a month, Monday-first. */
-function monthGrid(anchor: Date) {
-  const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
-  const lead = (first.getDay() + 6) % 7; // JS weeks start Sunday; ours don't.
-  const cells: Date[] = [];
-  for (let i = 0; i < 42; i++) {
-    cells.push(new Date(anchor.getFullYear(), anchor.getMonth(), 1 - lead + i));
-  }
-  return cells;
-}
 
 export type Person = {
   name: string;
@@ -105,16 +80,13 @@ export default function ViewingBooker({
   const today = useMemo(() => startOfDay(new Date()), []);
   const [stage, setStage] = useState<"applicant" | "when" | "who" | "done">("when");
   const [chosen, setChosen] = useState<Person | null>(lead);
-  const [month, setMonth] = useState<Date>(() => new Date(today.getFullYear(), today.getMonth(), 1));
   const [day, setDay] = useState<Date | null>(null);
   const [slot, setSlot] = useState<string | null>(null);
   const [propertyId, setPropertyId] = useState<string>(properties[0]?.id ?? "");
   const [sentCount, setSentCount] = useState(0);
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
-  // Week first: a booking decision is "which day this week or next", and the
-  // week view has room to show the day's other appointments. Month stays a
-  // toggle away for the long-range look.
-  const [view, setView] = useState<"week" | "month">("week");
+  // One calendar for the whole OS: the diary's own week grid, with the pick
+  // drawn into it. Which day AND what else that day holds, one look.
   const [week, setWeek] = useState(0);
 
   // Reset on OPEN only. The caller builds `properties` inline, so depending on
@@ -130,9 +102,7 @@ export default function ViewingBooker({
     setDay(null);
     setSlot(null);
     setPropertyId(seed.current[0]?.id ?? "");
-    setMonth(new Date(today.getFullYear(), today.getMonth(), 1));
     setFilters(NO_FILTERS);
-    setView("week");
     setWeek(0);
   }, [open, today]);
 
@@ -143,8 +113,6 @@ export default function ViewingBooker({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  const cells = useMemo(() => monthGrid(month), [month]);
-
   // The forecast rides the calendar for the agent's OWN visits — the
   // appraisal is nicer on a good day, and the take-on is where the
   // photographs happen, so the sky is genuinely a scheduling input there.
@@ -153,39 +121,19 @@ export default function ViewingBooker({
   const toLandlord = mode !== "viewing";
   const forecast = useForecast(open && toLandlord);
 
-  /* The rolodex answers the mouse wheel — that's what a roller is FOR. A
-     non-passive listener because the modal behind it scrolls too, and a
-     spin of the times must not drag the whole panel with it. */
-  const rolodexRef = useRef<HTMLDivElement | null>(null);
-  const lastSpin = useRef(0);
-  useEffect(() => {
-    const el = rolodexRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const now = performance.now();
-      if (now - lastSpin.current < 110 || Math.abs(e.deltaY) < 4) return;
-      lastSpin.current = now;
-      setSlot((s) => {
-        const i = SLOTS.indexOf(s ?? "12:00");
-        return SLOTS[Math.min(SLOTS.length - 1, Math.max(0, i + (e.deltaY > 0 ? 1 : -1)))];
-      });
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [open, stage, day]);
+
 
   if (!open) return null;
 
-  /** Picking a day also seats the roller at midday — the rolodex must never
-      be empty, because "all the times at once" and "just the roller" looking
-      different is what made it feel broken. */
-  function pickDay(c: Date) {
-    setDay(c);
-    setSlot((s) => s ?? "12:00");
-  }
+
 
   const property = properties.find((p) => p.id === propertyId) ?? properties[0] ?? null;
+  const offsetOf = (d: Date) => Math.round((startOfDay(d).getTime() - today.getTime()) / 86400000);
+  const dateFromOffset = (o: number) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() + o);
+    return d;
+  };
   const ready = Boolean(day && slot && chosen && (toLandlord || property));
 
   const dayLabel = day
@@ -341,7 +289,9 @@ export default function ViewingBooker({
     ];
   }
 
-  return (
+  // Portaled: this opens from inside drawers whose slide transition leaves a
+  // transform on the aside — which would anchor `fixed` to the drawer.
+  return createPortal(
     <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
       <button
         aria-label="Close"
@@ -466,252 +416,66 @@ export default function ViewingBooker({
                 </div>
               )}
 
-              {/* Week or month, the agent's choice — week is the default
-                  because that's the horizon a booking decision lives on. */}
+              {/* THE week — the diary's own grid, so booking happens against
+                  the day you can see: every existing appointment drawn in,
+                  the weather up top for the agent's own visits, and the pick
+                  a solid block among them. Click any empty half-hour. */}
               <div className="mb-3 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => (view === "week" ? setWeek((w) => w - 1) : setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1)))}
-                    className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink"
+                    onClick={() => setWeek((w) => Math.max(0, w - 1))}
+                    disabled={week === 0}
+                    className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink disabled:opacity-30"
                   >
                     ‹
                   </button>
                   <button
                     type="button"
-                    onClick={() => (view === "week" ? setWeek((w) => w + 1) : setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1)))}
+                    onClick={() => setWeek((w) => w + 1)}
                     className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink"
                   >
                     ›
                   </button>
                 </div>
                 <p className="hand text-[17px]">
-                  {view === "week"
-                    ? week === 0 ? "This week" : week === 1 ? "Next week" : weekOf(week)[0].toLocaleDateString("en-GB", { day: "numeric", month: "short" }) + " – " + weekOf(week)[6].toLocaleDateString("en-GB", { day: "numeric", month: "short" })
-                    : month.toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
+                  {week === 0 ? "This week" : week === 1 ? "Next week" : `${week} weeks out`}
                 </p>
-                <div className="flex rounded-full border border-line/80 p-0.5">
-                  {(["week", "month"] as const).map((v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => setView(v)}
-                      className={`hand rounded-full px-3.5 py-1 text-[12px] transition-colors ${
-                        view === v ? "bg-accent-soft/70 font-medium text-accent-dark" : "text-muted hover:text-ink"
-                      }`}
-                    >
-                      {v === "week" ? "Week" : "Month"}
-                    </button>
-                  ))}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setWeek(0)}
+                  className={`hand rounded-full border px-3.5 py-1.5 text-[12px] transition-colors ${
+                    week === 0 ? "border-accent-dark text-accent-dark" : "border-line/80 hover:border-ink"
+                  }`}
+                >
+                  Today
+                </button>
               </div>
 
-              <div className={`grid gap-5 ${view === "week" ? "sm:grid-cols-[1fr_120px]" : "sm:grid-cols-[1fr_150px]"}`}>
-                {view === "week" ? (
-                  /* ── The week: weather up top, big, then each day's other
-                     appointments with how far away they are — a booking is
-                     "can I get there", not just "am I free". ── */
-                  <div className="grid grid-cols-7 gap-1.5">
-                    {weekOf(week).map((c, i) => {
-                      const past = c < today;
-                      const isToday = c.getTime() === today.getTime();
-                      const picked = day != null && c.getTime() === day.getTime();
-                      const wx = forecast[dayKey(c)];
-                      const offset = Math.round((c.getTime() - today.getTime()) / 86400000);
-                      const appts = DIARY.filter((a) => a.day === offset).sort(
-                        (a, b) => minutesOf(a.start) - minutesOf(b.start)
-                      );
-                      return (
-                        <button
-                          key={c.toISOString()}
-                          type="button"
-                          disabled={past}
-                          onClick={() => pickDay(c)}
-                          className={`flex flex-col rounded-xl border p-1.5 text-center transition-all ${
-                            toLandlord ? "min-h-[250px]" : "min-h-[210px]"
-                          } ${
-                            picked
-                              ? "border-accent-dark bg-accent-soft/50"
-                              : past
-                                ? "cursor-not-allowed border-transparent opacity-35"
-                                : "border-line/50 hover:border-ink/40"
-                          } ${isToday && !picked ? "ring-1 ring-inset ring-accent-dark/50" : ""}`}
-                        >
-                          <span className="text-[9.5px] font-semibold uppercase tracking-wide text-muted">
-                            {DAY_NAMES[i]}
-                          </span>
-                          <span className={`figures text-[16px] leading-tight ${picked ? "font-semibold text-accent-dark" : ""}`}>
-                            {c.getDate()}
-                          </span>
-                          {/* The sky, at the top where it informs the choice. */}
-                          {toLandlord && wx && !past ? (
-                            <span className="mt-1 block border-b border-line/40 pb-1.5">
-                              <span className="block text-[20px] leading-none">{wx.glyph}</span>
-                              <span className="figures block text-[11px] text-muted">{wx.temp}°</span>
-                            </span>
-                          ) : (
-                            <span className="mt-1 block border-b border-line/40 pb-1.5" />
-                          )}
-                          {/* What the day already holds, and how far away. */}
-                          <span className="mt-1.5 flex-1 space-y-1 overflow-hidden">
-                            {appts.map((a) => (
-                              <span key={a.id} className="block rounded-md bg-accent-soft/45 px-1 py-0.5 text-left">
-                                <span className="figures block text-[8.5px] leading-tight text-accent-dark">
-                                  {a.start}
-                                  {origin && a.lat != null && a.lng != null && (
-                                    <span className="text-muted">
-                                      {" "}· {Math.round(milesBetween(origin, { lat: a.lat, lng: a.lng }))} mi away
-                                    </span>
-                                  )}
-                                </span>
-                                <span className="block truncate text-[9px] leading-tight">
-                                  {a.what.replace(/^[^—]+—\s*/, "")}
-                                </span>
-                              </span>
-                            ))}
-                            {!appts.length && !past && (
-                              <span className="block pt-2 text-[9px] text-muted/60">Clear day</span>
-                            )}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  /* ── The month, for the long-range look. ── */
-                  <div>
-                    <div className="grid grid-cols-7 gap-1">
-                      {DAY_NAMES.map((d) => (
-                        <div
-                          key={d}
-                          className="pb-1 text-center text-[10px] font-semibold uppercase tracking-wide text-muted"
-                        >
-                          {d}
-                        </div>
-                      ))}
-                      {cells.map((c) => {
-                        const outside = c.getMonth() !== month.getMonth();
-                        const past = c < today;
-                        const isToday = c.getTime() === today.getTime();
-                        const picked = day != null && c.getTime() === day.getTime();
-                        return (
-                          <button
-                            key={c.toISOString()}
-                            type="button"
-                            disabled={past}
-                            onClick={() => pickDay(c)}
-                            title={
-                              forecast[dayKey(c)] && !past
-                                ? `${forecast[dayKey(c)].word}, ${forecast[dayKey(c)].temp}°`
-                                : undefined
-                            }
-                            className={`figures aspect-square rounded-xl border text-[13px] transition-all ${
-                              picked
-                                ? "border-accent-dark bg-accent-dark font-semibold text-page"
-                                : past
-                                  ? "cursor-not-allowed border-transparent text-muted/30"
-                                  : outside
-                                    ? "border-transparent text-muted/45 hover:border-line"
-                                    : "border-line/50 hover:border-ink/40"
-                            } ${isToday && !picked ? "ring-1 ring-inset ring-accent-dark/50" : ""}`}
-                          >
-                            <span className="block leading-tight">{c.getDate()}</span>
-                            {forecast[dayKey(c)] && !past && (
-                              <span
-                                className={`block text-[9px] leading-tight ${
-                                  picked ? "text-page/90" : "text-muted"
-                                }`}
-                              >
-                                {forecast[dayKey(c)].glyph} {forecast[dayKey(c)].temp}°
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* ── The time, as a rolodex: the chosen slot biggest, its
-                    neighbours smaller, the rest fading away. One glance says
-                    what's picked; one click moves it. ── */}
-                <div className="flex min-h-0 flex-col">
-                  <p className="mb-2 text-center text-[11px] font-semibold uppercase tracking-wide text-muted">
-                    Time
-                  </p>
-                  {day ? (
-                    /* The roller. A slot is ALWAYS seated (picking a day
-                       seats midday), so this only ever has one look: the
-                       chosen time big, the neighbours shrinking away. Spin
-                       the wheel over it, click a neighbour, or use the
-                       arrows — all three turn it. */
-                    <div
-                      ref={rolodexRef}
-                      className="flex flex-1 cursor-ns-resize select-none flex-col items-center justify-center gap-0.5"
-                      title="Scroll to change the time"
-                    >
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSlot((s) => SLOTS[Math.max(0, SLOTS.indexOf(s ?? "12:00") - 1)])
-                        }
-                        className="mb-1 text-[11px] text-muted transition-colors hover:text-ink"
-                        aria-label="Earlier"
-                      >
-                        ▲
-                      </button>
-                      {SLOTS.map((t, i) => {
-                        const si = SLOTS.indexOf(slot ?? "12:00");
-                        const d = Math.abs(i - si);
-                        const cls =
-                          d === 0
-                            ? "text-[22px] font-semibold text-accent-dark"
-                            : d === 1
-                              ? "text-[14.5px] opacity-75"
-                              : d === 2
-                                ? "text-[12px] opacity-50"
-                                : d === 3
-                                  ? "text-[10.5px] opacity-30"
-                                  : d === 4
-                                    ? "text-[9.5px] opacity-15"
-                                    : "hidden";
-                        return (
-                          <button
-                            key={t}
-                            type="button"
-                            onClick={() => setSlot(t)}
-                            className={`figures block leading-tight transition-all duration-200 ${cls} ${
-                              d > 0 ? "hover:opacity-100 hover:text-ink" : ""
-                            }`}
-                          >
-                            {t}
-                          </button>
-                        );
-                      })}
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSlot((s) =>
-                            SLOTS[Math.min(SLOTS.length - 1, SLOTS.indexOf(s ?? "12:00") + 1)]
-                          )
-                        }
-                        className="mt-1 text-[11px] text-muted transition-colors hover:text-ink"
-                        aria-label="Later"
-                      >
-                        ▼
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="rounded-xl border border-dashed border-line px-3 py-6 text-center text-[11.5px] leading-relaxed text-muted">
-                      Pick a day first
-                    </p>
-                  )}
-                </div>
+              <div className="max-h-[46vh] overflow-auto rounded-xl border border-line/60">
+                <DiaryGrid
+                  week={week}
+                  hourPx={44}
+                  pick={day && slot ? { day: offsetOf(day), slot } : null}
+                  onPick={(o, t) => {
+                    setDay(dateFromOffset(o));
+                    setSlot(t);
+                  }}
+                  pickLabel={
+                    mode === "appraisal" ? "Appraisal" : mode === "takeon" ? "Take-on" : "Viewing"
+                  }
+                  origin={origin}
+                  weather={toLandlord ? forecast : undefined}
+                />
               </div>
+              <p className="mt-2 text-[10.5px] text-muted">
+                Click an empty half-hour to book it — the other appointments are already
+                drawn in, so a clash is visible before it happens.
+              </p>
             </>
           )}
 
-          {/* ══ WHO ══ */}
+                    {/* ══ WHO ══ */}
           {stage === "who" && (
             <SendFlow
               messages={compose()}
@@ -807,6 +571,7 @@ export default function ViewingBooker({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

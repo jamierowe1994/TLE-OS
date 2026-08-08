@@ -283,9 +283,17 @@ export function DataTable<T extends { id: string }>({
               <tr
                 key={row.id}
                 onClick={() => onRowClick?.(row, rowIndex)}
-                className={`border-b border-line/40 transition-colors last:border-0 ${
+                /* Hover is theatre: the ink rule draws itself under the row
+                   and the row leans forward a touch — no doubt about which
+                   one you're on (James, 8 Aug 2026). scale on a <tr> is fine
+                   in every browser we serve. */
+                className={`border-b border-line/40 transition-[border-color,transform,background-color] duration-200 last:border-0 ${
                   onRowClick ? "cursor-pointer" : ""
-                } ${active ? "bg-accent-soft/50" : "hover:bg-page"}`}
+                } ${
+                  active
+                    ? "bg-accent-soft/50"
+                    : "origin-left hover:scale-[1.012] hover:border-ink hover:bg-page"
+                }`}
               >
                 {cols.visible.map((c) => (
                   <td key={c.key} className={`py-4 pr-3 ${c.cell ?? ""}`}>
