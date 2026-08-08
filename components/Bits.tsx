@@ -147,7 +147,10 @@ export function DetailRow({
   copyable?: boolean;
 }) {
   return (
-    <div className="group/row flex items-center gap-3 py-1.5">
+    /* Fixed height, not padding: this row must land on the same horizontals
+       as the property column's rows beside it, and two paddings only agree
+       until one side's content wraps. h-[42px] is the shared ruler. */
+    <div className="group/row flex h-[42px] items-center gap-3">
       <DoodleIcon name={icon} size={15} className="shrink-0 text-muted" />
       <span className="min-w-0 flex-1 text-[13.5px]">
         {onChange ? (

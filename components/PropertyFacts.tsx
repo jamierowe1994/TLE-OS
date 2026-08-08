@@ -20,7 +20,8 @@ const TYPES = ["Flat", "Terraced", "Semi-detached", "Detached", "Bungalow", "Mai
 /** The row skeleton, lifted from DetailRow so the columns rhyme. */
 function Row({ icon, label, children }: { icon: string; label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-3 py-1.5">
+    /* h-[42px] matches DetailRow exactly — the two columns share one ruler. */
+    <div className="flex h-[42px] items-center gap-3">
       <DoodleIcon name={icon} size={15} className="shrink-0 text-muted" />
       <span className="min-w-0 flex-1 text-[13.5px]">{label}</span>
       {children}

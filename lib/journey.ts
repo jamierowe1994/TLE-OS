@@ -27,7 +27,8 @@ export type JourneyAction =
   | "viewing"        // book an applicant viewing
   | "appraise"       // book the market appraisal into the diary
   | "appraisal-form" // record the appraisal: property details + what was said
-  | "followup"       // set the MA follow-up
+  | "takeon"         // book the take-on visit, then capture photos & details
+  | "docs"           // open a document portal (ID, AML, compliance) — never gating
   | "send"           // email properties
   | "sign"           // prepare a document for signature
   | "handoff"        // push the record to its next home
@@ -135,15 +136,15 @@ export const LANDLORD_TRACK: JourneyStep[] = [
     id: "takeon", label: "Take-on & photos", icon: "megaphone",
     title: "Take-on & photos",
     detail:
-      "The property's details and its photographs, captured while you're in the building anyway. Drop photos onto this record — they're stored, and the listing builds from them.",
-    action: "none", cta: "Take-on & photos done",
+      "Book a day to go over — the forecast is on the calendar, because this is the visit where the photographs get taken. Then the photos, the description and the front image, off the back of it.",
+    action: "takeon", cta: "Book the take-on",
   },
   {
     id: "id", label: "ID & ownership", icon: "doc",
     title: "Landlord ID and proof of ownership",
     detail:
-      "Photo ID plus proof they actually own the property — title register or Land Registry. Letting a property for somebody who doesn't own it is a story that ends in court.",
-    action: "none", cta: "Verify ID & ownership",
+      "Photo ID plus proof they actually own the property — title register or Land Registry. Filed here, stored in the vault, side-mounted to the compliance portal. Missing pieces never lock the record.",
+    action: "docs", cta: "Open the ID portal",
   },
   /* AML and property compliance share the last box — one final checks stage,
      and its button IS the door: the moment everything clears, the record

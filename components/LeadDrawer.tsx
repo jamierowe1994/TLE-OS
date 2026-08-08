@@ -189,6 +189,161 @@ function AppraisalForm({
   );
 }
 
+/**
+ * The second half of the take-on: the visit happened, now the listing's raw
+ * material — photos (stored for real, in R2), which one leads, and the
+ * description. This is what the listing builds from when the record pushes.
+ */
+function TakeOnPanel({
+  refId,
+  onClose,
+  onSave,
+}: {
+  refId: string;
+  onClose: () => void;
+  onSave: (summary: string) => void;
+}) {
+  const [description, setDescription] = useState("");
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [front, setFront] = useState<string | null>(null);
+
+  return (
+    <StepModal
+      title="Photos & details"
+      subtitle="What the listing will be built from"
+      onClose={onClose}
+    >
+      <div className="grid grid-cols-3 gap-2.5">
+        {[0, 1, 2].map((i) => (
+          <PhotoBox
+            key={i}
+            refId={refId}
+            label={i === 0 ? "Front image" : "Add a photo"}
+            onStored={(f) => {
+              setPhotos((cur) => [...cur, f.name]);
+              // First photo in is the front image until somebody says otherwise.
+              setFront((cur) => cur ?? f.name);
+            }}
+          />
+        ))}
+      </div>
+
+      {photos.length > 1 && (
+        <div className="mt-3">
+          <span className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-muted">
+            Front image
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {photos.map((name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => setFront(name)}
+                className={`max-w-[180px] truncate rounded-full border px-3 py-1 text-[11px] transition-colors ${
+                  front === name
+                    ? "border-accent-dark bg-accent-soft/60 font-semibold text-accent-dark"
+                    : "border-line/80 text-muted hover:border-ink/40"
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <label className="mt-3 block">
+        <span className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-muted">
+          Description
+        </span>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={4}
+          placeholder="The listing copy — rooms, condition, what sells it…"
+          className="w-full resize-none rounded-xl border border-line/80 bg-transparent px-3 py-2.5 text-[12.5px] leading-relaxed outline-none focus:border-ink"
+        />
+      </label>
+
+      <div className="mt-4 flex justify-end">
+        <PressButton
+          onClick={() =>
+            onSave(
+              `Take-on — ${photos.length} photo${photos.length === 1 ? "" : "s"}${
+                front ? `, front: ${front}` : ""
+              }.${description.trim() ? ` ${description.trim()}` : ""}`
+            )
+          }
+          className="press-ring rounded-full bg-accent-dark px-6 py-2.5 text-[13px] font-semibold text-page"
+        >
+          Save take-on
+        </PressButton>
+      </div>
+    </StepModal>
+  );
+}
+
+/**
+ * A document portal for a checks stage. Real uploads — the files land in R2
+ * under the documents prefix, which is the same vault the compliance portal
+ * side-mounts. Deliberately TOOTHLESS as a gate: missing pieces never lock
+ * the record, because a record nobody can move is a record people work
+ * around, and worked-around records are how compliance actually gets lost.
+ */
+const DOC_PORTALS = {
+  id: {
+    title: "Landlord ID & ownership",
+    slots: ["Photo ID", "Proof of ownership"],
+    note: "Title register or Land Registry for ownership. Stored in the vault; the compliance portal reads the same files.",
+  },
+  checks: {
+    title: "AML & property compliance",
+    slots: ["AML check", "EPC", "Gas safety", "EICR"],
+    note: "Filed against this landlord and carried onto the listing at push. Michael's compliance portal side-mounts this vault.",
+  },
+} as const;
+
+function DocsPanel({
+  kind,
+  refId,
+  onClose,
+  onDone,
+}: {
+  kind: keyof typeof DOC_PORTALS;
+  refId: string;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const portal = DOC_PORTALS[kind];
+  return (
+    <StepModal title={portal.title} subtitle="Nothing here blocks the record" onClose={onClose}>
+      <div className="grid grid-cols-2 gap-2.5">
+        {portal.slots.map((slot) => (
+          <div key={slot}>
+            <span className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-muted">
+              {slot}
+            </span>
+            <PhotoBox
+              scope="document"
+              refId={`${refId}-${slot.toLowerCase().replace(/[^a-z]+/g, "-")}`}
+              label={`Add ${slot.toLowerCase()}`}
+            />
+          </div>
+        ))}
+      </div>
+      <p className="mt-3 text-[10.5px] leading-relaxed text-muted">{portal.note}</p>
+      <div className="mt-4 flex justify-end">
+        <PressButton
+          onClick={onDone}
+          className="press-ring rounded-full bg-accent-dark px-6 py-2.5 text-[13px] font-semibold text-page"
+        >
+          Save & carry on
+        </PressButton>
+      </div>
+    </StepModal>
+  );
+}
+
 export default function LeadDrawer({
   lead,
   onClose,
@@ -224,8 +379,13 @@ export default function LeadDrawer({
   const [handingOff, setHandingOff] = useState(false);
   const [tagging, setTagging] = useState(false);
   // The booker serves two jobs; which one is decided at fire time.
-  const [bookMode, setBookMode] = useState<"viewing" | "appraisal">("viewing");
+  const [bookMode, setBookMode] = useState<"viewing" | "appraisal" | "takeon">("viewing");
   const [appraising, setAppraising] = useState(false);
+  // The take-on is two moves in one step: book the visit, then capture what
+  // it produced. This remembers which half we're on.
+  const [takeOnBooked, setTakeOnBooked] = useState(false);
+  const [takingOn, setTakingOn] = useState(false);
+  const [docsOpen, setDocsOpen] = useState<null | "id" | "checks">(null);
   // Terms out for signature: the record WAITS here rather than advancing —
   // it moves itself on when the signed copy comes back.
   const [termsOut, setTermsOut] = useState(false);
@@ -242,6 +402,8 @@ export default function LeadDrawer({
     setJustAdded(false);
     setBooked([]);
     setTermsOut(false);
+    setTakeOnBooked(false);
+    setDocsOpen(null);
   }, [detail]);
 
   useEffect(() => {
@@ -298,6 +460,11 @@ export default function LeadDrawer({
     if (here.action === "viewing") { setBookMode("viewing"); setBooking(true); }
     else if (here.action === "appraise") { setBookMode("appraisal"); setBooking(true); }
     else if (here.action === "appraisal-form") setAppraising(true);
+    else if (here.action === "takeon") {
+      if (!takeOnBooked) { setBookMode("takeon"); setBooking(true); }
+      else setTakingOn(true);
+    }
+    else if (here.action === "docs") setDocsOpen("id");
     else if (here.action === "sign") setSigning(true);
     else if (here.action === "send") setEmailing(true);
     else if (here.action === "handoff") setHandingOff(true);
@@ -889,9 +1056,23 @@ export default function LeadDrawer({
                     onClick={fire}
                     className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-6 py-3 text-[13px] font-semibold text-page"
                   >
-                    <DoodleIcon name={here.icon} size={15} />
-                    {here.cta}
+                    <DoodleIcon
+                      name={here.action === "takeon" && takeOnBooked ? "doc" : here.icon}
+                      size={15}
+                    />
+                    {here.action === "takeon" && takeOnBooked
+                      ? "Add photos & details"
+                      : here.cta}
                   </PressButton>
+                  {here.id === "checks" && (
+                    <button
+                      type="button"
+                      onClick={() => setDocsOpen("checks")}
+                      className="text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+                    >
+                      Add AML & compliance documents
+                    </button>
+                  )}
                   {here.action !== "none" && !finished && (
                     <button
                       type="button"
@@ -1006,13 +1187,45 @@ export default function LeadDrawer({
             ...cur,
           ]);
           // Booking IS the step's work — the record moves itself on, and the
-          // next step's panel is one button away rather than a hunt.
+          // next step's panel is one button away rather than a hunt. The
+          // take-on stays put: its second half (photos & details) is still due.
           if (here.action === "viewing" || here.action === "appraise") advance();
+          if (here.action === "takeon") setTakeOnBooked(true);
         }}
       />
 
       {/* ── Recording the appraisal: what was found, what was said. Saving
           writes a real note and moves the record to the follow-up. ── */}
+      {takingOn && (
+        <TakeOnPanel
+          refId={`lead-${lead.id}`}
+          onClose={() => setTakingOn(false)}
+          onSave={(summary) => {
+            setNotes((n) => [
+              { id: `n${Date.now()}`, author: "You", when: "Just now", text: summary },
+              ...n,
+            ]);
+            setTakingOn(false);
+            advance();
+          }}
+        />
+      )}
+
+      {docsOpen && (
+        <DocsPanel
+          kind={docsOpen}
+          refId={`lead-${lead.id}`}
+          onClose={() => setDocsOpen(null)}
+          onDone={() => {
+            const wasId = docsOpen === "id";
+            setDocsOpen(null);
+            // The ID step is done once its portal closes; the checks portal is
+            // an aside — the push is that step's exit, not this.
+            if (wasId) advance();
+          }}
+        />
+      )}
+
       {appraising && (
         <AppraisalForm
           leadName={lead.name}

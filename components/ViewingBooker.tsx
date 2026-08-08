@@ -69,10 +69,10 @@ export default function ViewingBooker({
   applicants?: Person[];
   properties: Listing[];
   agent: string;
-  /** "appraisal" books the AGENT to the landlord's own property: no property
-   *  picker (theirs is the only one), and the confirmation goes to the
-   *  landlord, not an applicant. */
-  mode?: "viewing" | "appraisal";
+  /** "appraisal" and "takeon" book the AGENT to the landlord's own property:
+   *  no property picker (theirs is the only one), and the confirmation goes
+   *  to the landlord, not an applicant. */
+  mode?: "viewing" | "appraisal" | "takeon";
   /** The landlord's address, for appraisal mode. */
   address?: string;
   onBooked: (summary: { when: string; property: string; locality: string; who: string }) => void;
@@ -111,15 +111,18 @@ export default function ViewingBooker({
 
   const cells = useMemo(() => monthGrid(month), [month]);
 
-  // The forecast rides the calendar: picking a day for a visit, you can see
-  // whether it'll be a nice one. Fetched only while the booker is open, and
-  // its absence changes nothing but the corner of each cell.
-  const forecast = useForecast(open);
+  // The forecast rides the calendar for the agent's OWN visits — the
+  // appraisal is nicer on a good day, and the take-on is where the
+  // photographs happen, so the sky is genuinely a scheduling input there.
+  // Applicant viewings don't need it (James, 8 Aug 2026). Absence changes
+  // nothing but the corner of each cell.
+  const toLandlord = mode !== "viewing";
+  const forecast = useForecast(open && toLandlord);
 
   if (!open) return null;
 
   const property = properties.find((p) => p.id === propertyId) ?? properties[0] ?? null;
-  const ready = Boolean(day && slot && chosen && (mode === "appraisal" || property));
+  const ready = Boolean(day && slot && chosen && (toLandlord || property));
 
   const dayLabel = day
     ? day.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })
@@ -136,7 +139,7 @@ export default function ViewingBooker({
     if (!day || !slot || !chosen) return [];
     const first = chosen.name.split(" ")[0];
 
-    if (mode === "appraisal") {
+    if (toLandlord) {
       // Two messages: the landlord's confirmation, and the agent's own diary.
       const where = address || "their property";
       return [
@@ -148,17 +151,29 @@ export default function ViewingBooker({
           phone: chosen.phone,
           channel: "email",
           on: true,
-          subject: `Your market appraisal — ${shortDate} at ${slot}`,
+          subject:
+            mode === "takeon"
+              ? `Photos & details visit — ${shortDate} at ${slot}`
+              : `Your market appraisal — ${shortDate} at ${slot}`,
           emailBody:
-            `Hi ${first},\n\n` +
-            `Thanks for speaking today — your market appraisal is booked for ${dayLabel} at ${slot}.\n\n` +
-            `${where}\n\n` +
-            `${agent} will come to you, walk the property with you and talk through what it should achieve. ` +
-            `Nothing to prepare — half an hour of your time is all it takes.\n\n` +
-            `Kind regards,\n${agent}\nThe Lettings Experts`,
+            mode === "takeon"
+              ? `Hi ${first},\n\n` +
+                `We're booked in for ${dayLabel} at ${slot} to photograph the property and gather ` +
+                `the details for the listing.\n\n${where}\n\n` +
+                `Bright and tidy is all it needs — ${agent} will do the rest. It takes about an hour.\n\n` +
+                `Kind regards,\n${agent}\nThe Lettings Experts`
+              : `Hi ${first},\n\n` +
+                `Thanks for speaking today — your market appraisal is booked for ${dayLabel} at ${slot}.\n\n` +
+                `${where}\n\n` +
+                `${agent} will come to you, walk the property with you and talk through what it should achieve. ` +
+                `Nothing to prepare — half an hour of your time is all it takes.\n\n` +
+                `Kind regards,\n${agent}\nThe Lettings Experts`,
           whatsappBody:
-            `Hi ${first}, your market appraisal is booked — ${shortDate} at ${slot}, at ${where}. ` +
-            `${agent} will come to you. Reply here if you need to move it.`,
+            mode === "takeon"
+              ? `Hi ${first}, photos & details visit booked — ${shortDate} at ${slot}, at ${where}. ` +
+                `Bright and tidy is all it needs. Reply here to move it.`
+              : `Hi ${first}, your market appraisal is booked — ${shortDate} at ${slot}, at ${where}. ` +
+                `${agent} will come to you. Reply here if you need to move it.`,
         },
         {
           key: "agent",
@@ -168,9 +183,9 @@ export default function ViewingBooker({
           phone: "—",
           channel: "email",
           on: false,
-          subject: `Diary: MA at ${where}, ${shortDate} ${slot}`,
+          subject: `Diary: ${mode === "takeon" ? "take-on" : "MA"} at ${where}, ${shortDate} ${slot}`,
           emailBody: `${dayLabel}, ${slot}\n${where}\n\nLandlord: ${chosen.name} · ${chosen.phone}`,
-          whatsappBody: `${shortDate} ${slot} — MA at ${where}. ${chosen.name}, ${chosen.phone}.`,
+          whatsappBody: `${shortDate} ${slot} — ${mode === "takeon" ? "take-on" : "MA"} at ${where}. ${chosen.name}, ${chosen.phone}.`,
         },
       ];
     }
@@ -250,12 +265,12 @@ export default function ViewingBooker({
           <div className="min-w-0">
             <h2 className="text-[19px] leading-tight">
               {stage === "done"
-                ? mode === "appraisal" ? "Appraisal booked" : "Viewing booked"
+                ? mode === "appraisal" ? "Appraisal booked" : mode === "takeon" ? "Take-on booked" : "Viewing booked"
                 : stage === "who"
                   ? "Who do we tell?"
                   : stage === "applicant"
                     ? "Who's viewing?"
-                    : mode === "appraisal" ? "Book the appraisal" : "Book a viewing"}
+                    : mode === "appraisal" ? "Book the appraisal" : mode === "takeon" ? "Book the take-on" : "Book a viewing"}
             </h2>
             <p className="mt-0.5 truncate text-[12px] text-muted">
               {stage === "applicant"
@@ -263,7 +278,7 @@ export default function ViewingBooker({
                 : stage === "when"
                   ? `For ${chosen?.name ?? "—"}`
                   : `${chosen?.name ?? "—"} · ${whenLabel}${
-                      mode === "appraisal"
+                      toLandlord
                         ? address ? ` · ${address}` : ""
                         : property ? ` · ${property.name}` : ""
                     }`}
@@ -319,13 +334,13 @@ export default function ViewingBooker({
           {/* ══ WHEN ══ */}
           {stage === "when" && (
             <>
-              {mode === "appraisal" && address && (
+              {toLandlord && address && (
                 <p className="mb-4 flex items-center gap-2 text-[12.5px] text-muted">
                   <DoodleIcon name="home" size={14} />
                   At {address} — their place, not ours.
                 </p>
               )}
-              {mode === "viewing" && properties.length > 1 && (
+              {!toLandlord && properties.length > 1 && (
                 <div className="mb-5">
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
                     Which property
@@ -470,11 +485,11 @@ export default function ViewingBooker({
                 setSentCount(sent.length);
                 setStage("done");
                 // Appraisals have no listing — the guard must not eat them.
-                if (mode === "appraisal" || property) {
+                if (toLandlord || property) {
                   onBooked({
                     when: whenLabel,
-                    property: mode === "appraisal" ? (address || "Appraisal") : property!.name,
-                    locality: mode === "appraisal" ? "Market appraisal" : property!.locality,
+                    property: toLandlord ? (address || "Visit") : property!.name,
+                    locality: mode === "appraisal" ? "Market appraisal" : mode === "takeon" ? "Take-on visit" : property!.locality,
                     who: chosen?.name ?? "",
                   });
                 }
@@ -488,7 +503,7 @@ export default function ViewingBooker({
               <DoneTick />
               <p className="hand mt-5 text-[20px]">{whenLabel}</p>
               <p className="mt-1 text-[12.5px]">
-                {mode === "appraisal" ? address || "Market appraisal" : property?.name}
+                {toLandlord ? address || "Visit booked" : property?.name}
               </p>
               <p className="mt-3 text-[12px] text-muted">
                 {sentCount

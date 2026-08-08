@@ -46,8 +46,15 @@ const URL =
 /** One fetch per page load is plenty — the sky doesn't change that fast. */
 let cache: Record<string, DayWeather> | null = null;
 
+/** Stable identity, so disabled callers don't re-render on a new {}. */
+const EMPTY: Record<string, DayWeather> = {};
+
 export function useForecast(enabled: boolean): Record<string, DayWeather> {
   const [days, setDays] = useState<Record<string, DayWeather>>(cache ?? {});
+  // The cache is module-wide, so a disabled caller must not inherit a warm
+  // one: without this, booking one appraisal would put weather on every
+  // applicant-viewing calendar for the rest of the session.
+  const out = enabled ? days : EMPTY;
 
   useEffect(() => {
     if (!enabled || cache) return;
@@ -75,7 +82,7 @@ export function useForecast(enabled: boolean): Record<string, DayWeather> {
     return () => { dead = true; };
   }, [enabled]);
 
-  return days;
+  return out;
 }
 
 /** Local YYYY-MM-DD, matching Open-Meteo's daily keys. */
