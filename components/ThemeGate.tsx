@@ -67,7 +67,7 @@ const THEMES: {
     id: "dark",
     label: "Dark",
     blurb: "Warm charcoal, with the linework turned to chalk.",
-    swatchBg: "#292826",
+    swatchBg: "#363432",
     swatchLine: "#524e49",
     swatchInk: "#ecebe8",
     icon: Moon,
@@ -89,7 +89,7 @@ function usePaint() {
 
   const run = useCallback((next: ThemeChoice, origin?: { x: number; y: number }) => {
     const mode = resolve(next);
-    const colour = mode === "dark" ? "#292826" : "#f2f0eb";
+    const colour = mode === "dark" ? "#363432" : "#f2f0eb";
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     if (reduced) {

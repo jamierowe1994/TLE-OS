@@ -106,9 +106,10 @@ export const CHARCOALS: { step: number; hex: string }[] = [
 
 export const DARK_BG_KEY = "os-dark-bg";
 export const DARK_BOX_KEY = "os-dark-box";
-/** Softer than the old #1c1c1e page — charcoal, and boxes a lift above it. */
-export const DARK_BG_DEFAULT = 700;
-export const DARK_BOX_DEFAULT = 500;
+/** The winner, picked by eye (James, 8 Aug 2026): background 400, boxes 300
+ *  — boxes one step lighter than the page they sit on. */
+export const DARK_BG_DEFAULT = 400;
+export const DARK_BOX_DEFAULT = 300;
 
 export function readDarkStep(key: string, fallback: number): number {
   try {
