@@ -89,8 +89,10 @@ export type CompProperty = {
   name: string;
   locality: string;
   landlord: string;
-  /** Sitting tenant — the person the engineer's visit must be arranged with. */
-  tenant: string | null;
+  /** Sitting tenant — the person the engineer's visit must be arranged with.
+   *  null = known vacant. undefined = nobody has told us, which is NOT the
+   *  same thing when someone is about to book an engineer. */
+  tenant: string | null | undefined;
   hmo: boolean;
   hasGas: boolean;
   certs: Partial<Record<CertKey, Cert>>;
@@ -222,9 +224,9 @@ export function headlineCerts(p: CompProperty): CertKey[] {
 
 /** Every headline certificate that is expired or due inside `days` —
  *  the list the page exists for. Sorted most-urgent first. */
-export function dueWithin(days: number) {
+export function dueWithin(days: number, book: CompProperty[] = COMP_BOOK) {
   const out: { p: CompProperty; key: CertKey; cert: Cert | undefined; status: CertStatus }[] = [];
-  for (const p of COMP_BOOK) {
+  for (const p of book) {
     for (const key of headlineCerts(p)) {
       const cert = p.certs[key];
       const s = statusOf(cert);

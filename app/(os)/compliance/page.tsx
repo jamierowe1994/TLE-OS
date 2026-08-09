@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import WorksOrderModal, { type OrderTarget } from "@/components/WorksOrder";
@@ -66,12 +66,38 @@ export default function Compliance() {
   const [orders, setOrders] = useState<Record<string, { contractor: string; when: string }>>({});
   const [reminded, setReminded] = useState<Set<string>>(new Set());
 
-  const urgent = useMemo(() => dueWithin(30), []);
+  /* ── The real book, out of REX. Sample stands in until it answers. ── */
+  const [source, setSource] = useState<{
+    properties: CompProperty[];
+    live: boolean;
+    loading: boolean;
+    reason?: string;
+    counts?: { properties: number; withAnyRecord: number; entries: number; withCertificate: number; gasUnknown: number };
+  }>({ properties: COMP_BOOK, live: false, loading: true });
+
+  useEffect(() => {
+    let gone = false;
+    fetch("/api/compliance")
+      .then((r) => r.json())
+      .then((j) => {
+        if (gone) return;
+        if (j.ok && j.live && Array.isArray(j.properties)) {
+          setSource({ properties: j.properties, live: true, loading: false, counts: j.counts });
+        } else {
+          setSource({ properties: COMP_BOOK, live: false, loading: false, reason: j.reason });
+        }
+      })
+      .catch(() => { if (!gone) setSource((b) => ({ ...b, loading: false, reason: "REX didn't answer — showing the sample book." })); });
+    return () => { gone = true; };
+  }, []);
+
+  const BOOK = source.properties;
+  const urgent = useMemo(() => dueWithin(30, BOOK), [BOOK]);
 
   // Per-property worst status, for the tiles and the filter.
   const graded = useMemo(
     () =>
-      COMP_BOOK.map((p) => {
+      BOOK.map((p) => {
         const statuses = headlineCerts(p).map((k) => statusOf(p.certs[k]));
         const worst: CertStatus = statuses.includes("expired")
           ? "expired"
@@ -84,7 +110,9 @@ export default function Compliance() {
                 : "ok";
         return { p, worst };
       }),
-    []
+    // MUST depend on BOOK: with an empty list this memo froze on the sample
+    // book and left the count tiles disagreeing with the rows beneath them.
+    [BOOK]
   );
 
   const counts = {
@@ -102,7 +130,7 @@ export default function Compliance() {
     return worst === filter;
   });
 
-  const open = COMP_BOOK.find((p) => p.id === openId) ?? null;
+  const open = BOOK.find((p) => p.id === openId) ?? null;
 
   const TILES: { key: Filter; label: string; value: number; hint: string; icon: string }[] = [
     { key: "expired", label: "Expired now", value: counts.expired, hint: "stop-everything jobs", icon: "bell" },
@@ -115,7 +143,13 @@ export default function Compliance() {
     <>
       <PageHeader
         title="Compliance"
-        blurb="Every certificate on every home, and the button that fixes each one. The big three — electrical, gas, EPC — lead, because they're the safety law."
+        blurb={
+          source.loading
+            ? "Reading every certificate on every home from REX…"
+            : source.live && source.counts
+              ? `Live from REX — ${source.counts.entries} certificate records across ${source.counts.properties} homes, ${source.counts.withCertificate} with the document itself on file. Gas is only shown where REX holds a record: ${source.counts.gasUnknown} homes have none, which means unknown, not exempt.`
+              : (source.reason ?? "Every certificate on every home, and the button that fixes each one.")
+        }
         illustration="/illustrations/notioly/home-caring.svg"
         lineBreak="dip"
       />
@@ -179,7 +213,11 @@ export default function Compliance() {
                     <span className="hand block text-[13.5px]">{p.name}</span>
                     <span className="block text-[10.5px] text-muted">
                       {CERT_META[key].label} · landlord {p.landlord}
-                      {p.tenant ? ` · access via ${p.tenant}` : " · vacant, keys held"}
+                      {p.tenant
+                        ? ` · access via ${p.tenant}`
+                        : p.tenant === null
+                          ? " · vacant, keys held"
+                          : " · occupancy not known"}
                     </span>
                   </button>
 

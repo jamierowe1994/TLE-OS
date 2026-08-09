@@ -29,6 +29,8 @@ const MAX_PAGES = 8; // 800 rows — the book is ~294, so this is a runaway guar
 
 export interface OsListing {
   id: string;
+  /** REX hangs compliance certificates off the PROPERTY, not the listing. */
+  propertyId: string | null;
   name: string;
   locality: string;
   rent: number | null;
@@ -73,7 +75,9 @@ interface RexAddress {
   adr_unit_number?: string | null;
   adr_street_number?: string | null;
   adr_street_name?: string | null;
-  adr_building?: string | null;
+  /** An OBJECT, not a string — carries the building's name ("Dara House")
+   *  plus its own address. Interpolating it raw prints "[object Object]". */
+  adr_building?: { name?: string | null } | string | null;
   adr_suburb_or_town?: string | null;
   adr_postcode?: string | null;
 }
@@ -90,7 +94,7 @@ interface RexListing extends Record<string, unknown> {
   epc_expiry_date?: string | null;
   epc_rating?: string | null;
   lettings_service_type?: { text?: string } | string | null;
-  property?: RexAddress | null;
+  property?: (RexAddress & { id?: string | number }) | null;
   listing_primary_image?: { url?: string } | null;
   related?: { listing_images?: { url?: string }[] } | null;
 }
@@ -104,10 +108,12 @@ function https(url: string | undefined | null): string | null {
 function addressOf(p: RexAddress | null | undefined): { name: string; locality: string } {
   if (!p) return { name: "Address not recorded", locality: "—" };
   const street = [p.adr_street_number, p.adr_street_name].filter(Boolean).join(" ").trim();
+  const building =
+    typeof p.adr_building === "string" ? p.adr_building : (p.adr_building?.name ?? null);
   const name =
     [
       p.adr_unit_number ? `Apartment ${p.adr_unit_number}` : null,
-      p.adr_building,
+      building,
       street || null,
     ]
       .filter(Boolean)
@@ -145,6 +151,7 @@ function toListing(l: RexListing): OsListing {
 
   return {
     id: String(l.id ?? ""),
+    propertyId: l.property?.id != null ? String(l.property.id) : null,
     name,
     locality,
     rent: num(l.price_rent),
