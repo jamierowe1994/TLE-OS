@@ -32,8 +32,10 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Everything except the key screen itself, its API, and static assets.
+  // Everything except the key screen itself, its API, static assets — and
+  // the TENANT portal, which is customer-facing: tenants get their own
+  // magic-link + password door, never the office access code.
   matcher: [
-    "/((?!key|api/key|_next|icons|illustrations|favicon.ico|robots.txt).*)",
+    "/((?!key|api/key|tenant|_next|icons|illustrations|favicon.ico|robots.txt).*)",
   ],
 };

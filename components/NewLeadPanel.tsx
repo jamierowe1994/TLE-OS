@@ -112,6 +112,7 @@ export default function NewLeadPanel({
   const [d, setD] = useState<Draft>(EMPTY);
   const [geo, setGeo] = useState<ResolvedAddress | null>(null);
   const [saved, setSaved] = useState(false);
+  const [emailPreview, setEmailPreview] = useState(false);
   // The fork: who is this lead? Everything downstream hangs off it.
   const [kind, setKind] = useState<null | "tenant" | "landlord">(null);
   const [dossier, setDossier] = useState<Dossier | null>(null);
@@ -276,6 +277,40 @@ export default function NewLeadPanel({
                   : ""}
                 .
               </p>
+
+              {/* The bundle: GDPR notice + their portal, one email. Sent on
+                  registration by default, because the notice is a legal duty
+                  and the portal is the welcome — one envelope, two jobs. */}
+              {kind === "tenant" && (
+                <div className="mt-5 w-full rounded-2xl border border-line/70 p-4 text-left">
+                  <p className="flex items-center gap-2 text-[12.5px] font-semibold">
+                    <DoodleIcon name="mail" size={15} className="text-accent-dark" />
+                    Welcome email queued — GDPR notice with their portal invite inside
+                  </p>
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+                    {d.name.split(" ")[0] || "They"} gets one email: how we look after
+                    their details (the legal bit), and a button to set a password and
+                    open their own Lettings Experts account.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEmailPreview(true)}
+                      className="rounded-full border border-ink/25 px-4 py-2 text-[11.5px] font-semibold transition-colors hover:border-ink"
+                    >
+                      See the email they&apos;ll get
+                    </button>
+                    <a
+                      href="/tenant/welcome"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full border border-line/80 px-4 py-2 text-[11.5px] font-semibold text-muted transition-colors hover:border-ink hover:text-ink"
+                    >
+                      Preview their portal →
+                    </a>
+                  </div>
+                </div>
+              )}
 
               <div className="mt-8 w-full">
                 <p className="mb-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted">
@@ -892,6 +927,83 @@ export default function NewLeadPanel({
             </div>
           )}
         </div>
+
+      {/* ── The email itself: a GDPR notice wearing its best clothes. ── */}
+      {emailPreview && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+          <button
+            aria-label="Close"
+            onClick={() => setEmailPreview(false)}
+            className="absolute inset-0 cursor-default bg-ink/45"
+          />
+          <div className="fade-up relative flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line/70 px-6 py-4">
+              <div>
+                <h2 className="text-[17px] leading-tight">The email they receive</h2>
+                <p className="mt-0.5 text-[11.5px] text-muted">
+                  To: {d.email || "their email"} · From: hello@thelettingexperts.co.uk
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEmailPreview(false)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-line/80 text-[12px] text-muted transition-colors hover:text-ink"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-6">
+              {/* Rendered in the CUSTOMER brand — red, plain type — because
+                  that is what actually lands in their inbox. */}
+              <div className="overflow-hidden rounded-xl border border-line/60 bg-white text-[#16181d]">
+                <div className="px-6 pt-6">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[#e31f36] text-[12px] font-extrabold text-white">
+                    TLE
+                  </span>
+                  <p className="mt-4 text-[15px] font-bold">
+                    Welcome, {d.name.split(" ")[0] || "there"} — your account with The Lettings Experts
+                  </p>
+                  <div className="mt-3 space-y-2.5 text-[12.5px] leading-relaxed text-black/70">
+                    <p>
+                      We&apos;ve registered you with The Lettings Experts, which means we
+                      now hold your name and contact details so we can help you find a
+                      home. We look after them carefully, never sell them, and you can
+                      see, correct or delete them at any time — the details are at the
+                      foot of this email.
+                    </p>
+                    <p>
+                      Your account is ready. Set a password and you can see every home
+                      we have, your viewings, and manage everything in one place:
+                    </p>
+                  </div>
+                  <a
+                    href="/tenant/welcome"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-4 inline-block rounded-lg bg-[#e31f36] px-6 py-3 text-[13px] font-bold text-white"
+                  >
+                    Set up my account
+                  </a>
+                  <p className="mt-3 text-[10.5px] text-black/40">
+                    This link is just for you and expires in 7 days.
+                  </p>
+                </div>
+                <div className="mt-5 border-t border-black/10 bg-[#fafafa] px-6 py-4 text-[10px] leading-relaxed text-black/45">
+                  Your data: we hold your name, contact details and search preferences to
+                  provide our lettings service (legitimate interest / contract). We share
+                  them only where a tenancy requires it. Ask for a copy, correction or
+                  deletion any time: hello@thelettingexperts.co.uk. Full policy:
+                  thelettingexperts.co.uk/privacy.
+                </div>
+              </div>
+              <p className="mt-3 text-[10.5px] text-muted">
+                Wireframe — the send goes live with the email layer; the magic-link
+                button already opens the real portal flow.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
       </aside>
     </div>
   );
