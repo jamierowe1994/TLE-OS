@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
+import { diagnosticsBlocked } from "@/lib/diagnostics";
 
 /**
  * The live half of the wiring sheet: one pass over REX proving what the OS
@@ -29,6 +30,9 @@ async function safe(fn: () => Promise<Check>, key: string, label: string): Promi
 }
 
 export async function GET() {
+  const blocked = diagnosticsBlocked();
+  if (blocked) return blocked;
+
   if (!rexConfigured()) {
     return NextResponse.json({
       configured: false,

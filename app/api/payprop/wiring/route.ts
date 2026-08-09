@@ -6,6 +6,7 @@ import {
   payPropKeyFor,
   type PayPropAccountId,
 } from "@/lib/payprop";
+import { diagnosticsBlocked } from "@/lib/diagnostics";
 
 /**
  * The PayProp half of the wiring sheet — read-only probes per agency.
@@ -117,6 +118,9 @@ async function checkAccount(id: PayPropAccountId, label: string): Promise<{
 }
 
 export async function GET() {
+  const blocked = diagnosticsBlocked();
+  if (blocked) return blocked;
+
   if (!payPropConfigured()) {
     return NextResponse.json({
       configured: false,

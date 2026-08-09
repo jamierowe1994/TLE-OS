@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { candidateEndpoints, r2, r2Configured, R2_BUCKET, rememberEndpoint } from "@/lib/r2";
+import { diagnosticsBlocked } from "@/lib/diagnostics";
 
 /**
  * Does R2 actually work?
@@ -20,6 +21,9 @@ import { candidateEndpoints, r2, r2Configured, R2_BUCKET, rememberEndpoint } fro
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const blocked = diagnosticsBlocked();
+  if (blocked) return blocked;
+
   const present = {
     R2_ACCOUNT_ID: Boolean(process.env.R2_ACCOUNT_ID),
     R2_ACCESS_KEY_ID: Boolean(process.env.R2_ACCESS_KEY_ID),
