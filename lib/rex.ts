@@ -116,10 +116,81 @@ async function getToken(accountId: string | null, force = false): Promise<string
   return login(accountId);
 }
 
+
+/* ==========================================================================
+   THE WRITE LOCK — nothing this OS does may change anything in REX.
+
+   REX is the live system six businesses run on. Until the team has actually
+   moved onto this platform, a stray write here doesn't corrupt a demo — it
+   edits a real agent's real property record, and there is no undo.
+
+   So writes are not merely "not implemented", they are REFUSED at the only
+   door: every REX call goes through rexCall, and rexCall will only carry a
+   method it recognises as read-only.
+
+   It is an ALLOWLIST, deliberately. A denylist would have to predict every
+   dangerous method REX has or ever adds; an allowlist means anything new or
+   unrecognised is blocked by default and someone has to think about it.
+
+   To lift it (one supervised test, with James watching), set REX_ALLOW_WRITES
+   to the exact method being tested — e.g. "ListingPublication/publish". No
+   blanket "true": unlocking everything at once is how the first careful test
+   becomes an accident.
+   ========================================================================== */
+
+/** Method names, and prefixes, that only ever read. */
+const READ_ONLY_EXACT = new Set([
+  "search", "read", "describe", "autocomplete",
+  "describeModel", "describeSearchFields", "describeDeleteModes",
+  "describeFeedFormats", "searchValidateCriteria", "searchValidateOrderBys",
+]);
+const READ_ONLY_PREFIX = ["get", "download", "describe", "is", "list", "preview", "check"];
+
+export function isReadOnlyMethod(method: string): boolean {
+  if (READ_ONLY_EXACT.has(method)) return true;
+  // "getPublicationStatus", "downloadEpcGraph" — reads by name and by nature.
+  // Anything starting "set", "create", "update", "publish", "queue", "upload",
+  // "send", "archive", "trash", "purge", "toggle", "reassign", "link", "sync",
+  // "make" or "complete" falls through and is refused.
+  return READ_ONLY_PREFIX.some(
+    (p) => method.startsWith(p) && method.length > p.length && method[p.length] === method[p.length].toUpperCase()
+  );
+}
+
+/** Is this exact call the one write we've been explicitly unlocked for? */
+function writeIsUnlocked(service: string, method: string): boolean {
+  const allowed = (process.env.REX_ALLOW_WRITES ?? "").trim();
+  if (!allowed) return false;
+  return allowed
+    .split(",")
+    .map((x) => x.trim().toLowerCase())
+    .includes(`${service}/${method}`.toLowerCase());
+}
+
+/** For the wiring sheet: is the lock on? */
+export function rexWritesLocked(): boolean {
+  return !(process.env.REX_ALLOW_WRITES ?? "").trim();
+}
+
+export class RexWriteBlocked extends Error {
+  constructor(service: string, method: string) {
+    super(
+      `Refusing to call ${service}/${method} — the OS is locked to read-only against REX. ` +
+        `REX is the team's live system and nothing here may change it yet. To run one ` +
+        `supervised test, set REX_ALLOW_WRITES="${service}/${method}" on the environment.`
+    );
+    this.name = "RexWriteBlocked";
+  }
+}
+
 // Authenticated call: resolve a token, POST, retry ONCE on a token error.
 export async function rexCall(service: string, method: string, body?: unknown): Promise<RexResponse> {
   if (!rexConfigured()) {
     throw new Error("Rex isn't connected yet (missing REX_API_EMAIL/PASSWORD).");
+  }
+  // The lock. Before a token is even fetched.
+  if (!isReadOnlyMethod(method) && !writeIsUnlocked(service, method)) {
+    throw new RexWriteBlocked(service, method);
   }
   const accountId = rexAccountId();
   const path = `${service}/${method}`;

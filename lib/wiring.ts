@@ -80,6 +80,13 @@ export const WIRING: WiringRow[] = [
   // ═══ REX ═══
   {
     system: "rex",
+    area: "The safety catch",
+    item: "🔒 The OS cannot write to REX at all",
+    state: "manual",
+    note: "Locked 9 Aug at James's instruction, and enforced rather than promised: every REX call goes through one function, and that function will only carry a method it recognises as read-only. It's an allowlist, so anything new or unrecognised is refused by default — a button wired up by mistake cannot reach a real record. Verified against 36 of REX's actual write methods (publish, create, update, upload, archive, purge, toggle, send…): all refused; 11 reads still pass. Lifting it for one supervised test means naming that exact method in REX_ALLOW_WRITES — there is deliberately no blanket 'on'.",
+  },
+  {
+    system: "rex",
     area: "Listings & publishing",
     item: "Read the whole rental book (294 current rentals, photos included)",
     state: "live",

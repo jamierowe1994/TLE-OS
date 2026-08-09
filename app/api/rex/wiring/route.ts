@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
+import { rexCall, rexConfigured, rexRows, rexWritesLocked } from "@/lib/rex";
 import { diagnosticsBlocked } from "@/lib/diagnostics";
 
 /**
@@ -41,7 +41,17 @@ export async function GET() {
     });
   }
 
-  const checks = await Promise.all([
+  const checks: Check[] = [
+    {
+      key: "lock",
+      label: "Write lock",
+      ok: rexWritesLocked(),
+      detail: rexWritesLocked()
+        ? "LOCKED — the OS cannot change anything in REX. Reads only, enforced in the client."
+        : "⚠️ UNLOCKED for a supervised test. Re-lock by clearing REX_ALLOW_WRITES.",
+    },
+  ];
+  checks.push(...await Promise.all([
     safe(async () => {
       const r = await rexCall("AccountUsers", "search", { limit: 1 });
       return {
@@ -185,7 +195,7 @@ export async function GET() {
           : (r.error ?? `HTTP ${r.status}`),
       };
     }, "webhooks", "Webhooks (push to the OS)"),
-  ]);
+  ]));
 
-  return NextResponse.json({ configured: true, at: Date.now(), checks });
+  return NextResponse.json({ configured: true, at: Date.now(), checks, writesLocked: rexWritesLocked() });
 }
