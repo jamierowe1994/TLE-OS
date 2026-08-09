@@ -197,7 +197,7 @@ export const WIRING: WiringRow[] = [
     area: "Reading the money",
     item: "UK agency — the bigger book",
     state: "blocked",
-    note: "The UK agency connects to the portal over OAuth, and PayProp rotates the refresh token on every refresh — two apps sharing one OAuth connection invalidate each other. Unblock: ask PayProp for a UK API key (like Scotland's), or wait for the shared database so both apps use one token store.",
+    note: "No UK API key exists — not here, not in the portal. The portal runs this agency on OAuth, which two apps can't share (PayProp mints a new refresh token on every refresh, and the client has one registered redirect URL — the portal's). Unblock: the UK agency admin issues an API key at uk.payprop.com/c/settings/api, then it goes in as PAYPROP_API_KEY_UK. Beware: the last thing in that variable was the PROPOLY key by mistake — PayProp keys are 60-character padded base64, Propoly's is 40 unpadded.",
   },
   {
     system: "payprop",

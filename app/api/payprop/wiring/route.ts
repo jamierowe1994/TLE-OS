@@ -50,8 +50,8 @@ async function checkAccount(id: PayPropAccountId, label: string): Promise<{
           ok: false,
           detail:
             id === "uk"
-              ? "No key on this environment — the UK agency currently connects to the portal over OAuth, which two apps cannot safely share (PayProp rotates the refresh token on every use). Needs its own API key."
-              : "No key on this environment yet.",
+              ? "No UK API key exists anywhere yet — the portal runs this agency on OAuth, which two apps can't share (PayProp rotates the refresh token on every use). Fix: the agency admin issues one at uk.payprop.com/c/settings/api, then set PAYPROP_API_KEY_UK here."
+              : "No key on this environment yet — set PAYPROP_API_KEY_SCOTLAND.",
         },
       ],
     };

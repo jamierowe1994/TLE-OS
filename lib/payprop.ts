@@ -48,6 +48,21 @@ export function payPropKeyFor(account: PayPropAccountId): string | null {
   return null;
 }
 
+/**
+ * Does this look like a PayProp key at all?
+ *
+ * This guard exists because the mistake already happened: the portal's
+ * PAYPROP_API_KEY_UK held the PROPOLY api key for weeks (found 4 Aug 2026).
+ * Every UK call would have posted a live Propoly secret into PayProp's logs.
+ *
+ * The two are trivially distinguishable — PayProp issues 60-character padded
+ * base64, Propoly's is 40 characters unpadded — so we check the shape and
+ * refuse to send anything that fails it. A key we won't send can't leak.
+ */
+export function payPropKeyLooksValid(key: string): boolean {
+  return key.length >= 50 && /^[A-Za-z0-9+/]+=*$/.test(key) && key.endsWith("=");
+}
+
 export function payPropConfigured(): boolean {
   return PAYPROP_ACCOUNTS.some((a) => payPropKeyFor(a.id));
 }
@@ -67,6 +82,18 @@ export async function payPropGet(
 ): Promise<PayPropResponse> {
   const key = payPropKeyFor(account);
   if (!key) return { status: 0, ok: false, result: null, error: "No API key for this agency on this environment" };
+  // Refuse to transmit something that isn't shaped like a PayProp key — see
+  // payPropKeyLooksValid. Sending it is how another system's secret ends up
+  // in PayProp's logs.
+  if (!payPropKeyLooksValid(key)) {
+    return {
+      status: 0,
+      ok: false,
+      result: null,
+      error:
+        "The key set for this agency isn't shaped like a PayProp key (they are 60-character padded base64) — refusing to send it, in case it belongs to another system.",
+    };
+  }
 
   const url = new URL(`${base()}/${path.replace(/^\//, "")}`);
   for (const [k, v] of Object.entries(params ?? {})) url.searchParams.set(k, v);
