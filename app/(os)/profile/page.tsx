@@ -6,6 +6,7 @@ import PageHeader from "@/components/PageHeader";
 import { PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
 import WiringSheet from "@/components/WiringSheet";
+import { usePref, usePrefsHome } from "@/lib/prefs-store";
 import {
   applySurface, applyTheme, readSurface, readTheme, writeSurface, writeTheme,
   CHARCOALS, DARK_BG_DEFAULT, DARK_BG_KEY, DARK_BOX_DEFAULT, DARK_BOX_KEY,
@@ -97,16 +98,27 @@ export default function ProfilePage() {
   /** Labels with a diary reminder set this session. */
   const [reminders, setReminders] = useState<Set<string>>(new Set());
 
+  /* Who you are, and the accent you picked, now follow the account. Theme
+     and surface stay browser-first — they paint before React runs, and a
+     round-trip would mean a flash of the wrong colour on every load. */
+  const [storedProfile, storeProfile] = usePref<Profile | null>(PROFILE_KEY, null);
+  const [storedAccent, storeAccent] = usePref<string>("os-accent", "");
+  const prefsHome = usePrefsHome();
+
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(PROFILE_KEY);
-      if (raw) setProfile({ ...DEFAULT_PROFILE, ...JSON.parse(raw) });
-    } catch { /* default profile */ }
+    if (storedProfile) setProfile({ ...DEFAULT_PROFILE, ...storedProfile });
+  }, [storedProfile]);
+
+  useEffect(() => {
+    setAccent(storedAccent ?? "");
+    if (storedAccent) document.documentElement.dataset.accent = storedAccent;
+  }, [storedAccent]);
+
+  useEffect(() => {
     setTheme(readTheme() ?? "auto");
     setSurface(readSurface());
     setDarkBg(readDarkStep(DARK_BG_KEY, DARK_BG_DEFAULT));
     setDarkBox(readDarkStep(DARK_BOX_KEY, DARK_BOX_DEFAULT));
-    setAccent(localStorage.getItem("os-accent") ?? "");
   }, []);
 
   function pickSurface(s: SurfaceChoice) {
@@ -117,7 +129,7 @@ export default function ProfilePage() {
 
   function save(next: Profile) {
     setProfile(next);
-    try { localStorage.setItem(PROFILE_KEY, JSON.stringify(next)); } catch { /* session-only */ }
+    storeProfile(next);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1600);
   }
@@ -129,7 +141,7 @@ export default function ProfilePage() {
   }
   function pickAccent(id: string) {
     setAccent(id);
-    localStorage.setItem("os-accent", id);
+    storeAccent(id);
     if (id) document.documentElement.dataset.accent = id;
     else delete document.documentElement.dataset.accent;
   }
@@ -237,7 +249,11 @@ export default function ProfilePage() {
                   {PLAN !== "Pro" && <span className="text-muted">· upgrade →</span>}
                 </button>
               </div>
-              {saved && <Pill tone="good">Saved</Pill>}
+              {saved && (
+                <Pill tone="good">
+                  {prefsHome.signedIn ? "Saved to your account" : "Saved in this browser"}
+                </Pill>
+              )}
             </div>
 
             <div className="mt-7 grid gap-5 sm:grid-cols-2">

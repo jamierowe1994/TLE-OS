@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
 import type { WidgetDef } from "@/components/widgets";
+import { usePref } from "@/lib/prefs-store";
 
 /**
  * The bento board: the dashboard as a grid of widgets the agent owns.
@@ -97,18 +98,27 @@ export default function BentoDash({
   // that reads the state mirror misses it. State only drives the ghost.
   const dragRef = useRef<DragState | null>(null);
 
-  /* ── Persistence ── */
+  /* ── Persistence: the board belongs to the PERSON, not the browser. ──
+     usePref keeps the browser copy for instant paint and syncs it to their
+     account, so a board built on the laptop is there on the office machine.
+     Signed out, it behaves exactly as it always did. */
+  const [savedLayout, saveLayout, prefsReady] = usePref<Item[] | null>(STORE, null);
+
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORE);
-      if (!raw) return;
-      const saved: Item[] = JSON.parse(raw);
-      if (Array.isArray(saved) && saved.every((i) => WIDGETS[i.type])) setLayout(saved);
-    } catch { /* a broken save is just the default board */ }
-  }, []);
+    if (!prefsReady && !savedLayout) return;
+    if (Array.isArray(savedLayout) && savedLayout.length && savedLayout.every((i) => WIDGETS[i.type])) {
+      setLayout(savedLayout);
+    }
+    // A widget we no longer ship would otherwise wipe the whole board, so a
+    // failed check falls back to the default rather than an empty grid.
+  }, [savedLayout, prefsReady]);
+
   useEffect(() => {
-    try { localStorage.setItem(STORE, JSON.stringify(layout)); } catch { /* private mode */ }
-  }, [layout]);
+    // Don't write the default board back over a stored one that hasn't
+    // arrived yet — that's how somebody's layout gets quietly reset.
+    if (!prefsReady) return;
+    saveLayout(layout);
+  }, [layout, prefsReady, saveLayout]);
 
   /* ── FLIP: whenever tiles land somewhere new, they slide there instead of
      teleporting — this is the "squeeze apart" the drag is showing you.

@@ -129,7 +129,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<ThemeChoice>("auto");
 
   useEffect(() => {
-    const saved = localStorage.getItem("os-accent") ?? "";
+    const saved = localStorage.getItem("os-accent") ?? "";  // instant paint; the account copy syncs via usePref on the profile
     setAccent(saved);
     applyAccent(saved);
     setCollapsed(localStorage.getItem("os-nav-collapsed") === "1");
@@ -155,6 +155,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   function toggleCollapsed() {
     setCollapsed((c) => {
       localStorage.setItem("os-nav-collapsed", c ? "0" : "1");
+      // Whether the rail is folded is a per-person habit, so it travels too.
+      void fetch("/api/prefs", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: "os-nav-collapsed", value: c ? "0" : "1" }),
+      }).catch(() => { /* browser copy still holds it */ });
       if (!c) setProfileOpen(false); // the panel has nowhere to live at 72px
       return !c;
     });
