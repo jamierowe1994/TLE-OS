@@ -131,8 +131,8 @@ export const WIRING: WiringRow[] = [
     system: "rex",
     area: "Leads",
     item: "Pull those leads into the OS leads page",
-    state: "proven",
-    note: "Leads/search reads them cleanly with full contact + listing joins. Wiring the OS leads screen to this is next on the list.",
+    state: "live",
+    note: "Done 9 Aug — the leads page is real. It walks the 500 newest enquiries, keeps the lettings ones (237 at last refresh) and sets aside the sales book, saying on screen how many and why. Cached so it opens instantly. Names, numbers, the property they asked about, its photo, the agent it's assigned to, and their own message — all live.",
   },
   {
     system: "rex",
