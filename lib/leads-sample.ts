@@ -13,7 +13,11 @@ export type Stage =
   | "Viewing booked"
   | "Qualified"
   | "Waiting"
-  | "Not proceeding";
+  | "Not proceeding"
+  /** REX's own third state: the enquiry has been dealt with. Deliberately
+   *  NOT mapped onto "Qualified" — REX doesn't say which way it went, and
+   *  guessing would put words in the team's mouth. */
+  | "Closed";
 
 export type Lead = {
   id: string;
@@ -35,6 +39,20 @@ export type Lead = {
   lat?: number;
   lng?: number;
   activity: { icon: string; text: string; when: string }[];
+  /* ── Only real REX leads carry these; the demo book leaves them unset. ── */
+  /** ISO timestamp, so the list can sort on something better than "10m ago". */
+  receivedAt?: string;
+  /** What the applicant themselves typed. Kept separate from `notes`, which
+   *  is the agency's own writing — showing one as the other puts words in
+   *  somebody's mouth. */
+  enquiryMessage?: string;
+  /** The listing's own photo, for leads attached to a property. */
+  photo?: string;
+  address?: string;
+  listingId?: number;
+  /** Which office the listing belongs to — this REX account is shared. */
+  office?: string;
+  subject?: string;
 };
 
 export const STAGE_TONE: Record<Stage, "accent" | "neutral" | "good"> = {
@@ -44,6 +62,7 @@ export const STAGE_TONE: Record<Stage, "accent" | "neutral" | "good"> = {
   Qualified: "good",
   Waiting: "neutral",
   "Not proceeding": "neutral",
+  Closed: "neutral",
 };
 
 const act = (icon: string, text: string, when: string) => ({ icon, text, when });
@@ -365,9 +384,12 @@ export function leadDetail(lead: Lead): LeadDetail {
     priority: d.priority ?? (lead.stage === "New" ? "High" : "Medium"),
     summary:
       d.summary ??
-      `${lead.name.split(" ")[0]} enquired about ${lead.area} at ${lead.budget}. ${
-        lead.notes || "No further detail captured yet."
-      }`,
+      [
+        `${lead.name.split(" ")[0]} enquired about ${lead.area}`,
+        lead.budget && lead.budget !== "—" ? ` at ${lead.budget}` : "",
+        ". ",
+        lead.enquiryMessage || lead.notes || "No further detail captured yet.",
+      ].join(""),
     nextAction:
       d.nextAction ??
       (lead.stage === "New"
@@ -376,9 +398,13 @@ export function leadDetail(lead: Lead): LeadDetail {
     tasks: d.tasks ?? DEFAULT_TASKS,
     notes:
       d.notes ??
-      (lead.notes
-        ? [{ id: "n1", author: lead.agent, when: lead.received, text: lead.notes }]
-        : []),
+      // The applicant's own message is THEIRS — attributed to them, not to
+      // whichever agent the lead happens to be assigned to.
+      (lead.enquiryMessage
+        ? [{ id: "n1", author: `${lead.name} — their enquiry`, when: lead.received, text: lead.enquiryMessage }]
+        : lead.notes
+          ? [{ id: "n1", author: lead.agent, when: lead.received, text: lead.notes }]
+          : []),
     docs: d.docs ?? [],
     viewings: d.viewings ?? [],
     interested: d.interested ?? [],

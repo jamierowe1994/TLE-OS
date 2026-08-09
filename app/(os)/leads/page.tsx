@@ -98,6 +98,17 @@ function Source({ s }: { s: string }) {
   );
 }
 
+interface LeadSource {
+  leads: Lead[];
+  live: boolean;
+  loading: boolean;
+  reason?: string;
+  scanned?: number;
+  setAside?: { sales: number; unclear: number };
+  total?: number | null;
+  stale?: boolean;
+}
+
 export default function Leads() {
   // Closed on arrival: the page is the inbox, full width. The panel is a
   // consequence of picking someone, never the state you land in.
@@ -113,16 +124,48 @@ export default function Leads() {
   const params = useSearchParams();
   const side = params.get("side"); // "tenant" | "landlord" | null (both)
 
+  /* ── The real book, out of REX. Until it answers we show the demo one, so
+        the page never renders empty; `live` says which you're looking at. ── */
+  const [source, setSource] = useState<LeadSource>({ leads: LEADS, live: false, loading: true });
+
+  useEffect(() => {
+    let gone = false;
+    fetch("/api/leads")
+      .then((r) => r.json())
+      .then((j) => {
+        if (gone) return;
+        if (j.ok && j.live && Array.isArray(j.leads)) {
+          setSource({
+            leads: j.leads,
+            live: true,
+            loading: false,
+            scanned: j.scanned,
+            setAside: j.setAside,
+            total: j.total,
+            stale: j.stale,
+          });
+        } else {
+          setSource({ leads: LEADS, live: false, loading: false, reason: j.reason });
+        }
+      })
+      .catch(() => {
+        if (!gone) setSource({ leads: LEADS, live: false, loading: false, reason: "REX didn't answer — showing the demo book." });
+      });
+    return () => { gone = true; };
+  }, []);
+
+  const ALL = source.leads;
+
   // The dropdowns offer what the book actually contains — no imagined values.
-  const sources = useMemo(() => [...new Set(LEADS.map((l) => l.source))].sort(), []);
-  const agents = useMemo(() => [...new Set(LEADS.map((l) => l.agent))].sort(), []);
-  const stages = useMemo(() => [...new Set(LEADS.map((l) => l.stage))], []);
+  const sources = useMemo(() => [...new Set(ALL.map((l) => l.source))].sort(), [ALL]);
+  const agents = useMemo(() => [...new Set(ALL.map((l) => l.agent))].sort(), [ALL]);
+  const stages = useMemo(() => [...new Set(ALL.map((l) => l.stage))], [ALL]);
 
   // Tenant-side and landlord-side are different jobs with different questions,
   // so the nav splits them and the list follows. The filters stack on top.
   const book = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return LEADS.filter((l) => {
+    return ALL.filter((l) => {
       if (side && leadSide(l) !== side) return false;
       if (fSource && l.source !== fSource) return false;
       if (fAgent && l.agent !== fAgent) return false;
@@ -131,7 +174,7 @@ export default function Leads() {
         return false;
       return true;
     });
-  }, [side, fSource, fAgent, fStage, q]);
+  }, [ALL, side, fSource, fAgent, fStage, q]);
 
   // A filter change can strand the page number past the end of the list.
   useEffect(() => {
@@ -186,7 +229,19 @@ export default function Leads() {
     <>
       <PageHeader
         title={side === "tenant" ? "Tenant leads" : side === "landlord" ? "Landlord leads" : "Leads"}
-        blurb="New enquiries from the portals, your ads and the website — ready to qualify and follow up."
+        blurb={
+          source.loading
+            ? "Fetching today's enquiries from REX…"
+            : source.live
+              ? `Live from REX${
+                  source.total ? ` — ${source.total.toLocaleString("en-GB")} enquiries on record` : ""
+                }. Showing the ${source.scanned?.toLocaleString("en-GB") ?? ""} most recent, ${
+                  source.setAside
+                    ? `with ${(source.setAside.sales + source.setAside.unclear).toLocaleString("en-GB")} set aside as sales or unclear`
+                    : ""
+                }.`
+              : (source.reason ?? "New enquiries from the portals, your ads and the website.")
+        }
         illustration="/illustrations/notioly/inbox.svg"
         lineBreak="sink"
         actions={
