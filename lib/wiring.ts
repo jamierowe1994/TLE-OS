@@ -233,24 +233,38 @@ export const WIRING: WiringRow[] = [
     system: "storage",
     area: "The vault",
     item: "Uploaded files persisting across refresh",
-    state: "blocked",
-    note: "The chips vanish on reload because there's no listing endpoint yet — about an hour's work, first in the storage queue.",
+    state: "live",
+    note: "Fixed 9 Aug: /api/r2/list asks the vault what's filed against one record, and the compliance drawer loads it on open. Scoped to a single record's prefix — a route that can enumerate the whole bucket is one that leaks the filing cabinet.",
   },
 
   // ═══ Email & WhatsApp ═══
   {
     system: "sends",
     area: "Getting messages out",
-    item: "Sending real email from the OS",
-    state: "blocked",
-    note: "Every send in the OS is a rehearsal — the buttons compose the right message but nothing leaves. Needs an email sender (SMTP/Resend) and a sending address the business owns.",
+    item: "Sending real email — through REX itself",
+    state: "untested",
+    note: "Found 9 Aug, and it changes the plan: REX exposes MailMerge/createAndSend ('create a mail merge and send it instantly'), and the account already has a working sender configured ('Default Email Provider for Rex'). So no SMTP account, no Resend bill, no new sending domain — and every send lands on the contact's REX timeline, which a separate mailer would never do. Needs one supervised test send to a colleague.",
+  },
+  {
+    system: "sends",
+    area: "Getting messages out",
+    item: "Text messages (SMS)",
+    state: "untested",
+    note: "Also already configured: the account's SMS provider is live ('SMS Expert'), with per-user choice enabled. Texting an applicant a viewing confirmation is available today — same rule, one supervised test first.",
   },
   {
     system: "sends",
     area: "Getting messages out",
     item: "Sending real WhatsApp",
     state: "blocked",
-    note: "REX has a WhatsAppMessages service and a ThirdPartyServiceWhatsApp class — worth probing whether the account has WhatsApp enabled before buying anything separate.",
+    note: "REX has the plumbing (ThirdPartyServiceWhatsApp + WhatsAppMessages) but it is NOT connected — no message has ever passed through it. Connecting needs Meta's embedded signup against a WhatsApp Business number, which is a business action, not a code one: REX gives us the signup URL to walk through.",
+  },
+  {
+    system: "sends",
+    area: "Getting messages out",
+    item: "Reading the team's mailboxes (IMAP)",
+    state: "proven",
+    note: "The portal already does this per person — each agent adds their own address and an app password, and their mail appears against the record. Portable to the OS whenever it earns its place; needs no purchase, just each agent's app password.",
   },
 
   // ═══ Foundations ═══
@@ -259,7 +273,7 @@ export const WIRING: WiringRow[] = [
     area: "The ground floor",
     item: "Real sign-in (per-person accounts) and a database",
     state: "blocked",
-    note: "Nothing OS-side persists beyond the browser yet — notes, layouts and portal accounts are localStorage. This is the agreed next foundational block; everything above gets easier once it lands.",
+    note: "Nothing OS-side persists beyond the browser yet — notes, layouts and portal accounts are localStorage. Unblocking is one click: add a Postgres service to the tle-os Railway project and DATABASE_URL appears by itself. The portal's auth (sign-in, sessions, per-user records) is a working pattern to port once it exists.",
   },
   {
     system: "foundations",

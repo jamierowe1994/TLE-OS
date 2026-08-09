@@ -38,8 +38,9 @@ export default function ComplianceDrawer({
   onOrder: (t: OrderTarget) => void;
 }) {
   const [shown, setShown] = useState(false);
-  /** Certificates stored THIS session, keyed propertyId:cert — the first
-   *  real write path in the product: files land in R2 for keeps. */
+  /** Certificates in the vault, keyed propertyId:cert. Loaded from R2 when
+   *  the drawer opens and added to as files land — so what you filed last
+   *  week is still on the screen this week, not just this session. */
   const [files, setFiles] = useState<Record<string, { name: string; url: string }[]>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
@@ -72,6 +73,38 @@ export default function ComplianceDrawer({
     if (!property) { setShown(false); return; }
     const id = requestAnimationFrame(() => setShown(true));
     return () => cancelAnimationFrame(id);
+  }, [property]);
+
+  // Ask the vault what's already filed against this property. Without this
+  // every attached certificate disappeared on refresh — still stored, but
+  // invisible, which invites somebody to upload it all over again.
+  useEffect(() => {
+    if (!property) return;
+    const pid = property.id;
+    let gone = false;
+    setFiles({});
+    (async () => {
+      const found: Record<string, { name: string; url: string }[]> = {};
+      await Promise.all(
+        requiredCerts(property).map(async (certKey) => {
+          try {
+            const res = await fetch(
+              `/api/r2/list?scope=document&ref=${encodeURIComponent(`compliance-${pid}-${certKey}`)}`
+            );
+            const j = await res.json();
+            if (!j.ok || !j.files?.length) return;
+            found[`${pid}:${certKey}`] = j.files.map((f: { key: string; name: string }) => ({
+              name: f.name,
+              url: `/api/r2/file?key=${encodeURIComponent(f.key)}`,
+            }));
+          } catch {
+            /* a vault that won't answer shows as nothing filed, not a crash */
+          }
+        })
+      );
+      if (!gone) setFiles(found);
+    })();
+    return () => { gone = true; };
   }, [property]);
 
   useEffect(() => {
