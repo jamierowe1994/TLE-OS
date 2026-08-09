@@ -14,7 +14,16 @@
  * the question agents open a diary to answer.
  */
 
-export type ApptKind = "viewing" | "appraisal" | "takeon" | "movein" | "inspection";
+export type ApptKind =
+  | "viewing"
+  | "appraisal"
+  | "takeon"
+  | "movein"
+  | "inspection"
+  /** Everything else in a real working day — appointments, training, the
+   *  private entries that show only as "Busy". Hiding these would tell you
+   *  an agent is free when they are not. */
+  | "other";
 
 export type Appt = {
   id: string;
@@ -41,6 +50,10 @@ export type Appt = {
   link?: { href: string; label: string };
   /** The messages the booking flow sends, and whether they went. */
   comms: { label: string; done: boolean }[];
+  /** Came from a real REX calendar rather than the sample book. Such an
+   *  appointment has no confirmation trail and no occupancy on it, and the
+   *  screen must say so rather than imply all is well. */
+  fromRex?: boolean;
 };
 
 export const KIND_META: Record<ApptKind, { label: string; icon: string }> = {
@@ -49,6 +62,7 @@ export const KIND_META: Record<ApptKind, { label: string; icon: string }> = {
   takeon: { label: "Take-on & photos", icon: "pack/photo" },
   movein: { label: "Move-in", icon: "pack/house" },
   inspection: { label: "Inspection", icon: "pack/checklist" },
+  other: { label: "In the diary", icon: "clock" },
 };
 
 /** "10:15" → minutes since midnight. */

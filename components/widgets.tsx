@@ -7,7 +7,8 @@ import DiaryCalendar from "@/components/DiaryCalendar";
 import DiaryGrid from "@/components/DiaryGrid";
 import LeadSourceChart from "@/components/LeadSourceChart";
 import { FlowTag, Pill } from "@/components/Wire";
-import { todaysAppts, DIARY, VIEWING_OUTCOMES } from "@/lib/diary";
+import { todaysAppts, DIARY as SAMPLE_DIARY, VIEWING_OUTCOMES } from "@/lib/diary";
+import { useDiary } from "@/lib/diary-store";
 import { dueWithin, CERT_META } from "@/lib/compliance";
 import { LEADS, leadSide } from "@/lib/leads-sample";
 
@@ -254,8 +255,9 @@ function DiaryWidget({ w, h }: { w: number; h: number }) {
 /* ── The Today widget carries its own calendar modal. ── */
 function TodayWidget({ w, h }: { w: number; h: number }) {
   const [open, setOpen] = useState(false);
-  const today = todaysAppts();
-  const tomorrow = DIARY.filter((a) => a.day === 1);
+  const { appts } = useDiary();
+  const today = appts.filter((a) => a.day === 0);
+  const tomorrow = appts.filter((a) => a.day === 1);
   const showTomorrow = w >= 2 || h >= 3;
   return (
     <>
@@ -952,9 +954,30 @@ export const WIDGETS: Record<string, WidgetDef> = {
     label: "Viewings", icon: "key", hint: "coming up — and what the last ones said",
     defaultW: 1, defaultH: 1,
     sizes: { s: [1, 1], m: [1, 2], l: [2, 2] },
-    render: (w, h) => {
-      const week = DIARY.filter((a) => a.kind === "viewing" && a.day >= 0 && a.day <= 6);
-      const past = DIARY.filter((a) => a.kind === "viewing" && a.day < 0).sort((a, b) => b.day - a.day);
+    render: (w, h) => <ViewingsWeekWidget w={w} h={h} />,
+  },
+};
+
+/** The default board IS today's dashboard, box for box. */
+export const DEFAULT_LAYOUT: { id: string; type: string; w: number; h: number }[] = [
+  { id: "d1", type: "leads-today", w: 1, h: 1 },
+  { id: "d2", type: "on-market", w: 1, h: 1 },
+  { id: "d3", type: "applications", w: 1, h: 1 },
+  { id: "d4", type: "occupancy", w: 1, h: 1 },
+  { id: "d5", type: "attention", w: 1, h: 2 },
+  { id: "d6", type: "today", w: 1, h: 2 },
+  { id: "d7", type: "lead-sources", w: 2, h: 2 },
+  { id: "d8", type: "pipeline", w: 4, h: 1 },
+];
+
+/** The dashboard's tray drawers. Finances has its own set. */
+
+/* ── Viewings this week, plus what the last ones said. A component rather
+      than an inline renderer so it can read the live diary. ── */
+function ViewingsWeekWidget({ w, h }: { w: number; h: number }) {
+  const { appts } = useDiary();
+  const week = appts.filter((a) => a.kind === "viewing" && a.day >= 0 && a.day <= 6);
+  const past = appts.filter((a) => a.kind === "viewing" && a.day < 0).sort((a, b) => b.day - a.day);
       const rows = (list: typeof week, upcoming: boolean) =>
         list.slice(0, h >= 2 ? 4 : 2).map((v) => ({
           a: upcoming ? (v.day === 0 ? v.start : `+${v.day}d`) : `${-v.day}d ago`,
@@ -983,24 +1006,9 @@ export const WIDGETS: Record<string, WidgetDef> = {
             </div>
           )}
         </>
-      );
-    },
-  },
-};
+      )
+}
 
-/** The default board IS today's dashboard, box for box. */
-export const DEFAULT_LAYOUT: { id: string; type: string; w: number; h: number }[] = [
-  { id: "d1", type: "leads-today", w: 1, h: 1 },
-  { id: "d2", type: "on-market", w: 1, h: 1 },
-  { id: "d3", type: "applications", w: 1, h: 1 },
-  { id: "d4", type: "occupancy", w: 1, h: 1 },
-  { id: "d5", type: "attention", w: 1, h: 2 },
-  { id: "d6", type: "today", w: 1, h: 2 },
-  { id: "d7", type: "lead-sources", w: 2, h: 2 },
-  { id: "d8", type: "pipeline", w: 4, h: 1 },
-];
-
-/** The dashboard's tray drawers. Finances has its own set. */
 export const DASH_TRAY_GROUPS = [
   { key: "performance", label: "Performance", icon: "trend-up", types: ["leads-today", "lead-sources", "pipeline", "earnings", "applications"] },
   { key: "social", label: "Social & ads", icon: "megaphone", types: ["facebook-leads", "instagram-leads", "ads-live"] },

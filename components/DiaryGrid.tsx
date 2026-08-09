@@ -1,6 +1,7 @@
 "use client";
 
-import { DIARY, minutesOf } from "@/lib/diary";
+import { minutesOf } from "@/lib/diary";
+import { useDiary } from "@/lib/diary-store";
 import { dayKey } from "@/lib/weather";
 import { milesBetween } from "@/components/PeopleFilter";
 
@@ -63,6 +64,7 @@ export default function DiaryGrid({
   /** Per-day forecast, keyed by lib/weather dayKey — big, in the header. */
   weather?: Record<string, Wx | undefined>;
 }) {
+  const { appts: DIARY } = useDiary();
   const PX = hourPx / 60;
   const columns = weekOffsets(week);
   const gridH = (DAY_END - DAY_START) * PX;

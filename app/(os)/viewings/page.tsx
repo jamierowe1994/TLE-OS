@@ -6,7 +6,8 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import ViewingDrawer, { type Outcome } from "@/components/ViewingDrawer";
 import { FlowTag, Ghost, Pill } from "@/components/Wire";
-import { DIARY, minutesOf, VIEWING_OUTCOMES, type Appt } from "@/lib/diary";
+import { minutesOf, VIEWING_OUTCOMES, type Appt } from "@/lib/diary";
+import { useDiary } from "@/lib/diary-store";
 
 /**
  * Viewings: the week's diary, and every row opens into the whole story —
@@ -51,6 +52,7 @@ export default function Viewings() {
   /** "apptId:label" for anything sent from the drawer this session. */
   const [sentExtra, setSentExtra] = useState<Set<string>>(new Set());
 
+  const { appts: DIARY, live, loading } = useDiary();
   const viewings = DIARY.filter((a) => a.kind === "viewing");
   const upcoming = viewings.filter((a) => a.day >= 0).sort(
     (a, b) => a.day - b.day || minutesOf(a.start) - minutesOf(b.start)
@@ -61,6 +63,11 @@ export default function Viewings() {
 
   /** The row's state at a glance: every message gone, or something missing. */
   function commState(a: Appt) {
+    // A REX calendar entry carries no record of what was sent. Saying
+    // "all confirmed" because the list is empty would be inventing comfort.
+    if (a.fromRex && !a.comms.length) {
+      return { label: "Not known", tone: "neutral" as const };
+    }
     const missing = a.comms.filter((c) => !c.done && !sentExtra.has(`${a.id}:${c.label}`)).length;
     return missing === 0
       ? { label: "All confirmed", tone: "good" as const }
@@ -92,8 +99,13 @@ export default function Viewings() {
           <span className="hidden w-24 shrink-0 sm:block">
             {a.tenant ? (
               <Pill tone="accent">Tenanted</Pill>
-            ) : (
+            ) : a.tenant === null ? (
               <span className="text-[10px] font-semibold uppercase tracking-wide text-muted/70">Vacant</span>
+            ) : (
+              // undefined means nobody has told us — which is not the same
+              // as empty, and an agent knocking on a tenanted door deserves
+              // the difference.
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted/50">Not known</span>
             )}
           </span>
           <span className="hidden w-16 shrink-0 truncate text-[11px] text-muted sm:block">{a.agent}</span>

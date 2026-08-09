@@ -6,7 +6,8 @@ import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import DiaryGrid from "@/components/DiaryGrid";
 import { FlowTag } from "@/components/Wire";
-import { DIARY, KIND_META, minutesOf, type Appt } from "@/lib/diary";
+import { KIND_META, minutesOf, type Appt } from "@/lib/diary";
+import { useDiary } from "@/lib/diary-store";
 
 /**
  * The full calendar — what the dashboard's Today box opens out into.
@@ -66,6 +67,7 @@ export default function DiaryCalendar({
   open: boolean;
   onClose: () => void;
 }) {
+  const { appts: DIARY } = useDiary();
   const [week, setWeek] = useState(0);
   const [selId, setSelId] = useState<string | null>(null);
 
