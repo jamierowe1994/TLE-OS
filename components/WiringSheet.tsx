@@ -40,6 +40,36 @@ function normalise(system: SystemKey, j: unknown): LiveStatus {
     );
     return { state: checks.every((c) => c.ok) ? "ok" : "partial", checks };
   }
+  if (system === "foundations") {
+    const d = j as {
+      connected?: boolean;
+      error?: string;
+      tables?: string[];
+      users?: number;
+      serverVersion?: string;
+      authSecretSet?: boolean;
+    };
+    if (!d.connected) return { state: "unconfigured", checks: [], note: d.error };
+    return {
+      state: d.authSecretSet ? "ok" : "partial",
+      checks: [
+        {
+          key: "db",
+          label: "Database",
+          ok: true,
+          detail: `${d.serverVersion ?? "Postgres"} — ${d.tables?.length ?? 0} tables, ${d.users ?? 0} people registered`,
+        },
+        {
+          key: "authsecret",
+          label: "Session signing key",
+          ok: Boolean(d.authSecretSet),
+          detail: d.authSecretSet
+            ? "AUTH_SECRET set — sessions can be signed"
+            : "AUTH_SECRET missing — sign-in can't issue tokens until it's set in Railway",
+        },
+      ],
+    };
+  }
   if (system === "storage") {
     const d = j as { ok?: boolean; bucket?: string; jurisdiction?: string; objectCount?: number; stage?: string };
     if (d.ok) {

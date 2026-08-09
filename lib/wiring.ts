@@ -72,7 +72,7 @@ export const SYSTEMS: {
     key: "foundations",
     label: "Foundations",
     blurb: "Sign-in, database, the customer portals.",
-    endpoint: null,
+    endpoint: "/api/db/health",
   },
 ];
 
@@ -273,7 +273,7 @@ export const WIRING: WiringRow[] = [
     area: "The ground floor",
     item: "Real sign-in (per-person accounts) and a database",
     state: "blocked",
-    note: "Nothing OS-side persists beyond the browser yet — notes, layouts and portal accounts are localStorage. Unblocking is one click: add a Postgres service to the tle-os Railway project and DATABASE_URL appears by itself. The portal's auth (sign-in, sessions, per-user records) is a working pattern to port once it exists.",
+    note: "The database is UP (Railway Postgres, 9 Aug) and the schema builds itself on first use: people, per-person preferences, notes, customer portal accounts, and a cache for the slow REX/PayProp walks. What is not done yet is moving the screens onto it — notes, layouts and profiles still live in the browser until sign-in exists to own them.",
   },
   {
     system: "foundations",
