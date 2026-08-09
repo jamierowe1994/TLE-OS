@@ -20,13 +20,14 @@ import {
  * hangs off. Everything else is theirs to write.
  */
 
-type TabKey = "info" | "appearance" | "compliance" | "connections" | "ads";
+type TabKey = "info" | "appearance" | "compliance" | "connections" | "portals" | "ads";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "info", label: "Profile information" },
   { key: "appearance", label: "Appearance" },
   { key: "compliance", label: "Personal compliance" },
   { key: "connections", label: "Connections" },
+  { key: "portals", label: "Portals" },
   { key: "ads", label: "Ads" },
 ];
 
@@ -562,6 +563,59 @@ export default function ProfilePage() {
             </ul>
             <p className="mt-4 text-[10.5px] leading-relaxed text-muted">
               Wireframe — the buttons flip the label; the OAuth flows land with sign-in.
+            </p>
+          </div>
+        )}
+
+        {/* ══ PORTALS — the customer-facing fronts, previewable from here. ══ */}
+        {tab === "portals" && (
+          <div className="max-w-2xl">
+            <p className="mb-4 text-[12.5px] leading-relaxed text-muted">
+              The two customer fronts of the OS — brand red, corporate type, no
+              illustrations, deliberately NOT this product&apos;s look. Preview them
+              exactly as a customer sees them.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {(
+                [
+                  {
+                    title: "Tenant portal",
+                    who: "Sent with the GDPR welcome when a tenant is registered.",
+                    what: "Their viewings (reschedulable), homes picked for them, offers online, guides, and the landlord-facing profile builder.",
+                    href: "/tenant/welcome",
+                  },
+                  {
+                    title: "Landlord portal",
+                    who: "Sent when the terms of business come back signed.",
+                    what: "The letting's progress and offers, the sitting tenant and rent, compliance certificates, upkeep approvals, documents down and up.",
+                    href: "/landlord/welcome",
+                  },
+                ]
+              ).map((c) => (
+                <div key={c.title} className="rounded-2xl border border-line/70 p-5">
+                  <p className="flex items-center gap-2 text-[14px] font-semibold">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#e31f36] text-[9px] font-extrabold text-white">
+                      TLE
+                    </span>
+                    {c.title}
+                  </p>
+                  <p className="mt-2 text-[11px] font-semibold text-accent-dark">{c.who}</p>
+                  <p className="mt-1.5 text-[12px] leading-relaxed text-muted">{c.what}</p>
+                  <a
+                    href={c.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#e31f36] px-4 py-2 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+                  >
+                    Open the preview →
+                  </a>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-[10.5px] leading-relaxed text-muted">
+              Both sit outside the office access code — customers get their own doors
+              (magic link → password). Sign-in and per-customer data land with the
+              database.
             </p>
           </div>
         )}

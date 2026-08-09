@@ -36,6 +36,6 @@ export const config = {
   // the TENANT portal, which is customer-facing: tenants get their own
   // magic-link + password door, never the office access code.
   matcher: [
-    "/((?!key|api/key|tenant|_next|icons|illustrations|favicon.ico|robots.txt).*)",
+    "/((?!key|api/key|tenant|landlord|_next|icons|illustrations|favicon.ico|robots.txt).*)",
   ],
 };
