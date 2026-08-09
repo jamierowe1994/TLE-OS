@@ -2,6 +2,9 @@
  * The wiring sheet — the honest ledger of what the OS can and cannot do
  * against the real systems, kept as data so updating it is editing one list.
  *
+ * Organised PER SYSTEM: each system gets its own section on the sheet, its
+ * own live health check, and its own rows — wired up (or not) individually.
+ *
  * States:
  *   live    — working in this build, on real credentials
  *   proven  — capability confirmed against the live API (read-only probes);
@@ -15,7 +18,10 @@
 
 export type WiringState = "live" | "proven" | "untested" | "blocked" | "manual";
 
+export type SystemKey = "rex" | "payprop" | "storage" | "sends" | "foundations";
+
 export interface WiringRow {
+  system: SystemKey;
   area: string;
   item: string;
   state: WiringState;
@@ -30,134 +36,234 @@ export const WIRING_STATES: Record<WiringState, { label: string; tone: string }>
   manual: { label: "Stays manual for now", tone: "#8a867f" },
 };
 
-export const WIRING: WiringRow[] = [
-  // ── Listings & publishing ──
+/** The systems, in sheet order. `endpoint` is the live health check the sheet
+ *  calls for that system; null means there's nothing to probe (yet). */
+export const SYSTEMS: {
+  key: SystemKey;
+  label: string;
+  blurb: string;
+  endpoint: string | null;
+}[] = [
   {
+    key: "rex",
+    label: "REX",
+    blurb: "The CRM — listings, leads, compliance records, diary.",
+    endpoint: "/api/rex/wiring",
+  },
+  {
+    key: "payprop",
+    label: "PayProp",
+    blurb: "The money — rent, fees, arrears. Two agencies: Scotland and the rest of the UK, blind to each other.",
+    endpoint: "/api/payprop/wiring",
+  },
+  {
+    key: "storage",
+    label: "Storage (R2)",
+    blurb: "Our own vault for certificates, documents and photos.",
+    endpoint: "/api/r2/health",
+  },
+  {
+    key: "sends",
+    label: "Email & WhatsApp",
+    blurb: "Getting messages out of the building.",
+    endpoint: null,
+  },
+  {
+    key: "foundations",
+    label: "Foundations",
+    blurb: "Sign-in, database, the customer portals.",
+    endpoint: null,
+  },
+];
+
+export const WIRING: WiringRow[] = [
+  // ═══ REX ═══
+  {
+    system: "rex",
     area: "Listings & publishing",
     item: "Read the whole rental book (293 current rentals, photos included)",
     state: "live",
     note: "Listings/search with the rental category filter. The OS listings page currently uses a static export of exactly this call — swapping to live is a small change.",
   },
   {
+    system: "rex",
     area: "Listings & publishing",
     item: "Publish a listing to Rightmove / Zoopla / OnTheMarket",
     state: "untested",
     note: "The full pipeline exists and is exposed to us: ListingPublication/publish, setActivePublicationChannels, ListingPortalUploads/queue. Rightmove, Zoopla and OnTheMarket are active portal profiles on the account, and current listings are feeding live (checked against a real Rightmove link). No write has ever been fired — first publish should be a supervised test on a throwaway draft.",
   },
   {
+    system: "rex",
     area: "Listings & publishing",
     item: "Pre-publish checks (what's missing before it can go live)",
     state: "proven",
     note: "ListingPublication/getErrorsPreventingPublication returns the exact blockers per listing — this becomes the OS's 'ready to publish?' checklist for free.",
   },
   {
+    system: "rex",
     area: "Listings & publishing",
     item: "Create / edit listings and properties from the OS",
     state: "untested",
     note: "listings and properties both expose create + update to our session (settled 3 Aug via describe). Same rule: exists, never executed.",
   },
   {
+    system: "rex",
     area: "Listings & publishing",
     item: "Upload photos and floorplans into REX",
     state: "untested",
     note: "The undocumented Upload service (uploadListingImage, uploadFileFromUrl, 16 methods) is exposed to us. This is also the R2→REX photo route.",
   },
   {
+    system: "rex",
     area: "Listings & publishing",
     item: "56% of the current rental book is unpublished drafts",
     state: "manual",
     note: "165 of 293 current rentals sit in draft, invisible on every portal. A business decision, not a technical one — worth a review before any bulk publish.",
   },
-
-  // ── Leads ──
   {
+    system: "rex",
     area: "Leads",
     item: "Rightmove / Zoopla / OnTheMarket enquiries arriving in REX",
     state: "live",
     note: "87,000+ leads on record, newest minutes old. Each carries the applicant's name, email, phone, message, and the listing it's about. The portal sources are set to auto-process.",
   },
   {
+    system: "rex",
     area: "Leads",
     item: "Pull those leads into the OS leads page",
     state: "proven",
     note: "Leads/search reads them cleanly with full contact + listing joins. Wiring the OS leads screen to this is next on the list.",
   },
   {
+    system: "rex",
     area: "Leads",
     item: "Real-time push — a lead lands in REX, the OS hears instantly",
     state: "proven",
     note: "AdminWebhooks supports leads.created (73 events incl. listings.updated, tenancy_applications.created). One webhook already exists on the account (a 2022 Zapier one), so the mechanism is in use. Needs: an OS endpoint + creating the webhook (a write).",
   },
   {
+    system: "rex",
     area: "Leads",
     item: "Work a lead from the OS (assign, complete, archive, mark spam)",
     state: "untested",
     note: "Leads exposes update, toggleCompletionState, archive, toggleSpamMarker to our session. Exists, never executed.",
   },
-
-  // ── Compliance & documents ──
   {
-    area: "Compliance & documents",
+    system: "rex",
+    area: "Compliance",
     item: "Read certificates out of REX (EICR, gas, terms of business)",
     state: "proven",
     note: "The portal already does this daily: compliance entries carry the file at file.url. EICR and ToB are 100% attached, gas 66%, EPC 0% (EPC lives as a listing date field instead).",
   },
   {
-    area: "Compliance & documents",
-    item: "Certificate vault in our own storage (R2)",
-    state: "live",
-    note: "Attach-certificate on the compliance drawer uploads for real; files come back on 5-minute signed links. Next brick: a listing endpoint so attached files persist across refresh.",
-  },
-  {
-    area: "Compliance & documents",
+    system: "rex",
+    area: "Compliance",
     item: "Write certificates back into REX compliance entries",
     state: "untested",
     note: "compliance-entries exposes create + update; documents flow in via the Upload service. Exists, never executed.",
   },
   {
-    area: "Compliance & documents",
+    system: "rex",
+    area: "Compliance",
     item: "E-signatures (tenancy agreements) fired from the OS",
     state: "untested",
     note: "esign-requests/create is exposed, and REX has DocuSign/HelloSign third-party service classes. A supervised test away.",
   },
-
-  // ── Diary & viewings ──
   {
+    system: "rex",
     area: "Diary & viewings",
     item: "The OS diary reading real REX calendars",
     state: "proven",
     note: "Calendars, CalendarEvents and Appointments services all answer. The OS diary/booker currently runs on sample data — this is the swap.",
   },
   {
+    system: "rex",
     area: "Diary & viewings",
     item: "Booking a viewing writing back to REX",
     state: "untested",
     note: "CalendarEvents and a BookViewingWizard service (createLead + saveApplicantStep) exist — REX has its own booking flow we can drive.",
   },
 
-  // ── Money ──
+  // ═══ PayProp ═══
   {
-    area: "Money",
-    item: "Fees, arrears and landlord payments from PayProp",
+    system: "payprop",
+    area: "Reading the money",
+    item: "Scotland agency — properties, tenants, tenancies, categories",
+    state: "live",
+    note: "The Scotland API key reads the managed book directly (84 properties, 374 tenants at last census). API keys don't rotate, so the portal and the OS can share this one safely.",
+  },
+  {
+    system: "payprop",
+    area: "Reading the money",
+    item: "UK agency — the bigger book",
     state: "blocked",
-    note: "The portal reads PayProp today, but the OS has no PayProp key yet — and the deeper reports (damage deposits, unreconciled money) need scopes/OAuth PayProp still hasn't granted. Ask stays with PayProp support.",
+    note: "The UK agency connects to the portal over OAuth, and PayProp rotates the refresh token on every refresh — two apps sharing one OAuth connection invalidate each other. Unblock: ask PayProp for a UK API key (like Scotland's), or wait for the shared database so both apps use one token store.",
+  },
+  {
+    system: "payprop",
+    area: "Reading the money",
+    item: "Fees & arrears widgets on real figures",
+    state: "proven",
+    note: "The portal computes fee generation and arrears from all-payments and tenant balances today. Once a key is on this environment the Finances board swaps from sample to real.",
+  },
+  {
+    system: "payprop",
+    area: "Deeper reports",
+    item: "Damage deposits, unreconciled money, account statements",
+    state: "blocked",
+    note: "Lives in PayProp v2.0, which API keys cannot reach at all (OAuth-only) — and report/damage-deposits is 403 on both existing keys. The ask sits with PayProp support: v2 OAuth credentials + the missing scopes.",
+  },
+  {
+    system: "payprop",
+    area: "Deeper reports",
+    item: "Webhooks (PayProp pushing events to us)",
+    state: "blocked",
+    note: "PayProp webhooks post to ONE URL per agency — if it's pointed at the OS, nothing else gets them. Fine once the OS is the receiving end; needs deciding, then PayProp support sets it.",
   },
 
-  // ── Foundations ──
+  // ═══ Storage ═══
   {
-    area: "Foundations",
+    system: "storage",
+    area: "The vault",
+    item: "Certificate & document vault in our own storage",
+    state: "live",
+    note: "Attach-certificate on the compliance drawer and the landlord portal's proof-of-ownership upload both store for real; files come back on 5-minute signed links. EU-hosted bucket.",
+  },
+  {
+    system: "storage",
+    area: "The vault",
+    item: "Uploaded files persisting across refresh",
+    state: "blocked",
+    note: "The chips vanish on reload because there's no listing endpoint yet — about an hour's work, first in the storage queue.",
+  },
+
+  // ═══ Email & WhatsApp ═══
+  {
+    system: "sends",
+    area: "Getting messages out",
+    item: "Sending real email from the OS",
+    state: "blocked",
+    note: "Every send in the OS is a rehearsal — the buttons compose the right message but nothing leaves. Needs an email sender (SMTP/Resend) and a sending address the business owns.",
+  },
+  {
+    system: "sends",
+    area: "Getting messages out",
+    item: "Sending real WhatsApp",
+    state: "blocked",
+    note: "REX has a WhatsAppMessages service and a ThirdPartyServiceWhatsApp class — worth probing whether the account has WhatsApp enabled before buying anything separate.",
+  },
+
+  // ═══ Foundations ═══
+  {
+    system: "foundations",
+    area: "The ground floor",
     item: "Real sign-in (per-person accounts) and a database",
     state: "blocked",
     note: "Nothing OS-side persists beyond the browser yet — notes, layouts and portal accounts are localStorage. This is the agreed next foundational block; everything above gets easier once it lands.",
   },
   {
-    area: "Foundations",
-    item: "Sending real email / WhatsApp from the OS",
-    state: "blocked",
-    note: "Every send in the OS is a rehearsal — the buttons compose the right message but nothing leaves. Needs an email sender (SMTP/Resend) and WhatsApp (REX has a WhatsAppMessages service worth probing first).",
-  },
-  {
-    area: "Foundations",
+    system: "foundations",
+    area: "The ground floor",
     item: "Tenant & landlord portals on real customer accounts",
     state: "blocked",
     note: "Both portals are built and walk-through-able, but run on demo people until sign-in + database exist.",
