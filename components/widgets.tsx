@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import DiaryCalendar from "@/components/DiaryCalendar";
+import DiaryGrid from "@/components/DiaryGrid";
 import LeadSourceChart from "@/components/LeadSourceChart";
 import { FlowTag, Pill } from "@/components/Wire";
 import { todaysAppts, DIARY, VIEWING_OUTCOMES } from "@/lib/diary";
@@ -193,6 +194,62 @@ const ADS = [
 ];
 
 const tenantLeads = LEADS.filter((l) => leadSide(l) === "tenant");
+
+/* ── The Diary widget: the day at 1×1, the week grid from 2×2, the full
+   two-row diary at 4×3 — the same grid as everywhere else, so someone can
+   log in, glance, and go. ── */
+function DiaryWidget({ w, h }: { w: number; h: number }) {
+  const [open, setOpen] = useState(false);
+  const today = todaysAppts();
+  if (w === 1 && h === 1) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="block w-full text-left">
+        <Head icon="calendar" label="Diary" />
+        <BigCount value={String(today.length)} hint={`today · next at ${today[0]?.start ?? "—"}`} />
+        <DiaryCalendar open={open} onClose={() => setOpen(false)} />
+      </button>
+    );
+  }
+  if (w === 1) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="block w-full text-left">
+        <Head icon="calendar" label="Diary — today" />
+        <ul className="mt-4 space-y-2.5">
+          {today.slice(0, h >= 3 ? 8 : 5).map((t) => (
+            <li key={t.id} className="flex items-baseline gap-3">
+              <span className="figures w-11 shrink-0 text-[13px] text-accent-dark">{t.start}</span>
+              <span className="min-w-0">
+                <span className="block truncate text-[12.5px]">{t.what}</span>
+                <span className="block truncate text-[10.5px] text-muted">{t.who}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+        <DiaryCalendar open={open} onClose={() => setOpen(false)} />
+      </button>
+    );
+  }
+  // Wide: the real week grid, scaled to the room it's given.
+  const hourPx = h >= 3 ? 40 : 24;
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between gap-2">
+        <Head icon="calendar" label="Diary — this week" />
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="text-[10.5px] font-semibold text-muted transition-colors hover:text-ink"
+        >
+          Open full →
+        </button>
+      </div>
+      <div className="mt-3 min-h-0 flex-1 overflow-auto rounded-lg border border-line/50">
+        <DiaryGrid week={0} hourPx={hourPx} onAppt={() => setOpen(true)} />
+      </div>
+      <DiaryCalendar open={open} onClose={() => setOpen(false)} />
+    </div>
+  );
+}
 
 /* ── The Today widget carries its own calendar modal. ── */
 function TodayWidget({ w, h }: { w: number; h: number }) {
@@ -503,6 +560,13 @@ export const WIDGETS: Record<string, WidgetDef> = {
     defaultW: 1, defaultH: 2,
     sizes: { s: [1, 1], m: [1, 2], l: [2, 2] },
     render: (w, h) => <AttentionWidget w={w} h={h} />,
+  },
+
+  diary: {
+    label: "Diary", icon: "calendar", hint: "the day → the week → the whole grid, as it grows",
+    defaultW: 2, defaultH: 2,
+    sizes: { s: [1, 1], m: [2, 2], l: [4, 3] },
+    render: (w, h) => <DiaryWidget w={w} h={h} />,
   },
 
   today: {
@@ -941,7 +1005,7 @@ export const DASH_TRAY_GROUPS = [
   { key: "performance", label: "Performance", icon: "trend-up", types: ["leads-today", "lead-sources", "pipeline", "earnings", "applications"] },
   { key: "social", label: "Social & ads", icon: "megaphone", types: ["facebook-leads", "instagram-leads", "ads-live"] },
   { key: "book", label: "The book", icon: "folder", types: ["portfolio", "on-market", "occupancy", "recently-listed"] },
-  { key: "diary", label: "People & diary", icon: "calendar", types: ["today", "viewings-week", "attention"] },
+  { key: "diary", label: "People & diary", icon: "calendar", types: ["diary", "today", "viewings-week", "attention"] },
   { key: "management", label: "Management", icon: "setting", types: ["arrears", "maintenance", "renewals"] },
   { key: "compliance", label: "Compliance", icon: "shield", types: ["compliance-due"] },
 ];
