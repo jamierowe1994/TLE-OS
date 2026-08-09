@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  applyDarkPalette,
   applySurface,
   applyTheme,
   isNight,
@@ -131,6 +132,7 @@ export default function ThemeGate({ children }: { children: React.ReactNode }) {
   // First paint: honour the saved choice, or open the chooser if there isn't one.
   useEffect(() => {
     applySurface(readSurface());
+    applyDarkPalette();
     const saved = readTheme();
     if (saved) {
       choice.current = saved;

@@ -81,3 +81,54 @@ export function writeSurface(choice: SurfaceChoice) {
     /* private browsing */
   }
 }
+
+/**
+ * The dark room's decorating kit. Ten warm charcoals in hundred-steps —
+ * 100 lightest, 1000 deepest — applied separately to the BACKGROUND and the
+ * BOXES so James can find the exact blend by eye. Pure black never appears:
+ * the illustrations are ink, and ink on true black loses its paper.
+ */
+export const CHARCOALS: { step: number; hex: string }[] = [
+  { step: 100, hex: "#3d3d44" },
+  { step: 200, hex: "#39393f" },
+  { step: 300, hex: "#34343b" },
+  { step: 400, hex: "#303036" },
+  { step: 500, hex: "#2c2c32" },
+  { step: 600, hex: "#28282e" },
+  { step: 700, hex: "#242429" },
+  { step: 800, hex: "#202025" },
+  { step: 900, hex: "#1c1c20" },
+  { step: 1000, hex: "#18181c" },
+];
+
+export const DARK_BG_KEY = "os-dark-bg";
+export const DARK_BOX_KEY = "os-dark-box";
+/** Softer than the old #1c1c1e page — charcoal, and boxes a lift above it. */
+export const DARK_BG_DEFAULT = 700;
+export const DARK_BOX_DEFAULT = 500;
+
+export function readDarkStep(key: string, fallback: number): number {
+  try {
+    const v = Number(localStorage.getItem(key));
+    return CHARCOALS.some((c) => c.step === v) ? v : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Stamp the chosen charcoals as CSS vars — the dark block reads them. */
+export function applyDarkPalette() {
+  const bg = CHARCOALS.find((c) => c.step === readDarkStep(DARK_BG_KEY, DARK_BG_DEFAULT))!;
+  const box = CHARCOALS.find((c) => c.step === readDarkStep(DARK_BOX_KEY, DARK_BOX_DEFAULT))!;
+  document.documentElement.style.setProperty("--dark-page", bg.hex);
+  document.documentElement.style.setProperty("--dark-box", box.hex);
+}
+
+export function writeDarkStep(key: string, step: number) {
+  try {
+    localStorage.setItem(key, String(step));
+  } catch {
+    /* private browsing */
+  }
+  applyDarkPalette();
+}

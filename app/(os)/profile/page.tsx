@@ -7,6 +7,8 @@ import { PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
 import {
   applySurface, applyTheme, readSurface, readTheme, writeSurface, writeTheme,
+  CHARCOALS, DARK_BG_DEFAULT, DARK_BG_KEY, DARK_BOX_DEFAULT, DARK_BOX_KEY,
+  readDarkStep, writeDarkStep,
   type SurfaceChoice, type ThemeChoice,
 } from "@/lib/theme";
 
@@ -36,7 +38,7 @@ const ACCENTS = [
 
 const PROFILE_KEY = "tle-profile-v1";
 
-type Profile = { name: string; phone: string; patch: string; bio: string };
+type Profile = { name: string; phone: string; patch: string; bio: string; photo?: string };
 const DEFAULT_PROFILE: Profile = {
   name: "James Rowe",
   phone: "07XXX XXXXXX",
@@ -85,6 +87,8 @@ export default function ProfilePage() {
   const [saved, setSaved] = useState(false);
   const [theme, setTheme] = useState<ThemeChoice>("auto");
   const [surface, setSurface] = useState<SurfaceChoice>("medium");
+  const [darkBg, setDarkBg] = useState(DARK_BG_DEFAULT);
+  const [darkBox, setDarkBox] = useState(DARK_BOX_DEFAULT);
   const [accent, setAccent] = useState("");
   const [connections, setConnections] = useState(CONNECTIONS);
   /** Labels with a diary reminder set this session. */
@@ -97,6 +101,8 @@ export default function ProfilePage() {
     } catch { /* default profile */ }
     setTheme(readTheme() ?? "auto");
     setSurface(readSurface());
+    setDarkBg(readDarkStep(DARK_BG_KEY, DARK_BG_DEFAULT));
+    setDarkBox(readDarkStep(DARK_BOX_KEY, DARK_BOX_DEFAULT));
     setAccent(localStorage.getItem("os-accent") ?? "");
   }, []);
 
@@ -165,9 +171,51 @@ export default function ProfilePage() {
         {tab === "info" && (
           <div className="max-w-2xl">
             <div className="flex items-center gap-5">
-              <span className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[24px] font-bold text-accent-dark">
-                {initials}
-              </span>
+              {/* The headshot: click it, pick a photo. Downscaled to 256px
+                  and stored on the profile — it goes on emails and listings
+                  when those are wired. */}
+              <label
+                className="group relative block h-20 w-20 shrink-0 cursor-pointer overflow-hidden rounded-full"
+                title="Change your photo"
+              >
+                {profile.photo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={profile.photo} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center bg-accent-soft text-[24px] font-bold text-accent-dark">
+                    {initials}
+                  </span>
+                )}
+                <span className="absolute inset-x-0 bottom-0 bg-ink/60 py-1 text-center text-[8.5px] font-semibold uppercase tracking-wide text-page opacity-0 transition-opacity group-hover:opacity-100">
+                  {profile.photo ? "Change" : "Add photo"}
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    const img = new Image();
+                    img.onload = () => {
+                      // 256px square crop-fit — enough for every avatar spot,
+                      // small enough to live in localStorage until sign-in.
+                      const c = document.createElement("canvas");
+                      c.width = c.height = 256;
+                      const ctx = c.getContext("2d")!;
+                      const side = Math.min(img.width, img.height);
+                      ctx.drawImage(
+                        img,
+                        (img.width - side) / 2, (img.height - side) / 2, side, side,
+                        0, 0, 256, 256
+                      );
+                      save({ ...profile, photo: c.toDataURL("image/jpeg", 0.85) });
+                      URL.revokeObjectURL(img.src);
+                    };
+                    img.src = URL.createObjectURL(file);
+                  }}
+                />
+              </label>
               <div className="min-w-0">
                 <p className="hand text-[20px] leading-tight">{profile.name}</p>
                 <p className="mt-0.5 text-[12px] text-muted">
@@ -266,6 +314,64 @@ export default function ProfilePage() {
               Automatic follows the clock, not the operating system — the screen softens
               from 7pm to 7am.
             </p>
+
+            {/* The dark room's decorating kit — shown only once Dark is the
+                choice, because that's when the question exists. Ten charcoals
+                each for the background and the boxes; find the blend by eye. */}
+            {theme === "dark" && (
+              <>
+                <p className={`${label} mt-7`}>Dark background</p>
+                <div className="flex gap-1.5">
+                  {CHARCOALS.map((c) => (
+                    <button
+                      key={c.step}
+                      type="button"
+                      title={`${c.step}`}
+                      onClick={() => {
+                        setDarkBg(c.step);
+                        writeDarkStep(DARK_BG_KEY, c.step);
+                      }}
+                      className={`flex h-9 flex-1 flex-col items-center justify-end rounded-lg border pb-1 transition-transform hover:scale-105 ${
+                        darkBg === c.step ? "border-accent-dark" : "border-ink/15"
+                      }`}
+                      style={{ backgroundColor: c.hex }}
+                    >
+                      <span className={`text-[7.5px] font-semibold ${darkBg === c.step ? "text-accent" : "text-white/50"}`}>
+                        {c.step}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                <p className={`${label} mt-5`}>Dark boxes</p>
+                <div className="flex gap-1.5">
+                  {CHARCOALS.map((c) => (
+                    <button
+                      key={c.step}
+                      type="button"
+                      title={`${c.step}`}
+                      onClick={() => {
+                        setDarkBox(c.step);
+                        writeDarkStep(DARK_BOX_KEY, c.step);
+                      }}
+                      className={`flex h-9 flex-1 flex-col items-center justify-end rounded-lg border pb-1 transition-transform hover:scale-105 ${
+                        darkBox === c.step ? "border-accent-dark" : "border-ink/15"
+                      }`}
+                      style={{ backgroundColor: c.hex }}
+                    >
+                      <span className={`text-[7.5px] font-semibold ${darkBox === c.step ? "text-accent" : "text-white/50"}`}>
+                        {c.step}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
+                  100 is the lightest charcoal, 1000 the deepest — never true black, the
+                  ink needs its paper. Boxes usually sit a step or two lighter than the
+                  background. Changes apply live.
+                </p>
+              </>
+            )}
 
             <p className={`${label} mt-7`}>Surface</p>
             <div className="flex gap-2">

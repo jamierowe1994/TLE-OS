@@ -97,16 +97,20 @@
   --ink: #f4f3f0;
   --muted: #b6b4ae;
   --line: #4d4a52;
-  --page: #1c1c1e;
-  --card: #232326;
+  /* Charcoal is adjustable: Profile → Appearance writes --dark-page and
+     --dark-box (ten hundred-steps each); these are the fallbacks — a warm
+     charcoal, never black, and boxes a clear lift above the page. */
+  --page: var(--dark-page, #242429);
+  --card: var(--dark-box, #2c2c32);
   /* In the dark an outline alone is too severe — the boxes read as cuts in
      the page rather than panels on it. A couple of points of lift is all it
      takes to say "this is a container" without turning it into a slab. */
-  --panel: #212124;
+  --panel: var(--dark-box, #2c2c32);
+  --box: var(--dark-box, #2c2c32);
 
   /* Soft fills go dark-tinted; the "dark" accent goes LIGHTER, because on a
      charcoal page the legible variant of a colour is the paler one. */
-  --accent-soft: color-mix(in srgb, var(--accent) 20%, #1c1c1e);
+  --accent-soft: color-mix(in srgb, var(--accent) 20%, var(--page));
   --accent-dark: color-mix(in srgb, var(--accent) 72%, white);
 }
 
