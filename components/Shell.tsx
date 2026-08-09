@@ -245,10 +245,19 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               <Link
                 href="/profile"
                 onClick={() => setProfileOpen(false)}
-                className="mb-3 flex items-center gap-2 rounded-lg border border-line/70 px-2.5 py-2 text-[12px] font-semibold transition-colors hover:border-ink/40"
+                className="mb-2 flex items-center gap-2 rounded-lg border border-line/70 px-2.5 py-2 text-[12px] font-semibold transition-colors hover:border-ink/40"
               >
                 <DoodleIcon name="user" size={14} className="text-accent-dark" />
                 Your profile
+                <span className="ml-auto text-muted">→</span>
+              </Link>
+              <Link
+                href="/account"
+                onClick={() => setProfileOpen(false)}
+                className="mb-3 flex items-center gap-2 rounded-lg border border-line/70 px-2.5 py-2 text-[12px] font-semibold transition-colors hover:border-ink/40"
+              >
+                <DoodleIcon name="key" size={14} className="text-accent-dark" />
+                Your account
                 <span className="ml-auto text-muted">→</span>
               </Link>
               <p className="text-[10px] font-bold uppercase tracking-wide text-muted">

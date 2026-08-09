@@ -18,18 +18,23 @@ export function PressButton({
   onClick,
   className = "",
   title,
+  disabled = false,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   className?: string;
   title?: string;
+  /** A button that's working shouldn't wobble when pressed again. */
+  disabled?: boolean;
 }) {
   const [pressed, setPressed] = useState(false);
   return (
     <button
       type="button"
       title={title}
+      disabled={disabled}
       onClick={() => {
+        if (disabled) return;
         setPressed(true);
         onClick?.();
       }}
