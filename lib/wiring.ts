@@ -151,9 +151,9 @@ export const WIRING: WiringRow[] = [
   {
     system: "rex",
     area: "Compliance",
-    item: "Read certificates out of REX (EICR, gas, terms of business)",
-    state: "proven",
-    note: "The portal already does this daily: compliance entries carry the file at file.url. EICR and ToB are 100% attached, gas 66%, EPC 0% (EPC lives as a listing date field instead).",
+    item: "Read certificates out of REX (EICR, gas, EPC, HMO licences)",
+    state: "live",
+    note: "Done 9 Aug — the compliance page is real: 527 certificate records across 294 homes, 212 with the document itself attached, all eight certificate types mapped. Certificates hang off the PROPERTY, not the listing — querying by listing id returns almost nothing and looks like a compliant book. The page states what it doesn't know: 257 homes with no record, and 236 with no gas record, which is unknown rather than exempt.",
   },
   {
     system: "rex",
