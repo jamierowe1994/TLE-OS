@@ -96,17 +96,17 @@
      bubbles actually describe an edge instead of hinting at one. */
   --ink: #f4f3f0;
   --muted: #b6b4ae;
-  --line: #4d4a52;
+  --line: #524e49;
   /* Charcoal is adjustable: Profile → Appearance writes --dark-page and
      --dark-box (ten hundred-steps each); these are the fallbacks — a warm
      charcoal, never black, and boxes a clear lift above the page. */
-  --page: var(--dark-page, #242429);
-  --card: var(--dark-box, #2c2c32);
+  --page: var(--dark-page, #292826);
+  --card: var(--dark-box, #32302e);
   /* In the dark an outline alone is too severe — the boxes read as cuts in
      the page rather than panels on it. A couple of points of lift is all it
      takes to say "this is a container" without turning it into a slab. */
-  --panel: var(--dark-box, #2c2c32);
-  --box: var(--dark-box, #2c2c32);
+  --panel: var(--dark-box, #32302e);
+  --box: var(--dark-box, #32302e);
 
   /* Soft fills go dark-tinted; the "dark" accent goes LIGHTER, because on a
      charcoal page the legible variant of a colour is the paler one. */

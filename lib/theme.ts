@@ -88,17 +88,20 @@ export function writeSurface(choice: SurfaceChoice) {
  * BOXES so James can find the exact blend by eye. Pure black never appears:
  * the illustrations are ink, and ink on true black loses its paper.
  */
+/* Warm greys, not blue ones — the first ramp leaned blue (the B channel ran
+   high) and James caught it: "bluey grey rather than greyy grey". These sit
+   a whisker warm of neutral, same family as the eggshell daylight. */
 export const CHARCOALS: { step: number; hex: string }[] = [
-  { step: 100, hex: "#3d3d44" },
-  { step: 200, hex: "#39393f" },
-  { step: 300, hex: "#34343b" },
-  { step: 400, hex: "#303036" },
-  { step: 500, hex: "#2c2c32" },
-  { step: 600, hex: "#28282e" },
-  { step: 700, hex: "#242429" },
-  { step: 800, hex: "#202025" },
-  { step: 900, hex: "#1c1c20" },
-  { step: 1000, hex: "#18181c" },
+  { step: 100, hex: "#454341" },
+  { step: 200, hex: "#403e3c" },
+  { step: 300, hex: "#3b3937" },
+  { step: 400, hex: "#363432" },
+  { step: 500, hex: "#32302e" },
+  { step: 600, hex: "#2d2c2a" },
+  { step: 700, hex: "#292826" },
+  { step: 800, hex: "#252422" },
+  { step: 900, hex: "#21201e" },
+  { step: 1000, hex: "#1c1b1a" },
 ];
 
 export const DARK_BG_KEY = "os-dark-bg";
