@@ -5,6 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import { PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
+import WiringSheet from "@/components/WiringSheet";
 import {
   applySurface, applyTheme, readSurface, readTheme, writeSurface, writeTheme,
   CHARCOALS, DARK_BG_DEFAULT, DARK_BG_KEY, DARK_BOX_DEFAULT, DARK_BOX_KEY,
@@ -20,7 +21,7 @@ import {
  * hangs off. Everything else is theirs to write.
  */
 
-type TabKey = "info" | "appearance" | "compliance" | "connections" | "portals" | "ads";
+type TabKey = "info" | "appearance" | "compliance" | "connections" | "portals" | "wiring" | "ads";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "info", label: "Profile information" },
@@ -28,6 +29,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "compliance", label: "Personal compliance" },
   { key: "connections", label: "Connections" },
   { key: "portals", label: "Portals" },
+  { key: "wiring", label: "The wiring" },
   { key: "ads", label: "Ads" },
 ];
 
@@ -619,6 +621,9 @@ export default function ProfilePage() {
             </p>
           </div>
         )}
+
+        {/* ══ THE WIRING — what's genuinely connected, live-checked. ══ */}
+        {tab === "wiring" && <WiringSheet />}
 
         {/* ══ ADS — the one page that sells something. Layout after the
             reference: a small mark, a big centred line with the accent
