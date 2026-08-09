@@ -272,8 +272,8 @@ export const WIRING: WiringRow[] = [
     system: "foundations",
     area: "The ground floor",
     item: "Real sign-in (per-person accounts) and a database",
-    state: "blocked",
-    note: "The database is UP (Railway Postgres, 9 Aug) and the schema builds itself on first use: people, per-person preferences, notes, customer portal accounts, and a cache for the slow REX/PayProp walks. What is not done yet is moving the screens onto it — notes, layouts and profiles still live in the browser until sign-in exists to own them.",
+    state: "live",
+    note: "Both done 9 Aug. Postgres is up and the schema builds itself; sign-in runs on it at Your account — scrypt passwords, signed 30-day sessions, first person becomes owner and further accounts are created from inside. It sits ALONGSIDE the office access code rather than replacing it, so a bad deploy can never lock the team out of their own product. Still to come: moving notes, layouts and profiles off the browser onto the account that now owns them.",
   },
   {
     system: "foundations",
