@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import ListingDrawer from "@/components/ListingDrawer";
@@ -24,19 +24,36 @@ type SampleListing = {
   name: string;
   locality: string;
   rent: number | null;
+  /** REX quotes some rents WEEKLY. Printing those as "pcm" understates a
+   *  property fourfold, so the period travels with the number. */
+  rentPeriod?: "month" | "week" | null;
+  /** Monthly equivalent — comparisons only, never shown. */
+  rentMonthly?: number | null;
   letAgreed: boolean;
   publicationStatus: string | null;
   availableFrom: string | null;
   epcExpiry: string | null;
+  epcRating?: string | null;
   daysOnMarket: number | null;
   lastUpdated: string | null;
   imageCount: number;
   image: string | null;
+  serviceType?: string | null;
   tenant?: { name: string; email: string; phone: string } | null;
 };
 
-const LISTINGS = rexSample.listings as SampleListing[];
-const C = rexSample.counts;
+type Counts = {
+  currentRentals: number; published: number; draft: number;
+  letAgreed: number; available: number;
+};
+
+const FALLBACK = rexSample.listings as SampleListing[];
+const FALLBACK_COUNTS = rexSample.counts as Counts;
+
+/** What to print under the price. Weekly rents say so. */
+function rentPeriodLabel(l: SampleListing): string {
+  return l.rentPeriod === "week" ? "per week" : "pcm";
+}
 
 function statusOf(l: SampleListing): { label: string; tone: "good" | "accent" | "neutral" } {
   if (l.letAgreed) return { label: "Let agreed", tone: "neutral" };
@@ -134,9 +151,40 @@ export default function Listings() {
   const [rentBand, setRentBand] = useState<string | null>(null);
   const [loc, setLoc] = useState<string | null>(null);
 
+  /* ── The real book, out of REX. The static export stands in until it
+        answers, so the page never renders empty. ── */
+  const [book, setBook] = useState<{
+    listings: SampleListing[];
+    counts: Counts;
+    live: boolean;
+    loading: boolean;
+    reason?: string;
+  }>({ listings: FALLBACK, counts: FALLBACK_COUNTS, live: false, loading: true });
+
+  useEffect(() => {
+    let gone = false;
+    fetch("/api/listings")
+      .then((r) => r.json())
+      .then((j) => {
+        if (gone) return;
+        if (j.ok && j.live && Array.isArray(j.listings)) {
+          setBook({ listings: j.listings, counts: j.counts, live: true, loading: false });
+        } else {
+          setBook({ listings: FALLBACK, counts: FALLBACK_COUNTS, live: false, loading: false, reason: j.reason });
+        }
+      })
+      .catch(() => {
+        if (!gone) setBook((b) => ({ ...b, loading: false, reason: "REX didn't answer — showing the last static export." }));
+      });
+    return () => { gone = true; };
+  }, []);
+
+  const LISTINGS = book.listings;
+  const C = book.counts;
+
   const localities = useMemo(
     () => [...new Set(LISTINGS.map((l) => l.locality))].sort().map((x) => ({ id: x, label: x })),
-    []
+    [LISTINGS]
   );
 
   const board = useMemo(() => {
@@ -144,22 +192,30 @@ export default function Listings() {
     const band = RENT_BANDS.find((b) => b.id === rentBand);
     const rows = LISTINGS.filter((l) => {
       if (needle && !`${l.name} ${l.locality}`.toLowerCase().includes(needle)) return false;
-      if (band && !(l.rent != null && band.test(l.rent))) return false;
+      const cmp = l.rentMonthly ?? l.rent;
+      if (band && !(cmp != null && band.test(cmp))) return false;
       if (loc && l.locality !== loc) return false;
       return true;
     });
     // Most recent is the resting order (REX's own lastUpdated already leads);
     // the rent sorts rearrange on request.
-    if (sort === "rent-low") rows.sort((a, b) => (a.rent ?? 1e9) - (b.rent ?? 1e9));
-    else if (sort === "rent-high") rows.sort((a, b) => (b.rent ?? 0) - (a.rent ?? 0));
+    const monthly = (l: SampleListing) => l.rentMonthly ?? l.rent;
+    if (sort === "rent-low") rows.sort((a, b) => (monthly(a) ?? 1e9) - (monthly(b) ?? 1e9));
+    else if (sort === "rent-high") rows.sort((a, b) => (monthly(b) ?? 0) - (monthly(a) ?? 0));
     return rows;
-  }, [q, sort, rentBand, loc]);
+  }, [LISTINGS, q, sort, rentBand, loc]);
 
   return (
     <>
       <PageHeader
         title="Listings"
-        blurb="Manage your properties and their marketing. List here once — the OS writes into REX, and REX syndicates to the portals."
+        blurb={
+          book.loading
+            ? "Fetching the rental book from REX…"
+            : book.live
+              ? `Live from REX — ${C.currentRentals} current rentals, ${C.published} published to the portals and ${C.draft} still drafts.`
+              : (book.reason ?? "Manage your properties and their marketing.")
+        }
         illustration="/illustrations/notioly/moving.svg"
         lineBreak="none"
         searchValue={q}
@@ -264,10 +320,15 @@ export default function Listings() {
 
                 {/* The money, top right, unmissable. */}
                 <div className="shrink-0 text-right">
+                  {/* A third of the book — mostly drafts — carries no rent at
+                      all. A bare "£" reads as broken; "Rent not set" reads as
+                      a job to do, which is what it is. */}
                   <p className="figures text-[22px] leading-none">
-                    £{l.rent?.toLocaleString("en-GB")}
+                    {l.rent == null ? "—" : `£${l.rent.toLocaleString("en-GB")}`}
                   </p>
-                  <p className="mt-0.5 text-[10px] text-muted">pcm</p>
+                  <p className="mt-0.5 text-[10px] text-muted">
+                    {l.rent == null ? "rent not set" : rentPeriodLabel(l)}
+                  </p>
                 </div>
               </div>
             </button>
@@ -285,7 +346,9 @@ export default function Listings() {
         Showing {board.length} of {C.currentRentals} current rentals ·{" "}
         <span className="font-semibold">Bedrooms</span> shows a dash on purpose — counts
         aren&apos;t in REX&apos;s listing projection; they arrive with the take-on and are
-        never invented.
+        never invented. <span className="font-semibold">Days on market</span> is only
+        known for the published half: a draft has never been on a portal, so it has no
+        clock to read.
       </p>
 
       <ListingDrawer
