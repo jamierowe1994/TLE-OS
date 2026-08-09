@@ -71,6 +71,11 @@ export default function PageHeader({
   /** The search bar under the rule. On by default; pages that aren't about
    *  finding things (the profile) turn it off. */
   search = true,
+  /** Wire the bar up: pages that filter pass value + onSearch, and THIS
+   *  becomes the page's one and only search — never a second one below. */
+  searchValue = "",
+  onSearch,
+  searchPlaceholder = "Search properties, tenants…",
   /** Actions that belong to the page, sitting on the search row. */
   actions,
 }: {
@@ -83,6 +88,9 @@ export default function PageHeader({
   lineBreak?: LineBreak;
   flushRight?: boolean;
   search?: boolean;
+  searchValue?: string;
+  onSearch?: (v: string) => void;
+  searchPlaceholder?: string;
   actions?: React.ReactNode;
 }) {
   const hasArt = Boolean(illustration || illustrationNode);
@@ -170,7 +178,10 @@ export default function PageHeader({
               <DoodleIcon name="search" size={15} className="shrink-0 text-muted" />
               <input
                 type="text"
-                placeholder="Search properties, tenants…"
+                placeholder={searchPlaceholder}
+                value={searchValue}
+                onChange={onSearch ? (e) => onSearch(e.target.value) : undefined}
+                readOnly={!onSearch}
                 className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted/70"
               />
             </label>

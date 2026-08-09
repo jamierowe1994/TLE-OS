@@ -5,17 +5,18 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import ListingDrawer from "@/components/ListingDrawer";
 import PropertyPhoto from "@/components/PropertyPhoto";
-import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
-import { FlowTag, Pill } from "@/components/Wire";
+import { Pill } from "@/components/Wire";
+import { DIARY } from "@/lib/diary";
 import rexSample from "@/lib/rex-sample.json";
 
 /**
- * Listings: the marketing board, and the proof-of-concept for the whole
- * overlay — create here, push to REX, REX syndicates to the portals.
+ * Listings, as CARDS — each house gets the attention it deserves: a proper
+ * photo, its address large, the rent big in the corner, and one quiet row of
+ * the facts that matter (available from, bedrooms, viewings so far).
  *
- * Everything on this page is REAL, from a read-only pull on 6 Aug 2026:
- * the properties, their photos, their rents, their ages, and the counts
- * across the top (every current rental walked, 293 rows).
+ * One search (the header's), one row of filters beside Add-new-listing, and
+ * nothing else between the agent and the houses. Everything here is still
+ * REAL — the read-only REX pull of 6 Aug.
  */
 
 type SampleListing = {
@@ -31,6 +32,7 @@ type SampleListing = {
   lastUpdated: string | null;
   imageCount: number;
   image: string | null;
+  tenant?: { name: string; email: string; phone: string } | null;
 };
 
 const LISTINGS = rexSample.listings as SampleListing[];
@@ -42,86 +44,116 @@ function statusOf(l: SampleListing): { label: string; tone: "good" | "accent" | 
   return { label: "Draft", tone: "accent" };
 }
 
-function Filter({ label }: { label: string }) {
+/** How many viewings the diary knows about for this address. */
+function viewingsFor(name: string): number {
+  return DIARY.filter((a) => a.kind === "viewing" && a.what.includes(name)).length;
+}
+
+const RENT_BANDS = [
+  { id: "under750", label: "Under £750", test: (r: number) => r < 750 },
+  { id: "750to1000", label: "£750 – £1,000", test: (r: number) => r >= 750 && r <= 1000 },
+  { id: "1000to1500", label: "£1,000 – £1,500", test: (r: number) => r > 1000 && r <= 1500 },
+  { id: "over1500", label: "Over £1,500", test: (r: number) => r > 1500 },
+];
+
+const SORTS = [
+  { id: "recent", label: "Most recent" },
+  { id: "rent-low", label: "Rent — low to high" },
+  { id: "rent-high", label: "Rent — high to low" },
+];
+
+/** The dropdown chip — same grammar as the leads bar. */
+function Filter({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { id: string; label: string }[];
+  value: string | null;
+  onChange: (v: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = options.find((o) => o.id === value);
   return (
-    <button
-      type="button"
-      className="flex items-center gap-2 rounded-full border border-line/80 px-3.5 py-2 text-[12px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
-    >
-      {label}
-      <span className="text-[9px]">▾</span>
-    </button>
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-3.5 py-2 text-[12px] transition-colors ${
+          current
+            ? "border-accent-dark bg-accent-soft/50 font-semibold text-accent-dark"
+            : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
+        }`}
+      >
+        {current?.label ?? label}
+        <span className="text-[9px]">▾</span>
+      </button>
+      {open && (
+        <>
+          <button
+            type="button"
+            aria-label="Close"
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-[60] cursor-default"
+          />
+          <div className="fade-up absolute right-0 top-full z-[70] mt-1.5 min-w-[180px] rounded-2xl border border-line/80 bg-card p-1.5 shadow-[0_16px_40px_-14px_rgba(0,0,0,0.3)]">
+            <button
+              type="button"
+              onClick={() => { onChange(null); setOpen(false); }}
+              className={`block w-full rounded-lg px-3 py-2 text-left text-[12px] transition-colors hover:bg-accent-soft/40 ${
+                value === null ? "font-semibold text-accent-dark" : ""
+              }`}
+            >
+              {label}
+            </button>
+            {options.map((o) => (
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => { onChange(o.id); setOpen(false); }}
+                className={`block w-full whitespace-nowrap rounded-lg px-3 py-2 text-left text-[12px] transition-colors hover:bg-accent-soft/40 ${
+                  value === o.id ? "font-semibold text-accent-dark" : ""
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
 export default function Listings() {
-  // Which row is open. Index rather than id so Previous/Next can walk the
-  // board without going back to it, same as the leads drawer.
   const [openAt, setOpenAt] = useState<number | null>(null);
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState<string | null>(null);
+  const [rentBand, setRentBand] = useState<string | null>(null);
+  const [loc, setLoc] = useState<string | null>(null);
 
-  const defs = useMemo<ColumnDef<SampleListing>[]>(
-    () => [
-      {
-        key: "property", label: "Property", required: true,
-        render: (l) => (
-          <span className="flex items-center gap-3">
-            <PropertyPhoto src={l.image} className="h-11 w-14 shrink-0 rounded-lg" />
-            <span className="min-w-0">
-              <span className="hand block whitespace-nowrap text-[13px]">{l.name}</span>
-              <span className="block whitespace-nowrap text-[10.5px] text-muted">
-                {l.locality} · {l.imageCount ? `${l.imageCount} photos` : "no photos"}
-              </span>
-            </span>
-          </span>
-        ),
-      },
-      {
-        key: "status", label: "Status", cell: "whitespace-nowrap",
-        render: (l) => {
-          const st = statusOf(l);
-          return <Pill tone={st.tone}>{st.label}</Pill>;
-        },
-      },
-      {
-        key: "rent", label: "Rent", cell: "figures whitespace-nowrap",
-        render: (l) => (
-          <>
-            £{l.rent?.toLocaleString("en-GB")}
-            <span className="text-[10px] text-muted"> pcm</span>
-          </>
-        ),
-      },
-      {
-        // Bedrooms are NOT in REX's listing projection — probed via describe
-        // and four extra_fields variants. Blank, never guessed.
-        key: "beds", label: "Beds", cell: "whitespace-nowrap text-muted",
-        render: () => "—",
-      },
-      {
-        key: "age", label: "Age in REX", cell: "figures whitespace-nowrap",
-        render: (l) => (
-          <>
-            {l.daysOnMarket?.toLocaleString("en-GB")}
-            <span className="text-[10px] text-muted"> days</span>
-          </>
-        ),
-      },
-      {
-        key: "updated", label: "Last updated", cell: "whitespace-nowrap text-[11px] text-muted",
-        render: (l) => l.lastUpdated,
-      },
-      {
-        key: "available", label: "Available from", optional: true,
-        cell: "whitespace-nowrap text-muted", render: (l) => l.availableFrom ?? "—",
-      },
-      {
-        key: "epc", label: "EPC expiry", optional: true,
-        cell: "whitespace-nowrap text-muted", render: (l) => l.epcExpiry ?? "—",
-      },
-    ],
+  const localities = useMemo(
+    () => [...new Set(LISTINGS.map((l) => l.locality))].sort().map((x) => ({ id: x, label: x })),
     []
   );
-  const cols = useColumns<SampleListing>("listings", defs);
+
+  const board = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const band = RENT_BANDS.find((b) => b.id === rentBand);
+    const rows = LISTINGS.filter((l) => {
+      if (needle && !`${l.name} ${l.locality}`.toLowerCase().includes(needle)) return false;
+      if (band && !(l.rent != null && band.test(l.rent))) return false;
+      if (loc && l.locality !== loc) return false;
+      return true;
+    });
+    // Most recent is the resting order (REX's own lastUpdated already leads);
+    // the rent sorts rearrange on request.
+    if (sort === "rent-low") rows.sort((a, b) => (a.rent ?? 1e9) - (b.rent ?? 1e9));
+    else if (sort === "rent-high") rows.sort((a, b) => (b.rent ?? 0) - (a.rent ?? 0));
+    return rows;
+  }, [q, sort, rentBand, loc]);
 
   return (
     <>
@@ -130,94 +162,137 @@ export default function Listings() {
         blurb="Manage your properties and their marketing. List here once — the OS writes into REX, and REX syndicates to the portals."
         illustration="/illustrations/notioly/moving.svg"
         lineBreak="none"
+        searchValue={q}
+        onSearch={setQ}
+        searchPlaceholder="Search properties…"
+        /* One row of chrome: the filters, then the button that makes more
+           houses. Nothing else stands between the agent and the board. */
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Filter label="Most recent" options={SORTS} value={sort} onChange={setSort} />
+            <Filter label="Rent" options={RENT_BANDS} value={rentBand} onChange={setRentBand} />
+            <Filter label="Location" options={localities} value={loc} onChange={setLoc} />
+            <button
+              type="button"
+              className="hand flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] text-page transition-opacity hover:opacity-90"
+            >
+              <span className="text-base leading-none">+</span> Add new listing
+            </button>
+          </div>
+        }
       />
 
-      <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
-        <FlowTag from="REX (real data, pulled 6 Aug)" to="REX → portals" />
-        <button
-          type="button"
-          className="hand flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] text-page transition-opacity hover:opacity-90"
-        >
-          <span className="text-base leading-none">+</span> Add new listing
-        </button>
-      </div>
+      {/* ── The board: one card per house, full width, no clutter. ── */}
+      <div className="mt-6 space-y-4">
+        {board.map((l) => {
+          const st = statusOf(l);
+          const views = viewingsFor(l.name);
+          return (
+            <button
+              key={l.id}
+              type="button"
+              onClick={() => setOpenAt(LISTINGS.indexOf(l))}
+              className="fade-up block w-full rounded-2xl border border-line/80 bg-box p-4 text-left transition-all hover:-translate-y-0.5 hover:border-ink/50 hover:shadow-[0_16px_36px_-18px_rgba(0,0,0,0.25)]"
+            >
+              <div className="flex gap-5">
+                <PropertyPhoto src={l.image} className="h-32 w-44 shrink-0 rounded-xl" />
 
-      {/* ── The board. */}
-      <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <label className="flex min-w-44 flex-1 items-center gap-2.5 rounded-full border border-line/80 px-3.5 py-2 focus-within:border-ink">
-            <DoodleIcon name="search" size={14} className="shrink-0 text-muted" />
-            <input
-              type="text"
-              placeholder="Search properties…"
-              className="w-full bg-transparent text-[12px] outline-none placeholder:text-muted/70"
-            />
-          </label>
-          <Filter label="All branches" />
-          <Filter label="All statuses" />
-          {/* The finding, as a filter rather than a banner: 165 of 293 current
-              rentals sit in REX as unpublished drafts — 56% of the book, on no
-              portal. Measured, and actionable right here. */}
-          <button
-            type="button"
-            className="flex items-center gap-2 whitespace-nowrap rounded-full border border-accent/60 px-3.5 py-2 text-[12px] font-medium text-accent-dark transition-colors hover:bg-accent-soft/40"
-          >
-            Unpublished drafts
-            <span className="figures">{C.draft}</span>
-          </button>
-          <Filter label="All property types" />
-          <ColumnCustomiser cols={cols} />
-        </div>
+                <div className="min-w-0 flex-1">
+                  {/* The chips — only what changes decisions. No 'For sale',
+                      no 'Sponsored': everything here is a rental, ours. */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Pill tone={st.tone}>{st.label}</Pill>
+                    {l.tenant && <Pill tone="neutral">Tenanted</Pill>}
+                    {l.imageCount === 0 && <Pill tone="accent">No photos</Pill>}
+                    {l.epcExpiry == null && <Pill tone="neutral">EPC not filed</Pill>}
+                  </div>
 
-        <div className="mt-4">
-          <DataTable cols={cols} rows={LISTINGS} onRowClick={(_r, i) => setOpenAt(i)} />
-        </div>
+                  <h3 className="hand mt-2 truncate text-[19px] leading-tight">{l.name}</h3>
+                  <p className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-muted">
+                    <DoodleIcon name="home-1" size={12} className="shrink-0" />
+                    {l.locality}
+                  </p>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line/70 pt-4">
-          <p className="text-[11px] text-muted">
-            Showing 1–{LISTINGS.length} of {C.currentRentals} current rentals
+                  {/* The fact row, each cell its own little column. */}
+                  <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-line/50 pt-3">
+                    <span className="flex items-center gap-2">
+                      <DoodleIcon name="calendar" size={13} className="shrink-0 text-accent-dark" />
+                      <span>
+                        <span className="block text-[9px] font-semibold uppercase tracking-wide text-muted">
+                          Available from
+                        </span>
+                        <span className="figures block text-[12px]">{l.availableFrom ?? "Now"}</span>
+                      </span>
+                    </span>
+                    <span className="hidden h-7 w-px bg-line/60 sm:block" />
+                    <span className="flex items-center gap-2">
+                      <DoodleIcon name="bed.png" size={13} className="shrink-0 text-accent-dark" />
+                      <span>
+                        <span className="block text-[9px] font-semibold uppercase tracking-wide text-muted">
+                          Bedrooms
+                        </span>
+                        <span
+                          className="figures block text-[12px]"
+                          title="Not in REX's listing projection — captured at the take-on"
+                        >
+                          —
+                        </span>
+                      </span>
+                    </span>
+                    <span className="hidden h-7 w-px bg-line/60 sm:block" />
+                    <span className="flex items-center gap-2">
+                      <DoodleIcon name="key" size={13} className="shrink-0 text-accent-dark" />
+                      <span>
+                        <span className="block text-[9px] font-semibold uppercase tracking-wide text-muted">
+                          Viewings so far
+                        </span>
+                        <span className="figures block text-[12px]">{views}</span>
+                      </span>
+                    </span>
+                    <span className="hidden h-7 w-px bg-line/60 sm:block" />
+                    <span className="flex items-center gap-2">
+                      <DoodleIcon name="folder" size={13} className="shrink-0 text-accent-dark" />
+                      <span>
+                        <span className="block text-[9px] font-semibold uppercase tracking-wide text-muted">
+                          Photos
+                        </span>
+                        <span className="figures block text-[12px]">{l.imageCount}</span>
+                      </span>
+                    </span>
+                  </div>
+                </div>
+
+                {/* The money, top right, unmissable. */}
+                <div className="shrink-0 text-right">
+                  <p className="figures text-[22px] leading-none">
+                    £{l.rent?.toLocaleString("en-GB")}
+                  </p>
+                  <p className="mt-0.5 text-[10px] text-muted">pcm</p>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+
+        {!board.length && (
+          <p className="rounded-2xl border border-dashed border-line py-10 text-center text-[12.5px] text-muted">
+            Nothing matches — widen the rent band or clear the filters.
           </p>
-          <div className="flex items-center gap-1.5">
-            {["‹", "1", "2", "3", "…", "37", "›"].map((p, i) => (
-              <button
-                key={i}
-                type="button"
-                className={`flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[11px] transition-colors ${
-                  p === "1"
-                    ? "bg-accent-soft/60 font-semibold text-accent-dark"
-                    : "text-muted hover:text-ink"
-                }`}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Two honest footnotes, so nobody builds on a number that isn't there. */}
-      <ul className="mt-4 space-y-1.5 text-[11px] leading-relaxed text-muted">
-        <li>
-          <span className="font-semibold">Beds</span> is blank on purpose — bedroom
-          counts aren&apos;t in REX&apos;s listing projection (checked via describe and
-          four extra_fields variants). They&apos;ll come from the property record or a
-          portal feed; not invented here.
-        </li>
-        <li>
-          <span className="font-semibold">Age in REX</span> is the record&apos;s own age,
-          not true days-on-market — every listing&apos;s publication timestamp is null,
-          so market date isn&apos;t recoverable from this call. Named for what it
-          actually measures.
-        </li>
-      </ul>
+      <p className="mt-4 text-[11px] leading-relaxed text-muted">
+        Showing {board.length} of {C.currentRentals} current rentals ·{" "}
+        <span className="font-semibold">Bedrooms</span> shows a dash on purpose — counts
+        aren&apos;t in REX&apos;s listing projection; they arrive with the take-on and are
+        never invented.
+      </p>
 
       <ListingDrawer
         listing={openAt == null ? null : LISTINGS[openAt]}
         onClose={() => setOpenAt(null)}
         onStep={(d) =>
-          setOpenAt((i) =>
-            i == null ? i : (i + d + LISTINGS.length) % LISTINGS.length
-          )
+          setOpenAt((i) => (i == null ? i : (i + d + LISTINGS.length) % LISTINGS.length))
         }
       />
 
@@ -227,7 +302,7 @@ export default function Listings() {
         src="/illustrations/buildings-street.png"
         alt=""
         aria-hidden
-        className="art pointer-events-none mt-8 ml-auto hidden w-[420px] opacity-90 lg:block"
+        className="art pointer-events-none ml-auto mt-8 hidden w-[420px] opacity-90 lg:block"
       />
     </>
   );
