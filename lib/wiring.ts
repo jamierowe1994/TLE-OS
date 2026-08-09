@@ -278,6 +278,13 @@ export const WIRING: WiringRow[] = [
   {
     system: "foundations",
     area: "The ground floor",
+    item: "⚠️ The OS shares the portal's live database",
+    state: "manual",
+    note: "The DATABASE_URL points at the TLE portal's production database — all fifteen of its tables are there, including real staff accounts, PayProp OAuth tokens and deal data. Nothing has been harmed: every OS table is os_-prefixed and additive. The OS now REFUSES at the query layer to write to any table it doesn't own, so a bug here can't cost the portal data. Worth a decision though: share deliberately (it's the clean route to the UK PayProp token) or split the OS onto its own database.",
+  },
+  {
+    system: "foundations",
+    area: "The ground floor",
     item: "Tenant & landlord portals on real customer accounts",
     state: "blocked",
     note: "Both portals are built and walk-through-able, but run on demo people until sign-in + database exist.",

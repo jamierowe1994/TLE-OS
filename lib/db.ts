@@ -125,8 +125,68 @@ function ensureSchema(): Promise<void> {
   return globalThis.__osSchemaReady;
 }
 
-/** Query helper — ensures the schema exists, then runs the query. */
+/* --------------------------------------------------------------------------
+   ⚠️ THIS DATABASE IS SHARED WITH THE TLE PORTAL.
+
+   Measured 9 Aug 2026: the DATABASE_URL given to the OS points at the
+   portal's LIVE production database. All fifteen portal tables are in it —
+   real staff accounts and password hashes, PayProp OAuth refresh tokens,
+   deal data, forecasts, encrypted mailbox credentials.
+
+   That is survivable, and arguably useful (a shared payprop_tokens row is
+   the one clean route to the UK PayProp agency). It is only survivable
+   while two rules hold:
+
+     1. Every table the OS creates is prefixed `os_`.
+     2. The OS never mutates a table it doesn't own.
+
+   Rule 2 is enforced below rather than trusted, because the failure mode is
+   not a bug in the OS — it is the portal losing live company data.
+-------------------------------------------------------------------------- */
+
+const MUTATION = /^\s*(insert\s+into|update|delete\s+from|drop\s+table|alter\s+table|truncate(?:\s+table)?)\s+(?:if\s+exists\s+)?"?([a-z_][a-z0-9_]*)"?/i;
+
+/** Tables the OS owns outright. Anything else is the portal's. */
+function ownedByOs(table: string): boolean {
+  return table.startsWith("os_");
+}
+
+/**
+ * Query helper — ensures the schema exists, then runs the query.
+ *
+ * Refuses to mutate anything outside the OS's own tables. Reads are allowed
+ * (that's how the OS would ever share the PayProp token), but a write to a
+ * portal table has to be a deliberate act through `qShared`, not a typo.
+ */
 export async function q<Row extends Record<string, unknown> = Record<string, unknown>>(
+  text: string,
+  params?: unknown[]
+): Promise<Row[]> {
+  const m = MUTATION.exec(text);
+  if (m && !ownedByOs(m[2].toLowerCase())) {
+    throw new Error(
+      `Refusing to ${m[1].toLowerCase()} "${m[2]}" — this database is shared with the TLE portal ` +
+        `and that table belongs to it. If this is genuinely intended, use qShared() and say why.`
+    );
+  }
+  return run<Row>(text, params);
+}
+
+/**
+ * The deliberate escape hatch, for the rare case where the OS must write to
+ * something the portal owns (updating the shared PayProp refresh token being
+ * the obvious one). Separate name so it shows up in a diff and in review.
+ */
+export async function qShared<Row extends Record<string, unknown> = Record<string, unknown>>(
+  text: string,
+  params: unknown[] | undefined,
+  because: string
+): Promise<Row[]> {
+  if (!because) throw new Error("qShared needs a reason.");
+  return run<Row>(text, params);
+}
+
+async function run<Row extends Record<string, unknown>>(
   text: string,
   params?: unknown[]
 ): Promise<Row[]> {
