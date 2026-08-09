@@ -173,8 +173,8 @@ export const WIRING: WiringRow[] = [
     system: "rex",
     area: "Diary & viewings",
     item: "The OS diary reading real REX calendars",
-    state: "proven",
-    note: "Calendars, CalendarEvents and Appointments services all answer. The OS diary/booker currently runs on sample data — this is the swap.",
+    state: "live",
+    note: "Done 9 Aug — 323 real appointments across 13 lettings agents, five weeks either side of today, feeding the viewings page, the week grid, the calendar and the dashboard. Filtered to OUR calendars (the account holds six businesses'; the sales side outnumbers lettings five to one). Private entries show as Busy with no detail. Where REX can't tell us something — whether confirmations went, whether anyone lives there — the screen says Not known rather than guessing.",
   },
   {
     system: "rex",
