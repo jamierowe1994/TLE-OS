@@ -60,9 +60,12 @@ export default function BlendVideo({
           const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const d = frame.data;
           for (let i = 0; i < d.length; i += 4) {
-            // Luminance → alpha: white vanishes, ink stays ink.
+            // Luminance → alpha, with the plate SNAPPED to clear: the video's
+            // white is 250–254, not 255, and 255-luma left a ghost veil of
+            // 1–5 alpha — a faint grey rectangle over the page. Anything
+            // near-white is now fully transparent; the ink ramps in below it.
             const luma = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0;
-            d[i + 3] = 255 - luma;
+            d[i + 3] = luma >= 236 ? 0 : Math.min(255, ((236 - luma) * 255) / 220 + 20);
             d[i] = d[i + 1] = d[i + 2] = 16; // the house ink
           }
           ctx.putImageData(frame, 0, 0);

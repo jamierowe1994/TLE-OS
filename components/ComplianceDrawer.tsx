@@ -38,6 +38,35 @@ export default function ComplianceDrawer({
   onOrder: (t: OrderTarget) => void;
 }) {
   const [shown, setShown] = useState(false);
+  /** Certificates stored THIS session, keyed propertyId:cert — the first
+   *  real write path in the product: files land in R2 for keeps. */
+  const [files, setFiles] = useState<Record<string, { name: string; url: string }[]>>({});
+  const [busy, setBusy] = useState<string | null>(null);
+  const [uploadErr, setUploadErr] = useState<string | null>(null);
+
+  async function attach(certKey: string, file: File) {
+    if (!property) return;
+    const slot = `${property.id}:${certKey}`;
+    setBusy(slot);
+    setUploadErr(null);
+    try {
+      const body = new FormData();
+      body.set("file", file);
+      body.set("scope", "document");
+      body.set("ref", `compliance-${property.id}-${certKey}`);
+      const res = await fetch("/api/r2/upload", { method: "POST", body });
+      const j = await res.json();
+      if (!j.ok) throw new Error(j.error ?? "Upload failed");
+      setFiles((cur) => ({
+        ...cur,
+        [slot]: [...(cur[slot] ?? []), { name: j.name, url: j.url }],
+      }));
+    } catch (e) {
+      setUploadErr(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   useEffect(() => {
     if (!property) { setShown(false); return; }
@@ -144,6 +173,36 @@ export default function ComplianceDrawer({
                               <DoodleIcon name="doc" size={12} /> Date recorded, certificate NOT attached
                             </span>
                           ))}
+                        {/* The storage is REAL: the file lands in the R2
+                            vault under this property and certificate, and
+                            opens back out of a signed link. */}
+                        {(files[`${p.id}:${key}`] ?? []).map((f) => (
+                          <a
+                            key={f.url}
+                            href={f.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-[10.5px] font-semibold text-accent-dark transition-opacity hover:opacity-80"
+                          >
+                            <DoodleIcon name="doc" size={11} />
+                            {f.name.length > 26 ? `${f.name.slice(0, 24)}…` : f.name}
+                          </a>
+                        ))}
+                        <label className="flex cursor-pointer items-center gap-1.5 rounded-full border border-line/80 px-2.5 py-1 text-[10.5px] font-semibold text-muted transition-colors hover:border-ink hover:text-ink">
+                          <DoodleIcon name="upload" size={11} />
+                          {busy === `${p.id}:${key}` ? "Storing…" : "Attach certificate"}
+                          <input
+                            type="file"
+                            accept="application/pdf,image/*"
+                            className="hidden"
+                            disabled={busy !== null}
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) void attach(key, f);
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
                         {order ? (
                           <Pill tone="good">
                             Order out — {order.contractor.split(" (")[0]}, {order.when}
@@ -167,10 +226,15 @@ export default function ComplianceDrawer({
             </div>
           ))}
 
+          {uploadErr && (
+            <p className="mb-3 rounded-lg bg-accent-soft/60 px-3 py-2 text-[11px] font-semibold text-accent-dark">
+              {uploadErr}
+            </p>
+          )}
           <p className="border-t border-line/60 pt-3 text-[10px] leading-relaxed text-muted">
-            Wired up, this reads REX&apos;s compliance entries for this property — dates and
-            the certificate files themselves — and every works order writes back as a note
-            on the record.
+            Attach certificate is LIVE — files store in the agency&apos;s own vault (R2)
+            under this property and certificate, and open from time-limited signed links.
+            Next: reading REX&apos;s dates and existing certificates in beside them.
           </p>
         </div>
       </aside>
