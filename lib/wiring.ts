@@ -81,9 +81,9 @@ export const WIRING: WiringRow[] = [
   {
     system: "rex",
     area: "Listings & publishing",
-    item: "Read the whole rental book (293 current rentals, photos included)",
+    item: "Read the whole rental book (294 current rentals, photos included)",
     state: "live",
-    note: "Listings/search with the rental category filter. The OS listings page currently uses a static export of exactly this call — swapping to live is a small change.",
+    note: "Done 9 Aug — the listings page is real, all 294 of them with live photos, rents, EPC dates and availability. Days on market is genuine for the 128 published and honestly blank for the 166 drafts, which have never been on a portal. 23 listings quote rent WEEKLY and are labelled as such; a third of the book has no rent set at all and says so.",
   },
   {
     system: "rex",
