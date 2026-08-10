@@ -141,8 +141,28 @@ export async function GET() {
       note: "No PayProp API keys are set on this environment yet.",
     });
   }
+  // A throw in any one account must not blank the whole page. This endpoint
+  // exists to EXPLAIN failures, so it can't be the thing that fails silently.
   const accounts = await Promise.all(
-    PAYPROP_ACCOUNTS.map((a) => checkAccount(a.id, a.label))
+    PAYPROP_ACCOUNTS.map(async (a) => {
+      try {
+        return await checkAccount(a.id, a.label);
+      } catch (e) {
+        return {
+          id: a.id,
+          label: a.label,
+          hasKey: false,
+          checks: [
+            {
+              key: "error",
+              label: "Access",
+              ok: false,
+              detail: e instanceof Error ? e.message : "Something threw while checking this agency.",
+            },
+          ],
+        };
+      }
+    })
   );
   return NextResponse.json({ configured: true, at: Date.now(), accounts });
 }
