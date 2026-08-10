@@ -422,7 +422,10 @@ export default function BentoDash({
                         ? "ring-2 ring-accent-dark/60"
                         : ""
                     }`
-                  : "fade-up overflow-hidden border-line/80 hover:border-ink/60"
+                  /* The slab is the board's hover language — it went missing
+                     on 8 Aug when the request was to drop it from the WIDE
+                     chart boxes, and I took it off every tile instead. */
+                  : "block-pop fade-up overflow-hidden border-line/80 hover:border-ink"
               }`}
               style={{
                 gridColumn: `span ${item.w} / span ${item.w}`,

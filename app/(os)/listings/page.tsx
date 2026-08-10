@@ -248,7 +248,7 @@ export default function Listings() {
               key={l.id}
               type="button"
               onClick={() => setOpenAt(LISTINGS.indexOf(l))}
-              className="fade-up block w-full rounded-2xl border border-line/80 bg-box p-4 text-left transition-all hover:-translate-y-0.5 hover:border-ink/50 hover:shadow-[0_16px_36px_-18px_rgba(0,0,0,0.25)]"
+              className="fade-up block-pop block w-full rounded-2xl border border-line/80 bg-box p-4 text-left hover:border-ink"
             >
               <div className="flex gap-5">
                 <PropertyPhoto src={l.image} className="h-32 w-44 shrink-0 rounded-xl" />
