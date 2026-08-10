@@ -104,21 +104,40 @@ export default function BentoDash({
      Signed out, it behaves exactly as it always did. */
   const [savedLayout, saveLayout, prefsReady] = usePref<Item[] | null>(STORE, null);
 
+  /**
+   * LOAD ONCE. This is a one-way door on purpose.
+   *
+   * The first cut re-applied `savedLayout` whenever it changed — and saving
+   * changes it. So: save → stored value updates → board re-applies it →
+   * board state is a new array → save → … The dashboard shook itself apart,
+   * and "Reset to default" couldn't stick because the old layout was being
+   * put back within the same frame.
+   *
+   * The stored board is therefore read exactly once, when the account's copy
+   * has arrived, and after that this component owns the layout. Nothing that
+   * happens downstream can feed back into it.
+   */
+  const hydrated = useRef(false);
+
   useEffect(() => {
-    if (!prefsReady && !savedLayout) return;
+    if (hydrated.current || !prefsReady) return;
+    hydrated.current = true;
+    // A widget we no longer ship would wipe the board, so a failed check
+    // leaves the default standing rather than rendering an empty grid.
     if (Array.isArray(savedLayout) && savedLayout.length && savedLayout.every((i) => WIDGETS[i.type])) {
       setLayout(savedLayout);
     }
-    // A widget we no longer ship would otherwise wipe the whole board, so a
-    // failed check falls back to the default rather than an empty grid.
   }, [savedLayout, prefsReady]);
 
   useEffect(() => {
-    // Don't write the default board back over a stored one that hasn't
-    // arrived yet — that's how somebody's layout gets quietly reset.
-    if (!prefsReady) return;
-    saveLayout(layout);
-  }, [layout, prefsReady, saveLayout]);
+    // Never write before the stored board has been read, or the default
+    // overwrites what we were about to load.
+    if (!hydrated.current) return;
+    // Dragging a tile emits a layout on every pointer move; without this the
+    // board would post a write per frame.
+    const t = setTimeout(() => saveLayout(layout), 400);
+    return () => clearTimeout(t);
+  }, [layout, saveLayout]);
 
   /* ── FLIP: whenever tiles land somewhere new, they slide there instead of
      teleporting — this is the "squeeze apart" the drag is showing you.
