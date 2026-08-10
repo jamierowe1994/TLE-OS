@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import DiaryGrid from "@/components/DiaryGrid";
 import DoodleIcon from "@/components/DoodleIcon";
+import PropertyPhoto from "@/components/PropertyPhoto";
+import type { KeySet } from "@/lib/rex-keys";
 import ProcessTimeline from "@/components/ProcessTimeline";
 import SendFlow, { type Outgoing } from "@/components/SendFlow";
 import { CopyButton, DoneTick, PressButton } from "@/components/Bits";
@@ -172,6 +174,43 @@ export default function ViewingDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [appt, onClose]);
 
+  /* ── The property behind the viewing. ──
+     Live REX appointments carry NO listing link (record_service is null on
+     669 of 671 events), so the only join available is the address text.
+     Matched conservatively: a wrong property here would show somebody the
+     wrong keys. */
+  const [match, setMatch] = useState<{ propertyId: string | null; image: string | null; locality: string } | null>(null);
+  const [keys, setKeys] = useState<KeySet[] | null>(null);
+  /** The address didn't match a listing, so we know nothing about access. */
+  const [noMatch, setNoMatch] = useState(false);
+
+  useEffect(() => {
+    if (!appt) return;
+    let gone = false;
+    const target = `${appt.where} ${appt.what}`.toLowerCase();
+    fetch("/api/listings")
+      .then((r) => r.json())
+      .then((j) => {
+        if (gone || !j.ok || !Array.isArray(j.listings)) return;
+        const hit = j.listings.find((l: { name: string; locality: string }) => {
+          const name = l.name.toLowerCase();
+          // Require the street line itself, not just a town — "Bristol"
+          // matches sixty properties and none of them reliably.
+          return name.length > 6 && target.includes(name);
+        });
+        if (!hit) { setMatch(null); setKeys([]); setNoMatch(true); return; }
+        setMatch({ propertyId: hit.propertyId ?? null, image: hit.image ?? null, locality: hit.locality });
+        if (hit.propertyId) {
+          fetch(`/api/keys?propertyIds=${encodeURIComponent(hit.propertyId)}`)
+            .then((r) => r.json())
+            .then((k) => { if (!gone && k.ok) setKeys(k.keys[hit.propertyId] ?? []); })
+            .catch(() => { if (!gone) setKeys([]); });
+        } else setKeys([]);
+      })
+      .catch(() => { /* no match, no claims */ });
+    return () => { gone = true; };
+  }, [appt]);
+
   if (!appt) return null;
   const past = appt.day < 0;
   const property = appt.what.replace(/^[^—]+—\s*/, "");
@@ -325,15 +364,95 @@ export default function ViewingDrawer({
               <Card
                 title="The property"
                 icon="home"
-                action={appt.tenant ? <Pill tone="accent">Tenanted</Pill> : <Pill tone="neutral">Vacant</Pill>}
+                action={
+                  appt.tenant ? (
+                    <Pill tone="accent">Tenanted</Pill>
+                  ) : appt.tenant === null ? (
+                    <Pill tone="neutral">Vacant</Pill>
+                  ) : (
+                    <Pill tone="neutral">Occupancy not known</Pill>
+                  )
+                }
               >
-                <p className="hand text-[15px]">{property}</p>
-                <p className="mt-0.5 text-[11.5px] text-muted">{appt.where}</p>
-                <p className="mt-2.5 border-t border-line/50 pt-2.5 text-[11.5px] leading-relaxed text-muted">
-                  {appt.tenant
-                    ? `${appt.tenant} in situ — access is arranged with them, and they must know before anyone walks in.`
-                    : "Vacant — keys held at the office, no access to arrange."}
-                </p>
+                <div className="flex gap-3.5">
+                  <PropertyPhoto src={match?.image ?? null} className="h-20 w-24 shrink-0 rounded-xl" />
+                  <div className="min-w-0">
+                    <p className="hand text-[15px] leading-tight">{property}</p>
+                    <p className="mt-0.5 text-[11.5px] text-muted">{match?.locality ?? appt.where}</p>
+                    <p className="mt-1.5 text-[11px] text-muted">
+                      <span className="font-semibold">Landlord</span>{" "}
+                      {/* REX's rental book carries no landlord name at all
+                          (legal_vendor_name is populated on 0% of it), so
+                          this says so rather than inventing one. */}
+                      <span className="text-muted/70">not recorded in REX</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* ── ACCESS: the three ways in, each stated even when the
+                       answer is "we don't know" — an agent standing on a
+                       doorstep needs the blank as much as the fact. ── */}
+                <div className="mt-3 border-t border-line/50 pt-3">
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted">Access</p>
+                  <ul className="space-y-2">
+                    <li className="flex items-start gap-2.5">
+                      <DoodleIcon name="key" size={13} className="mt-px shrink-0 text-accent-dark" />
+                      <span className="text-[11.5px] leading-snug">
+                        <span className="font-semibold">Keys</span>{" "}
+                        {keys === null ? (
+                          <span className="text-muted">checking the register…</span>
+                        ) : keys.length === 0 ? (
+                          <span className="text-muted">
+                            {noMatch
+                              ? "couldn't match this viewing to a property record, so the key register can't be checked"
+                              : "no key set on the register for this property"}
+                          </span>
+                        ) : (
+                          keys.map((k) => (
+                            <span key={k.id} className="block text-muted">
+                              {k.label}
+                              {k.heldBy ? (
+                                <span className="text-accent-dark">
+                                  {" "}— out with {k.heldBy}
+                                  {k.reason ? ` (${k.reason})` : ""}
+                                  {k.since ? `, since ${new Date(k.since).toLocaleDateString("en-GB")}` : ""}
+                                </span>
+                              ) : (
+                                <> — on the shelf{k.location ? `, ${k.location}` : ""}</>
+                              )}
+                            </span>
+                          ))
+                        )}
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2.5">
+                      <DoodleIcon name="user" size={13} className="mt-px shrink-0 text-accent-dark" />
+                      <span className="text-[11.5px] leading-snug">
+                        <span className="font-semibold">Tenant</span>{" "}
+                        {appt.tenant ? (
+                          <span className="text-muted">
+                            {appt.tenant} in situ — arrange with them, and they must know before anyone walks in.
+                          </span>
+                        ) : appt.tenant === null ? (
+                          <span className="text-muted">vacant — nobody to arrange around</span>
+                        ) : (
+                          <span className="text-muted">
+                            not known whether anyone lives here — check before you travel
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-2.5">
+                      <DoodleIcon name="home" size={13} className="mt-px shrink-0 text-accent-dark" />
+                      <span className="text-[11.5px] leading-snug">
+                        <span className="font-semibold">Landlord</span>{" "}
+                        <span className="text-muted">
+                          no access arrangement recorded
+                        </span>
+                      </span>
+                    </li>
+                  </ul>
+                </div>
                 {appt.link && (
                   <Link
                     href={appt.link.href}
@@ -370,7 +489,9 @@ export default function ViewingDrawer({
                 title="Confirmations"
                 icon="mail"
                 action={
-                  allSent ? (
+                  appt.fromRex && !appt.comms.length ? (
+                    <Pill tone="neutral">Not known</Pill>
+                  ) : allSent ? (
                     <Pill tone="good">All sent</Pill>
                   ) : (
                     <Pill tone="accent">

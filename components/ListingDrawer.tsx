@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PhotoBox from "@/components/PhotoBox";
 import PropertyPhoto from "@/components/PropertyPhoto";
@@ -13,6 +13,7 @@ import { Pill } from "@/components/Wire";
 import { landlordFor, LISTING_TRACK, listingStartingStep } from "@/lib/journey";
 import { LEADS, leadSide } from "@/lib/leads-sample";
 import { DIARY } from "@/lib/diary";
+import { useDiary } from "@/lib/diary-store";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -58,8 +59,16 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 
 /** One tenant on an offer — who they are and how they live. */
-type TenantIn = { name: string; number: string; mobile: string; situation: string };
-const BLANK_TENANT: TenantIn = { name: "", number: "", mobile: "", situation: "" };
+type TenantIn = {
+  name: string;
+  number: string;
+  mobile: string;
+  situation: string;
+  /** The record this person came from. An offer with no attached file is
+   *  an offer from a stranger, so this is never blank on a saved offer. */
+  fromId: string;
+};
+const BLANK_TENANT: TenantIn = { name: "", number: "", mobile: "", situation: "", fromId: "" };
 
 type Offer = { rent: string; tenants: TenantIn[] };
 
@@ -148,9 +157,44 @@ export default function ListingDrawer({
   const [offers, setOffers] = useState<Offer[]>([]);
   const [topPick, setTopPick] = useState<number | null>(null);
   const [offering, setOffering] = useState(false);
+  /** Widen the search beyond people who viewed THIS property. */
+  const [otherTenants, setOtherTenants] = useState(false);
+  const [tenantQuery, setTenantQuery] = useState("");
+  const { appts: liveDiary } = useDiary();
+
+  /**
+   * Who may be attached to an offer.
+   *
+   * By default only people who have actually VIEWED this property — that's
+   * who offers come from nearly every time, and it keeps the list to the
+   * handful that matter. "Find other tenants" widens it to everyone we hold
+   * a viewing record for, searched by name.
+   */
+  const candidates = useMemo(() => {
+    const seen = new Map<string, { id: string; name: string; phone: string; note: string }>();
+    const here = (a: { what: string; where: string }) =>
+      `${a.what} ${a.where}`.toLowerCase().includes((listing?.name ?? "\u0000").toLowerCase());
+    for (const a of liveDiary) {
+      if (a.kind !== "viewing" || !a.who) continue;
+      if (!otherTenants && !here(a)) continue;
+      const key = a.who.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.set(key, {
+        id: a.id,
+        name: a.who,
+        phone: a.contact?.phone ?? "",
+        note: otherTenants
+          ? `Viewed ${a.what.toLowerCase()}${a.where ? ` · ${a.where}` : ""}`
+          : `Viewed this property${a.day < 0 ? ` ${-a.day}d ago` : a.day === 0 ? " today" : ` in ${a.day}d`}`,
+      });
+    }
+    const all = [...seen.values()];
+    const q = tenantQuery.trim().toLowerCase();
+    return q ? all.filter((c) => c.name.toLowerCase().includes(q)) : all.slice(0, otherTenants ? 40 : 12);
+  }, [liveDiary, listing?.name, otherTenants, tenantQuery]);
   const [reviewing, setReviewing] = useState(false);
   const [draftRent, setDraftRent] = useState("");
-  const [draftTenants, setDraftTenants] = useState<TenantIn[]>([BLANK_TENANT]);
+  const [draftTenants, setDraftTenants] = useState<TenantIn[]>([]);
 
   useEffect(() => {
     if (!listing) return;
@@ -200,12 +244,14 @@ export default function ListingDrawer({
   }
 
   function saveOffer() {
-    const tenants = draftTenants.filter((t) => t.name.trim());
+    // An offer must be ATTACHED to a record we hold — fromId is what makes
+    // it referenceable, chaseable and auditable later.
+    const tenants = draftTenants.filter((t) => t.name.trim() && t.fromId);
     if (!draftRent.trim() || !tenants.length) return;
     setOffers((cur) => [...cur, { rent: draftRent.trim(), tenants }]);
     setOffering(false);
     setDraftRent("");
-    setDraftTenants([BLANK_TENANT]);
+    setDraftTenants([]);
   }
 
   const status = listing.letAgreed
@@ -724,32 +770,84 @@ export default function ListingDrawer({
                 </span>
               </label>
 
-              {draftTenants.map((t, i) => (
-                <div key={i} className="mt-4 rounded-2xl border border-line/70 p-4">
-                  <p className="mb-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                    Tenant {i + 1}
-                  </p>
-                  <div className="grid gap-2.5 sm:grid-cols-3">
-                    {(
-                      [
-                        ["name", "Name"],
-                        ["number", "Number"],
-                        ["mobile", "Mobile"],
-                      ] as const
-                    ).map(([k, label]) => (
-                      <input
-                        key={k}
-                        value={t[k]}
-                        onChange={(e) =>
+              {/* ── WHO the offer is from. An offer has to be attached to a
+                     person we hold a file on: typing a name into a box makes
+                     an offer from a stranger, and there is nothing to
+                     reference, chase or hold to it. ── */}
+              <div className="mt-5">
+                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  Who&apos;s offering
+                </p>
+                <p className="mb-2.5 text-[11.5px] text-muted">
+                  {otherTenants
+                    ? "Anyone we hold a record for."
+                    : "People who have viewed this property — nearly always one of these."}
+                </p>
+
+                {otherTenants && (
+                  <input
+                    autoFocus
+                    value={tenantQuery}
+                    onChange={(e) => setTenantQuery(e.target.value)}
+                    placeholder="Search by name…"
+                    className="mb-2.5 w-full rounded-xl border border-line/80 bg-transparent px-3 py-2.5 text-[13px] outline-none focus:border-ink"
+                  />
+                )}
+
+                <div className="space-y-1.5">
+                  {candidates.map((c) => {
+                    const on = draftTenants.some((t) => t.fromId === c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() =>
                           setDraftTenants((cur) =>
-                            cur.map((x, xi) => (xi === i ? { ...x, [k]: e.target.value } : x))
+                            on
+                              ? cur.filter((t) => t.fromId !== c.id)
+                              : [...cur, { name: c.name, number: "", mobile: c.phone, situation: "", fromId: c.id }]
                           )
                         }
-                        placeholder={label}
-                        className="rounded-xl border border-line/80 bg-transparent px-3 py-2.5 text-[13px] outline-none transition-colors focus:border-ink"
-                      />
-                    ))}
-                  </div>
+                        className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                          on ? "border-accent-dark bg-accent-soft/50" : "border-line/70 hover:border-ink/40"
+                        }`}
+                      >
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[10px] font-bold text-accent-dark">
+                          {c.name.split(/\s+/).map((x) => x[0]).slice(0, 2).join("")}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[13px] font-medium">{c.name}</span>
+                          <span className="block truncate text-[11px] text-muted">{c.note}</span>
+                        </span>
+                        {on && <DoodleIcon name="check" size={14} className="shrink-0 text-accent-dark" />}
+                      </button>
+                    );
+                  })}
+                  {!candidates.length && (
+                    <p className="rounded-xl border border-dashed border-line px-3 py-4 text-center text-[11.5px] text-muted">
+                      {otherTenants
+                        ? "Nobody matches that."
+                        : "Nobody has viewed this property yet — use Find other tenants below."}
+                    </p>
+                  )}
+                </div>
+
+                {/* Right at the bottom, as the exception it is. */}
+                <button
+                  type="button"
+                  onClick={() => { setOtherTenants((o) => !o); setTenantQuery(""); }}
+                  className="mt-3 text-[12px] font-semibold text-accent-dark transition-opacity hover:opacity-70"
+                >
+                  {otherTenants ? "← Back to people who viewed it" : "Find other tenants →"}
+                </button>
+              </div>
+
+              {/* Their situation, per attached person — the bit a landlord asks about. */}
+              {draftTenants.map((t, i) => (
+                <div key={t.fromId || i} className="mt-3 rounded-2xl border border-line/70 p-4">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                    {t.name}
+                  </p>
                   <textarea
                     value={t.situation}
                     onChange={(e) =>
@@ -759,27 +857,11 @@ export default function ListingDrawer({
                     }
                     placeholder="Their situation — job, income, pets, anything the landlord will ask about…"
                     rows={2}
-                    className="mt-2.5 w-full resize-none rounded-xl border border-line/80 bg-transparent px-3 py-2.5 text-[12.5px] leading-relaxed outline-none transition-colors focus:border-ink"
+                    className="w-full resize-none rounded-xl border border-line/80 bg-transparent px-3 py-2.5 text-[12.5px] leading-relaxed outline-none focus:border-ink"
                   />
-                  {draftTenants.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => setDraftTenants((cur) => cur.filter((_, xi) => xi !== i))}
-                      className="mt-2 text-[11px] font-semibold text-muted transition-colors hover:text-ink"
-                    >
-                      Remove tenant {i + 1}
-                    </button>
-                  )}
                 </div>
               ))}
 
-              <button
-                type="button"
-                onClick={() => setDraftTenants((cur) => [...cur, BLANK_TENANT])}
-                className="mt-3 flex items-center gap-2 text-[12px] font-semibold text-accent-dark transition-opacity hover:opacity-70"
-              >
-                + Add another tenant
-              </button>
             </div>
             <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line/70 px-6 py-4">
               <button
