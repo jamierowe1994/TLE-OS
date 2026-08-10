@@ -39,7 +39,11 @@ async function checkAccount(id: PayPropAccountId, label: string): Promise<{
   hasKey: boolean;
   checks: Check[];
 }> {
-  if (!payPropKeyFor(id)) {
+  // How are we getting in? An API key of our own, or a token borrowed from
+  // the portal — which owns the single OAuth connection.
+  const key = payPropKeyFor(id);
+  const bridged = Boolean(process.env.PORTAL_ORIGIN && process.env.OS_BRIDGE_SECRET);
+  if (!key && !bridged) {
     return {
       id,
       label,
@@ -47,12 +51,10 @@ async function checkAccount(id: PayPropAccountId, label: string): Promise<{
       checks: [
         {
           key: "key",
-          label: "API key",
+          label: "Access",
           ok: false,
           detail:
-            id === "uk"
-              ? "No UK API key exists anywhere yet — the portal runs this agency on OAuth, which two apps can't share (PayProp rotates the refresh token on every use). Fix: the agency admin issues one at uk.payprop.com/c/settings/api, then set PAYPROP_API_KEY_UK here."
-              : "No key on this environment yet — set PAYPROP_API_KEY_SCOTLAND.",
+            "No API key here and no borrowing arrangement — set PORTAL_ORIGIN and OS_BRIDGE_SECRET, or an API key.",
         },
       ],
     };
@@ -75,6 +77,14 @@ async function checkAccount(id: PayPropAccountId, label: string): Promise<{
 
   const checks: Check[] = [
     {
+      key: "route",
+      label: "How we get in",
+      ok: true,
+      detail: key
+        ? "Our own API key"
+        : "Borrowing a token from the portal — it stays the only app that refreshes",
+    },
+    {
       key: "auth",
       label: "Sign in",
       ok: me.ok,
@@ -86,6 +96,9 @@ async function checkAccount(id: PayPropAccountId, label: string): Promise<{
       key: "properties",
       label: "Read the managed book",
       ok: props.ok,
+      // THE number that settles whether one connection covers both books:
+      // ~84 is the Scotland book, several hundred is E&W, everything means
+      // the single OAuth connection spans the lot.
       detail: props.ok
         ? `${totalRows(props.result) ?? "?"} properties visible`
         : (props.error ?? "failed"),
