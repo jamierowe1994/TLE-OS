@@ -5,13 +5,14 @@ import "server-only";
 // TWO AGENCIES: the business runs Scotland and the rest of the UK as separate
 // PayProp accounts that cannot see each other. Each wants its own API key.
 //
-// DELIBERATELY NO OAUTH HERE. The portal connects the UK agency over OAuth,
-// and PayProp rotates the refresh token on every refresh — a second app
-// sharing that connection would invalidate the portal's tokens (and vice
-// versa) in a slow-motion tug of war. API keys have no such rotation and are
-// safe to use from both apps at once, so the OS speaks APIkey or nothing.
-// The UK agency joins when it has a key of its own (or when both apps share
-// a token store in the database).
+// THIS OS NEVER REFRESHES A PAYPROP TOKEN. There is exactly one PayProp
+// connection (Susan's consent, 30 Jul 2026) and no machine-to-machine grant
+// — v1.1 and v2.0 both accept only authorization_code and refresh_token, so
+// the OS cannot authenticate for itself. Two apps refreshing the same
+// credential would race, and PayProp mints a new refresh token every time,
+// leaving the loser holding a dead one. So: the PORTAL stays the single
+// refresher and lends this OS short-lived access tokens (lib/payprop-bridge).
+// An API key, where one exists, is used in preference — keys don't rotate.
 //
 // Spec traps that matter even for health checks:
 //   • rows is silently capped at 25 — trust pagination, never page length
@@ -64,7 +65,9 @@ export function payPropKeyLooksValid(key: string): boolean {
 }
 
 export function payPropConfigured(): boolean {
-  return PAYPROP_ACCOUNTS.some((a) => payPropKeyFor(a.id));
+  // Either an API key of our own, or a borrowing arrangement with the portal.
+  if (PAYPROP_ACCOUNTS.some((a) => payPropKeyFor(a.id))) return true;
+  return Boolean(process.env.PORTAL_ORIGIN && process.env.OS_BRIDGE_SECRET);
 }
 
 export interface PayPropResponse {
@@ -80,19 +83,28 @@ export async function payPropGet(
   path: string,
   params?: Record<string, string>
 ): Promise<PayPropResponse> {
+  // An API key if we have one; otherwise borrow a bearer token from the
+  // portal, which owns the single OAuth connection.
   const key = payPropKeyFor(account);
-  if (!key) return { status: 0, ok: false, result: null, error: "No API key for this agency on this environment" };
-  // Refuse to transmit something that isn't shaped like a PayProp key — see
-  // payPropKeyLooksValid. Sending it is how another system's secret ends up
-  // in PayProp's logs.
-  if (!payPropKeyLooksValid(key)) {
-    return {
-      status: 0,
-      ok: false,
-      result: null,
-      error:
-        "The key set for this agency isn't shaped like a PayProp key (they are 60-character padded base64) — refusing to send it, in case it belongs to another system.",
-    };
+  let auth: string | null = null;
+  if (key) {
+    if (!payPropKeyLooksValid(key)) {
+      return {
+        status: 0, ok: false, result: null,
+        error: "The key set for this agency isn't shaped like a PayProp key (they are 60-character padded base64) — refusing to send it, in case it belongs to another system.",
+      };
+    }
+    auth = `APIkey ${key}`;
+  } else {
+    const { payPropBearer, bridgeConfigured } = await import("@/lib/payprop-bridge");
+    if (!bridgeConfigured()) {
+      return { status: 0, ok: false, result: null, error: "No PayProp access on this environment — set PORTAL_ORIGIN and OS_BRIDGE_SECRET, or an API key." };
+    }
+    const bearer = await payPropBearer(account);
+    if (!bearer) {
+      return { status: 0, ok: false, result: null, error: "The portal wouldn't lend a PayProp token — check OS_BRIDGE_SECRET matches on both." };
+    }
+    auth = `Bearer ${bearer}`;
   }
 
   const url = new URL(`${base()}/${path.replace(/^\//, "")}`);
@@ -103,7 +115,7 @@ export async function payPropGet(
   let res: Response;
   try {
     res = await fetch(url, {
-      headers: { Authorization: `APIkey ${key}` },
+      headers: { Authorization: auth },
       cache: "no-store",
       signal: controller.signal,
     });
