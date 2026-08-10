@@ -6,6 +6,11 @@ import { dayKey } from "@/lib/weather";
 import { milesBetween } from "@/components/PeopleFilter";
 
 /**
+ * NOTE on clicks: in a pure BOOKING flow (onPick with no onAppt) the
+ * appointments are inert, because every click there means "put it here".
+ * The diary passes both — a block opens its record, empty space starts
+ * something new — so blocks must stay clickable.
+ *
  * THE week grid — one calendar view for the whole OS. The diary modal reads
  * it, and the booking flows write into it: pass `onPick` and every empty
  * half-hour becomes a target, with the chosen slot drawn as a solid block
@@ -13,8 +18,14 @@ import { milesBetween } from "@/components/PeopleFilter";
  * whole point — the clash is visible before it's made.
  */
 
-const DAY_START = 8 * 60; // 08:00 →
-const DAY_END = 19 * 60; //        → 19:00
+/**
+ * The day the grid always shows. It is a FLOOR, not a cage: if the week
+ * holds a 20:00 viewing or a 05:00 start, the window stretches to include
+ * it. An appointment that exists and can't be seen is worse than a long
+ * scroll — that's how somebody misses a job that's actually in the diary.
+ */
+const BASE_START = 8 * 60; // 08:00 →
+const BASE_END = 19 * 60; //        → 19:00
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function todayStart(): Date {
@@ -33,6 +44,69 @@ export function weekOffsets(week: number): { date: Date; offset: number }[] {
     date.setDate(date.getDate() + offset);
     return { date, offset };
   });
+}
+
+
+/**
+ * Where each appointment sits across the width of its day.
+ *
+ * Every block used to be full-width, so two viewings an hour apart with a
+ * 90-minute first one simply buried each other — which is exactly what a
+ * busy Monday looks like in this book. Overlapping appointments are grouped
+ * into clusters and dealt lanes, so a clash is something you can SEE rather
+ * than something hidden underneath.
+ */
+const MAX_LANES = 4;
+
+function laneMap(appts: { id: string; start: string; mins: number }[]) {
+  const sorted = [...appts].sort(
+    (a, b) => minutesOf(a.start) - minutesOf(b.start) || b.mins - a.mins
+  );
+  const out = new Map<string, { lane: number; lanes: number; hidden?: boolean }>();
+  let cluster: typeof sorted = [];
+  let clusterEnd = -1;
+
+  const flush = () => {
+    if (!cluster.length) return;
+    const laneEnds: number[] = [];
+    for (const a of cluster) {
+      const s = minutesOf(a.start);
+      const e = s + a.mins;
+      let lane = laneEnds.findIndex((end) => end <= s);
+      if (lane === -1) {
+        lane = laneEnds.length;
+        laneEnds.push(e);
+      } else laneEnds[lane] = e;
+      out.set(a.id, { lane, lanes: 1 });
+    }
+    // A genuinely stacked morning can want ten lanes, and ten lanes is ten
+    // slivers with one letter in each. Past four, the extras fold into a
+    // "+N" on the last lane — the day still says it's busy, and the detail
+    // is one click away rather than shredded across the column.
+    const lanes = Math.min(laneEnds.length, MAX_LANES);
+    for (const a of cluster) {
+      const seat = out.get(a.id)!;
+      seat.lanes = lanes;
+      if (seat.lane >= MAX_LANES) seat.hidden = true;
+    }
+    cluster = [];
+    clusterEnd = -1;
+  };
+
+  for (const a of sorted) {
+    const s = minutesOf(a.start);
+    const e = s + a.mins;
+    if (cluster.length && s < clusterEnd) {
+      cluster.push(a);
+      clusterEnd = Math.max(clusterEnd, e);
+    } else {
+      flush();
+      cluster = [a];
+      clusterEnd = e;
+    }
+  }
+  flush();
+  return out;
 }
 
 export type Wx = { glyph: string; temp: number; word: string };
@@ -65,8 +139,16 @@ export default function DiaryGrid({
   weather?: Record<string, Wx | undefined>;
 }) {
   const { appts: DIARY } = useDiary();
-  const PX = hourPx / 60;
   const columns = weekOffsets(week);
+
+  // The window: the base day, widened to hold anything outside it.
+  const visible = columns.flatMap((c) => DIARY.filter((a) => a.day === c.offset));
+  const earliest = visible.reduce((m, a) => Math.min(m, minutesOf(a.start)), BASE_START);
+  const latest = visible.reduce((m, a) => Math.max(m, minutesOf(a.start) + a.mins), BASE_END);
+  const DAY_START = Math.floor(earliest / 60) * 60;
+  const DAY_END = Math.ceil(latest / 60) * 60;
+
+  const PX = hourPx / 60;
   const gridH = (DAY_END - DAY_START) * PX;
   const hours = Array.from({ length: (DAY_END - DAY_START) / 60 }, (_, i) => DAY_START / 60 + i);
 
@@ -133,6 +215,9 @@ export default function DiaryGrid({
 
         {columns.map((c, i) => {
           const appts = DIARY.filter((a) => a.day === c.offset);
+          // Overlapping appointments share the column rather than burying
+          // one another — a clash you can see is a clash you can fix.
+          const lanes = laneMap(appts);
           const isToday = c.offset === 0;
           const past = c.offset < 0;
           const pickable = Boolean(onPick) && !past;
@@ -154,9 +239,21 @@ export default function DiaryGrid({
                 />
               ))}
 
+              {(() => {
+                const over = appts.filter((a) => lanes.get(a.id)?.hidden).length;
+                if (!over) return null;
+                return (
+                  <span className="pointer-events-none absolute right-1 top-1 z-20 rounded-full bg-ink px-1.5 py-0.5 text-[9px] font-semibold text-page">
+                    +{over}
+                  </span>
+                );
+              })()}
               {appts.map((a) => {
                 const top = (minutesOf(a.start) - DAY_START) * PX;
                 const h = Math.max(a.mins * PX, 26);
+                const seat = lanes.get(a.id) ?? { lane: 0, lanes: 1, hidden: false };
+                if (seat.hidden) return null;
+                const widthPct = 100 / seat.lanes;
                 const on = selApptId === a.id;
                 return (
                   <button
@@ -166,14 +263,19 @@ export default function DiaryGrid({
                       e.stopPropagation();
                       onAppt?.(a.id);
                     }}
-                    className={`absolute inset-x-1 overflow-hidden rounded-lg border px-1.5 py-1 text-left transition-colors ${
+                    style={{
+                      top: top + 1,
+                      height: h - 2,
+                      left: `calc(${seat.lane * widthPct}% + 2px)`,
+                      width: `calc(${widthPct}% - 4px)`,
+                    }}
+                    className={`absolute overflow-hidden rounded-lg border px-1.5 py-1 text-left transition-colors ${
                       on
                         ? "border-accent-dark bg-accent-soft"
                         : past
                           ? "border-line/70 bg-page opacity-60 hover:opacity-100"
                           : "border-accent-dark/40 bg-accent-soft/55 hover:border-accent-dark"
-                    } ${onPick ? "pointer-events-none" : ""}`}
-                    style={{ top: top + 1, height: h - 2 }}
+                    } ${onPick && !onAppt ? "pointer-events-none" : ""}`}
                   >
                     <span className="figures block text-[9px] leading-none text-accent-dark">
                       {a.start}

@@ -101,6 +101,26 @@ CREATE TABLE IF NOT EXISTS os_portal_accounts (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS os_portal_accounts_email_kind ON os_portal_accounts (email, kind);
 
+-- Appointments and reminders made IN THE OS. These are ours alone: REX is
+-- locked read-only, so nothing here has been pushed to the team's live
+-- diary. Kept so the work isn't lost while that stays true, and so the sync
+-- has something to send the day writes are switched on.
+CREATE TABLE IF NOT EXISTS os_appointments (
+  id             TEXT PRIMARY KEY,
+  starts_at      TIMESTAMPTZ NOT NULL,
+  mins           INTEGER NOT NULL DEFAULT 30,
+  kind           TEXT NOT NULL DEFAULT 'other',
+  title          TEXT NOT NULL,
+  where_at       TEXT NOT NULL DEFAULT '',
+  who            TEXT NOT NULL DEFAULT '',
+  author_id      TEXT,
+  author_name    TEXT NOT NULL DEFAULT '',
+  /** Has this ever reached REX / 365? Nothing has, yet. */
+  synced_at      TIMESTAMPTZ,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_appointments_when ON os_appointments (starts_at);
+
 -- Results of slow REX/PayProp walks, so a deploy doesn't cost minutes of
 -- empty screens before the first figure appears.
 CREATE TABLE IF NOT EXISTS os_cache (

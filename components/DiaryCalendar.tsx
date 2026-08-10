@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import DiaryGrid from "@/components/DiaryGrid";
 import { FlowTag } from "@/components/Wire";
+import { PressButton } from "@/components/Bits";
 import { KIND_META, minutesOf, type Appt } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 
@@ -60,6 +61,15 @@ function endTime(a: Appt): string {
   return `${String(Math.floor(end / 60)).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`;
 }
 
+/** "Today" / "Tomorrow" / "Wed 13 Aug" — for the composer's header. */
+function dayLabel(offset: number): string {
+  if (offset === 0) return "Today";
+  if (offset === 1) return "Tomorrow";
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+}
+
 export default function DiaryCalendar({
   open,
   onClose,
@@ -69,6 +79,73 @@ export default function DiaryCalendar({
 }) {
   const { appts: DIARY } = useDiary();
   const [week, setWeek] = useState(0);
+  /** A slot the user clicked, waiting to become something. */
+  const [making, setMaking] = useState<{ day: number; slot: string } | null>(null);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftMins, setDraftMins] = useState(30);
+  const [draftKind, setDraftKind] = useState("other");
+  const [draftWhere, setDraftWhere] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [madeNote, setMadeNote] = useState<string | null>(null);
+
+  async function makeIt() {
+    if (!making || !draftTitle.trim()) return;
+    setSaving(true);
+    try {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() + making.day);
+      const [hh, mm] = making.slot.split(":").map(Number);
+      d.setHours(hh, mm, 0, 0);
+      const res = await fetch("/api/appointments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startsAt: d.toISOString(),
+          mins: draftMins,
+          kind: draftKind,
+          title: draftTitle.trim(),
+          where: draftWhere.trim(),
+        }),
+      });
+      const j = await res.json();
+      setMadeNote(j.ok ? j.note : (j.error ?? "Couldn't save it."));
+      if (j.ok) {
+        setMaking(null);
+        setDraftTitle("");
+        setDraftWhere("");
+      }
+    } catch {
+      setMadeNote("Couldn't save it.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /**
+   * The day is drawn to FILL the modal rather than at a fixed scale. The
+   * fixed 52px/hour left the grid stopping around six o'clock with a third
+   * of the window empty beneath it, which made every appointment look
+   * cramped for no reason.
+   */
+  const gridBox = useRef<HTMLDivElement | null>(null);
+  const [hourPx, setHourPx] = useState(64);
+
+  useEffect(() => {
+    if (!open) return;
+    const el = gridBox.current;
+    if (!el) return;
+    const measure = () => {
+      // Header row eats ~64px; the rest is the day. 13 hours is the usual
+      // window, and a generous floor keeps a quiet week readable.
+      const usable = el.clientHeight - 68;
+      setHourPx(Math.max(52, Math.min(120, usable / 13)));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open]);
   const [selId, setSelId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -112,7 +189,7 @@ export default function DiaryCalendar({
         className="absolute inset-0 cursor-default bg-ink/45"
       />
 
-      <div className="fade-up relative flex h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+      <div className="fade-up relative flex h-[94vh] w-full max-w-[1680px] flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
         {/* ── Header: the week, and how to move through it. ── */}
         <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-line/70 px-6 py-4">
           <DoodleIcon name="calendar" size={20} className="text-accent-dark" />
@@ -160,16 +237,129 @@ export default function DiaryCalendar({
 
         <div className="flex min-h-0 flex-1">
           {/* ── The grid. ── */}
-          <div className="min-w-0 flex-1 overflow-auto">
+          <div ref={gridBox} className="min-w-0 flex-1 overflow-auto">
             <DiaryGrid
               week={week}
+              hourPx={hourPx}
               selApptId={selId}
               onAppt={(id) => setSelId(selId === id ? null : id)}
+              onPick={(day, slot) => setMaking({ day, slot })}
+              pickLabel="New"
             />
           </div>
 
+          {/* A note from the last save, once the panel has closed. */}
+          {!making && !sel && madeNote && (
+            <aside className="fade-up w-[320px] shrink-0 border-l border-line/70 px-5 py-5">
+              <p className="rounded-xl border border-accent-dark/40 bg-accent-soft/40 px-3 py-2.5 text-[11.5px] leading-relaxed text-accent-dark">
+                {madeNote}
+              </p>
+              <button
+                type="button"
+                onClick={() => setMadeNote(null)}
+                className="mt-3 text-[12px] text-muted hover:text-ink"
+              >
+                Dismiss
+              </button>
+            </aside>
+          )}
+
+          {/* ── Making something in a slot you clicked. ── */}
+          {making && (
+            <aside className="fade-up w-[320px] shrink-0 overflow-y-auto border-l border-line/70 px-5 py-5">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[16px]">New in the diary</h3>
+                <button
+                  type="button"
+                  onClick={() => setMaking(null)}
+                  className="text-[12px] text-muted hover:text-ink"
+                >
+                  Cancel
+                </button>
+              </div>
+              <p className="mt-1 text-[11.5px] text-muted">
+                {dayLabel(making.day)} at {making.slot}
+              </p>
+
+              <div className="mt-4 space-y-3">
+                <input
+                  autoFocus
+                  value={draftTitle}
+                  onChange={(e) => setDraftTitle(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") void makeIt(); }}
+                  placeholder="What is it? e.g. Ring the landlord"
+                  className="w-full rounded-xl border border-line/80 bg-page px-3 py-2.5 text-[13px] outline-none focus:border-ink"
+                />
+                <input
+                  value={draftWhere}
+                  onChange={(e) => setDraftWhere(e.target.value)}
+                  placeholder="Where (optional)"
+                  className="w-full rounded-xl border border-line/80 bg-page px-3 py-2.5 text-[13px] outline-none focus:border-ink"
+                />
+                <div>
+                  <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted">What kind</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(["viewing", "appraisal", "inspection", "other"] as const).map((k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setDraftKind(k)}
+                        className={`rounded-lg border px-2.5 py-1.5 text-[11.5px] font-medium transition-colors ${
+                          draftKind === k ? "border-accent-dark bg-accent-soft text-accent-dark" : "border-line/70 text-muted hover:text-ink"
+                        }`}
+                      >
+                        {KIND_META[k].label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted">How long</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[15, 30, 45, 60, 90].map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setDraftMins(m)}
+                        className={`figures rounded-lg border px-2.5 py-1.5 text-[11.5px] transition-colors ${
+                          draftMins === m ? "border-accent-dark bg-accent-soft text-accent-dark" : "border-line/70 text-muted hover:text-ink"
+                        }`}
+                      >
+                        {m}m
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <PressButton
+                  onClick={() => void makeIt()}
+                  disabled={saving || !draftTitle.trim()}
+                  className="press-ring w-full rounded-full bg-accent-dark py-2.5 text-[13px] font-semibold text-page disabled:opacity-40"
+                >
+                  {saving ? "Saving…" : "Put it in the diary"}
+                </PressButton>
+
+                {/* Whatever came back — success or refusal — is shown. A
+                    button that appears to do nothing is worse than one that
+                    says it failed. */}
+                {madeNote && (
+                  <p className="rounded-xl border border-accent-dark/40 bg-accent-soft/40 px-3 py-2.5 text-[11.5px] leading-relaxed text-accent-dark">
+                    {madeNote}
+                  </p>
+                )}
+
+                {/* Said plainly, at the point of the promise. */}
+                <p className="rounded-xl border border-dashed border-line px-3 py-2.5 text-[11px] leading-relaxed text-muted">
+                  This is kept in the OS only. It does <span className="font-semibold">not</span> go
+                  into REX or your 365 diary — those writes are switched off until the team has
+                  moved across.
+                </p>
+              </div>
+            </aside>
+          )}
+
           {/* ── The appointment's file, down the right. ── */}
-          {sel && (
+          {sel && !making && (
             <aside className="fade-up w-[290px] shrink-0 overflow-y-auto border-l border-line/70 px-5 py-5">
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-[10px] font-semibold text-accent-dark">
