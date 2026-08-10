@@ -358,110 +358,121 @@ export default function ViewingDrawer({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          <div className="grid gap-4 lg:grid-cols-2">
+          {/* ══ Same rhythm as the listing drawer: one wide box for what
+                 this IS, then the job in hand, then the breakdown. Two
+                 record screens shouldn't feel like two products. ══ */}
+
+          {/* 1 ── THE PROPERTY, all the way across. */}
+          <div className="rounded-3xl border border-line/80 bg-panel p-6">
+            <Card
+              title="The property"
+              icon="home"
+              action={
+                appt.tenant ? (
+                  <Pill tone="accent">Tenanted</Pill>
+                ) : appt.tenant === null ? (
+                  <Pill tone="neutral">Vacant</Pill>
+                ) : (
+                  <Pill tone="neutral">Occupancy not known</Pill>
+                )
+              }
+            >
+              <div className="flex gap-3.5">
+                <PropertyPhoto src={match?.image ?? null} className="h-20 w-24 shrink-0 rounded-xl" />
+                <div className="min-w-0">
+                  <p className="hand text-[15px] leading-tight">{property}</p>
+                  <p className="mt-0.5 text-[11.5px] text-muted">{match?.locality ?? appt.where}</p>
+                  <p className="mt-1.5 text-[11px] text-muted">
+                    <span className="font-semibold">Landlord</span>{" "}
+                    {/* REX's rental book carries no landlord name at all
+                        (legal_vendor_name is populated on 0% of it), so
+                        this says so rather than inventing one. */}
+                    <span className="text-muted/70">not recorded in REX</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* ── ACCESS: the three ways in, each stated even when the
+                     answer is "we don't know" — an agent standing on a
+                     doorstep needs the blank as much as the fact. ── */}
+              <div className="mt-3 border-t border-line/50 pt-3">
+                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted">Access</p>
+                <ul className="space-y-2">
+                  <li className="flex items-start gap-2.5">
+                    <DoodleIcon name="key" size={13} className="mt-px shrink-0 text-accent-dark" />
+                    <span className="text-[11.5px] leading-snug">
+                      <span className="font-semibold">Keys</span>{" "}
+                      {keys === null ? (
+                        <span className="text-muted">checking the register…</span>
+                      ) : keys.length === 0 ? (
+                        <span className="text-muted">
+                          {noMatch
+                            ? "couldn't match this viewing to a property record, so the key register can't be checked"
+                            : "no key set on the register for this property"}
+                        </span>
+                      ) : (
+                        keys.map((k) => (
+                          <span key={k.id} className="block text-muted">
+                            {k.label}
+                            {k.heldBy ? (
+                              <span className="text-accent-dark">
+                                {" "}— out with {k.heldBy}
+                                {k.reason ? ` (${k.reason})` : ""}
+                                {k.since ? `, since ${new Date(k.since).toLocaleDateString("en-GB")}` : ""}
+                              </span>
+                            ) : (
+                              <> — on the shelf{k.location ? `, ${k.location}` : ""}</>
+                            )}
+                          </span>
+                        ))
+                      )}
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <DoodleIcon name="user" size={13} className="mt-px shrink-0 text-accent-dark" />
+                    <span className="text-[11.5px] leading-snug">
+                      <span className="font-semibold">Tenant</span>{" "}
+                      {appt.tenant ? (
+                        <span className="text-muted">
+                          {appt.tenant} in situ — arrange with them, and they must know before anyone walks in.
+                        </span>
+                      ) : appt.tenant === null ? (
+                        <span className="text-muted">vacant — nobody to arrange around</span>
+                      ) : (
+                        <span className="text-muted">
+                          not known whether anyone lives here — check before you travel
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <DoodleIcon name="home" size={13} className="mt-px shrink-0 text-accent-dark" />
+                    <span className="text-[11.5px] leading-snug">
+                      <span className="font-semibold">Landlord</span>{" "}
+                      <span className="text-muted">
+                        no access arrangement recorded
+                      </span>
+                    </span>
+                  </li>
+                </ul>
+              </div>
+              {appt.link && (
+                <Link
+                  href={appt.link.href}
+                  className="mt-2 inline-block text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+                >
+                  Open the property record →
+                </Link>
+              )}
+            </Card>
+          </div>
+
+          {/* 2 ── THE VIEWING: who's coming, where it stands, what to do. */}
+          <div className="mt-5 rounded-3xl border border-line/80 bg-panel p-6">
+            <div className="grid gap-4 lg:grid-cols-2">
             {/* ══ LEFT: the facts. ══ */}
             <div className="space-y-4">
-              <Card
-                title="The property"
-                icon="home"
-                action={
-                  appt.tenant ? (
-                    <Pill tone="accent">Tenanted</Pill>
-                  ) : appt.tenant === null ? (
-                    <Pill tone="neutral">Vacant</Pill>
-                  ) : (
-                    <Pill tone="neutral">Occupancy not known</Pill>
-                  )
-                }
-              >
-                <div className="flex gap-3.5">
-                  <PropertyPhoto src={match?.image ?? null} className="h-20 w-24 shrink-0 rounded-xl" />
-                  <div className="min-w-0">
-                    <p className="hand text-[15px] leading-tight">{property}</p>
-                    <p className="mt-0.5 text-[11.5px] text-muted">{match?.locality ?? appt.where}</p>
-                    <p className="mt-1.5 text-[11px] text-muted">
-                      <span className="font-semibold">Landlord</span>{" "}
-                      {/* REX's rental book carries no landlord name at all
-                          (legal_vendor_name is populated on 0% of it), so
-                          this says so rather than inventing one. */}
-                      <span className="text-muted/70">not recorded in REX</span>
-                    </p>
-                  </div>
-                </div>
 
-                {/* ── ACCESS: the three ways in, each stated even when the
-                       answer is "we don't know" — an agent standing on a
-                       doorstep needs the blank as much as the fact. ── */}
-                <div className="mt-3 border-t border-line/50 pt-3">
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted">Access</p>
-                  <ul className="space-y-2">
-                    <li className="flex items-start gap-2.5">
-                      <DoodleIcon name="key" size={13} className="mt-px shrink-0 text-accent-dark" />
-                      <span className="text-[11.5px] leading-snug">
-                        <span className="font-semibold">Keys</span>{" "}
-                        {keys === null ? (
-                          <span className="text-muted">checking the register…</span>
-                        ) : keys.length === 0 ? (
-                          <span className="text-muted">
-                            {noMatch
-                              ? "couldn't match this viewing to a property record, so the key register can't be checked"
-                              : "no key set on the register for this property"}
-                          </span>
-                        ) : (
-                          keys.map((k) => (
-                            <span key={k.id} className="block text-muted">
-                              {k.label}
-                              {k.heldBy ? (
-                                <span className="text-accent-dark">
-                                  {" "}— out with {k.heldBy}
-                                  {k.reason ? ` (${k.reason})` : ""}
-                                  {k.since ? `, since ${new Date(k.since).toLocaleDateString("en-GB")}` : ""}
-                                </span>
-                              ) : (
-                                <> — on the shelf{k.location ? `, ${k.location}` : ""}</>
-                              )}
-                            </span>
-                          ))
-                        )}
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-2.5">
-                      <DoodleIcon name="user" size={13} className="mt-px shrink-0 text-accent-dark" />
-                      <span className="text-[11.5px] leading-snug">
-                        <span className="font-semibold">Tenant</span>{" "}
-                        {appt.tenant ? (
-                          <span className="text-muted">
-                            {appt.tenant} in situ — arrange with them, and they must know before anyone walks in.
-                          </span>
-                        ) : appt.tenant === null ? (
-                          <span className="text-muted">vacant — nobody to arrange around</span>
-                        ) : (
-                          <span className="text-muted">
-                            not known whether anyone lives here — check before you travel
-                          </span>
-                        )}
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-2.5">
-                      <DoodleIcon name="home" size={13} className="mt-px shrink-0 text-accent-dark" />
-                      <span className="text-[11.5px] leading-snug">
-                        <span className="font-semibold">Landlord</span>{" "}
-                        <span className="text-muted">
-                          no access arrangement recorded
-                        </span>
-                      </span>
-                    </li>
-                  </ul>
-                </div>
-                {appt.link && (
-                  <Link
-                    href={appt.link.href}
-                    className="mt-2 inline-block text-[11px] font-semibold text-muted transition-colors hover:text-ink"
-                  >
-                    Open the property record →
-                  </Link>
-                )}
-              </Card>
 
               <Card
                 title={past ? "Who viewed" : "Who's coming"}
@@ -738,6 +749,7 @@ export default function ViewingDrawer({
                   ))}
                 </ul>
               </Card>
+            </div>
             </div>
           </div>
         </div>
