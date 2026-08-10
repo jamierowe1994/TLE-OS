@@ -67,7 +67,7 @@ async function checkAccount(id: PayPropAccountId, label: string): Promise<{
   const me = await payPropGet(id, "meta/me");
   // If the borrow failed, the portal's own words are far more use than ours.
   const { bridgeLastReason } = await import("@/lib/payprop-bridge");
-  const why = bridgeLastReason();
+  const why = bridgeLastReason(id);
   await pause();
   const props = await payPropGet(id, "export/properties", { rows: "1" });
   await pause();
@@ -104,7 +104,7 @@ async function checkAccount(id: PayPropAccountId, label: string): Promise<{
       // the single OAuth connection spans the lot.
       detail: props.ok
         ? `${totalRows(props.result) ?? "?"} properties visible`
-        : (props.error ?? "failed"),
+        : (why ?? props.error ?? "failed"),
     },
     {
       key: "tenants",

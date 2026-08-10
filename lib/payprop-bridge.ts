@@ -20,14 +20,17 @@ import "server-only";
 
 const SKEW_MS = 60_000; // hand it back a minute before it dies
 
-let held: { token: string; account: string; expiresAt: number } | null = null;
-let inflight: Promise<string | null> | null = null;
-/** What the portal last said. Its own words are safe to repeat — they never
- *  contain our secret, only whether it was accepted. */
-let lastReason: string | null = null;
+const held = new Map<string, { token: string; expiresAt: number }>();
+const inflight = new Map<string, Promise<string | null>>();
+/** What the portal said, PER ACCOUNT. Keyed, because the wiring check runs
+ *  the agencies in parallel — a single shared variable meant whichever
+ *  finished last described both, and Scotland's "no connection" was shown
+ *  against the UK. Its own words are safe to repeat; they never contain our
+ *  secret, only whether it was accepted. */
+const reasons = new Map<string, string | null>();
 
-export function bridgeLastReason(): string | null {
-  return lastReason;
+export function bridgeLastReason(account = "uk"): string | null {
+  return reasons.get(account) ?? null;
 }
 
 /**
@@ -65,7 +68,7 @@ async function borrow(account: string): Promise<string | null> {
   } catch (e) {
     // Deliberately NOT the thrown message — that is what quoted the secret
     // back onto a page. Just the shape of the failure.
-    lastReason = `couldn't reach the portal at ${origin} (${e instanceof Error ? e.name : "network"})`;
+    reasons.set(account, `couldn't reach the portal at ${origin} (${e instanceof Error ? e.name : "network"})`);
     return null;
   }
   let j: { ok?: boolean; accessToken?: string; error?: string } = {};
@@ -75,23 +78,26 @@ async function borrow(account: string): Promise<string | null> {
     /* non-JSON */
   }
   if (!res.ok || !j.ok || !j.accessToken) {
-    lastReason = `portal replied ${res.status}${j.error ? `: ${j.error}` : ""}`;
+    reasons.set(account, `portal replied ${res.status}${j.error ? `: ${j.error}` : ""}`);
     return null;
   }
-  lastReason = null;
+  reasons.set(account, null);
 
   // PayProp's access tokens run an hour; hold it a little shorter so a call
   // never starts with a token about to expire mid-flight.
-  held = { token: j.accessToken, account, expiresAt: Date.now() + 55 * 60_000 - SKEW_MS };
+  held.set(account, { token: j.accessToken, expiresAt: Date.now() + 55 * 60_000 - SKEW_MS });
   return j.accessToken;
 }
 
 /** A usable access token, cached until shortly before it expires. */
 export async function payPropBearer(account: string = "uk"): Promise<string | null> {
-  if (held && held.account === account && held.expiresAt > Date.now()) return held.token;
-  // Collapse concurrent callers onto one borrow.
-  if (!inflight) {
-    inflight = borrow(account).finally(() => { inflight = null; });
+  const mine = held.get(account);
+  if (mine && mine.expiresAt > Date.now()) return mine.token;
+  // Collapse concurrent callers onto one borrow PER ACCOUNT.
+  let job = inflight.get(account);
+  if (!job) {
+    job = borrow(account).finally(() => { inflight.delete(account); });
+    inflight.set(account, job);
   }
-  return inflight;
+  return job;
 }
