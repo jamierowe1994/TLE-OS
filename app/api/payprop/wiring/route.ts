@@ -65,6 +65,9 @@ async function checkAccount(id: PayPropAccountId, label: string): Promise<{
   // trips the limiter reports its own noise as failure.
   const pause = () => new Promise((r) => setTimeout(r, 400));
   const me = await payPropGet(id, "meta/me");
+  // If the borrow failed, the portal's own words are far more use than ours.
+  const { bridgeLastReason } = await import("@/lib/payprop-bridge");
+  const why = bridgeLastReason();
   await pause();
   const props = await payPropGet(id, "export/properties", { rows: "1" });
   await pause();
@@ -89,8 +92,8 @@ async function checkAccount(id: PayPropAccountId, label: string): Promise<{
       label: "Sign in",
       ok: me.ok,
       detail: me.ok
-        ? `Key accepted — ${scopeCount ?? "?"} permissions granted`
-        : (me.error ?? "failed"),
+        ? `Accepted — ${scopeCount ?? "?"} permissions granted`
+        : (why ?? me.error ?? "failed"),
     },
     {
       key: "properties",

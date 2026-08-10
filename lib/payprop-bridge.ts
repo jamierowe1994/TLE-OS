@@ -22,6 +22,13 @@ const SKEW_MS = 60_000; // hand it back a minute before it dies
 
 let held: { token: string; account: string; expiresAt: number } | null = null;
 let inflight: Promise<string | null> | null = null;
+/** What the portal last said. Its own words are safe to repeat — they never
+ *  contain our secret, only whether it was accepted. */
+let lastReason: string | null = null;
+
+export function bridgeLastReason(): string | null {
+  return lastReason;
+}
 
 /**
  * The shared secret, cleaned.
@@ -55,12 +62,23 @@ async function borrow(account: string): Promise<string | null> {
       cache: "no-store",
       signal: AbortSignal.timeout(15_000),
     });
-  } catch {
+  } catch (e) {
+    // Deliberately NOT the thrown message — that is what quoted the secret
+    // back onto a page. Just the shape of the failure.
+    lastReason = `couldn't reach the portal at ${origin} (${e instanceof Error ? e.name : "network"})`;
     return null;
   }
-  if (!res.ok) return null;
-  const j = (await res.json()) as { ok?: boolean; accessToken?: string };
-  if (!j.ok || !j.accessToken) return null;
+  let j: { ok?: boolean; accessToken?: string; error?: string } = {};
+  try {
+    j = (await res.json()) as typeof j;
+  } catch {
+    /* non-JSON */
+  }
+  if (!res.ok || !j.ok || !j.accessToken) {
+    lastReason = `portal replied ${res.status}${j.error ? `: ${j.error}` : ""}`;
+    return null;
+  }
+  lastReason = null;
 
   // PayProp's access tokens run an hour; hold it a little shorter so a call
   // never starts with a token about to expire mid-flight.
