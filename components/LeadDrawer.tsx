@@ -25,6 +25,8 @@ import {
   type Note,
   type Task,
 } from "@/lib/leads-sample";
+import AppraisalTrack from "@/components/AppraisalTrack";
+import { EMPTY_CASE, type AppraisalCase } from "@/lib/appraisal";
 import { isStalled, startingStep, trackFor } from "@/lib/journey";
 import rexSample from "@/lib/rex-sample.json";
 
@@ -373,6 +375,9 @@ export default function LeadDrawer({
   const [emailing, setEmailing] = useState(false);
   // Where they are on their track, and the two panels a step can open.
   const [step, setStep] = useState(0);
+  /* The appraisal sub-case. Held here for now — it belongs in os_ storage
+     beside the notes, which is the next piece of work, not this one. */
+  const [appraisal, setAppraisal] = useState<AppraisalCase>(EMPTY_CASE);
   const [booking, setBooking] = useState(false);
   const [signing, setSigning] = useState(false);
   const [booked, setBooked] = useState<LeadViewing[]>([]);
@@ -1097,6 +1102,17 @@ export default function LeadDrawer({
               )}
             </div>
           </div>
+
+          {/* ── The appraisal opens up INSIDE its own step: booking one is the
+              start of a job, not the end of one. Only while the record is
+              actually there — once terms are out, the sub-track has done its
+              work and folding it away keeps the record honest about where it
+              is. ── */}
+          {!isTenant && here.id === "appraisal" && (
+            <div className="mt-3">
+              <AppraisalTrack value={appraisal} onChange={setAppraisal} who="You" />
+            </div>
+          )}
 
           {/* ── Notes fill whatever is left of the screen — the record wants
               to END at the bottom edge, not scroll past it. Composer on the
