@@ -216,7 +216,8 @@ export default function Listings() {
               ? `Live from REX — ${C.currentRentals} current rentals, ${C.published} published to the portals and ${C.draft} still drafts.`
               : (book.reason ?? "Manage your properties and their marketing.")
         }
-        illustration="/illustrations/notioly/moving.svg"
+        illustration="/illustrations/notioly/checking-the-calendar.svg"
+        shadow
         lineBreak="none"
         searchValue={q}
         onSearch={setQ}

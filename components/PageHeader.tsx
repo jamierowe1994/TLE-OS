@@ -114,6 +114,9 @@ export default function PageHeader({
    * lands on a dangling shoe.
    */
   seat,
+  /** Trim the shadow's sides. Only needed when something of theirs RESTS on
+   *  the line and must not cast — the seated man's braced hands. */
+  seatCut,
   /**
    * For a figure who HANGS off the rule instead of sitting on it: where their
    * grip is, as a fraction of the artwork's height (for the hanging woman, her
@@ -163,6 +166,7 @@ export default function PageHeader({
   illustrationHeight?: number;
   lineBreak?: LineBreak;
   seat?: number;
+  seatCut?: { left: number; right: number };
   grip?: number;
   sprite?: { src: string; frames: number; aspect: number; fps?: number };
   shadow?: boolean;
@@ -364,7 +368,7 @@ export default function PageHeader({
                            side trim — those exist to keep the seated man's
                            hands, which rest ON the ledge, from casting. */
                         clipPath: seated
-                          ? `inset(${Math.round(illustrationHeight * (seat ?? 0)) - SHADOW.drop}px ${SHADOW.cutRight}% 0 ${SHADOW.cutLeft}%)`
+                          ? `inset(${Math.round(illustrationHeight * (seat ?? 0)) - SHADOW.drop}px ${seatCut?.right ?? 0}% 0 ${seatCut?.left ?? 0}%)`
                           : undefined,
                         transform: `translateY(${Math.round(below)}px) translate(${-SHADOW.side}px, ${SHADOW.drop}px) skewX(${-SHADOW.rake}deg)`,
                       }}

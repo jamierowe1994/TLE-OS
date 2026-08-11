@@ -127,11 +127,14 @@ export default function Viewings() {
       <PageHeader
         title="Viewings"
         blurb="Every viewing opens into its whole story: the property, who's coming, whether someone lives there — and whether every confirmation actually went."
-        illustration="/illustrations/notioly/checking-the-calendar.svg"
-        /* Standing straight on an unbroken rule — she is not heavy enough to
-           bend it, and the trough under her feet read as the line sagging. */
+        illustration="/illustrations/sleeping.png"
+        illustrationHeight={210}
+        /* Asleep ON the line. 0.44 is the underside of her torso, measured off
+           the artwork — everything past it is arm, hair and feet hanging over
+           the edge, and those are exactly what should cast. No side trim:
+           unlike the seated man, nothing of hers rests on the line beside her. */
+        seat={0.44}
         lineBreak="none"
-        shadow
       />
 
       <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
