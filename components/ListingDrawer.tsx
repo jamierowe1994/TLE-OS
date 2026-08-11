@@ -7,6 +7,7 @@ import PropertyPhoto from "@/components/PropertyPhoto";
 import Link from "next/link";
 import EmailToTenants from "@/components/EmailToTenants";
 import ProcessTimeline from "@/components/ProcessTimeline";
+import TenancyLinkPanel from "@/components/TenancyLinkPanel";
 import ViewingBooker, { type Person } from "@/components/ViewingBooker";
 import { CopyButton, DoneTick, PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
@@ -14,6 +15,7 @@ import { landlordFor, LISTING_TRACK, listingStartingStep } from "@/lib/journey";
 import { LEADS, leadSide } from "@/lib/leads-sample";
 import { DIARY } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
+import type { TenancyLink } from "@/lib/tenancy-link";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -159,7 +161,46 @@ export default function ListingDrawer({
   const [handingOver, setHandingOver] = useState(false);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [topPick, setTopPick] = useState<number | null>(null);
+  /* The landlord–property–tenant link, made the moment an offer is accepted.
+     Built from the picked offer so it carries the real tenants; persisting it
+     beside the record is the next piece. */
+  const [linkState, setLinkState] = useState<TenancyLink | null>(null);
   const [offering, setOffering] = useState(false);
+
+  /* The link, made from the accepted offer. Derived rather than typed again:
+     the tenants on the offer ARE the tenants on the tenancy, and re-entering
+     them is how the two versions drift apart. Once it exists it is owned by
+     the panel, because only the panel may end it. */
+  const link: TenancyLink | null = useMemo(() => {
+    if (linkState) return linkState;
+    const picked = topPick != null ? offers[topPick] : null;
+    if (!picked || !listing) return null;
+    return {
+      state: "accepted",
+      rexApplicationId: null,
+      listingId: listing.id,
+      listingName: listing.name,
+      landlord: landlordFor(listing.id)
+        ? { contactId: null, name: landlordFor(listing.id)!.name }
+        : null,
+      tenants: picked.tenants
+        .filter((t) => t.name.trim())
+        .map((t, i) => ({
+          contactId: t.fromId || null,
+          name: t.name.trim(),
+          email: null,
+          mobile: t.mobile || null,
+          isPrimary: i === 0,
+        })),
+      offerAmount: Number(String(picked.rent).replace(/[^\d]/g, "")) || null,
+      acceptedOn: new Date().toISOString().slice(0, 10),
+      startDate: null,
+      endDate: null,
+      endedOn: null,
+      endedReason: null,
+      endedNotes: "",
+    };
+  }, [linkState, topPick, offers, listing]);
   /** Widen the search beyond people who viewed THIS property. */
   const [otherTenants, setOtherTenants] = useState(false);
   const [tenantQuery, setTenantQuery] = useState("");
@@ -498,6 +539,15 @@ export default function ListingDrawer({
               </div>
             </div>
           </div>
+
+          {/* ── From "offer accepted" onward, the landlord, the property and
+              the tenant are one thing. The panel is the record of that, and
+              the only place it can be undone. ── */}
+          {(here.id === "accepted" || here.id === "handover") && link && (
+            <div className="mt-3">
+              <TenancyLinkPanel value={link} onChange={setLinkState} />
+            </div>
+          )}
 
           {/* ── Tabs ── */}
           <div className="mt-5 flex gap-1 overflow-x-auto border-b border-line/80">
