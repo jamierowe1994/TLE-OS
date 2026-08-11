@@ -1114,7 +1114,21 @@ export default function LeadDrawer({
               is. ── */}
           {!isTenant && here.id === "appraisal" && (
             <div className="mt-3">
-              <AppraisalTrack value={appraisal} onChange={setAppraisal} who="You" />
+              <AppraisalTrack
+                value={appraisal}
+                onChange={setAppraisal}
+                who="You"
+                landlordEmail={lead.email}
+                invite={{
+                  landlordName: lead.name,
+                  address: lead.area || "your property",
+                  whenPretty: appraisal.bookedFor ?? detail.nextAction?.due ?? "",
+                  startsAt: appraisal.bookedFor,
+                  minutes: 45,
+                  agentName: lead.agent || "The Lettings Experts",
+                  agentPhone: "0161 883 2525",
+                }}
+              />
               {saveLabel(appraisalSave) && (
                 <p className="mt-1.5 pl-1 text-[10.5px] text-muted">{saveLabel(appraisalSave)}</p>
               )}

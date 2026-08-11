@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import { bodyFor, icsFor, subjectFor, type AppraisalInvite } from "@/lib/appraisal-email";
 import {
   APPRAISAL_STEPS,
   EMPTY_CASE,
@@ -62,14 +63,26 @@ export default function AppraisalTrack({
   value,
   onChange,
   who = "You",
+  invite,
+  landlordEmail,
+  landlordContactId,
 }: {
   value?: AppraisalCase;
   onChange: (c: AppraisalCase) => void;
   who?: string;
+  /** Everything the confirmation needs to write itself. */
+  invite?: AppraisalInvite;
+  landlordEmail?: string | null;
+  landlordContactId?: string | null;
 }) {
   const c = value ?? EMPTY_CASE;
   const [deciding, setDeciding] = useState<AppraisalOutcome | null>(null);
   const [touchText, setTouchText] = useState("");
+  /* The confirmation, opened on the pre-appraisal step. The body is editable
+     because no template survives contact with a real landlord. */
+  const [draft, setDraft] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [sendMsg, setSendMsg] = useState<string | null>(null);
   const [touchKind, setTouchKind] = useState<Touch["kind"]>("call");
 
   const at = stageIndex(c.state);
@@ -200,6 +213,83 @@ export default function AppraisalTrack({
               </label>
             </div>
           ) : null}
+
+          {c.state === "pre" && invite && (
+            <div className="mt-3 max-w-xl rounded-xl border border-line/60 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                To {landlordEmail || "— no email on file"}
+              </p>
+              <p className="mt-1.5 text-[12.5px] font-semibold">{subjectFor(invite)}</p>
+              <textarea
+                rows={10}
+                value={draft ?? bodyFor(invite)}
+                onChange={(e) => setDraft(e.target.value)}
+                className="mt-2 w-full resize-y rounded-lg border border-line/80 bg-transparent px-3 py-2 text-[12px] leading-relaxed outline-none focus:border-ink"
+              />
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={sending || !landlordEmail}
+                  onClick={async () => {
+                    setSending(true);
+                    setSendMsg(null);
+                    try {
+                      const res = await fetch("/api/appraisal-email", {
+                        method: "POST",
+                        headers: { "content-type": "application/json" },
+                        body: JSON.stringify({
+                          to: landlordEmail,
+                          contactId: landlordContactId,
+                          subject: subjectFor(invite),
+                          text: draft ?? bodyFor(invite),
+                        }),
+                      });
+                      const j = await res.json();
+                      if (!res.ok) throw new Error(j.error ?? "Send failed.");
+                      setSendMsg("Sent — it's on their REX timeline too.");
+                      patch({ confirmationSentAt: new Date().toISOString(), state: "visit" });
+                    } catch (e) {
+                      setSendMsg(e instanceof Error ? e.message : "Send failed.");
+                    } finally {
+                      setSending(false);
+                    }
+                  }}
+                  className="rounded-full bg-ink px-4 py-2 text-[12.5px] text-page disabled:opacity-50"
+                >
+                  {sending ? "Sending…" : "Send it"}
+                </button>
+                {/* Works with or without REX: the file is made here. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const ics = icsFor(invite);
+                    if (!ics) return;
+                    const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = "market-appraisal.ics";
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="rounded-full border border-line/80 px-4 py-2 text-[12.5px]"
+                >
+                  Calendar invite
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigator.clipboard?.writeText(draft ?? bodyFor(invite))}
+                  className="rounded-full border border-line/80 px-4 py-2 text-[12.5px]"
+                >
+                  Copy
+                </button>
+              </div>
+              {sendMsg && (
+                <p className="mt-2 rounded-lg bg-accent-soft/60 px-3 py-2 text-[11.5px] leading-relaxed text-accent-dark">
+                  {sendMsg}
+                </p>
+              )}
+            </div>
+          )}
 
           {at < APPRAISAL_STEPS.length - 1 && (
             <button
