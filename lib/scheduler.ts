@@ -97,7 +97,12 @@ export function finished(campaign: Campaign, lastStepSent: number): boolean {
  */
 export type Disposition = "send" | "unwritten" | "human";
 
-export function dispositionOf(step: CampaignStep): Disposition {
+/**
+ * `written` is copy saved in the editor. It counts the same as copy in code —
+ * a step is written or it isn't, and where the words happen to live is not
+ * something the scheduler should have an opinion about.
+ */
+export function dispositionOf(step: CampaignStep, written = false): Disposition {
   if (step.channel !== "email") return "human";
-  return step.body && step.body.length ? "send" : "unwritten";
+  return written || step.body?.length ? "send" : "unwritten";
 }

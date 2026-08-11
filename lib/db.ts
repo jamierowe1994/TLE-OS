@@ -159,6 +159,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS os_campaign_sends_once
   WHERE outcome IN ('sent', 'for_human', 'overtaken');
 CREATE INDEX IF NOT EXISTS os_campaign_sends_recent ON os_campaign_sends (at DESC);
 
+-- The copy for a campaign step, written in the editor.
+--
+-- An OVERLAY on the campaign in code, never a replacement: the step's day,
+-- channel and audience stay where they can be read at a glance, and only the
+-- words live here. Deleting a row reverts the step to whatever the code says,
+-- which is the cheapest possible undo.
+CREATE TABLE IF NOT EXISTS os_email_templates (
+  id          TEXT PRIMARY KEY,
+  campaign_id TEXT NOT NULL,
+  step_index  INTEGER NOT NULL,
+  subject     TEXT NOT NULL DEFAULT '',
+  blocks      JSONB NOT NULL DEFAULT '[]',
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by  TEXT NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS os_email_templates_step
+  ON os_email_templates (campaign_id, step_index);
+
 -- Customers with a portal account (tenants and landlords). Separate table
 -- from os_users on purpose: a customer must never be one bad join away from
 -- an office login.

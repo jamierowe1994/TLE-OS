@@ -6,7 +6,8 @@ import { FlowTag } from "@/components/Wire";
 import { CAMPAIGNS, lastDay, type Campaign } from "@/lib/campaigns";
 // The ported TMKE renderer, wrapped in our own brand — the same module that
 // will do the sending.
-import { renderStep } from "@/lib/campaign-mail";
+import { renderStep, type StepCopy } from "@/lib/campaign-mail";
+import EmailEditor from "@/components/EmailEditor";
 
 /** What GET /api/campaigns/run reports. */
 type RunReport = {
@@ -76,15 +77,42 @@ export default function Marketing() {
   };
   useEffect(check, []);
 
+  /* The copy written in the editor, keyed campaign:step. Held here rather
+     than fetched per step so opening a step is instant and the step list can
+     say which ones are still owed. */
+  const [copy, setCopy] = useState<Record<string, StepCopy>>({});
+  useEffect(() => {
+    fetch("/api/email-templates")
+      .then((r) => r.json())
+      .then((j) => {
+        const m: Record<string, StepCopy> = {};
+        for (const t of j.templates ?? []) m[`${t.campaignId}:${t.stepIndex}`] = t;
+        setCopy(m);
+      })
+      .catch(() => {});
+  }, []);
+  const written = (c: Campaign, i: number) =>
+    Boolean(copy[`${c.id}:${i}`]?.blocks?.length || c.steps[i].body?.length);
+
+  /** Which step is being written, if any. */
+  const [editing, setEditing] = useState<number | null>(null);
+  useEffect(() => setEditing(null), [openId]);
+
   /* The FIRST WRITTEN STEP of the open campaign, rendered by the module that
      sends it — so what's on screen is the email, not a drawing of one. A
      campaign with nothing written shows nothing: the ported TMKE starters
      would fill the space, but they say TMKE in the footer, and another
      company's name has no business on this screen. */
   const preview = useMemo(() => {
-    const step = open?.steps.find((s) => s.channel === "email" && s.body?.length);
-    return step ? renderStep(step, { name: "Susan Barnes", address: "3 Buttermere Close" }) : null;
-  }, [open]);
+    if (!open) return null;
+    const i = open.steps.findIndex((s, n) => s.channel === "email" && (copy[`${open.id}:${n}`]?.blocks?.length || s.body?.length));
+    if (i < 0) return null;
+    return renderStep(
+      open.steps[i],
+      { name: "Susan Barnes", address: "3 Buttermere Close" },
+      copy[`${open.id}:${i}`] ?? null
+    );
+  }, [open, copy]);
 
   return (
     <>
@@ -156,16 +184,48 @@ export default function Marketing() {
                     <span className="min-w-0 flex-1">
                       <span className="block text-[12.5px] font-semibold">{s.subject}</span>
                       <span className="block text-[11.5px] leading-snug text-muted">{s.gist}</span>
-                      {s.channel === "email" && !s.body?.length && (
+                      {s.channel === "email" && !written(open, i) && (
                         <span className="mt-0.5 block text-[11px] text-accent-dark">
                           Not written yet — the scheduler holds here rather than improvising
                         </span>
                       )}
+                      {copy[`${open.id}:${i}`] && (
+                        <span className="mt-0.5 block text-[11px] text-muted">Written here</span>
+                      )}
                     </span>
+                    {s.channel === "email" && (
+                      <button
+                        type="button"
+                        onClick={() => setEditing(editing === i ? null : i)}
+                        className="h-fit shrink-0 rounded-lg border border-line/70 px-2 py-1 text-[11px] hover:border-ink/30"
+                      >
+                        {editing === i ? "Close" : written(open, i) ? "Edit" : "Write it"}
+                      </button>
+                    )}
                   </li>
                 ))}
               </ol>
             </div>
+          )}
+
+          {open && editing !== null && (
+            <EmailEditor
+              key={`${open.id}:${editing}`}
+              campaignId={open.id}
+              stepIndex={editing}
+              step={open.steps[editing]}
+              initial={copy[`${open.id}:${editing}`] ?? null}
+              onClose={() => setEditing(null)}
+              onSaved={(saved) =>
+                setCopy((prev) => {
+                  const next = { ...prev };
+                  const k = `${open.id}:${editing}`;
+                  if (saved) next[k] = saved;
+                  else delete next[k];
+                  return next;
+                })
+              }
+            />
           )}
 
           {/* ── What the scheduler would do right now ── */}

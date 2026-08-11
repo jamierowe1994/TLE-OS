@@ -32,13 +32,30 @@ type Recipient = { name?: string; email?: string; address?: string };
 let n = 0;
 const id = () => `cs_${(n++).toString(36)}`;
 
-/** The rendered email, or null if the step has no copy behind it yet. */
-export function renderStep(
-  step: CampaignStep,
-  to: Recipient
-): { subject: string; html: string } | null {
-  if (step.channel !== "email" || !step.body?.length) return null;
+/** Copy written in the editor, which overrides whatever the step says in code. */
+export type StepCopy = { subject?: string; blocks: Record<string, unknown>[] };
 
+/** The standard footer. Every campaign email carries one, and it is added here
+ *  rather than left to whoever is writing — an unsubscribe nobody can forget
+ *  to include is the only kind worth having. */
+export function footerBlock(): Record<string, unknown> {
+  return {
+    type: "footer",
+    id: id(),
+    note: "You're getting this because we appraised your property. One reply and we'll stop.",
+    address: "The Lettings Experts",
+    showSocial: false,
+    unsubscribe: true,
+  };
+}
+
+/**
+ * The blocks a step starts from: its heading, its paragraphs, its call to
+ * action. Also what the editor opens with, so a step written in code and one
+ * written in the editor are the same thing from here on.
+ */
+export function blocksFor(step: CampaignStep): Record<string, unknown>[] {
+  if (!step.body?.length) return [];
   const blocks: Record<string, unknown>[] = [
     { type: "heading", id: id(), text: step.subject, align: "left", color: "" },
     ...step.body.map((p) => ({ type: "text", id: id(), text: p, bg: "" })),
@@ -46,14 +63,30 @@ export function renderStep(
   if (step.cta) {
     blocks.push({ type: "button", id: id(), text: step.cta.text, url: step.cta.url, color: "", align: "left" });
   }
-  blocks.push({
-    type: "footer",
-    id: id(),
-    note: "You're getting this because we appraised your property. One reply and we'll stop.",
-    address: "The Lettings Experts",
-    showSocial: false,
-    unsubscribe: true,
-  });
+  return blocks;
+}
+
+/**
+ * The rendered email, or null if there is no copy behind the step at all.
+ *
+ * `copy` is what the editor saved. It wins over the code — that is the whole
+ * point of the editor — but the code is still there underneath, so deleting
+ * the stored row puts the original back.
+ */
+export function renderStep(
+  step: CampaignStep,
+  to: Recipient,
+  copy?: StepCopy | null
+): { subject: string; html: string } | null {
+  if (step.channel !== "email") return null;
+
+  const written = copy?.blocks?.length ? copy.blocks : blocksFor(step);
+  if (!written.length) return null;
+  const subjectLine = (copy?.subject || step.subject).trim() || step.subject;
+
+  // The footer is appended unless the writer has already placed one, so it
+  // can be positioned deliberately but never dropped by accident.
+  const blocks = written.some((b) => b?.type === "footer") ? [...written] : [...written, footerBlock()];
 
   const brand = tleBrand();
   // Built ON TOP of the renderer's own context, never instead of it: the
@@ -68,7 +101,7 @@ export function renderStep(
     brand
   );
   const out = renderTemplate(
-    { name: step.subject, subject: step.subject, blocks },
+    { name: subjectLine, subject: subjectLine, blocks },
     {
       brand,
       mergeCtx: {
@@ -93,6 +126,6 @@ export function renderStep(
   // here the landlord gets a literal {{unsubscribe_url}} in the footer.
   const raw = typeof out === "string" ? out : (out?.html ?? "");
   const html = renderTokens(raw, ctx);
-  const subject = typeof out === "string" ? step.subject : (out?.subject ?? step.subject);
+  const subject = typeof out === "string" ? subjectLine : (out?.subject ?? subjectLine);
   return html ? { subject, html } : null;
 }

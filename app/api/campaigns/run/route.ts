@@ -4,7 +4,7 @@ import { hasDb, q } from "@/lib/db";
 import { SESSION_COOKIE, uid, verifySessionToken } from "@/lib/auth";
 import { CAMPAIGNS, type Campaign } from "@/lib/campaigns";
 import { dispositionOf, nextDue, type StepPlan } from "@/lib/scheduler";
-import { renderStep } from "@/lib/campaign-mail";
+import { renderStep, type StepCopy } from "@/lib/campaign-mail";
 import { rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
 
 /**
@@ -72,6 +72,25 @@ function authorised(req: NextRequest): boolean {
   return Boolean(verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value));
 }
 
+/**
+ * The copy written in the editor, keyed campaign:step. Loaded once per run
+ * rather than per enrolment — fifty landlords on one campaign is one query,
+ * not fifty.
+ */
+async function storedCopy(): Promise<Map<string, StepCopy>> {
+  const rows = await q<{ campaign_id: string; step_index: number; subject: string; blocks: Record<string, unknown>[] }>(
+    `SELECT campaign_id, step_index, subject, blocks FROM os_email_templates`
+  );
+  const m = new Map<string, StepCopy>();
+  for (const r of rows) {
+    m.set(`${r.campaign_id}:${r.step_index}`, {
+      subject: r.subject,
+      blocks: Array.isArray(r.blocks) ? r.blocks : [],
+    });
+  }
+  return m;
+}
+
 async function activeRows(): Promise<Row[]> {
   return q<Row>(
     `SELECT id, campaign_id, record_id, name, email, last_step_sent, enrolled_at
@@ -97,14 +116,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ran: false, sending: sendingOn(), due: [], reason: "No database on this environment." });
   }
   const now = new Date();
-  const rows = await activeRows();
+  const [rows, copy] = await Promise.all([activeRows(), storedCopy()]);
   const due: Verdict[] = [];
 
   for (const row of rows) {
     const found = planFor(row, now);
     if (!found) continue;
     const { campaign, plan } = found;
-    const disp = dispositionOf(plan.step);
+    const disp = dispositionOf(plan.step, copy.has(`${campaign.id}:${plan.index}`));
     due.push({
       enrolmentId: row.id,
       campaignId: campaign.id,
@@ -140,7 +159,7 @@ export async function POST(req: NextRequest) {
   }
 
   const now = new Date();
-  const rows = await activeRows();
+  const [rows, copy] = await Promise.all([activeRows(), storedCopy()]);
   const done: Verdict[] = [];
 
   for (const row of rows) {
@@ -158,7 +177,8 @@ export async function POST(req: NextRequest) {
       overdue: plan.overdue,
     };
 
-    const disp = dispositionOf(plan.step);
+    const written = copy.get(`${campaign.id}:${plan.index}`) ?? null;
+    const disp = dispositionOf(plan.step, Boolean(written));
 
     // Held: reported and left where it is. Nothing is logged and nothing
     // advances, so it comes up again next run — which is the whole point of
@@ -190,7 +210,7 @@ export async function POST(req: NextRequest) {
     }
 
     // A real send.
-    const mail = renderStep(plan.step, { name: row.name, email: row.email, address: "" });
+    const mail = renderStep(plan.step, { name: row.name, email: row.email, address: "" }, written);
     if (!mail) {
       done.push({ ...base, outcome: "unwritten", detail: "The step rendered to nothing." });
       continue;
