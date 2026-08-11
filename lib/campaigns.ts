@@ -102,6 +102,74 @@ export const CAMPAIGNS: Campaign[] = [
       { day: 100, channel: "email", subject: "Ready when you are", gist: "Photos and marketing can be booked before completion." },
     ],
   },
+
+  {
+    id: "valuation-low",
+    name: "Win-back — valuation too low",
+    audience: "lost",
+    reasons: ["Valuation too low"],
+    aim: "Be the honest number they remember when the optimistic one doesn't let.",
+    status: "live",
+    steps: [
+      { day: 1, channel: "email", subject: "The figure, and why", gist: "Restate the valuation with the comparables behind it. No sulking, no I-told-you-so." },
+      { day: 21, channel: "email", subject: "What's actually letting", gist: "Local lets at ACHIEVED rents. The over-valued one is still sitting there and they can see it." },
+      { day: 60, channel: "call", subject: "Any interest?", gist: "Six weeks is when an over-valued let starts to hurt. Ask, do not gloat." },
+      { day: 120, channel: "email", subject: "Still available?", gist: "Offer a fresh appraisal free. By now the market has made the argument for us." },
+    ],
+  },
+  {
+    id: "went-direct",
+    name: "Win-back — self-managing",
+    audience: "lost",
+    reasons: ["Went direct / self-managing"],
+    aim: "Let the admin do the persuading — most self-managers quit at the first hard thing.",
+    status: "live",
+    steps: [
+      { day: 2, channel: "email", subject: "The bits people forget", gist: "Deposit deadlines, right to rent, gas and EICR dates. Genuinely useful, no pitch." },
+      { day: 40, channel: "email", subject: "When a tenant stops paying", gist: "What the process actually costs in time. The most common reason they come back." },
+      { day: 100, channel: "email", subject: "What has changed in the rules", gist: "Legislation update. Self-managers are the ones who miss these." },
+      { day: 200, channel: "call", subject: "How is it going?", gist: "A year in, most have had one bad month. This is the call." },
+    ],
+  },
+  {
+    id: "selling-instead",
+    name: "Selling instead",
+    audience: "lost",
+    reasons: ["Decided to sell instead", "Decided not to let"],
+    aim: "Stay useful on a decision we do not handle, so the next property comes to us.",
+    status: "live",
+    steps: [
+      { day: 1, channel: "email", subject: "Good luck with the sale", gist: "No pitch. Offer the rental figure in writing in case the sale stalls." },
+      { day: 75, channel: "email", subject: "If it has not sold", gist: "Letting as the fallback, with the numbers. A stalled sale is a live lettings lead." },
+      { day: 240, channel: "email", subject: "Buying again?", gist: "Landlords who sell often buy. Be there for the next one." },
+    ],
+  },
+  {
+    id: "weighing-up",
+    name: "Weighing up agents",
+    audience: "nurture",
+    reasons: ["Weighing up agents"],
+    aim: "Win it in the week they are actually deciding, which is this one.",
+    status: "live",
+    steps: [
+      { day: 1, channel: "email", subject: "Everything in one place", gist: "Valuation, fee, what we do for it. One page to put next to the others." },
+      { day: 4, channel: "call", subject: "Any questions?", gist: "The call most agents do not make. Ask what would make the decision easy." },
+      { day: 14, channel: "email", subject: "A landlord like you", gist: "One case study, same kind of property, same postcode." },
+    ],
+  },
+  {
+    id: "lost-touch",
+    name: "Gone quiet",
+    audience: "lost",
+    reasons: ["Lost touch", "Other"],
+    aim: "Two more tries, spaced, then stop — a list nobody prunes is a list nobody trusts.",
+    status: "live",
+    steps: [
+      { day: 7, channel: "email", subject: "Did I miss you?", gist: "Short, human, one question. No attachments." },
+      { day: 30, channel: "call", subject: "One more try", gist: "Different time of day from the last attempt." },
+      { day: 90, channel: "email", subject: "Closing your file", gist: "Say we are stopping, and how to come back. Gets more replies than the other two." },
+    ],
+  },
 ];
 
 /** The campaigns that fit what the appraisal actually recorded. */
