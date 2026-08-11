@@ -157,7 +157,7 @@ export default function Applications() {
            0.05 is where her fist is in the artwork, measured off the frames. */
         sprite={{ src: "/illustrations/hanging-strip.webp", frames: 30, aspect: 0.653, fps: 12 }}
         illustrationHeight={300}
-        grip={0.05}
+        grip={0.0428}
         /* The line sags where she grips it — she is hanging off it, so it
            should give. The trough is centred on the wrapper, which is centred
            on her fist. */

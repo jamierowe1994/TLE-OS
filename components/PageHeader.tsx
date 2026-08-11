@@ -25,6 +25,15 @@ import DoodleIcon from "@/components/DoodleIcon";
 export type LineBreak = "none" | "dip" | "sink";
 
 /**
+ * How far the rule drops at the bottom of each kind of trough.
+ *
+ * The figure has to come down by the same amount. Anchoring them to the rule's
+ * flat height leaves them holding — or standing on — thin air a few pixels
+ * above the line they are supposed to be bending.
+ */
+const DROP: Record<LineBreak, number> = { none: 0, dip: 9, sink: 17 };
+
+/**
  * How a seated figure's shadow falls on the wall below the ledge.
  *
  * `side` and `drop` are how far it lands from him — small, because he is sat
@@ -44,13 +53,19 @@ function LineDip({ width, mode }: { width: number; mode: LineBreak }) {
   if (mode === "none") return null;
 
   const h = 34;
-  /* The baseline sits 2px down in a box that hangs mostly BELOW the rule, so
+  /* The baseline sits 2.5px down in a box that hangs mostly BELOW the rule, so
      the trough drops into the space under it. It used to be a 34px box pinned
      bottom-0 with the baseline at its top — which drew the whole thing 32px
      ABOVE the rule and left a stray curve floating over the real line on every
-     page that asked for a dip. */
-  const y = 2;
-  const drop = mode === "sink" ? 17 : 9;
+     page that asked for a dip.
+
+     The half pixel is the whole trick to a clean join. The header's border
+     occupies the pixel below the wrapper, so its centre is half a pixel down;
+     a 1px stroke straddles its own path. Land the path anywhere else and the
+     redrawn line meets the real one a pixel out — which reads as a nick in the
+     rule at each end of the trough. */
+  const y = 2.5;
+  const drop = DROP[mode];
   // The gap is what makes "sink" read as broken rather than merely bent.
   const gap = mode === "sink" ? 0.2 : 0;
 
@@ -67,7 +82,7 @@ function LineDip({ width, mode }: { width: number; mode: LineBreak }) {
       viewBox={`0 0 ${width} ${h}`}
       preserveAspectRatio="none"
       className="pointer-events-none absolute"
-      style={{ width, height: h, left: "50%", bottom: -(h - y - 1), transform: "translateX(-50%)" }}
+      style={{ width, height: h, left: "50%", bottom: -(h - y + 0.5), transform: "translateX(-50%)" }}
     >
       {/* Just deep enough to swallow the real border and give the trough clean
           paper to be drawn on — any taller and it masks the page underneath. */}
@@ -168,8 +183,12 @@ export default function PageHeader({
      half by it; someone hanging by their fist is barely cut at all, and nearly
      all of them ends up below the line. */
   const cross = seated ? seat : hanging ? grip : 1;
-  const below = seated || hanging ? illustrationHeight * (1 - cross) : 0;
-  const legs = seated ? below : 0;
+  /* Plus the trough: where a figure bends the rule, the line at their own
+     position is DROP lower than its flat height, so they have to come down
+     with it or they hold on to nothing. Applies to anyone meeting the line —
+     a hanging fist, a seat, or a pair of feet. */
+  const below = illustrationHeight * (1 - cross) + DROP[lineBreak];
+  const legs = seated ? illustrationHeight * (1 - cross) : 0;
   /* The figure is scaled down at each breakpoint, so the legs hang shorter
      there too and the clearance has to follow. Written as real CSS because the
      numbers are computed — Tailwind can only see class names it was built
@@ -347,7 +366,7 @@ export default function PageHeader({
                         clipPath: seated
                           ? `inset(${Math.round(illustrationHeight * (seat ?? 0)) - SHADOW.drop}px ${SHADOW.cutRight}% 0 ${SHADOW.cutLeft}%)`
                           : undefined,
-                        transform: `translateY(${Math.round(legs)}px) translate(${-SHADOW.side}px, ${SHADOW.drop}px) skewX(${-SHADOW.rake}deg)`,
+                        transform: `translateY(${Math.round(below)}px) translate(${-SHADOW.side}px, ${SHADOW.drop}px) skewX(${-SHADOW.rake}deg)`,
                       }}
                     />
                   )}
@@ -361,9 +380,7 @@ export default function PageHeader({
                        point the rule crosses, so it passes exactly through the
                        seat — or through the gripping fist. */
                     style={
-                      seated || hanging
-                        ? { transform: `translateY(${Math.round(below)}px)` }
-                        : undefined
+                      below ? { transform: `translateY(${Math.round(below)}px)` } : undefined
                     }
                   />
                 </span>
