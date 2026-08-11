@@ -85,6 +85,23 @@ CREATE TABLE IF NOT EXISTS os_notes (
 );
 CREATE INDEX IF NOT EXISTS os_notes_record_idx ON os_notes (record_type, record_id, created_at DESC);
 
+-- The OS's own working state on a record REX has no field for: the appraisal
+-- sub-case on a lead, the landlord-property-tenant link on a listing.
+--
+-- One table rather than one per feature, and a jsonb payload rather than a
+-- column per field, because these shapes are still moving weekly — a new key
+-- on the appraisal case should not be a migration. What must NOT drift is the
+-- key: (kind, record_id) is the identity, so a save is an upsert and a record
+-- can never end up with two competing states.
+CREATE TABLE IF NOT EXISTS os_case_state (
+  kind           TEXT NOT NULL,
+  record_id      TEXT NOT NULL,
+  payload        JSONB NOT NULL,
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by     TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (kind, record_id)
+);
+
 -- Customers with a portal account (tenants and landlords). Separate table
 -- from os_users on purpose: a customer must never be one bad join away from
 -- an office login.

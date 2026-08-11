@@ -27,6 +27,7 @@ import {
 } from "@/lib/leads-sample";
 import AppraisalTrack from "@/components/AppraisalTrack";
 import { EMPTY_CASE, type AppraisalCase } from "@/lib/appraisal";
+import { saveLabel, useCaseState } from "@/lib/case-state";
 import { isStalled, startingStep, trackFor } from "@/lib/journey";
 import rexSample from "@/lib/rex-sample.json";
 
@@ -375,9 +376,12 @@ export default function LeadDrawer({
   const [emailing, setEmailing] = useState(false);
   // Where they are on their track, and the two panels a step can open.
   const [step, setStep] = useState(0);
-  /* The appraisal sub-case. Held here for now — it belongs in os_ storage
-     beside the notes, which is the next piece of work, not this one. */
-  const [appraisal, setAppraisal] = useState<AppraisalCase>(EMPTY_CASE);
+  /* The appraisal sub-case, stored per lead in os_case_state. */
+  const [appraisal, setAppraisal, appraisalSave] = useCaseState<AppraisalCase>(
+    "appraisal",
+    lead?.id ?? null,
+    EMPTY_CASE
+  );
   const [booking, setBooking] = useState(false);
   const [signing, setSigning] = useState(false);
   const [booked, setBooked] = useState<LeadViewing[]>([]);
@@ -1111,6 +1115,9 @@ export default function LeadDrawer({
           {!isTenant && here.id === "appraisal" && (
             <div className="mt-3">
               <AppraisalTrack value={appraisal} onChange={setAppraisal} who="You" />
+              {saveLabel(appraisalSave) && (
+                <p className="mt-1.5 pl-1 text-[10.5px] text-muted">{saveLabel(appraisalSave)}</p>
+              )}
             </div>
           )}
 

@@ -16,6 +16,7 @@ import { LEADS, leadSide } from "@/lib/leads-sample";
 import { DIARY } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 import type { TenancyLink } from "@/lib/tenancy-link";
+import { saveLabel, useCaseState } from "@/lib/case-state";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -161,10 +162,14 @@ export default function ListingDrawer({
   const [handingOver, setHandingOver] = useState(false);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [topPick, setTopPick] = useState<number | null>(null);
-  /* The landlord–property–tenant link, made the moment an offer is accepted.
-     Built from the picked offer so it carries the real tenants; persisting it
-     beside the record is the next piece. */
-  const [linkState, setLinkState] = useState<TenancyLink | null>(null);
+  /* The landlord–property–tenant link, made the moment an offer is accepted
+     and stored per listing in os_case_state. Null until someone accepts, at
+     which point it is derived from the picked offer below. */
+  const [linkState, setLinkState, linkSave] = useCaseState<TenancyLink | null>(
+    "tenancy-link",
+    listing?.id ?? null,
+    null
+  );
   const [offering, setOffering] = useState(false);
 
   /* The link, made from the accepted offer. Derived rather than typed again:
@@ -546,6 +551,9 @@ export default function ListingDrawer({
           {(here.id === "accepted" || here.id === "handover") && link && (
             <div className="mt-3">
               <TenancyLinkPanel value={link} onChange={setLinkState} />
+              {saveLabel(linkSave) && (
+                <p className="mt-1.5 pl-1 text-[10.5px] text-muted">{saveLabel(linkSave)}</p>
+              )}
             </div>
           )}
 
