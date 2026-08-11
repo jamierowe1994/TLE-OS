@@ -13,7 +13,7 @@ import Link from "next/link";
  * customer's portal.
  */
 
-export const metadata = { title: "The Lettings Experts — My Account" };
+export const metadata = { title: "The Letting Experts — My Account" };
 
 const RED = "#e31f36";
 
@@ -53,7 +53,7 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
 
       <footer className="border-t border-black/10 bg-[#fafafa]">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 py-6 text-[11px] text-black/50">
-          <span>© The Lettings Experts · thelettingexperts.co.uk</span>
+          <span>© The Letting Experts · thelettingexperts.co.uk</span>
           <span className="flex gap-4">
             <a href="#" className="hover:text-black">Privacy &amp; your data</a>
             <a href="#" className="hover:text-black">Contact us</a>

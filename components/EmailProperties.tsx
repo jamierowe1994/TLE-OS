@@ -185,7 +185,7 @@ export default function EmailProperties({
                   Just reply to this email or give me a ring if you&apos;d like to arrange a
                   viewing on any of them.
                 </p>
-                <p className="text-muted">Kind regards,<br />The Lettings Experts</p>
+                <p className="text-muted">Kind regards,<br />The Letting Experts</p>
               </div>
             </div>
           )}

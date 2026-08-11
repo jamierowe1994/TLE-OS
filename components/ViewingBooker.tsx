@@ -173,13 +173,13 @@ export default function ViewingBooker({
                 `We're booked in for ${dayLabel} at ${slot} to photograph the property and gather ` +
                 `the details for the listing.\n\n${where}\n\n` +
                 `Bright and tidy is all it needs — ${agent} will do the rest. It takes about an hour.\n\n` +
-                `Kind regards,\n${agent}\nThe Lettings Experts`
+                `Kind regards,\n${agent}\nThe Letting Experts`
               : `Hi ${first},\n\n` +
                 `Thanks for speaking today — your market appraisal is booked for ${dayLabel} at ${slot}.\n\n` +
                 `${where}\n\n` +
                 `${agent} will come to you, walk the property with you and talk through what it should achieve. ` +
                 `Nothing to prepare — half an hour of your time is all it takes.\n\n` +
-                `Kind regards,\n${agent}\nThe Lettings Experts`,
+                `Kind regards,\n${agent}\nThe Letting Experts`,
           whatsappBody:
             mode === "takeon"
               ? `Hi ${first}, photos & details visit booked — ${shortDate} at ${slot}, at ${where}. ` +
@@ -223,7 +223,7 @@ export default function ViewingBooker({
               `Just to let you know we'll be bringing someone to view the property on ${dayLabel} at ${slot}. ` +
               `${agent} will accompany them, and it should take no more than twenty minutes.\n\n` +
               `If that time doesn't work for you, reply here and we'll move it — your say comes first.\n\n` +
-              `Kind regards,\n${agent}\nThe Lettings Experts`,
+              `Kind regards,\n${agent}\nThe Letting Experts`,
             whatsappBody:
               `Hi ${occupant.name.split(" ")[0]}, heads-up — viewing at yours ${shortDate} at ${slot}, ` +
               `${agent} accompanying, ~20 mins. Reply if that time's bad and we'll move it.`,
@@ -247,7 +247,7 @@ export default function ViewingBooker({
           `That's your viewing booked for ${dayLabel} at ${slot}.\n\n` +
           `${where}\n\n` +
           `${agent} will meet you outside — please give us a ring if you're running late or need to move it.\n\n` +
-          `Kind regards,\n${agent}\nThe Lettings Experts`,
+          `Kind regards,\n${agent}\nThe Letting Experts`,
         whatsappBody:
           `Hi ${first}, viewing booked for ${shortDate} at ${slot} — ${where}. ` +
           `${agent} will meet you outside. Reply here if you need to change it.`,
@@ -267,7 +267,7 @@ export default function ViewingBooker({
           `${agent} will be accompanying, so there's nothing you need to do — ` +
           `just let us know if that time is a problem for access.\n\n` +
           `We'll come back to you with feedback the same day.\n\n` +
-          `Kind regards,\n${agent}\nThe Lettings Experts`,
+          `Kind regards,\n${agent}\nThe Letting Experts`,
         whatsappBody:
           `Hi ${llFirst}, we've got a viewing at ${property.name} on ${shortDate} at ${slot}. ` +
           `${agent} is accompanying. Let us know if access is a problem.`,

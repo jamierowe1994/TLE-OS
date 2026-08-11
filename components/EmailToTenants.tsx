@@ -228,7 +228,7 @@ export default function EmailToTenants({
                   </span>
                 </div>
                 <p>Reply to this email or give us a ring and we&apos;ll get you booked in.</p>
-                <p className="text-muted">Kind regards,<br />The Lettings Experts</p>
+                <p className="text-muted">Kind regards,<br />The Letting Experts</p>
               </div>
               <p className="mt-4 border-t border-line/60 pt-3 text-[10.5px] text-muted">
                 Sent individually, not as one thread — {picked.length} separate email

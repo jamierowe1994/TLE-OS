@@ -243,7 +243,7 @@ export default function ViewingDrawer({
           email: appt.contact.email, phone: appt.contact.phone,
           channel: "email" as const, on: true,
           subject: `Viewing cancelled — ${property}`,
-          emailBody: `Hi ${appt.who.split(" ")[0]},\n\nSorry to say we've had to cancel the viewing at ${property} on ${dayLabel(appt.day)} at ${appt.start}. We'll be in touch to rearrange — nothing needed from you.\n\nKind regards,\n${appt.agent}\nThe Lettings Experts`,
+          emailBody: `Hi ${appt.who.split(" ")[0]},\n\nSorry to say we've had to cancel the viewing at ${property} on ${dayLabel(appt.day)} at ${appt.start}. We'll be in touch to rearrange — nothing needed from you.\n\nKind regards,\n${appt.agent}\nThe Letting Experts`,
           whatsappBody: `Hi ${appt.who.split(" ")[0]}, sorry — the ${appt.start} viewing at ${property} on ${dayLabel(appt.day)} is cancelled. We'll be in touch to rearrange.`,
         }]
       : []),
@@ -252,7 +252,7 @@ export default function ViewingDrawer({
       email: "landlord@record.tle", phone: "07000 000000",
       channel: "email" as const, on: true,
       subject: `Viewing cancelled at ${property}`,
-      emailBody: `The ${appt.start} viewing on ${dayLabel(appt.day)} at ${property} has been cancelled. We'll rebook and keep you posted.\n\n${appt.agent}\nThe Lettings Experts`,
+      emailBody: `The ${appt.start} viewing on ${dayLabel(appt.day)} at ${property} has been cancelled. We'll rebook and keep you posted.\n\n${appt.agent}\nThe Letting Experts`,
       whatsappBody: `The ${appt.start} viewing at ${property} (${dayLabel(appt.day)}) is cancelled — we'll rebook and keep you posted.`,
     },
     ...(appt.tenant
@@ -261,7 +261,7 @@ export default function ViewingDrawer({
           email: "tenant@record.tle", phone: "07000 000001",
           channel: "whatsapp" as const, on: true,
           subject: `Viewing cancelled — ${property}`,
-          emailBody: `Hi ${appt.tenant.split(" ")[0]},\n\nThe viewing booked for ${dayLabel(appt.day)} at ${appt.start} is cancelled — nobody will be coming, no need to do anything.\n\n${appt.agent}\nThe Lettings Experts`,
+          emailBody: `Hi ${appt.tenant.split(" ")[0]},\n\nThe viewing booked for ${dayLabel(appt.day)} at ${appt.start} is cancelled — nobody will be coming, no need to do anything.\n\n${appt.agent}\nThe Letting Experts`,
           whatsappBody: `Hi ${appt.tenant.split(" ")[0]}, the ${appt.start} viewing on ${dayLabel(appt.day)} is cancelled — nobody's coming after all.`,
         }]
       : []),
@@ -273,7 +273,7 @@ export default function ViewingDrawer({
       email: "landlord@record.tle", phone: "07000 000000",
       channel: "email" as const, on: true,
       subject: `An offer on ${property}`,
-      emailBody: `An offer has come in on ${property} from ${appt.who}.\n\nEverything you need — the offer, their situation and references — is on your page:\nhttps://tle-os.co.uk/review/${appt.id} \n\nHave a look and reply here, or ring and we'll talk it through.\n\n${appt.agent}\nThe Lettings Experts`,
+      emailBody: `An offer has come in on ${property} from ${appt.who}.\n\nEverything you need — the offer, their situation and references — is on your page:\nhttps://tle-os.co.uk/review/${appt.id} \n\nHave a look and reply here, or ring and we'll talk it through.\n\n${appt.agent}\nThe Letting Experts`,
       whatsappBody: `Good news — an offer on ${property} from ${appt.who}. Everything's here: https://tle-os.co.uk/review/${appt.id} — reply or ring to talk it through.`,
     },
   ];

@@ -38,7 +38,7 @@ export default function TenantWelcome() {
         Let&apos;s set up your account, Sophie
       </h1>
       <p className="mt-2 text-[13.5px] leading-relaxed text-black/60">
-        We&apos;ve registered you with The Lettings Experts. Choose a password and
+        We&apos;ve registered you with The Letting Experts. Choose a password and
         you&apos;ll be able to see the homes we have, your viewings, and manage
         everything in one place.
       </p>

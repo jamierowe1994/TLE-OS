@@ -1,6 +1,6 @@
 # TLE OS
 
-The operations overlay for The Lettings Experts. Phase 1 is a wireframe of the
+The operations overlay for The Letting Experts. Phase 1 is a wireframe of the
 whole system in the TLE OS style — a private preview for Susan and Howard,
 kept entirely separate from the TLE portal until the portal has shipped.
 

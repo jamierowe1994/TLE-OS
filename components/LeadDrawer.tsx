@@ -1126,7 +1126,7 @@ export default function LeadDrawer({
                   whenPretty: appraisal.bookedFor ?? detail.nextAction?.due ?? "",
                   startsAt: appraisal.bookedFor,
                   minutes: 45,
-                  agentName: lead.agent || "The Lettings Experts",
+                  agentName: lead.agent || "The Letting Experts",
                   agentPhone: "0161 883 2525",
                 }}
               />

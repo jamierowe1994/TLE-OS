@@ -2,11 +2,11 @@ import Link from "next/link";
 
 /**
  * The landlord portal's shell — the same official red as the tenant side,
- * because to a customer there is exactly one Lettings Experts. Corporate
+ * because to a customer there is exactly one Letting Experts. Corporate
  * type, no illustrations, the OS's handwriting suppressed.
  */
 
-export const metadata = { title: "The Lettings Experts — Landlord Account" };
+export const metadata = { title: "The Letting Experts — Landlord Account" };
 
 const RED = "#e31f36";
 
@@ -42,7 +42,7 @@ export default function LandlordLayout({ children }: { children: React.ReactNode
 
       <footer className="border-t border-black/10 bg-[#fafafa]">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 py-6 text-[11px] text-black/50">
-          <span>© The Lettings Experts · thelettingexperts.co.uk</span>
+          <span>© The Letting Experts · thelettingexperts.co.uk</span>
           <span className="flex gap-4">
             <a href="#" className="hover:text-black">Privacy &amp; your data</a>
             <a href="#" className="hover:text-black">Contact us</a>

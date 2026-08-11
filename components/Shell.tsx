@@ -332,7 +332,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 collapsed ? "ml-0 max-w-0 opacity-0" : "ml-0 max-w-[150px] opacity-100"
               }`}
             >
-              <span className="hand block truncate text-[13px]">The Lettings Experts</span>
+              <span className="hand block truncate text-[13px]">The Letting Experts</span>
               <span className="block whitespace-nowrap text-[10px] text-muted">
                 Preview access · {process.env.NEXT_PUBLIC_BUILD}
               </span>

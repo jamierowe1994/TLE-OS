@@ -7,7 +7,7 @@ import type { Appt, ApptKind } from "@/lib/diary";
  *
  * WHOSE DIARY IS IT? This REX account holds SIX businesses' calendars — of
  * 671 events in a fortnight, 482 belong to The Property Experts (sales) and
- * only 91 to The Lettings Experts. The reliable divider is the calendar
+ * only 91 to The Letting Experts. The reliable divider is the calendar
  * OWNER'S EMAIL DOMAIN, not the title: filtering on the "TLE " title prefix
  * finds 20 events where the owner's domain finds 91, because most of an
  * agent's day (appointments, inventory prep, check-ins) carries no prefix

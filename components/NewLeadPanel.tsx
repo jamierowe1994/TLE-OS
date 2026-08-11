@@ -383,7 +383,7 @@ export default function NewLeadPanel({
                   <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
                     {d.name.split(" ")[0] || "They"} gets one email: how we look after
                     their details (the legal bit), and a button to set a password and
-                    open their own Lettings Experts account.
+                    open their own Letting Experts account.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
@@ -1058,11 +1058,11 @@ export default function NewLeadPanel({
                     TLE
                   </span>
                   <p className="mt-4 text-[15px] font-bold">
-                    Welcome, {d.name.split(" ")[0] || "there"} — your account with The Lettings Experts
+                    Welcome, {d.name.split(" ")[0] || "there"} — your account with The Letting Experts
                   </p>
                   <div className="mt-3 space-y-2.5 text-[12.5px] leading-relaxed text-black/70">
                     <p>
-                      We&apos;ve registered you with The Lettings Experts, which means we
+                      We&apos;ve registered you with The Letting Experts, which means we
                       now hold your name and contact details so we can help you find a
                       home. We look after them carefully, never sell them, and you can
                       see, correct or delete them at any time — the details are at the

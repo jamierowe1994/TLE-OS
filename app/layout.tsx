@@ -25,7 +25,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "TLE OS",
-  description: "The Lettings Experts — operations overlay (internal preview)",
+  description: "The Letting Experts — operations overlay (internal preview)",
   // Not for crawlers: this is a private preview behind an access code.
   robots: { index: false, follow: false },
 };

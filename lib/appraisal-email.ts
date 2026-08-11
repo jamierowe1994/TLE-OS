@@ -52,7 +52,7 @@ If the time no longer works, just reply to this email or ring me on ${i.agentPho
 
 See you ${i.whenPretty ? i.whenPretty.split(" ")[0].toLowerCase() : "soon"},
 ${i.agentName}
-The Lettings Experts`;
+The Letting Experts`;
 }
 
 /**
@@ -75,7 +75,7 @@ export function icsFor(i: AppraisalInvite): string | null {
   return [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//The Lettings Experts//TLE OS//EN",
+    "PRODID:-//The Letting Experts//TLE OS//EN",
     "METHOD:REQUEST",
     "BEGIN:VEVENT",
     `UID:${uid}`,
@@ -83,7 +83,7 @@ export function icsFor(i: AppraisalInvite): string | null {
     `DTSTART:${stamp(start)}`,
     `DTEND:${stamp(end)}`,
     fold(`SUMMARY:Market appraisal — ${i.address}`),
-    fold(`DESCRIPTION:With ${i.agentName}, The Lettings Experts. Any problems, ring ${i.agentPhone}.`),
+    fold(`DESCRIPTION:With ${i.agentName}, The Letting Experts. Any problems, ring ${i.agentPhone}.`),
     fold(`LOCATION:${i.address}`),
     "END:VEVENT",
     "END:VCALENDAR",

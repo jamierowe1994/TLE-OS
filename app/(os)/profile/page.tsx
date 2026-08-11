@@ -234,7 +234,7 @@ export default function ProfilePage() {
               <div className="min-w-0">
                 <p className="hand text-[20px] leading-tight">{profile.name}</p>
                 <p className="mt-0.5 text-[12px] text-muted">
-                  The Lettings Experts · {profile.patch}
+                  The Letting Experts · {profile.patch}
                 </p>
                 {/* The package, always visible — nobody should have to ask
                     what they're on. Starter → Growth → Pro. */}
