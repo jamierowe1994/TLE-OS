@@ -127,15 +127,14 @@ export default function Viewings() {
       <PageHeader
         title="Viewings"
         blurb="Every viewing opens into its whole story: the property, who's coming, whether someone lives there — and whether every confirmation actually went."
-        illustration="/illustrations/sleeping.png"
-        illustrationHeight={210}
-        /* Asleep ON the line. The rule crosses her at 0.40 — a shade above the
-           underside of her torso, so her resting forearm settles onto the line
-           and drifts just over it rather than hovering a few pixels clear.
-           Everything past it is arm, hair and feet hanging over the edge, and
-           those are what cast. No side trim: unlike the seated man, nothing of
-           hers rests on the line beside her. */
-        seat={0.40}
+        illustration="/illustrations/relaxed.png"
+        /* She is long and low — 1378x388 — so she is sized by WIDTH in effect:
+           110 tall puts her at ~390 across, about the footprint the standing
+           figures take. The rule crosses at 0.94, the flat underside her back,
+           hip and legs all rest along, which leaves her shoes just past it to
+           cast. */
+        illustrationHeight={110}
+        seat={0.94}
         lineBreak="none"
       />
 
