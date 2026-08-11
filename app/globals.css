@@ -180,6 +180,19 @@ h1, h2, h3, h4, h5 {
 .art { transition: filter 0.4s ease; }
 :root[data-theme="dark"] .art { filter: invert(1) hue-rotate(180deg); }
 
+/* The dashboard window's sky is the one piece of colour in the artwork, so it
+   must NOT be inverted — a sunset run through invert+hue-rotate comes out
+   toxic. Its palette is picked to sit on either surface.
+
+   Dark mode lays a veil over the sky instead. It isn't only about glare: .art
+   flips the drawing's ink to white, and white lines over a bright noon sky wash
+   out to nothing. The veil goes UNDER the sun, the moon and the stars, so they
+   stay bright while the sky behind them drops far enough for the frame and the
+   figure to read against it. */
+.window-sky { transition: opacity 0.4s ease; }
+:root { --sky-veil: transparent; }
+:root[data-theme="dark"] { --sky-veil: rgb(20 22 30 / 0.55); }
+
 /* Video has no alpha channel, so a line-art clip arrives as black ink on a
    white rectangle. Blending does what transparency would:
      light — multiply drops the white and keeps the ink;

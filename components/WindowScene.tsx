@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { skyState, type SkyState } from "@/lib/sun";
+import { useEffect, useId, useState } from "react";
+import { skyState, type Phase, type SkyState } from "@/lib/sun";
 
 /**
  * The dashboard illustration, with a sky that tells the truth.
@@ -17,10 +17,67 @@ import { skyState, type SkyState } from "@/lib/sun";
  */
 
 /* Geometry measured off the artwork's own paths (getBBox on the 520 viewBox):
-   inner glazing starts at x=67 below the head rail at y=91; mullions cross at
-   x=177/296 and y=208/331; the seated figure's hair begins at x=364. So the
-   sky gets the clear glass to her left, and the arc stops short of her. */
-const SKY = { x: 67, y: 88, w: 293, h: 258 };
+   mullions cross at x=177/296 and y=208/331; the seated figure's hair begins
+   at x=364, and the sun's arc stops short of her. */
+/*
+ * The glass, as the artwork actually draws it — NOT a rectangle.
+ *
+ * It's a hand-drawn window in perspective: the right stile leans in hard
+ * (x = 498 − 0.081y, so 490 at the head rail and 461 at the sill) and the left
+ * inner edge leans the other way (x = 49 + 0.043y, 51 → 67). Both lines were
+ * fitted by least squares over the rasterised ink, sampling only the rows the
+ * seated figure doesn't cover. A rectangle inside that shape has to choose
+ * between a gap at the top-left and a spill past the stile at the bottom
+ * right; this doesn't.
+ *
+ * The right edge then comes in a further 26 — the width of the frame's face on
+ * the left, measured from the outer line to the glass. The artwork draws only
+ * ONE line on the right, because she is sat against the frame and her back and
+ * hair cover the face of it, but the frame is still there: without that gap the
+ * sky ran out to the very edge of the drawing and the window lost its depth on
+ * that side. So the face is inferred rather than drawn — no invented ink, just
+ * the same band of frame the other side has.
+ *
+ * The sky used to stop at the arc's horizon and at her hair, which was
+ * invisible while the glass was empty and reads as a hard seam the moment it
+ * has colour.
+ */
+const GLASS = { top: 88, bottom: 448, path: "M51 88 L466 88 L437 448 L67 448 Z" };
+
+/*
+ * The frame's face: this, with the glass cut out of it, is the grey band.
+ *
+ * Both sides follow their drawn lines rather than running straight down — the
+ * stile on the right (x = 498 − 0.081y), the outer line on the left
+ * (x = 21 + 0.042y) — so the face is filled edge to edge on both sides and the
+ * two gaps read the same. Squared off, the right spilled grey onto the wall
+ * below her hip, where the stile has leaned 30 units in, and the left left a
+ * pale sliver inside its own frame. Nothing may hang outside this outline
+ * either: under even-odd an overhang is crossed once, not twice, and fills —
+ * that was a stray grey stripe down the wall.
+ */
+const WASH_OUTER = "M24 66 L493 66 L461 450 L40 450 Z";
+
+/**
+ * The figure's silhouette, so the sky passes BEHIND her rather than through
+ * her: her face, her arm and shirt, and her shoe. Everything else of her —
+ * hair, trousers — is solid ink in the artwork and hides the sky by itself.
+ *
+ * Traced from the artwork rather than drawn by eye: the frame SVG was
+ * rasterised, the glass flood-filled from outside (with the ink thickened by
+ * three so the loose pen's gaps close), and the regions the flood could not
+ * reach are these. The boundary therefore lands under her own ink line, which
+ * is what stops a pale halo appearing along her edge.
+ */
+const FIGURE =
+  "M409 154L416 161L423 180L424 211L422 220L415 222L414 225L403 234L389 233L382 224L382 216" +
+  "L386 215L387 211L380 210L380 201L384 184L387 184L392 178L392 175L389 175L389 164L400 164" +
+  "L402 167L404 167L404 165L400 162Z" +
+  "M468 266L473 281L471 329L460 382L453 405L451 407L430 406L406 399L404 397L401 397L401 389" +
+  "L399 389L398 391L388 391L338 364L338 356L350 355L365 364L380 368L389 357L389 355L380 355" +
+  "L380 346L386 339L402 310L402 299L406 299L413 295L433 273L433 271L440 267Z" +
+  "M197 421L203 426L203 435L194 435L194 442L182 453L174 453L165 448L162 448L161 450L137 450" +
+  "L131 447L131 437L167 436L171 433L179 433L180 427L188 422Z";
 const ARC = { x0: 88, x1: 330, yHorizon: 305, yPeak: 112 };
 
 /** Where the body sits along its arc: across in a line, up in a curve. */
@@ -42,10 +99,113 @@ const STARS = [
   [84.68, 116.05, 1.44],
 ] as const;
 
-function Sun({ cx, cy, rays }: { cx: number; cy: number; rays: number }) {
+/**
+ * The sky's colour, phase by phase.
+ *
+ * `sky` runs top of the glass → horizon, so every gradient warms as it falls.
+ * The night values are deliberately off-black — a blue-charcoal — because the
+ * seated figure's hair is near-black ink and the two must not merge.
+ * `star` and `body` are the light against that dark; the daytime `body` is the
+ * warm orange that makes the sun read as the sun and not as a hole in a pane.
+ */
+const PALETTE: Record<Phase, {
+  /** Top of the glass → mid → the horizon band → the hazy ground below it. */
+  sky: [string, string, string, string];
+  body: string;
+  bodyFill: string;
+  glow: string;
+  star: string;
+  stars: number;
+}> = {
+  night:   { sky: ["#191E2D", "#222940", "#31384F", "#3C445E"], body: "#E7DDBE", bodyFill: "#F7F2E2", glow: "#8FA0C8", star: "#F6F1DE", stars: 1 },
+  dawn:    { sky: ["#2B3350", "#57536F", "#A8807C", "#C09A93"], body: "#E4D6B4", bodyFill: "#F9F4E4", glow: "#C79A8A", star: "#EFE9DA", stars: 0.45 },
+  sunrise: { sky: ["#A9CFEA", "#DCCDBC", "#F3B27E", "#F7CBA4"], body: "#D9762C", bodyFill: "#FBD9A6", glow: "#F6B87A", star: "#FFFFFF", stars: 0 },
+  day:     { sky: ["#9CCBEB", "#BEDFF4", "#DCEDF9", "#EAF3FB"], body: "#DE8C1F", bodyFill: "#FCD87F", glow: "#F7CE8A", star: "#FFFFFF", stars: 0 },
+  sunset:  { sky: ["#7FA9D2", "#C79A9E", "#E9834C", "#F2AD79"], body: "#C24A22", bodyFill: "#F7B96F", glow: "#EE9457", star: "#FFFFFF", stars: 0 },
+  dusk:    { sky: ["#2F3855", "#5C5675", "#A97567", "#C08D7F"], body: "#E9DCBE", bodyFill: "#F8F3E3", glow: "#B790A0", star: "#EFE9DA", stars: 0.5 },
+};
+
+type Paint = (typeof PALETTE)[Phase];
+
+const hex = (c: string) => [
+  parseInt(c.slice(1, 3), 16),
+  parseInt(c.slice(3, 5), 16),
+  parseInt(c.slice(5, 7), 16),
+];
+
+/** Blend two colours in sRGB. Good enough for neighbours on the same wheel. */
+function mix(a: string, b: string, t: number) {
+  const [ar, ag, ab] = hex(a);
+  const [br, bg, bb] = hex(b);
+  const to = (x: number, y: number) => Math.round(x + (y - x) * t).toString(16).padStart(2, "0");
+  return `#${to(ar, br)}${to(ag, bg)}${to(ab, bb)}`;
+}
+
+function blend(a: Paint, b: Paint, t: number): Paint {
+  return {
+    sky: [
+      mix(a.sky[0], b.sky[0], t),
+      mix(a.sky[1], b.sky[1], t),
+      mix(a.sky[2], b.sky[2], t),
+      mix(a.sky[3], b.sky[3], t),
+    ],
+    body: mix(a.body, b.body, t),
+    bodyFill: mix(a.bodyFill, b.bodyFill, t),
+    glow: mix(a.glow, b.glow, t),
+    star: mix(a.star, b.star, t),
+    stars: a.stars + (b.stars - a.stars) * t,
+  };
+}
+
+/**
+ * The palette as a continuous function of where the sky is in its arc, rather
+ * than six states that snap.
+ *
+ * The keyframes are laid out in the arc's own units, using the edge fraction
+ * the solar maths hands back — so the warm band lasts forty real minutes
+ * whether that is a twentieth of a June day or a tenth of a December one. Both
+ * arcs start and end on the sunrise/sunset keyframes, which is what makes the
+ * seam at the horizon invisible: sunset is the last colour of the day and the
+ * first colour of the night.
+ */
+function paintFor(sky: SkyState): Paint {
+  const e = sky.edge;
+  const keys: [number, Phase][] = sky.daylight
+    ? [[0, "sunrise"], [e, "day"], [1 - e, "day"], [1, "sunset"]]
+    : [
+        [0, "sunset"], [e / 2, "dusk"], [e, "night"],
+        [1 - e, "night"], [1 - e / 2, "dawn"], [1, "sunrise"],
+      ];
+
+  const p = Math.min(1, Math.max(0, sky.progress));
+  let i = keys.length - 2;
+  while (i > 0 && p < keys[i][0]) i--;
+
+  const [from, a] = keys[i];
+  const [to, b] = keys[i + 1];
+  const raw = to === from ? 0 : (p - from) / (to - from);
+  // Smoothstep: the colour should settle into each keyframe rather than
+  // arriving at full speed and turning a corner.
+  const t = raw * raw * (3 - 2 * Math.min(1, Math.max(0, raw)));
+  return blend(PALETTE[a], PALETTE[b], Math.min(1, Math.max(0, t)));
+}
+
+function Sun({
+  cx,
+  cy,
+  rays,
+  stroke,
+  fill,
+}: {
+  cx: number;
+  cy: number;
+  rays: number;
+  stroke: string;
+  fill: string;
+}) {
   return (
-    <g stroke="#231f20" strokeWidth={4.5} strokeLinecap="round" fill="none">
-      <circle cx={cx} cy={cy} r={17} />
+    <g stroke={stroke} strokeWidth={4.5} strokeLinecap="round" fill="none">
+      <circle cx={cx} cy={cy} r={17} fill={fill} />
       {Array.from({ length: 8 }, (_, i) => {
         const a = (i / 8) * Math.PI * 2 - Math.PI / 8;
         const from = 25;
@@ -65,7 +225,7 @@ function Sun({ cx, cy, rays }: { cx: number; cy: number; rays: number }) {
   );
 }
 
-function Moon({ cx, cy }: { cx: number; cy: number }) {
+function Moon({ cx, cy, fill, stroke }: { cx: number; cy: number; fill: string; stroke: string }) {
   // A crescent drawn as one closed path — two arcs, the way you'd draw it.
   const r = 17;
   return (
@@ -73,8 +233,8 @@ function Moon({ cx, cy }: { cx: number; cy: number }) {
       d={`M ${cx + r * 0.35} ${cy - r * 0.94}
           A ${r} ${r} 0 1 0 ${cx + r * 0.35} ${cy + r * 0.94}
           A ${r * 0.78} ${r * 0.78} 0 1 1 ${cx + r * 0.35} ${cy - r * 0.94} Z`}
-      fill="#231f20"
-      stroke="#231f20"
+      fill={fill}
+      stroke={stroke}
       strokeWidth={3}
       strokeLinejoin="round"
     />
@@ -99,10 +259,11 @@ export default function WindowScene({
       return;
     }
     setSky(skyState());
-    // Every five minutes the sun has moved about a degree — plenty often
-    // enough for a drawing, and it means a dashboard left open all afternoon
-    // watches the sun go down.
-    const id = window.setInterval(() => setSky(skyState()), 5 * 60_000);
+    // Once a minute. Five was plenty while the sky was only moving a body
+    // across it, but the colour now ramps over the forty minutes either side
+    // of the horizon — at five-minute ticks that ramp arrives in eight visible
+    // steps. A minute is a fortieth, which reads as a fade.
+    const id = window.setInterval(() => setSky(skyState()), 60_000);
     return () => window.clearInterval(id);
   }, [at]);
 
@@ -112,7 +273,15 @@ export default function WindowScene({
   const rays = sky
     ? Math.min(1, Math.max(0.45, Math.sin(Math.min(1, Math.max(0, sky.progress)) * Math.PI) * 1.6))
     : 1;
-  const deepNight = sky?.phase === "night";
+  const pal = sky ? paintFor(sky) : PALETTE.day;
+  // SVG defs are document-global: two windows on one page (the design review
+  // grid) would otherwise both paint with whichever gradient rendered first.
+  const uid = useId().replace(/:/g, "");
+  const glassId = `glass-${uid}`;
+  const fillId = `sky-${uid}`;
+  const glowId = `glow-${uid}`;
+  /** The arc's horizon, as a stop offset down the glass. */
+  const horizon = (ARC.yHorizon - GLASS.top) / (GLASS.bottom - GLASS.top);
 
   return (
     <div className={`relative ${className}`} title={sky ? `${sky.label} · Manchester` : undefined}>
@@ -135,23 +304,71 @@ export default function WindowScene({
         className="relative h-full w-full"
         style={{ transformOrigin: "0 0", transform: "translate(-1.04%, -1.23%) scale(1.0228)" }}
       >
-      {/* The sky, behind the glass. */}
+      {/*
+        The coloured sky, behind the glass — and deliberately OUTSIDE the .art
+        layer. Dark mode inverts and hue-rotates .art, which is right for black
+        ink and wrong for a sunset; these colours are chosen for both themes and
+        only dimmed a little at night by .window-sky.
+      */}
+      <svg
+        viewBox="0 0 520 520"
+        aria-hidden
+        className="window-sky absolute inset-0 h-full w-full"
+      >
+        <defs>
+          <clipPath id={glassId}>
+            <path d={GLASS.path} />
+          </clipPath>
+          <linearGradient id={fillId} x1="0" y1={GLASS.top} x2="0" y2={GLASS.bottom} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor={pal.sky[0]} />
+            <stop offset={horizon * 0.6} stopColor={pal.sky[1]} />
+            <stop offset={horizon} stopColor={pal.sky[2]} />
+            <stop offset="1" stopColor={pal.sky[3]} />
+          </linearGradient>
+          {/* The light the body throws onto the sky around it. */}
+          <radialGradient id={glowId} cx={cx} cy={cy} r={72} gradientUnits="userSpaceOnUse">
+            <stop offset="0" stopColor={pal.glow} stopOpacity={0.75} />
+            <stop offset="1" stopColor={pal.glow} stopOpacity={0} />
+          </radialGradient>
+        </defs>
+        {sky && (
+          <g clipPath={`url(#${glassId})`} style={{ transition: "opacity 0.6s ease" }}>
+            <path d={GLASS.path} fill={`url(#${fillId})`} />
+            {/* Transparent in light mode; in dark it takes the sky down so the
+                inverted white ink has something to read against. */}
+            <path d={GLASS.path} fill="var(--sky-veil)" />
+            {pal.stars > 0 &&
+              STARS.map(([x, y, r], i) => (
+                <circle key={i} cx={x} cy={y} r={r} fill={pal.star} opacity={pal.stars} />
+              ))}
+            <circle cx={cx} cy={cy} r={72} fill={`url(#${glowId})`} />
+            {sky.daylight ? (
+              <Sun cx={cx} cy={cy} rays={rays} stroke={pal.body} fill={pal.bodyFill} />
+            ) : (
+              <Moon cx={cx} cy={cy} fill={pal.bodyFill} stroke={pal.body} />
+            )}
+            {/* Her, in the surface's own colour, over the sky and under the
+                ink — so she keeps the colours she always had. */}
+            <path d={FIGURE} fill="var(--page)" />
+          </g>
+        )}
+      </svg>
+
+      {/* The frame's own greys, which DO invert with the theme. */}
       <svg
         viewBox="0 0 520 520"
         aria-hidden
         className="art absolute inset-0 h-full w-full"
       >
-        <defs>
-          <clipPath id="window-glass">
-            <rect x={SKY.x} y={SKY.y} width={SKY.w} height={SKY.h} />
-          </clipPath>
-        </defs>
         {/* The wash: the frame's band and the shirt, filled in the surface's
             own grey BEHIND the ink — the drawing's lines are open, so the
             fills are drawn shapes, slightly inset, the way a colourist works
             under an inker. --art-wash inverts with the theme via .art. */}
         <path
-          d="M36 66 H488 V450 H36 Z M62 92 H466 V434 H62 Z"
+          /* The hole IS the glass — the band and the sky have to meet along the
+             same line or the band lays grey back over the glass. As a rectangle
+             it did exactly that in the top-right: a pale notch above her head. */
+          d={`${WASH_OUTER} ${GLASS.path}`}
           fillRule="evenodd"
           fill="var(--art-wash)"
         />
@@ -166,15 +383,6 @@ export default function WindowScene({
              C445 291 430 288 418 292 Z"
           fill="var(--art-wash)"
         />
-        {sky && (
-          <g clipPath="url(#window-glass)" style={{ transition: "opacity 0.6s ease" }}>
-            {deepNight &&
-              STARS.map(([x, y, r], i) => (
-                <circle key={i} cx={x} cy={y} r={r} fill="#231f20" />
-              ))}
-            {sky.daylight ? <Sun cx={cx} cy={cy} rays={rays} /> : <Moon cx={cx} cy={cy} />}
-          </g>
-        )}
       </svg>
 
       {/* The frame and the figure, on top — so the sky passes behind the bars. */}

@@ -79,6 +79,13 @@ export type SkyState = {
   daylight: boolean;
   /** 0→1 across the current arc: sunrise→sunset by day, sunset→sunrise by night. */
   progress: number;
+  /**
+   * The warm edge (sunrise/sunset, dusk/dawn) as a FRACTION of the current arc
+   * — 40 minutes is a tenth of a June night and a fifth of a December day, and
+   * anything colouring the sky needs that in the same units as `progress`.
+   * Clamped to 0.4 so the two edges of a very short arc can never cross.
+   */
+  edge: number;
   label: string;
 };
 
@@ -101,6 +108,7 @@ export function skyState(now = new Date(), lat = UK.lat, lng = UK.lng): SkyState
       phase: day ? "day" : "night",
       daylight: day,
       progress: 0.5,
+      edge: 0.15,
       label: day ? "Daytime" : "Night",
     };
   }
@@ -108,12 +116,14 @@ export function skyState(now = new Date(), lat = UK.lat, lng = UK.lng): SkyState
   const ms = now.valueOf();
   const rise = t.sunrise.valueOf();
   const set = t.sunset.valueOf();
+  const edgeOf = (span: number) => Math.min(0.4, EDGE / span);
 
   if (ms >= rise && ms <= set) {
     const progress = (ms - rise) / (set - rise);
-    if (ms < rise + EDGE) return { phase: "sunrise", daylight: true, progress, label: "Sunrise" };
-    if (ms > set - EDGE) return { phase: "sunset", daylight: true, progress, label: "Sunset" };
-    return { phase: "day", daylight: true, progress, label: "Daytime" };
+    const edge = edgeOf(set - rise);
+    if (ms < rise + EDGE) return { phase: "sunrise", daylight: true, progress, edge, label: "Sunrise" };
+    if (ms > set - EDGE) return { phase: "sunset", daylight: true, progress, edge, label: "Sunset" };
+    return { phase: "day", daylight: true, progress, edge, label: "Daytime" };
   }
 
   // Night: the moon's arc runs from this evening's sunset to tomorrow's rise.
@@ -126,7 +136,8 @@ export function skyState(now = new Date(), lat = UK.lat, lng = UK.lng): SkyState
     : (sunTimes(new Date(ms + DAY_MS), lat, lng)?.sunrise.valueOf() ?? rise + DAY_MS);
 
   const progress = Math.min(1, Math.max(0, (ms - prevSet) / (nextRise - prevSet)));
-  if (ms < prevSet + EDGE) return { phase: "dusk", daylight: false, progress, label: "Dusk" };
-  if (ms > nextRise - EDGE) return { phase: "dawn", daylight: false, progress, label: "Dawn" };
-  return { phase: "night", daylight: false, progress, label: "Night" };
+  const edge = edgeOf(nextRise - prevSet);
+  if (ms < prevSet + EDGE) return { phase: "dusk", daylight: false, progress, edge, label: "Dusk" };
+  if (ms > nextRise - EDGE) return { phase: "dawn", daylight: false, progress, edge, label: "Dawn" };
+  return { phase: "night", daylight: false, progress, edge, label: "Night" };
 }
