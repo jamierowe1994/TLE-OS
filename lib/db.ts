@@ -134,6 +134,31 @@ CREATE UNIQUE INDEX IF NOT EXISTS os_campaign_enrolments_active
 CREATE INDEX IF NOT EXISTS os_campaign_enrolments_campaign
   ON os_campaign_enrolments (campaign_id, status);
 
+-- Every step the scheduler accounted for. This is the audit trail: what went
+-- out, what a person still has to do, and what was skipped because it had
+-- gone stale. Kept separate from the enrolment so a row is never overwritten.
+CREATE TABLE IF NOT EXISTS os_campaign_sends (
+  id           TEXT PRIMARY KEY,
+  enrolment_id TEXT NOT NULL,
+  campaign_id  TEXT NOT NULL,
+  step_index   INTEGER NOT NULL,
+  step_day     INTEGER NOT NULL,
+  channel      TEXT NOT NULL,
+  subject      TEXT NOT NULL DEFAULT '',
+  -- sent | for_human | overtaken | failed
+  outcome      TEXT NOT NULL,
+  detail       TEXT NOT NULL DEFAULT '',
+  at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+-- A step can be accounted for ONCE. Two overlapping cron runs, a retried
+-- deploy, a double-click on Run now — none of them can send twice, because
+-- the database refuses the second row rather than the code remembering to.
+-- 'failed' is left out: a failure must be free to happen again.
+CREATE UNIQUE INDEX IF NOT EXISTS os_campaign_sends_once
+  ON os_campaign_sends (enrolment_id, step_index)
+  WHERE outcome IN ('sent', 'for_human', 'overtaken');
+CREATE INDEX IF NOT EXISTS os_campaign_sends_recent ON os_campaign_sends (at DESC);
+
 -- Customers with a portal account (tenants and landlords). Separate table
 -- from os_users on purpose: a customer must never be one bad join away from
 -- an office login.

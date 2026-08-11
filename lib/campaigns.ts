@@ -24,8 +24,20 @@ export type CampaignStep = {
   day: number;
   channel: "email" | "call" | "post";
   subject: string;
-  /** The gist, for the agent reading the plan. The mail merge holds the copy. */
+  /** The gist, for the agent reading the plan. Shorthand, written for us —
+   *  "ask, do not gloat" is a note to the office, never to a landlord. */
   gist: string;
+  /**
+   * The actual copy, as paragraphs. Merge tokens allowed: {{firstName}},
+   * {{address}}, {{senderName}}.
+   *
+   * Absent means marketing hasn't written it yet, and the scheduler will hold
+   * the sequence there rather than improvise — which is the point. An unwritten
+   * step is visible on the Marketing screen as a debt, not silently skipped.
+   */
+  body?: string[];
+  /** Optional call to action under the copy. */
+  cta?: { text: string; url: string };
 };
 
 export type Campaign = {
@@ -57,9 +69,41 @@ export const CAMPAIGNS: Campaign[] = [
     aim: "Stay in sight for the six months until they're disappointed, without ever saying so.",
     status: "live",
     steps: [
-      { day: 1, channel: "email", subject: "Good luck with the let", gist: "Gracious note, no pitch. Offer the market report anyway." },
-      { day: 30, channel: "email", subject: "How's it going?", gist: "One question: is it let? If not, we're still here." },
-      { day: 90, channel: "email", subject: "What rents did in your postcode", gist: "The area report — useful whether or not they use us." },
+      {
+        day: 1,
+        channel: "email",
+        subject: "Good luck with the let",
+        gist: "Gracious note, no pitch. Offer the market report anyway.",
+        body: [
+          "Hi {{firstName}},",
+          "Thanks for having us round to look at {{address}} — and genuinely, good luck with the let. I hope it goes quickly.",
+          "One thing before I leave you alone: we put together a short report each quarter on what's actually letting around you, and at what rent. It's useful whether or not you ever use us, so I'll send it over unless you'd rather I didn't.",
+          "If anything changes, you have my number.",
+        ],
+      },
+      {
+        day: 30,
+        channel: "email",
+        subject: "How's it going?",
+        gist: "One question: is it let? If not, we're still here.",
+        body: [
+          "Hi {{firstName}},",
+          "A month on — is {{address}} let?",
+          "If it is, that's the last you'll hear from me on it. If it isn't, that's worth a conversation: a property that's been on for four weeks usually needs a change to the price, the photos or the audience, and it's easier to fix now than at week ten.",
+          "Either way, a one-line reply and I'll know which.",
+        ],
+      },
+      {
+        day: 90,
+        channel: "email",
+        subject: "What rents did in your postcode",
+        gist: "The area report — useful whether or not they use us.",
+        body: [
+          "Hi {{firstName}},",
+          "The quarterly figures for your area are in. This is what actually let near {{address}} and what it achieved — not asking prices, which is the number most reports quietly use.",
+          "No action needed. It's the sort of thing worth knowing before a renewal comes round.",
+        ],
+      },
       { day: 180, channel: "call", subject: "Six-month check-in", gist: "Most switch at renewal. This is the call that catches it." },
     ],
   },
