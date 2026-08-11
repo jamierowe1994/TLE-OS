@@ -17,6 +17,15 @@ const nextConfig: NextConfig = {
   // old name, and that's the whole diagnosis. Railway provides the sha.
   env: {
     NEXT_PUBLIC_BUILD: (process.env.RAILWAY_GIT_COMMIT_SHA ?? "").slice(0, 7) || "dev",
+    // Where our own assets can be fetched FROM, absolutely — an email is
+    // opened somewhere else entirely, so the logo in it needs a full URL.
+    // Resolved at build time so the server and the browser always agree:
+    // computing it from window.location would differ between the two and
+    // React would keep the server's answer, which is a logo that never
+    // appears. Railway provides the domain; locally it's the dev server.
+    NEXT_PUBLIC_OS_ORIGIN:
+      process.env.OS_ORIGIN ||
+      (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "http://localhost:3200"),
   },
 };
 

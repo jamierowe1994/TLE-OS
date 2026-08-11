@@ -18,16 +18,16 @@ export default function LandlordLayout({ children }: { children: React.ReactNode
     >
       <header className="border-b border-black/10">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-5">
-          <Link href="/landlord" className="flex items-center gap-2.5">
-            <span
-              className="flex h-8 w-8 items-center justify-center rounded-md text-[13px] font-extrabold text-white"
-              style={{ backgroundColor: RED }}
-            >
-              TLE
-            </span>
-            <span className="text-[14px] font-bold uppercase tracking-[0.08em]">
-              The Lettings <span style={{ color: RED }}>Experts</span>
-            </span>
+          <Link href="/landlord" className="flex items-center">
+            {/* The real logo, not a stand-in. Sized by height so the pin sits
+                on the same baseline as the nav; the alt text carries the name
+                for anyone the image never reaches. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/tle-logo.png"
+              alt="The Letting Experts"
+              className="h-11 w-auto"
+            />
           </Link>
           <nav className="flex items-center gap-5 text-[12.5px] font-medium text-black/60">
             <Link href="/landlord" className="transition-colors hover:text-black">My properties</Link>

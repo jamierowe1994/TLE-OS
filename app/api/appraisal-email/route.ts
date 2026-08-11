@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
+import { renderPlain } from "@/lib/campaign-mail";
 
 /**
  * Send the pre-appraisal confirmation through REX's own mailer.
@@ -40,9 +41,13 @@ export async function POST(req: Request) {
   }
 
   try {
+    // On the letterhead, not as a wall of plain text. The agent writes the
+    // words; the logo, the type and the unsubscribe are not theirs to
+    // remember.
+    const mail = renderPlain(subject, text);
     const res = await rexCall("MailMerge", "createAndSend", {
-      subject,
-      body: text.replace(/\n/g, "<br>"),
+      subject: mail.subject,
+      body: mail.html,
       // REX addresses a merge by RECORD, not by string, which is what puts the
       // send on the timeline. Falling back to a bare address still sends, but
       // lands nowhere anyone will see it.

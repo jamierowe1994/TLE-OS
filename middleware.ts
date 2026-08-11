@@ -35,7 +35,12 @@ export const config = {
   // Everything except the key screen itself, its API, static assets — and
   // the TENANT portal, which is customer-facing: tenants get their own
   // magic-link + password door, never the office access code.
+  //
+  // `brand` is exempt for a reason worth keeping: the logo in an email is
+  // fetched by the landlord's mail client, which has no cookie and never
+  // will. Behind the gate it would redirect to /key and every email would
+  // arrive with a broken image where the logo should be.
   matcher: [
-    "/((?!key|api/key|tenant|landlord|_next|icons|illustrations|favicon.ico|robots.txt).*)",
+    "/((?!key|api/key|tenant|landlord|_next|icons|illustrations|brand|favicon.ico|robots.txt).*)",
   ],
 };

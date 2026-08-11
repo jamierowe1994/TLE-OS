@@ -16,13 +16,37 @@ import type { CampaignStep } from "./campaigns";
  * won't know the difference.
  */
 
+/**
+ * Where the logo can be fetched FROM.
+ *
+ * An email is opened somewhere else entirely, so the logo needs an absolute
+ * URL on a host that answers without a cookie — hence /brand being exempt
+ * from the access gate.
+ *
+ * Resolved at BUILD time (see next.config.ts) rather than from
+ * window.location, so the server and the browser produce the same HTML. They
+ * did not at first, and React keeps the server's version on hydration — which
+ * showed up as a logo that was in the markup and never on the screen.
+ *
+ * With nothing configured this is "", and the renderer falls back to the
+ * wordmark: a missing logo reads as restraint, a broken image reads as a
+ * broken company.
+ */
+function assetOrigin(): string {
+  return (process.env.NEXT_PUBLIC_OS_ORIGIN ?? "").replace(/\/+$/, "");
+}
+
 export function tleBrand() {
+  const origin = assetOrigin();
   return {
     ...defaultBrand(),
-    companyName: "The Lettings Experts",
-    signatureName: "The Lettings Experts",
+    companyName: "The Letting Experts",
+    signatureName: "The Letting Experts",
     website: "https://thelettingexperts.co.uk",
-    accentColor: "#a85a51",
+    logo: origin ? `${origin}/brand/tle-logo.png` : "",
+    // The red off the logo itself, not the OS's clay accent: the OS is where
+    // the team works and can be repainted at will, an email is the company.
+    accentColor: "#e31f36",
     bgColor: "#f6f4f2",
   };
 }
@@ -35,17 +59,25 @@ const id = () => `cs_${(n++).toString(36)}`;
 /** Copy written in the editor, which overrides whatever the step says in code. */
 export type StepCopy = { subject?: string; blocks: Record<string, unknown>[] };
 
-/** The standard footer. Every campaign email carries one, and it is added here
- *  rather than left to whoever is writing — an unsubscribe nobody can forget
- *  to include is the only kind worth having. */
-export function footerBlock(): Record<string, unknown> {
+/**
+ * The standard footer, added here rather than left to whoever is writing — an
+ * unsubscribe nobody can forget to include is the only kind worth having.
+ *
+ * Marketing gets the unsubscribe; a transactional email does NOT. Offering to
+ * unsubscribe someone from the confirmation of the appointment they booked
+ * this morning is nonsense, and worse, it teaches people that our unsubscribe
+ * link is noise.
+ */
+export function footerBlock(marketing = true): Record<string, unknown> {
   return {
     type: "footer",
     id: id(),
-    note: "You're getting this because we appraised your property. One reply and we'll stop.",
-    address: "The Lettings Experts",
+    note: marketing
+      ? "You're getting this because we appraised your property. One reply and we'll stop."
+      : "",
+    address: "The Letting Experts",
     showSocial: false,
-    unsubscribe: true,
+    unsubscribe: marketing,
   };
 }
 
@@ -128,4 +160,27 @@ export function renderStep(
   const html = renderTokens(raw, ctx);
   const subject = typeof out === "string" ? subjectLine : (out?.subject ?? subjectLine);
   return html ? { subject, html } : null;
+}
+
+/**
+ * An email an agent typed, put on the letterhead.
+ *
+ * The pre-appraisal confirmation is written by hand in the composer, so it
+ * arrives here as plain paragraphs. It still leaves under the company's name,
+ * and the difference between a branded confirmation and a wall of plain text
+ * is most of what a landlord judges us on before anyone turns up.
+ */
+export function renderPlain(subject: string, text: string): { subject: string; html: string } {
+  const paras = text
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const blocks: Record<string, unknown>[] = [
+    ...paras.map((p) => ({ type: "text", id: id(), text: p, bg: "" })),
+    footerBlock(false),
+  ];
+  const brand = tleBrand();
+  const out = renderTemplate({ name: subject, subject, blocks }, { brand, mergeCtx: mergeContextFor({}, brand) });
+  const raw = typeof out === "string" ? out : (out?.html ?? "");
+  return { subject, html: renderTokens(raw, mergeContextFor({}, brand)) };
 }
