@@ -1119,6 +1119,7 @@ export default function LeadDrawer({
                 onChange={setAppraisal}
                 who="You"
                 landlordEmail={lead.email}
+                recordId={lead.id}
                 invite={{
                   landlordName: lead.name,
                   address: lead.area || "your property",

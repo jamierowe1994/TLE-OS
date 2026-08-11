@@ -102,6 +102,38 @@ CREATE TABLE IF NOT EXISTS os_case_state (
   PRIMARY KEY (kind, record_id)
 );
 
+-- Who is on which campaign.
+--
+-- Its own table, not a field on the case, because the questions are asked
+-- from the CAMPAIGN's end: who is on the win-back, who is due a step this
+-- week, what did the fee-objection sequence actually recover. A field on a
+-- lead answers none of those without reading every lead.
+--
+-- One active enrolment per record per campaign, enforced rather than trusted:
+-- an agent re-picking the same campaign should not start the drip twice.
+CREATE TABLE IF NOT EXISTS os_campaign_enrolments (
+  id             TEXT PRIMARY KEY,
+  campaign_id    TEXT NOT NULL,
+  record_type    TEXT NOT NULL DEFAULT 'lead',
+  record_id      TEXT NOT NULL,
+  name           TEXT NOT NULL DEFAULT '',
+  email          TEXT NOT NULL DEFAULT '',
+  reason         TEXT NOT NULL DEFAULT '',
+  status         TEXT NOT NULL DEFAULT 'active',
+  stopped_reason TEXT NOT NULL DEFAULT '',
+  enrolled_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  stopped_at     TIMESTAMPTZ,
+  -- How far through the steps they are. The scheduler moves this; nothing
+  -- else should.
+  last_step_sent INTEGER NOT NULL DEFAULT -1,
+  last_sent_at   TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS os_campaign_enrolments_active
+  ON os_campaign_enrolments (campaign_id, record_type, record_id)
+  WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS os_campaign_enrolments_campaign
+  ON os_campaign_enrolments (campaign_id, status);
+
 -- Customers with a portal account (tenants and landlords). Separate table
 -- from os_users on purpose: a customer must never be one bad join away from
 -- an office login.

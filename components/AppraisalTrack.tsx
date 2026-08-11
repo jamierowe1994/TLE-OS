@@ -67,6 +67,7 @@ export default function AppraisalTrack({
   invite,
   landlordEmail,
   landlordContactId,
+  recordId,
 }: {
   value?: AppraisalCase;
   onChange: (c: AppraisalCase) => void;
@@ -75,6 +76,8 @@ export default function AppraisalTrack({
   invite?: AppraisalInvite;
   landlordEmail?: string | null;
   landlordContactId?: string | null;
+  /** The lead this case belongs to — what an enrolment is filed against. */
+  recordId?: string | null;
 }) {
   const c = value ?? EMPTY_CASE;
   const [deciding, setDeciding] = useState<AppraisalOutcome | null>(null);
@@ -105,6 +108,16 @@ export default function AppraisalTrack({
   }
 
   function decide(id: AppraisalOutcome, reason: string, notes: string, when: string | null, campaignId: string | null) {
+    /* The enrolment is a row of its own, so the campaign can be asked who is
+       on it. Fire and forget: a landlord is marked lost whether or not the
+       marketing table is reachable, and the case keeps the id either way. */
+    if (campaignId && recordId) {
+      fetch("/api/enrolments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ campaignId, recordId, name: who, email: landlordEmail ?? "", reason }),
+      }).catch(() => {});
+    }
     onChange({
       ...c,
       state: id,
@@ -337,7 +350,16 @@ export default function AppraisalTrack({
           </dl>
           <button
             type="button"
-            onClick={() => patch({ state: "post", decidedAt: null })}
+            onClick={() => {
+              if (c.campaignId && recordId) {
+                fetch("/api/enrolments", {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ campaignId: c.campaignId, recordId, stop: true, stopReason: "Case reopened" }),
+                }).catch(() => {});
+              }
+              patch({ state: "post", decidedAt: null, campaignId: null });
+            }}
             className="mt-3 rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px]"
           >
             Reopen

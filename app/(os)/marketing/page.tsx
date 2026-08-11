@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { FlowTag } from "@/components/Wire";
 import { CAMPAIGNS, lastDay, type Campaign } from "@/lib/campaigns";
@@ -21,6 +21,16 @@ import { STARTER_TEMPLATES } from "@/lib/email/starters.js";
 export default function Marketing() {
   const [openId, setOpenId] = useState<string>(CAMPAIGNS[0]?.id ?? "");
   const open: Campaign | undefined = CAMPAIGNS.find((c) => c.id === openId);
+
+  /* How many landlords are actually on each — the only number that says
+     whether any of this is being used. */
+  const [counts, setCounts] = useState<Record<string, { live: number; total: number }>>({});
+  useEffect(() => {
+    fetch("/api/enrolments")
+      .then((r) => r.json())
+      .then((j) => setCounts(j.counts ?? {}))
+      .catch(() => {});
+  }, []);
 
   const brand = useMemo(() => defaultBrand(), []);
   const html = useMemo(() => {
@@ -60,6 +70,11 @@ export default function Marketing() {
                   <p className="mt-0.5 text-[11px] text-muted">
                     {c.audience === "lost" ? "Lost" : "Nurture"} · {c.steps.length} steps over{" "}
                     {lastDay(c)} days
+                  </p>
+                  <p className="mt-1 text-[11px] text-accent-dark">
+                    {counts[c.id]?.live
+                      ? `${counts[c.id].live} on it now`
+                      : "Nobody on it yet"}
                   </p>
                 </button>
               </li>
