@@ -3,6 +3,7 @@
 import { useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { bodyFor, icsFor, subjectFor, type AppraisalInvite } from "@/lib/appraisal-email";
+import { campaignsFor, CAMPAIGNS, lastDay } from "@/lib/campaigns";
 import {
   APPRAISAL_STEPS,
   EMPTY_CASE,
@@ -103,12 +104,13 @@ export default function AppraisalTrack({
     patch({ state: next.id as AppraisalStage });
   }
 
-  function decide(id: AppraisalOutcome, reason: string, notes: string, when: string | null) {
+  function decide(id: AppraisalOutcome, reason: string, notes: string, when: string | null, campaignId: string | null) {
     onChange({
       ...c,
       state: id,
       outcomeReason: reason || null,
       outcomeNotes: notes,
+      campaignId,
       nextActionAt: id === "nurture" ? when : null,
       decidedAt: new Date().toISOString(),
     });
@@ -315,6 +317,12 @@ export default function AppraisalTrack({
               {c.outcomeNotes}
             </p>
           )}
+          {c.campaignId && (
+            <p className="mt-2 inline-flex items-center gap-2 rounded-full bg-accent-soft/60 px-3 py-1 text-[11.5px] text-accent-dark">
+              <DoodleIcon name="mail" size={12} />
+              On {CAMPAIGNS.find((x) => x.id === c.campaignId)?.name ?? "a campaign"}
+            </p>
+          )}
           <dl className="mt-2.5 flex flex-wrap gap-x-6 gap-y-1 text-[11.5px] text-muted">
             {c.valuation != null && (
               <span>
@@ -359,7 +367,7 @@ export default function AppraisalTrack({
         <Decide
           outcome={deciding}
           onCancel={() => setDeciding(null)}
-          onConfirm={(reason, notes, when) => decide(deciding, reason, notes, when)}
+          onConfirm={(reason, notes, when, campaignId) => decide(deciding, reason, notes, when, campaignId)}
         />
       )}
 
@@ -422,12 +430,16 @@ function Decide({
 }: {
   outcome: AppraisalOutcome;
   onCancel: () => void;
-  onConfirm: (reason: string, notes: string, when: string | null) => void;
+  onConfirm: (reason: string, notes: string, when: string | null, campaignId: string | null) => void;
 }) {
   const reasons = outcome === "lost" ? LOST_REASONS : outcome === "nurture" ? NURTURE_REASONS : [];
   const [reason, setReason] = useState<string>(reasons[0] ?? "");
   const [notes, setNotes] = useState("");
   const [when, setWhen] = useState("");
+  /* The campaigns marketing wrote for THIS reason. The agent picks; they
+     never author one, and the list narrows as soon as a reason is chosen. */
+  const offered = outcome === "won" ? [] : campaignsFor(outcome, reason);
+  const [campaignId, setCampaignId] = useState<string | null>(null);
 
   return (
     <div className="mb-4 rounded-xl border border-accent-dark/40 bg-accent-soft/30 p-4">
@@ -487,10 +499,40 @@ function Decide({
           />
         </label>
       </div>
+      {!!offered.length && (
+        <div className="mt-3">
+          <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted">
+            Put them on a campaign
+          </p>
+          <div className="space-y-1.5">
+            {offered.map((k) => (
+              <button
+                key={k.id}
+                type="button"
+                onClick={() => setCampaignId(campaignId === k.id ? null : k.id)}
+                className={`block w-full rounded-lg border px-3 py-2 text-left transition-colors ${
+                  campaignId === k.id
+                    ? "border-accent-dark bg-accent-soft/50"
+                    : "border-line/80 hover:border-ink/30"
+                }`}
+              >
+                <span className="block text-[12px] font-semibold">{k.name}</span>
+                <span className="block text-[11px] leading-snug text-muted">
+                  {k.aim} · {k.steps.length} steps over {lastDay(k)} days
+                </span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[10px] text-muted">
+            Optional — leave it if they want nothing from us.
+          </p>
+        </div>
+      )}
+
       <div className="mt-3 flex gap-2">
         <button
           type="button"
-          onClick={() => onConfirm(reason, notes, when || null)}
+          onClick={() => onConfirm(reason, notes, when || null, campaignId)}
           className="rounded-full bg-ink px-4 py-2 text-[12.5px] text-page"
         >
           Save

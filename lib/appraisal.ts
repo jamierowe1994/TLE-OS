@@ -141,6 +141,9 @@ export type AppraisalCase = {
   nextActionAt: string | null;
   outcomeReason: string | null;
   outcomeNotes: string;
+  /** The campaign they were put on when it ended. Marketing wrote it; the
+   *  agent only picked it. */
+  campaignId: string | null;
   decidedAt: string | null;
   touches: Touch[];
 };
@@ -155,6 +158,7 @@ export const EMPTY_CASE: AppraisalCase = {
   nextActionAt: null,
   outcomeReason: null,
   outcomeNotes: "",
+  campaignId: null,
   decidedAt: null,
   touches: [],
 };
