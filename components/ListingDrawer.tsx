@@ -199,6 +199,48 @@ export default function ListingDrawer({
   const [draftRent, setDraftRent] = useState("");
   const [draftTenants, setDraftTenants] = useState<TenantIn[]>([]);
 
+  /* The portal write-up, and the only thing on this screen that writes to REX.
+     `saved` holds what REX confirmed on the way back, so the panel shows the
+     stored value rather than what was typed — the book's cache can be up to
+     two minutes behind a save. */
+  const [editingCopy, setEditingCopy] = useState(false);
+  const [copyHeading, setCopyHeading] = useState("");
+  const [copyBody, setCopyBody] = useState("");
+  const [savingCopy, setSavingCopy] = useState(false);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<{ heading: string | null; body: string | null } | null>(null);
+
+  const shownHeading = saved ? saved.heading : (listing?.advertHeading ?? null);
+  const shownBody = saved ? saved.body : (listing?.advertBody ?? null);
+
+  // A different listing is a different write-up: never carry one over.
+  useEffect(() => {
+    setEditingCopy(false);
+    setSaved(null);
+    setCopyError(null);
+  }, [listing?.id]);
+
+  async function saveCopy() {
+    if (!listing) return;
+    setSavingCopy(true);
+    setCopyError(null);
+    try {
+      const res = await fetch("/api/listings/write-up", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: listing.id, heading: copyHeading, body: copyBody }),
+      });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "REX refused the save.");
+      setSaved({ heading: j.heading ?? null, body: j.body ?? null });
+      setEditingCopy(false);
+    } catch (e) {
+      setCopyError(e instanceof Error ? e.message : "Save failed.");
+    } finally {
+      setSavingCopy(false);
+    }
+  }
+
   useEffect(() => {
     if (!listing) return;
     setTab("home");
@@ -636,21 +678,77 @@ export default function ListingDrawer({
                 <div className="mb-5 rounded-xl border border-line/60 p-4">
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <h4 className="text-[12.5px] font-semibold">Portal write-up</h4>
-                    <span className="text-[10px] text-muted">
-                      {listing.advertBody
-                        ? `${listing.advertBody.length.toLocaleString("en-GB")} characters`
-                        : "Nothing written"}
-                    </span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] text-muted">
+                        {shownBody
+                          ? `${shownBody.length.toLocaleString("en-GB")} characters`
+                          : "Nothing written"}
+                      </span>
+                      {!editingCopy && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCopyHeading(shownHeading ?? "");
+                            setCopyBody(shownBody ?? "");
+                            setEditingCopy(true);
+                          }}
+                          className="rounded-full border border-line/80 px-3 py-1 text-[11px] transition-colors hover:border-ink/40"
+                        >
+                          {shownBody ? "Edit" : "Write one"}
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  {listing.advertBody ? (
-                    <>
-                      {listing.advertHeading && (
-                        <p className="mb-2 text-[13px] font-semibold leading-snug">
-                          {listing.advertHeading}
+
+                  {editingCopy ? (
+                    <div className="space-y-2.5">
+                      <input
+                        type="text"
+                        value={copyHeading}
+                        onChange={(e) => setCopyHeading(e.target.value)}
+                        placeholder="Headline — the line the portals show first"
+                        className="w-full rounded-lg border border-line/80 px-3 py-2 text-[12.5px] outline-none focus:border-ink"
+                      />
+                      <textarea
+                        value={copyBody}
+                        onChange={(e) => setCopyBody(e.target.value)}
+                        rows={14}
+                        placeholder="Where it is, what it's like, what's nearby…"
+                        className="w-full resize-y rounded-lg border border-line/80 px-3 py-2 text-[12.5px] leading-relaxed outline-none focus:border-ink"
+                      />
+                      <div className="flex flex-wrap items-center gap-2.5">
+                        <button
+                          type="button"
+                          onClick={saveCopy}
+                          disabled={savingCopy}
+                          className="rounded-full bg-ink px-4 py-2 text-[12px] text-page transition-opacity disabled:opacity-50"
+                        >
+                          {savingCopy ? "Saving to REX…" : "Save to REX"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setEditingCopy(false); setCopyError(null); }}
+                          className="rounded-full border border-line/80 px-4 py-2 text-[12px]"
+                        >
+                          Cancel
+                        </button>
+                        <span className="text-[10px] text-muted">
+                          {copyBody.length.toLocaleString("en-GB")} characters · goes to Rightmove
+                        </span>
+                      </div>
+                      {copyError && (
+                        <p className="rounded-lg bg-accent-soft/60 px-3 py-2 text-[11px] leading-relaxed text-accent-dark">
+                          {copyError}
                         </p>
                       )}
+                    </div>
+                  ) : shownBody ? (
+                    <>
+                      {shownHeading && (
+                        <p className="mb-2 text-[13px] font-semibold leading-snug">{shownHeading}</p>
+                      )}
                       <p className="max-h-64 overflow-y-auto whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted">
-                        {listing.advertBody}
+                        {shownBody}
                       </p>
                     </>
                   ) : (
@@ -658,6 +756,11 @@ export default function ListingDrawer({
                       No description on this listing. It can&apos;t go to the portals
                       reading like this — every published rental in the book has one,
                       and this is what stands between a draft and going live.
+                    </p>
+                  )}
+                  {saved && !editingCopy && (
+                    <p className="mt-2.5 text-[10px] text-muted">
+                      Saved to REX — read back from the record, not from the box.
                     </p>
                   )}
                 </div>
