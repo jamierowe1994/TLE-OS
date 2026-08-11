@@ -134,7 +134,7 @@ export default function Viewings() {
            hip and legs all rest along, which leaves her shoes just past it to
            cast. */
         illustrationHeight={110}
-        seat={0.94}
+        seat={0.96}
         lineBreak="none"
       />
 
