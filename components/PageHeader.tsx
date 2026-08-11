@@ -44,7 +44,12 @@ function LineDip({ width, mode }: { width: number; mode: LineBreak }) {
   if (mode === "none") return null;
 
   const h = 34;
-  const y = 1;
+  /* The baseline sits 2px down in a box that hangs mostly BELOW the rule, so
+     the trough drops into the space under it. It used to be a 34px box pinned
+     bottom-0 with the baseline at its top — which drew the whole thing 32px
+     ABOVE the rule and left a stray curve floating over the real line on every
+     page that asked for a dip. */
+  const y = 2;
   const drop = mode === "sink" ? 17 : 9;
   // The gap is what makes "sink" read as broken rather than merely bent.
   const gap = mode === "sink" ? 0.2 : 0;
@@ -61,10 +66,12 @@ function LineDip({ width, mode }: { width: number; mode: LineBreak }) {
       aria-hidden
       viewBox={`0 0 ${width} ${h}`}
       preserveAspectRatio="none"
-      className="pointer-events-none absolute bottom-0"
-      style={{ width, height: h, left: "50%", transform: "translateX(-50%)" }}
+      className="pointer-events-none absolute"
+      style={{ width, height: h, left: "50%", bottom: -(h - y - 1), transform: "translateX(-50%)" }}
     >
-      <rect x="0" y="0" width={width} height={h} fill="var(--page)" />
+      {/* Just deep enough to swallow the real border and give the trough clean
+          paper to be drawn on — any taller and it masks the page underneath. */}
+      <rect x="0" y="0" width={width} height={y + drop + 3} fill="var(--page)" />
       <path d={left} fill="none" stroke="var(--line)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
       <path d={right} fill="none" stroke="var(--line)" strokeWidth="1" vectorEffect="non-scaling-stroke" />
     </svg>
@@ -92,6 +99,33 @@ export default function PageHeader({
    * lands on a dangling shoe.
    */
   seat,
+  /**
+   * For a figure who HANGS off the rule instead of sitting on it: where their
+   * grip is, as a fraction of the artwork's height (for the hanging woman, her
+   * raised fist, 0.05).
+   *
+   * Same anchoring as `seat` — the rule passes through that point — but no room
+   * is made underneath. She is meant to dangle in front of the page, so she
+   * overlays whatever is below and never pushes it down.
+   */
+  grip,
+  /**
+   * An animated figure, as a vertical strip of frames rather than a video.
+   *
+   * A strip plus `steps()` is a fraction of the weight of the same motion as a
+   * clip, and CSS can play it out and back with `alternate` — so half the
+   * frames are stored and the loop has no seam, which matters because a
+   * generated clip never comes back to its own first frame.
+   */
+  sprite,
+  /**
+   * Cast a shadow off a figure who is not seated — someone STANDING on the
+   * rule. Same silhouette-masked shadow the seated man gets, but uncut: he is
+   * cropped to his legs because his hands rest on the ledge and his top half
+   * has nothing behind it, where someone stood on the line is against the wall
+   * head to foot.
+   */
+  shadow = false,
   /** Pin the figure hard into the corner instead of the standard inset —
    *  the dashboard's window lives in the corner of the room. */
   flushRight = false,
@@ -114,6 +148,9 @@ export default function PageHeader({
   illustrationHeight?: number;
   lineBreak?: LineBreak;
   seat?: number;
+  grip?: number;
+  sprite?: { src: string; frames: number; aspect: number; fps?: number };
+  shadow?: boolean;
   flushRight?: boolean;
   search?: boolean;
   searchValue?: string;
@@ -121,11 +158,18 @@ export default function PageHeader({
   searchPlaceholder?: string;
   actions?: React.ReactNode;
 }) {
-  const hasArt = Boolean(illustration || illustrationNode);
+  const hasArt = Boolean(illustration || illustrationNode || sprite);
   const dipWidth = Math.round(illustrationHeight * (lineBreak === "sink" ? 0.82 : 0.66));
 
   const seated = typeof seat === "number";
-  const legs = seated ? illustrationHeight * (1 - seat) : 0;
+  const hanging = typeof grip === "number";
+  /* Where the rule crosses the artwork, and therefore how far the figure has
+     to drop for that point to land on it. A seated figure is cut roughly in
+     half by it; someone hanging by their fist is barely cut at all, and nearly
+     all of them ends up below the line. */
+  const cross = seated ? seat : hanging ? grip : 1;
+  const below = seated || hanging ? illustrationHeight * (1 - cross) : 0;
+  const legs = seated ? below : 0;
   /* The figure is scaled down at each breakpoint, so the legs hang shorter
      there too and the clearance has to follow. Written as real CSS because the
      numbers are computed — Tailwind can only see class names it was built
@@ -145,8 +189,37 @@ export default function PageHeader({
     [1, 0.55],
   ].map(([scale, factor]) => Math.round(legs * scale * factor) + 20);
 
+  /* The strip is scaled to the element's width, so each frame ends up exactly
+     illustrationHeight tall and the run is that times the frame count. Stepping
+     to the full run rather than one frame short is deliberate: steps() never
+     reaches its end value, so 30 steps land on frames 0…29 and none is skipped
+     or held twice. `alternate` then walks back down, which is what makes a
+     pendulum out of a clip that never returned to where it started. */
+  const spriteClass = sprite
+    ? `swing-${sprite.frames}-${Math.round(illustrationHeight)}`
+    : "";
+  const spriteRun = sprite ? sprite.frames * illustrationHeight : 0;
+  const spriteSecs = sprite ? sprite.frames / (sprite.fps ?? 12) : 0;
+
   return (
     <>
+      {sprite && (
+        <style>{`
+          @keyframes ${spriteClass} {
+            from { background-position: 0 0 }
+            to { background-position: 0 -${spriteRun}px }
+          }
+          .${spriteClass} {
+            background-image: url(${sprite.src});
+            background-size: 100% auto;
+            background-repeat: no-repeat;
+            animation: ${spriteClass} ${spriteSecs}s steps(${sprite.frames}) infinite alternate;
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .${spriteClass} { animation: none }
+          }
+        `}</style>
+      )}
       {seated && (
         <style>{`
           .${seatClass} { margin-top: ${clearance[0]}px }
@@ -222,7 +295,19 @@ export default function PageHeader({
           >
             <div className="relative h-full">
               <LineDip width={dipWidth} mode={lineBreak} />
-              {illustrationNode ? (
+              {sprite ? (
+                /* The frames are a background, not an <img>, because only a
+                   background can be stepped through. .art still inverts it for
+                   the dark theme, exactly as it does the still drawings. */
+                <span
+                  aria-hidden
+                  className={`art relative block h-full ${spriteClass}`}
+                  style={{
+                    width: Math.round(illustrationHeight * sprite.aspect),
+                    transform: `translateY(${Math.round(below)}px)`,
+                  }}
+                />
+              ) : illustrationNode ? (
                 /* EXPLICIT width, not aspect-square: at least one browser in
                    the field sized the ratio box wrong and the figure drifted
                    ~300px off the corner while the bell (plain right-0 in the
@@ -232,7 +317,7 @@ export default function PageHeader({
                 </div>
               ) : (
                 <span className="relative block h-full">
-                  {seated && (
+                  {(seated || shadow) && (
                     /*
                      * The shadow his legs throw on the wall below the ledge.
                      *
@@ -256,7 +341,12 @@ export default function PageHeader({
                       style={{
                         WebkitMaskImage: `url(${illustration})`,
                         maskImage: `url(${illustration})`,
-                        clipPath: `inset(${Math.round(illustrationHeight * (seat ?? 0)) - SHADOW.drop}px ${SHADOW.cutRight}% 0 ${SHADOW.cutLeft}%)`,
+                        /* Standing: the whole figure throws, so no clip and no
+                           side trim — those exist to keep the seated man's
+                           hands, which rest ON the ledge, from casting. */
+                        clipPath: seated
+                          ? `inset(${Math.round(illustrationHeight * (seat ?? 0)) - SHADOW.drop}px ${SHADOW.cutRight}% 0 ${SHADOW.cutLeft}%)`
+                          : undefined,
                         transform: `translateY(${Math.round(legs)}px) translate(${-SHADOW.side}px, ${SHADOW.drop}px) skewX(${-SHADOW.rake}deg)`,
                       }}
                     />
@@ -267,9 +357,14 @@ export default function PageHeader({
                     alt=""
                     aria-hidden
                     className="art relative h-full w-auto"
-                    /* Seated: drop them by everything below their seat, so the
-                       rule passes under them and the legs hang free. */
-                    style={seated ? { transform: `translateY(${Math.round(legs)}px)` } : undefined}
+                    /* Seated or hanging: drop them by everything below the
+                       point the rule crosses, so it passes exactly through the
+                       seat — or through the gripping fist. */
+                    style={
+                      seated || hanging
+                        ? { transform: `translateY(${Math.round(below)}px)` }
+                        : undefined
+                    }
                   />
                 </span>
               )}

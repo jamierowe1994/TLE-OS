@@ -152,16 +152,28 @@ export default function Applications() {
       <PageHeader
         title="Applications"
         blurb="Every application from offer to keys, on the eight stages the business actually runs. Stage changes are written back to REX."
-        illustration="/illustrations/notioly/checklist.svg"
-        lineBreak="sink"
+        /* She hangs off the rule by one fist, swinging — which is why the
+           pipeline below was pulled in: her body dangles down that gutter.
+           0.05 is where her fist is in the artwork, measured off the frames. */
+        sprite={{ src: "/illustrations/hanging-strip.webp", frames: 30, aspect: 0.653, fps: 12 }}
+        illustrationHeight={300}
+        grip={0.05}
+        /* The line sags where she grips it — she is hanging off it, so it
+           should give. The trough is centred on the wrapper, which is centred
+           on her fist. */
+        lineBreak="dip"
       />
 
       <div className="mt-10">
         <FlowTag from="Propoly + REX" to="REX" />
       </div>
 
-      {/* ── The pipeline: how many sit at each stage. */}
-      <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
+      {/* ── The pipeline: how many sit at each stage.
+
+          The box itself stops after the eighth stage rather than running the
+          full width, so the woman hanging off the header rule has clear air to
+          swing her legs in. */}
+      <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5 lg:max-w-[80%]">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-[15px]">Pipeline</h2>
           <p className="text-[11px] text-muted">{APPS.length} live applications</p>

@@ -128,7 +128,10 @@ export default function Viewings() {
         title="Viewings"
         blurb="Every viewing opens into its whole story: the property, who's coming, whether someone lives there — and whether every confirmation actually went."
         illustration="/illustrations/notioly/checking-the-calendar.svg"
-        lineBreak="dip"
+        /* Standing straight on an unbroken rule — she is not heavy enough to
+           bend it, and the trough under her feet read as the line sagging. */
+        lineBreak="none"
+        shadow
       />
 
       <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
