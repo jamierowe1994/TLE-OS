@@ -54,6 +54,17 @@ export interface OsListing {
   /** Managed / Let Only / Rent Collect — what we actually do for this landlord. */
   serviceType: string | null;
   tenant: string | null;
+  /**
+   * The marketing write-up — the copy that goes to Rightmove.
+   *
+   * REX keeps it in `related.listing_adverts`, one row per advert_type; the
+   * "internet" row is the portal one, and brochure/stocklist sit beside it
+   * unused. Measured across the current book (11 Aug 2026): every one of the
+   * 128 published rentals has one, and 128 of the 164 drafts have nothing —
+   * so this is a pre-publication gap, not a live one.
+   */
+  advertHeading: string | null;
+  advertBody: string | null;
 }
 
 export interface ListingBook {
@@ -66,6 +77,10 @@ export interface ListingBook {
     available: number;
     withPhoto: number;
     withRent: number;
+    /** How much of the book is ready to go out: a portal advert with a body. */
+    withWriteUp: number;
+    /** The ones that would go to the portals with nothing to read. */
+    draftsMissingWriteUp: number;
   };
   pulledAt: string;
 }
@@ -96,7 +111,10 @@ interface RexListing extends Record<string, unknown> {
   lettings_service_type?: { text?: string } | string | null;
   property?: (RexAddress & { id?: string | number }) | null;
   listing_primary_image?: { url?: string } | null;
-  related?: { listing_images?: { url?: string }[] } | null;
+  related?: {
+    listing_images?: { url?: string }[];
+    listing_adverts?: { advert_type?: string; advert_heading?: string | null; advert_body?: string | null }[];
+  } | null;
 }
 
 /** REX hands image URLs back protocol-relative — unusable outside a browser. */
@@ -140,8 +158,21 @@ function num(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** The portal advert out of the three REX keeps. Blank strings count as
+ *  missing — a few carry a heading with an empty body. */
+function internetAdvert(l: RexListing): { heading: string | null; body: string | null } {
+  const rows = l.related?.listing_adverts ?? [];
+  const net = rows.find((a) => a?.advert_type === "internet");
+  const trim = (v: unknown) => {
+    const s = typeof v === "string" ? v.trim() : "";
+    return s ? s : null;
+  };
+  return { heading: trim(net?.advert_heading), body: trim(net?.advert_body) };
+}
+
 function toListing(l: RexListing): OsListing {
   const { name, locality } = addressOf(l.property);
+  const advert = internetAdvert(l);
   const published = num(l.system_publication_time);
   const period = l.price_rent_period?.id;
   const service =
@@ -180,6 +211,8 @@ function toListing(l: RexListing): OsListing {
     image: https(l.listing_primary_image?.url ?? l.related?.listing_images?.[0]?.url),
     serviceType: service,
     tenant: null, // tenancy_id is populated on 0% of the book — nothing to join to
+    advertHeading: advert.heading,
+    advertBody: advert.body,
   };
 }
 
@@ -187,7 +220,7 @@ export async function fetchListingBook(): Promise<ListingBook> {
   if (!rexConfigured()) {
     return {
       listings: [],
-      counts: { currentRentals: 0, published: 0, draft: 0, letAgreed: 0, available: 0, withPhoto: 0, withRent: 0 },
+      counts: { currentRentals: 0, published: 0, draft: 0, letAgreed: 0, available: 0, withPhoto: 0, withRent: 0, withWriteUp: 0, draftsMissingWriteUp: 0 },
       pulledAt: new Date().toISOString(),
     };
   }
@@ -203,7 +236,7 @@ export async function fetchListingBook(): Promise<ListingBook> {
       limit: PAGE_SIZE,
       offset: page * PAGE_SIZE,
       order_by: { system_modtime: "desc" },
-      extra_options: { extra_fields: ["related.listing_images"] },
+      extra_options: { extra_fields: ["related.listing_images", "related.listing_adverts"] },
     });
     if (!res.ok) break;
     const batch = rexRows(res.result) as RexListing[];
@@ -222,6 +255,8 @@ export async function fetchListingBook(): Promise<ListingBook> {
       available: listings.filter((l) => !l.letAgreed).length,
       withPhoto: listings.filter((l) => l.image).length,
       withRent: listings.filter((l) => l.rent != null).length,
+      withWriteUp: listings.filter((l) => l.advertBody).length,
+      draftsMissingWriteUp: listings.filter((l) => !l.advertBody && l.publicationStatus === "draft").length,
     },
     pulledAt: new Date().toISOString(),
   };

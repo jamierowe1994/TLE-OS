@@ -44,6 +44,9 @@ export type Listing = {
   image: string | null;
   /** The sitting tenant, when the property is occupied. */
   tenant?: { name: string; email: string; phone: string } | null;
+  /** The portal write-up, live from REX's `related.listing_adverts`. */
+  advertHeading?: string | null;
+  advertBody?: string | null;
 };
 
 type TabKey = "home" | "property" | "marketing" | "photos";
@@ -627,6 +630,38 @@ export default function ListingDrawer({
 
             {tab === "marketing" && (
               <Card title="Marketing — edit what's wrong" icon="megaphone">
+                {/* The write-up: REX's "internet" advert, which IS the copy
+                    Rightmove shows. Read live; editing lands once the write
+                    path is proven on a nominated listing. */}
+                <div className="mb-5 rounded-xl border border-line/60 p-4">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <h4 className="text-[12.5px] font-semibold">Portal write-up</h4>
+                    <span className="text-[10px] text-muted">
+                      {listing.advertBody
+                        ? `${listing.advertBody.length.toLocaleString("en-GB")} characters`
+                        : "Nothing written"}
+                    </span>
+                  </div>
+                  {listing.advertBody ? (
+                    <>
+                      {listing.advertHeading && (
+                        <p className="mb-2 text-[13px] font-semibold leading-snug">
+                          {listing.advertHeading}
+                        </p>
+                      )}
+                      <p className="max-h-64 overflow-y-auto whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted">
+                        {listing.advertBody}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="rounded-lg bg-accent-soft/50 px-3 py-2 text-[11px] leading-relaxed text-accent-dark">
+                      No description on this listing. It can&apos;t go to the portals
+                      reading like this — every published rental in the book has one,
+                      and this is what stands between a draft and going live.
+                    </p>
+                  )}
+                </div>
+
                 <dl className="max-w-md space-y-2 text-[12.5px]">
                   {[
                     ["Status", status.label],

@@ -15,7 +15,10 @@ import { rexConfigured } from "@/lib/rex";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const CACHE_KEY = "listings:v1";
+/* v2: the book gained the portal write-up. A cached object that grows a field
+   keeps serving the old shape under the old key, so the field reads as missing
+   on every environment that has already warmed the cache. */
+const CACHE_KEY = "listings:v2";
 const FRESH_MS = 10 * 60 * 1000;
 const STALE_MS = 6 * 60 * 60 * 1000;
 
