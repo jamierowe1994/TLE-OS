@@ -3,10 +3,32 @@
 import { useEffect, useRef, useState } from "react";
 import AddressField, { type ResolvedAddress } from "@/components/AddressField";
 import { DoneTick, PressButton } from "@/components/Bits";
+import ContactMatches from "@/components/ContactMatches";
 import DoodleIcon from "@/components/DoodleIcon";
+import type { ScoredMatch } from "@/lib/contact-match";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { LEAD_SOURCES } from "@/lib/leads-sample";
 import rexSample from "@/lib/rex-sample.json";
+
+/** They chose an existing REX record to carry on with, rather than a new one. */
+function Continuing({ match, onClear }: { match: ScoredMatch | null; onClear: () => void }) {
+  if (!match) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-accent-dark/40 bg-accent-soft/40 px-4 py-3 text-[12px]">
+      <span className="font-semibold text-accent-dark">Continuing {match.name}&apos;s record</span>
+      <span className="text-muted">
+        REX contact {match.id} · matched {match.score}%
+      </span>
+      <button
+        type="button"
+        onClick={onClear}
+        className="ml-auto rounded-full border border-line/80 px-3 py-1 text-[11px]"
+      >
+        Start a new one instead
+      </button>
+    </div>
+  );
+}
 
 /**
  * Creating a lead is the same act as reading one, so it happens in the same
@@ -124,6 +146,16 @@ export default function NewLeadPanel({
   const [picked, setPicked] = useState<string[]>([]);
   const [picking, setPicking] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
+
+  /* Duplicate check. Runs while they type, against REX, read-only — four
+     facts scored a quarter each. `dismissed` is them answering "no, this is
+     someone else" to a 100%: the question is asked once, not on every
+     keystroke after. `continuing` marks the record they chose to work on, so
+     saving updates that contact rather than making a second one. */
+  const [matches, setMatches] = useState<ScoredMatch[]>([]);
+  const [matchBusy, setMatchBusy] = useState(false);
+  const [dismissedExact, setDismissedExact] = useState(false);
+  const [continuing, setContinuing] = useState<ScoredMatch | null>(null);
   const [dragFrom, setDragFrom] = useState<"market" | "shortlist">("market");
   const [overDrop, setOverDrop] = useState(false);
   const [overMarket, setOverMarket] = useState(false);
@@ -154,6 +186,57 @@ export default function NewLeadPanel({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  /* Ask REX who this might be, half a second after they stop typing. Aborting
+     the previous request matters as much as the debounce: four fields being
+     filled in order would otherwise land four answers out of order, and the
+     stale one wins. */
+  useEffect(() => {
+    // Once they've chosen a record to carry on with, stop asking — prefilling
+    // the form from it would otherwise re-run the search and offer it straight
+    // back, which reads as the OS not having listened.
+    if (!open || saved || continuing) return;
+    const enquirer = { name: d.name, email: d.email, mobile: d.mobile, address: d.address };
+    if (!enquirer.name && !enquirer.email && !enquirer.mobile) {
+      setMatches([]);
+      return;
+    }
+    const ctrl = new AbortController();
+    const t = setTimeout(async () => {
+      setMatchBusy(true);
+      try {
+        const res = await fetch("/api/contacts/match", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(enquirer),
+          signal: ctrl.signal,
+        });
+        const j = await res.json();
+        if (!ctrl.signal.aborted) setMatches(Array.isArray(j.matches) ? j.matches : []);
+      } catch {
+        /* a duplicate check that fails is a quiet no-op, never a blocked form */
+      } finally {
+        if (!ctrl.signal.aborted) setMatchBusy(false);
+      }
+    }, 500);
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, [open, saved, continuing, d.name, d.email, d.mobile, d.address]);
+
+  /** They picked an existing record: carry its details in and say so. */
+  function openMatch(m: ScoredMatch) {
+    setContinuing(m);
+    setD((prev) => ({
+      ...prev,
+      name: m.name || prev.name,
+      email: m.email ?? prev.email,
+      mobile: m.mobile ?? prev.mobile,
+      address: m.address ? m.address.replace(/\s+/g, " ").trim() : prev.address,
+    }));
+    setMatches([]);
+  }
 
   /**
    * Drag with POINTER events, not the HTML5 drag API — that one text-selects
@@ -235,6 +318,16 @@ export default function NewLeadPanel({
           shown ? "opacity-100" : "opacity-0"
         }`}
       />
+
+      {/* Possible duplicates, in the gutter the drawer leaves. */}
+      {!saved && (
+        <ContactMatches
+          matches={dismissedExact ? matches.filter((m) => m.score < 100) : matches}
+          busy={matchBusy}
+          onOpen={openMatch}
+          onDismissExact={() => setDismissedExact(true)}
+        />
+      )}
 
       {/* Same width as the record drawer — creating and reading are one place. */}
       <aside
@@ -394,6 +487,7 @@ export default function NewLeadPanel({
           ) : kind === "landlord" ? (
             /* ── Landlord: address first, everything else follows from it. ── */
             <div className="fade-up mx-auto max-w-3xl space-y-4">
+              <Continuing match={continuing} onClear={() => setContinuing(null)} />
               <Section title="What's the address?" icon="home">
                 <AddressField
                   value={d.address}
@@ -681,6 +775,9 @@ export default function NewLeadPanel({
             </div>
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
+              <div className="lg:col-span-2">
+                <Continuing match={continuing} onClear={() => setContinuing(null)} />
+              </div>
               {/* ── Who they are ── */}
               <Section title="Contact details" icon="user">
                 <div className="space-y-3.5">
