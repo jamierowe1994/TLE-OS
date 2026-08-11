@@ -193,6 +193,21 @@ h1, h2, h3, h4, h5 {
 :root { --sky-veil: transparent; }
 :root[data-theme="dark"] { --sky-veil: rgb(20 22 30 / 0.55); }
 
+/* The shadow a figure sitting on the header rule throws on the wall below it.
+
+   The element carries the figure's own artwork as a mask, so the shadow is his
+   exact silhouette rather than a blur under him — a flat, quiet tint, which is
+   what a shape casts onto a wall close behind it. --ink flips with the theme,
+   which is right: in dark mode the drawing itself is light on charcoal, so its
+   shadow is too. */
+.fig-shadow {
+  background-color: color-mix(in srgb, var(--ink) 20%, transparent);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
 /* Video has no alpha channel, so a line-art clip arrives as black ink on a
    white rectangle. Blending does what transparency would:
      light — multiply drops the white and keeps the ink;

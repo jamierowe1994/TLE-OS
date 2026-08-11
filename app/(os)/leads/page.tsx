@@ -7,6 +7,7 @@ import { PressButton } from "@/components/Bits";
 import LeadDrawer from "@/components/LeadDrawer";
 import NewLeadPanel from "@/components/NewLeadPanel";
 import PageHeader from "@/components/PageHeader";
+import SourceMark from "@/components/SourceMark";
 import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
 import { Pill } from "@/components/Wire";
 import { LEADS, STAGE_TONE, leadSide, type Lead } from "@/lib/leads-sample";
@@ -81,20 +82,6 @@ function Filter({
         </>
       )}
     </div>
-  );
-}
-
-/** Source badge — the pipe matters, so it's shown as a chip not plain text. */
-function Source({ s }: { s: string }) {
-  const social = /facebook|instagram/i.test(s);
-  return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-      <span
-        className={`h-1.5 w-1.5 rounded-full ${social ? "bg-accent" : "bg-muted/50"}`}
-        title={social ? "Paid social — via GoHighLevel" : "Portal or website — via REX"}
-      />
-      {s}
-    </span>
   );
 }
 
@@ -209,7 +196,7 @@ export default function Leads() {
       { key: "enquiry", label: "Enquiry", cell: "whitespace-nowrap text-muted", render: (l) => l.enquiry },
       { key: "area", label: "Area", cell: "whitespace-nowrap", render: (l) => l.area },
       { key: "budget", label: "Budget", cell: "figures whitespace-nowrap", render: (l) => l.budget },
-      { key: "source", label: "Source", cell: "text-muted", render: (l) => <Source s={l.source} /> },
+      { key: "source", label: "Source", cell: "text-muted", render: (l) => <SourceMark source={l.source} /> },
       { key: "received", label: "Received", cell: "whitespace-nowrap text-[11px] text-muted", render: (l) => l.received },
       { key: "moveDate", label: "Move date", optional: true, cell: "whitespace-nowrap text-muted", render: (l) => l.moveDate },
       { key: "agent", label: "Agent", optional: true, cell: "whitespace-nowrap text-muted", render: (l) => l.agent },
@@ -242,8 +229,14 @@ export default function Leads() {
                 }.`
               : (source.reason ?? "New enquiries from the portals, your ads and the website.")
         }
-        illustration="/illustrations/notioly/inbox.svg"
-        lineBreak="sink"
+        illustration="/illustrations/sitting-man.png"
+        illustrationHeight={260}
+        /* His braced hands stop at 0.554 of the artwork — measured off the
+           file, not guessed — so that is where the rule goes under him. */
+        seat={0.554}
+        /* No dip and no break: he is sitting ON the line, and his own body
+           hides it where he is. A trough would read as the line sagging. */
+        lineBreak="none"
         actions={
           <PressButton
             onClick={() => setCreating(true)}

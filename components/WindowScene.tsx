@@ -45,18 +45,12 @@ import { skyState, type Phase, type SkyState } from "@/lib/sun";
 const GLASS = { top: 88, bottom: 448, path: "M51 88 L466 88 L437 448 L67 448 Z" };
 
 /*
- * The frame's face: this, with the glass cut out of it, is the grey band.
- *
- * Both sides follow their drawn lines rather than running straight down — the
- * stile on the right (x = 498 − 0.081y), the outer line on the left
- * (x = 21 + 0.042y) — so the face is filled edge to edge on both sides and the
- * two gaps read the same. Squared off, the right spilled grey onto the wall
- * below her hip, where the stile has leaned 30 units in, and the left left a
- * pale sliver inside its own frame. Nothing may hang outside this outline
- * either: under even-odd an overhang is crossed once, not twice, and fills —
- * that was a stray grey stripe down the wall.
+ * The frame's face and her shirt used to be washed in --art-wash, a beige laid
+ * behind the open ink so the drawing had a surface. The sky retired it (James,
+ * 11 Aug 2026): with the glass carrying real colour, the face reads simply by
+ * being the part the sky does NOT reach, and the beige had become a second,
+ * competing background. Both are the page's own colour now.
  */
-const WASH_OUTER = "M24 66 L493 66 L461 450 L40 450 Z";
 
 /**
  * The figure's silhouette, so the sky passes BEHIND her rather than through
@@ -352,37 +346,6 @@ export default function WindowScene({
             <path d={FIGURE} fill="var(--page)" />
           </g>
         )}
-      </svg>
-
-      {/* The frame's own greys, which DO invert with the theme. */}
-      <svg
-        viewBox="0 0 520 520"
-        aria-hidden
-        className="art absolute inset-0 h-full w-full"
-      >
-        {/* The wash: the frame's band and the shirt, filled in the surface's
-            own grey BEHIND the ink — the drawing's lines are open, so the
-            fills are drawn shapes, slightly inset, the way a colourist works
-            under an inker. --art-wash inverts with the theme via .art. */}
-        <path
-          /* The hole IS the glass — the band and the sky have to meet along the
-             same line or the band lays grey back over the glass. As a rectangle
-             it did exactly that in the top-right: a pale notch above her head. */
-          d={`${WASH_OUTER} ${GLASS.path}`}
-          fillRule="evenodd"
-          fill="var(--art-wash)"
-        />
-        <path
-          d="M418 292
-             C404 299 395 308 391 320
-             C387 331 384 342 385 352
-             C394 359 403 363 412 369
-             C425 378 439 388 452 398
-             C459 390 463 378 465 362
-             C466 344 464 316 457 300
-             C445 291 430 288 418 292 Z"
-          fill="var(--art-wash)"
-        />
       </svg>
 
       {/* The frame and the figure, on top — so the sky passes behind the bars. */}

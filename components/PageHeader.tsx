@@ -24,6 +24,22 @@ import DoodleIcon from "@/components/DoodleIcon";
  */
 export type LineBreak = "none" | "dip" | "sink";
 
+/**
+ * How a seated figure's shadow falls on the wall below the ledge.
+ *
+ * `side` and `drop` are how far it lands from him — small, because he is sat
+ * ON the ledge, not hovering in front of it, so the shadow stays tight to the
+ * legs. `rake` is the shear, which reads as how high the light is.
+ *
+ * `cut` trims the sides to the LEGS alone. His braced hands rest on the ledge
+ * either side of him, and they sat inside the clip — the shadow has to start a
+ * few pixels above the seat so that, once dropped, its top edge lands on the
+ * rule, and those few pixels are exactly where the hands are. Measured off the
+ * artwork: below the seat his legs occupy 19%–75% of the width, and his hands
+ * everything outside that.
+ */
+const SHADOW = { side: 7, drop: 6, rake: 5, cutLeft: 18, cutRight: 24 };
+
 function LineDip({ width, mode }: { width: number; mode: LineBreak }) {
   if (mode === "none") return null;
 
@@ -65,6 +81,17 @@ export default function PageHeader({
   illustrationHeight = 190,
   /** How the rule behaves where the figure meets it. */
   lineBreak = "dip",
+  /**
+   * For a figure who SITS on the rule rather than standing on it: where their
+   * seat is, as a fraction of the artwork's height (measured off the file —
+   * for the sitting man, the row where his braced hands stop, 0.554).
+   *
+   * The figure is dropped by the rest of their height so that line lands under
+   * them, and their legs hang below into the page. The search row is pushed
+   * clear of the feet by exactly that much at each breakpoint, so nothing ever
+   * lands on a dangling shoe.
+   */
+  seat,
   /** Pin the figure hard into the corner instead of the standard inset —
    *  the dashboard's window lives in the corner of the room. */
   flushRight = false,
@@ -86,6 +113,7 @@ export default function PageHeader({
   illustrationNode?: React.ReactNode;
   illustrationHeight?: number;
   lineBreak?: LineBreak;
+  seat?: number;
   flushRight?: boolean;
   search?: boolean;
   searchValue?: string;
@@ -96,16 +124,55 @@ export default function PageHeader({
   const hasArt = Boolean(illustration || illustrationNode);
   const dipWidth = Math.round(illustrationHeight * (lineBreak === "sink" ? 0.82 : 0.66));
 
+  const seated = typeof seat === "number";
+  const legs = seated ? illustrationHeight * (1 - seat) : 0;
+  /* The figure is scaled down at each breakpoint, so the legs hang shorter
+     there too and the clearance has to follow. Written as real CSS because the
+     numbers are computed — Tailwind can only see class names it was built
+     with. Keyed by the numbers themselves, so two identical headers share one
+     rule and two different ones never collide. */
+  const seatClass = `seat-${Math.round(illustrationHeight)}-${Math.round((seat ?? 0) * 1000)}`;
+  /* From sm up, a seated figure is set in far enough to clear the page's
+     action button, so the search row only has to clear his SHINS — his shoes
+     hang past it into empty space, which is what dangling legs do. The rule
+     itself then sits where it does on every other page. Below sm there is no
+     room to set him in beside the search box, so there the row clears his feet
+     completely (factor 1) and he stays in the corner. */
+  const clearance = [
+    [0.5, 1],
+    [0.68, 1],
+    [0.88, 0.55],
+    [1, 0.55],
+  ].map(([scale, factor]) => Math.round(legs * scale * factor) + 20);
+
   return (
     <>
-      <div className="fade-up relative flex min-h-[212px] items-end justify-between gap-6 border-b border-line/80 pt-8">
+      {seated && (
+        <style>{`
+          .${seatClass} { margin-top: ${clearance[0]}px }
+          @media (min-width: 640px) { .${seatClass} { margin-top: ${clearance[1]}px } }
+          @media (min-width: 1024px) { .${seatClass} { margin-top: ${clearance[2]}px } }
+          @media (min-width: 1280px) { .${seatClass} { margin-top: ${clearance[3]}px } }
+        `}</style>
+      )}
+      {/* 232, not 212: at 212 the notification button sat ON the top of the
+          dashboard's window frame. The figure hangs off the rule, so giving the
+          masthead 20px more height is what buys the air above its head. */}
+      <div className="fade-up relative flex min-h-[232px] items-end justify-between gap-6 border-b border-line/80 pt-8">
         {/* The right padding is the figure's footprint reserved in advance.
             The figure is absolutely positioned, so it can't push the text out
             of its way — without this the blurb runs underneath it the moment
             the window narrows. Each step matches the scale below. */}
         <div
           className={`mb-2 pb-9 pl-2 pt-8 ${
-            hasArt ? "pr-[120px] sm:pr-[165px] lg:pr-[220px] xl:pr-[250px]" : ""
+            !hasArt
+              ? ""
+              : seated
+                ? /* A seated figure is set in from the corner from lg up, so
+                     his footprint starts further left and the blurb has to
+                     stop sooner or it runs under his arm. */
+                  "pr-[120px] sm:pr-[165px] lg:pr-[290px] xl:pr-[315px]"
+                : "pr-[120px] sm:pr-[165px] lg:pr-[220px] xl:pr-[250px]"
           }`}
         >
           {/* Flick strokes used to frame the title's corners; retired
@@ -141,7 +208,15 @@ export default function PageHeader({
             className={`pointer-events-none absolute bottom-0 origin-bottom-right scale-[0.5] sm:scale-[0.68] lg:scale-[0.88] xl:scale-100 ${
               flushRight
                 ? "right-0"
-                : "right-5 sm:right-8 lg:right-12 xl:right-14"
+                : seated
+                  ? /* Set in past the page's action button, so the dangling
+                       feet land in the empty middle of the search row rather
+                       than on top of it. Below sm it stays at the standard
+                       inset — there is no room between the search box and the
+                       button at that width, so the row clears his feet
+                       instead. */
+                    "right-5 sm:right-8 lg:right-[158px] xl:right-[166px]"
+                  : "right-5 sm:right-8 lg:right-12 xl:right-14"
             }`}
             style={{ height: illustrationHeight }}
           >
@@ -156,13 +231,47 @@ export default function PageHeader({
                   {illustrationNode}
                 </div>
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={illustration}
-                  alt=""
-                  aria-hidden
-                  className="art relative h-full w-auto"
-                />
+                <span className="relative block h-full">
+                  {seated && (
+                    /*
+                     * The shadow his legs throw on the wall below the ledge.
+                     *
+                     * It is HIS OWN SILHOUETTE, not a blur under him: the
+                     * artwork masks this layer, so the shape is exactly his
+                     * legs, then it is sheared and dropped so it falls away
+                     * from him — off the inside of his left leg and out past
+                     * his right.
+                     *
+                     * Clipped to start at the seat: above the line he is sat
+                     * against thin air, so his top half throws nothing. The
+                     * clip is applied in the element's own box BEFORE the
+                     * transform, so it has to be lifted by the drop or the
+                     * shadow starts that far under the rule and floats. A
+                     * shear leaves horizontal lines horizontal, so once
+                     * lifted the top edge lands exactly on the line.
+                     */
+                    <span
+                      aria-hidden
+                      className="fig-shadow absolute inset-0"
+                      style={{
+                        WebkitMaskImage: `url(${illustration})`,
+                        maskImage: `url(${illustration})`,
+                        clipPath: `inset(${Math.round(illustrationHeight * (seat ?? 0)) - SHADOW.drop}px ${SHADOW.cutRight}% 0 ${SHADOW.cutLeft}%)`,
+                        transform: `translateY(${Math.round(legs)}px) translate(${-SHADOW.side}px, ${SHADOW.drop}px) skewX(${-SHADOW.rake}deg)`,
+                      }}
+                    />
+                  )}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={illustration}
+                    alt=""
+                    aria-hidden
+                    className="art relative h-full w-auto"
+                    /* Seated: drop them by everything below their seat, so the
+                       rule passes under them and the legs hang free. */
+                    style={seated ? { transform: `translateY(${Math.round(legs)}px)` } : undefined}
+                  />
+                </span>
               )}
             </div>
           </div>
@@ -172,7 +281,7 @@ export default function PageHeader({
       {/* Search sits UNDER the rule, in the same column it always did — it
           belongs to the work below, not to the masthead above. */}
       {(search || actions) && (
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <div className={`flex flex-wrap items-center justify-between gap-3 ${seated ? seatClass : "mt-5"}`}>
           {search && (
             <label className="flex w-full max-w-xs items-center gap-2.5 rounded-full border border-line/80 px-4 py-2.5 transition-colors focus-within:border-ink">
               <DoodleIcon name="search" size={15} className="shrink-0 text-muted" />
