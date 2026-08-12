@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { bodyFor, icsFor, subjectFor, type AppraisalInvite } from "@/lib/appraisal-email";
-import { campaignsFor, CAMPAIGNS, lastDay } from "@/lib/campaigns";
+import { campaignsFor, CAMPAIGNS, lastDay, type Campaign } from "@/lib/campaigns";
 import {
   APPRAISAL_STEPS,
   EMPTY_CASE,
@@ -458,9 +458,19 @@ function Decide({
   const [reason, setReason] = useState<string>(reasons[0] ?? "");
   const [notes, setNotes] = useState("");
   const [when, setWhen] = useState("");
+  /* Every campaign there is, not just the ones in code: one marketing wrote
+     this morning has to be offered this afternoon. Seeded from code so the
+     list is never momentarily empty, and so it works with no database. */
+  const [all, setAll] = useState<Campaign[]>(CAMPAIGNS);
+  useEffect(() => {
+    fetch("/api/campaigns")
+      .then((r) => r.json())
+      .then((j) => Array.isArray(j.campaigns) && j.campaigns.length && setAll(j.campaigns))
+      .catch(() => {});
+  }, []);
   /* The campaigns marketing wrote for THIS reason. The agent picks; they
      never author one, and the list narrows as soon as a reason is chosen. */
-  const offered = outcome === "won" ? [] : campaignsFor(outcome, reason);
+  const offered = outcome === "won" ? [] : campaignsFor(outcome, reason, all);
   const [campaignId, setCampaignId] = useState<string | null>(null);
 
   return (

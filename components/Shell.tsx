@@ -34,9 +34,9 @@ const BACK: NavItem[] = [
   { href: "/compliance", label: "Compliance", icon: "shield" },
   { href: "/portfolio", label: "Portfolio", icon: "folder" },
   { href: "/finances", label: "Finances", icon: "wallet" },
-  /* Marketing builds the campaigns agents pick from — its own place, because
-     authoring and picking are different jobs for different people. */
-  { href: "/marketing", label: "Marketing", icon: "megaphone" },
+  /* Marketing is deliberately NOT here. It's a different workspace for a
+     different person, reached from the door — a nav that lists everything
+     everyone might do is how an OS starts to feel like a filing cabinet. */
 ];
 
 /** Clay is the house default; the attribute only exists for the others. */

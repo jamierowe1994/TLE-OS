@@ -28,7 +28,37 @@ import { rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const BY_ID = new Map<string, Campaign>(CAMPAIGNS.map((c) => [c.id, c]));
+/**
+ * Every campaign, built-in and written here, by id.
+ *
+ * Loaded per run rather than held in a module constant: a campaign marketing
+ * created this morning has to be schedulable this afternoon, and a constant
+ * built at import time would only see it after the next deploy.
+ */
+async function campaignsById(): Promise<Map<string, Campaign>> {
+  const m = new Map<string, Campaign>(CAMPAIGNS.map((c) => [c.id, c]));
+  const rows = await q<{
+    id: string;
+    name: string;
+    audience: string;
+    reasons: string[];
+    aim: string;
+    status: string;
+    steps: Campaign["steps"];
+  }>(`SELECT id, name, audience, reasons, aim, status, steps FROM os_campaigns`).catch(() => []);
+  for (const r of rows) {
+    m.set(r.id, {
+      id: r.id,
+      name: r.name,
+      audience: r.audience === "lost" ? "lost" : "nurture",
+      reasons: Array.isArray(r.reasons) ? r.reasons : [],
+      aim: r.aim,
+      status: r.status === "live" ? "live" : "draft",
+      steps: Array.isArray(r.steps) ? r.steps : [],
+    });
+  }
+  return m;
+}
 
 type Row = {
   id: string;
@@ -101,8 +131,12 @@ async function activeRows(): Promise<Row[]> {
 }
 
 /** What is due for one enrolment, before anything is done about it. */
-function planFor(row: Row, now: Date): { campaign: Campaign; plan: StepPlan } | null {
-  const campaign = BY_ID.get(row.campaign_id);
+function planFor(
+  row: Row,
+  now: Date,
+  byId: Map<string, Campaign>
+): { campaign: Campaign; plan: StepPlan } | null {
+  const campaign = byId.get(row.campaign_id);
   if (!campaign) return null; // A campaign that was retired. Nothing to fire.
   const plan = nextDue(campaign, row.enrolled_at, row.last_step_sent, now);
   return plan ? { campaign, plan } : null;
@@ -116,11 +150,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ran: false, sending: sendingOn(), due: [], reason: "No database on this environment." });
   }
   const now = new Date();
-  const [rows, copy] = await Promise.all([activeRows(), storedCopy()]);
+  const [rows, copy, byId] = await Promise.all([activeRows(), storedCopy(), campaignsById()]);
   const due: Verdict[] = [];
 
   for (const row of rows) {
-    const found = planFor(row, now);
+    const found = planFor(row, now, byId);
     if (!found) continue;
     const { campaign, plan } = found;
     const disp = dispositionOf(plan.step, copy.has(`${campaign.id}:${plan.index}`));
@@ -159,11 +193,11 @@ export async function POST(req: NextRequest) {
   }
 
   const now = new Date();
-  const [rows, copy] = await Promise.all([activeRows(), storedCopy()]);
+  const [rows, copy, byId] = await Promise.all([activeRows(), storedCopy(), campaignsById()]);
   const done: Verdict[] = [];
 
   for (const row of rows) {
-    const found = planFor(row, now);
+    const found = planFor(row, now, byId);
     if (!found) continue;
     const { campaign, plan } = found;
     const base = {

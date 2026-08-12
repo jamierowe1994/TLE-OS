@@ -216,9 +216,19 @@ export const CAMPAIGNS: Campaign[] = [
   },
 ];
 
-/** The campaigns that fit what the appraisal actually recorded. */
-export function campaignsFor(audience: CampaignAudience, reason: string | null): Campaign[] {
-  const live = CAMPAIGNS.filter((c) => c.status === "live" && c.audience === audience);
+/**
+ * The campaigns that fit what the appraisal actually recorded.
+ *
+ * `all` defaults to the built-in set so this stays usable without a fetch —
+ * but the agent screen passes the merged list, or a campaign marketing wrote
+ * this morning could never be picked.
+ */
+export function campaignsFor(
+  audience: CampaignAudience,
+  reason: string | null,
+  all: Campaign[] = CAMPAIGNS
+): Campaign[] {
+  const live = all.filter((c) => c.status === "live" && c.audience === audience);
   if (!reason) return live;
   const exact = live.filter((c) => c.reasons.includes(reason));
   // Never leave an agent with nothing: an unmatched reason still gets the

@@ -177,6 +177,25 @@ CREATE TABLE IF NOT EXISTS os_email_templates (
 CREATE UNIQUE INDEX IF NOT EXISTS os_email_templates_step
   ON os_email_templates (campaign_id, step_index);
 
+-- Campaigns marketing built here, alongside the ones that ship in code.
+--
+-- The built-in set stays in lib/campaigns.ts: it is the house's own thinking
+-- about why a landlord walks away, it wants reviewing in a diff, and it must
+-- exist on an environment with no database at all. This table is for the ones
+-- marketing writes afterwards, which nobody should need a deploy for.
+CREATE TABLE IF NOT EXISTS os_campaigns (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  audience    TEXT NOT NULL DEFAULT 'nurture',
+  reasons     JSONB NOT NULL DEFAULT '[]',
+  aim         TEXT NOT NULL DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'draft',
+  steps       JSONB NOT NULL DEFAULT '[]',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by  TEXT NOT NULL DEFAULT ''
+);
+
 -- Customers with a portal account (tenants and landlords). Separate table
 -- from os_users on purpose: a customer must never be one bad join away from
 -- an office login.
