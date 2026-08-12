@@ -22,10 +22,18 @@ const nextConfig: NextConfig = {
     // Resolved at build time so the server and the browser always agree:
     // computing it from window.location would differ between the two and
     // React would keep the server's answer, which is a logo that never
-    // appears. Railway provides the domain; locally it's the dev server.
+    // appears.
+    //
+    // localhost ONLY outside production. Railway's domain variables aren't
+    // reliably present during the build, and a production build that quietly
+    // fell back to localhost would put http://localhost:3200/brand/… in a
+    // landlord's inbox — a broken image on every email, visible to them and
+    // to nobody here. Empty is the safe miss: the renderer falls back to the
+    // wordmark. Set OS_ORIGIN on Railway to get the logo.
     NEXT_PUBLIC_OS_ORIGIN:
       process.env.OS_ORIGIN ||
-      (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "http://localhost:3200"),
+      (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "") ||
+      (process.env.NODE_ENV === "production" ? "" : "http://localhost:3200"),
   },
 };
 
