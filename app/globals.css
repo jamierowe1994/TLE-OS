@@ -20,23 +20,23 @@
   --accent-dark: #a85a51;
   --accent-soft: #ffe4df;
 
-  /* Warm eggshell canvas sampled from the Notioly artwork, so the
-     illustrations sit on their native colour; white stays for cards. */
+  /* Daylight is white paper. The warm eggshell (#f2f0eb, sampled from the
+     Notioly artwork) was the founding surface and was offered beside this one
+     as a toggle for a while; James settled it on 12 Aug — light only, and the
+     toggle went with it. */
   --ink: #101014;
   --muted: #6b6b70;
-  --line: #d9d5ca;
-  --page: #f2f0eb;
+  --line: #cdc9c0;
+  --page: #ffffff;
   --card: #ffffff;
-  /* Boxes sit ON the eggshell in daylight — outline only, no fill. */
-  --panel: transparent;
-  /* What a BOX is painted with. On the eggshell it's simply the page (the
-     boxes are outlines); the light surface overrides it with the faintest
-     grey so boxes read against pure white. */
-  --box: var(--page);
+  /* The faintest grey — a 50, maybe a 100, never more — so the nav and the
+     boxes separate from the white page without any drama. */
+  --panel: #fbfbfa;
+  --box: #fcfcfc;
   /* A wash INSIDE the illustrations — the window frame, the lady's shirt.
      Sits behind the ink, in the grey family of the surface it's on. The
      dark theme gets it inverted for free via .art. */
-  --art-wash: #e9e7e1;
+  --art-wash: #f0efeb;
 
   --radius-card: 16px;
 }
@@ -58,25 +58,6 @@
   --accent-soft: #fef2f2;
 }
 
-/* ---------------------------------------------------------------------------
-   The surface toggle: "medium" is the founding eggshell above; "light" is
-   plain white. Two options on purpose — the beige split the room, and one
-   of these will be removed once the room decides. Declared BEFORE the dark
-   block so that dark (same specificity, later in the file) always wins when
-   both attributes are present.
---------------------------------------------------------------------------- */
-:root[data-surface="light"] {
-  --page: #ffffff;
-  /* The faintest grey — a 50, maybe a 100, never more — so the nav and the
-     boxes separate from the white page without any drama. And the rims come
-     up one notch, purely so edges are findable. Reader accessibility, not
-     decoration (James, 8 Aug 2026; lightened ~20% twice more same day —
-     it has landed where a whisper lands). */
-  --panel: #fbfbfa;
-  --box: #fcfcfc;
-  --line: #cdc9c0;
-  --art-wash: #f0efeb;
-}
 
 /* ---------------------------------------------------------------------------
    Dark mode. Charcoal, never black — a true #000 makes the hand-drawn linework

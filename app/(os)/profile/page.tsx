@@ -8,10 +8,10 @@ import { Pill } from "@/components/Wire";
 import WiringSheet from "@/components/WiringSheet";
 import { usePref, usePrefsHome } from "@/lib/prefs-store";
 import {
-  applySurface, applyTheme, readSurface, readTheme, writeSurface, writeTheme,
+  applyTheme, readTheme, writeTheme,
   CHARCOALS, DARK_BG_DEFAULT, DARK_BG_KEY, DARK_BOX_DEFAULT, DARK_BOX_KEY,
   readDarkStep, writeDarkStep,
-  type SurfaceChoice, type ThemeChoice,
+  type ThemeChoice,
 } from "@/lib/theme";
 
 /**
@@ -90,7 +90,6 @@ export default function ProfilePage() {
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
   const [saved, setSaved] = useState(false);
   const [theme, setTheme] = useState<ThemeChoice>("auto");
-  const [surface, setSurface] = useState<SurfaceChoice>("medium");
   const [darkBg, setDarkBg] = useState(DARK_BG_DEFAULT);
   const [darkBox, setDarkBox] = useState(DARK_BOX_DEFAULT);
   const [accent, setAccent] = useState("");
@@ -99,7 +98,7 @@ export default function ProfilePage() {
   const [reminders, setReminders] = useState<Set<string>>(new Set());
 
   /* Who you are, and the accent you picked, now follow the account. Theme
-     and surface stay browser-first — they paint before React runs, and a
+     stays browser-first — it paints before React runs, and a
      round-trip would mean a flash of the wrong colour on every load. */
   const [storedProfile, storeProfile] = usePref<Profile | null>(PROFILE_KEY, null);
   const [storedAccent, storeAccent] = usePref<string>("os-accent", "");
@@ -116,16 +115,9 @@ export default function ProfilePage() {
 
   useEffect(() => {
     setTheme(readTheme() ?? "auto");
-    setSurface(readSurface());
     setDarkBg(readDarkStep(DARK_BG_KEY, DARK_BG_DEFAULT));
     setDarkBox(readDarkStep(DARK_BOX_KEY, DARK_BOX_DEFAULT));
   }, []);
-
-  function pickSurface(s: SurfaceChoice) {
-    setSurface(s);
-    writeSurface(s);
-    applySurface(s);
-  }
 
   function save(next: Profile) {
     setProfile(next);
@@ -392,37 +384,7 @@ export default function ProfilePage() {
               </>
             )}
 
-            <p className={`${label} mt-7`}>Surface</p>
-            <div className="flex gap-2">
-              {(
-                [
-                  { id: "light", name: "Light", dot: "#ffffff" },
-                  { id: "medium", name: "Medium", dot: "#f2f0eb" },
-                ] as const
-              ).map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => pickSurface(s.id)}
-                  className={`flex flex-1 items-center justify-center gap-2.5 rounded-xl border px-3 py-3 text-[12.5px] font-medium transition-colors ${
-                    surface === s.id
-                      ? "border-accent-dark bg-accent-soft text-accent-dark"
-                      : "border-line/70 text-muted hover:text-ink"
-                  }`}
-                >
-                  <span
-                    className="h-5 w-5 rounded-full border border-ink/15"
-                    style={{ backgroundColor: s.dot }}
-                  />
-                  {s.name}
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
-              The page&apos;s paper: Medium is the warm eggshell, Light is plain white.
-              The jury&apos;s out — one of these will eventually win and the other goes.
-              Daylight only; the dark theme is its own paper.
-            </p>
+
 
             <p className={`${label} mt-7`}>Your accent</p>
             <div className="flex gap-3">

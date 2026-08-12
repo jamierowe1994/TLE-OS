@@ -50,39 +50,6 @@ export function writeTheme(choice: ThemeChoice) {
 }
 
 /**
- * The surface: what colour the page itself is, in daylight.
- *
- * "Medium" is the founding eggshell (#f2f0eb, sampled from the Notioly
- * artwork); "light" is plain white. Both exist because the beige split the
- * room (James, 8 Aug 2026) — one of them will eventually be removed, so
- * this is deliberately a two-value toggle, not a palette.
- */
-export type SurfaceChoice = "light" | "medium";
-
-export const SURFACE_KEY = "os-surface";
-
-export function applySurface(choice: SurfaceChoice) {
-  if (choice === "light") document.documentElement.dataset.surface = "light";
-  else delete document.documentElement.dataset.surface;
-}
-
-export function readSurface(): SurfaceChoice {
-  try {
-    return localStorage.getItem(SURFACE_KEY) === "light" ? "light" : "medium";
-  } catch {
-    return "medium";
-  }
-}
-
-export function writeSurface(choice: SurfaceChoice) {
-  try {
-    localStorage.setItem(SURFACE_KEY, choice);
-  } catch {
-    /* private browsing */
-  }
-}
-
-/**
  * The dark room's decorating kit. Ten warm charcoals in hundred-steps —
  * 100 lightest, 1000 deepest — applied separately to the BACKGROUND and the
  * BOXES so James can find the exact blend by eye. Pure black never appears:
