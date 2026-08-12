@@ -469,6 +469,11 @@ export default function LeadDrawer({
      timeline and the notes step aside for it. An escape hatch rather than a
      one-way door: "show the whole process" brings the timeline back. */
   const appraisalTakesOver = !isTenant && here.id === "appraisal" && !stalled && !showProcess;
+  /* The visit is the one step that's a FORM — rent, rooms, dates, condition,
+     documents. In a 68%-wide drawer that's a column of one-word fields, so
+     the drawer takes more of the screen for exactly that step and gives it
+     back afterwards. */
+  const wide = appraisalTakesOver && appraisal.state === "visit";
 
   /** Advance one step, if there's anywhere to go. */
   const advance = () => setStep((s) => Math.min(s + 1, track.length - 1));
@@ -536,7 +541,9 @@ export default function LeadDrawer({
       />
 
       <aside
-        className={`absolute inset-y-0 right-0 flex overflow-hidden rounded-l-2xl w-full flex-col bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] lg:w-[76%] xl:w-[68%] ${
+        className={`absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-2xl bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-[transform,width] duration-[420ms] ${
+          wide ? "lg:w-[92%] xl:w-[86%]" : "lg:w-[76%] xl:w-[68%]"
+        } ${
           shown ? "translate-x-0" : "translate-x-full"
         }`}
         style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
@@ -1128,7 +1135,7 @@ export default function LeadDrawer({
               the contact log, which is the same record read from the other
               end. "Show the whole process" puts the timeline back. ── */}
           {appraisalTakesOver && (
-            <>
+            <div className="mt-3 flex min-h-0 flex-1 flex-col">
               <AppraisalTrack
                 value={appraisal}
                 onChange={setAppraisal}
@@ -1156,7 +1163,7 @@ export default function LeadDrawer({
               {saveLabel(appraisalSave) && (
                 <p className="mt-1.5 pl-1 text-[10.5px] text-muted">{saveLabel(appraisalSave)}</p>
               )}
-            </>
+            </div>
           )}
 
           {/* ── Notes fill whatever is left of the screen — the record wants

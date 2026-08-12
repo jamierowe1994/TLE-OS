@@ -128,6 +128,14 @@ export type Touch = {
   what: string;
 };
 
+/** A file taken at the visit, or sent over afterwards. */
+export type AppraisalDoc = {
+  id: string;
+  name: string;
+  url: string;
+  at: string;
+};
+
 export type AppraisalCase = {
   state: AppraisalState;
   /** When the visit is, as text — the diary holds the real event. */
@@ -136,6 +144,22 @@ export type AppraisalCase = {
   /** What it was valued at, per calendar month. */
   valuation: number | null;
   feePercent: number | null;
+  /**
+   * What the landlord wants for it, which is a different number from the
+   * valuation and the gap between the two is the whole conversation.
+   */
+  askingRent: number | null;
+  /* The property, filled in at the visit — this is the one moment someone is
+     actually standing in it, and the lead record rarely knows any of this. */
+  bedrooms: number | null;
+  bathrooms: number | null;
+  receptions: number | null;
+  availableFrom: string | null;
+  /** Vacant, tenanted, notice served — in their words. */
+  tenantSituation: string;
+  /** Condition, works needed, anything seen on the day. */
+  condition: string;
+  docs: AppraisalDoc[];
   summary: string;
   /** The next time someone has agreed to make contact. */
   nextActionAt: string | null;
@@ -154,6 +178,14 @@ export const EMPTY_CASE: AppraisalCase = {
   confirmationSentAt: null,
   valuation: null,
   feePercent: null,
+  askingRent: null,
+  bedrooms: null,
+  bathrooms: null,
+  receptions: null,
+  availableFrom: null,
+  tenantSituation: "",
+  condition: "",
+  docs: [],
   summary: "",
   nextActionAt: null,
   outcomeReason: null,

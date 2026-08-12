@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
-import { bodyFor, icsFor, subjectFor, type AppraisalInvite } from "@/lib/appraisal-email";
+import {
+  bodyFor,
+  icsFor,
+  postBodyFor,
+  postSubjectFor,
+  subjectFor,
+  type AppraisalInvite,
+} from "@/lib/appraisal-email";
+import EmailPopout from "@/components/EmailPopout";
 import { campaignsFor, CAMPAIGNS, lastDay, type Campaign } from "@/lib/campaigns";
 import {
   APPRAISAL_STEPS,
@@ -14,6 +22,7 @@ import {
   needsAttention,
   stageIndex,
   type AppraisalCase,
+  type AppraisalDoc,
   type AppraisalOutcome,
   type AppraisalStage,
   type Touch,
@@ -40,6 +49,23 @@ import {
  */
 
 const money = (n: number | null) => (n == null ? "—" : `£${n.toLocaleString("en-GB")}`);
+
+/** Digits only — landlords say "1,300" and "£1300 pcm" and mean the same thing. */
+const num = (v: string) => (v.trim() ? Number(v.replace(/\D/g, "")) || null : null);
+
+const INPUT =
+  "w-full rounded-lg border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block min-w-0">
+      <span className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-muted">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
 
 /** The stage rail — named, because four dots never told anyone where they were. */
 function Rail({ state }: { state: AppraisalCase["state"] }) {
@@ -102,11 +128,11 @@ export default function AppraisalTrack({
   const c = value ?? EMPTY_CASE;
   const [deciding, setDeciding] = useState<AppraisalOutcome | null>(null);
   const [touchText, setTouchText] = useState("");
-  /* The confirmation, opened on the pre-appraisal step. The body is editable
-     because no template survives contact with a real landlord. */
-  const [draft, setDraft] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
-  const [sendMsg, setSendMsg] = useState<string | null>(null);
+  /* Both emails open full size rather than living in the panel — see
+     EmailPopout. Which one is open, if either. */
+  const [composing, setComposing] = useState<null | "pre" | "post">(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
   const [touchKind, setTouchKind] = useState<Touch["kind"]>("call");
 
   const at = stageIndex(c.state);
@@ -170,8 +196,30 @@ export default function AppraisalTrack({
     setTouchText("");
   }
 
-  const emailStage = c.state === "pre" && !!invite;
-  const body = draft ?? (invite ? bodyFor(invite) : "");
+  async function upload(file: File) {
+    setUploading(true);
+    setUploadMsg(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("scope", "document");
+      form.append("ref", recordId ?? "appraisal");
+      const res = await fetch("/api/r2/upload", { method: "POST", body: form });
+      const j = await res.json();
+      if (!j.ok) throw new Error(j.error ?? "That didn't upload.");
+      const doc: AppraisalDoc = {
+        id: `d${Date.now()}`,
+        name: file.name,
+        url: j.url ?? j.key ?? "",
+        at: new Date().toISOString(),
+      };
+      patch({ docs: [doc, ...c.docs] });
+    } catch (e) {
+      setUploadMsg(e instanceof Error ? e.message : "That didn't upload.");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-line/80 bg-panel">
@@ -246,119 +294,144 @@ export default function AppraisalTrack({
             <>
               <p className="max-w-prose text-[12.5px] leading-relaxed text-muted">{step?.detail}</p>
 
-              {/* The confirmation, full height — it's the whole job at this
-                  step, and a ten-line box in a corner was unreadable. */}
-              {emailStage && invite && (
-                <div className="mt-3 flex min-h-0 flex-1 flex-col rounded-2xl border border-line/70 bg-card">
-                  <div className="flex flex-wrap items-baseline gap-x-3 border-b border-line/60 px-4 py-2.5">
-                    <span className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">
-                      To
-                    </span>
-                    <span className="text-[12px]">{landlordEmail || "no email on file"}</span>
+              {/* The visit: the one moment someone is standing in the
+                  property. Everything the lead record never knew gets filled
+                  in here, and post-appraisal reads it back rather than asking
+                  twice. */}
+              {c.state === "visit" && (
+                <div className="mt-3 grid min-h-0 flex-1 grid-rows-[auto_auto_1fr] gap-3 overflow-y-auto pr-1">
+                  <div className="grid gap-3 sm:grid-cols-4">
+                    <Field label="They want (pcm)">
+                      <input
+                        inputMode="numeric"
+                        value={c.askingRent ?? ""}
+                        onChange={(e) => patch({ askingRent: num(e.target.value) })}
+                        placeholder="1,300"
+                        className={INPUT}
+                      />
+                    </Field>
+                    <Field label="Beds">
+                      <input
+                        inputMode="numeric"
+                        value={c.bedrooms ?? ""}
+                        onChange={(e) => patch({ bedrooms: num(e.target.value) })}
+                        className={INPUT}
+                      />
+                    </Field>
+                    <Field label="Baths">
+                      <input
+                        inputMode="numeric"
+                        value={c.bathrooms ?? ""}
+                        onChange={(e) => patch({ bathrooms: num(e.target.value) })}
+                        className={INPUT}
+                      />
+                    </Field>
+                    <Field label="Receptions">
+                      <input
+                        inputMode="numeric"
+                        value={c.receptions ?? ""}
+                        onChange={(e) => patch({ receptions: num(e.target.value) })}
+                        className={INPUT}
+                      />
+                    </Field>
                   </div>
-                  <div className="border-b border-line/60 px-4 py-2.5 text-[13px] font-semibold">
-                    {subjectFor(invite)}
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="Available from">
+                      <input
+                        type="date"
+                        value={c.availableFrom ?? ""}
+                        onChange={(e) => patch({ availableFrom: e.target.value || null })}
+                        className={INPUT}
+                      />
+                    </Field>
+                    <Field label="Tenant situation">
+                      <input
+                        value={c.tenantSituation}
+                        onChange={(e) => patch({ tenantSituation: e.target.value })}
+                        placeholder="Vacant · tenanted until March · notice served"
+                        className={INPUT}
+                      />
+                    </Field>
                   </div>
-                  <textarea
-                    value={body}
-                    onChange={(e) => setDraft(e.target.value)}
-                    className="min-h-0 w-full flex-1 resize-none bg-transparent px-4 py-3 text-[12.5px] leading-relaxed outline-none"
-                  />
-                  <div className="flex flex-wrap items-center gap-2 border-t border-line/60 px-4 py-3">
-                    <button
-                      type="button"
-                      disabled={sending || !landlordEmail}
-                      onClick={async () => {
-                        setSending(true);
-                        setSendMsg(null);
-                        try {
-                          const res = await fetch("/api/appraisal-email", {
-                            method: "POST",
-                            headers: { "content-type": "application/json" },
-                            body: JSON.stringify({
-                              to: landlordEmail,
-                              contactId: landlordContactId,
-                              subject: subjectFor(invite),
-                              text: body,
-                            }),
-                          });
-                          const j = await res.json();
-                          if (!res.ok) throw new Error(j.error ?? "Send failed.");
-                          setSendMsg("Sent — it's on their REX timeline too.");
-                          patch({ confirmationSentAt: new Date().toISOString(), state: "visit" });
-                        } catch (e) {
-                          setSendMsg(e instanceof Error ? e.message : "Send failed.");
-                        } finally {
-                          setSending(false);
-                        }
-                      }}
-                      className="rounded-full bg-ink px-4 py-2 text-[12.5px] text-page disabled:opacity-50"
-                    >
-                      {sending ? "Sending…" : "Send the confirmation"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const ics = icsFor(invite);
-                        if (!ics) return;
-                        const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
-                        const a = document.createElement("a");
-                        a.href = url;
-                        a.download = "market-appraisal.ics";
-                        a.click();
-                        URL.revokeObjectURL(url);
-                      }}
-                      className="rounded-full border border-line/80 px-3.5 py-2 text-[12px]"
-                    >
-                      Calendar invite
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigator.clipboard?.writeText(body)}
-                      className="rounded-full border border-line/80 px-3.5 py-2 text-[12px]"
-                    >
-                      Copy
-                    </button>
-                    <button
-                      type="button"
-                      onClick={advance}
-                      className="ml-auto text-[11px] font-semibold text-muted transition-colors hover:text-ink"
-                    >
-                      Already sent — move on
-                    </button>
+
+                  <div className="grid min-h-0 gap-3 lg:grid-cols-2">
+                    <Field label="How it went, and what it needs">
+                      <textarea
+                        value={c.condition}
+                        onChange={(e) => patch({ condition: e.target.value })}
+                        placeholder="Condition, works needed, what they said on the day…"
+                        className={`${INPUT} min-h-[110px] resize-none leading-relaxed`}
+                      />
+                    </Field>
+                    <Field label="Anything you took with you">
+                      <div className="rounded-xl border border-dashed border-line/80 p-3">
+                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-line/80 px-3 py-1.5 text-[11.5px]">
+                          {uploading ? "Uploading…" : "Add a document"}
+                          <input
+                            type="file"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) upload(f);
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
+                        {uploadMsg && (
+                          <p className="mt-2 text-[11px] text-accent-dark">{uploadMsg}</p>
+                        )}
+                        <ul className="mt-2 space-y-1">
+                          {c.docs.map((d) => (
+                            <li key={d.id} className="flex items-center gap-2 text-[11.5px]">
+                              <DoodleIcon name="doc" size={12} className="text-muted" />
+                              <span className="min-w-0 flex-1 truncate">{d.name}</span>
+                              <button
+                                type="button"
+                                aria-label="Remove"
+                                onClick={() => patch({ docs: c.docs.filter((x) => x.id !== d.id) })}
+                                className="text-muted hover:text-ink"
+                              >
+                                ×
+                              </button>
+                            </li>
+                          ))}
+                          {!c.docs.length && (
+                            <li className="text-[11px] text-muted">
+                              EPC, gas certificate, floor plan — whatever they handed over.
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    </Field>
                   </div>
-                  {sendMsg && (
-                    <p className="border-t border-line/60 bg-accent-soft/50 px-4 py-2 text-[11.5px] text-accent-dark">
-                      {sendMsg}
-                    </p>
-                  )}
                 </div>
               )}
 
-              {/* The write-up. Same idea: at this step it IS the work. */}
+              {/* The write-up. Everything from the visit is already here —
+                  asking nobody to type the same number twice is most of what
+                  makes a process get used. */}
               {c.state === "post" && (
-                <div className="mt-3 flex min-h-0 flex-1 flex-col">
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <label className="block">
-                      <span className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-muted">
-                        Valued at (pcm)
-                      </span>
+                <div className="mt-3 grid min-h-0 flex-1 grid-rows-[auto_1fr] gap-3 overflow-y-auto pr-1">
+                  <div className="grid gap-3 sm:grid-cols-4">
+                    <Field label="Valued at (pcm)">
                       <input
                         inputMode="numeric"
                         value={c.valuation ?? ""}
-                        onChange={(e) =>
-                          patch({
-                            valuation: e.target.value ? Number(e.target.value.replace(/\D/g, "")) : null,
-                          })
-                        }
+                        onChange={(e) => patch({ valuation: num(e.target.value) })}
                         placeholder="1,250"
-                        className="w-full rounded-lg border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink"
+                        className={INPUT}
                       />
-                    </label>
-                    <label className="block">
-                      <span className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-muted">
-                        Fee quoted (%)
-                      </span>
+                    </Field>
+                    <Field label="They want (pcm)">
+                      <input
+                        inputMode="numeric"
+                        value={c.askingRent ?? ""}
+                        onChange={(e) => patch({ askingRent: num(e.target.value) })}
+                        className={INPUT}
+                      />
+                    </Field>
+                    <Field label="Fee quoted (%)">
                       <input
                         inputMode="decimal"
                         value={c.feePercent ?? ""}
@@ -370,40 +443,58 @@ export default function AppraisalTrack({
                           })
                         }
                         placeholder="10"
-                        className="w-full rounded-lg border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink"
+                        className={INPUT}
                       />
-                    </label>
-                    <label className="block">
-                      <span className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-muted">
-                        Follow up on
-                      </span>
+                    </Field>
+                    <Field label="Follow up on">
                       <input
                         type="date"
                         value={c.nextActionAt?.slice(0, 10) ?? ""}
                         onChange={(e) => patch({ nextActionAt: e.target.value || null })}
-                        className="w-full rounded-lg border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink"
+                        className={INPUT}
                       />
-                    </label>
+                    </Field>
                   </div>
-                  <textarea
-                    value={c.summary}
-                    onChange={(e) => patch({ summary: e.target.value })}
-                    placeholder="What they're weighing up, who else they're seeing, when they want to be on the market…"
-                    className="mt-3 min-h-0 w-full flex-1 resize-none rounded-2xl border border-line/70 bg-card px-4 py-3 text-[12.5px] leading-relaxed outline-none focus:border-ink"
-                  />
+                  <Field label="What was said">
+                    <textarea
+                      value={c.summary || c.condition}
+                      onChange={(e) => patch({ summary: e.target.value })}
+                      placeholder="What they're weighing up, who else they're seeing, when they want to be on the market…"
+                      className={`${INPUT} min-h-[120px] resize-none leading-relaxed`}
+                    />
+                  </Field>
                 </div>
               )}
 
-              {/* Every other step: one button, and nothing to fill in. */}
-              {!emailStage && c.state !== "post" && step && (
-                <div className="mt-4">
+              {/* The one button that moves it on. On the two email steps it
+                  opens the email full size first — nobody should send
+                  something they haven't read. */}
+              {step && (
+                <div className="mt-4 flex flex-wrap items-center gap-3">
                   <button
                     type="button"
-                    onClick={advance}
+                    onClick={() => {
+                      if (c.state === "pre" && invite) return setComposing("pre");
+                      if (c.state === "post" && invite) return setComposing("post");
+                      advance();
+                    }}
                     className="rounded-full bg-ink px-5 py-2.5 text-[12.5px] text-page"
                   >
-                    {step.cta}
+                    {c.state === "pre"
+                      ? "Send the pre-appraisal"
+                      : c.state === "post"
+                        ? "Send the follow-up"
+                        : step.cta}
                   </button>
+                  {(c.state === "pre" || c.state === "post") && (
+                    <button
+                      type="button"
+                      onClick={advance}
+                      className="text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+                    >
+                      Skip it — move on
+                    </button>
+                  )}
                 </div>
               )}
             </>
@@ -485,6 +576,55 @@ export default function AppraisalTrack({
           </ul>
         </div>
       </div>
+
+      {composing && invite && (
+        <EmailPopout
+          title={composing === "pre" ? "Before the visit" : "After the visit"}
+          to={landlordEmail}
+          contactId={landlordContactId}
+          subject={composing === "pre" ? subjectFor(invite) : postSubjectFor(invite)}
+          body={
+            composing === "pre"
+              ? bodyFor(invite)
+              : postBodyFor(invite, {
+                  valuation: c.valuation,
+                  askingRent: c.askingRent,
+                  feePercent: c.feePercent,
+                  availableFrom: c.availableFrom,
+                  summary: c.summary || c.condition,
+                })
+          }
+          attachments={c.docs}
+          extra={
+            composing === "pre" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const ics = icsFor(invite);
+                  if (!ics) return;
+                  const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = "market-appraisal.ics";
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="rounded-full border border-line/80 px-4 py-2.5 text-[12px]"
+              >
+                Calendar invite
+              </button>
+            ) : undefined
+          }
+          onClose={() => setComposing(null)}
+          onSent={() => {
+            // The confirmation moves it on; the follow-up doesn't — after the
+            // visit the next move is theirs, and the case waits on the answer.
+            if (composing === "pre") {
+              patch({ confirmationSentAt: new Date().toISOString(), state: "visit" });
+            }
+          }}
+        />
+      )}
 
       {/* ── The shortcut. The route above is the way through; this is for the
           landlord who answers on the doorstep. ── */}

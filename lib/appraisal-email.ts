@@ -89,3 +89,72 @@ export function icsFor(i: AppraisalInvite): string | null {
     "END:VCALENDAR",
   ].join("\r\n");
 }
+
+/**
+ * The follow-up, after the visit.
+ *
+ * Written from what was actually recorded on the day rather than from a
+ * template with slots, because the whole value of it is that it repeats their
+ * property back to them: the number, the reasoning, what they said they
+ * wanted. A landlord comparing three agents keeps the one that put it in
+ * writing first.
+ */
+export type AppraisalOutcomeFacts = {
+  valuation: number | null;
+  askingRent: number | null;
+  feePercent: number | null;
+  availableFrom: string | null;
+  summary: string;
+};
+
+const pcm = (n: number | null) => (n == null ? null : `£${n.toLocaleString("en-GB")} pcm`);
+
+export function postSubjectFor(i: AppraisalInvite): string {
+  return `Your appraisal — ${i.address}`;
+}
+
+export function postBodyFor(i: AppraisalInvite, f: AppraisalOutcomeFacts): string {
+  const figure = pcm(f.valuation);
+  const asked = pcm(f.askingRent);
+  const lines: string[] = [
+    `Hi ${first(i.landlordName)},`,
+    "",
+    `Thanks for your time today, and for showing me round ${i.address}.`,
+    "",
+  ];
+
+  if (figure) {
+    lines.push(
+      asked && asked !== figure
+        ? `In writing, as promised: I'd put it on the market at ${figure}. You mentioned you were hoping for ${asked} — that's not far off, and it's worth a conversation about what would close the gap.`
+        : `In writing, as promised: I'd put it on the market at ${figure}.`
+    );
+  } else {
+    lines.push("In writing, as promised — here's where we got to.");
+  }
+  lines.push("");
+
+  if (f.summary.trim()) {
+    lines.push(f.summary.trim(), "");
+  }
+  if (f.feePercent != null) {
+    lines.push(
+      `Our fee would be ${f.feePercent}% of the rent, which covers the marketing, the viewings, the referencing and the paperwork.`,
+      ""
+    );
+  }
+  if (f.availableFrom) {
+    lines.push(`You said you'd want it available from ${f.availableFrom}.`, "");
+  }
+
+  lines.push(
+    "If you'd like to go ahead, I'll send the terms over and we can get the photos booked. If you're still weighing it up, that's completely fine — tell me what would help and I'll get it to you.",
+    "",
+    `Either way, ring me on ${i.agentPhone} if anything's easier said than written.`,
+    "",
+    "Kind regards,",
+    i.agentName,
+    "The Letting Experts"
+  );
+  return lines.join("\n");
+}
