@@ -376,12 +376,17 @@ export default function LeadDrawer({
   const [emailing, setEmailing] = useState(false);
   // Where they are on their track, and the two panels a step can open.
   const [step, setStep] = useState(0);
+  /* Declared here with the rest of the hooks, not down beside the markup that
+     uses it: there is an early return between the two, and a hook after a
+     conditional return changes the hook order between renders. */
+  const [showProcess, setShowProcess] = useState(false);
   /* The appraisal sub-case, stored per lead in os_case_state. */
   const [appraisal, setAppraisal, appraisalSave] = useCaseState<AppraisalCase>(
     "appraisal",
     lead?.id ?? null,
     EMPTY_CASE
   );
+  useEffect(() => setShowProcess(false), [lead?.id]);
   const [booking, setBooking] = useState(false);
   const [signing, setSigning] = useState(false);
   const [booked, setBooked] = useState<LeadViewing[]>([]);
@@ -459,6 +464,11 @@ export default function LeadDrawer({
   const stalled = isStalled(lead);
   const here = track[Math.min(step, track.length - 1)];
   const finished = step >= track.length - 1;
+
+  /* At the appraisal step the appraisal itself takes the screen — the lead's
+     timeline and the notes step aside for it. An escape hatch rather than a
+     one-way door: "show the whole process" brings the timeline back. */
+  const appraisalTakesOver = !isTenant && here.id === "appraisal" && !stalled && !showProcess;
 
   /** Advance one step, if there's anywhere to go. */
   const advance = () => setStep((s) => Math.min(s + 1, track.length - 1));
@@ -1014,8 +1024,12 @@ export default function LeadDrawer({
               says — in plain words, for the agent who's three days in and
               nervous — exactly what to do about it, and the button does that
               thing. Nobody should ever have to infer their next move from a
-              diagram. ── */}
-          <div className="mt-3 rounded-3xl border border-line/80 bg-panel p-5">
+              diagram.
+
+              While a landlord is AT the appraisal, this steps aside for the
+              appraisal itself (below): booking one turns the record into a
+              job of work, and the job deserves the screen. ── */}
+          <div className={`mt-3 rounded-3xl border border-line/80 bg-panel p-5 ${appraisalTakesOver ? "hidden" : ""}`}>
             <ProcessTimeline
               steps={track}
               current={step}
@@ -1107,23 +1121,32 @@ export default function LeadDrawer({
             </div>
           </div>
 
-          {/* ── The appraisal opens up INSIDE its own step: booking one is the
-              start of a job, not the end of one. Only while the record is
-              actually there — once terms are out, the sub-track has done its
-              work and folding it away keeps the record honest about where it
-              is. ── */}
-          {!isTenant && here.id === "appraisal" && (
-            <div className="mt-3">
+          {/* ── The appraisal TAKES OVER while the record is at that step.
+              It replaces the process card and the notes rather than sitting
+              under them: three grey buttons squeezed below a timeline was the
+              whole problem, and notes lose nothing because every note goes to
+              the contact log, which is the same record read from the other
+              end. "Show the whole process" puts the timeline back. ── */}
+          {appraisalTakesOver && (
+            <>
               <AppraisalTrack
                 value={appraisal}
                 onChange={setAppraisal}
                 who="You"
                 landlordEmail={lead.email}
                 recordId={lead.id}
+                outerStep={`Step ${step + 1} of ${track.length}`}
+                onWon={advance}
+                onShowProcess={() => setShowProcess(true)}
                 invite={{
                   landlordName: lead.name,
-                  address: lead.area || "your property",
-                  whenPretty: appraisal.bookedFor ?? detail.nextAction?.due ?? "",
+                  // "—" is what the list prints for a missing area, and a
+                  // landlord should never be emailed about "—".
+                  address: lead.area && lead.area !== "—" ? lead.area : "your property",
+                  // ONLY a real booking. nextAction.due carries words like
+                  // "Overdue", and "seeing you on Overdue" went out to a
+                  // landlord in the draft before this.
+                  whenPretty: appraisal.bookedFor ?? "",
                   startsAt: appraisal.bookedFor,
                   minutes: 45,
                   agentName: lead.agent || "The Letting Experts",
@@ -1133,7 +1156,7 @@ export default function LeadDrawer({
               {saveLabel(appraisalSave) && (
                 <p className="mt-1.5 pl-1 text-[10.5px] text-muted">{saveLabel(appraisalSave)}</p>
               )}
-            </div>
+            </>
           )}
 
           {/* ── Notes fill whatever is left of the screen — the record wants
@@ -1142,7 +1165,11 @@ export default function LeadDrawer({
               the right is the thing that accumulates, so IT scrolls, inside
               its own column, only when it has to. No "lead summary" card —
               the agent's own notes ARE the summary. ── */}
-          <div className="mt-3 flex min-h-[200px] flex-1 flex-col rounded-3xl border border-line/80 bg-panel p-5">
+          <div
+            className={`mt-3 flex min-h-[200px] flex-1 flex-col rounded-3xl border border-line/80 bg-panel p-5 ${
+              appraisalTakesOver ? "hidden" : ""
+            }`}
+          >
             <SectionHead>Notes</SectionHead>
             <div className="grid min-h-0 flex-1 gap-5 md:grid-cols-2">
               <div className="flex min-h-0 flex-col rounded-xl border border-line/80 p-3">
