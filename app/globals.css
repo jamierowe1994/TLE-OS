@@ -166,6 +166,17 @@ h1, h2, h3, h4, h5 {
 }
 .fade-up { animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+/* The welcome. The drawing arrives first and settles; the words follow a beat
+   later, so it reads as one gesture rather than two things appearing at once.
+   Slower and further than fade-up — this is the one moment in the app that is
+   allowed to take its time. */
+@keyframes intro-rise {
+  from { opacity: 0; transform: translateY(18px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.intro-rise { animation: intro-rise 0.85s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.intro-rise-late { animation: intro-rise 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.22s both; }
+
 /* ---------------------------------------------------------------------------
    Illustrations in the dark.
 
@@ -379,6 +390,8 @@ h1, h2, h3, h4, h5 {
 
 @media (prefers-reduced-motion: reduce) {
   .fade-up,
+  .intro-rise,
+  .intro-rise-late,
   .paint-spread,
   .toast-in { animation: none; }
   .art { transition: none; }
