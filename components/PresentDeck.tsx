@@ -11,6 +11,7 @@ import {
   type SlideId,
 } from "@/lib/present";
 import { icsFor } from "@/lib/appraisal-email";
+import WelcomeMark from "@/components/WelcomeMark";
 
 /**
  * The pre-appraisal deck, as the landlord sees it.
@@ -369,32 +370,16 @@ function Welcome({ deck, show }: { deck: Deck; show: boolean }) {
               needs to be set MUCH larger than a sans to read at the same
               visual weight, and then pulled back in with tight leading and a
               negative margin or it floats half a line above its own baseline. */}
-          {/* Not a Rise — this one is WRITTEN. A soft-edged wipe travelling
-              left to right at the speed of a hand, so the letters arrive in
-              the order somebody would form them. See globals.css for why a
-              stroke animation isn't available to a script font. */}
-          <p
-            // THE PADDING IS LOAD-BEARING, and the negative margin cancels it.
-            //
-            // A mask only paints within the element's own box, and a script's
-            // capital overhangs its box on every side — Ms Madi's W leads with
-            // a swash that starts left of the glyph origin and rides above the
-            // cap height. Without room inside the box the mask sliced the
-            // entry stroke clean off, leaving a detached red mark floating
-            // beside the word.
-            //
-            // So: pad the ink in, then pull the box back out by the same
-            // amount, and it sits on the same left edge as everything else on
-            // the slide with nothing clipped.
-            className="present-write -ml-3 -mt-2 px-3 pb-3 pt-2 text-[88px] leading-[0.74] sm:text-[162px]"
-            data-written={show}
-            // A touch of tracking. Scripts are drawn to join tightly, and the
-            // reference is noticeably airier than the metal default — at this
-            // size the letters need room or the loops close up into a blur.
-            style={{ fontFamily: FLOW, color: CLAY, letterSpacing: "0.015em" }}
-          >
-            Welcome
-          </p>
+          {/* Not a Rise — this one is WRITTEN. See components/WelcomeMark:
+              the letterforms clip a fat stroke that travels the pen path, so
+              the word fills in the order a hand would form it. Sized by width
+              rather than font-size because it is artwork now, not text. */}
+          <WelcomeMark
+            written={show}
+            color={CLAY}
+            className="w-[290px] sm:w-[560px]"
+          />
+
           <Rise show={show} i={2}>
             {/* Serif, matching the reference and the interior slides — one
                 document, not two. */}
