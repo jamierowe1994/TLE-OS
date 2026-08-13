@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  BANNER,
   BRING_ALONG,
   VISIT_STEPS,
   WHY_TLE,
@@ -35,10 +36,31 @@ import { icsFor } from "@/lib/appraisal-email";
  * plain scrolling page if the snap never applies.
  */
 
+/**
+ * Straight out of TLE Branding 3 — no approximations, no eyedroppered guesses.
+ *
+ *   Expert Red      #E31F36   the brand
+ *   Expert Grey     #3B3B3C   type on light
+ *   Anti Flash White #F1F1F1  the quiet surface
+ *   Warm Clay       #DE968F   the darker of the two pinks — the banner
+ *   Mist            #FFE4DF   the lighter pink
+ *
+ * The guidelines list "White #000000", which is a typo in the deck rather
+ * than an instruction; white is white.
+ */
 const RED = "#e31f36";
-const DEEP = "#b3172a";
-const INK = "#16181d";
-const CREAM = "#f6f4f2";
+const INK = "#3b3b3c";
+const CLAY = "#de968f";
+/** Mist carries the appointment card. Anti Flash White is the other option
+ *  and it reads as grey next to the clay banner two slides earlier — the
+ *  warm tint keeps the whole deck in one family. */
+const MIST = "#ffe4df";
+/** Deep enough to carry white type, still in the clay family rather than grey.
+ *  Used only for the scrim over the hero photograph. */
+const DEEP = "#4a3a35";
+
+/** The brand's flowing face — Lora Italic, the guidelines' supporting text. */
+const FLOW = "var(--font-lora), Georgia, serif";
 
 /* ───────────────────────── small parts ───────────────────────── */
 
@@ -105,49 +127,153 @@ function Slide({
 
 /* ───────────────────────── the slides ───────────────────────── */
 
+/** Three line icons for the banner. Inline because the deck must render with
+ *  no network beyond its own page — a landlord may open this on bad signal. */
+function BannerIcon({ name }: { name: "people" | "shield" | "trend" }) {
+  const common = {
+    width: 26,
+    height: 26,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.4,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+  if (name === "people")
+    return (
+      <svg {...common} aria-hidden>
+        <circle cx="9" cy="8" r="3" />
+        <path d="M3.5 19a5.5 5.5 0 0 1 11 0" />
+        <path d="M16 5.5a3 3 0 0 1 0 5.6M17 14.4a5.5 5.5 0 0 1 3.5 4.6" />
+      </svg>
+    );
+  if (name === "shield")
+    return (
+      <svg {...common} aria-hidden>
+        <path d="M12 3l7 3v5.5c0 4.3-2.9 7.9-7 9.5-4.1-1.6-7-5.2-7-9.5V6l7-3z" />
+        <path d="M9 12l2 2 4-4" />
+      </svg>
+    );
+  return (
+    <svg {...common} aria-hidden>
+      <path d="M3 17l5.5-5.5 3.5 3.5L21 6" />
+      <path d="M15.5 6H21v5.5" />
+    </svg>
+  );
+}
+
+/**
+ * The entrance screen.
+ *
+ * Built from James's mock-up rather than from the pattern of the other
+ * slides, which is why it doesn't use <Slide>: the photograph and the clay
+ * banner both go edge to edge, and a slide that centres its content inside
+ * padding can't do that.
+ *
+ * Two departures from the mock-up, both deliberate:
+ *
+ *  • The scrim runs LEFT to RIGHT rather than darkening the whole frame. The
+ *    photograph's left third is a bare wall — it was composed for type — and
+ *    dimming the whole room to carry white text throws away the light coming
+ *    through the window, which is the best thing in the picture.
+ *
+ *  • It stays personal. The mock-up's headline is generic; this one still
+ *    names the property and who it was prepared for, because that is the
+ *    entire reason a landlord opens the link rather than closing it.
+ */
 function Welcome({ deck }: { deck: Deck }) {
   const { property, recipientName, whenPretty } = deck;
-  return (
-    <Slide id="welcome" dark>
-      {/* The hero photograph, when there is one. It sits UNDER the type at low
-          opacity rather than beside it: dossier images are estate-agent
-          photos of wildly different crops and quality, and any layout that
-          gives one a defined box looks broken the first time it gets a
-          portrait shot of a front door. */}
-      {property.image && (
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={property.image} alt="" className="h-full w-full object-cover opacity-[0.18]" />
-          <div
-            className="absolute inset-0"
-            style={{ background: `linear-gradient(180deg, ${RED}cc 0%, ${RED}f2 60%, ${DEEP} 100%)` }}
-          />
-        </div>
-      )}
+  /* Their own property when the dossier found a photograph of it, the styled
+     room otherwise. A stock interior is a far better opening than a badly
+     cropped estate-agent shot of a front door — but their house, when we have
+     it, beats both. */
+  const hero = property.image ?? "/brand/living-room.jpg";
 
-      <div className="relative mx-auto w-full max-w-3xl">
-        <Mark on="dark" className="h-10 sm:h-12" />
-        <div className="mt-10 sm:mt-14">
-          <Eyebrow on="dark">Your market appraisal</Eyebrow>
-          <h1 className="mt-4 text-[30px] font-light leading-[1.12] tracking-[-0.01em] sm:text-[46px]">
-            {property.address}
-          </h1>
-          {recipientName && (
-            <p className="mt-5 text-[14px] font-light text-white/85 sm:text-[16px]">
-              Prepared for {recipientName}
-            </p>
-          )}
-          {whenPretty && (
-            <p className="mt-8 inline-block rounded-full bg-white/15 px-4 py-2 text-[12.5px] font-medium sm:text-[13.5px]">
-              {whenPretty}
-            </p>
-          )}
-        </div>
-        <p className="mt-12 text-[12px] font-light text-white/70">
-          A few things worth knowing before we meet — two minutes, at most.
-        </p>
+  return (
+    <section
+      data-slide="welcome"
+      className="relative flex min-h-[100dvh] w-full shrink-0 snap-start flex-col overflow-hidden text-white"
+    >
+      <div className="pointer-events-none absolute inset-0">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={hero} alt="" className="h-full w-full object-cover" />
+        {/* Warm, not grey. A neutral black scrim over this photograph turns
+            the clay and terracotta in it to mud. */}
+        <div
+          className="absolute inset-0"
+          style={{
+            background: `linear-gradient(100deg, ${DEEP}e0 0%, ${DEEP}b8 40%, ${DEEP}47 72%, transparent 100%)`,
+          }}
+        />
       </div>
-    </Slide>
+
+      <header className="relative flex justify-center px-6 pt-9 sm:pt-12">
+        {/* Bigger than everywhere else in the deck. It is stacked artwork —
+            a pin over three lines of type — so the height that reads as a
+            neat logo in a header renders the words at about ten pixels. */}
+        <Mark on="dark" className="h-14 sm:h-16" />
+      </header>
+
+      <div className="relative flex flex-1 flex-col justify-center px-6 py-12 sm:px-12 lg:px-20">
+        <div className="w-full max-w-2xl">
+          {/* Lora Italic — the guidelines' own flowing face, in Warm Clay. */}
+          <p
+            className="text-[38px] leading-[0.95] sm:text-[58px]"
+            style={{ fontFamily: FLOW, color: CLAY }}
+          >
+            Welcome
+          </p>
+          <h1 className="mt-1 text-[38px] font-light leading-[1.04] tracking-[-0.015em] sm:mt-2 sm:text-[66px]">
+            Let&rsquo;s get started
+          </h1>
+          <span className="mt-6 block h-[3px] w-[110px] rounded-full" style={{ background: CLAY }} />
+
+          <p className="mt-7 max-w-lg text-[14px] font-light leading-relaxed text-white/90 sm:text-[16.5px]">
+            We&rsquo;re excited to show you how we can help you get the most from{" "}
+            <span className="text-white">{property.address}</span>.
+          </p>
+
+          <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2.5">
+            {whenPretty && (
+              <span
+                className="rounded-full px-4 py-2 text-[12.5px] font-medium"
+                style={{ background: CLAY, color: "#ffffff" }}
+              >
+                {whenPretty}
+              </span>
+            )}
+            {recipientName && (
+              <span className="text-[12.5px] font-light text-white/75">
+                Prepared for {recipientName}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* The banner. Extra bottom padding on a phone so the deck's own dots
+          sit inside the clay rather than on the line beneath it. */}
+      <div className="relative pb-14 pt-6 lg:pb-8" style={{ background: CLAY }}>
+        <div className="mx-auto grid max-w-5xl gap-y-5 px-6 sm:grid-cols-3 sm:gap-x-8 lg:px-10">
+          {BANNER.map((b) => (
+            <div key={b.title} className="flex items-start gap-3.5">
+              <span className="mt-0.5 shrink-0 text-white/90">
+                <BannerIcon name={b.icon} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-white">
+                  {b.title}
+                </span>
+                <span className="mt-1 block text-[12px] font-light leading-snug text-white/85">
+                  {b.body}
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -197,7 +323,7 @@ function Appointment({ deck }: { deck: Deck }) {
             ))}
           </ol>
 
-          <aside className="rounded-2xl p-6" style={{ background: CREAM }}>
+          <aside className="rounded-2xl p-6" style={{ background: MIST }}>
             {whenPretty ? (
               <>
                 <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/45">
@@ -528,7 +654,11 @@ export default function PresentDeck({
     }
   };
 
-  const onDark = slides[at]?.id === "welcome" || slides[at]?.id === "questions";
+  const here = slides[at]?.id;
+  const onDark = here === "welcome" || here === "questions";
+  /* What the phone bar fades into. The welcome slide ends in the clay banner,
+     not in white or red, and a white fade over it reads as a printing fault. */
+  const tint = here === "welcome" ? CLAY : here === "questions" ? RED : "#ffffff";
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden">
@@ -594,7 +724,7 @@ export default function PresentDeck({
         // a paragraph is unreadable; a panel across the bottom of a phone
         // costs a line of copy on every slide that didn't need one.
         style={{
-          background: `linear-gradient(to top, ${onDark ? RED : "#ffffff"} 55%, transparent)`,
+          background: `linear-gradient(to top, ${tint} 55%, transparent)`,
         }}
       >
         <span

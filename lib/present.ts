@@ -105,6 +105,29 @@ export const VISIT_STEPS: { title: string; body: string }[] = [
   },
 ];
 
+/**
+ * The three promises along the bottom of the entrance screen, from James's
+ * mock-up. They are propositions rather than statistics, which is the same
+ * rule the Why slide follows — nothing here is a number we can't stand behind.
+ */
+export const BANNER: { icon: "people" | "shield" | "trend"; title: string; body: string }[] = [
+  {
+    icon: "people",
+    title: "Local experts",
+    body: "Personal service from people who know your area.",
+  },
+  {
+    icon: "shield",
+    title: "Maximum protection",
+    body: "Keeping your property and investment safe.",
+  },
+  {
+    icon: "trend",
+    title: "Better returns",
+    body: "Smart strategies to maximise your income.",
+  },
+];
+
 /** Have these to hand. Deliberately short, and all four are optional. */
 export const BRING_ALONG: string[] = [
   "The EPC, if you already have one",
