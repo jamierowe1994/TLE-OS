@@ -211,15 +211,16 @@ function Welcome({ deck }: { deck: Deck }) {
         />
       </div>
 
-      <header className="relative flex justify-center px-6 pt-9 sm:pt-12">
-        {/* Bigger than everywhere else in the deck. It is stacked artwork —
-            a pin over three lines of type — so the height that reads as a
-            neat logo in a header renders the words at about ten pixels. */}
-        <Mark on="dark" className="h-14 sm:h-16" />
+      {/* Top left, on the same left margin as the headline, so the logo and
+          the type share one edge rather than floating independently. Smaller
+          than a centred mark can afford to be: off to the side it reads as a
+          signature on the page instead of a title above it. */}
+      <header className="relative flex px-6 pt-8 sm:px-12 sm:pt-10 lg:px-20">
+        <Mark on="dark" className="h-11 sm:h-12" />
       </header>
 
       <div className="relative flex flex-1 flex-col justify-center px-6 py-12 sm:px-12 lg:px-20">
-        <div className="w-full max-w-2xl">
+        <div className="w-full max-w-3xl">
           {/* The flowing hand, and the biggest thing on the page.
               A script's letterforms sit inside a fraction of their em box —
               the capital swash reaches high, the x-height is tiny — so it
@@ -227,7 +228,7 @@ function Welcome({ deck }: { deck: Deck }) {
               visual weight, and then pulled back in with tight leading and a
               negative margin or it floats half a line above its own baseline. */}
           <p
-            className="-ml-1 text-[76px] leading-[0.78] sm:text-[132px]"
+            className="-ml-1 text-[86px] leading-[0.74] sm:text-[158px]"
             // A touch of tracking. Scripts are drawn to join tightly, and the
             // reference is noticeably airier than the metal default — at this
             // size the letters need room or the loops close up into a blur.
@@ -235,12 +236,15 @@ function Welcome({ deck }: { deck: Deck }) {
           >
             Welcome
           </p>
-          <h1 className="-mt-1 text-[36px] font-light leading-[1.04] tracking-[-0.015em] sm:-mt-4 sm:text-[62px]">
+          <h1 className="-mt-1 text-[46px] font-light leading-[0.98] tracking-[-0.02em] sm:-mt-5 sm:text-[92px]">
             Let&rsquo;s get started
           </h1>
           <span className="mt-6 block h-[3px] w-[110px] rounded-full" style={{ background: CLAY }} />
 
-          <p className="mt-7 max-w-lg text-[14px] font-light leading-relaxed text-white/90 sm:text-[16.5px]">
+          {/* Brought up with the headline. Against 92px type a 14px line reads
+              as a caption rather than a sentence, and this one carries the
+              only personalised words on the slide. */}
+          <p className="mt-7 max-w-xl text-[15px] font-light leading-relaxed text-white/90 sm:text-[18px]">
             We&rsquo;re excited to show you how we can help you get the most from{" "}
             <span className="text-white">{property.address}</span>.
           </p>
@@ -248,14 +252,14 @@ function Welcome({ deck }: { deck: Deck }) {
           <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2.5">
             {whenPretty && (
               <span
-                className="rounded-full px-4 py-2 text-[12.5px] font-medium"
+                className="rounded-full px-5 py-2.5 text-[13px] font-medium"
                 style={{ background: CLAY, color: "#ffffff" }}
               >
                 {whenPretty}
               </span>
             )}
             {recipientName && (
-              <span className="text-[12.5px] font-light text-white/75">
+              <span className="text-[13px] font-light text-white/75">
                 Prepared for {recipientName}
               </span>
             )}
