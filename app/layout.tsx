@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Montserrat, Sacramento, Shantell_Sans } from "next/font/google";
+import { Inter, Lora, Montserrat, Ms_Madi, Shantell_Sans } from "next/font/google";
 import "./globals.css";
 
 const montserrat = Montserrat({
@@ -26,20 +26,43 @@ const shantell = Shantell_Sans({
  * no script face, he confirmed he wants that look. So: a deliberate,
  * decided-on addition to the brand, not a slip.
  *
- * Sacramento, chosen by rendering eight candidates at display size against
- * the reference rather than by name. The quality that decides it is that the
- * reference is MONOLINE — one uniform hairline stroke, no thick downstrokes —
- * and Sacramento is the only true monoline of the set. Allura, Great Vibes,
- * Parisienne and Style Script all have calligraphic contrast, which is what
- * made the first attempt read as a wedding invitation rather than a hand.
+ * The face James actually wants is Brittany Signature, which is commercial
+ * and whose free download is personal-use only — that does not cover a
+ * business emailing this to landlords, so it is not an option.
+ *
+ * MS MADI is the stand-in, picked by rendering eight free scripts against
+ * Brittany rather than by name. It is the only one with Brittany's actual
+ * character: a modern MONOLINE hand with a natural, slightly bouncy
+ * baseline. Sacramento is monoline but rounder and more retro; Aguafina and
+ * Rouge Script have brush contrast; Herr Von Muellerhoff and Meow Script are
+ * formal copperplate. Ms Madi is under the SIL Open Font License, so it is
+ * free for commercial use with no attribution required.
  *
  * Used ONLY for a single display word. A script at body size is unreadable,
  * and at any size it is a decoration rather than a typeface.
  */
-const sacramento = Sacramento({
+const msMadi = Ms_Madi({
   subsets: ["latin"],
   weight: "400",
   variable: "--font-script",
+  display: "swap",
+});
+
+/**
+ * The display serif for the customer-facing decks.
+ *
+ * Lora, which is what TLE Branding 3 names and what marketing confirmed when
+ * James asked. The guidelines list it as supporting text; both of James's
+ * layout references set the big headline in a serif of exactly this
+ * character, so it earns the display role on the presentation as well.
+ *
+ * Regular and italic — the headline pairs an upright serif with one word
+ * dropped into the script, and the italic carries the quieter asides.
+ */
+const lora = Lora({
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+  variable: "--font-display",
   display: "swap",
 });
 
@@ -67,7 +90,7 @@ export default function RootLayout({
     // heading silently falls back to system fonts.
     <html
       lang="en"
-      className={`${montserrat.variable} ${shantell.variable} ${inter.variable} ${sacramento.variable}`}
+      className={`${montserrat.variable} ${shantell.variable} ${inter.variable} ${msMadi.variable} ${lora.variable}`}
     >
       <body className="antialiased">{children}</body>
     </html>

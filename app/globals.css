@@ -377,3 +377,25 @@ h1, h2, h3, h4, h5 {
   .toast-in { animation: none; }
   .art { transition: none; }
 }
+
+/* ---------------------------------------------------------------------------
+   The presentation's reveal.
+   The transition lives in CSS rather than inline so the reduced-motion opt-out
+   can be a real media query — an inline style can't be overridden by one, and
+   a landlord who needs motion stilled has no way to ask us.
+--------------------------------------------------------------------------- */
+.present-rise {
+  transition:
+    opacity 720ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 720ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .present-rise {
+    transition: none;
+    /* Never leave content hidden because the animation was suppressed. */
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}

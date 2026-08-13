@@ -22,7 +22,14 @@ export const metadata: Metadata = {
 export default function PresentLayout({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className="min-h-[100dvh] bg-white text-[#16181d] antialiased [&_h1]:!font-[inherit] [&_h2]:!font-[inherit] [&_h3]:!font-[inherit]"
+      // Headings inherit rather than taking the OS's handwritten face — this
+      // is customer-facing, and the drawn wordmark stops at the office door.
+      //
+      // NOT !important, deliberately. globals.css styles h1–h5 with a plain
+      // element selector, so a class already beats it; adding ! only meant
+      // the class also beat every inline fontFamily, which silently stopped
+      // the deck's own display serif from ever applying.
+      className="min-h-[100dvh] bg-white text-[#16181d] antialiased [&_h1]:font-[inherit] [&_h2]:font-[inherit] [&_h3]:font-[inherit]"
       style={{ fontFamily: "var(--font-montserrat), system-ui, sans-serif" }}
     >
       {children}

@@ -65,6 +65,67 @@ const DEEP = "#4a3a35";
  */
 const FLOW = "var(--font-script), 'Snell Roundhand', cursive";
 
+/** Lora — the guidelines' own serif, carrying the display headings. */
+const DISPLAY = "var(--font-display), Georgia, serif";
+
+/** The interior page ground: white with the faintest warm cast, so a mist
+ *  card sitting on it reads as a tint rather than as a coloured box on grey. */
+const PAPER = "#fdf9f8";
+/** The icon badges — mist, one step warmer than the card it sits on. */
+const BADGE = "#fce0da";
+
+/* ───────────────────────── the reveal ───────────────────────── */
+
+/**
+ * Slides don't arrive, they surface.
+ *
+ * James's note: landing on a slide "feels like getting jolted into a bunch of
+ * information". True, and it was structural rather than cosmetic — every
+ * element of a slide painted at the same instant, so a heading, four numbered
+ * steps and a card all demanded attention simultaneously and the eye had
+ * nowhere to start.
+ *
+ * So each block rises in turn, top down, and the order IS the reading order.
+ * Roughly 90ms apart: enough to feel choreographed, not enough that anyone
+ * waits for it.
+ *
+ * Two details that matter more than they look:
+ *
+ *  • The easing is a strong ease-OUT (fast, then settling). Anything with
+ *    acceleration in it reads as a slide transition; this reads as focus.
+ *
+ *  • It respects prefers-reduced-motion — for some people this kind of thing
+ *    is genuinely unpleasant, and a landlord can't ask us to turn it off.
+ */
+function Rise({
+  show,
+  i = 0,
+  className = "",
+  style,
+  children,
+}: {
+  show: boolean;
+  /** Position in the stagger, not in the DOM. */
+  i?: number;
+  className?: string;
+  style?: React.CSSProperties;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`present-rise ${className}`}
+      style={{
+        ...style,
+        opacity: show ? 1 : 0,
+        transform: show ? "none" : "translateY(18px)",
+        transitionDelay: `${i * 90}ms`,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 /* ───────────────────────── small parts ───────────────────────── */
 
 function Eyebrow({ children, on = "light" }: { children: React.ReactNode; on?: "light" | "dark" }) {
@@ -130,38 +191,101 @@ function Slide({
 
 /* ───────────────────────── the slides ───────────────────────── */
 
-/** Three line icons for the banner. Inline because the deck must render with
- *  no network beyond its own page — a landlord may open this on bad signal. */
-function BannerIcon({ name }: { name: "people" | "shield" | "trend" }) {
-  const common = {
-    width: 26,
-    height: 26,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.4,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-  };
-  if (name === "people")
-    return (
-      <svg {...common} aria-hidden>
-        <circle cx="9" cy="8" r="3" />
-        <path d="M3.5 19a5.5 5.5 0 0 1 11 0" />
-        <path d="M16 5.5a3 3 0 0 1 0 5.6M17 14.4a5.5 5.5 0 0 1 3.5 4.6" />
-      </svg>
-    );
-  if (name === "shield")
-    return (
-      <svg {...common} aria-hidden>
-        <path d="M12 3l7 3v5.5c0 4.3-2.9 7.9-7 9.5-4.1-1.6-7-5.2-7-9.5V6l7-3z" />
-        <path d="M9 12l2 2 4-4" />
-      </svg>
-    );
-  return (
-    <svg {...common} aria-hidden>
+/**
+ * The line icons.
+ *
+ * Inline SVG rather than a font or a sprite: the deck must render with no
+ * network beyond its own page, because a landlord opens this standing in a
+ * kitchen on one bar of signal, and an icon set that arrives late is worse
+ * than one that never existed.
+ *
+ * One stroke weight, one grid, currentColor throughout — so a badge sets the
+ * colour once and every icon inside it obeys.
+ */
+type IconName =
+  | "people"
+  | "shield"
+  | "trend"
+  | "home"
+  | "chart"
+  | "star"
+  | "calendar"
+  | "pin"
+  | "person"
+  | "check";
+
+/** Which icon belongs to which beat of the visit, in order. */
+const STEP_ICONS: IconName[] = ["home", "chart", "people", "star"];
+
+const PATHS: Record<IconName, React.ReactNode> = {
+  people: (
+    <>
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3.5 19a5.5 5.5 0 0 1 11 0" />
+      <path d="M16 5.5a3 3 0 0 1 0 5.6M17 14.4a5.5 5.5 0 0 1 3.5 4.6" />
+    </>
+  ),
+  shield: (
+    <>
+      <path d="M12 3l7 3v5.5c0 4.3-2.9 7.9-7 9.5-4.1-1.6-7-5.2-7-9.5V6l7-3z" />
+      <path d="M9 12l2 2 4-4" />
+    </>
+  ),
+  trend: (
+    <>
       <path d="M3 17l5.5-5.5 3.5 3.5L21 6" />
       <path d="M15.5 6H21v5.5" />
+    </>
+  ),
+  home: (
+    <>
+      <path d="M4 10.5L12 4l8 6.5" />
+      <path d="M6 9.8V20h12V9.8" />
+    </>
+  ),
+  chart: (
+    <>
+      <path d="M5 20V12M10 20V6M15 20v-5M20 20v-9" />
+    </>
+  ),
+  star: (
+    <path d="M12 4l2.5 5.1 5.5.8-4 3.9.9 5.6-4.9-2.6-4.9 2.6.9-5.6-4-3.9 5.5-.8z" />
+  ),
+  calendar: (
+    <>
+      <rect x="3.5" y="5" width="17" height="15" rx="2.5" />
+      <path d="M3.5 10h17M8 3.5v3M16 3.5v3" />
+    </>
+  ),
+  pin: (
+    <>
+      <path d="M12 21s7-5.8 7-11a7 7 0 1 0-14 0c0 5.2 7 11 7 11z" />
+      <circle cx="12" cy="10" r="2.6" />
+    </>
+  ),
+  person: (
+    <>
+      <circle cx="12" cy="8.5" r="3.4" />
+      <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
+    </>
+  ),
+  check: <path d="M4 12.5l5 5L20 6.5" />,
+};
+
+function Line({ name, size = 24 }: { name: IconName; size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.4}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      {PATHS[name]}
     </svg>
   );
 }
@@ -185,7 +309,7 @@ function BannerIcon({ name }: { name: "people" | "shield" | "trend" }) {
  *    names the property and who it was prepared for, because that is the
  *    entire reason a landlord opens the link rather than closing it.
  */
-function Welcome({ deck }: { deck: Deck }) {
+function Welcome({ deck, show }: { deck: Deck; show: boolean }) {
   const { property, recipientName, whenPretty } = deck;
   /* Their own property when the dossier found a photograph of it, the styled
      room otherwise. A stock interior is a far better opening than a badly
@@ -216,7 +340,9 @@ function Welcome({ deck }: { deck: Deck }) {
           than a centred mark can afford to be: off to the side it reads as a
           signature on the page instead of a title above it. */}
       <header className="relative flex px-6 pt-8 sm:px-12 sm:pt-10 lg:px-20">
-        <Mark on="dark" className="h-11 sm:h-12" />
+        <Rise show={show} i={0}>
+          <Mark on="dark" className="h-11 sm:h-12" />
+        </Rise>
       </header>
 
       <div className="relative flex flex-1 flex-col justify-center px-6 py-12 sm:px-12 lg:px-20">
@@ -227,6 +353,7 @@ function Welcome({ deck }: { deck: Deck }) {
               needs to be set MUCH larger than a sans to read at the same
               visual weight, and then pulled back in with tight leading and a
               negative margin or it floats half a line above its own baseline. */}
+          <Rise show={show} i={1}>
           <p
             className="-ml-1 text-[86px] leading-[0.74] sm:text-[158px]"
             // A touch of tracking. Scripts are drawn to join tightly, and the
@@ -236,20 +363,30 @@ function Welcome({ deck }: { deck: Deck }) {
           >
             Welcome
           </p>
-          <h1 className="-mt-1 text-[46px] font-light leading-[0.98] tracking-[-0.02em] sm:-mt-5 sm:text-[92px]">
-            Let&rsquo;s get started
-          </h1>
-          <span className="mt-6 block h-[3px] w-[110px] rounded-full" style={{ background: CLAY }} />
+          </Rise>
+          <Rise show={show} i={2}>
+            {/* Serif, matching the reference and the interior slides — one
+                document, not two. */}
+            <h1
+              className="-mt-1 text-[46px] leading-[1.0] tracking-[-0.01em] sm:-mt-5 sm:text-[92px]"
+              style={{ fontFamily: DISPLAY }}
+            >
+              Let&rsquo;s get started
+            </h1>
+            <span className="mt-6 block h-[3px] w-[110px] rounded-full" style={{ background: CLAY }} />
+          </Rise>
 
           {/* Brought up with the headline. Against 92px type a 14px line reads
               as a caption rather than a sentence, and this one carries the
               only personalised words on the slide. */}
-          <p className="mt-7 max-w-xl text-[15px] font-light leading-relaxed text-white/90 sm:text-[18px]">
-            We&rsquo;re excited to show you how we can help you get the most from{" "}
-            <span className="text-white">{property.address}</span>.
-          </p>
+          <Rise show={show} i={3}>
+            <p className="mt-7 max-w-xl text-[15px] font-light leading-relaxed text-white/90 sm:text-[18px]">
+              We&rsquo;re excited to show you how we can help you get the most from{" "}
+              <span className="text-white">{property.address}</span>.
+            </p>
+          </Rise>
 
-          <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2.5">
+          <Rise show={show} i={4} className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2.5">
             {whenPretty && (
               <span
                 className="rounded-full px-5 py-2.5 text-[13px] font-medium"
@@ -263,18 +400,18 @@ function Welcome({ deck }: { deck: Deck }) {
                 Prepared for {recipientName}
               </span>
             )}
-          </div>
+          </Rise>
         </div>
       </div>
 
       {/* The banner. Extra bottom padding on a phone so the deck's own dots
           sit inside the clay rather than on the line beneath it. */}
-      <div className="relative pb-14 pt-6 lg:pb-8" style={{ background: CLAY }}>
+      <Rise show={show} i={5} className="relative pb-14 pt-6 lg:pb-8" style={{ background: CLAY }}>
         <div className="mx-auto grid max-w-5xl gap-y-5 px-6 sm:grid-cols-3 sm:gap-x-8 lg:px-10">
           {BANNER.map((b) => (
             <div key={b.title} className="flex items-start gap-3.5">
               <span className="mt-0.5 shrink-0 text-white/90">
-                <BannerIcon name={b.icon} />
+                <Line name={b.icon} size={26} />
               </span>
               <span className="min-w-0">
                 <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-white">
@@ -287,12 +424,12 @@ function Welcome({ deck }: { deck: Deck }) {
             </div>
           ))}
         </div>
-      </div>
+      </Rise>
     </section>
   );
 }
 
-function Appointment({ deck }: { deck: Deck }) {
+function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
   const { whenPretty, property, agent, minutes } = deck;
 
   /**
@@ -302,113 +439,220 @@ function Appointment({ deck }: { deck: Deck }) {
    * before they put the phone down.
    */
   const ics = deck.startsAt
-    ? icsFor({
-        landlordName: deck.recipientName,
-        address: property.address,
-        whenPretty,
-        startsAt: deck.startsAt,
-        minutes,
-        agentName: agent.name,
-        agentPhone: agent.phone,
-      }, deck.createdAt)
+    ? icsFor(
+        {
+          landlordName: deck.recipientName,
+          address: property.address,
+          whenPretty,
+          startsAt: deck.startsAt,
+          minutes,
+          agentName: agent.name,
+          agentPhone: agent.phone,
+        },
+        deck.createdAt
+      )
     : null;
 
+  /** WHEN / WHERE / WHO. Built as data so the empty rules live in one place:
+   *  a row with nothing to say is dropped, never printed as a dash. */
+  const facts: { icon: IconName; label: string; value: string; soft?: boolean }[] = [
+    {
+      icon: "calendar",
+      label: "When",
+      // No time in the diary yet. Said plainly rather than left blank — a
+      // landlord reading "—" assumes the system is broken; this tells them
+      // what happens next instead.
+      value: whenPretty || `${agent.firstName || "Your agent"} will confirm a time with you directly`,
+      soft: !whenPretty,
+    },
+    {
+      icon: "pin",
+      label: "Where",
+      value: `${property.address}${property.postcode ? `, ${property.postcode}` : ""}`,
+    },
+    ...(agent.name
+      ? [
+          {
+            icon: "person" as IconName,
+            label: "Who",
+            value: `${agent.name}${agent.title ? ` · ${agent.title}` : ""}`,
+          },
+        ]
+      : []),
+  ];
+
   return (
-    <Slide id="appointment">
-      <div className="mx-auto w-full max-w-5xl">
-        <Eyebrow>What happens on the day</Eyebrow>
-        <h2 className="mt-3 max-w-2xl text-[26px] font-light leading-[1.15] tracking-[-0.01em] sm:text-[36px]">
-          About {minutes} minutes, and you&rsquo;ll know what it lets for
-        </h2>
+    <section
+      data-slide="appointment"
+      className="relative flex min-h-[100dvh] w-full shrink-0 snap-start flex-col"
+      style={{ background: PAPER, color: INK }}
+    >
+      <header className="px-6 pt-8 sm:px-12 sm:pt-10 lg:px-16">
+        <Mark className="h-10 sm:h-11" />
+      </header>
 
-        <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_320px] lg:gap-14">
-          {/* The four beats of the visit. Numbered, because the order is the
-              reassurance: the number comes after the walk round, not before. */}
-          <ol className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
-            {VISIT_STEPS.map((s, i) => (
-              <li key={s.title} className="border-t border-black/10 pt-3.5">
-                <span className="text-[11px] font-semibold" style={{ color: RED }}>
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <h3 className="mt-1.5 text-[14.5px] font-semibold leading-snug">{s.title}</h3>
-                <p className="mt-1.5 text-[12.5px] font-light leading-relaxed text-black/60">
-                  {s.body}
-                </p>
-              </li>
-            ))}
-          </ol>
+      {/* pr-40 on desktop keeps the card clear of the contents rail, which
+          floats over every slide. */}
+      <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-12 lg:px-16 lg:py-12 lg:pr-40">
+        <div className="mx-auto grid w-full max-w-6xl gap-10 lg:grid-cols-[1fr_400px] lg:gap-16">
+          {/* ── left: the headline and the four beats ── */}
+          <div className="min-w-0">
+            <Rise show={show} i={0}>
+              <Eyebrow>What happens on the day</Eyebrow>
+            </Rise>
 
-          <aside className="rounded-2xl p-6" style={{ background: MIST }}>
-            {whenPretty ? (
-              <>
-                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/45">
-                  When
-                </span>
-                <p className="mt-1.5 text-[16px] font-medium leading-snug">{whenPretty}</p>
-              </>
-            ) : (
-              <>
-                <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-black/45">
-                  When
-                </span>
-                {/* No time in the diary yet. Said plainly rather than left
-                    blank — a landlord reading "—" assumes the system is
-                    broken; this tells them what to expect instead. */}
-                <p className="mt-1.5 text-[13px] font-light leading-relaxed text-black/60">
-                  {agent.firstName || "Your agent"} will confirm a time with you directly.
-                </p>
-              </>
-            )}
-
-            <span className="mt-5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-black/45">
-              Where
-            </span>
-            <p className="mt-1.5 text-[13px] font-light leading-snug text-black/75">
-              {property.address}
-              {property.postcode ? `, ${property.postcode}` : ""}
-            </p>
-
-            {agent.name && (
-              <>
-                <span className="mt-5 block text-[10px] font-semibold uppercase tracking-[0.18em] text-black/45">
-                  Who
-                </span>
-                <p className="mt-1.5 text-[13px] font-light text-black/75">
-                  {agent.name}
-                  {agent.title ? ` · ${agent.title}` : ""}
-                </p>
-              </>
-            )}
-
-            {ics && (
-              <a
-                href={`data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`}
-                download="market-appraisal.ics"
-                className="mt-6 inline-flex w-full items-center justify-center rounded-full px-4 py-2.5 text-[12.5px] font-medium text-white transition-opacity hover:opacity-90"
-                style={{ background: RED }}
+            <Rise show={show} i={1}>
+              {/* Serif display, with one word dropped into the hand. The
+                  script word is the ONLY one that moves — a headline where
+                  two words wander stops being a headline. */}
+              <h2
+                className="mt-4 text-[34px] leading-[1.1] sm:text-[52px]"
+                style={{ fontFamily: DISPLAY }}
               >
-                Add it to my calendar
-              </a>
-            )}
+                About {minutes} minutes, and you&rsquo;ll know what it{" "}
+                <span
+                  className="pr-1 text-[42px] sm:text-[64px]"
+                  style={{ fontFamily: FLOW, color: RED }}
+                >
+                  lets
+                </span>{" "}
+                for
+              </h2>
+            </Rise>
 
-            <span className="mt-6 block text-[10px] font-semibold uppercase tracking-[0.18em] text-black/45">
-              Handy to have out
-            </span>
-            <ul className="mt-2 space-y-1.5">
-              {BRING_ALONG.map((b) => (
-                <li key={b} className="flex gap-2 text-[12px] font-light leading-snug text-black/65">
-                  <span style={{ color: RED }}>·</span>
-                  <span>{b}</span>
+            {/* The four beats, ruled into quarters. The lines are drawn per
+                cell rather than with a grid divider so they stop at the
+                block's edge instead of running out into the margin. */}
+            <ol className="mt-9 grid sm:grid-cols-2">
+              {VISIT_STEPS.map((s, i) => (
+                <li
+                  key={s.title}
+                  className={[
+                    "flex gap-4 py-5 sm:py-6",
+                    i % 2 === 0 ? "sm:border-r sm:pr-8" : "sm:pl-8",
+                    i < 2 ? "border-b" : "",
+                    i > 0 ? "border-t sm:border-t-0" : "",
+                  ].join(" ")}
+                  style={{ borderColor: "rgba(59,59,60,0.12)" }}
+                >
+                  <Rise show={show} i={2 + i} className="shrink-0">
+                    <span
+                      className="flex h-12 w-12 items-center justify-center rounded-full"
+                      style={{ background: BADGE, color: RED }}
+                    >
+                      <Line name={STEP_ICONS[i]} size={22} />
+                    </span>
+                  </Rise>
+                  <Rise show={show} i={2 + i} className="min-w-0">
+                    <span className="text-[12px] font-semibold" style={{ color: RED }}>
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <h3 className="mt-1 text-[15px] font-semibold leading-snug">{s.title}</h3>
+                    <p className="mt-1.5 text-[13px] font-light leading-relaxed text-black/55">
+                      {s.body}
+                    </p>
+                  </Rise>
                 </li>
               ))}
-            </ul>
-            <p className="mt-3 text-[11px] font-light italic leading-relaxed text-black/45">
-              None of it is essential. If you haven&rsquo;t got it, we&rsquo;ll sort it afterwards.
-            </p>
-          </aside>
+            </ol>
+          </div>
+
+          {/* ── right: the appointment itself ── */}
+          <Rise show={show} i={3}>
+            <aside className="rounded-[26px] p-6 sm:p-8" style={{ background: MIST }}>
+              <ul>
+                {facts.map((f) => (
+                  <li
+                    key={f.label}
+                    className="flex gap-4 border-b py-4 first:pt-0 last:border-b-0 last:pb-1"
+                    style={{ borderColor: "rgba(59,59,60,0.10)" }}
+                  >
+                    <span
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white"
+                      style={{ background: CLAY }}
+                    >
+                      <Line name={f.icon} size={20} />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-black/45">
+                        {f.label}
+                      </span>
+                      <span
+                        className={`mt-1 block leading-snug ${
+                          f.soft ? "text-[13px] font-light text-black/60" : "text-[15px] font-medium"
+                        }`}
+                      >
+                        {f.value}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              {ics && (
+                <a
+                  href={`data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`}
+                  download="market-appraisal.ics"
+                  className="mt-6 flex w-full items-center justify-center rounded-full px-5 py-3.5 text-[13.5px] font-medium text-white transition-opacity hover:opacity-90"
+                  style={{ background: RED }}
+                >
+                  Add it to my calendar
+                </a>
+              )}
+
+              <span className="mt-7 block text-[10px] font-semibold uppercase tracking-[0.18em] text-black/45">
+                Handy to have out
+              </span>
+              <ul className="mt-3 space-y-2.5">
+                {BRING_ALONG.map((b) => (
+                  <li key={b} className="flex gap-2.5 text-[13px] font-light leading-snug text-black/70">
+                    <span className="mt-[1px] shrink-0" style={{ color: RED }}>
+                      <Line name="check" size={16} />
+                    </span>
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+              <p
+                className="mt-5 text-[12.5px] leading-relaxed text-black/45"
+                style={{ fontFamily: DISPLAY, fontStyle: "italic" }}
+              >
+                None of it is essential. If you haven&rsquo;t got it, we&rsquo;ll sort it afterwards.
+              </p>
+            </aside>
+          </Rise>
         </div>
       </div>
-    </Slide>
+
+      {/* The three promises again, in mist rather than clay. Repeating them
+          is the point: it is the one band that appears on every page of the
+          reference, and it ties the deck together the way a footer does. */}
+      <Rise show={show} i={5}>
+        <div className="border-t pb-16 pt-7 lg:pb-8" style={{ background: MIST, borderColor: "rgba(59,59,60,0.06)" }}>
+          <div className="mx-auto grid max-w-5xl gap-y-5 px-6 sm:grid-cols-3 sm:gap-x-0 lg:px-10">
+            {BANNER.map((b, i) => (
+              <div
+                key={b.title}
+                className={`flex items-center gap-4 sm:px-7 ${i > 0 ? "sm:border-l" : ""}`}
+                style={{ borderColor: "rgba(59,59,60,0.14)" }}
+              >
+                <span className="shrink-0" style={{ color: RED }}>
+                  <Line name={b.icon} size={28} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[11px] font-semibold uppercase tracking-[0.14em]">
+                    {b.title}
+                  </span>
+                  <span className="mt-1 block text-[12.5px] font-light leading-snug text-black/60">
+                    {b.body}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Rise>
+    </section>
   );
 }
 
@@ -597,6 +841,26 @@ export default function PresentDeck({
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState(0);
+  /**
+   * Which slides have been reached, and are therefore revealed.
+   *
+   * A SET rather than "is this the current slide", so a slide that has played
+   * its reveal stays put. Re-running the stagger every time somebody scrolls
+   * back past a slide turns a nice touch into a tic.
+   *
+   * It starts empty on purpose: server and client both render hidden, and the
+   * effect below flips slide 0 on a frame later — which is what makes the
+   * FIRST screen rise in rather than simply being there.
+   */
+  const [seen, setSeen] = useState<number[]>([]);
+  const show = (i: number) => seen.includes(i);
+
+  /* The first screen rises on arrival: server and client both paint it
+     hidden, then this flips it a frame later. Everything after it is the
+     reveal observer's job. */
+  useEffect(() => {
+    setSeen((prev) => (prev.length ? prev : [0]));
+  }, []);
 
   /* Count the open, once. See app/api/present/opened for why it isn't done
      in the page render. */
@@ -612,24 +876,61 @@ export default function PresentDeck({
     return () => clearTimeout(t);
   }, [token]);
 
-  /* Which slide is on screen. An observer rather than a scroll handler: it
-     fires once per crossing instead of on every frame of a flick. */
+  /**
+   * Two observers, because two different questions are being asked and one
+   * answer cannot serve both.
+   *
+   * WHICH DOT IS LIT is a precise question: exactly one slide at a time. A
+   * band across the middle of the scrollport answers it for a slide of ANY
+   * height — which a percentage threshold cannot. This was originally
+   * `threshold: 0.55`, and on a phone the appointment slide is taller than
+   * the screen, so 55% of it could never be visible: the slide never became
+   * current, and once the reveal depended on that it rendered BLANK. A
+   * visibility rule that can be mathematically impossible to satisfy is a
+   * rule that will eventually hide the page.
+   *
+   * WHETHER TO REVEAL is a generous question: as soon as any part of a slide
+   * has been on screen, its content should be there. Never gate content on a
+   * precise measurement — the failure mode is an empty page.
+   */
   useEffect(() => {
     const root = scroller.current;
     if (!root) return;
-    const io = new IntersectionObserver(
+    const cells = Array.from(root.querySelectorAll<HTMLElement>("[data-index]"));
+
+    const current = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
-          if (e.isIntersecting) {
-            const i = Number((e.target as HTMLElement).dataset.index);
-            if (!Number.isNaN(i)) setAt(i);
-          }
+          if (!e.isIntersecting) continue;
+          const i = Number(e.target.getAttribute("data-index"));
+          if (!Number.isNaN(i)) setAt(i);
         }
       },
-      { root, threshold: 0.55 }
+      { root, rootMargin: "-45% 0px -45% 0px", threshold: 0 }
     );
-    root.querySelectorAll("[data-index]").forEach((el) => io.observe(el));
-    return () => io.disconnect();
+
+    const reveal = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          const i = Number(e.target.getAttribute("data-index"));
+          if (Number.isNaN(i)) continue;
+          setSeen((prev) => (prev.includes(i) ? prev : [...prev, i]));
+        }
+      },
+      // A screen of lead-in, so a slide has already begun to settle by the
+      // time it is properly in view rather than starting its rise then.
+      { root, rootMargin: "0px 0px 15% 0px", threshold: 0 }
+    );
+
+    cells.forEach((el) => {
+      current.observe(el);
+      reveal.observe(el);
+    });
+    return () => {
+      current.disconnect();
+      reveal.disconnect();
+    };
   }, [slides.length]);
 
   const go = useCallback((i: number) => {
@@ -654,12 +955,12 @@ export default function PresentDeck({
     return () => window.removeEventListener("keydown", onKey);
   }, [at, go, slides.length]);
 
-  const body = (id: SlideId) => {
+  const body = (id: SlideId, i: number) => {
     switch (id) {
       case "welcome":
-        return <Welcome deck={deck} />;
+        return <Welcome deck={deck} show={show(i)} />;
       case "appointment":
-        return <Appointment deck={deck} />;
+        return <Appointment deck={deck} show={show(i)} />;
       case "agent":
         return <Agent deck={deck} />;
       case "why":
@@ -690,7 +991,7 @@ export default function PresentDeck({
       >
         {slides.map((s, i) => (
           <div key={s.id} data-index={i}>
-            {body(s.id)}
+            {body(s.id, i)}
           </div>
         ))}
       </div>
