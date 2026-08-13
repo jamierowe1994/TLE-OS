@@ -43,6 +43,13 @@ const LIFETIME_SECONDS = 14 * 24 * 60 * 60;
  *  can be done at a convenient moment rather than mid-job. */
 const RENEW_WITHIN_HOURS = 48;
 
+/**
+ * Extend once a token is past halfway. Anyone who so much as opens the OS in
+ * a week keeps their sign-in alive without noticing, and the prompt is left
+ * for people who have genuinely been away a fortnight.
+ */
+const EXTEND_WHEN_UNDER_MS = (LIFETIME_SECONDS / 2) * 1000;
+
 /* ───────────────────────── at rest ───────────────────────── */
 
 /**
@@ -138,6 +145,44 @@ export async function signInToRex(
   return { ok: true, expiresAt };
 }
 
+/**
+ * Keeping a live token alive, without anyone typing anything.
+ *
+ * REX has no OAuth and no refresh token — but UserProfile/extendSessionToken
+ * pushes out the expiry of the token you present, for the user that token
+ * belongs to. Same token, later deadline, no password. It returns the new
+ * expiry as a unix timestamp.
+ *
+ * Found by asking the F&C team how theirs stays signed in: they extend rather
+ * than refresh, and the method is on UserProfile rather than Authentication,
+ * which is why it wasn't in the auth service's method list.
+ *
+ * Fire-and-forget on purpose: this must never delay the call the person is
+ * actually making, and a failed extension is harmless — the token is still
+ * valid, and it will be tried again next time.
+ */
+async function extend(userId: string, token: string): Promise<void> {
+  try {
+    const r = await fetch(`${REX_BASE}/v1/rex/UserProfile/extendSessionToken`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ token_lifetime: LIFETIME_SECONDS }),
+      signal: AbortSignal.timeout(10000),
+    });
+    const j = (await r.json().catch(() => null)) as { result?: unknown } | null;
+    // Unix seconds. Anything else means REX declined, and the old expiry
+    // stands rather than being overwritten with a guess.
+    const until = typeof j?.result === "number" ? j.result : null;
+    if (!until) return;
+    await q(`UPDATE os_rex_tokens SET expires_at = $2 WHERE user_id = $1`, [
+      userId,
+      new Date(until * 1000).toISOString(),
+    ]);
+  } catch {
+    /* still signed in; try again on the next call */
+  }
+}
+
 /** Their live token, or null if they've never signed in or it has lapsed. */
 export async function rexTokenFor(userId: string | null): Promise<string | null> {
   if (!userId || !hasDb()) return null;
@@ -148,7 +193,15 @@ export async function rexTokenFor(userId: string | null): Promise<string | null>
   const row = rows[0];
   if (!row) return null;
   if (new Date(row.expires_at).getTime() <= Date.now()) return null;
-  return open(row.token_enc);
+  const token = open(row.token_enc);
+  if (!token) return null;
+
+  // Past halfway: push it out while they're here, so they never meet the
+  // prompt at all. Deliberately not awaited.
+  if (new Date(row.expires_at).getTime() - Date.now() < EXTEND_WHEN_UNDER_MS) {
+    void extend(userId, token);
+  }
+  return token;
 }
 
 export async function rexSessionFor(userId: string | null): Promise<RexSession> {

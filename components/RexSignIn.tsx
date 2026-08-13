@@ -152,8 +152,9 @@ export default function RexSignIn() {
           </button>
           <p className="text-[10.5px] leading-relaxed text-muted">
             Your password goes straight to REX and is never stored here — what we keep is the
-            pass REX hands back, encrypted, and only for a week. That&apos;s why this asks
-            again roughly once a week, and why nobody can act as you from it after that.
+            pass REX hands back, encrypted. It renews itself quietly whenever you use the OS,
+            so this should be the only time you see this. It only expires if you stay away for
+            a fortnight, and nobody can act as you from it once it has.
           </p>
         </form>
       )}
