@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import DiaryCalendar from "@/components/DiaryCalendar";
@@ -381,6 +381,75 @@ function AttentionWidget({ h }: { w: number; h: number }) {
 }
 
 /* ── The registry itself. ── */
+/**
+ * Industry news, from Landlord Today's feed.
+ *
+ * How many stories you get is the SIZE of the tile — one at 1x1, two at 2x1,
+ * three when it's tall. That's the honest way to make a resizable widget
+ * useful: not the same content shrunk, but more of it.
+ *
+ * One source for now. The API takes a source id already, so a second outlet
+ * is an entry in a list rather than a rewrite.
+ */
+function NewsWidget({ w, h }: { w: number; h: number }) {
+  const [items, setItems] = useState<{ title: string; link: string; at: string | null; blurb: string }[] | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    fetch("/api/news")
+      .then((r) => r.json())
+      .then((j) => live && (j.ok ? setItems(j.items ?? []) : setFailed(true)))
+      .catch(() => live && setFailed(true));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const count = w >= 2 && h >= 2 ? 3 : w >= 2 || h >= 2 ? 2 : 1;
+  const ago = (iso: string | null) => {
+    if (!iso) return "";
+    const hrs = Math.floor((Date.now() - new Date(iso).valueOf()) / 3600000);
+    if (hrs < 1) return "just now";
+    if (hrs < 24) return `${hrs}h ago`;
+    const d = Math.floor(hrs / 24);
+    return `${d}d ago`;
+  };
+
+  return (
+    <div className="flex h-full flex-col">
+      <Head icon="megaphone" label="News" />
+      {failed && <p className="mt-2 text-[11px] text-muted">The feed didn&apos;t answer.</p>}
+      {!items && !failed && <p className="mt-2 text-[11px] text-muted">Reading the headlines…</p>}
+      {items && !items.length && <p className="mt-2 text-[11px] text-muted">Nothing new today.</p>}
+      {items && items.length > 0 && (
+        <ul className="mt-1.5 min-h-0 flex-1 space-y-2">
+          {items.slice(0, count).map((n) => (
+            <li key={n.link} className="border-b border-line/40 pb-2 last:border-0 last:pb-0">
+              <a
+                href={n.link}
+                target="_blank"
+                rel="noreferrer"
+                className="block transition-colors hover:text-accent-dark"
+              >
+                <span className="block text-[12px] font-semibold leading-snug">{n.title}</span>
+                {/* The blurb only where there's room for it to be read rather
+                    than clipped to three words. */}
+                {count > 1 && n.blurb && (
+                  <span className="mt-0.5 block truncate text-[10.5px] text-muted">{n.blurb}</span>
+                )}
+                <span className="mt-0.5 block text-[10px] text-muted">
+                  Landlord Today · {ago(n.at)}
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export const WIDGETS: Record<string, WidgetDef> = {
   "leads-today": {
     label: "Leads today", icon: "pack/target", hint: "count → trend → the names themselves",
@@ -724,6 +793,11 @@ export const WIDGETS: Record<string, WidgetDef> = {
     ),
   },
 
+  news: {
+    label: "News", icon: "megaphone", hint: "what landlords are reading today",
+    defaultW: 1, defaultH: 1,
+    render: (w, h) => <NewsWidget w={w} h={h} />,
+  },
   "compliance-due": {
     label: "Compliance due", icon: "shield", hint: "certificates dying this month",
     defaultW: 1, defaultH: 1,
@@ -1016,4 +1090,5 @@ export const DASH_TRAY_GROUPS = [
   { key: "diary", label: "People & diary", icon: "calendar", types: ["diary", "today", "viewings-week", "attention"] },
   { key: "management", label: "Management", icon: "setting", types: ["arrears", "maintenance", "renewals"] },
   { key: "compliance", label: "Compliance", icon: "shield", types: ["compliance-due"] },
+  { key: "news", label: "News", icon: "megaphone", types: ["news"] },
 ];
