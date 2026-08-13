@@ -40,7 +40,11 @@ export const config = {
   // fetched by the landlord's mail client, which has no cookie and never
   // will. Behind the gate it would redirect to /key and every email would
   // arrive with a broken image where the logo should be.
+  // `present` is exempt for the same reason as the tenant portal: the
+  // pre-appraisal deck goes to a landlord who has no account and never will.
+  // Its own random token is the credential. `api/present` goes with it — the
+  // viewer calls it to record that the deck was opened.
   matcher: [
-    "/((?!key|api/key|tenant|landlord|_next|icons|illustrations|brand|favicon.ico|robots.txt).*)",
+    "/((?!key|api/key|tenant|landlord|present|api/present|_next|icons|illustrations|brand|favicon.ico|robots.txt).*)",
   ],
 };

@@ -22,6 +22,12 @@ export type AppraisalInvite = {
   minutes: number;
   agentName: string;
   agentPhone: string;
+  /**
+   * The landlord's own pre-appraisal deck, if one has been minted for this
+   * visit. Null means the email goes out as it always did — the link is an
+   * addition to a working email, never a dependency of it.
+   */
+  presentationUrl?: string | null;
 };
 
 const first = (name: string) => (name || "there").trim().split(/\s+/)[0];
@@ -31,12 +37,26 @@ export function subjectFor(i: AppraisalInvite): string {
 }
 
 export function bodyFor(i: AppraisalInvite): string {
+  /**
+   * The deck link, placed HIGH — directly under the appointment and above the
+   * list of things to dig out. It is the one thing in this email we actually
+   * want clicked, and a link at the bottom of a paragraph about certificates
+   * is a link nobody sees.
+   *
+   * Written as a sentence with the URL on its own line rather than as a bare
+   * URL: the email goes out through REX's mailer as HTML over our letterhead,
+   * and a lone URL on a line survives both that and a plain-text client.
+   */
+  const deck = i.presentationUrl
+    ? `\nBefore we meet, I've put a short page together for you — who's coming, what happens on the day, and how long it takes. Two minutes:\n\n${i.presentationUrl}\n`
+    : "";
+
   return `Hi ${first(i.landlordName)},
 
 Thanks for your time on the phone. I'm looking forward to seeing ${i.address}${
     i.whenPretty ? ` on ${i.whenPretty}` : ""
   }.
-
+${deck}
 It usually takes about ${i.minutes} minutes. I'll walk round the property, take a few notes, and we'll talk through what it should let for, how quickly, and what — if anything — is worth doing first.
 
 To make the most of it, it helps to have to hand:
@@ -62,7 +82,7 @@ The Letting Experts`;
  * generated here, so "put it in their diary" works on any environment,
  * including the ones where sending is still locked.
  */
-export function icsFor(i: AppraisalInvite): string | null {
+export function icsFor(i: AppraisalInvite, stampAt?: string | null): string | null {
   if (!i.startsAt) return null;
   const start = new Date(i.startsAt);
   if (Number.isNaN(start.valueOf())) return null;
@@ -79,7 +99,16 @@ export function icsFor(i: AppraisalInvite): string | null {
     "METHOD:REQUEST",
     "BEGIN:VEVENT",
     `UID:${uid}`,
-    `DTSTAMP:${stamp(new Date())}`,
+    /**
+     * When the calendar object itself was written — not when the visit is.
+     *
+     * Takes `stampAt` when the caller has a fixed moment to hand, and this is
+     * not housekeeping: rendered server-side and client-side, `new Date()`
+     * gives two different answers, React sees two different hrefs, and the
+     * whole slide fails to hydrate. The presentation passes the deck's own
+     * creation time, which is genuinely what DTSTAMP means.
+     */
+    `DTSTAMP:${stamp(stampAt ? new Date(stampAt) : new Date())}`,
     `DTSTART:${stamp(start)}`,
     `DTEND:${stamp(end)}`,
     fold(`SUMMARY:Market appraisal — ${i.address}`),

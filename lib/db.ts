@@ -249,6 +249,34 @@ CREATE TABLE IF NOT EXISTS os_appointments (
 );
 CREATE INDEX IF NOT EXISTS os_appointments_when ON os_appointments (starts_at);
 
+-- Presentations sent to landlords — the pre-appraisal deck they open from a
+-- link in the confirmation email.
+--
+-- the deck column is a SNAPSHOT, deliberately: everything the viewer needs, frozen at
+-- send. A landlord opening the link on a Sunday must not depend on REX being
+-- up or on anyone's token still being valid, and what they saw stays visible
+-- to us afterwards. The row is the record of what was sent, not a pointer to
+-- data that has since moved on.
+--
+-- The token is the only credential. It is a 160-bit random string, never
+-- guessable and never sequential, because this page is public by necessity —
+-- see app/present/[token] for what is and isn't exposed through it.
+CREATE TABLE IF NOT EXISTS os_presentations (
+  token           TEXT PRIMARY KEY,
+  kind            TEXT NOT NULL DEFAULT 'pre-appraisal',
+  /** The lead or case this belongs to, so a record can show its own sends. */
+  ref             TEXT NOT NULL DEFAULT '',
+  deck            JSONB NOT NULL,
+  author_id       TEXT,
+  author_name     TEXT NOT NULL DEFAULT '',
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  /** Opens are the whole point: an unopened deck is a follow-up call. */
+  first_opened_at TIMESTAMPTZ,
+  last_opened_at  TIMESTAMPTZ,
+  opens           INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS os_presentations_ref ON os_presentations (ref, created_at DESC);
+
 -- Results of slow REX/PayProp walks, so a deploy doesn't cost minutes of
 -- empty screens before the first figure appears.
 CREATE TABLE IF NOT EXISTS os_cache (

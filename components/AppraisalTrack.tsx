@@ -134,6 +134,12 @@ export default function AppraisalTrack({
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
   const [touchKind, setTouchKind] = useState<Touch["kind"]>("call");
+  /* The landlord's own pre-appraisal page, once minted. `missing` is what the
+     agent's profile is short of — worth saying before it goes out, not after
+     the landlord has seen a deck with no photograph on it. */
+  const [deck, setDeck] = useState<{ url: string; missing: string[] } | null>(null);
+  const [deckError, setDeckError] = useState<string | null>(null);
+  const [minting, setMinting] = useState(false);
 
   const at = stageIndex(c.state);
   const step = isOutcome(c.state) ? null : APPRAISAL_STEPS[at];
@@ -141,6 +147,47 @@ export default function AppraisalTrack({
   const outcome = isOutcome(c.state) ? OUTCOMES.find((o) => o.id === c.state)! : null;
 
   const patch = (p: Partial<AppraisalCase>) => onChange({ ...c, ...p });
+
+  /**
+   * Mint the landlord's pre-appraisal page, then open the email over it.
+   *
+   * Minted on the way to the email rather than on a separate button, because
+   * a link that exists but wasn't pasted in is worse than no link: the agent
+   * thinks it went and the landlord never sees it.
+   *
+   * It is deliberately NOT a blocker. If the deck can't be created — no
+   * database, not signed in, REX unreachable for the headshot — the email
+   * still opens and still sends, just without the page. The confirmation is
+   * the thing that stops no-shows; the deck is the thing that impresses.
+   */
+  async function openPre() {
+    if (!invite) return;
+    if (deck) return setComposing("pre");
+    setMinting(true);
+    setDeckError(null);
+    try {
+      const res = await fetch("/api/presentations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ref: recordId ?? "",
+          recipientName: invite.landlordName,
+          address: invite.address,
+          whenPretty: invite.whenPretty,
+          startsAt: invite.startsAt,
+          minutes: invite.minutes,
+        }),
+      });
+      const j = await res.json();
+      if (j.ok) setDeck({ url: j.url, missing: j.missing ?? [] });
+      else setDeckError(j.error ?? "Couldn't build the landlord's page.");
+    } catch {
+      setDeckError("Couldn't build the landlord's page.");
+    } finally {
+      setMinting(false);
+      setComposing("pre");
+    }
+  }
 
   function advance() {
     const next = APPRAISAL_STEPS[at + 1];
@@ -474,14 +521,17 @@ export default function AppraisalTrack({
                   <button
                     type="button"
                     onClick={() => {
-                      if (c.state === "pre" && invite) return setComposing("pre");
+                      if (c.state === "pre" && invite) return void openPre();
                       if (c.state === "post" && invite) return setComposing("post");
                       advance();
                     }}
-                    className="rounded-full bg-ink px-5 py-2.5 text-[12.5px] text-page"
+                    disabled={minting}
+                    className="rounded-full bg-ink px-5 py-2.5 text-[12.5px] text-page disabled:opacity-60"
                   >
                     {c.state === "pre"
-                      ? "Send the pre-appraisal"
+                      ? minting
+                        ? "Building their page…"
+                        : "Send the pre-appraisal"
                       : c.state === "post"
                         ? "Send the follow-up"
                         : step.cta}
@@ -585,7 +635,7 @@ export default function AppraisalTrack({
           subject={composing === "pre" ? subjectFor(invite) : postSubjectFor(invite)}
           body={
             composing === "pre"
-              ? bodyFor(invite)
+              ? bodyFor({ ...invite, presentationUrl: deck?.url ?? null })
               : postBodyFor(invite, {
                   valuation: c.valuation,
                   askingRent: c.askingRent,
@@ -597,6 +647,19 @@ export default function AppraisalTrack({
           attachments={c.docs}
           extra={
             composing === "pre" ? (
+              <>
+                {/* Nobody should send a page they haven't looked at — and
+                    this one has their own face on it. */}
+                {deck && (
+                  <a
+                    href={deck.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-full border border-line/80 px-4 py-2.5 text-[12px]"
+                  >
+                    Preview their page
+                  </a>
+                )}
               <button
                 type="button"
                 onClick={() => {
@@ -613,6 +676,17 @@ export default function AppraisalTrack({
               >
                 Calendar invite
               </button>
+                {/* Said before it goes, not after. A deck introducing an
+                    agent by monogram is fine; an agent who didn't know it
+                    would is not. */}
+                {deck && deck.missing.length > 0 && (
+                  <span className="text-[11px] text-muted">
+                    Your profile has no {deck.missing.join(" and no ")} — add it in your profile and
+                    the next one will carry it.
+                  </span>
+                )}
+                {deckError && <span className="text-[11px] text-accent-dark">{deckError}</span>}
+              </>
             ) : undefined
           }
           onClose={() => setComposing(null)}
