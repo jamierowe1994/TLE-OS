@@ -546,12 +546,6 @@ export default function ListingDrawer({
             </div>
           </div>
 
-          {/* ── What the portals did with it. Only for something that has
-              actually been advertised: a draft has no campaign, and an empty
-              panel on 165 unpublished listings would teach everyone to
-              ignore it. ── */}
-          {listing.publicationStatus === "published" && <PortalStatsPanel listingId={listing.id} />}
-
           {/* ── From "offer accepted" onward, the landlord, the property and
               the tenant are one thing. The panel is the record of that, and
               the only place it can be undone. ── */}
@@ -830,6 +824,12 @@ export default function ListingDrawer({
                   )}
                 </div>
 
+                {/* The facts and the performance, side by side. The facts
+                    column was capped at max-w-md and left half the tab empty;
+                    what the advert is DOING is the natural neighbour of what
+                    the advert SAYS. ── */}
+                <div className="grid gap-x-8 gap-y-6 lg:grid-cols-2">
+                <div className="min-w-0">
                 <dl className="max-w-md space-y-2 text-[12.5px]">
                   {[
                     ["Status", status.label],
@@ -855,6 +855,15 @@ export default function ListingDrawer({
                   Editing these writes back to REX once the write path is wired —
                   read-only facts until then.
                 </p>
+                </div>
+
+                {/* Only where there IS an advert: a draft has no campaign, and
+                    an empty panel on the 162 unpublished listings would teach
+                    everyone to ignore it. */}
+                {listing.publicationStatus === "published" && (
+                  <PortalStatsPanel listingId={listing.id} embedded />
+                )}
+                </div>
               </Card>
             )}
 

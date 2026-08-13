@@ -23,7 +23,15 @@ import type { PortalStats } from "@/lib/rex-portal-stats";
 
 const nf = (n: number | null) => (n == null ? "—" : n.toLocaleString("en-GB"));
 
-export default function PortalStatsPanel({ listingId }: { listingId: string }) {
+export default function PortalStatsPanel({
+  listingId,
+  embedded = false,
+}: {
+  listingId: string;
+  /** Inside the Marketing tab it sits in a column beside the facts, so it
+   *  drops its own card chrome and borrows the one around it. */
+  embedded?: boolean;
+}) {
   const [data, setData] = useState<PortalStats | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "off">("loading");
 
@@ -48,7 +56,7 @@ export default function PortalStatsPanel({ listingId }: { listingId: string }) {
   if (state === "off") return null;
 
   return (
-    <div className="mt-3 rounded-3xl border border-line/80 bg-panel p-5">
+    <div className={embedded ? "" : "mt-3 rounded-3xl border border-line/80 bg-panel p-5"}>
       <div className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h3 className="text-[14px]">How the advert is doing</h3>
         <span className="text-[10.5px] text-muted">
@@ -83,7 +91,7 @@ export default function PortalStatsPanel({ listingId }: { listingId: string }) {
               key={p.id}
               className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-line/40 pb-2.5 last:border-0 last:pb-0"
             >
-              <span className="min-w-[110px]">
+              <span className="min-w-[102px]">
                 <span className="block text-[12.5px] font-semibold">{p.portal}</span>
                 {p.branch && <span className="block text-[10.5px] text-muted">{p.branch}</span>}
               </span>
