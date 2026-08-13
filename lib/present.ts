@@ -162,6 +162,37 @@ export const WHY_TLE: { title: string; body: string }[] = [
   },
 ];
 
+/**
+ * Three things every agent can be held to, on the introduction slide.
+ * Same rule as everywhere else in this deck: claims about conduct, never
+ * statistics nobody can stand behind.
+ */
+export const AGENT_CHIPS: { icon: "pin" | "chat" | "heart"; title: string; body: string }[] = [
+  { icon: "pin", title: "Local expert", body: "In-depth knowledge of your area" },
+  { icon: "chat", title: "Straight talking advice", body: "Honest, clear guidance at every step" },
+  { icon: "heart", title: "Here to help", body: "Focused on you and your goals" },
+];
+
+/**
+ * What the introduction says when the agent hasn't written their own.
+ *
+ * This is the COMMON case, not the edge one — REX's profile_bio is null for
+ * every user on the account — so it has to stand up as real writing rather
+ * than read as a placeholder.
+ *
+ * Written without pronouns, using the first name instead. A deck is generated
+ * for whoever is signed in and we do not hold anybody's pronouns; guessing
+ * from a name is exactly the kind of thing that goes wrong in front of a
+ * customer.
+ */
+export function defaultBio(firstName: string): string {
+  const who = firstName || "Your agent";
+  return [
+    `${who} looks after lettings across the area, and will be the one person you deal with — the valuation, the marketing, and the call when there's an offer.`,
+    `At the appointment ${who} will walk round the property with you, talk through what it should let for and why, answer anything you want to ask, and set out exactly what happens next.`,
+  ].join("\n\n");
+}
+
 /* ───────────────────────── shaping helpers ───────────────────────── */
 
 export const firstNameOf = (name: string) => (name || "").trim().split(/\s+/)[0] ?? "";

@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  AGENT_CHIPS,
   BANNER,
   BRING_ALONG,
+  defaultBio,
   VISIT_STEPS,
   WHY_TLE,
   initialsOf,
@@ -229,7 +231,12 @@ type IconName =
   | "calendar"
   | "pin"
   | "person"
-  | "check";
+  | "check"
+  | "phone"
+  | "chat"
+  | "heart"
+  | "whatsapp"
+  | "mail";
 
 /** Which icon belongs to which beat of the visit, in order. */
 const STEP_ICONS: IconName[] = ["home", "chart", "people", "star"];
@@ -287,6 +294,27 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   check: <path d="M4 12.5l5 5L20 6.5" />,
+  phone: (
+    <path d="M6.5 3.5h3l1.5 4-2 1.4a12 12 0 0 0 6.1 6.1l1.4-2 4 1.5v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.5 5.7 2 2 0 0 1 6.5 3.5z" />
+  ),
+  chat: (
+    <path d="M20 12.5a7 7 0 0 1-7 7H8l-4 2.5.9-3.6A7 7 0 0 1 4 12.5a7 7 0 0 1 7-7h2a7 7 0 0 1 7 7z" />
+  ),
+  heart: (
+    <path d="M12 20s-7-4.4-7-9.3A4 4 0 0 1 12 8a4 4 0 0 1 7-2.7c0 4.9-7 14.7-7 14.7z" />
+  ),
+  whatsapp: (
+    <>
+      <path d="M20 11.6a8 8 0 0 1-11.9 7L3.5 20.5l2-4.5A8 8 0 1 1 20 11.6z" />
+      <path d="M9 8.7c.3-.1.6 0 .8.3l.7 1.2c.1.3.1.6-.1.8l-.5.5a5.4 5.4 0 0 0 2.6 2.6l.5-.5c.2-.2.5-.2.8-.1l1.2.7c.3.2.4.5.3.8-.2.7-.9 1.2-1.7 1.1a7.6 7.6 0 0 1-5.7-5.7c-.1-.8.4-1.5 1.1-1.7z" />
+    </>
+  ),
+  mail: (
+    <>
+      <rect x="3" y="5.5" width="18" height="13" rx="2.5" />
+      <path d="M3.6 7L12 13l8.4-6" />
+    </>
+  ),
 };
 
 function Line({ name, size = 24 }: { name: IconName; size?: number }) {
@@ -727,100 +755,152 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
   );
 }
 
-function Agent({ deck }: { deck: Deck }) {
+function Agent({ deck, show }: { deck: Deck; show: boolean }) {
   const a = deck.agent;
   const tel = a.phone.replace(/\s+/g, "");
   /** wa.me wants an international number with no punctuation. UK mobiles are
    *  stored as 07…, so the leading zero becomes 44. */
   const wa = /^0\d{10}$/.test(tel) ? `44${tel.slice(1)}` : null;
 
+  /* Their own words when they've written them; otherwise a real introduction
+     rather than a placeholder — see defaultBio, and note that nobody on the
+     REX account has a bio, so this is the usual case. */
+  const paragraphs = (a.bio.trim() || defaultBio(a.firstName)).split(/\n{2,}/);
+
+  const OUTLINE =
+    "flex items-center gap-2.5 rounded-full border px-5 py-3 text-[13px] font-medium transition-colors";
+
   return (
-    <Slide id="agent">
-      <div className="mx-auto grid w-full max-w-5xl items-center gap-8 lg:grid-cols-[300px_1fr] lg:gap-16">
-        {/* On a phone the copy comes FIRST and the portrait sits under it: a
-            full-width face pushes the name below the fold, and the name is
-            the thing they need. */}
-        <div className="order-2 lg:order-1">
-          {a.photo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={a.photo}
-              alt={a.name}
-              className="h-[180px] w-[180px] rounded-2xl object-cover object-[center_18%] sm:h-[260px] sm:w-full sm:max-w-[300px]"
-            />
-          ) : (
-            /* No headshot on the REX record. A monogram in the brand red
-               reads as a design choice; an empty grey rectangle reads as a
-               fault, and about a third of the account has no photo. */
-            <div
-              className="flex h-[140px] w-[140px] items-center justify-center rounded-2xl text-[38px] font-light text-white sm:h-[220px] sm:w-[220px] sm:text-[56px]"
-              style={{ background: RED }}
-            >
-              {initialsOf(a.name)}
-            </div>
-          )}
-        </div>
+    <section
+      data-slide="agent"
+      className="relative flex min-h-[100dvh] w-full shrink-0 snap-start flex-col"
+      style={{ background: PAPER, color: INK }}
+    >
+      <header className="px-6 pt-8 sm:px-12 sm:pt-10 lg:px-16">
+        <Mark className="h-10 sm:h-11" />
+      </header>
 
-        <div className="order-1 lg:order-2">
-          <Eyebrow>Who you&rsquo;re meeting</Eyebrow>
-          <h2 className="mt-3 text-[28px] font-light leading-[1.1] tracking-[-0.01em] sm:text-[40px]">
-            {a.name || "Your agent"}
-          </h2>
-          {a.title && <p className="mt-2 text-[13.5px] font-medium text-black/55">{a.title}</p>}
-
-          {a.bio ? (
-            /* Written by them, in their profile. Paragraph breaks preserved —
-               it is prose, not a field. */
-            <div className="mt-6 max-w-xl space-y-3">
-              {a.bio.split(/\n{2,}/).map((p, i) => (
-                <p key={i} className="text-[13.5px] font-light leading-relaxed text-black/70">
-                  {p}
-                </p>
-              ))}
-            </div>
-          ) : (
-            /* Nobody on the account has filled a bio in (REX's own field is
-               null for all 100 users), so this is the common case, not the
-               edge one. It has to stand on its own as a sentence. */
-            <p className="mt-6 max-w-xl text-[13.5px] font-light leading-relaxed text-black/70">
-              {a.firstName || "Your agent"} looks after lettings across the area and will be the one
-              person you deal with — the valuation, the marketing and the call when there&rsquo;s an
-              offer.
-            </p>
-          )}
-
-          <div className="mt-8 flex flex-wrap gap-2.5">
-            {a.phone && (
-              <a
-                href={`tel:${tel}`}
-                className="rounded-full px-5 py-2.5 text-[12.5px] font-medium text-white transition-opacity hover:opacity-90"
+      <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-12 lg:px-16 lg:py-12 lg:pr-40">
+        <div className="mx-auto grid w-full max-w-6xl items-center gap-9 lg:grid-cols-[420px_1fr] lg:gap-14">
+          {/* The portrait leads, and it is the point of the slide — this is
+              the one moment before the visit where the landlord sees a face.
+              Capped on a phone so the name still lands above the fold. */}
+          <Rise show={show} i={0}>
+            {a.photo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={a.photo}
+                alt={a.name}
+                className="max-h-[38vh] w-full rounded-[18px] object-cover object-[center_18%] lg:max-h-none lg:aspect-[3/4]"
+              />
+            ) : (
+              /* Four of the fourteen TLE people have no photo on their REX
+                 record (measured). A monogram in the brand red reads as a
+                 design choice; an empty rectangle reads as a fault. */
+              <div
+                className="flex h-[38vh] w-full items-center justify-center rounded-[18px] text-[68px] font-light text-white lg:aspect-[3/4] lg:h-auto"
                 style={{ background: RED }}
               >
-                Call {a.firstName || "them"} · {a.phone}
-              </a>
+                {initialsOf(a.name)}
+              </div>
             )}
-            {wa && (
-              <a
-                href={`https://wa.me/${wa}`}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-full border border-black/15 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-black/40"
+          </Rise>
+
+          <div className="min-w-0">
+            <Rise show={show} i={1}>
+              <Eyebrow>Who you&rsquo;ll be meeting</Eyebrow>
+              <h2
+                className="mt-3 text-[34px] leading-[1.05] sm:text-[50px]"
+                style={{ fontFamily: DISPLAY }}
               >
-                WhatsApp
-              </a>
-            )}
-            {a.email && (
-              <a
-                href={`mailto:${a.email}`}
-                className="rounded-full border border-black/15 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-black/40"
+                {a.name || "Your agent"}
+              </h2>
+              {a.title && (
+                <p className="mt-2 text-[15px] font-light text-black/55">{a.title}</p>
+              )}
+              <span
+                className="mt-5 block h-[3px] w-[34px] rounded-full"
+                style={{ background: RED }}
+              />
+            </Rise>
+
+            <Rise show={show} i={2}>
+              <div className="mt-6 max-w-xl space-y-4">
+                {paragraphs.map((p, i) => (
+                  <p key={i} className="text-[14px] font-light leading-relaxed text-black/70">
+                    {p}
+                  </p>
+                ))}
+              </div>
+            </Rise>
+
+            <Rise show={show} i={3}>
+              <div className="mt-8 flex flex-wrap gap-3">
+                {a.phone && (
+                  <a
+                    href={`tel:${tel}`}
+                    className="flex items-center gap-2.5 rounded-full px-5 py-3 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+                    style={{ background: RED }}
+                  >
+                    <Line name="phone" size={17} />
+                    Call {a.firstName || "them"} · {a.phone}
+                  </a>
+                )}
+                {wa && (
+                  <a
+                    href={`https://wa.me/${wa}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`${OUTLINE} hover:border-black/40`}
+                    style={{ borderColor: "rgba(59,59,60,0.20)" }}
+                  >
+                    <Line name="whatsapp" size={17} />
+                    WhatsApp
+                  </a>
+                )}
+                {a.email && (
+                  <a
+                    href={`mailto:${a.email}`}
+                    className={`${OUTLINE} hover:border-black/40`}
+                    style={{ borderColor: "rgba(59,59,60,0.20)" }}
+                  >
+                    <Line name="mail" size={17} />
+                    Email
+                  </a>
+                )}
+              </div>
+            </Rise>
+
+            <Rise show={show} i={4}>
+              <div
+                className="mt-8 grid max-w-2xl gap-y-5 rounded-[14px] px-6 py-5 sm:grid-cols-3 sm:gap-x-0"
+                style={{ background: MIST }}
               >
-                Email
-              </a>
-            )}
+                {AGENT_CHIPS.map((c, i) => (
+                  <div
+                    key={c.title}
+                    className={`flex items-start gap-3 sm:px-5 ${i > 0 ? "sm:border-l" : ""}`}
+                    style={{ borderColor: "rgba(59,59,60,0.14)" }}
+                  >
+                    <span className="mt-0.5 shrink-0" style={{ color: RED }}>
+                      <Line name={c.icon} size={21} />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[12.5px] font-semibold leading-snug">
+                        {c.title}
+                      </span>
+                      <span className="mt-1 block text-[11.5px] font-light leading-snug text-black/55">
+                        {c.body}
+                      </span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </Rise>
           </div>
         </div>
       </div>
-    </Slide>
+    </section>
   );
 }
 
@@ -1033,7 +1113,7 @@ export default function PresentDeck({
       case "appointment":
         return <Appointment deck={deck} show={show(i)} />;
       case "agent":
-        return <Agent deck={deck} />;
+        return <Agent deck={deck} show={show(i)} />;
       case "why":
         return <Why />;
       case "questions":
