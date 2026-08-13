@@ -13,7 +13,8 @@ try:
 except Exception:
     pass
 
-word = "Welcome"
+import sys
+word = sys.argv[1] if len(sys.argv)>1 else "Welcome"
 names = [cmap[ord(c)] for c in word]
 
 # Compose the whole word into ONE path, applying advance widths (+kerning).
@@ -37,7 +38,7 @@ path = " ".join(pen_out)
 print("UPM", upm)
 print("advance total", x)
 print("len(d)", len(path))
-open("welcome_outline.txt", "w").write(path)
+open("outline_%s.txt"%word, "w").write(path)
 
 # bounds
 from fontTools.pens.boundsPen import BoundsPen

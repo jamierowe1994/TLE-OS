@@ -14,15 +14,22 @@ letters filling in along the writing path.
 
 ## Running them
 
+Both scripts take the word as their one argument.
+
 ```bash
 python3 -m venv .venv && ./.venv/bin/pip install fonttools numpy scikit-image brotli
 curl -sL -o MsMadi.ttf https://github.com/google/fonts/raw/main/ofl/msmadi/MsMadi-Regular.ttf
-./.venv/bin/python outline.py    # -> welcome_outline.txt  (the clipPath)
-./.venv/bin/python penpath.py    # -> welcome_pen.txt      (the pen path)
+./.venv/bin/python outline.py Welcome   # -> outline_Welcome.txt   (the clipPath)
+./.venv/bin/python penpath.py Welcome   # -> hand_Welcome.json     (the strokes)
 ```
 
-Then paste the two strings into `OUTLINE` and `PEN` in `WelcomeMark.tsx`, and
-update `VIEW_BOX` to the bounding box `penpath.py` prints.
+Then add an entry to `HAND_WORDS` in `lib/handwriting-data.ts`: the outline
+string, the per-letter `d` and `f` from the JSON, the `viewBox` the script
+prints, and `ratio` = viewBox width ÷ height. `components/HandWord.tsx` renders
+any word in that map — nothing else needs touching.
+
+Round the outline coordinates to integers on the way in; at 1000 units per em
+the decimals buy nothing and cost about 2KB a word.
 
 ## The three things that matter
 

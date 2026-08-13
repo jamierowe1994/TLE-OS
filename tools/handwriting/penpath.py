@@ -26,7 +26,9 @@ class Flatten(BasePen):
         self.cur=[]
     def endPath(self): self._closePath()
 
-word="Welcome"; names=[cmap[ord(c)] for c in word]
+import sys
+word=sys.argv[1] if len(sys.argv)>1 else "Welcome"
+names=[cmap[ord(c)] for c in word]
 per=[]; x=0.0
 for i,n in enumerate(names):
     fp=Flatten(gs,dx=x); gs[n].draw(fp); fp.endPath(); per.append(fp.contours)
@@ -295,6 +297,6 @@ for li,letter in enumerate(letters):
     out.append({"c":word[li],"d":d,"len":round(L)})
 tot=sum(o["len"] for o in out)
 for o in out: print("  %s  len=%-6d %5.1f%%  pts~%d"%(o["c"],o["len"],100*o["len"]/tot,o["d"].count("L")))
-json.dump(out,open("welcome_letters.json","w"))
+json.dump({"word":word,"viewBox":[round(X0-10),round(Y0-10),round(X1-X0+20),round(Y1-Y0+20)],"letters":out},open("hand_%s.json"%word,"w"))
 print("total length",tot,"chars",sum(len(o["d"]) for o in out))
 print("viewBox", f"{X0-10:.0f} {Y0-10:.0f} {X1-X0+20:.0f} {Y1-Y0+20:.0f}")

@@ -11,7 +11,7 @@ import {
   type SlideId,
 } from "@/lib/present";
 import { icsFor } from "@/lib/appraisal-email";
-import WelcomeMark from "@/components/WelcomeMark";
+import HandWord from "@/components/HandWord";
 
 /**
  * The pre-appraisal deck, as the landlord sees it.
@@ -374,10 +374,11 @@ function Welcome({ deck, show }: { deck: Deck; show: boolean }) {
               the letterforms clip a fat stroke that travels the pen path, so
               the word fills in the order a hand would form it. Sized by width
               rather than font-size because it is artwork now, not text. */}
-          <WelcomeMark
+          <HandWord
+            word="welcome"
             written={show}
             color={CLAY}
-            className="w-[290px] sm:w-[560px]"
+            size="clamp(69px, 13vw, 134px)"
           />
 
           <Rise show={show} i={2}>
@@ -539,21 +540,35 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
             </Rise>
 
             <Rise show={show} i={1}>
-              {/* Serif display, with one word dropped into the hand. The
-                  script word is the ONLY one that moves — a headline where
-                  two words wander stops being a headline. */}
+              {/* Three lines, broken by hand rather than left to wrap. The
+                  reference sets it this way and it reads better: each line is
+                  a phrase, and the script word lands at the end where the eye
+                  finishes. Block display on the spans so the breaks hold at
+                  every width instead of reflowing on a narrow screen. */}
               <h2
-                className="mt-4 text-[34px] leading-[1.1] sm:text-[52px]"
+                className="mt-4 text-[32px] leading-[1.14] sm:text-[50px]"
                 style={{ fontFamily: DISPLAY }}
               >
-                About {minutes} minutes, and you&rsquo;ll know what it{" "}
-                <span
-                  className="pr-1 text-[42px] sm:text-[64px]"
-                  style={{ fontFamily: FLOW, color: RED }}
-                >
-                  lets
-                </span>{" "}
-                for
+                <span className="block">About {minutes} minutes,</span>
+                <span className="block">and you&rsquo;ll know</span>
+                <span className="block whitespace-nowrap">
+                  what it{" "}
+                  {/* Written, like the entrance. Sized in em so it tracks the
+                      headline at every breakpoint, and a touch bigger than the
+                      serif around it — a script's x-height is far smaller, so
+                      matched sizes make it look shrunken. */}
+                  <HandWord
+                    word="lets"
+                    written={show}
+                    color={RED}
+                    size="1.22em"
+                    align="-0.30em"
+                    ms={1400}
+                    delay={420}
+                    className="mx-[0.06em] inline-block"
+                  />{" "}
+                  for
+                </span>
               </h2>
             </Rise>
 
@@ -596,31 +611,40 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
 
           {/* ── right: the appointment itself ── */}
           <Rise show={show} i={3}>
-            {/* The card carries the red rather than accenting with it. This is
-                the one block on the page big enough to set the temperature,
-                and a red panel does in one move what tinting six small things
-                never would. */}
+            {/* The card carries the red rather than accenting with it — the
+                one block big enough to set the page's temperature.
+                
+                At HALF strength: full red was shouting, and at 50% over the
+                paper it still reads unmistakably red while leaving the type
+                black and the button somewhere to go. Squarer corners than the
+                26px it started at, which suits the flatter colour. */}
             <aside
-              className="rounded-[26px] p-6 text-white sm:p-8"
-              style={{ background: RED }}
+              className="rounded-[16px] p-6 sm:p-8"
+              style={{ background: `${RED}80`, color: INK }}
             >
               <ul>
                 {facts.map((f) => (
                   <li
                     key={f.label}
                     className="flex gap-4 border-b py-4 first:pt-0 last:border-b-0 last:pb-1"
-                    style={{ borderColor: "rgba(255,255,255,0.22)" }}
+                    style={{ borderColor: "rgba(59,59,60,0.16)" }}
                   >
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/15">
+                    {/* White discs on the half-red: the icons need to sit on
+                        something lighter than the card, and white is the only
+                        thing on this page that is. */}
+                    <span
+                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white"
+                      style={{ color: RED }}
+                    >
                       <Line name={f.icon} size={20} />
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
+                      <span className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-black/50">
                         {f.label}
                       </span>
                       <span
                         className={`mt-1 block leading-snug ${
-                          f.soft ? "text-[13px] font-light text-white/80" : "text-[15px] font-medium"
+                          f.soft ? "text-[13px] font-light text-black/65" : "text-[15px] font-medium"
                         }`}
                       >
                         {f.value}
@@ -634,20 +658,23 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
                 <a
                   href={`data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`}
                   download="market-appraisal.ics"
-                  className="mt-6 flex w-full items-center justify-center rounded-full bg-white px-5 py-3.5 text-[13.5px] font-semibold transition-opacity hover:opacity-90"
-                  style={{ color: RED }}
+                  // Full-strength red now that the card is at half. It is the
+                  // only saturated thing on the slide, which is exactly what
+                  // you want of the one button on it.
+                  className="mt-6 flex w-full items-center justify-center rounded-[12px] px-5 py-3.5 text-[13.5px] font-semibold text-white transition-opacity hover:opacity-90"
+                  style={{ background: RED }}
                 >
                   Add it to my calendar
                 </a>
               )}
 
-              <span className="mt-7 block text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
+              <span className="mt-7 block text-[10px] font-semibold uppercase tracking-[0.18em] text-black/50">
                 Handy to have out
               </span>
               <ul className="mt-3 space-y-2.5">
                 {BRING_ALONG.map((b) => (
-                  <li key={b} className="flex gap-2.5 text-[13px] font-light leading-snug text-white/90">
-                    <span className="mt-[1px] shrink-0 text-white/70">
+                  <li key={b} className="flex gap-2.5 text-[13px] font-light leading-snug text-black/75">
+                    <span className="mt-[1px] shrink-0 text-white">
                       <Line name="check" size={16} />
                     </span>
                     <span>{b}</span>
@@ -655,7 +682,7 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
                 ))}
               </ul>
               <p
-                className="mt-5 text-[12.5px] leading-relaxed text-white/70"
+                className="mt-5 text-[12.5px] leading-relaxed text-black/55"
                 style={{ fontFamily: DISPLAY, fontStyle: "italic" }}
               >
                 None of it is essential. If you haven&rsquo;t got it, we&rsquo;ll sort it afterwards.
@@ -669,7 +696,10 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
           is the point: it is the one band that appears on every page of the
           reference, and it ties the deck together the way a footer does. */}
       <Rise show={show} i={5}>
-        <div className="border-t pb-16 pt-7 lg:pb-8" style={{ background: MIST, borderColor: "rgba(59,59,60,0.06)" }}>
+        {/* No fill. With the card at half strength the page has enough colour
+            in it; a tinted band underneath made the whole slide read as one
+            pink block. A hairline is all the separation it needs. */}
+        <div className="border-t pb-16 pt-7 lg:pb-8" style={{ borderColor: "rgba(59,59,60,0.10)" }}>
           <div className="mx-auto grid max-w-5xl gap-y-5 px-6 sm:grid-cols-3 sm:gap-x-0 lg:px-10">
             {BANNER.map((b, i) => (
               <div
