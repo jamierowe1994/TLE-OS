@@ -228,7 +228,10 @@ function Welcome({ deck }: { deck: Deck }) {
               negative margin or it floats half a line above its own baseline. */}
           <p
             className="-ml-1 text-[76px] leading-[0.78] sm:text-[132px]"
-            style={{ fontFamily: FLOW, color: CLAY }}
+            // A touch of tracking. Scripts are drawn to join tightly, and the
+            // reference is noticeably airier than the metal default — at this
+            // size the letters need room or the loops close up into a blur.
+            style={{ fontFamily: FLOW, color: CLAY, letterSpacing: "0.015em" }}
           >
             Welcome
           </p>

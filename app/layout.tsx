@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Allura, Inter, Montserrat, Shantell_Sans } from "next/font/google";
+import { Inter, Montserrat, Sacramento, Shantell_Sans } from "next/font/google";
 import "./globals.css";
 
 const montserrat = Montserrat({
@@ -26,14 +26,17 @@ const shantell = Shantell_Sans({
  * no script face, he confirmed he wants that look. So: a deliberate,
  * decided-on addition to the brand, not a slip.
  *
- * Allura of the candidates — thin, wide and monoline, which is what both
- * references are. Great Vibes has more calligraphic contrast and Sacramento
- * is more casual; either is a one-word swap here if the flavour is wrong.
+ * Sacramento, chosen by rendering eight candidates at display size against
+ * the reference rather than by name. The quality that decides it is that the
+ * reference is MONOLINE — one uniform hairline stroke, no thick downstrokes —
+ * and Sacramento is the only true monoline of the set. Allura, Great Vibes,
+ * Parisienne and Style Script all have calligraphic contrast, which is what
+ * made the first attempt read as a wedding invitation rather than a hand.
  *
  * Used ONLY for a single display word. A script at body size is unreadable,
  * and at any size it is a decoration rather than a typeface.
  */
-const allura = Allura({
+const sacramento = Sacramento({
   subsets: ["latin"],
   weight: "400",
   variable: "--font-script",
@@ -64,7 +67,7 @@ export default function RootLayout({
     // heading silently falls back to system fonts.
     <html
       lang="en"
-      className={`${montserrat.variable} ${shantell.variable} ${inter.variable} ${allura.variable}`}
+      className={`${montserrat.variable} ${shantell.variable} ${inter.variable} ${sacramento.variable}`}
     >
       <body className="antialiased">{children}</body>
     </html>
