@@ -25,10 +25,23 @@ import { hasDb, q } from "./db";
  */
 
 const REX_BASE = process.env.REX_API_BASE ?? "https://api.uk.rexsoftware.com";
-/** Seven days. The ceiling is fourteen; half of it leaves room to rotate. */
-const LIFETIME_SECONDS = 7 * 24 * 60 * 60;
-/** Prompt for a fresh sign-in before it actually lapses, never after. */
-const RENEW_WITHIN_HOURS = 24;
+/**
+ * The maximum REX allows: exactly two weeks. Measured — 1209600 is accepted
+ * and anything above it is refused by name.
+ *
+ * We asked for seven at first, out of caution. That caution cost a sign-in a
+ * week for no security gained: the token is sealed at rest either way, and a
+ * fortnight is still short enough that a leaked one dies on its own. There is
+ * no renew method on REX's Authentication service (login,
+ * loginWithGlobalAuthToken, loginWithIntegrationAccessToken, logout,
+ * resetPassword — nothing else), so a longer token is the ONLY lever we have
+ * without either storing passwords or getting an integration access token
+ * out of REX.
+ */
+const LIFETIME_SECONDS = 14 * 24 * 60 * 60;
+/** Prompt for a fresh sign-in before it lapses, never after. Two days, so it
+ *  can be done at a convenient moment rather than mid-job. */
+const RENEW_WITHIN_HOURS = 48;
 
 /* ───────────────────────── at rest ───────────────────────── */
 
