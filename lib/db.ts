@@ -177,6 +177,23 @@ CREATE TABLE IF NOT EXISTS os_email_templates (
 CREATE UNIQUE INDEX IF NOT EXISTS os_email_templates_step
   ON os_email_templates (campaign_id, step_index);
 
+-- One person's REX sign-in.
+--
+-- The TOKEN only, encrypted, and never the password: we forward the password
+-- to REX once at sign-in and forget it in the same function. Holding staff
+-- passwords would let us re-authenticate silently and skip the weekly prompt,
+-- which is a real security boundary traded for one click a week.
+--
+-- REX lets the caller choose token_lifetime up to two weeks (measured). We
+-- ask for seven days, so a weekly rotation always lands well inside it.
+CREATE TABLE IF NOT EXISTS os_rex_tokens (
+  user_id     TEXT PRIMARY KEY,
+  rex_email   TEXT NOT NULL,
+  token_enc   TEXT NOT NULL,
+  issued_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at  TIMESTAMPTZ NOT NULL
+);
+
 -- Campaigns marketing built here, alongside the ones that ship in code.
 --
 -- The built-in set stays in lib/campaigns.ts: it is the house's own thinking

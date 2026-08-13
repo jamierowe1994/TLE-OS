@@ -184,7 +184,19 @@ export class RexWriteBlocked extends Error {
 }
 
 // Authenticated call: resolve a token, POST, retry ONCE on a token error.
-export async function rexCall(service: string, method: string, body?: unknown): Promise<RexResponse> {
+/**
+ * `actorToken` is a REX token belonging to a PERSON, from lib/rex-user.
+ *
+ * Pass it and the call is made as them, so REX stamps their name on whatever
+ * it touches. That is the entire point: a record created by Susan should say
+ * Susan, not the office API user, and certainly not James.
+ */
+export async function rexCall(
+  service: string,
+  method: string,
+  body?: unknown,
+  actorToken?: string | null
+): Promise<RexResponse> {
   if (!rexConfigured()) {
     throw new Error("Rex isn't connected yet (missing REX_API_EMAIL/PASSWORD).");
   }
@@ -194,6 +206,16 @@ export async function rexCall(service: string, method: string, body?: unknown): 
   }
   const accountId = rexAccountId();
   const path = `${service}/${method}`;
+
+  if (actorToken) {
+    const res = await rexPost(path, body, actorToken);
+    // NO fallback to the office account. A person's token expiring must
+    // surface as "sign in again", never as the office quietly doing it for
+    // them — that would put the wrong name on the record, which is the one
+    // outcome this whole mechanism exists to prevent.
+    return res;
+  }
+
   let token = await getToken(accountId);
   let res = await rexPost(path, body, token);
   if (isTokenError(res)) {
@@ -201,6 +223,12 @@ export async function rexCall(service: string, method: string, body?: unknown): 
     res = await rexPost(path, body, token);
   }
   return res;
+}
+
+/** Did REX reject the token we sent? Exported so callers acting AS a person
+ *  can tell "your sign-in has lapsed" from "that failed". */
+export function isExpiredToken(res: RexResponse): boolean {
+  return isTokenError(res);
 }
 
 // Rex results are either a bare array or { rows: [...] } — normalise to rows.

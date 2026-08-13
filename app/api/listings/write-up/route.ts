@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server";
-import { rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
+import { NextRequest, NextResponse } from "next/server";
+import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { rexTokenFor } from "@/lib/rex-user";
 import { hasDb, q } from "@/lib/db";
 
 /**
@@ -30,7 +32,7 @@ export const runtime = "nodejs";
 const MAX_BODY = 20_000;
 const MAX_HEADING = 500;
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   if (!rexConfigured()) {
     return NextResponse.json({ error: "REX isn't connected on this environment." }, { status: 503 });
   }
@@ -53,13 +55,27 @@ export async function POST(req: Request) {
   }
 
   try {
+    // As THEM. A write-up saved by Susan should say Susan in REX, so the
+    // call carries her token; without one it falls to the office account and
+    // the record would read as the API user forever.
+    const actor = await rexTokenFor(verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value));
+
     const res = await rexCall("Listings", "update", {
       data: {
         id,
         related: { listing_adverts: [{ advert_type: "internet", advert_heading: heading, advert_body: body }] },
       },
-    });
+    }, actor);
     if (!res.ok) {
+      // Their sign-in lapsing is a different problem from REX refusing the
+      // write, and it has a different fix — say so rather than making them
+      // guess at a 502.
+      if (actor && isExpiredToken(res)) {
+        return NextResponse.json(
+          { error: "Your REX sign-in has lapsed — reconnect it in your profile and try again.", reconnect: true },
+          { status: 401 }
+        );
+      }
       return NextResponse.json({ error: res.error ?? `REX refused the write (${res.status}).` }, { status: 502 });
     }
 

@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server";
-import { rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
+import { NextRequest, NextResponse } from "next/server";
+import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { rexTokenFor } from "@/lib/rex-user";
 import { renderPlain } from "@/lib/campaign-mail";
 
 /**
@@ -19,7 +21,7 @@ import { renderPlain } from "@/lib/campaign-mail";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   if (!rexConfigured()) {
     return NextResponse.json({ error: "REX isn't connected on this environment." }, { status: 503 });
   }
@@ -45,6 +47,10 @@ export async function POST(req: Request) {
     // words; the logo, the type and the unsubscribe are not theirs to
     // remember.
     const mail = renderPlain(subject, text);
+    // Sent as the agent, so it lands on the landlord's REX timeline under
+    // their name — the person the landlord will ring back.
+    const actor = await rexTokenFor(verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value));
+
     const res = await rexCall("MailMerge", "createAndSend", {
       subject: mail.subject,
       body: mail.html,
@@ -54,8 +60,14 @@ export async function POST(req: Request) {
       ...(body.contactId
         ? { merge_objects: [{ service_name: "Contacts", record_id: Number(body.contactId) }] }
         : { recipients: [to] }),
-    });
+    }, actor);
     if (!res.ok) {
+      if (actor && isExpiredToken(res)) {
+        return NextResponse.json(
+          { error: "Your REX sign-in has lapsed — reconnect it in your profile and try again.", reconnect: true },
+          { status: 401 }
+        );
+      }
       const msg = res.error ?? `REX refused the send (${res.status}).`;
       // Its own cryptic one, translated — confirmed cause is a contact with no
       // valid email on the REX record.

@@ -5,6 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import { PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
+import RexSignIn from "@/components/RexSignIn";
 import WiringSheet from "@/components/WiringSheet";
 import { usePref, usePrefsHome } from "@/lib/prefs-store";
 import {
@@ -507,6 +508,13 @@ export default function ProfilePage() {
               What your OS is plugged into. Microsoft 365 is the big one — it&apos;s what
               makes the diary yours and the emails really send.
             </p>
+
+            {/* First, because it's the one that decides whose NAME ends up on
+                the work. The others decide what the OS can do; this decides
+                who it says did it. */}
+            <div className="mb-5">
+              <RexSignIn />
+            </div>
             <ul className="space-y-2.5">
               {connections.map((c) => (
                 <li key={c.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-line/70 p-4">
