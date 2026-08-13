@@ -7,6 +7,7 @@ import PropertyPhoto from "@/components/PropertyPhoto";
 import Link from "next/link";
 import EmailToTenants from "@/components/EmailToTenants";
 import ProcessTimeline from "@/components/ProcessTimeline";
+import PortalStatsPanel from "@/components/PortalStatsPanel";
 import TenancyLinkPanel from "@/components/TenancyLinkPanel";
 import ViewingBooker, { type Person } from "@/components/ViewingBooker";
 import { CopyButton, DoneTick, PressButton } from "@/components/Bits";
@@ -544,6 +545,12 @@ export default function ListingDrawer({
               </div>
             </div>
           </div>
+
+          {/* ── What the portals did with it. Only for something that has
+              actually been advertised: a draft has no campaign, and an empty
+              panel on 165 unpublished listings would teach everyone to
+              ignore it. ── */}
+          {listing.publicationStatus === "published" && <PortalStatsPanel listingId={listing.id} />}
 
           {/* ── From "offer accepted" onward, the landlord, the property and
               the tenant are one thing. The panel is the record of that, and
