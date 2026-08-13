@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Lora, Montserrat, Shantell_Sans } from "next/font/google";
+import { Allura, Inter, Montserrat, Shantell_Sans } from "next/font/google";
 import "./globals.css";
 
 const montserrat = Montserrat({
@@ -17,20 +17,26 @@ const shantell = Shantell_Sans({
 });
 
 /**
- * The brand's own flowing face.
+ * The flourish script — the flowing hand on the entrance screen.
  *
- * TLE Branding 3 names four roles: Unitext Bold for titles and subheadings,
- * Unitext for body, and LORA ITALIC for supporting text. Lora italic is the
- * only flowing face in the guidelines, so that is what the customer-facing
- * decks use for a flourish — not a script lifted off a mockup, which would be
- * off-brand however nice it looked.
+ * Worth recording why this is here rather than Lora Italic, which is what TLE
+ * Branding 3 names as supporting text. James's two reference images both use
+ * a true monoline signature script ("Welcome" on his mock-up, "Watch Online
+ * Now" on the HomeBuy piece), and having pointed out that the guidelines have
+ * no script face, he confirmed he wants that look. So: a deliberate,
+ * decided-on addition to the brand, not a slip.
  *
- * Italic only is loaded, because that is the only way the guidelines use it.
+ * Allura of the candidates — thin, wide and monoline, which is what both
+ * references are. Great Vibes has more calligraphic contrast and Sacramento
+ * is more casual; either is a one-word swap here if the flavour is wrong.
+ *
+ * Used ONLY for a single display word. A script at body size is unreadable,
+ * and at any size it is a decoration rather than a typeface.
  */
-const lora = Lora({
+const allura = Allura({
   subsets: ["latin"],
-  style: ["italic"],
-  variable: "--font-lora",
+  weight: "400",
+  variable: "--font-script",
   display: "swap",
 });
 
@@ -58,7 +64,7 @@ export default function RootLayout({
     // heading silently falls back to system fonts.
     <html
       lang="en"
-      className={`${montserrat.variable} ${shantell.variable} ${inter.variable} ${lora.variable}`}
+      className={`${montserrat.variable} ${shantell.variable} ${inter.variable} ${allura.variable}`}
     >
       <body className="antialiased">{children}</body>
     </html>

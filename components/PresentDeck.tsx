@@ -59,8 +59,11 @@ const MIST = "#ffe4df";
  *  Used only for the scrim over the hero photograph. */
 const DEEP = "#4a3a35";
 
-/** The brand's flowing face — Lora Italic, the guidelines' supporting text. */
-const FLOW = "var(--font-lora), Georgia, serif";
+/**
+ * The flourish hand — see app/layout.tsx for why a script is here at all when
+ * the guidelines name Lora Italic. One display word, never body copy.
+ */
+const FLOW = "var(--font-script), 'Snell Roundhand', cursive";
 
 /* ───────────────────────── small parts ───────────────────────── */
 
@@ -217,14 +220,19 @@ function Welcome({ deck }: { deck: Deck }) {
 
       <div className="relative flex flex-1 flex-col justify-center px-6 py-12 sm:px-12 lg:px-20">
         <div className="w-full max-w-2xl">
-          {/* Lora Italic — the guidelines' own flowing face, in Warm Clay. */}
+          {/* The flowing hand, and the biggest thing on the page.
+              A script's letterforms sit inside a fraction of their em box —
+              the capital swash reaches high, the x-height is tiny — so it
+              needs to be set MUCH larger than a sans to read at the same
+              visual weight, and then pulled back in with tight leading and a
+              negative margin or it floats half a line above its own baseline. */}
           <p
-            className="text-[38px] leading-[0.95] sm:text-[58px]"
+            className="-ml-1 text-[76px] leading-[0.78] sm:text-[132px]"
             style={{ fontFamily: FLOW, color: CLAY }}
           >
             Welcome
           </p>
-          <h1 className="mt-1 text-[38px] font-light leading-[1.04] tracking-[-0.015em] sm:mt-2 sm:text-[66px]">
+          <h1 className="-mt-1 text-[36px] font-light leading-[1.04] tracking-[-0.015em] sm:-mt-4 sm:text-[62px]">
             Let&rsquo;s get started
           </h1>
           <span className="mt-6 block h-[3px] w-[110px] rounded-full" style={{ background: CLAY }} />
