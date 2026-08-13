@@ -50,11 +50,26 @@ import { icsFor } from "@/lib/appraisal-email";
  */
 const RED = "#e31f36";
 const INK = "#3b3b3c";
-const CLAY = "#de968f";
-/** Mist carries the appointment card. Anti Flash White is the other option
- *  and it reads as grey next to the clay banner two slides earlier — the
- *  warm tint keeps the whole deck in one family. */
-const MIST = "#ffe4df";
+
+/**
+ * ── THE COLOURWAY SWITCH ────────────────────────────────────────────────────
+ *
+ * The deck was first built on the guidelines' warm colourway — Warm Clay
+ * banners and Mist cards. It looked good and read FEMININE (James, 13 Aug),
+ * which for a landlord audience is the wrong signal however pretty it is.
+ *
+ * So it now runs on the guidelines' other sanctioned pairing: Expert Red ×
+ * White, grounded on Anti Flash White. Same brand, different temperature —
+ * the pinks were doing all the softening, and red does none of it.
+ *
+ * Both sets are kept side by side rather than one being deleted, because
+ * this is a judgement about tone that may well be revisited. Swapping the
+ * two blocks below puts the warm version back in one edit.
+ */
+const CLAY = RED;
+/** WAS Warm Clay #de968f — the entrance banner, the chips, the card badges. */
+const MIST = "#f1f1f1";
+/** WAS Mist #ffe4df — the appointment card and the footer band. */
 /** Deep enough to carry white type, still in the clay family rather than grey.
  *  Used only for the scrim over the hero photograph. */
 const DEEP = "#4a3a35";
@@ -68,11 +83,12 @@ const FLOW = "var(--font-script), 'Snell Roundhand', cursive";
 /** Lora — the guidelines' own serif, carrying the display headings. */
 const DISPLAY = "var(--font-display), Georgia, serif";
 
-/** The interior page ground: white with the faintest warm cast, so a mist
- *  card sitting on it reads as a tint rather than as a coloured box on grey. */
-const PAPER = "#fdf9f8";
-/** The icon badges — mist, one step warmer than the card it sits on. */
-const BADGE = "#fce0da";
+/** The interior page ground. Neutral now rather than warm-cast: a grey card
+ *  on pink paper reads as a mistake, and the paper was half the softness. */
+const PAPER = "#fbfbfb";
+/** The step badges. Red at a whisper — enough to hold an icon, not enough to
+ *  compete with the card. */
+const BADGE = "#fdeaec";
 
 /* ───────────────────────── the reveal ───────────────────────── */
 
@@ -345,7 +361,7 @@ function Welcome({ deck, show }: { deck: Deck; show: boolean }) {
         </Rise>
       </header>
 
-      <div className="relative flex flex-1 flex-col justify-center px-6 py-12 sm:px-12 lg:px-20">
+      <div className="relative flex flex-1 flex-col justify-center px-6 py-6 sm:px-12 sm:py-12 lg:px-20">
         <div className="w-full max-w-3xl">
           {/* The flowing hand, and the biggest thing on the page.
               A script's letterforms sit inside a fraction of their em box —
@@ -353,9 +369,13 @@ function Welcome({ deck, show }: { deck: Deck; show: boolean }) {
               needs to be set MUCH larger than a sans to read at the same
               visual weight, and then pulled back in with tight leading and a
               negative margin or it floats half a line above its own baseline. */}
-          <Rise show={show} i={1}>
+          {/* Not a Rise — this one is WRITTEN. A soft-edged wipe travelling
+              left to right at the speed of a hand, so the letters arrive in
+              the order somebody would form them. See globals.css for why a
+              stroke animation isn't available to a script font. */}
           <p
-            className="-ml-1 text-[86px] leading-[0.74] sm:text-[158px]"
+            className="present-write -ml-1 pb-2 text-[96px] leading-[0.74] sm:text-[180px]"
+            data-written={show}
             // A touch of tracking. Scripts are drawn to join tightly, and the
             // reference is noticeably airier than the metal default — at this
             // size the letters need room or the loops close up into a blur.
@@ -363,12 +383,11 @@ function Welcome({ deck, show }: { deck: Deck; show: boolean }) {
           >
             Welcome
           </p>
-          </Rise>
           <Rise show={show} i={2}>
             {/* Serif, matching the reference and the interior slides — one
                 document, not two. */}
             <h1
-              className="-mt-1 text-[46px] leading-[1.0] tracking-[-0.01em] sm:-mt-5 sm:text-[92px]"
+              className="-mt-3 text-[52px] leading-[1.0] tracking-[-0.01em] sm:-mt-7 sm:text-[104px]"
               style={{ fontFamily: DISPLAY }}
             >
               Let&rsquo;s get started
@@ -404,20 +423,41 @@ function Welcome({ deck, show }: { deck: Deck; show: boolean }) {
         </div>
       </div>
 
-      {/* The banner. Extra bottom padding on a phone so the deck's own dots
-          sit inside the clay rather than on the line beneath it. */}
-      <Rise show={show} i={5} className="relative pb-14 pt-6 lg:pb-8" style={{ background: CLAY }}>
-        <div className="mx-auto grid max-w-5xl gap-y-5 px-6 sm:grid-cols-3 sm:gap-x-8 lg:px-10">
+      {/* The three promises, sitting ON the photograph rather than on a bar.
+          A solid band cut the room off at the knees; a fade keeps the sofa
+          and the rug in the picture and still carries white type.
+
+          The blur is doing real work, not decoration: the gradient alone is
+          fine over the flat rug and fails over the busy patterned edge, and
+          legibility can't depend on which part of a photograph a word lands
+          on. It is deliberately slight — enough to quiet the texture, not
+          enough to read as frosted glass. */}
+      <Rise
+        show={show}
+        i={5}
+        className="relative pb-14 pt-10 backdrop-blur-[3px] sm:pb-24 sm:pt-24 lg:pb-20 lg:pt-20"
+        style={{
+          background: `linear-gradient(to top, ${DEEP}f2 0%, ${DEEP}d9 42%, ${DEEP}66 76%, transparent 100%)`,
+          maskImage: "linear-gradient(to top, #000 76%, transparent 100%)",
+          WebkitMaskImage: "linear-gradient(to top, #000 76%, transparent 100%)",
+        }}
+      >
+        <div className="mx-auto grid max-w-6xl gap-y-4 px-6 sm:grid-cols-3 sm:gap-x-10 sm:gap-y-6 lg:px-12">
           {BANNER.map((b) => (
-            <div key={b.title} className="flex items-start gap-3.5">
-              <span className="mt-0.5 shrink-0 text-white/90">
-                <Line name={b.icon} size={26} />
+            <div key={b.title} className="flex items-center gap-4">
+              {/* Full height of the pair it sits beside — an icon scaled to
+                  the title alone reads as a bullet point. */}
+              <span className="shrink-0 text-white/85">
+                <Line name={b.icon} size={40} />
               </span>
               <span className="min-w-0">
-                <span className="block text-[11px] font-semibold uppercase tracking-[0.14em] text-white">
+                <span className="block text-[12.5px] font-semibold uppercase tracking-[0.12em] text-white">
                   {b.title}
                 </span>
-                <span className="mt-1 block text-[12px] font-light leading-snug text-white/85">
+                {/* One line, always. The copy was shortened to fit rather
+                    than the type shrunk — a promise that wraps to two lines
+                    stops looking like a promise. */}
+                <span className="mt-1 block whitespace-nowrap text-[12.5px] font-light leading-snug text-white/85">
                   {b.body}
                 </span>
               </span>
@@ -559,27 +599,31 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
 
           {/* ── right: the appointment itself ── */}
           <Rise show={show} i={3}>
-            <aside className="rounded-[26px] p-6 sm:p-8" style={{ background: MIST }}>
+            {/* The card carries the red rather than accenting with it. This is
+                the one block on the page big enough to set the temperature,
+                and a red panel does in one move what tinting six small things
+                never would. */}
+            <aside
+              className="rounded-[26px] p-6 text-white sm:p-8"
+              style={{ background: RED }}
+            >
               <ul>
                 {facts.map((f) => (
                   <li
                     key={f.label}
                     className="flex gap-4 border-b py-4 first:pt-0 last:border-b-0 last:pb-1"
-                    style={{ borderColor: "rgba(59,59,60,0.10)" }}
+                    style={{ borderColor: "rgba(255,255,255,0.22)" }}
                   >
-                    <span
-                      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white"
-                      style={{ background: CLAY }}
-                    >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/15">
                       <Line name={f.icon} size={20} />
                     </span>
                     <span className="min-w-0">
-                      <span className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-black/45">
+                      <span className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
                         {f.label}
                       </span>
                       <span
                         className={`mt-1 block leading-snug ${
-                          f.soft ? "text-[13px] font-light text-black/60" : "text-[15px] font-medium"
+                          f.soft ? "text-[13px] font-light text-white/80" : "text-[15px] font-medium"
                         }`}
                       >
                         {f.value}
@@ -593,20 +637,20 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
                 <a
                   href={`data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`}
                   download="market-appraisal.ics"
-                  className="mt-6 flex w-full items-center justify-center rounded-full px-5 py-3.5 text-[13.5px] font-medium text-white transition-opacity hover:opacity-90"
-                  style={{ background: RED }}
+                  className="mt-6 flex w-full items-center justify-center rounded-full bg-white px-5 py-3.5 text-[13.5px] font-semibold transition-opacity hover:opacity-90"
+                  style={{ color: RED }}
                 >
                   Add it to my calendar
                 </a>
               )}
 
-              <span className="mt-7 block text-[10px] font-semibold uppercase tracking-[0.18em] text-black/45">
+              <span className="mt-7 block text-[10px] font-semibold uppercase tracking-[0.18em] text-white/70">
                 Handy to have out
               </span>
               <ul className="mt-3 space-y-2.5">
                 {BRING_ALONG.map((b) => (
-                  <li key={b} className="flex gap-2.5 text-[13px] font-light leading-snug text-black/70">
-                    <span className="mt-[1px] shrink-0" style={{ color: RED }}>
+                  <li key={b} className="flex gap-2.5 text-[13px] font-light leading-snug text-white/90">
+                    <span className="mt-[1px] shrink-0 text-white/70">
                       <Line name="check" size={16} />
                     </span>
                     <span>{b}</span>
@@ -614,7 +658,7 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
                 ))}
               </ul>
               <p
-                className="mt-5 text-[12.5px] leading-relaxed text-black/45"
+                className="mt-5 text-[12.5px] leading-relaxed text-white/70"
                 style={{ fontFamily: DISPLAY, fontStyle: "italic" }}
               >
                 None of it is essential. If you haven&rsquo;t got it, we&rsquo;ll sort it afterwards.
@@ -972,9 +1016,11 @@ export default function PresentDeck({
 
   const here = slides[at]?.id;
   const onDark = here === "welcome" || here === "questions";
-  /* What the phone bar fades into. The welcome slide ends in the clay banner,
-     not in white or red, and a white fade over it reads as a printing fault. */
-  const tint = here === "welcome" ? CLAY : here === "questions" ? RED : "#ffffff";
+  /* What the phone bar fades into — the colour the slide actually ENDS in.
+     The entrance used to end in a solid banner and now ends in a fade over
+     the photograph, so it takes the scrim colour; a red strip under it read
+     as a stray band across the picture. */
+  const tint = here === "welcome" ? DEEP : here === "questions" ? RED : PAPER;
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden">

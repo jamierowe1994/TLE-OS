@@ -114,17 +114,20 @@ export const BANNER: { icon: "people" | "shield" | "trend"; title: string; body:
   {
     icon: "people",
     title: "Local experts",
-    body: "Personal service from people who know your area.",
+    // Each of these has to hold ONE line at 12.5px in a third of the frame,
+    // so they were cut to fit rather than the type shrunk to fit them. A
+    // promise that wraps stops reading as a promise.
+    body: "Agents who know your streets.",
   },
   {
     icon: "shield",
     title: "Maximum protection",
-    body: "Keeping your property and investment safe.",
+    body: "Your property and income, safe.",
   },
   {
     icon: "trend",
     title: "Better returns",
-    body: "Smart strategies to maximise your income.",
+    body: "Smarter strategy, stronger rent.",
   },
 ];
 
