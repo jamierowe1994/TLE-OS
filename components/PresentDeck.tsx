@@ -374,7 +374,19 @@ function Welcome({ deck, show }: { deck: Deck; show: boolean }) {
               the order somebody would form them. See globals.css for why a
               stroke animation isn't available to a script font. */}
           <p
-            className="present-write -ml-1 pb-2 text-[96px] leading-[0.74] sm:text-[180px]"
+            // THE PADDING IS LOAD-BEARING, and the negative margin cancels it.
+            //
+            // A mask only paints within the element's own box, and a script's
+            // capital overhangs its box on every side — Ms Madi's W leads with
+            // a swash that starts left of the glyph origin and rides above the
+            // cap height. Without room inside the box the mask sliced the
+            // entry stroke clean off, leaving a detached red mark floating
+            // beside the word.
+            //
+            // So: pad the ink in, then pull the box back out by the same
+            // amount, and it sits on the same left edge as everything else on
+            // the slide with nothing clipped.
+            className="present-write -ml-3 -mt-2 px-3 pb-3 pt-2 text-[88px] leading-[0.74] sm:text-[162px]"
             data-written={show}
             // A touch of tracking. Scripts are drawn to join tightly, and the
             // reference is noticeably airier than the metal default — at this
@@ -387,7 +399,7 @@ function Welcome({ deck, show }: { deck: Deck; show: boolean }) {
             {/* Serif, matching the reference and the interior slides — one
                 document, not two. */}
             <h1
-              className="-mt-3 text-[52px] leading-[1.0] tracking-[-0.01em] sm:-mt-7 sm:text-[104px]"
+              className="-mt-2 text-[52px] leading-[1.0] tracking-[-0.01em] sm:-mt-5 sm:text-[104px]"
               style={{ fontFamily: DISPLAY }}
             >
               Let&rsquo;s get started
