@@ -51,6 +51,16 @@ export interface OsListing {
   lastUpdated: string;
   imageCount: number;
   image: string | null;
+  /**
+   * EVERY photo, in REX's own order.
+   *
+   * We were asking REX for these, counting them, and then keeping only the
+   * first — which is why the OS looked like it could only see one photo per
+   * property. It could always see them all: measured, live listings carry 29,
+   * 29, 31 and 12. The ones showing none are the unpublished drafts, which is
+   * more than half the book.
+   */
+  images: string[];
   /** Managed / Let Only / Rent Collect — what we actually do for this landlord. */
   serviceType: string | null;
   tenant: string | null;
@@ -112,7 +122,12 @@ interface RexListing extends Record<string, unknown> {
   property?: (RexAddress & { id?: string | number }) | null;
   listing_primary_image?: { url?: string } | null;
   related?: {
-    listing_images?: { url?: string }[];
+    listing_images?: {
+      url?: string;
+      /** 1..n, REX's own display order. */
+      priority?: number;
+      thumbs?: Record<string, { url?: string }>;
+    }[];
     listing_adverts?: { advert_type?: string; advert_heading?: string | null; advert_body?: string | null }[];
   } | null;
 }
@@ -121,6 +136,27 @@ interface RexListing extends Record<string, unknown> {
 function https(url: string | undefined | null): string | null {
   if (!url) return null;
   return url.startsWith("//") ? `https:${url}` : url;
+}
+
+/**
+ * Every photo on a listing, in REX's display order.
+ *
+ * The 800x600 thumbnail rather than the original, deliberately: originals are
+ * 1200x667 and a listing carries thirty of them, so a drawer that loaded the
+ * full set at full size would pull tens of megabytes to fill a panel a few
+ * hundred pixels wide. The primary image is forced to the front in case REX
+ * ever disagrees with its own priority ordering.
+ */
+function photos(l: RexListing): string[] {
+  const rows = [...(l.related?.listing_images ?? [])].sort(
+    (a, b) => (a.priority ?? 999) - (b.priority ?? 999)
+  );
+  const urls = rows
+    .map((r) => https(r.thumbs?.["800x600"]?.url ?? r.url))
+    .filter((u): u is string => Boolean(u));
+  const primary = https(l.listing_primary_image?.url);
+  if (primary && !urls.includes(primary)) urls.unshift(primary);
+  return urls;
 }
 
 function addressOf(p: RexAddress | null | undefined): { name: string; locality: string } {
@@ -209,6 +245,7 @@ function toListing(l: RexListing): OsListing {
     lastUpdated: ago(num(l.system_modtime)),
     imageCount: l.related?.listing_images?.length ?? (l.listing_primary_image ? 1 : 0),
     image: https(l.listing_primary_image?.url ?? l.related?.listing_images?.[0]?.url),
+    images: photos(l),
     serviceType: service,
     tenant: null, // tenancy_id is populated on 0% of the book — nothing to join to
     advertHeading: advert.heading,

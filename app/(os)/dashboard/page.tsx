@@ -69,17 +69,25 @@ export default function Dashboard() {
           mid-scroll — the white-plate flash. The isolated eggshell wrapper
           stays as the blend floor; BlendVideo makes what's blended a canvas,
           which the compositor treats as ordinary content on every frame. */}
-      {/* The dog follows you now — pinned to the viewport's bottom corner,
-          padding along as the page scrolls. Multiply/screen blending keeps
-          him readable over whatever he wanders across; pointer-events-none
-          keeps him from ever standing between you and a button. */}
-      <div className="pointer-events-none fixed bottom-0 right-8 z-[95] hidden sm:block">
+      {/* He is a SECTION now, not an overlay.
+      
+          He used to be `fixed` to the viewport corner, which meant he padded
+          across whatever happened to be under him — and a dog walking over a
+          tile of figures reads as a rendering fault rather than a joke. There
+          is no clever way to keep a floating element off arbitrary content;
+          the fix is to stop it floating.
+      
+          So he sits in the flow, after the board, right-aligned, in white
+          space he owns. Add a widget and the grid grows and pushes him down;
+          he is always at the foot of the page and never on top of anything,
+          because nothing is ever underneath him. */}
+      <div className="pointer-events-none mt-12 hidden justify-end pb-20 pr-2 sm:flex">
         {/* keyed: real alpha, no blending — a fixed layer drops blends, which
             is how the white box came back. .art inverts him in the dark. */}
         <BlendVideo
           keyed
           src="/illustrations/dog-wag-3.mp4"
-          className="art pointer-events-none block w-64"
+          className="art pointer-events-none block w-56 lg:w-64"
         />
       </div>
     </>

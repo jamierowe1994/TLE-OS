@@ -150,6 +150,8 @@ export default function Listings() {
   const [sort, setSort] = useState<string | null>(null);
   const [rentBand, setRentBand] = useState<string | null>(null);
   const [loc, setLoc] = useState<string | null>(null);
+  /** The one question asked all day: what can I put someone in NOW. */
+  const [availableOnly, setAvailableOnly] = useState(false);
 
   /* ── The real book, out of REX. The static export stands in until it
         answers, so the page never renders empty. ── */
@@ -195,6 +197,10 @@ export default function Listings() {
       const cmp = l.rentMonthly ?? l.rent;
       if (band && !(cmp != null && band.test(cmp))) return false;
       if (loc && l.locality !== loc) return false;
+      // "Available" is what the status chip already means — published and not
+      // let agreed. Defined once, in statusOf, so the switch and the chip can
+      // never drift apart and show a house the other disagrees with.
+      if (availableOnly && statusOf(l).label !== "Available") return false;
       return true;
     });
     // Most recent is the resting order (REX's own lastUpdated already leads);
@@ -203,7 +209,7 @@ export default function Listings() {
     if (sort === "rent-low") rows.sort((a, b) => (monthly(a) ?? 1e9) - (monthly(b) ?? 1e9));
     else if (sort === "rent-high") rows.sort((a, b) => (monthly(b) ?? 0) - (monthly(a) ?? 0));
     return rows;
-  }, [LISTINGS, q, sort, rentBand, loc]);
+  }, [LISTINGS, q, sort, rentBand, loc, availableOnly]);
 
   return (
     <>
@@ -226,6 +232,21 @@ export default function Listings() {
            houses. Nothing else stands between the agent and the board. */
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {/* A switch, not a dropdown, because it answers the one question
+                asked all day — what can I put someone in NOW. Outline only:
+                a filled pill would out-shout the four dropdowns beside it and
+                the point is a quiet marker that a filter is on. */}
+            <button
+              type="button"
+              onClick={() => setAvailableOnly((v) => !v)}
+              aria-pressed={availableOnly}
+              className={`avail-toggle flex items-center gap-2 rounded-full border px-4 py-2.5 text-[13px] transition-colors ${
+                availableOnly ? "avail-on" : "border-line/80 hover:border-ink/40"
+              }`}
+            >
+              <span className="avail-dot" aria-hidden />
+              Available only
+            </button>
             <Filter label="Most recent" options={SORTS} value={sort} onChange={setSort} />
             <Filter label="Rent" options={RENT_BANDS} value={rentBand} onChange={setRentBand} />
             <Filter label="Location" options={localities} value={loc} onChange={setLoc} />
@@ -249,12 +270,20 @@ export default function Listings() {
               key={l.id}
               type="button"
               onClick={() => setOpenAt(LISTINGS.indexOf(l))}
-              className="fade-up block-pop block w-full rounded-2xl border border-line/80 bg-box p-4 text-left hover:border-ink"
+              // Thinner rule and less padding, so the photograph can grow
+              // into the space rather than floating in a frame. p-2 with an
+              // inner radius of 14 against the card's 16 keeps the two curves
+              // concentric — the giveaway that a nested corner is wrong is
+              // when the gap between the arcs is uneven.
+              className="fade-up block-pop block w-full rounded-2xl border border-line/60 bg-box p-2 text-left hover:border-ink"
             >
-              <div className="flex gap-5">
-                <PropertyPhoto src={l.image} className="h-32 w-44 shrink-0 rounded-xl" />
+              <div className="flex gap-4">
+                <PropertyPhoto
+                  src={l.image}
+                  className="h-40 w-56 shrink-0 rounded-[14px] sm:h-44 sm:w-64"
+                />
 
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 py-2 pr-2">
                   {/* The chips — only what changes decisions. No 'For sale',
                       no 'Sponsored': everything here is a rental, ours. */}
                   <div className="flex flex-wrap items-center gap-1.5">

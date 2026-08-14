@@ -415,3 +415,58 @@ h1, h2, h3, h4, h5 {
     stroke-dashoffset: 0 !important;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   The "Available only" switch.
+
+   OUTLINE ONLY when it is on — never a fill. A filled pill would out-shout the
+   dropdowns beside it, and the job here is a quiet marker that a filter is
+   applied, not a call to action.
+
+   The animation is a single settle: the dot pops slightly past full size and
+   comes back, and the ring draws in with it. One movement, ~380ms, no loop —
+   a control that keeps moving after you have pressed it becomes noise on a
+   page an agent has open all day.
+--------------------------------------------------------------------------- */
+.avail-toggle .avail-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: transparent;
+  transition:
+    border-color 220ms ease,
+    background-color 220ms ease;
+}
+
+.avail-toggle.avail-on {
+  border-color: #16a34a;
+  color: #15803d;
+  animation: avail-settle 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.avail-toggle.avail-on .avail-dot {
+  border-color: #16a34a;
+  background: #16a34a;
+  animation: avail-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes avail-settle {
+  0%   { transform: scale(1); }
+  45%  { transform: scale(1.045); }
+  100% { transform: scale(1); }
+}
+
+@keyframes avail-pop {
+  0%   { transform: scale(0.2); opacity: 0; }
+  60%  { transform: scale(1.35); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avail-toggle.avail-on,
+  .avail-toggle.avail-on .avail-dot {
+    animation: none;
+  }
+}
