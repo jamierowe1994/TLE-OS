@@ -277,6 +277,34 @@ CREATE TABLE IF NOT EXISTS os_presentations (
 );
 CREATE INDEX IF NOT EXISTS os_presentations_ref ON os_presentations (ref, created_at DESC);
 
+-- Terms of business sent for signature, watched.
+--
+-- REX owns the request; this table exists ONLY so we can tell when one
+-- CHANGES. REX has no e-sign webhook (the nearest events are contracts.*,
+-- which fire on a different record), so completion has to be noticed by
+-- polling — and a poll can only say "this is complete", never "this just
+-- completed", unless something remembers what it looked like last time.
+--
+-- That is the whole job of this table: last_status is what we told somebody
+-- about, notified_at is when we did. Nothing here is a copy of REX's data.
+CREATE TABLE IF NOT EXISTS os_esign_watch (
+  rex_id         BIGINT PRIMARY KEY,
+  listing_id     BIGINT,
+  /** The lead or case it belongs to, so the right record can be updated. */
+  ref            TEXT NOT NULL DEFAULT '',
+  template_name  TEXT NOT NULL DEFAULT '',
+  sent_by        TEXT NOT NULL DEFAULT '',
+  sent_by_id     TEXT,
+  last_status    TEXT NOT NULL DEFAULT '',
+  completed_at   TIMESTAMPTZ,
+  notified_at    TIMESTAMPTZ,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  checked_at     TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS os_esign_watch_open
+  ON os_esign_watch (last_status) WHERE last_status <> 'completed';
+CREATE INDEX IF NOT EXISTS os_esign_watch_ref ON os_esign_watch (ref);
+
 -- Results of slow REX/PayProp walks, so a deploy doesn't cost minutes of
 -- empty screens before the first figure appears.
 CREATE TABLE IF NOT EXISTS os_cache (
