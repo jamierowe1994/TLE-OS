@@ -470,3 +470,42 @@ h1, h2, h3, h4, h5 {
     animation: none;
   }
 }
+
+/* ── The beat between pressing send and the email arriving (SendHandoff).
+   The block starts in the middle of the screen and travels down out of the
+   way, so the email lands in the space it left rather than on top of it.
+   Declared here rather than inline because an inline transition beats every
+   stylesheet, including the reduced-motion rule below. ── */
+.handoff-block {
+  transition: transform 1700ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+
+.handoff-tick {
+  display: inline-flex;
+  animation: handoff-tick 1s steps(2, end) infinite;
+}
+
+@keyframes handoff-tick {
+  0%   { transform: rotate(-7deg); }
+  50%  { transform: rotate(7deg); }
+  100% { transform: rotate(-7deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .handoff-block { transition: none; }
+  .handoff-tick { animation: none; }
+}
+
+/* The email arriving at the end of the handover. */
+.popout-in {
+  animation: popout-in 420ms cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+}
+
+@keyframes popout-in {
+  0%   { transform: translateY(18px) scale(0.965); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popout-in { animation: none; }
+}

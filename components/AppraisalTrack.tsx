@@ -11,6 +11,7 @@ import {
   type AppraisalInvite,
 } from "@/lib/appraisal-email";
 import EmailPopout from "@/components/EmailPopout";
+import SendHandoff from "@/components/SendHandoff";
 import { campaignsFor, CAMPAIGNS, lastDay, type Campaign } from "@/lib/campaigns";
 import {
   APPRAISAL_STEPS,
@@ -131,6 +132,8 @@ export default function AppraisalTrack({
   /* Both emails open full size rather than living in the panel — see
      EmailPopout. Which one is open, if either. */
   const [composing, setComposing] = useState<null | "pre" | "post">(null);
+  /** The pause while the landlord's page is built — see SendHandoff. */
+  const [handingOver, setHandingOver] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
   const [touchKind, setTouchKind] = useState<Touch["kind"]>("call");
@@ -164,6 +167,7 @@ export default function AppraisalTrack({
     if (!invite) return;
     if (deck) return setComposing("pre");
     setMinting(true);
+    setHandingOver(true);
     setDeckError(null);
     try {
       const res = await fetch("/api/presentations", {
@@ -184,8 +188,10 @@ export default function AppraisalTrack({
     } catch {
       setDeckError("Couldn't build the landlord's page.");
     } finally {
+      /* The composer is opened by the handover, not from here. The build is
+         usually quicker than the beat, and a box that appears while the words
+         are still travelling is the jolt this was built to remove. */
       setMinting(false);
-      setComposing("pre");
     }
   }
 
@@ -626,6 +632,21 @@ export default function AppraisalTrack({
           </ul>
         </div>
       </div>
+
+      <SendHandoff
+        open={handingOver}
+        ready={!minting}
+        headline="Building their page…"
+        sub={
+          invite
+            ? `${invite.landlordName.split(" ")[0]}'s own pre-appraisal page — who's coming, what happens on the day, and the appointment. Then the email, ready to read.`
+            : undefined
+        }
+        onDone={() => {
+          setHandingOver(false);
+          setComposing("pre");
+        }}
+      />
 
       {composing && invite && (
         <EmailPopout

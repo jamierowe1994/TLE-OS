@@ -65,7 +65,11 @@ export default function EmailPopout({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/35 p-4 backdrop-blur-sm">
-      <div className="flex h-full max-h-[860px] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-line bg-page shadow-2xl">
+      {/* It POPS out. On the pre-appraisal it arrives after a beat in which
+          the words travelled down the screen to make room for it, and a box
+          that simply exists at the end of that reads as a glitch rather than
+          an arrival. See SendHandoff. */}
+      <div className="popout-in flex h-full max-h-[860px] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-line bg-page shadow-2xl">
         <div className="flex items-center gap-3 border-b border-line/70 px-5 py-3.5">
           <div className="min-w-0">
             <h3 className="text-[15px]">{title}</h3>
