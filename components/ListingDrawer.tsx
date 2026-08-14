@@ -10,7 +10,7 @@ import EmailToTenants from "@/components/EmailToTenants";
 import ProcessTimeline from "@/components/ProcessTimeline";
 import PortalStatsPanel from "@/components/PortalStatsPanel";
 import TenancyLinkPanel from "@/components/TenancyLinkPanel";
-import ContractsPanel from "@/components/ContractsPanel";
+import ListingDocuments from "@/components/ListingDocuments";
 import ViewingBooker, { type Person } from "@/components/ViewingBooker";
 import { CopyButton, DoneTick, PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
@@ -20,6 +20,7 @@ import { DIARY } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 import type { TenancyLink } from "@/lib/tenancy-link";
 import { saveLabel, useCaseState } from "@/lib/case-state";
+import { useListingTerms } from "@/lib/use-listing-terms";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -58,7 +59,7 @@ export type Listing = {
   advertBody?: string | null;
 };
 
-type TabKey = "home" | "property" | "marketing" | "photos";
+type TabKey = "home" | "property" | "marketing" | "photos" | "documents";
 
 /* Property and Marketing are EDIT tabs — the facts they hold moved up into
    the header, so the tab is where you go to change them, not to read them.
@@ -68,6 +69,9 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "property", label: "Property" },
   { key: "marketing", label: "Marketing" },
   { key: "photos", label: "Photos" },
+  /* Where the signed terms live now that the panel has gone. Filed rather
+     than displayed: nobody needs it until the one day they very much do. */
+  { key: "documents", label: "Documents" },
 ];
 
 /** One tenant on an offer — who they are and how they live. */
@@ -156,6 +160,8 @@ export default function ListingDrawer({
   const [shown, setShown] = useState(false);
   const [tab, setTab] = useState<TabKey>("home");
   const [emailing, setEmailing] = useState(false);
+  /* Asked once, read by the header pill and by the Documents tab. */
+  const terms = useListingTerms(listing?.id ?? null);
   const [booking, setBooking] = useState(false);
 
   const [type, setType] = useState("");
@@ -419,7 +425,14 @@ export default function ListingDrawer({
                 even on all four sides, because the outer p-4 is the only
                 inset in play. */}
             <div className="flex flex-wrap items-stretch gap-5">
-              <ListingGallery photos={photos} className="w-full sm:w-[300px] lg:w-[360px]" />
+              {/* Wider than the board card, not narrower. Opening a property
+                  should never show you a SMALLER photograph than the list you
+                  opened it from — and the drawer has the room. */}
+              <ListingGallery
+                photos={photos}
+                className="w-full sm:w-[380px] lg:w-[460px]"
+                minFrame={300}
+              />
 
               <div className="min-w-0 flex-1 py-2 pr-2">
                 <h2 className="text-[24px] leading-tight">{listing.name}</h2>
@@ -466,6 +479,28 @@ export default function ListingDrawer({
               {/* The landlord, because the first question on any property is
                   "whose is it and can I ring them". */}
               <div className="hidden w-[210px] shrink-0 rounded-2xl border border-line/70 p-4 lg:block">
+                {/* ── Terms, as one word rather than a panel.
+                    By the time a property is in Listings the terms are signed,
+                    so a box asking whether to send them is a permanent
+                    question nobody has. What is worth knowing at a glance is
+                    that they ARE signed — and, on the rare record where they
+                    aren't, that they are not. The copy itself lives in
+                    Documents; sending is a pop-out you open on purpose. ── */}
+                {terms.status === "ready" && (
+                  <button
+                    type="button"
+                    onClick={() => setTab("documents")}
+                    title="Open Documents"
+                    className={`mb-2.5 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors ${
+                      terms.signed
+                        ? "border-emerald-600/40 text-emerald-700 hover:border-emerald-600/70"
+                        : "border-accent-dark/50 text-accent-dark hover:border-accent-dark"
+                    }`}
+                  >
+                    <DoodleIcon name="file-contract" size={11} />
+                    {terms.signed ? "Terms signed" : "No terms on file"}
+                  </button>
+                )}
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
                   Landlord
                 </p>
@@ -578,18 +613,9 @@ export default function ListingDrawer({
             </div>
           )}
 
-          {/* ── Terms of business. Always on, at every step, because the
-              question "did they ever sign?" is asked long after the property
-              is let — and the answer lives in REX whether we sent it or the
-              office did by hand. ── */}
-          <div className="mt-3">
-            <ContractsPanel
-              listingId={listing.id}
-              contactId={link?.landlord?.contactId ?? null}
-              landlordName={ll?.name}
-              recordRef={String(listing.id)}
-            />
-          </div>
+          {/* The terms-of-business panel used to sit here, open on every
+              property at every step. It is now a pill in the header and a
+              Documents tab — see the note beside the pill. */}
 
           {/* ── Tabs ── */}
           <div className="mt-5 flex gap-1 overflow-x-auto border-b border-line/80">
@@ -922,6 +948,17 @@ export default function ListingDrawer({
                   they have to live somewhere with a URL before REX can be handed one.
                 </p>
               </Card>
+            )}
+
+            {tab === "documents" && (
+              <ListingDocuments
+                terms={terms}
+                listingId={listing.id}
+                contactId={link?.landlord?.contactId ?? null}
+                landlordName={ll?.name}
+                landlordEmail={ll?.email}
+                address={listing.name}
+              />
             )}
 
           </div>

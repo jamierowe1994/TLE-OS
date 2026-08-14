@@ -29,9 +29,14 @@ import PropertyPhoto from "@/components/PropertyPhoto";
 export default function ListingGallery({
   photos,
   className = "",
+  /* The floor the big frame will not go below. It STRETCHES past this to
+     whatever is beside it; this only stops it collapsing when the column
+     next to it happens to be short. */
+  minFrame = 220,
 }: {
   photos: string[];
   className?: string;
+  minFrame?: number;
 }) {
   const [at, setAt] = useState(0);
 
@@ -45,7 +50,11 @@ export default function ListingGallery({
   const step = (n: number) => setAt((i) => (i + n + count) % count);
 
   if (count === 0) {
-    return <PropertyPhoto src={null} className={`${className} min-h-[220px] rounded-2xl`} />;
+    return (
+      <div className={`${className} overflow-hidden rounded-2xl`} style={{ minHeight: minFrame }}>
+        <PropertyPhoto src={null} className="h-full w-full" />
+      </div>
+    );
   }
 
   return (
@@ -56,7 +65,8 @@ export default function ListingGallery({
           if (e.key === "ArrowRight") { e.preventDefault(); step(1); }
           if (e.key === "ArrowLeft") { e.preventDefault(); step(-1); }
         }}
-        className="group relative min-h-[220px] flex-1 overflow-hidden rounded-2xl outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-ink/30"
+        style={{ minHeight: minFrame }}
+        className="group relative flex-1 overflow-hidden rounded-2xl outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-ink/30"
       >
         <PropertyPhoto src={photos[at]} className="h-full w-full" />
 
