@@ -9,6 +9,7 @@ import EmailToTenants from "@/components/EmailToTenants";
 import ProcessTimeline from "@/components/ProcessTimeline";
 import PortalStatsPanel from "@/components/PortalStatsPanel";
 import TenancyLinkPanel from "@/components/TenancyLinkPanel";
+import ContractsPanel from "@/components/ContractsPanel";
 import ViewingBooker, { type Person } from "@/components/ViewingBooker";
 import { CopyButton, DoneTick, PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
@@ -557,6 +558,19 @@ export default function ListingDrawer({
               )}
             </div>
           )}
+
+          {/* ── Terms of business. Always on, at every step, because the
+              question "did they ever sign?" is asked long after the property
+              is let — and the answer lives in REX whether we sent it or the
+              office did by hand. ── */}
+          <div className="mt-3">
+            <ContractsPanel
+              listingId={listing.id}
+              contactId={link?.landlord?.contactId ?? null}
+              landlordName={ll?.name}
+              recordRef={String(listing.id)}
+            />
+          </div>
 
           {/* ── Tabs ── */}
           <div className="mt-5 flex gap-1 overflow-x-auto border-b border-line/80">

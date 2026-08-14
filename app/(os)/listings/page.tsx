@@ -222,7 +222,17 @@ export default function Listings() {
               ? `Live from REX — ${C.currentRentals} current rentals, ${C.published} published to the portals and ${C.draft} still drafts.`
               : (book.reason ?? "Manage your properties and their marketing.")
         }
-        illustration="/illustrations/notioly/checking-the-calendar.svg"
+        /* She is drawn already cut off at a ledge — her arm rests on it and
+           everything below is gone — so the artwork carries the occlusion
+           itself and needs no clipping. Left at the default anchor, her flat
+           bottom edge lands exactly on the rule, which is what makes her read
+           as sat behind it rather than pasted on top.
+        
+           lineBreak="none" because she is LEANING, not bearing down. A dip
+           would say her weight is on the line; the whole joke is that she has
+           popped up behind it. */
+        illustration="/illustrations/hiding.png"
+        illustrationHeight={132}
         shadow
         lineBreak="none"
         searchValue={q}
