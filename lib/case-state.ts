@@ -44,7 +44,22 @@ export function useCaseState<T>(
       .then((r) => r.json())
       .then((j) => {
         if (gone) return;
-        if (j.payload != null) setValue(j.payload as T);
+        /* Under the fallback, not over it. A row written before a field
+           existed comes back without it, and the screen then reads
+           `undefined` where the type promised `null` — the same shape trap
+           that makes a fix look like it never landed. Merging keeps old rows
+           readable as the current shape. Non-objects (tenancy-link can be
+           null) take the stored value as-is. */
+        if (j.payload != null) {
+          const stored = j.payload as T;
+          const mergeable =
+            typeof stored === "object" &&
+            !Array.isArray(stored) &&
+            typeof fallback === "object" &&
+            fallback !== null &&
+            !Array.isArray(fallback);
+          setValue(mergeable ? ({ ...(fallback as object), ...(stored as object) } as T) : stored);
+        }
         loadedFor.current = recordId;
         setStatus(j.stored === false ? "offline" : "ready");
       })

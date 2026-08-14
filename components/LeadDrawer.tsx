@@ -1154,8 +1154,12 @@ export default function LeadDrawer({
                   // "Overdue", and "seeing you on Overdue" went out to a
                   // landlord in the draft before this.
                   whenPretty: appraisal.bookedFor ?? "",
-                  startsAt: appraisal.bookedFor,
-                  minutes: 45,
+                  startsAt: appraisal.bookedAt,
+                  /* What was actually set aside, not a house number. An agent
+                     who blocks out ninety minutes should not have the landlord
+                     told forty-five. 45 only stands in for records booked
+                     before the OS started carrying the length. */
+                  minutes: appraisal.bookedMinutes ?? 45,
                   agentName: lead.agent || "The Letting Experts",
                   agentPhone: "0161 883 2525",
                 }}
@@ -1265,6 +1269,19 @@ export default function LeadDrawer({
             },
             ...cur,
           ]);
+          /* The appraisal remembers its own appointment. Without this the
+             landlord's confirmation had no date to state and no calendar file
+             to attach — `bookedFor` was declared on the case and never once
+             written to, so the invite always went out with an empty when and
+             a start of null. */
+          if (bookMode === "appraisal") {
+            setAppraisal({
+              ...appraisal,
+              bookedFor: v.whenPretty || v.when,
+              bookedAt: v.startsAt,
+              bookedMinutes: v.minutes,
+            });
+          }
           // Booking IS the step's work — the record moves itself on, and the
           // next step's panel is one button away rather than a hunt. The
           // take-on stays put: its second half (photos & details) is still due.

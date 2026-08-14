@@ -75,7 +75,23 @@ export default function ViewingBooker({
    *  each existing appointment is from it, which is how a real day is
    *  planned: not "am I free", but "can I get there". */
   origin?: { lat: number; lng: number } | null;
-  onBooked: (summary: { when: string; property: string; locality: string; who: string }) => void;
+  /**
+   * `startsAt` and `minutes` are the booking as a MACHINE reads it, and they
+   * are not decoration. Everything downstream — the landlord's calendar file,
+   * the "about 45 minutes" line on their page, the confirmation email — used
+   * to be handed a hard-coded 45 and a null start, so the .ics was never
+   * generated at all and the deck promised a length nobody had booked.
+   */
+  onBooked: (summary: {
+    when: string;
+    property: string;
+    locality: string;
+    who: string;
+    /** "Tuesday 19 August at 2:00pm" — how it reads to a landlord. */
+    whenPretty: string;
+    startsAt: string | null;
+    minutes: number;
+  }) => void;
 }) {
   const today = useMemo(() => startOfDay(new Date()), []);
   const [stage, setStage] = useState<"applicant" | "when" | "who" | "done">("when");
@@ -164,6 +180,23 @@ export default function ViewingBooker({
     ? day.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })
     : "";
   const whenLabel = `${shortDate}, ${slot ?? ""}`;
+  /* How a landlord would say it. The grid runs on a 24-hour clock because a
+     grid should; an email that says "at 14:00" does not sound like a person. */
+  const whenPretty = (() => {
+    if (!day || !slot) return "";
+    const [h, m] = slot.split(":").map(Number);
+    const am = h < 12;
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${dayLabel} at ${h12}:${String(m).padStart(2, "0")}${am ? "am" : "pm"}`;
+  })();
+  /** The same moment as an instant. Slots are "HH:MM" on the local clock. */
+  const startsAt = (() => {
+    if (!day || !slot) return null;
+    const [h, m] = slot.split(":").map(Number);
+    const at = new Date(day);
+    at.setHours(h, m, 0, 0);
+    return at.toISOString();
+  })();
 
   /* Composed at the point of sending so the wording carries the choices made
      on the previous screen — a template built up front goes stale the moment
@@ -514,6 +547,9 @@ export default function ViewingBooker({
                     property: toLandlord ? (address || "Visit") : property!.name,
                     locality: mode === "appraisal" ? "Market appraisal" : mode === "takeon" ? "Take-on visit" : property!.locality,
                     who: chosen?.name ?? "",
+                    whenPretty,
+                    startsAt,
+                    minutes: mins,
                   });
                 }
               }}

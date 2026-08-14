@@ -140,6 +140,17 @@ export type AppraisalCase = {
   state: AppraisalState;
   /** When the visit is, as text — the diary holds the real event. */
   bookedFor: string | null;
+  /**
+   * The same moment as an instant, and how long it runs.
+   *
+   * `bookedFor` alone is not enough: the landlord's calendar file and their
+   * pre-appraisal page both need a real start and a real length, and with
+   * only the text label the .ics could never be generated and the page fell
+   * back to a hard-coded three quarters of an hour. Null means nothing has
+   * been booked through the OS — an older record, or one booked by phone.
+   */
+  bookedAt: string | null;
+  bookedMinutes: number | null;
   confirmationSentAt: string | null;
   /** What it was valued at, per calendar month. */
   valuation: number | null;
@@ -175,6 +186,8 @@ export type AppraisalCase = {
 export const EMPTY_CASE: AppraisalCase = {
   state: "booked",
   bookedFor: null,
+  bookedAt: null,
+  bookedMinutes: null,
   confirmationSentAt: null,
   valuation: null,
   feePercent: null,

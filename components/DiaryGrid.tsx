@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { minutesOf } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 import { dayKey } from "@/lib/weather";
@@ -159,7 +160,21 @@ export default function DiaryGrid({
   const gridH = (DAY_END - DAY_START) * PX;
   const hours = Array.from({ length: (DAY_END - DAY_START) / 60 }, (_, i) => DAY_START / 60 + i);
 
+  /**
+   * A drag on the duration handle ends in a click, and that click lands on
+   * the day column underneath — which reads it as "book it here" and moves
+   * the appointment to wherever the finger let go. Measured: stretching a
+   * 14:30 booking to two hours also shunted it to 16:30. `stopPropagation`
+   * on pointerdown cannot prevent it, because the click is synthesised
+   * afterwards from the common ancestor of press and release.
+   */
+  const dragged = useRef(false);
+
   function pickAt(e: React.MouseEvent<HTMLDivElement>, offset: number) {
+    if (dragged.current) {
+      dragged.current = false;
+      return;
+    }
     if (!onPick || offset < 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const mins = DAY_START + (e.clientY - rect.top) / PX;
@@ -351,6 +366,14 @@ export default function DiaryGrid({
                         const up = () => {
                           el.removeEventListener("pointermove", move);
                           el.removeEventListener("pointerup", up);
+                          // Set on release, read by the click that follows it.
+                          // Cleared on a timer as well as by the click, so a
+                          // drag that ends without one (released off-screen)
+                          // cannot swallow somebody's next real booking.
+                          dragged.current = true;
+                          setTimeout(() => {
+                            dragged.current = false;
+                          }, 300);
                         };
                         el.addEventListener("pointermove", move);
                         el.addEventListener("pointerup", up);
