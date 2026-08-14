@@ -82,6 +82,10 @@ export default function ViewingBooker({
   const [chosen, setChosen] = useState<Person | null>(lead);
   const [day, setDay] = useState<Date | null>(null);
   const [slot, setSlot] = useState<string | null>(null);
+  /* How long it runs. Everything used to be half an hour, which is right for
+     a viewing and wrong for almost every appraisal — a four-bed with a
+     landlord who wants to talk is an hour and a half. */
+  const [mins, setMins] = useState(mode === "appraisal" || mode === "takeon" ? 60 : 30);
   const [propertyId, setPropertyId] = useState<string>(properties[0]?.id ?? "");
   const [sentCount, setSentCount] = useState(0);
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
@@ -134,6 +138,23 @@ export default function ViewingBooker({
     d.setDate(d.getDate() + o);
     return d;
   };
+  /* The booking's real length, in words, so the confirmation cannot promise
+     half an hour for a visit the agent has just set aside ninety minutes for.
+     That mismatch is exactly how a landlord ends up with somewhere else to be
+     half way through. */
+  const howLong =
+    mins >= 120
+      ? `${mins / 60} hours`
+      : mins === 90
+        ? "an hour and a half"
+        : mins === 60
+          ? "about an hour"
+          : mins === 45
+            ? "about three quarters of an hour"
+            : mins === 30
+              ? "half an hour"
+              : `about ${mins} minutes`;
+
   const ready = Boolean(day && slot && chosen && (toLandlord || property));
 
   const dayLabel = day
@@ -172,13 +193,13 @@ export default function ViewingBooker({
               ? `Hi ${first},\n\n` +
                 `We're booked in for ${dayLabel} at ${slot} to photograph the property and gather ` +
                 `the details for the listing.\n\n${where}\n\n` +
-                `Bright and tidy is all it needs — ${agent} will do the rest. It takes about an hour.\n\n` +
+                `Bright and tidy is all it needs — ${agent} will do the rest. It takes ${howLong}.\n\n` +
                 `Kind regards,\n${agent}\nThe Letting Experts`
               : `Hi ${first},\n\n` +
                 `Thanks for speaking today — your market appraisal is booked for ${dayLabel} at ${slot}.\n\n` +
                 `${where}\n\n` +
                 `${agent} will come to you, walk the property with you and talk through what it should achieve. ` +
-                `Nothing to prepare — half an hour of your time is all it takes.\n\n` +
+                `Nothing to prepare — ${howLong} of your time is all it takes.\n\n` +
                 `Kind regards,\n${agent}\nThe Letting Experts`,
           whatsappBody:
             mode === "takeon"
@@ -464,6 +485,8 @@ export default function ViewingBooker({
                   pickLabel={
                     mode === "appraisal" ? "Appraisal" : mode === "takeon" ? "Take-on" : "Viewing"
                   }
+                  pickMins={mins}
+                  onPickMins={setMins}
                   origin={origin}
                   weather={toLandlord ? forecast : undefined}
                 />
@@ -471,6 +494,7 @@ export default function ViewingBooker({
               <p className="mt-2 text-[10.5px] text-muted">
                 Click an empty half-hour to book it — the other appointments are already
                 drawn in, so a clash is visible before it happens.
+                {slot && " Drag the bar at the bottom of your booking to make it longer."}
               </p>
             </>
           )}

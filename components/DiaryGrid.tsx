@@ -119,6 +119,10 @@ export default function DiaryGrid({
   pick = null,
   onPick,
   pickLabel = "New",
+  /** How long the booking runs. Half an hour is where every appointment
+   *  starts; an appraisal on a four-bed is not a half-hour job. */
+  pickMins = 30,
+  onPickMins,
   origin = null,
   weather,
 }: {
@@ -132,6 +136,9 @@ export default function DiaryGrid({
   /** Present = the grid is a PICKER: clicks on empty space choose a slot. */
   onPick?: (day: number, slot: string) => void;
   pickLabel?: string;
+  pickMins?: number;
+  /** Present = the picked block grows a handle and can be dragged longer. */
+  onPickMins?: (mins: number) => void;
   /** Where the new appointment will be — appointments then say how far away
    *  they are, because a day is planned by drive, not by gaps. */
   origin?: { lat: number; lng: number } | null;
@@ -294,14 +301,65 @@ export default function DiaryGrid({
                 );
               })}
 
-              {/* The slot being booked — solid, unmistakably yours. */}
+              {/* The slot being booked — solid, unmistakably yours, and
+                  STRETCHABLE. Half an hour is where every booking starts and
+                  almost no appraisal actually is one; making the length a
+                  thing you drag rather than a field you fill is the whole
+                  point of booking on a calendar instead of in a form. */}
               {picked && (
                 <div
-                  className="pointer-events-none absolute inset-x-1 z-10 rounded-lg bg-accent-dark px-1.5 py-1 text-page shadow-[0_8px_18px_-8px_rgba(0,0,0,0.4)]"
-                  style={{ top: (minutesOf(picked.slot) - DAY_START) * PX + 1, height: Math.max(30 * PX, 26) }}
+                  className="absolute inset-x-1 z-10 rounded-lg bg-accent-dark px-1.5 py-1 text-page shadow-[0_8px_18px_-8px_rgba(0,0,0,0.4)]"
+                  style={{
+                    top: (minutesOf(picked.slot) - DAY_START) * PX + 1,
+                    height: Math.max(pickMins * PX, 26),
+                    pointerEvents: onPickMins ? "auto" : "none",
+                  }}
                 >
                   <span className="figures block text-[9px] leading-none">{picked.slot}</span>
                   <span className="hand block truncate text-[10.5px] leading-tight">{pickLabel}</span>
+                  {pickMins !== 30 && (
+                    <span className="figures absolute right-1.5 top-1 text-[9px] leading-none opacity-80">
+                      {pickMins >= 60
+                        ? `${Math.floor(pickMins / 60)}h${pickMins % 60 ? ` ${pickMins % 60}m` : ""}`
+                        : `${pickMins}m`}
+                    </span>
+                  )}
+
+                  {onPickMins && (
+                    /* Pointer events, not mouse: the same handler then works
+                       under a finger, and setPointerCapture means the drag
+                       survives the cursor leaving the little handle — which
+                       it does immediately, because the handle is 10px tall
+                       and the gesture is vertical. */
+                    <div
+                      role="separator"
+                      aria-label="Drag to change how long"
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const el = e.currentTarget;
+                        el.setPointerCapture(e.pointerId);
+                        const startY = e.clientY;
+                        const startMins = pickMins;
+                        const move = (ev: PointerEvent) => {
+                          const delta = (ev.clientY - startY) / PX;
+                          // Snapped to the quarter hour: a diary that can hold
+                          // 47 minutes is a diary nobody trusts.
+                          const next = Math.round((startMins + delta) / 15) * 15;
+                          onPickMins(Math.min(240, Math.max(15, next)));
+                        };
+                        const up = () => {
+                          el.removeEventListener("pointermove", move);
+                          el.removeEventListener("pointerup", up);
+                        };
+                        el.addEventListener("pointermove", move);
+                        el.addEventListener("pointerup", up);
+                      }}
+                      className="absolute inset-x-0 -bottom-1 flex h-3 cursor-ns-resize items-end justify-center"
+                    >
+                      <span className="h-1 w-7 rounded-full bg-page/70" />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
