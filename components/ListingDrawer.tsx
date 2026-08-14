@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PhotoBox from "@/components/PhotoBox";
 import PropertyPhoto from "@/components/PropertyPhoto";
+import ListingGallery from "@/components/ListingGallery";
 import Link from "next/link";
 import EmailToTenants from "@/components/EmailToTenants";
 import ProcessTimeline from "@/components/ProcessTimeline";
@@ -35,6 +36,9 @@ import { saveLabel, useCaseState } from "@/lib/case-state";
  */
 
 export type Listing = {
+  /** Every photo REX holds, in its own order. Optional because the static
+   *  fallback export predates the OS keeping more than the first one. */
+  images?: string[];
   id: string;
   name: string;
   locality: string;
@@ -319,6 +323,14 @@ export default function ListingDrawer({
   if (!listing) return null;
 
   const ll = landlordFor(listing.id);
+  /* Every photo when REX gave us them, the single primary when it didn't, and
+     an empty set for the drafts — more than half the book has no photo at all,
+     so an empty gallery is the normal case, not the broken one. */
+  const photos: string[] = listing.images?.length
+    ? listing.images
+    : listing.image
+      ? [listing.image]
+      : [];
   const here = LISTING_TRACK[Math.min(step, LISTING_TRACK.length - 1)];
   const advance = () => setStep((s) => Math.min(s + 1, LISTING_TRACK.length - 1));
 
@@ -398,11 +410,18 @@ export default function ListingDrawer({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-4">
           {/* ── Identity: the photo IS the identity of a property. ── */}
-          <div className="rounded-3xl border border-line/80 bg-panel p-6">
-            <div className="flex flex-wrap items-start gap-5">
-              <PropertyPhoto src={listing.image} className="h-32 w-44 shrink-0 rounded-2xl" />
+          <div className="rounded-3xl border border-line/80 bg-panel p-4">
+            {/* items-STRETCH, not items-start. The photograph was pinned to
+                its own height and finished less than half way down a block
+                that runs past the landlord card — a property card where the
+                property is the smallest thing on it. Stretched, it takes the
+                full height of whatever is beside it and the padding stays
+                even on all four sides, because the outer p-4 is the only
+                inset in play. */}
+            <div className="flex flex-wrap items-stretch gap-5">
+              <ListingGallery photos={photos} className="w-full sm:w-[300px] lg:w-[360px]" />
 
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 py-2 pr-2">
                 <h2 className="text-[24px] leading-tight">{listing.name}</h2>
                 <p className="mt-1 text-[12.5px] text-muted">
                   {listing.locality}

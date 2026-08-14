@@ -20,6 +20,9 @@ import rexSample from "@/lib/rex-sample.json";
  */
 
 type SampleListing = {
+  /** Every photo REX holds, in its own order. Absent on the static fallback,
+   *  which predates the OS carrying more than one. */
+  images?: string[];
   id: string;
   name: string;
   locality: string;
@@ -234,6 +237,18 @@ export default function Listings() {
         illustration="/illustrations/hiding.png"
         illustrationHeight={132}
         shadow
+        /* Measured off the artwork: her HAIR is cut at 384 of 424 tall, and
+           her hand reaches 39px lower to 423. Anchoring the rule at 0.906
+           puts the line where the hair stops, so the hair meets it and the
+           hand drops below — which is the whole illusion, a hand hooked over
+           the ledge she has popped up behind.
+        
+           Cutting the shadow's left 27% removes it from that hand and nothing
+           else: below the hair line the hand is the only ink on the page, so
+           the trim cannot take anything it shouldn't. A hand resting ON the
+           line must not cast onto the wall beneath it. */
+        seat={0.906}
+        seatCut={{ left: 27, right: 0 }}
         lineBreak="none"
         searchValue={q}
         onSearch={setQ}
