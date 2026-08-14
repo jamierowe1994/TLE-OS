@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import {
   bodyFor,
+  confirmBodyFor,
+  confirmSubjectFor,
   icsFor,
   postBodyFor,
   postSubjectFor,
@@ -69,6 +71,82 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 /** The stage rail — named, because four dots never told anyone where they were. */
+/**
+ * The appointment itself, stated once at the top of whichever step you are on.
+ *
+ * Every action on these two steps is about a specific date and time, and an
+ * agent should never have to remember which one while deciding whether to
+ * schedule an email against it.
+ */
+function Appointment({ c }: { c: AppraisalCase }) {
+  if (!c.bookedFor && !c.bookedAt) return null;
+  const mins = c.bookedMinutes;
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-line/70 bg-card px-4 py-3">
+      <DoodleIcon name="calendar" size={16} className="text-accent-dark" />
+      <p className="min-w-0 flex-1 text-[13px]">
+        {c.bookedFor ?? "Booked"}
+        {mins ? <span className="text-muted"> · {mins} minutes</span> : null}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * One way forward, as a card rather than a button in a row.
+ *
+ * The old step showed its options as a line of small buttons under a
+ * paragraph, which made three quite different decisions look like one toolbar.
+ * Sending now, queueing for Thursday and skipping altogether deserve equal
+ * width and a sentence each — the sentence is what stops the wrong one being
+ * clicked out of habit.
+ */
+function Choice({
+  icon,
+  title,
+  body,
+  onClick,
+  disabled,
+  done,
+  doneLabel,
+  note,
+}: {
+  icon: string;
+  title: string;
+  body: string;
+  onClick: () => void;
+  disabled?: boolean;
+  done?: boolean;
+  doneLabel?: string;
+  note?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex h-full flex-col rounded-2xl border p-4 text-left transition-colors ${
+        done
+          ? "border-emerald-600/40 bg-card"
+          : disabled
+            ? "cursor-not-allowed border-line/60 opacity-55"
+            : "border-line/70 bg-card hover:border-ink/40"
+      }`}
+    >
+      <span className="flex w-full items-center gap-2">
+        <DoodleIcon name={icon} size={15} className={done ? "text-emerald-700" : "text-accent-dark"} />
+        <span className="text-[12.5px] font-semibold">{title}</span>
+        {done && doneLabel && (
+          <span className="ml-auto rounded-full border border-emerald-600/40 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+            {doneLabel}
+          </span>
+        )}
+      </span>
+      <span className="mt-1.5 text-[11.5px] leading-relaxed text-muted">{note ?? body}</span>
+    </button>
+  );
+}
+
 function Rail({ state }: { state: AppraisalCase["state"] }) {
   const at = stageIndex(state);
   return (
@@ -131,7 +209,9 @@ export default function AppraisalTrack({
   const [touchText, setTouchText] = useState("");
   /* Both emails open full size rather than living in the panel — see
      EmailPopout. Which one is open, if either. */
-  const [composing, setComposing] = useState<null | "pre" | "post">(null);
+  const [composing, setComposing] = useState<null | "confirm" | "pre" | "post">(null);
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduleMsg, setScheduleMsg] = useState<string | null>(null);
   /** The pause while the landlord's page is built — see SendHandoff. */
   const [handingOver, setHandingOver] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -193,6 +273,93 @@ export default function AppraisalTrack({
          are still travelling is the jolt this was built to remove. */
       setMinting(false);
     }
+  }
+
+  /**
+   * Two days before the visit, at 9am.
+   *
+   * Counted BACK from the appointment rather than forward from today, because
+   * the point of the email is its distance from the visit. Never in the past:
+   * a visit booked for tomorrow gets it in an hour's time instead, which is
+   * still better than a queue entry that has already missed.
+   */
+  const scheduleFor = (() => {
+    if (!c.bookedAt) return null;
+    const visit = new Date(c.bookedAt);
+    if (Number.isNaN(visit.valueOf())) return null;
+    const when = new Date(visit);
+    when.setDate(when.getDate() - 2);
+    when.setHours(9, 0, 0, 0);
+    const soon = new Date(Date.now() + 60 * 60 * 1000);
+    return (when < soon ? soon : when).toISOString();
+  })();
+
+  const scheduleWords = scheduleFor
+    ? new Date(scheduleFor).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })
+    : "";
+
+  async function schedulePre() {
+    if (!invite || !scheduleFor) return;
+    setScheduling(true);
+    setScheduleMsg(null);
+    try {
+      /* The deck is minted NOW even though the email goes later. Building it
+         at send time would mean a queue entry that can fail hours after
+         anybody is watching — and a pre-appraisal without its page is the
+         one thing this email is for. */
+      let url: string | null = deck?.url ?? null;
+      if (!url) {
+        const made = await fetch("/api/presentations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            ref: recordId ?? "",
+            recipientName: invite.landlordName,
+            address: invite.address,
+            whenPretty: invite.whenPretty,
+            startsAt: invite.startsAt,
+            minutes: invite.minutes,
+          }),
+        }).then((r) => r.json());
+        if (made.ok) {
+          url = made.url;
+          setDeck({ url: made.url, missing: made.missing ?? [] });
+        }
+      }
+
+      const res = await fetch("/api/scheduled-sends", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: "pre-appraisal",
+          ref: recordId ?? "",
+          to: landlordEmail ?? "",
+          contactId: landlordContactId ?? null,
+          sendAt: scheduleFor,
+          subject: subjectFor(invite),
+          text: bodyFor({ ...invite, presentationUrl: url }),
+        }),
+      });
+      const j = await res.json();
+      if (!j.ok) {
+        setScheduleMsg(j.error ?? "Couldn't queue it.");
+        return;
+      }
+      patch({ preScheduledFor: scheduleFor, preScheduleId: String(j.id), state: "visit" });
+    } catch {
+      setScheduleMsg("Couldn't queue it.");
+    } finally {
+      setScheduling(false);
+    }
+  }
+
+  async function cancelSchedule() {
+    if (c.preScheduleId) {
+      await fetch(`/api/scheduled-sends?id=${encodeURIComponent(c.preScheduleId)}`, {
+        method: "DELETE",
+      }).catch(() => {});
+    }
+    patch({ preScheduledFor: null, preScheduleId: null, state: "pre" });
   }
 
   function advance() {
@@ -346,6 +513,114 @@ export default function AppraisalTrack({
           ) : (
             <>
               <p className="max-w-prose text-[12.5px] leading-relaxed text-muted">{step?.detail}</p>
+
+              {/* ── BOOKED: the appointment, in writing and in their diary.
+                  Both of these used to live inside the booker, which sent them
+                  before the record had a chance to say whether they'd gone —
+                  so the case looked confirmed when nothing had left. ── */}
+              {c.state === "booked" && (
+                <div className="mt-4 space-y-3">
+                  <Appointment c={c} />
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    <Choice
+                      icon="mail"
+                      title="Send the confirmation"
+                      body="Short, and in writing while the call is still warm. The detail has its own email nearer the time."
+                      done={Boolean(c.confirmationSentAt)}
+                      doneLabel="Sent"
+                      onClick={() => invite && setComposing("confirm")}
+                      disabled={!invite}
+                    />
+                    <Choice
+                      icon="calendar"
+                      title="Calendar invite"
+                      body="An .ics for their diary. Sent WITH the confirmation, not with the pre-appraisal — an invite that lands two days before the visit has missed most of its job."
+                      done={Boolean(c.inviteSavedAt)}
+                      doneLabel="Saved"
+                      onClick={() => {
+                        if (!invite) return;
+                        const ics = icsFor(invite);
+                        if (!ics) return;
+                        const url = URL.createObjectURL(new Blob([ics], { type: "text/calendar" }));
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = "market-appraisal.ics";
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        patch({ inviteSavedAt: new Date().toISOString() });
+                      }}
+                      disabled={!invite?.startsAt}
+                      note={!invite?.startsAt ? "No start time on the booking, so there's nothing to put in a calendar." : undefined}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* ── PRE: three ways out, because the right one depends on how
+                  far away the visit is. Sending it the same day as the
+                  confirmation is two emails in an hour and one of them gets
+                  skimmed. ── */}
+              {c.state === "pre" && (
+                <div className="mt-4 space-y-3">
+                  <Appointment c={c} />
+                  {c.preScheduledFor ? (
+                    <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-emerald-600/40 bg-card p-4">
+                      <DoodleIcon name="clock" size={16} className="text-emerald-700" />
+                      <p className="min-w-0 flex-1 text-[12.5px]">
+                        Queued for{" "}
+                        <span className="font-semibold">
+                          {new Date(c.preScheduledFor).toLocaleDateString("en-GB", {
+                            weekday: "long",
+                            day: "numeric",
+                            month: "long",
+                          })}
+                        </span>
+                        <span className="block text-[11.5px] text-muted">
+                          It goes on its own. Nothing else to do here.
+                        </span>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={cancelSchedule}
+                        className="text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+                      >
+                        Cancel it
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="grid gap-2.5 sm:grid-cols-3">
+                      <Choice
+                        icon="mail"
+                        title="Send it now"
+                        body="Opens it full size first. Right when the visit is only a day or two away."
+                        onClick={() => void openPre()}
+                        disabled={!invite || minting}
+                      />
+                      <Choice
+                        icon="clock"
+                        title={scheduleFor ? `Schedule for ${scheduleWords}` : "Schedule it"}
+                        body="Two days before the visit, sent on its own. The usual choice — it lands when it's useful rather than when it's convenient."
+                        onClick={schedulePre}
+                        disabled={!invite || !scheduleFor || scheduling}
+                        note={
+                          !scheduleFor
+                            ? "No start time on the booking, so there's no date to count back from."
+                            : undefined
+                        }
+                      />
+                      <Choice
+                        icon="cross"
+                        title="Skip it"
+                        body="They've had the confirmation and that's enough. Moves straight on to the visit."
+                        onClick={advance}
+                      />
+                    </div>
+                  )}
+                  {scheduleMsg && (
+                    <p className="text-[11.5px] leading-relaxed text-accent-dark">{scheduleMsg}</p>
+                  )}
+                </div>
+              )}
 
               {/* The visit: the one moment someone is standing in the
                   property. Everything the lead record never knew gets filled
@@ -522,27 +797,22 @@ export default function AppraisalTrack({
               {/* The one button that moves it on. On the two email steps it
                   opens the email full size first — nobody should send
                   something they haven't read. */}
-              {step && (
+              {/* Booked and Pre carry their own choices above — a second
+                  "Send the pre-appraisal" underneath three cards, one of which
+                  already says that, is how the wrong one gets pressed. */}
+              {step && c.state !== "booked" && c.state !== "pre" && (
                 <div className="mt-4 flex flex-wrap items-center gap-3">
                   <button
                     type="button"
                     onClick={() => {
-                      if (c.state === "pre" && invite) return void openPre();
                       if (c.state === "post" && invite) return setComposing("post");
                       advance();
                     }}
-                    disabled={minting}
                     className="rounded-full bg-ink px-5 py-2.5 text-[12.5px] text-page disabled:opacity-60"
                   >
-                    {c.state === "pre"
-                      ? minting
-                        ? "Building their page…"
-                        : "Send the pre-appraisal"
-                      : c.state === "post"
-                        ? "Send the follow-up"
-                        : step.cta}
+                    {c.state === "post" ? "Send the follow-up" : step.cta}
                   </button>
-                  {(c.state === "pre" || c.state === "post") && (
+                  {c.state === "post" && (
                     <button
                       type="button"
                       onClick={advance}
@@ -552,6 +822,19 @@ export default function AppraisalTrack({
                     </button>
                   )}
                 </div>
+              )}
+
+              {/* Booked has one way past it that isn't an email: they already
+                  know, because you told them. Kept small and separate from the
+                  two cards, which are the expected route. */}
+              {c.state === "booked" && (
+                <button
+                  type="button"
+                  onClick={advance}
+                  className="mt-3 self-start text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+                >
+                  They&rsquo;ve already got it — move on
+                </button>
               )}
             </>
           )}
@@ -650,12 +933,26 @@ export default function AppraisalTrack({
 
       {composing && invite && (
         <EmailPopout
-          title={composing === "pre" ? "Before the visit" : "After the visit"}
+          title={
+            composing === "confirm"
+              ? "Confirming the appointment"
+              : composing === "pre"
+                ? "Before the visit"
+                : "After the visit"
+          }
           to={landlordEmail}
           contactId={landlordContactId}
-          subject={composing === "pre" ? subjectFor(invite) : postSubjectFor(invite)}
+          subject={
+            composing === "confirm"
+              ? confirmSubjectFor(invite)
+              : composing === "pre"
+                ? subjectFor(invite)
+                : postSubjectFor(invite)
+          }
           body={
-            composing === "pre"
+            composing === "confirm"
+              ? confirmBodyFor(invite)
+              : composing === "pre"
               ? bodyFor({ ...invite, presentationUrl: deck?.url ?? null })
               : postBodyFor(invite, {
                   valuation: c.valuation,
@@ -714,9 +1011,13 @@ export default function AppraisalTrack({
           onSent={() => {
             // The confirmation moves it on; the follow-up doesn't — after the
             // visit the next move is theirs, and the case waits on the answer.
-            if (composing === "pre") {
-              patch({ confirmationSentAt: new Date().toISOString(), state: "visit" });
+            /* The CONFIRMATION is what moves booked → pre. The pre-appraisal
+               moves pre → visit. They were one step and one flag before, which
+               is why the case could say "confirmed" having sent neither. */
+            if (composing === "confirm") {
+              patch({ confirmationSentAt: new Date().toISOString(), state: "pre" });
             }
+            if (composing === "pre") patch({ state: "visit" });
           }}
         />
       )}

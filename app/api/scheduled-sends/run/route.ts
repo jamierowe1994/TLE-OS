@@ -1,0 +1,131 @@
+import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
+import { hasDb, q } from "@/lib/db";
+import { rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
+import { renderPlain } from "@/lib/campaign-mail";
+
+/**
+ * Send what's due.
+ *
+ * Run on a cron beside the campaign runner and the e-sign poll. Safe to run
+ * twice: a row is claimed by moving it out of 'queued' in the same statement
+ * that selects it, so two overlapping runs cannot both send the same email.
+ *
+ * ── Sent as the OFFICE, and that is a real compromise ───────────────────────
+ *
+ * Every other send in the OS goes out under the agent's own REX token so it
+ * lands on the landlord's timeline in their name. A cron has no session, and
+ * an agent's token would have to be held for days and used while they are not
+ * there — which is a worse thing to build than a send that says The Letting
+ * Experts. The queued_by column keeps the name of whoever queued it, so the
+ * record still knows whose email it was.
+ */
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+function authorised(req: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET;
+  // No secret set means an environment nobody has locked down yet; the
+  // campaign runner and the e-sign poll take the same view.
+  if (!secret) return true;
+  const given = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  const a = Buffer.from(given);
+  const b = Buffer.from(secret);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+type Due = {
+  id: string;
+  ref: string;
+  to_email: string;
+  contact_id: string | null;
+  subject: string;
+  body: string;
+  queued_by: string;
+};
+
+export async function POST(req: NextRequest) {
+  if (!authorised(req)) {
+    return NextResponse.json({ ok: false, error: "Not authorised." }, { status: 401 });
+  }
+  if (!hasDb()) {
+    return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
+  }
+  if (!rexConfigured()) {
+    return NextResponse.json({ ok: false, error: "REX isn't connected here." }, { status: 503 });
+  }
+
+  /* Claim and select in ONE statement. Two overlapping cron runs — a slow one
+     and its successor — would otherwise both read the same due rows and send
+     the landlord two copies. */
+  const due = await q<Due>(
+    `UPDATE os_scheduled_sends
+        SET state = 'sending'
+      WHERE id IN (
+        SELECT id FROM os_scheduled_sends
+         WHERE state = 'queued' AND send_at <= NOW()
+         ORDER BY send_at
+         LIMIT 25
+         FOR UPDATE SKIP LOCKED
+      )
+      RETURNING id, ref, to_email, contact_id, subject, body, queued_by`
+  ).catch(() => []);
+
+  const sent: string[] = [];
+  const failed: { id: string; error: string }[] = [];
+
+  for (const row of due) {
+    try {
+      const mail = renderPlain(row.subject, row.body);
+      const res = await rexCall("MailMerge", "createAndSend", {
+        subject: mail.subject,
+        body: mail.html,
+        // By RECORD where we have one — that is what puts the send on the
+        // landlord's REX timeline rather than nowhere anyone will look.
+        ...(row.contact_id
+          ? { recipient_records: [{ service_name: "Contacts", record_id: Number(row.contact_id) }] }
+          : { recipient_addresses: [row.to_email] }),
+      });
+
+      if (!res.ok) throw new Error(res.error ?? `REX refused it (${res.status}).`);
+
+      await q(
+        `UPDATE os_scheduled_sends SET state = 'sent', sent_at = NOW(), error = NULL WHERE id = $1`,
+        [row.id]
+      );
+      sent.push(row.id);
+    } catch (e) {
+      /* Back to 'queued' on a LOCKED environment, because that is not a
+         failure of this email — it is the environment, and it will be true
+         again next run. Anything else is the email's own problem and stays
+         failed rather than retrying at somebody's landlord forever. */
+      const locked = e instanceof RexWriteBlocked;
+      const message = locked
+        ? 'Sending is locked. Set REX_ALLOW_WRITES="MailMerge/createAndSend" to unlock it.'
+        : e instanceof Error
+          ? e.message
+          : "Send failed.";
+      await q(`UPDATE os_scheduled_sends SET state = $2, error = $3 WHERE id = $1`, [
+        row.id,
+        locked ? "queued" : "failed",
+        message,
+      ]).catch(() => []);
+      failed.push({ id: row.id, error: message });
+    }
+  }
+
+  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, failed });
+}
+
+/** A dry read: what is due, without sending it. */
+export async function GET() {
+  if (!hasDb()) return NextResponse.json({ ok: true, due: 0, rows: [] });
+  const rows = await q<{ id: string; to_email: string; subject: string; send_at: string }>(
+    `SELECT id, to_email, subject, send_at
+       FROM os_scheduled_sends
+      WHERE state = 'queued' AND send_at <= NOW()
+      ORDER BY send_at LIMIT 50`
+  ).catch(() => []);
+  return NextResponse.json({ ok: true, due: rows.length, rows });
+}

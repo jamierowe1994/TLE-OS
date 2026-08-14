@@ -124,7 +124,13 @@ export default function ViewingBooker({
     setPropertyId(seed.current[0]?.id ?? "");
     setFilters(NO_FILTERS);
     setWeek(0);
-  }, [open, today]);
+    /* Re-seeded on OPEN, not just at mount. The booker mounts once and is
+       shown and hidden by `open`, and it mounts under whatever mode the
+       caller last held — usually "viewing". So an appraisal opened later
+       kept the viewing default and every appraisal was booked for half an
+       hour, no matter what this line said. */
+    setMins(mode === "appraisal" || mode === "takeon" ? 60 : 30);
+  }, [open, today, mode]);
 
   useEffect(() => {
     if (!open) return;
@@ -189,6 +195,21 @@ export default function ViewingBooker({
     const h12 = h % 12 === 0 ? 12 : h % 12;
     return `${dayLabel} at ${h12}:${String(m).padStart(2, "0")}${am ? "am" : "pm"}`;
   })();
+  /**
+   * An appraisal stops HERE.
+   *
+   * It used to carry straight on into "who do we tell", compose the
+   * confirmation and finish on a Booked screen with confetti — which read as
+   * "that has gone out to them" when nothing had. Everything after the time
+   * is picked now belongs to the appraisal box on the record, where the
+   * confirmation, the calendar invite and the pre-appraisal live together and
+   * you can see which of them has actually happened.
+   *
+   * Viewings keep the old run: there is no appraisal box behind them, so the
+   * booker is the only place their messages can be composed.
+   */
+  const bookedOnly = mode === "appraisal";
+
   /** The same moment as an instant. Slots are "HH:MM" on the local clock. */
   const startsAt = (() => {
     if (!day || !slot) return null;
@@ -197,6 +218,20 @@ export default function ViewingBooker({
     at.setHours(h, m, 0, 0);
     return at.toISOString();
   })();
+
+  /** Hand the booking to the record and get out of the way. */
+  function bookAndClose() {
+    onBooked({
+      when: whenLabel,
+      property: address || "Visit",
+      locality: mode === "takeon" ? "Take-on visit" : "Market appraisal",
+      who: chosen?.name ?? "",
+      whenPretty,
+      startsAt,
+      minutes: mins,
+    });
+    onClose();
+  }
 
   /* Composed at the point of sending so the wording carries the choices made
      on the previous screen — a template built up front goes stale the moment
@@ -606,14 +641,14 @@ export default function ViewingBooker({
                     : "Pick a day and a time"}
                 </p>
                 <PressButton
-                  onClick={() => ready && setStage("who")}
+                  onClick={() => ready && (bookedOnly ? bookAndClose() : setStage("who"))}
                   className={`shrink-0 rounded-full px-6 py-2.5 text-[13px] font-semibold ${
                     ready ? "bg-ink text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
                   }`}
                 >
                   <span className="flex items-center gap-2">
                     <DoodleIcon name="calendar" size={15} />
-                    Next — who do we tell?
+                    {bookedOnly ? "Book it" : "Next — who do we tell?"}
                   </span>
                 </PressButton>
               </>

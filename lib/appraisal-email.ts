@@ -187,3 +187,40 @@ export function postBodyFor(i: AppraisalInvite, f: AppraisalOutcomeFacts): strin
   );
   return lines.join("\n");
 }
+
+/**
+ * The confirmation, sent the moment it is booked.
+ *
+ * A DIFFERENT email from the pre-appraisal, and the split is the point. This
+ * one exists to put the appointment in writing while the phone call is still
+ * warm — they agreed a time verbally, and verbal is what gets forgotten. It
+ * is short on purpose: a confirmation that runs to six paragraphs is a
+ * confirmation nobody reads to the end of, and the detail has its own email a
+ * couple of days out.
+ *
+ * The calendar invite rides WITH this one, not with the pre-appraisal. An
+ * .ics that arrives two days before the visit has missed most of its job.
+ */
+export function confirmSubjectFor(i: AppraisalInvite): string {
+  return `Confirmed — your market appraisal${i.whenPretty ? `, ${i.whenPretty}` : ""}`;
+}
+
+export function confirmBodyFor(i: AppraisalInvite): string {
+  return `Hi ${first(i.landlordName)},
+
+Thanks for your time on the phone just now. Putting it in writing so you have it:
+
+  ${i.whenPretty || "The time we agreed"}
+  ${i.address}
+  With ${i.agentName}, about ${i.minutes} minutes
+
+I've attached a calendar invite so it lands in your diary.
+
+Nothing to prepare at this stage. I'll send you a bit more detail nearer the time — what happens on the day and the handful of documents worth digging out.
+
+If that time stops working, just reply or ring me on ${i.agentPhone} and we'll move it.
+
+Kind regards,
+${i.agentName}
+The Letting Experts`;
+}

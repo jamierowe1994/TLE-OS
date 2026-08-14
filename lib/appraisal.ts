@@ -37,7 +37,7 @@ export const APPRAISAL_STEPS: AppraisalStep[] = [
     icon: "calendar",
     title: "Appraisal booked",
     detail:
-      "It's in the diary. Nothing has gone out to them yet — they know the time because you said it on the phone, which is not the same as them having it in writing.",
+      "It's in the diary. Nothing has gone out to them yet — they know the time because you said it on the phone, which is not the same as them having it in writing. Put it in writing while the call is still warm, and put it in their calendar.",
     cta: "Confirm it with them",
   },
   {
@@ -46,8 +46,8 @@ export const APPRAISAL_STEPS: AppraisalStep[] = [
     icon: "mail",
     title: "Before the visit",
     detail:
-      "The confirmation, the calendar invite, and what to expect on the day — who's coming, how long it takes, what to have to hand. This is the part that stops the no-shows and the ones who forgot they'd booked.",
-    cta: "Send the confirmation",
+      "What to expect on the day — who's coming, how long it takes, what to have to hand, and their own page with your face on it. Best sent a couple of days out rather than now: close enough to be remembered, far enough to dig out the EPC.",
+    cta: "Send the pre-appraisal",
   },
   {
     id: "visit",
@@ -152,6 +152,17 @@ export type AppraisalCase = {
   bookedAt: string | null;
   bookedMinutes: number | null;
   confirmationSentAt: string | null;
+  /** When the .ics was taken. Only so the step can stop nagging about it. */
+  inviteSavedAt: string | null;
+  /**
+   * The pre-appraisal, queued rather than sent.
+   *
+   * It is the one email in the run that is BETTER late: two days out, when
+   * the visit is close enough to matter and there is still time to find the
+   * EPC. So the step offers to schedule it, and this is the date it goes.
+   */
+  preScheduledFor: string | null;
+  preScheduleId: string | null;
   /** What it was valued at, per calendar month. */
   valuation: number | null;
   feePercent: number | null;
@@ -189,6 +200,9 @@ export const EMPTY_CASE: AppraisalCase = {
   bookedAt: null,
   bookedMinutes: null,
   confirmationSentAt: null,
+  inviteSavedAt: null,
+  preScheduledFor: null,
+  preScheduleId: null,
   valuation: null,
   feePercent: null,
   askingRent: null,

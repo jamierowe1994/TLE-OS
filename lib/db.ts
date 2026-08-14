@@ -305,6 +305,40 @@ CREATE INDEX IF NOT EXISTS os_esign_watch_open
   ON os_esign_watch (last_status) WHERE last_status <> 'completed';
 CREATE INDEX IF NOT EXISTS os_esign_watch_ref ON os_esign_watch (ref);
 
+-- Emails written now and sent later.
+--
+-- The pre-appraisal is the one email in the run that is BETTER late: two days
+-- before the visit, when it is close enough to matter and there is still time
+-- to dig out the EPC. Sending it in the same hour as the booking confirmation
+-- means two emails in an afternoon and one of them gets skimmed.
+--
+-- The BODY is stored, not a recipe for it. A queue entry that rebuilds its own
+-- wording at send time can fail hours after anybody is watching, and the agent
+-- who queued it never saw what actually went. What is here is what goes.
+--
+-- sent_at and error are the record of the attempt. A row is never deleted by
+-- the runner: 'cancelled' and 'failed' are answers, and a queue that empties
+-- itself cannot be asked what it did.
+CREATE TABLE IF NOT EXISTS os_scheduled_sends (
+  id             TEXT PRIMARY KEY,
+  kind           TEXT NOT NULL DEFAULT 'pre-appraisal',
+  ref            TEXT NOT NULL DEFAULT '',
+  to_email       TEXT NOT NULL,
+  contact_id     TEXT,
+  subject        TEXT NOT NULL,
+  body           TEXT NOT NULL,
+  send_at        TIMESTAMPTZ NOT NULL,
+  state          TEXT NOT NULL DEFAULT 'queued',
+  queued_by      TEXT NOT NULL DEFAULT '',
+  queued_by_id   TEXT,
+  sent_at        TIMESTAMPTZ,
+  error          TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_scheduled_sends_due
+  ON os_scheduled_sends (send_at) WHERE state = 'queued';
+CREATE INDEX IF NOT EXISTS os_scheduled_sends_ref ON os_scheduled_sends (ref);
+
 -- Results of slow REX/PayProp walks, so a deploy doesn't cost minutes of
 -- empty screens before the first figure appears.
 CREATE TABLE IF NOT EXISTS os_cache (
