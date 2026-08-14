@@ -110,6 +110,7 @@ function Choice({
   done,
   doneLabel,
   note,
+  row,
 }: {
   icon: string;
   title: string;
@@ -119,19 +120,56 @@ function Choice({
   done?: boolean;
   doneLabel?: string;
   note?: string;
+  /**
+   * Landscape: icon, name and reason on ONE line, stacked under each other.
+   *
+   * For a set of ALTERNATIVES rather than a set of jobs. Three columns made
+   * "send it", "queue it for Friday" and "don't" look like a toolbar of equal
+   * small things to be scanned across; stacked rectangles read as a list you
+   * come down and stop at, which is what choosing one of three actually is.
+   */
+  row?: boolean;
 }) {
+  const tone = done
+    ? "border-emerald-600/40 bg-card"
+    : disabled
+      ? "cursor-not-allowed border-line/60 opacity-55"
+      : "border-line/70 bg-card hover:border-ink/40";
+
+  if (row) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={disabled}
+        className={`flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border px-4 py-3.5 text-left transition-colors ${tone}`}
+      >
+        <DoodleIcon
+          name={icon}
+          size={15}
+          className={done ? "text-emerald-700" : "text-accent-dark"}
+        />
+        <span className="shrink-0 text-[12.5px] font-semibold">{title}</span>
+        {/* min-w-0 on a flex child is what lets long copy wrap instead of
+            stretching the card past the panel. */}
+        <span className="min-w-0 flex-1 text-[11.5px] leading-relaxed text-muted">
+          {note ?? body}
+        </span>
+        {done && doneLabel && (
+          <span className="shrink-0 rounded-full border border-emerald-600/40 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+            {doneLabel}
+          </span>
+        )}
+      </button>
+    );
+  }
+
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`flex h-full flex-col rounded-2xl border p-4 text-left transition-colors ${
-        done
-          ? "border-emerald-600/40 bg-card"
-          : disabled
-            ? "cursor-not-allowed border-line/60 opacity-55"
-            : "border-line/70 bg-card hover:border-ink/40"
-      }`}
+      className={`flex h-full flex-col rounded-2xl border p-4 text-left transition-colors ${tone}`}
     >
       <span className="flex w-full items-center gap-2">
         <DoodleIcon name={icon} size={15} className={done ? "text-emerald-700" : "text-accent-dark"} />
@@ -588,18 +626,20 @@ export default function AppraisalTrack({
                       </button>
                     </div>
                   ) : (
-                    <div className="grid gap-2.5 sm:grid-cols-3">
+                    <div className="space-y-2.5">
                       <Choice
                         icon="mail"
+                        row
                         title="Send it now"
-                        body="Opens it full size first. Right when the visit is only a day or two away."
+                        body="Opens it full size first. Best when the visit is a day or two away."
                         onClick={() => void openPre()}
                         disabled={!invite || minting}
                       />
                       <Choice
                         icon="clock"
+                        row
                         title={scheduleFor ? `Schedule for ${scheduleWords}` : "Schedule it"}
-                        body="Two days before the visit, sent on its own. The usual choice — it lands when it's useful rather than when it's convenient."
+                        body="Sent on its own, two days out — when it's useful rather than convenient."
                         onClick={schedulePre}
                         disabled={!invite || !scheduleFor || scheduling}
                         note={
@@ -610,8 +650,9 @@ export default function AppraisalTrack({
                       />
                       <Choice
                         icon="cross"
+                        row
                         title="Skip it"
-                        body="They've had the confirmation and that's enough. Moves straight on to the visit."
+                        body="They've had the confirmation. Moves straight on to the visit."
                         onClick={advance}
                       />
                     </div>
