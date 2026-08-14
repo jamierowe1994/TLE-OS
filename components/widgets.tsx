@@ -6,6 +6,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import DiaryCalendar from "@/components/DiaryCalendar";
 import DiaryGrid from "@/components/DiaryGrid";
 import LeadSourceChart from "@/components/LeadSourceChart";
+import OutstandingTermsWidget from "@/components/OutstandingTerms";
 import { FlowTag, Pill } from "@/components/Wire";
 import { todaysAppts, DIARY as SAMPLE_DIARY, VIEWING_OUTCOMES } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
@@ -1030,6 +1031,19 @@ export const WIDGETS: Record<string, WidgetDef> = {
     sizes: { s: [1, 1], m: [1, 2], l: [2, 2] },
     render: (w, h) => <ViewingsWeekWidget w={w} h={h} />,
   },
+
+  /* ── Terms nobody has signed yet. The property record answers "did THIS
+     one sign"; this answers the question an office actually asks on a
+     Monday, which is who is still sitting on ours. A component rather than
+     an inline renderer because it reads REX live and opens its own modal. ── */
+  "terms-outstanding": {
+    label: "Terms to sign",
+    icon: "file-contract",
+    hint: "Landlords who still haven't signed their terms of business, oldest first",
+    defaultW: 1, defaultH: 1,
+    sizes: { s: [1, 1], m: [2, 1], l: [2, 2] },
+    render: (w, h) => <OutstandingTermsWidget w={w} h={h} />,
+  },
 };
 
 /** The default board IS today's dashboard, box for box. */
@@ -1088,7 +1102,7 @@ export const DASH_TRAY_GROUPS = [
   { key: "social", label: "Social & ads", icon: "megaphone", types: ["facebook-leads", "instagram-leads", "ads-live"] },
   { key: "book", label: "The book", icon: "folder", types: ["portfolio", "on-market", "occupancy", "recently-listed"] },
   { key: "diary", label: "People & diary", icon: "calendar", types: ["diary", "today", "viewings-week", "attention"] },
-  { key: "management", label: "Management", icon: "setting", types: ["arrears", "maintenance", "renewals"] },
+  { key: "management", label: "Management", icon: "setting", types: ["arrears", "maintenance", "renewals", "terms-outstanding"] },
   { key: "compliance", label: "Compliance", icon: "shield", types: ["compliance-due"] },
   { key: "news", label: "News", icon: "megaphone", types: ["news"] },
 ];

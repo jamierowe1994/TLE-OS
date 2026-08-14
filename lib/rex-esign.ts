@@ -293,3 +293,84 @@ export function cdnUrlFor(uri: string): string | null {
   const host = process.env.REX_CDN_HOST ?? "uk-crm.cdns.rexsoftware.com";
   return `https://${host}/app/livestore/accounts/${m[1]}`;
 }
+
+/**
+ * Everything still waiting on a signature, across the whole book.
+ *
+ * ── Scoped to TLE by TEMPLATE, not by sender ────────────────────────────────
+ *
+ * The REX account is shared with five sister businesses, so an unscoped search
+ * would put another agency's landlords on TLE's dashboard. The obvious divider
+ * is the sender's email domain, and it is the wrong one: TLE partners sit on
+ * BOTH domains, so a domain filter drops real TLE contracts.
+ *
+ * The templates are the reliable divider. TLE has exactly three and they are
+ * its own — 4824 TLE Terms Of Business, 5930 TLE_TOB_SCOTLAND, 5962 RRA
+ * TLE_TOB_ENGLAND — and nothing else sends them.
+ *
+ * Overridable by env for the day a fourth is added, because a hard-coded id
+ * that goes stale silently drops contracts rather than erroring.
+ */
+export function tleTemplateIds(): number[] {
+  const raw = process.env.REX_TLE_TEMPLATE_IDS;
+  if (raw) return raw.split(",").map((s) => Number(s.trim())).filter(Boolean);
+  return [4824, 5930, 5962];
+}
+
+export type OutstandingTerm = EsignRequest & {
+  /** The property it was sent against, as words. Blank when it went out
+   *  from a contact or a property rather than a listing. */
+  address: string;
+  /** Whole days since it was sent. Null when REX has no sent time. */
+  age: number | null;
+};
+
+export async function outstandingTerms(limit = 60): Promise<OutstandingTerm[]> {
+  const ours = tleTemplateIds();
+  const res = await rexCall("EsignRequests", "search", {
+    limit,
+    criteria: [
+      { name: "esign_template_id", type: "in", value: ours },
+      // "incomplete" and "partially_signed" both mean somebody still has to
+      // act. Only "completed" is finished.
+      { name: "status_id", type: "in", value: ["incomplete", "partially_signed"] },
+    ],
+    // See esignFor: sorting by anything else returns zero rows, not an error.
+    order_by: { system_sent_time: "desc" },
+  });
+  if (!res.ok) return [];
+  const rows = ((res.result as { rows?: Raw[] })?.rows ?? []) as Raw[];
+
+  const full = await Promise.all(
+    rows.map(async (r) => {
+      const one = await rexCall("EsignRequests", "read", { id: Number(r.id) });
+      const raw = (one.ok ? one.result : r) as Raw & {
+        content?: {
+          listing?: { property?: { system_search_key?: string } };
+          /* The sender's own subject line, which on TLE's sends is usually
+             "Terms of Business - 19 Pilrig Gardens". Only a fallback: plenty
+             are just "Terms of Business" with no address in them at all. */
+          email_subject?: string;
+        };
+      };
+      const req = toRequest(raw);
+      const sent = req.sentAt ? new Date(req.sentAt).valueOf() : null;
+      /* The address is NOT `content.listing.name` — that field doesn't exist.
+         It lives on the joined property as `system_search_key`, which is REX's
+         own one-line address ("Flat 504, 50 Warwick Street, Birmingham B12
+         0BA"). Read the wrong key and every row comes back blank. */
+      const fromSubject = (raw.content?.email_subject ?? "").split(/\s+-\s+/).slice(1).join(" - ");
+      return {
+        ...req,
+        address: raw.content?.listing?.property?.system_search_key ?? fromSubject.trim(),
+        age: sent == null ? null : Math.floor((Date.now() - sent) / 86_400_000),
+      };
+    })
+  );
+
+  /* Defence in depth. `in` on a template id is honoured today, but this API
+     has a habit of ignoring a filter it doesn't like and returning everything
+     rather than erroring — and "everything" here means another agency's
+     landlords on TLE's dashboard. */
+  return full.filter((r) => r.templateId != null && ours.includes(r.templateId));
+}
