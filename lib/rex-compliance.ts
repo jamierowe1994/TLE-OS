@@ -6,15 +6,37 @@ import type { CertKey, CompProperty } from "@/lib/compliance";
 /**
  * The compliance book, live from REX.
  *
- * ⚠️ CERTIFICATES HANG OFF THE PROPERTY, NOT THE LISTING. `eicr`,
- * `gas_safety`, `epc`, the HMO licences, alarms and legionella all carry
- * `parent_object_type = property` and a PROPERTY id. Only
- * `listing_proof_of_ownership` is attached to the listing. Querying with
- * listing ids returns almost nothing and looks exactly like a compliant
- * book — the most dangerous possible way for this page to be wrong.
+ * ⚠️ QUERY BY PROPERTY ID, NOT LISTING ID — but not for the reason this
+ * comment used to give. It claimed certificates hang off the property only,
+ * and that a listing query "returns almost nothing". That was wrong. A census
+ * of all 6,657 compliance entries (18 Aug 2026) found:
+ *
+ *     property 2,715 | listing 1,916 | contact 2,026
+ *
+ * and EVERY safety type on BOTH parents — epc 1,986/1,071, gas 74/73,
+ * eicr 77/59, pat 41/29, legionella 46/28, the HMO licences, the alarms.
+ * REX stores the managed book's certificates twice.
+ *
+ * Property ids are still the right query, because the listing copy is always a
+ * DUPLICATE and never the only copy: of 103 listing-held certificates checked
+ * across gas, eicr and epc, zero lacked a property-record copy. So a property
+ * query loses nothing, and a merged query would just have to de-duplicate.
+ *
+ * The real trap is the opposite of the old warning: do NOT "fix" this by
+ * merging both parents without collapsing to one record per type, or every
+ * certificate is counted twice. (The TLE portal merges and de-dupes; this
+ * reads one parent. Both are correct, by different routes.)
+ *
+ * Worth knowing when reading REX PM's own compliance screen: its requirement
+ * banners and its certificate table disagree — it will say a certificate "has
+ * not been added" directly above that certificate. That is REX's display bug,
+ * not ours, and it is where the phantom renewal tasks come from.
  *
  * Expiry lives at `details.<type_id>.expiry_date`, and the certificate
- * itself at `file.url`.
+ * itself at `file.url` — though `file.url` is frequently absent: EPC had no
+ * document on any of 100 sampled entries, legionella 33%, pat 44%, gas 74%,
+ * while eicr and terms of business are at 100%. A date without a document
+ * means we cannot produce the certificate on request.
  *
  * WHAT WE DO NOT KNOW is left unknown. A property with no gas record might
  * have no gas, or might have gas nobody has certified — those are opposite
