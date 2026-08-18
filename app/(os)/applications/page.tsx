@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import PropertyPhoto from "@/components/PropertyPhoto";
+import ApplicationDrawer, { type AppActivity } from "@/components/ApplicationDrawer";
 import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
 import { FlowTag, Pill } from "@/components/Wire";
 
@@ -53,6 +53,8 @@ type App = {
   ticked: number;
   agent: string;
   flag?: string;
+  /** The running account of the deal. Sample until the back office is joined. */
+  activity?: AppActivity[];
 };
 
 const APPS: App[] = [
@@ -60,26 +62,52 @@ const APPS: App[] = [
     id: "a1", tenant: "Marcus Bell", property: "7 Station Approach", locality: "Luton LU1",
     image: null, rent: "£1,150 pcm", moveIn: "1 Sep 2026", stageKey: "holding_fee",
     ticked: 1, agent: "Kirstie",
+    activity: [
+      { when: "3 days ago", what: "Offer accepted by the landlord at £1,150.", by: "Kirstie" },
+      { when: "3 days ago", what: "Holding fee request sent.", by: "System" },
+      { when: "yesterday", what: "Tenant says he'll pay Friday when he's paid. Told him the property stays live until it lands.", by: "Kirstie", note: true },
+    ],
   },
   {
     id: "a2", tenant: "Sophie Turner", property: "Flat 2, Mercer Street", locality: "Manchester M4",
     image: null, rent: "£995 pcm", moveIn: "12 Sep 2026", stageKey: "referencing",
     ticked: 2, agent: "Kirstie", flag: "Stalled 6 days",
+    activity: [
+      { when: "12 days ago", what: "Holding fee received.", by: "System" },
+      { when: "9 days ago", what: "Referencing started with Goodlord.", by: "Kirstie" },
+      { when: "6 days ago", what: "Employer reference outstanding — chased the provider.", by: "Kirstie", note: true },
+      { when: "2 days ago", what: "Chased again. Provider says the employer hasn't responded. Sophie is going to call them herself.", by: "Kirstie", note: true },
+    ],
   },
   {
     id: "a3", tenant: "Priya Shah", property: "12 Elm Gardens", locality: "Didsbury M20",
     image: null, rent: "£1,750 pcm", moveIn: "1 Oct 2026", stageKey: "plc",
     ticked: 3, agent: "Michael",
+    activity: [
+      { when: "8 days ago", what: "References passed.", by: "System" },
+      { when: "5 days ago", what: "Right to Rent verified in branch.", by: "Michael" },
+      { when: "2 days ago", what: "Gas certificate expires 14 Mar — fine. EICR on file. Waiting on the EPC from the landlord.", by: "Michael", note: true },
+    ],
   },
   {
     id: "a4", tenant: "Liam Doyle", property: "88 Kelvin Way", locality: "Glasgow G12",
     image: null, rent: "£1,300 pcm", moveIn: "20 Aug 2026", stageKey: "tenancy_agreement",
     ticked: 5, agent: "Kirstie",
+    activity: [
+      { when: "6 days ago", what: "Deposit registered with the scheme.", by: "System" },
+      { when: "4 days ago", what: "Tenancy agreement sent for signature.", by: "System" },
+      { when: "yesterday", what: "Liam has signed. Waiting on the landlord — he's away until Tuesday.", by: "Kirstie", note: true },
+    ],
   },
   {
     id: "a5", tenant: "Hannah Price", property: "5 Orchard Close", locality: "St Albans AL1",
     image: null, rent: "£1,700 pcm", moveIn: "14 Aug 2026", stageKey: "move_day",
     ticked: 8, agent: "Michael", flag: "Friday",
+    activity: [
+      { when: "last week", what: "All parties signed.", by: "System" },
+      { when: "4 days ago", what: "First month's rent and deposit cleared.", by: "System" },
+      { when: "2 days ago", what: "Inventory booked for Friday morning, keys ready at the office.", by: "Michael", note: true },
+    ],
   },
 ];
 
@@ -88,7 +116,6 @@ const stageIdx = (k: string) => STAGES.findIndex((s) => s.key === k);
 export default function Applications() {
   const [openId, setOpenId] = useState<string | null>(null);
   const open = APPS.find((a) => a.id === openId) ?? null;
-  const cur = open ? stageIdx(open.stageKey) : -1;
 
   const defs = useMemo<ColumnDef<App>[]>(
     () => [
@@ -199,8 +226,8 @@ export default function Applications() {
         </div>
       </div>
 
-      {/* ── The applications, with the open one beside them. */}
-      <div className={`mt-4 grid gap-4 ${open ? "xl:grid-cols-[2fr_1fr]" : ""}`}>
+      {/* ── The applications. The open one takes the full pop-out. */}
+      <div className="mt-4">
         <div className="fade-up min-w-0 rounded-2xl border border-line/80 bg-panel p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2.5">
             <h2 className="text-[15px]">Live applications</h2>
@@ -214,128 +241,16 @@ export default function Applications() {
           />
         </div>
 
-        {/* ── The open application: where it is, and what's left. */}
-        {open && (
-          <aside className="fade-up h-fit rounded-2xl border border-line/80 bg-panel p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex min-w-0 items-start gap-3">
-                <PropertyPhoto src={open.image} className="h-12 w-14 shrink-0 rounded-lg" />
-                <div className="min-w-0">
-                  <p className="hand truncate text-[16px] leading-tight">{open.tenant}</p>
-                  <p className="mt-1 truncate text-[11px] text-muted">{open.property}</p>
-                  <p className="truncate text-[11px] text-muted">
-                    {open.rent} · moves {open.moveIn}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOpenId(null)}
-                className="shrink-0 text-muted transition-colors hover:text-ink"
-                title="Close"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* The eight stages, as a route walked so far. */}
-            <div className="mt-5 border-t border-line/70 pt-4">
-              <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
-                Where it&apos;s up to
-              </p>
-              <ol className="mt-3 space-y-2.5">
-                {STAGES.map((s, i) => {
-                  const done = i < cur;
-                  const here = i === cur;
-                  return (
-                    <li key={s.key} className="flex items-start gap-2.5">
-                      <span
-                        className={`mt-0.5 flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[9px] ${
-                          done
-                            ? "border-accent-dark bg-accent-soft text-accent-dark"
-                            : here
-                              ? "border-accent-dark bg-accent-dark text-white"
-                              : "border-line text-muted"
-                        }`}
-                      >
-                        {done ? "✓" : i + 1}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span
-                          className={`block text-[12px] leading-snug ${
-                            here ? "font-semibold" : done ? "text-muted" : "text-muted/70"
-                          }`}
-                        >
-                          {s.label}
-                        </span>
-                        {here && (
-                          <span className="mt-0.5 block text-[10.5px] leading-snug text-muted">
-                            {s.blurb}
-                          </span>
-                        )}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ol>
-            </div>
-
-            {/* The nine ticks. */}
-            <div className="mt-5 border-t border-line/70 pt-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
-                  Pre-tenancy checklist
-                </p>
-                <span className="figures text-[11px] text-muted">
-                  {open.ticked}/{CHECKLIST.length}
-                </span>
-              </div>
-              <ul className="mt-3 space-y-2">
-                {CHECKLIST.map((c, i) => {
-                  const done = i < open.ticked;
-                  return (
-                    <li key={c} className="flex items-start gap-2.5">
-                      <span
-                        className={`mt-0.5 flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[8px] ${
-                          done
-                            ? "border-accent-dark bg-accent-soft text-accent-dark"
-                            : "border-line"
-                        }`}
-                      >
-                        {done && "✓"}
-                      </span>
-                      <span
-                        className={`text-[11.5px] leading-snug ${
-                          done ? "text-muted line-through opacity-60" : ""
-                        }`}
-                      >
-                        {c}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-
-            <div className="mt-5 grid grid-cols-3 gap-2 border-t border-line/70 pt-4">
-              {[
-                { label: "Note", icon: "pencil" },
-                { label: "Chase", icon: "mail" },
-                { label: "Open in REX", icon: "link" },
-              ].map((a) => (
-                <button
-                  key={a.label}
-                  type="button"
-                  className="flex flex-col items-center gap-1.5 rounded-xl border border-line/80 px-2 py-2.5 text-[10px] font-medium transition-colors hover:border-ink/40"
-                >
-                  <DoodleIcon name={a.icon} size={16} className="text-accent-dark" />
-                  {a.label}
-                </button>
-              ))}
-            </div>
-          </aside>
-        )}
       </div>
+
+      {open && (
+        <ApplicationDrawer
+          app={open}
+          stages={STAGES}
+          checklist={CHECKLIST}
+          onClose={() => setOpenId(null)}
+        />
+      )}
 
       <ul className="mt-4 space-y-1.5 text-[11px] leading-relaxed text-muted">
         <li>
