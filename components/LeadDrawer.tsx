@@ -461,6 +461,22 @@ export default function LeadDrawer({
   );
 
   const track = trackFor(lead);
+
+  /**
+   * Move the record to a named step — forwards only.
+   *
+   * Once a stage is released it does not come back, so a file stops flicking
+   * between the same two steps and the rail means something. The one carve-out
+   * James named is a viewing being HELD: while one is still to happen you can
+   * return to it, because rebooking is a real thing that happens and it is not
+   * the same as going backwards through the process.
+   */
+  const advanceTo = (id: string) => {
+    const to = track.findIndex((s) => s.id === id);
+    if (to < 0) return;
+    const canRevisit = id === "viewing";
+    setStep((from) => (to > from || canRevisit ? to : from));
+  };
   const stalled = isStalled(lead);
   const here = track[Math.min(step, track.length - 1)];
   const finished = step >= track.length - 1;
@@ -696,14 +712,38 @@ export default function LeadDrawer({
                        IS the picture — it takes the same footprint the photo
                        takes on a property lead, rather than sitting in the
                        corner like a stamp. */
-                    <div className="hidden min-w-[300px] flex-1 items-center justify-center self-stretch py-2 lg:flex xl:max-w-[420px]">
+                    <div className="hidden min-w-[300px] flex-1 flex-col items-center justify-center gap-4 self-stretch py-2 lg:flex xl:max-w-[420px]">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src="/illustrations/notioly/home-caring.svg"
                         alt=""
                         aria-hidden
-                        className="art h-full max-h-[300px] min-h-[200px] w-auto object-contain"
+                        className="art max-h-[240px] min-h-[160px] w-auto flex-1 object-contain"
                       />
+                      {/* The two things anyone actually does to a tenant, sat
+                          where they can be reached without opening a step.
+                          Each one IS the stage change — sending the shortlist
+                          moves them to Shortlists, booking moves them to
+                          Viewings, so nobody has to remember to tick it. */}
+                      <div className="flex w-full shrink-0 gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEmailing(true);
+                            advanceTo("shortlist");
+                          }}
+                          className="flex-1 rounded-xl border border-line bg-panel px-3 py-2.5 text-[12.5px] font-semibold transition-colors hover:border-ink/40"
+                        >
+                          Send properties
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => advanceTo("viewing")}
+                          className="flex-1 rounded-xl bg-accent-dark px-3 py-2.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90"
+                        >
+                          Book viewing
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="hidden min-w-[300px] flex-1 self-stretch xl:block xl:max-w-[420px]">

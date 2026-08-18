@@ -55,46 +55,79 @@ export const TENANT_TRACK: JourneyStep[] = [
     action: "none", cta: "Log first contact",
   },
   {
-    id: "qualify", label: "Qualified", icon: "call",
+    id: "qualify", label: "Qualifying call", icon: "call",
     title: "Qualify the enquiry",
     detail: "Budget, area, move date, pets, who's moving in. Five minutes here saves five viewings later.",
     action: "none", cta: "Mark as qualified",
   },
   {
-    id: "shortlist", label: "Shortlist sent", icon: "mail",
+    id: "shortlist", label: "Shortlists", icon: "mail",
     title: "Send them properties",
     detail: "Match the shortlist to what they told you and get it in front of them the same day.",
     action: "send", cta: "Email properties",
   },
   {
-    id: "viewing", label: "Viewing", icon: "calendar",
+    id: "viewing", label: "Viewings", icon: "calendar",
     title: "Book a viewing",
-    detail: "Pick a slot, then tell everyone who needs to know — the applicant, the landlord and whoever holds the keys.",
+    detail:
+      "Pick a slot, then tell everyone who needs to know — the applicant, the landlord and whoever holds the keys. Booking it hands the record to the viewings process.",
     action: "viewing", cta: "Book a viewing",
+  },
+];
+
+/**
+ * The VIEWINGS spine — where an applicant goes once a viewing is booked.
+ *
+ * Split out of the tenant track on 18 Aug 2026 (James, after Howard). The
+ * tenant track used to run all eight steps from enquiry to move-in, which
+ * meant a record sat in one long rail owned by nobody in particular. It now
+ * hands over twice, at named points:
+ *
+ *   tenant     enquiry → qualifying call → shortlists → VIEWINGS
+ *   viewings   VIEWINGS → feedback → offer → offer accepted → APPLICATION
+ *   applications  (the eight pre-tenancy stages, on the Applications page)
+ *
+ * Viewings appears at the end of one spine and the start of the next on
+ * purpose — it is the handover itself, not a step that belongs to one side.
+ *
+ * Note this is the APPLICANT's journey through a viewing. LISTING_TRACK below
+ * is the property's, and they are deliberately different: one property runs
+ * many applicants through this.
+ */
+export const VIEWING_TRACK: JourneyStep[] = [
+  {
+    id: "viewing", label: "Viewings", icon: "calendar",
+    title: "The viewing",
+    detail: "Booked and confirmed. Everyone who needs to know has been told.",
+    action: "viewing", cta: "Book another viewing",
   },
   {
     id: "feedback", label: "Feedback", icon: "message",
     title: "Get the feedback",
-    detail: "Did they like it. Feedback the same day is worth ten times feedback a week later — to you and to the landlord.",
-    action: "send", cta: "Chase feedback",
+    detail:
+      "Did they like it. Feedback the same day is worth ten times feedback a week later — to you and to the landlord.",
+    action: "send", cta: "Ask for feedback",
+  },
+  {
+    id: "offer", label: "Offer", icon: "coin",
+    title: "Take the offer",
+    detail:
+      "What they'll pay and when they'd move. An offer can never be above the asking price — at or below only.",
+    action: "none", cta: "Record the offer",
+  },
+  {
+    id: "accepted", label: "Offer accepted", icon: "shield",
+    title: "Offer accepted",
+    detail:
+      "The landlord has said yes. Confirm to the applicant and let the others down kindly — every applicant gets an answer.",
+    action: "none", cta: "Accepted — confirm",
   },
   {
     id: "application", label: "Application", icon: "doc",
     title: "Take the application",
-    detail: "Holding deposit, application form, right-to-rent evidence. Referencing starts the moment this is complete.",
-    action: "none", cta: "Application received",
-  },
-  {
-    id: "agreement", label: "Agreement", icon: "file-contract",
-    title: "Send the tenancy agreement",
-    detail: "Prepare the AST and send it out for signature to every tenant and any guarantor.",
-    action: "sign", cta: "Prepare for signature",
-  },
-  {
-    id: "movein", label: "Moved in", icon: "key",
-    title: "Move-in",
-    detail: "Monies cleared, deposit protected, keys handed over. The record becomes a tenancy.",
-    action: "none", cta: "Confirm move-in",
+    detail:
+      "Holding deposit, application form, right-to-rent evidence. Completing this hands the record to Applications, where the eight pre-tenancy stages run.",
+    action: "handoff", cta: "Application received",
   },
 ];
 
@@ -225,8 +258,10 @@ export function startingStep(lead: Lead): number {
     case "Waiting": return tenant ? 2 : 1;
     // Landlord indices: 0 lead, 1 appraisal, 2 terms, 3 take-on,
     // 4 ID, 5 AML & compliance + push.
+    // Tenant indices are now 0 enquiry, 1 qualifying call, 2 shortlists,
+    // 3 viewings — the track ends there and the viewings spine takes over.
     case "Viewing booked": return tenant ? 3 : 1;
-    case "Qualified": return tenant ? 5 : 4;
+    case "Qualified": return tenant ? 2 : 4;
     case "Not proceeding": return 1;
     default: return 0;
   }
