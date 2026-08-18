@@ -692,13 +692,19 @@ export default function LeadDrawer({
                       Tenants have no property to photograph, so they keep
                       the drawing. */}
                   {isTenant ? (
-                    /* eslint-disable-next-line @next/next/no-img-element */
-                    <img
-                      src="/illustrations/notioly/home-caring.svg"
-                      alt=""
-                      aria-hidden
-                      className="art ml-auto hidden h-36 shrink-0 self-end lg:block"
-                    />
+                    /* A tenant has no property to photograph, so the drawing
+                       IS the picture — it takes the same footprint the photo
+                       takes on a property lead, rather than sitting in the
+                       corner like a stamp. */
+                    <div className="hidden min-w-[300px] flex-1 items-center justify-center self-stretch py-2 lg:flex xl:max-w-[420px]">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src="/illustrations/notioly/home-caring.svg"
+                        alt=""
+                        aria-hidden
+                        className="art h-full max-h-[300px] min-h-[200px] w-auto object-contain"
+                      />
+                    </div>
                   ) : (
                     <div className="hidden min-w-[300px] flex-1 self-stretch xl:block xl:max-w-[420px]">
                       <PhotoBox
