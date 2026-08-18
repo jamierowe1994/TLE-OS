@@ -343,7 +343,7 @@ export default function WindowScene({
             )}
             {/* Her, in the surface's own colour, over the sky and under the
                 ink — so she keeps the colours she always had. */}
-            <path d={FIGURE} fill="var(--page)" />
+            <path d={FIGURE} fill="var(--fig-fill)" />
           </g>
         )}
       </svg>
@@ -354,7 +354,9 @@ export default function WindowScene({
         src="/illustrations/notioly/window-frame.svg"
         alt=""
         aria-hidden
-        className="art relative h-full w-full"
+        /* Not inverted: her fill is light in both themes, so her linework
+           must stay dark or she loses her face entirely. */
+        className="art art-figure relative h-full w-full"
       />
       </div>
     </div>

@@ -172,6 +172,28 @@ h1, h2, h3, h4, h5 {
 .art { transition: filter 0.4s ease; }
 :root[data-theme="dark"] .art { filter: invert(1) hue-rotate(180deg); }
 
+/* ...but only for artwork that is genuinely INK ON NOTHING. The figure
+   illustrations are not: they carry their own white fills — a white face, a
+   white shirt, a white jumper — with black hair and black jeans beside them.
+   Inverting one renders a photographic negative: black face, black jacket,
+   white hair. Measured against the real files, not guessed.
+
+   They need no inversion at all. The page is a warm charcoal (#363432), never
+   black, so a figure keeps its white fills and reads as a light shape on a
+   dark ground, with its linework still doing the drawing.
+
+   The rule follows the convention already in the folder: line art ships as
+   SVG, filled figures ship as PNG. */
+:root[data-theme="dark"] .art-figure { filter: none; }
+
+/* The dashboard window's figure is drawn inline rather than shipped as a file,
+   so she has no fills of her own — she was painted in --page, which is white by
+   day and charcoal at night. That is what turned her face and her jumper black.
+   She wants the same treatment as every other figure: light fill, dark
+   linework, whatever the page is doing behind her. */
+:root { --fig-fill: var(--page); }
+:root[data-theme="dark"] { --fig-fill: #f4f3f0; }
+
 /* The dashboard window's sky is the one piece of colour in the artwork, so it
    must NOT be inverted — a sunset run through invert+hue-rotate comes out
    toxic. Its palette is picked to sit on either surface.

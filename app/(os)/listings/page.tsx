@@ -420,7 +420,7 @@ export default function Listings() {
         src="/illustrations/buildings-street.png"
         alt=""
         aria-hidden
-        className="art pointer-events-none ml-auto mt-8 hidden w-[420px] opacity-90 lg:block"
+        className="art art-figure pointer-events-none ml-auto mt-8 hidden w-[420px] opacity-90 lg:block"
       />
     </>
   );

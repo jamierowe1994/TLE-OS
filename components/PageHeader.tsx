@@ -320,11 +320,12 @@ export default function PageHeader({
               <LineDip width={dipWidth} mode={lineBreak} />
               {sprite ? (
                 /* The frames are a background, not an <img>, because only a
-                   background can be stepped through. .art still inverts it for
-                   the dark theme, exactly as it does the still drawings. */
+                   background can be stepped through. She is a FILLED figure —
+                   white face, white top — so she carries .art-figure and is not
+                   inverted, or dark mode gives her a black face. */
                 <span
                   aria-hidden
-                  className={`art relative block h-full ${spriteClass}`}
+                  className={`art art-figure relative block h-full ${spriteClass}`}
                   style={{
                     width: Math.round(illustrationHeight * sprite.aspect),
                     transform: `translateY(${Math.round(below)}px)`,
@@ -379,7 +380,10 @@ export default function PageHeader({
                     src={illustration}
                     alt=""
                     aria-hidden
-                    className="art relative h-full w-auto"
+                    className={`art relative h-full w-auto${
+                      /* Filled figure art must not be inverted — see .art-figure */
+                      illustration?.endsWith(".png") ? " art-figure" : ""
+                    }`}
                     /* Seated or hanging: drop them by everything below the
                        point the rule crosses, so it passes exactly through the
                        seat — or through the gripping fist. */
