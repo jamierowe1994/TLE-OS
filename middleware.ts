@@ -44,7 +44,20 @@ export const config = {
   // pre-appraisal deck goes to a landlord who has no account and never will.
   // Its own random token is the credential. `api/present` goes with it — the
   // viewer calls it to record that the deck was opened.
+  //
+  // ⚠️ EACH ALTERNATIVE IS ANCHORED TO A WHOLE PATH SEGMENT — `(?:/|$)`.
+  //
+  // They used to be bare prefixes, which meant an exemption leaked to every
+  // path that merely STARTED with one. `api/key` exempted `/api/keys` — the
+  // REX key register, which key sets exist for which properties — and it was
+  // reachable on the public internet with no code at all. `present` did the
+  // same for `/api/presentations`. `tenant` and `landlord` would have done it
+  // to `/tenants` and `/landlords` the day either was added.
+  //
+  // Anchored, `api/key` matches `/api/key` and `/api/key/anything` but NOT
+  // `/api/keys`. The two file exemptions are pinned with `$` because they are
+  // exact files, not prefixes.
   matcher: [
-    "/((?!key|api/key|tenant|landlord|present|api/present|_next|icons|illustrations|brand|favicon.ico|robots.txt).*)",
+    "/((?!(?:key|api/key|tenant|landlord|present|api/present|_next|icons|illustrations|brand)(?:/|$)|favicon\\.ico$|robots\\.txt$).*)",
   ],
 };
