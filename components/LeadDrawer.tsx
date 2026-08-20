@@ -126,12 +126,140 @@ function AppraisalForm({
   const [followUp, setFollowUp] = useState("");
   const first = leadName.split(" ")[0];
 
+  /* ---- Homesearch pre-fill ------------------------------------------------
+     The agent has just walked the property, so this is the one moment they
+     certainly know its address — and the moment they least want to be typing
+     things a database already holds.
+
+     Value discussed is filled from what same-sized homes in that postcode
+     SECTOR actually let for, bed-matched. Not a sale valuation: this business
+     runs on rent, and Homesearch's quick_valuation answers a different
+     question.
+
+     Everything it returns is a SUGGESTION and every field stays editable. The
+     agent stood in the house; the API did not. It also fills nothing silently —
+     the basis is printed under the figure, because a number that appears on its
+     own gets trusted more than it has earned.
+
+     Two known traps, both handled rather than hoped away: the route's own trust
+     check refuses a match whose house number disagrees (Homesearch will happily
+     resolve to a neighbour), and avg_price comes back null often enough that an
+     absent figure has to be said out loud instead of leaving the box blank. */
+  const [addr, setAddr] = useState("");
+  const [pc, setPc] = useState("");
+  const [looking, setLooking] = useState(false);
+  const [found, setFound] = useState<null | {
+    beds?: number;
+    propertyType?: string;
+    sqft?: number;
+    taxBand?: string;
+    epc?: { rating?: string; current?: boolean } | null;
+    areaRent?: { avg: number; beds: number } | null;
+    miss?: string;
+  }>(null);
+
+  async function prefill() {
+    if (!addr.trim() || !pc.trim()) return;
+    setLooking(true);
+    setFound(null);
+    try {
+      const r = await fetch(
+        `/api/dossier?address=${encodeURIComponent(addr)}&postcode=${encodeURIComponent(pc)}`,
+        { cache: "no-store" }
+      );
+      const d = r.ok ? await r.json() : null;
+      if (!d?.ok) {
+        setFound({ miss: "Homesearch didn't answer for that address." });
+        return;
+      }
+      if (!d.beds && !d.areaRent) {
+        // The trust check refused it, or there is simply nothing on file.
+        setFound({
+          miss:
+            "Couldn't confirm that exact address — nothing filled in. Check the house number, or just type the figures.",
+        });
+        return;
+      }
+      setFound({
+        beds: d.beds,
+        propertyType: d.propertyType,
+        sqft: d.sqft,
+        taxBand: d.taxBand,
+        epc: d.epc ?? null,
+        areaRent: d.areaRent ?? null,
+      });
+      // Only fills an EMPTY box. If the agent has already typed what the
+      // landlord said, that beats an average every time.
+      if (d.areaRent?.avg && !value.trim()) {
+        setValue(`£${Math.round(d.areaRent.avg).toLocaleString("en-GB")} pcm`);
+      }
+    } catch {
+      setFound({ miss: "Couldn't reach Homesearch just now." });
+    } finally {
+      setLooking(false);
+    }
+  }
+
   return (
     <StepModal
       title="Record the appraisal"
       subtitle={`How did it go at ${first}'s?`}
       onClose={onClose}
     >
+      {/* Fill it in from the address, before anyone types a figure. */}
+      <div className="mb-3 rounded-xl border border-line/80 p-3">
+        <span className="mb-1.5 block text-[10.5px] font-semibold uppercase tracking-wide text-muted">
+          Fill from the address
+        </span>
+        <div className="flex flex-wrap gap-2">
+          <input
+            value={addr}
+            onChange={(e) => setAddr(e.target.value)}
+            placeholder="12 Elm Gardens"
+            className="min-w-0 flex-1 rounded-lg border border-line/80 bg-transparent px-2.5 py-2 text-[12.5px] outline-none focus:border-ink"
+          />
+          <input
+            value={pc}
+            onChange={(e) => setPc(e.target.value.toUpperCase())}
+            placeholder="M20 2XR"
+            className="w-28 rounded-lg border border-line/80 bg-transparent px-2.5 py-2 text-[12.5px] uppercase outline-none focus:border-ink"
+          />
+          <PressButton
+            onClick={prefill}
+            className="press-ring rounded-lg border border-line/80 px-3 py-2 text-[12px] font-semibold"
+          >
+            {looking ? "Looking…" : "Look it up"}
+          </PressButton>
+        </div>
+
+        {found?.miss ? (
+          <p className="mt-2 text-[11px] leading-relaxed text-muted">{found.miss}</p>
+        ) : null}
+
+        {found && !found.miss ? (
+          <div className="mt-2.5 space-y-1 text-[11.5px] text-muted">
+            <p>
+              {[
+                found.beds ? `${found.beds} bed` : null,
+                found.propertyType,
+                found.sqft ? `${found.sqft.toLocaleString("en-GB")} sq ft` : null,
+                found.taxBand ? `Council tax ${found.taxBand}` : null,
+                found.epc?.rating
+                  ? `EPC ${found.epc.rating}${found.epc.current ? "" : " (expired)"}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+            <p>
+              {found.areaRent
+                ? `${found.areaRent.beds}-bed homes in this postcode sector are on the market at about £${Math.round(found.areaRent.avg).toLocaleString("en-GB")} pcm — filled in below, change it to whatever you agreed.`
+                : "No local letting average for this size — the value is yours to type."}
+            </p>
+          </div>
+        ) : null}
+      </div>
+
       <label className="mb-3 block">
         <span className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-muted">
           Value discussed
