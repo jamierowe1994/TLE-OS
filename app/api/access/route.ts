@@ -43,7 +43,12 @@ export async function GET(req: NextRequest) {
   if (!answer) {
     return NextResponse.json({ error: "REX didn't answer." }, { status: 502 });
   }
-  return NextResponse.json({ ...answer, writesLocked: rexWritesLocked() });
+  // Scoped to the write this endpoint would make, not the environment at
+  // large — a bare "false" beside a refusal reads as a contradiction.
+  return NextResponse.json({
+    ...answer,
+    writesLocked: rexWritesLocked("SecurityObjectPermissions", "grantPermission"),
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -85,7 +90,13 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     // RexWriteBlocked lands here and carries its own instructions.
     return NextResponse.json(
-      { error: (e as Error).message, writesLocked: rexWritesLocked() },
+      {
+        error: (e as Error).message,
+        writesLocked: rexWritesLocked(
+          "SecurityObjectPermissions",
+          action === "grant" ? "grantPermission" : "requestPermission"
+        ),
+      },
       { status: 423 }
     );
   }

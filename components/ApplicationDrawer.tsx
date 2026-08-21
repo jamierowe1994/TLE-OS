@@ -52,16 +52,34 @@ export interface Stage {
   blurb: string;
 }
 
-/** What the deal is waiting on at each stage — the answer to "do I need to act?" */
+/**
+ * A checklist item carries its own state.
+ *
+ * It used to be a bare string plus a count, which only works when the items
+ * are done in order. The four checks on an application — right to rent,
+ * landlord reference, guarantor, credit — are answered independently, and a
+ * count of three would have silently ticked the wrong three.
+ */
+export interface Check {
+  label: string;
+  done: boolean;
+  /** Why it isn't ticked, when that's worth saying. */
+  note?: string;
+}
+
+/**
+ * What the application is waiting on — the answer to "do I need to act?"
+ *
+ * Keyed on REX's OWN application statuses, because that is the record this
+ * drawer opens. The eight pre-tenancy stages (holding fee, referencing, PLC,
+ * deposit, move day) belong to the Propoly deal that gets created once an
+ * application is accepted — a different record, not joined in yet.
+ */
 const NEXT_ACTION: Record<string, { do: string; who: string }> = {
-  deal_started: { do: "Confirm the rent, dates and tenant details, then request the holding fee.", who: "Us" },
-  holding_fee: { do: "Chase the holding fee — the property stays on the market until it lands.", who: "Tenant" },
-  referencing: { do: "Referencing is with the provider. Chase if it passes 5 working days.", who: "Provider" },
-  plc: { do: "Right to Rent, gas, EICR, EPC and licensing all need to be on file before keys.", who: "Us" },
-  deposit: { do: "Collect the deposit and register it with the scheme inside 30 days.", who: "Tenant" },
-  tenancy_agreement: { do: "Agreement is out for signature. All parties must sign before move day.", who: "All parties" },
-  rent_payment: { do: "Collect the first month and set the standing order up.", who: "Tenant" },
-  move_day: { do: "Keys, inventory and check-in. Nothing outstanding after this.", who: "Us" },
+  received: { do: "Put it to the landlord — offer, income, and anything they've disclosed.", who: "Us" },
+  communicated: { do: "The landlord has it. Chase for a decision if it's been more than a day.", who: "Landlord" },
+  accepted: { do: "Take the holding deposit and open the deal. Let the other applicants know.", who: "Us" },
+  unsuccessful: { do: "Nothing outstanding. Tell them why if they haven't been told.", who: "—" },
 };
 
 export default function ApplicationDrawer({
@@ -72,7 +90,7 @@ export default function ApplicationDrawer({
 }: {
   app: AppRecord;
   stages: Stage[];
-  checklist: string[];
+  checklist: Check[];
   onClose: () => void;
 }) {
   const [shown, setShown] = useState(false);
@@ -92,7 +110,8 @@ export default function ApplicationDrawer({
   const cur = stages.findIndex((s) => s.key === app.stageKey);
   const action = NEXT_ACTION[app.stageKey];
   const thread = [...(app.activity ?? []), ...added];
-  const outstanding = checklist.length - app.ticked;
+  const ticked = checklist.filter((c) => c.done).length;
+  const outstanding = checklist.length - ticked;
 
   function post() {
     const text = draft.trim();
@@ -218,27 +237,31 @@ export default function ApplicationDrawer({
                     Checklist
                   </p>
                   <p className="figures text-[11px] text-muted">
-                    {app.ticked}/{checklist.length}
+                    {ticked}/{checklist.length}
                   </p>
                 </div>
                 <ul className="mt-3.5 space-y-2">
-                  {checklist.map((c, i) => {
-                    const done = i < app.ticked;
-                    return (
-                      <li key={c} className="flex items-center gap-2.5 text-[12.5px]">
-                        <span
-                          className={`flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded-[5px] border-[1.5px] text-[8px] ${
-                            done
-                              ? "border-accent-dark bg-accent-dark text-white"
-                              : "border-line text-muted"
-                          }`}
-                        >
-                          {done ? "✓" : ""}
-                        </span>
-                        <span className={done ? "text-muted line-through" : ""}>{c}</span>
-                      </li>
-                    );
-                  })}
+                  {checklist.map((c) => (
+                    <li key={c.label} className="flex items-start gap-2.5 text-[12.5px]">
+                      <span
+                        className={`mt-0.5 flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded-[5px] border-[1.5px] text-[8px] ${
+                          c.done
+                            ? "border-accent-dark bg-accent-dark text-white"
+                            : "border-line text-muted"
+                        }`}
+                      >
+                        {c.done ? "✓" : ""}
+                      </span>
+                      <span className="min-w-0">
+                        <span className={c.done ? "text-muted line-through" : ""}>{c.label}</span>
+                        {c.note && (
+                          <span className="mt-0.5 block text-[11px] leading-snug text-muted">
+                            {c.note}
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  ))}
                 </ul>
               </div>
             </div>

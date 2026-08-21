@@ -1,136 +1,137 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import PropertyPhoto from "@/components/PropertyPhoto";
-import ApplicationDrawer, { type AppActivity } from "@/components/ApplicationDrawer";
+import ApplicationDrawer, { type Check } from "@/components/ApplicationDrawer";
 import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
 import { FlowTag, Pill } from "@/components/Wire";
+import type { Application } from "@/lib/applications";
 
 /**
- * Applications: the pre-tenancy pipeline, lifted from the TLE portal so the
- * two products speak the same language on merge day.
+ * Applications — REX's own book, live.
  *
- * The eight stages and the nine checklist items are the PORTAL's, verbatim —
- * they came out of Kirstie's real process. Propoly only tracks five statuses;
- * the other three (PLC, Deposit, Move day) are portal-side stages someone
- * moves a deal into by hand, which is why this overlay has to own them.
+ * This page used to show five invented rows on the eight pre-tenancy stages.
+ * Those eight stages are real, but they belong to the PROPOLY deal that exists
+ * only after an application is accepted. The record that exists *before* that,
+ * and the one this page is named for, is REX's TenancyApplication — 576 of
+ * them, 457 made this year, most by Howard's JotForm flow.
+ *
+ * So the stages here are REX's four, verbatim, and the checklist is the four
+ * checks a letting actually turns on. Nothing is mapped onto anything.
+ *
+ * The banner is the point of the exercise. Right to Rent is a statutory check
+ * on every adult who will live in the property, and the JotForm only ever asks
+ * the lead applicant — so a third of the people on these applications have no
+ * recorded answer. The number is counted from the live data, not asserted.
  */
 
 const STAGES = [
-  { key: "deal_started", label: "Deal started", blurb: "Terms agreed — rent, dates and tenant details being set up." },
-  { key: "holding_fee", label: "Holding fee", blurb: "Collecting the fee that takes the property off the market." },
-  { key: "referencing", label: "Referencing", blurb: "Credit, employer and previous-landlord checks." },
-  { key: "plc", label: "PLC", blurb: "Pre-let compliance — Right to Rent, gas/EICR/EPC and licensing." },
-  { key: "deposit", label: "Deposit", blurb: "Collecting the deposit and registering it with the scheme." },
-  { key: "tenancy_agreement", label: "Tenancy agreement", blurb: "Drawn up with the agreed clauses and signed by all parties." },
-  { key: "rent_payment", label: "Rent payment", blurb: "First month's rent collected, standing order set up." },
-  { key: "move_day", label: "Move day", blurb: "Keys, inventory and check-in." },
+  { key: "received", label: "Received", blurb: "In, and not yet put to the landlord." },
+  { key: "communicated", label: "Communicated", blurb: "With the landlord, waiting on their decision." },
+  { key: "accepted", label: "Accepted", blurb: "Landlord has said yes — the deal opens from here." },
+  { key: "unsuccessful", label: "Unsuccessful", blurb: "Turned down, or the applicant withdrew." },
 ];
 
-/** Kirstie's spreadsheet, one tick each — the portal's CHECKLIST_ITEMS. */
-const CHECKLIST = [
-  "Holding fee received",
-  "References passed",
-  "Right to Rent verified",
-  "Tenancy agreement sent",
-  "Agreement signed by all parties",
-  "Deposit registered",
-  "Move-in monies received",
-  "Standing order set up",
-  "Keys & inventory arranged",
-];
+const stageIdx = (k: string) => Math.max(0, STAGES.findIndex((s) => s.key === k));
+const gbp = (n: number | null) => (n == null ? "—" : `£${n.toLocaleString("en-GB")}`);
 
-type App = {
-  id: string;
-  tenant: string;
-  property: string;
-  locality: string;
-  image: string | null;
-  rent: string;
-  moveIn: string;
-  stageKey: string;
-  ticked: number;
-  agent: string;
-  flag?: string;
-  /** The running account of the deal. Sample until the back office is joined. */
-  activity?: AppActivity[];
-};
-
-const APPS: App[] = [
-  {
-    id: "a1", tenant: "Marcus Bell", property: "7 Station Approach", locality: "Luton LU1",
-    image: null, rent: "£1,150 pcm", moveIn: "1 Sep 2026", stageKey: "holding_fee",
-    ticked: 1, agent: "Kirstie",
-    activity: [
-      { when: "3 days ago", what: "Offer accepted by the landlord at £1,150.", by: "Kirstie" },
-      { when: "3 days ago", what: "Holding fee request sent.", by: "System" },
-      { when: "yesterday", what: "Tenant says he'll pay Friday when he's paid. Told him the property stays live until it lands.", by: "Kirstie", note: true },
-    ],
-  },
-  {
-    id: "a2", tenant: "Sophie Turner", property: "Flat 2, Mercer Street", locality: "Manchester M4",
-    image: null, rent: "£995 pcm", moveIn: "12 Sep 2026", stageKey: "referencing",
-    ticked: 2, agent: "Kirstie", flag: "Stalled 6 days",
-    activity: [
-      { when: "12 days ago", what: "Holding fee received.", by: "System" },
-      { when: "9 days ago", what: "Referencing started with Goodlord.", by: "Kirstie" },
-      { when: "6 days ago", what: "Employer reference outstanding — chased the provider.", by: "Kirstie", note: true },
-      { when: "2 days ago", what: "Chased again. Provider says the employer hasn't responded. Sophie is going to call them herself.", by: "Kirstie", note: true },
-    ],
-  },
-  {
-    id: "a3", tenant: "Priya Shah", property: "12 Elm Gardens", locality: "Didsbury M20",
-    image: null, rent: "£1,750 pcm", moveIn: "1 Oct 2026", stageKey: "plc",
-    ticked: 3, agent: "Michael",
-    activity: [
-      { when: "8 days ago", what: "References passed.", by: "System" },
-      { when: "5 days ago", what: "Right to Rent verified in branch.", by: "Michael" },
-      { when: "2 days ago", what: "Gas certificate expires 14 Mar — fine. EICR on file. Waiting on the EPC from the landlord.", by: "Michael", note: true },
-    ],
-  },
-  {
-    id: "a4", tenant: "Liam Doyle", property: "88 Kelvin Way", locality: "Glasgow G12",
-    image: null, rent: "£1,300 pcm", moveIn: "20 Aug 2026", stageKey: "tenancy_agreement",
-    ticked: 5, agent: "Kirstie",
-    activity: [
-      { when: "6 days ago", what: "Deposit registered with the scheme.", by: "System" },
-      { when: "4 days ago", what: "Tenancy agreement sent for signature.", by: "System" },
-      { when: "yesterday", what: "Liam has signed. Waiting on the landlord — he's away until Tuesday.", by: "Kirstie", note: true },
-    ],
-  },
-  {
-    id: "a5", tenant: "Hannah Price", property: "5 Orchard Close", locality: "St Albans AL1",
-    image: null, rent: "£1,700 pcm", moveIn: "14 Aug 2026", stageKey: "move_day",
-    ticked: 8, agent: "Michael", flag: "Friday",
-    activity: [
-      { when: "last week", what: "All parties signed.", by: "System" },
-      { when: "4 days ago", what: "First month's rent and deposit cleared.", by: "System" },
-      { when: "2 days ago", what: "Inventory booked for Friday morning, keys ready at the office.", by: "Michael", note: true },
-    ],
-  },
-];
-
-const stageIdx = (k: string) => STAGES.findIndex((s) => s.key === k);
+/** The four checks, read off the live record rather than counted. */
+function checksFor(a: Application): Check[] {
+  const lead = a.applicants.find((p) => p.isPrimary) ?? a.applicants[0];
+  const k = lead?.keyInfo;
+  const everyone = a.applicants.length;
+  const answered = a.applicants.filter((p) => p.keyInfo?.rightToRent === true).length;
+  return [
+    {
+      label: `Right to rent — ${answered} of ${everyone} applicant${everyone === 1 ? "" : "s"}`,
+      done: everyone > 0 && answered === everyone,
+      note:
+        answered < everyone
+          ? "The form only ever asks the lead applicant. The others were never asked."
+          : undefined,
+    },
+    {
+      label: "Landlord reference, last 2 years",
+      done: k?.landlordRef === true,
+      note: k?.landlordRef === false ? "None available — worth a guarantor conversation." : undefined,
+    },
+    {
+      label: "Guarantor available if needed",
+      done: k?.guarantor === true,
+      note:
+        k?.guarantor === true && lead?.guarantorCount === 0
+          ? "Offered, but nobody has been recorded. REX's guarantor list is empty on every application."
+          : undefined,
+    },
+    {
+      label: "No adverse credit",
+      done: k?.adverseCredit === false,
+      note: k?.adverseCredit === true ? k.adverseCreditNote?.slice(0, 180) ?? "Disclosed." : undefined,
+    },
+  ];
+}
 
 export default function Applications() {
+  const [apps, setApps] = useState<Application[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
-  const open = APPS.find((a) => a.id === openId) ?? null;
+  const [showClosed, setShowClosed] = useState(false);
 
-  const defs = useMemo<ColumnDef<App>[]>(
+  useEffect(() => {
+    let live = true;
+    fetch("/api/applications?limit=200")
+      .then((r) => r.json())
+      .then((d: { applications?: Application[]; error?: string }) => {
+        if (!live) return;
+        if (d.error) setError(d.error);
+        setApps(d.applications ?? []);
+      })
+      .catch((e: Error) => live && setError(e.message));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  const all = apps ?? [];
+  const rows = useMemo(
+    () => (showClosed ? all : all.filter((a) => a.status !== "unsuccessful")),
+    [all, showClosed]
+  );
+  const open = all.find((a) => a.id === openId) ?? null;
+
+  /* The measurement, live. Counted over the applications on screen so the
+     number always agrees with what's in front of you. */
+  const rtr = useMemo(() => {
+    const live = all.filter((a) => a.status === "received" || a.status === "communicated");
+    const people = live.flatMap((a) => a.applicants);
+    return {
+      applications: live.length,
+      unanswered: people.filter((p) => p.keyInfo?.rightToRent !== true).length,
+      people: people.length,
+    };
+  }, [all]);
+
+  const defs = useMemo<ColumnDef<Application>[]>(
     () => [
       {
         key: "applicant", label: "Applicant", required: true,
-        render: (a) => (
-          <>
-            <span className="hand block whitespace-nowrap text-[13px]">{a.tenant}</span>
-            {a.flag && (
-              <span className="mt-1 inline-block">
-                <Pill tone="accent">{a.flag}</Pill>
+        render: (a) => {
+          const lead = a.applicants.find((p) => p.isPrimary) ?? a.applicants[0];
+          const others = a.applicants.length - 1;
+          return (
+            <>
+              <span className="hand block whitespace-nowrap text-[13px]">
+                {lead?.name ?? "—"}
               </span>
-            )}
-          </>
-        ),
+              {others > 0 && (
+                <span className="block whitespace-nowrap text-[10.5px] text-muted">
+                  + {others} other{others === 1 ? "" : "s"}
+                </span>
+              )}
+            </>
+          );
+        },
       },
       {
         key: "property", label: "Property",
@@ -139,81 +140,108 @@ export default function Applications() {
             <PropertyPhoto src={a.image} className="h-9 w-11 shrink-0 rounded-md" />
             <span className="min-w-0">
               <span className="block whitespace-nowrap">{a.property}</span>
-              <span className="block whitespace-nowrap text-[10.5px] text-muted">
-                {a.locality}
-              </span>
+              <span className="block whitespace-nowrap text-[10.5px] text-muted">{a.locality}</span>
             </span>
           </span>
         ),
       },
-      { key: "rent", label: "Rent", cell: "figures whitespace-nowrap", render: (a) => a.rent },
-      { key: "moveIn", label: "Move-in", cell: "whitespace-nowrap text-muted", render: (a) => a.moveIn },
       {
-        key: "stage", label: "Stage", cell: "whitespace-nowrap",
-        render: (a) => <Pill tone="neutral">{STAGES[stageIdx(a.stageKey)].label}</Pill>,
+        key: "offer", label: "Offer", cell: "figures whitespace-nowrap",
+        render: (a) => (a.offerAmount ? `${gbp(a.offerAmount)} pcm` : "—"),
       },
       {
-        key: "checklist", label: "Checklist", cell: "whitespace-nowrap",
+        key: "affordability", label: "Rent / income", cell: "figures whitespace-nowrap",
+        render: (a) =>
+          a.affordabilityPct == null ? (
+            <span className="text-muted">—</span>
+          ) : (
+            <span className={a.affordabilityPct > 40 ? "text-accent-dark" : undefined}>
+              {a.affordabilityPct.toFixed(0)}%
+            </span>
+          ),
+      },
+      { key: "moveIn", label: "Move-in", cell: "whitespace-nowrap text-muted", render: (a) => a.startDate ?? "—" },
+      {
+        key: "stage", label: "Status", cell: "whitespace-nowrap",
         render: (a) => (
-          <span className="flex items-center gap-1">
-            {CHECKLIST.map((_, i) => (
-              <span
-                key={i}
-                className={`h-1.5 w-1.5 rounded-full ${i < a.ticked ? "bg-accent" : "bg-line"}`}
-              />
-            ))}
-            <span className="ml-1.5 text-[10px] text-muted">
-              {a.ticked}/{CHECKLIST.length}
-            </span>
-          </span>
+          <Pill tone={a.status === "accepted" ? "accent" : "neutral"}>{a.statusLabel}</Pill>
         ),
       },
-      { key: "agent", label: "With", cell: "whitespace-nowrap text-muted", render: (a) => a.agent },
+      {
+        key: "checks", label: "Checks", cell: "whitespace-nowrap",
+        render: (a) => {
+          const checks = checksFor(a);
+          const done = checks.filter((c) => c.done).length;
+          return (
+            <span className="flex items-center gap-1">
+              {checks.map((c, i) => (
+                <span
+                  key={i}
+                  className={`h-1.5 w-1.5 rounded-full ${c.done ? "bg-accent" : "bg-line"}`}
+                />
+              ))}
+              <span className="ml-1.5 text-[10px] text-muted">{done}/{checks.length}</span>
+            </span>
+          );
+        },
+      },
+      { key: "agent", label: "With", cell: "whitespace-nowrap text-muted", render: (a) => a.agent ?? "—" },
     ],
     []
   );
-  const cols = useColumns<App>("applications", defs);
+  const cols = useColumns<Application>("applications", defs);
 
   return (
     <>
       <PageHeader
         title="Applications"
-        blurb="Every application from offer to keys, on the eight stages the business actually runs. Stage changes are written back to REX."
+        blurb="Every application on REX's four statuses, live. The eight pre-tenancy stages open once one is accepted."
         /* She hangs off the rule by one fist, swinging — which is why the
            pipeline below was pulled in: her body dangles down that gutter.
            0.05 is where her fist is in the artwork, measured off the frames. */
         sprite={{ src: "/illustrations/hanging-strip.webp", frames: 30, aspect: 0.653, fps: 12 }}
         illustrationHeight={300}
         grip={0.0428}
-        /* The line sags where she grips it — she is hanging off it, so it
-           should give. The trough is centred on the wrapper, which is centred
-           on her fist. */
         lineBreak="dip"
       />
 
       <div className="mt-10">
-        <FlowTag from="Propoly + REX" to="REX" />
+        <FlowTag from="REX" to="REX" />
       </div>
 
-      {/* ── The pipeline: how many sit at each stage.
+      {/* ── The gap worth acting on, counted live. ── */}
+      {rtr.unanswered > 0 && (
+        <div className="fade-up mt-4 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-5 lg:max-w-[80%]">
+          <p className="text-[9.5px] font-bold uppercase tracking-wider text-accent-dark">
+            Right to rent
+          </p>
+          <p className="mt-2 text-[13.5px] leading-relaxed">
+            <span className="figures font-semibold">{rtr.unanswered}</span> of {rtr.people} people
+            on the {rtr.applications} open applications have no recorded right-to-rent answer.
+          </p>
+          <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted">
+            The JotForm asks the lead applicant only, and writes the answer as prose into the
+            notes field rather than a column. Everyone who applies through the portal form is
+            asked individually.
+          </p>
+        </div>
+      )}
 
-          The box itself stops after the eighth stage rather than running the
-          full width, so the woman hanging off the header rule has clear air to
-          swing her legs in. */}
+      {/* ── The pipeline: how many sit at each status. ── */}
       <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5 lg:max-w-[80%]">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-[15px]">Pipeline</h2>
-          <p className="text-[11px] text-muted">{APPS.length} live applications</p>
+          <p className="text-[11px] text-muted">
+            {apps === null ? "loading…" : `${all.length} applications`}
+          </p>
         </div>
-        <div className="grid grid-cols-4 gap-3 sm:grid-cols-8">
+        <div className="grid grid-cols-4 gap-3">
           {STAGES.map((s, i) => {
-            const n = APPS.filter((a) => a.stageKey === s.key).length;
+            const n = all.filter((a) => a.status === s.key).length;
             return (
               <div key={s.key} title={s.blurb}>
                 <div className="flex items-center gap-1.5">
-                  <span
-                    className={`h-2 w-2 rounded-full ${n ? "bg-accent" : "bg-line"}`}
-                  />
+                  <span className={`h-2 w-2 rounded-full ${n ? "bg-accent" : "bg-line"}`} />
                   <span className="text-[9px] font-bold uppercase tracking-wider text-muted">
                     {i + 1}
                   </span>
@@ -226,46 +254,96 @@ export default function Applications() {
         </div>
       </div>
 
-      {/* ── The applications. The open one takes the full pop-out. */}
+      {/* ── The applications. The open one takes the full pop-out. ── */}
       <div className="mt-4">
         <div className="fade-up min-w-0 rounded-2xl border border-line/80 bg-panel p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2.5">
-            <h2 className="text-[15px]">Live applications</h2>
-            <ColumnCustomiser cols={cols} />
+            <h2 className="text-[15px]">
+              {showClosed ? "All applications" : "Open applications"}
+            </h2>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowClosed((v) => !v)}
+                className="text-[11.5px] text-muted underline transition-colors hover:text-ink"
+              >
+                {showClosed ? "Hide unsuccessful" : "Show unsuccessful"}
+              </button>
+              <ColumnCustomiser cols={cols} />
+            </div>
           </div>
-          <DataTable
-            cols={cols}
-            rows={APPS}
-            activeId={openId}
-            onRowClick={(a) => setOpenId(a.id === openId ? null : a.id)}
-          />
-        </div>
 
+          {apps === null ? (
+            <p className="py-8 text-center text-[12.5px] text-muted">Pulling from REX…</p>
+          ) : error ? (
+            <p className="py-8 text-center text-[12.5px] text-muted">{error}</p>
+          ) : (
+            <DataTable
+              cols={cols}
+              rows={rows}
+              activeId={openId}
+              onRowClick={(a) => setOpenId(a.id === openId ? null : a.id)}
+            />
+          )}
+        </div>
       </div>
 
       {open && (
         <ApplicationDrawer
-          app={open}
+          app={{
+            id: open.id,
+            tenant: (open.applicants.find((p) => p.isPrimary) ?? open.applicants[0])?.name ?? "—",
+            property: open.property,
+            locality: open.locality,
+            image: open.image,
+            rent: open.offerAmount ? `${gbp(open.offerAmount)} pcm` : "—",
+            moveIn: open.startDate ?? "—",
+            stageKey: open.status,
+            ticked: 0,
+            agent: open.agent ?? "—",
+            flag:
+              open.affordabilityPct != null && open.affordabilityPct > 40
+                ? `Rent is ${open.affordabilityPct.toFixed(0)}% of income`
+                : undefined,
+            activity: [
+              open.dateReceived
+                ? { when: open.dateReceived, what: "Application received.", by: open.createdBy ?? "—" }
+                : null,
+              open.dateAccepted
+                ? { when: open.dateAccepted, what: "Landlord accepted.", by: open.agent ?? "—" }
+                : null,
+              open.conditions
+                ? { when: "with the application", what: open.conditions, by: "Applicant", note: true }
+                : null,
+            ].filter((x): x is NonNullable<typeof x> => x !== null),
+          }}
           stages={STAGES}
-          checklist={CHECKLIST}
+          checklist={checksFor(open)}
           onClose={() => setOpenId(null)}
         />
       )}
 
       <ul className="mt-4 space-y-1.5 text-[11px] leading-relaxed text-muted">
         <li>
-          The eight stages and nine checklist items are the TLE portal&apos;s, verbatim —
-          so the two products speak one language when they merge.
+          These are REX&apos;s four application statuses, live. The{" "}
+          <span className="font-semibold">eight pre-tenancy stages</span> — holding fee,
+          referencing, PLC, deposit, move day — belong to the Propoly deal created once an
+          application is accepted, and that record isn&apos;t joined in yet.
         </li>
         <li>
-          Propoly tracks only five statuses. <span className="font-semibold">PLC,
-          Deposit and Move day are portal-side stages</span> someone moves a deal into
-          by hand, which is why the overlay has to own them rather than mirror Propoly.
+          <span className="font-semibold">Right to rent, landlord reference, guarantor and
+          credit have no fields in REX.</span> They are written as one line of prose into the
+          notes column, describing the lead applicant only. This page reads that line back out.
         </li>
         <li>
-          <span className="font-semibold">Referencing has no API source anywhere</span> —
-          The Lettings Hub isn&apos;t connected in REX and Propoly carries no reference
-          status field. That stage is manual until someone connects it.
+          <span className="font-semibold">REX&apos;s guarantor list is empty on every
+          application</span> — including the hundred-odd where the applicant said they could
+          provide one. We know a guarantor was offered; we have never recorded who.
+        </li>
+        <li>
+          <span className="font-semibold">Referencing has no API source anywhere</span> — The
+          Lettings Hub isn&apos;t connected in REX and Propoly carries no reference status
+          field. That stage is manual until someone connects it.
         </li>
       </ul>
     </>

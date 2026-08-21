@@ -167,8 +167,19 @@ function writeIsUnlocked(service: string, method: string): boolean {
     .includes(`${service}/${method}`.toLowerCase());
 }
 
-/** For the wiring sheet: is the lock on? */
-export function rexWritesLocked(): boolean {
+/**
+ * Is the lock on?
+ *
+ * With no arguments this answers the wiring sheet's question — "is ANY write
+ * unlocked". Pass a service and method and it answers the only question a
+ * caller actually cares about: "is THIS write unlocked". The difference is not
+ * academic. REX_ALLOW_WRITES holds one named method, so an endpoint that
+ * reported the bare flag next to its own refusal said `writesLocked: false`
+ * while refusing — true of the environment, and the opposite of what the
+ * reader would conclude.
+ */
+export function rexWritesLocked(service?: string, method?: string): boolean {
+  if (service && method) return !writeIsUnlocked(service, method);
   return !(process.env.REX_ALLOW_WRITES ?? "").trim();
 }
 
