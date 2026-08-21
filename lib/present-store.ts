@@ -1,7 +1,7 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { hasDb, q } from "./db";
-import type { PresentDeck } from "./present";
+import type { PresentDeck, WelcomeVideo } from "./present";
 
 /**
  * Presentations, stored.
@@ -112,6 +112,62 @@ export async function markOpened(token: string): Promise<void> {
       WHERE token = $1`,
     [token]
   ).catch(() => []);
+}
+
+/* ── the welcome video ────────────────────────────────────────────────────
+   The deck is a jsonb column, so the video lives inside it rather than in new
+   columns — one write, and no migration for a field that is optional by
+   design. Both helpers below key on the video's OWN random key rather than
+   the presentation token, so the webhook never has to be handed a credential.
+-------------------------------------------------------------------------- */
+
+export function newVideoKey(): string {
+  return `tlev_${randomBytes(12).toString("base64url")}`;
+}
+
+/** Put a freshly reserved recording on a deck. */
+export async function attachVideo(token: string, video: WelcomeVideo): Promise<boolean> {
+  if (!hasDb() || !token) return false;
+  const rows = await q(
+    `UPDATE os_presentations
+        SET deck = jsonb_set(deck, '{welcomeVideo}', $2::jsonb, true)
+      WHERE token = $1
+      RETURNING token`,
+    [token, JSON.stringify(video)]
+  ).catch(() => []);
+  return rows.length > 0;
+}
+
+/**
+ * Move a video on, found by the key Flow hands back.
+ *
+ * Written as one statement against the key rather than read-modify-write:
+ * webhook deliveries can arrive more than once AND out of order, so two
+ * updates can genuinely be in flight at the same moment.
+ *
+ * The status guard is what makes out-of-order safe. `ready` is terminal, so a
+ * late-arriving `uploading` can never drag a playable video backwards into a
+ * spinner.
+ */
+export async function updateVideoByKey(
+  key: string,
+  patch: Partial<WelcomeVideo>
+): Promise<boolean> {
+  if (!hasDb() || !key) return false;
+  const rows = await q(
+    `UPDATE os_presentations
+        SET deck = jsonb_set(
+              deck,
+              '{welcomeVideo}',
+              (deck -> 'welcomeVideo') || $2::jsonb,
+              true
+            )
+      WHERE deck -> 'welcomeVideo' ->> 'key' = $1
+        AND COALESCE(deck -> 'welcomeVideo' ->> 'status', '') <> 'ready'
+      RETURNING token`,
+    [key, JSON.stringify(patch)]
+  ).catch(() => []);
+  return rows.length > 0;
 }
 
 /** Everything sent for one lead, newest first — for the agent's own record. */

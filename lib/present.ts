@@ -65,8 +65,31 @@ export type PresentProperty = {
   epc: string | null;
 };
 
+/**
+ * The agent's short welcome, recorded straight into the landlord's page.
+ *
+ * `key` is ours and is what Flow gets as its `reference` — NOT the
+ * presentation token. The token is the only thing between a stranger and this
+ * page, and it does not belong in a third party's metadata.
+ *
+ * `status` mirrors Flow's, and lives here so the page can say "your agent is
+ * recording a welcome for you" rather than showing a hole. Nothing about the
+ * deck depends on it: no video is a perfectly good deck.
+ */
+export type WelcomeVideo = {
+  key: string;
+  recordingId: string;
+  status: "awaiting_recording" | "uploading" | "processing" | "ready" | "failed";
+  embedUrl: string | null;
+  thumbnailUrl: string | null;
+  durationSecs: number | null;
+  recordedAt: string | null;
+};
+
 export type PresentDeck = {
   kind: "pre-appraisal";
+  /** Optional throughout. The deck was designed without one and still reads. */
+  welcomeVideo?: WelcomeVideo | null;
   /** Who this copy is addressed to. Each guest could get their own. */
   recipientName: string;
   property: PresentProperty;

@@ -757,6 +757,7 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
 
 function Agent({ deck, show }: { deck: Deck; show: boolean }) {
   const a = deck.agent;
+  const video = deck.welcomeVideo ?? null;
   const tel = a.phone.replace(/\s+/g, "");
   /** wa.me wants an international number with no punctuation. UK mobiles are
    *  stored as 07…, so the leading zero becomes 44. */
@@ -833,6 +834,30 @@ function Agent({ deck, show }: { deck: Deck; show: boolean }) {
                 ))}
               </div>
             </Rise>
+
+            {/* The agent's own welcome, if they recorded one.
+                Here rather than on the opening slide: this is the slide about
+                the person, and a video of them talking belongs beside their
+                face and their words, not over the hero photograph.
+
+                Only ever rendered when it is genuinely playable. A recording
+                that is still processing shows NOTHING — a landlord opening
+                this page has no idea a video was coming, so an empty player or
+                a spinner can only read as something broken. */}
+            {video?.status === "ready" && video.embedUrl && (
+              <Rise show={show} i={3}>
+                <div className="mt-8 max-w-xl">
+                  <Eyebrow>A message from {a.firstName || "your agent"}</Eyebrow>
+                  <iframe
+                    src={`${video.embedUrl}?theme=light&accent=${RED.replace("#", "")}`}
+                    allow="autoplay; fullscreen; picture-in-picture"
+                    className="mt-3 w-full rounded-[14px] border-0"
+                    style={{ aspectRatio: "16 / 9" }}
+                    title={`Welcome from ${a.name}`}
+                  />
+                </div>
+              </Rise>
+            )}
 
             <Rise show={show} i={3}>
               <div className="mt-8 flex flex-wrap gap-3">

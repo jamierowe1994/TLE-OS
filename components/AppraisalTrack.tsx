@@ -14,6 +14,7 @@ import {
 } from "@/lib/appraisal-email";
 import EmailPopout from "@/components/EmailPopout";
 import SendHandoff from "@/components/SendHandoff";
+import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
 import { campaignsFor, CAMPAIGNS, lastDay, type Campaign } from "@/lib/campaigns";
 import {
   APPRAISAL_STEPS,
@@ -1018,6 +1019,18 @@ export default function AppraisalTrack({
                   >
                     Preview their page
                   </a>
+                )}
+                {/* Offered HERE, at the moment of sending, because that is the
+                    only moment an agent is thinking about this particular
+                    landlord. A record button on a settings screen somewhere
+                    would never be pressed. Optional throughout — the email
+                    sends with or without it. */}
+                {deck && (
+                  <WelcomeVideoRecorder
+                    compact
+                    token={deck.url.split("/").pop() ?? ""}
+                    address={invite?.address ?? "the property"}
+                  />
                 )}
               <button
                 type="button"
