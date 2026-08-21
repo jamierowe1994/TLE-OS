@@ -86,11 +86,14 @@ export default function ApplicationDrawer({
   app,
   stages,
   checklist,
+  aside,
   onClose,
 }: {
   app: AppRecord;
   stages: Stage[];
   checklist: Check[];
+  /** Anything the stage itself calls for — the handover packet, once accepted. */
+  aside?: React.ReactNode;
   onClose: () => void;
 }) {
   const [shown, setShown] = useState(false);
@@ -171,6 +174,11 @@ export default function ApplicationDrawer({
           <div className="grid gap-5 p-6 xl:grid-cols-[1fr_1fr]">
             {/* ══ left: where it is, and what to do ══ */}
             <div className="flex flex-col gap-5">
+              {/* Above the next action, deliberately: once a deal is accepted
+                  the handover IS the next action, and burying it under the
+                  stage rail would put the work below the description. */}
+              {aside}
+
               {/* the one thing that matters on opening */}
               {action && (
                 <div className="rounded-2xl border border-line/80 bg-panel p-5">

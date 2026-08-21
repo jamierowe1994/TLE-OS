@@ -138,6 +138,8 @@ export interface Application {
   status: string;
   statusLabel: string;
   listingId: number | null;
+  /** The PROPERTY, not the listing. Compliance certificates hang off this. */
+  propertyId: string | null;
   property: string;
   locality: string;
   image: string | null;
@@ -330,6 +332,7 @@ export function shapeApplication(r: Row): Application {
       APPLICATION_STATUSES.find((s) => s.id === status)?.text ??
       "Received",
     listingId: num(listing.id),
+    propertyId: property.id != null ? String(property.id) : null,
     property: name,
     locality:
       [str(property.adr_suburb_or_town), str(property.adr_postcode)].filter(Boolean).join(" ") ||

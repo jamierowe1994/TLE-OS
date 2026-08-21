@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import ApplicationDrawer, { type Check } from "@/components/ApplicationDrawer";
+import HandoffPanel from "@/components/HandoffPanel";
 import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
 import { FlowTag, Pill } from "@/components/Wire";
 import type { Application } from "@/lib/applications";
@@ -33,8 +34,29 @@ const STAGES = [
   { key: "unsuccessful", label: "Unsuccessful", blurb: "Turned down, or the applicant withdrew." },
 ];
 
-const stageIdx = (k: string) => Math.max(0, STAGES.findIndex((s) => s.key === k));
 const gbp = (n: number | null) => (n == null ? "—" : `£${n.toLocaleString("en-GB")}`);
+
+/**
+ * One fetch, however many times this mounts.
+ *
+ * The call takes ~3 seconds against 200 applications, and the component
+ * mounts more than once on the way to a settled page — the dev double-invoke,
+ * then the shell. Each mount was starting its own copy of the same request.
+ *
+ * Holding the PROMISE rather than the result means a later mount joins the
+ * call already in flight instead of racing it.
+ */
+let inFlight: Promise<{ applications?: Application[]; error?: string }> | null = null;
+function book() {
+  inFlight ??= fetch("/api/applications?limit=200")
+    .then((r) => r.json())
+    // A failure must not be cached — the next mount should try again.
+    .catch((e: Error) => {
+      inFlight = null;
+      throw e;
+    });
+  return inFlight;
+}
 
 /** The four checks, read off the live record rather than counted. */
 function checksFor(a: Application): Check[] {
@@ -80,9 +102,8 @@ export default function Applications() {
 
   useEffect(() => {
     let live = true;
-    fetch("/api/applications?limit=200")
-      .then((r) => r.json())
-      .then((d: { applications?: Application[]; error?: string }) => {
+    book()
+      .then((d) => {
         if (!live) return;
         if (d.error) setError(d.error);
         setApps(d.applications ?? []);
@@ -319,6 +340,9 @@ export default function Applications() {
           }}
           stages={STAGES}
           checklist={checksFor(open)}
+          // Only once the landlord has said yes. Before that there is no deal
+          // to hand over, and offering one invites somebody to jump the gun.
+          aside={open.status === "accepted" ? <HandoffPanel applicationId={open.id} /> : undefined}
           onClose={() => setOpenId(null)}
         />
       )}
