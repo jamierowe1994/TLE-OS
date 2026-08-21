@@ -32,6 +32,9 @@ const FRONT: NavItem[] = [
 ];
 const BACK: NavItem[] = [
   { href: "/compliance", label: "Compliance", icon: "shield" },
+  /* Back office rather than Marketing: this is the audit of what already goes
+     out under our name, not a place to write anything new. */
+  { href: "/emails", label: "Emails", icon: "mail" },
   { href: "/portfolio", label: "Portfolio", icon: "folder" },
   { href: "/finances", label: "Finances", icon: "wallet" },
   /* Marketing is deliberately NOT here. It's a different workspace for a
