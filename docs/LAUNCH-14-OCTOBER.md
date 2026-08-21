@@ -246,6 +246,38 @@ Do not rebuild these.
 | Duplicate-person permissions (grant, not transfer) | `lib/rex-permissions.ts` |
 | Email audit — what actually sends | `lib/email-audit.ts`, `/emails` |
 
+## The Fine & Country repo — read it before writing anything
+
+`hjjconsultingltd-sys/f-c-pipeline` (private, Base44-built, 3,700 commits and
+actively worked on). **Access confirmed 21 Aug 2026.** It is not a competitor to
+copy at arm's length — it is a working implementation against the SAME REX
+account, and several launch items are already solved in it.
+
+Note GitHub code search returns 0 hits on this repo (private repos are not
+indexed), so **search it by reading paths, not by querying** — the filenames are
+the map.
+
+| What is in there | Which item it answers |
+|---|---|
+| `src/functions/createRexContact.ts`, `createRexOffer.ts`, `createRexRecords.ts` | **Proven REX WRITE payloads.** We have never executed a write; they have. Read these before unlocking ours. |
+| `src/functions/enrichFromRex.ts`, `src/lib/RexContext.jsx` | Per-user REX wiring — item 8 |
+| `src/functions/commSyncMail.ts`, `commSendEmail.ts`, `commMailboxAdmin.ts`, `commCaseApi.ts` | **Mailbox sync per user.** Directly item 8's "hook up all their emails", and a second answer to the agent↔landlord email question. |
+| `src/lib/maJourney.js`, `maBrand.js` | The market-appraisal journey — items 1 and 2 |
+| `src/lib/comparablesMerge.js`, `collectPresentationImages.js`, `mergeFields.js` | Comparable evidence and presentation assembly — item 2 |
+| `src/functions/calendarAvailability.ts`, `autoUpdateDealStatuses.ts` | Booking and stage automation |
+
+**`commSyncMail` is the one to read first.** Its own comment says mode `me`
+pulls the signed-in user's inbox using their own connection, *because a
+background job cannot obtain another user's token*. That is the exact
+constraint item 8 runs into, already thought through and solved.
+
+It also reframes the email-chain finding: we concluded correspondence was
+unreadable because REX's `EmailDropbox` is empty and Propoly exposes nothing.
+F&C did not read it out of the CRM at all — **they sync the mailbox directly**.
+
+`F-C-presents` (the other repo) is a separate thing: a static HTML presentation
+demo with no REX code. Useful as a DESIGN reference for item 2, nothing more.
+
 ## Waiting on someone else
 
 | Blocked on | What it unblocks |
