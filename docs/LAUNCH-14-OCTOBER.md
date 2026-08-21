@@ -278,6 +278,143 @@ F&C did not read it out of the CRM at all — **they sync the mailbox directly**
 `F-C-presents` (the other repo) is a separate thing: a static HTML presentation
 demo with no REX code. Useful as a DESIGN reference for item 2, nothing more.
 
+## What f-c-pipeline already solved — READ BEFORE BUILDING
+
+Full read done 21 Aug 2026. Findings that change what we believed. The real
+code is `base44/functions/<name>/entry.ts` (312 of them) and `base44/shared/**`
+— `src/functions/*.ts` are thin client wrappers only. File-header comments are
+dated and signed; treat them as the documentation.
+
+### 1. REX writes are routine there, and the safety rule is narrower than ours
+
+They run **30+ mutating endpoints in production daily** — `contacts/create`,
+`listings/update` (20 call sites), `properties/create`, `contracts/create`,
+`notes/create`, `calendar-events/create`, `compliance-entries/create`, even
+`contacts/trash` and `contracts/purge`.
+
+Our blanket "writes are dangerous" is not the lesson. **Theirs is:**
+
+> **NEVER RETRY A WRITE.** The REX API is POST-only including writes, so a 500
+> may have committed server-side before failing — replaying duplicates a note,
+> offer or contact. Retry is OFF by default and auto-enabled only for provably
+> read-only paths.
+
+```js
+function isReadOnlyPath(path) {
+  const seg = String(path||'').split('/').pop() || '';
+  return /^(read|search|autocomplete)$/i.test(seg) || /^get/i.test(seg) || /^describe-?model$/i.test(seg);
+}
+// retries = isReadOnlyPath(path) ? 2 : 0
+```
+
+That is ~10 lines and it is the thing worth porting. Provoked by real
+incidents: a REX Redis exception dropped a `leads.updated` webhook on 17 Aug.
+
+### 2. Per-agent email IS solved — via Microsoft Graph, not the CRM
+
+This corrects our conclusion that agent↔landlord correspondence is unreachable.
+It is unreachable **out of REX and Propoly**; they never tried that. They sync
+the mailbox directly through **Microsoft Graph v1.0** on a Base44 app-user
+connector.
+
+The limitation is narrower and matters for item 8: **a background job cannot
+use an individual's token** — the SDK resolves the connection strictly from the
+caller's JWT, and a scheduled job has no caller. Their answer:
+
+- **shared mailboxes** → webhook + scheduled poll (true background sync)
+- **individual mailboxes** → **foreground sync** while the agent is using the app
+
+Dedupe on `graph_message_id` lets the two overlap harmlessly — *"a missed
+webhook costs latency, not data."*
+
+Matching a message to a record, most specific first: a `FC-<L|C|D><rex id>`
+reference stamped into the subject → `conversationId` → quoted
+`internetMessageId` in a bounce → a standing `SenderRule` → sender's single open
+case → triage queue. **The reference is built from the REX id** so one number
+works in both systems.
+
+Also worth stealing: bounce detection (Graph accepting a send only means
+ACCEPTED; an NDR arrives minutes later), and a hard rule of **no silent
+fallback** on send — if the agent hasn't connected 365 it fails loudly rather
+than sending as a bot, because a client seeing the wrong sender is worse than
+an error the agent can act on.
+
+### 3. A REX token vault gives per-user attribution without touching passwords
+
+Item 8 wants records to say the agent's name, not the office account. They do
+it in ~180 lines (`base44/shared/se/rexVault.ts`):
+
+1. Capture the embed `rex_token` from the URL.
+2. `POST /user-profile/extendSessionToken { token_lifetime: 604800 }` — REX's
+   documented 1-week max. Doubles as a liveness check.
+3. AES-GCM encrypt, store against the user.
+4. Scheduled keepalive re-extends, so one embed visit a week keeps direct
+   non-embed writes attributable.
+5. On `TokenException`/401/403, mark dead, log, throttled admin alert, and
+   **transparently retry on the service login so the user's action still
+   succeeds.**
+
+Resolution order: `live embed token > validated vault token > service login`.
+**No password is ever handled.**
+
+### 4. Compliance entries are WRITABLE, and searchable more cheaply
+
+We treat `ComplianceEntries` as read-only and slow. Both half-wrong:
+
+```js
+POST /compliance-entries/create
+{ data: { parent_object_type_id: 'listing', parent_object_id: <id>,
+          type_id: 'listing_proof_of_ownership', source_id: 'crm',
+          details: { <block>: { ..., file: 'rextmp://...' } } } }
+POST /compliance-entries/archive { id }
+```
+Search by `criteria: [{name:'parent_object_type_id',...},{name:'parent_object_id',...},{name:'type_id',...}]`
+rather than our 100-row scan. Rows carry `file: { uri, url }` where **`url` is
+protocol-relative — prefix `https:`**.
+
+Recording a NEW certificate from the portal is available (item 4, PLC). History
+still cannot be rewound — REX overwrites on renewal.
+
+### 5. Smaller traps, all measured by them
+
+- **`cf.*` custom fields are SILENTLY DISCARDED by `*/update`** — REX returns
+  200 and persists nothing. Use `POST /custom-fields/set-field-values
+  { service_name, service_object_id, value_map }`. And `contracts/read` never
+  returns `cf.*` at all; only webhooks carry them. Read them with
+  `get-values-keyed-by-field-name`.
+- **Enum fields silently drop plain strings** — must be `{ id: '<value id>' }`,
+  resolved via `/admin-value-lists/get-list-values`.
+- **`related` nested writes are confirmed as THE write path** — e.g. contacts
+  take `related.contact_names / contact_emails / contact_phones`; delete a
+  relation row with `_destroy: true` (they try `_id`/`_related` first, then
+  plain `id`/`related`, because REX is inconsistent).
+- **Documents have no create** — attach via `related.listing_documents` on the
+  parent's update, with a staged `rextmp://` uri from `/upload/uploadFile` or
+  `/upload/uploadFileFromUrl` (~30 MB).
+- **Calendar creates run `use_strict_arguments`** — only `data` (+ `return_id`).
+  Creates need an explicit `calendar_id`; the service login can only write to
+  diaries shared with it.
+- **REX mail-merge send, exact shape:** `{ data: { merge_objects: [{ contact_id,
+  listing_id, mail_merge_template_id, send_from_user_id, custom? }],
+  merge_type: 'email', connection_id: -1, send_from_user_id } }`. Omit
+  `listing_id` and every `property_adr_*` merge tag renders blank.
+
+### 6. The MA journey model (items 1 and 2)
+
+`MarketAppraisalCase` stages: `upcoming → awaiting_valuation → nurture → won |
+lost | cancelled`. `awaiting_valuation` is computed lazily on read, so **no
+scheduler is needed**. `won` is triggered by contract signature, not listing-live.
+
+`src/lib/maJourney.js` derives `{ steps, next, urgency, closed, won }` once and
+three surfaces consume it — *"three surfaces, one engine, so they can never
+disagree."* Six steps: Booked → Deck sent → Appraisal → Valuation → Send deck →
+Sign & win, exactly one of which may be `now`.
+
+**Comparables carry NO photos into the deck, deliberately** — HomeSearch has no
+photo endpoint for sold addresses, and matching back to a marketing listing hit
+1 in 10. *"A comparables slide where one property in ten has a photo reads as
+broken rather than rich."*
+
 ## Waiting on someone else
 
 | Blocked on | What it unblocks |
