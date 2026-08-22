@@ -79,6 +79,47 @@ Wiring it live is not.
   slice, log the rest as remaining, and stop.** A half-finished item that is
   described accurately is far more useful than a rushed whole one.
 
+## The standing mandate — what I may pick without asking
+
+James, 22 Aug 2026. This replaces asking him item by item. If a job fits here,
+take it; if it doesn't, leave it and say why in the log.
+
+### Cleared
+
+- **Anything needing no input from him.** If a decision is required, it isn't cleared.
+- **Probes and investigation — always.** Reading, measuring, censusing, mapping
+  someone else's API or app. A clear negative is a good result.
+- **Mechanical work.** Building out data points, wiring a known shape, checking
+  probes, backfills, reconciliations.
+- **Ports of things already decided.** Moving Susan's figures across is copying
+  work that is already correct — not re-deriving it.
+- **Anything pre-launch on TLE-portal or TLE OS.** Neither has been handed to
+  anybody. Short of touching REX, there is very little here that can be broken,
+  and the hard stop on REX writes already covers that.
+
+### Not cleared — safety
+
+1. **Nothing that changes another system we've built.** A test that would alter
+   somebody else's live records needs supervision. If the same thing can be
+   learned *without* touching it, that is fine and preferred.
+2. **Never edit someone else's app.** `f-c-pipeline`, Base44 apps, Howard's Power
+   Automate flows, REX itself — **reading them is explicitly fine and
+   encouraged. Writing to them is not.** We hold push access to
+   `hjjconsultingltd-sys/f-c-pipeline`; that access is for reading.
+3. **Anything higher-risk than the two above.** If it needs a judgement call
+   about whether it is risky, it is — log it and leave it.
+
+### Not cleared — waste, which is a different thing
+
+**Do not build pages for their visual design.** Not because it is dangerous but
+because James will come in and rework the look anyway, so an unattended run
+spent on styling is a night thrown away. Build the DATA, the API, the states
+and the honest empty case; leave the appearance for when he is at the desk.
+
+This is the distinction to hold on to: some things are off-limits because they
+could do harm, and some because they will be redone. Both are reasons not to
+start, and only the first is about safety.
+
 ## Allowed items
 
 Only these. Anything else waits for James.
