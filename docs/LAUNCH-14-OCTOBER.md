@@ -33,7 +33,7 @@ pick off. **Status column is honest: `todo` until it is actually working.**
 | 13 | Every email flow tested and on brand | — | todo |
 | 14 | Landlord + tenant portals refined and secured | Customers | todo |
 | 15 | Marketing email builder | Francesca | todo |
-| 16 | REX PM integration | — | todo |
+| 16 | REX PM integration | — | **probed: not viable, data is empty** |
 | 17 | Tenant passport in-house | — | todo |
 | 18 | Turn REX automations OFF at launch | — | **launch day** |
 | 19 | Live figures, leads in, notifications, portal editing | — | todo |
@@ -181,13 +181,53 @@ Also feeds **nurture campaigns**:
 - tenants who turned a property down
 - new properties coming through
 
-## 16. REX PM integration
+## 16. REX PM integration — PROBED 22 Aug 2026. The answer is no, and that is settled.
 
-REX CRM posts to REX PM, so we can drive the **compliance** and **portfolio**
-tabs off it.
+**Do not build this. The data is not there.**
 
-> Note: REX PM has historically been CSV-only to us. This is the item to test
-> earliest, because it may be the hardest.
+Good news first: **REX PM is NOT CSV-only and needs no separate API.** The whole
+property-management model is exposed through the same CRM endpoint we already
+use — `Tenancies`, `Invoices`, `InvoiceTransactions`, `TrustLedgers`,
+`AgentLedgers`, `AgentLedgerTransactions`, `AgentLedgerPayRuns`, all with full
+create/read/update/search methods.
+
+The problem is what is IN them:
+
+| Class | Rows | What it means |
+|---|---|---|
+| `Tenancies` | **0** | The tenancy ledger is empty |
+| `TrustLedgers` | **0** | No trust accounting on this account |
+| `AgentLedgers` / transactions / pay runs | **0** | Unused |
+| `Invoices` | **2,348** | Live to today — but see below |
+| `InvoiceTransactions` | **2,270** | Live to today |
+
+**2,341 of the 2,348 invoices carry a `comm_worksheet_id`** — they are
+SALESPERSON COMMISSION invoices, not rent. Top invoicees are Warwick District
+Council, The Auction Company, and named individuals. That is the sales
+businesses' commission run, not lettings.
+
+So: the module is reachable and live, and it holds somebody else's sales
+commission. **The lettings property-management tables are empty.** Driving the
+compliance or portfolio tabs off REX PM would drive them off nothing.
+
+**PayProp stays the source for rent, arrears and the managed book.** That is
+not a workaround; it is where the data actually is.
+
+### A trap that nearly produced the opposite answer
+
+`Invoices`, `InvoiceTransactions` and `TrustLedgers` **reject
+`order_by: { system_ctime: 'desc' }`** — and REX returns **`0 rows` together
+with the error**, not an empty error-free result. A first pass read that as
+"all PM classes are empty". Re-run without the order_by and two of the three
+have thousands of rows.
+
+**Never accept a zero from REX that arrives alongside an error.** Re-run the
+query before believing it. The genuine zeros here (`Tenancies`, `TrustLedgers`)
+were confirmed with no order_by and no error.
+
+Caveat: 0 rows with no error reads as "genuinely empty" rather than "not
+permitted" — a permission problem normally errors. Worth one look in the REX UI
+to confirm nobody is using the PM module, but the API answer is clear.
 
 ## 17. Tenant passport in-house
 
