@@ -22,7 +22,26 @@ import "server-only";
 
 const TOKEN_LIFETIME = 4 * 60 * 60; // seconds
 const TOKEN_SKEW_MS = 5 * 60 * 1000;
-const CALL_TIMEOUT_MS = 10_000;
+/**
+ * 20 seconds, not 10 — and the difference matters more than it looks.
+ *
+ * **REX commonly takes ~15s for a single call.** That is measured, not
+ * estimated: the Fine & Country codebase runs against this same account and
+ * sets its own per-call timeout to 20s with the comment "Rex commonly takes
+ * ~15s per call", after a function spent a fortnight returning
+ * "operation aborted due to timeout" and processing nothing.
+ *
+ * Our 10s ceiling was therefore BELOW REX's normal response time. The symptom
+ * looked like a concurrency problem — firing six searches at once made every
+ * one fail — but concurrency was never the cause. Each call simply needed
+ * longer than it was given, and the abort surfaced as
+ * "This operation was aborted", which reads like the browser giving up rather
+ * than our own timeout firing.
+ *
+ * If a page needs to be fast, the fix is fewer calls (see MailMergeEventLogs,
+ * capped at 3 concurrent), not a shorter fuse.
+ */
+const CALL_TIMEOUT_MS = 20_000;
 
 function base(): string {
   return process.env.REX_API_BASE ?? "https://api.uk.rexsoftware.com";
