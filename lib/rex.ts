@@ -267,3 +267,125 @@ export function rexRows(result: unknown): Array<Record<string, unknown>> {
   const rows = (result as { rows?: unknown[] } | null | undefined)?.rows;
   return Array.isArray(rows) ? (rows as Array<Record<string, unknown>>) : [];
 }
+
+/* ==========================================================================
+   SEARCHING WITHOUT LYING TO YOURSELF
+
+   `rexCall` + `rexRows` is a trap, and it has now cost us twice.
+
+   REX answers a rejected search with an ERROR **and** an empty result. So
+   `rexRows(res.result)` returns `[]`, the caller sees no rows, and reports
+   "there is nothing there" — which is a completely different statement from
+   "REX refused the question".
+
+   Measured, 22 Aug 2026, both on the live account:
+
+     • `Invoices/search { order_by: { system_ctime: 'desc' } }`
+         → 0 rows + "not a permissible order by field".
+         The class actually holds 2,348 rows. A first pass concluded REX PM
+         was empty. It was not.
+
+     • `Listings/search { limit: 1000 }`
+         → 0 rows + an error, because the row cap is 100.
+         The same query with `result_format: 'ids'` returns 1,000 ids.
+
+   Both times the wrong answer was confident, plausible and unfalsifiable —
+   the worst combination there is. So: anything that searches should use the
+   helpers below, which THROW rather than shrug.
+   ========================================================================== */
+
+export class RexError extends Error {
+  readonly status: number;
+  readonly body: unknown;
+  readonly path: string;
+  constructor(path: string, res: RexResponse) {
+    super(`REX ${path} (${res.status}): ${res.error ?? "refused the request"}`);
+    this.name = "RexError";
+    this.status = res.status;
+    this.body = res.result;
+    this.path = path;
+  }
+}
+
+/**
+ * Search, and throw if REX refused.
+ *
+ * The one difference from `rexCall(..., "search", ...)` is the only one that
+ * matters: an empty array from this function means REX said there is nothing,
+ * not that REX declined to look.
+ */
+export async function rexSearch(
+  service: string,
+  body: Record<string, unknown>,
+  actorToken?: string | null
+): Promise<Array<Record<string, unknown>>> {
+  const res = await rexCall(service, "search", body, actorToken);
+  if (!res.ok) throw new RexError(`${service}/search`, res);
+  return rexRows(res.result);
+}
+
+/** REX's row cap. Asking for more returns an empty array AND an error. */
+export const REX_ROW_CAP = 100;
+/** …but ids are cheap, and the cap on those is ten times higher. */
+export const REX_ID_CAP = 1000;
+
+/**
+ * Every matching id, in ONE call.
+ *
+ * `result_format: 'ids'` lifts the cap from 100 to 1,000 — verified live:
+ * `Listings/search` returns 1,000 ids where the same query for rows returns
+ * zero and an error. For anything up to a thousand records this replaces ten
+ * round trips with one, against a service that commonly takes ~15s a call.
+ *
+ * Returns ids as strings, because REX is inconsistent about whether an id is
+ * a number or a numeric string and comparing the two silently fails.
+ */
+export async function rexSearchIds(
+  service: string,
+  body: Record<string, unknown> = {},
+  actorToken?: string | null
+): Promise<string[]> {
+  const res = await rexCall(
+    service,
+    "search",
+    { ...body, result_format: "ids", limit: REX_ID_CAP },
+    actorToken
+  );
+  if (!res.ok) throw new RexError(`${service}/search[ids]`, res);
+  const raw = res.result;
+  const list = Array.isArray(raw)
+    ? raw
+    : ((raw as { rows?: unknown[]; ids?: unknown[] } | null)?.ids ??
+       (raw as { rows?: unknown[] } | null)?.rows ??
+       []);
+  return (list as unknown[])
+    .map((v) => (v == null ? null : String(typeof v === "object" ? (v as { id?: unknown }).id : v)))
+    .filter((v): v is string => Boolean(v));
+}
+
+/**
+ * Page every row, safely.
+ *
+ * Stops on a short page rather than trusting a total — REX's `total` is not
+ * always present and not always right. Throws on refusal, so a caller can
+ * never mistake "rejected" for "empty".
+ *
+ * `max` exists to stop an unbounded sweep of a class nobody measured first.
+ */
+export async function rexSearchAll(
+  service: string,
+  body: Record<string, unknown> = {},
+  { max = 1000, actorToken }: { max?: number; actorToken?: string | null } = {}
+): Promise<Array<Record<string, unknown>>> {
+  const out: Array<Record<string, unknown>> = [];
+  for (let offset = 0; out.length < max; offset += REX_ROW_CAP) {
+    const page = await rexSearch(
+      service,
+      { ...body, limit: Math.min(REX_ROW_CAP, max - out.length), offset },
+      actorToken
+    );
+    out.push(...page);
+    if (page.length < REX_ROW_CAP) break;
+  }
+  return out;
+}
