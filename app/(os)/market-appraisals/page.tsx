@@ -1,0 +1,145 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import PageHeader from "@/components/PageHeader";
+import { FlowTag, Pill } from "@/components/Wire";
+import {
+  MA_STAGES,
+  effectiveStage,
+  urgencyOf,
+  type MarketAppraisal,
+  type MaStage,
+} from "@/lib/market-appraisal";
+
+/**
+ * Market Appraisals — the landlord side, from booked to won.
+ *
+ * Leads ends at "appraisal booked". This begins there. The two are deliberately
+ * separate screens because they are separate jobs: winning a conversation, then
+ * winning an instruction.
+ *
+ * Sample rows until the diary join is wired. They are flagged as such on the
+ * page rather than passed off as live — a screen that quietly shows invented
+ * appraisals is worse than an empty one.
+ */
+
+const SAMPLE: MarketAppraisal[] = [
+  { id: "ma1", leadId: "l-carol", landlord: "Carol Whitfield", address: "18 Ashworth Rise", postcode: "LU2 7QP", agent: "Rhiannon Dodge", appointmentAt: "2026-08-25T14:00:00+01:00", stage: "booked", valuation: null, presentToken: null, createdAt: "2026-08-21" },
+  { id: "ma2", leadId: null, landlord: "Peter Nsofor", address: "Flat 4, Cavendish House", postcode: "M20 2RN", agent: "Kayleigh Wright", appointmentAt: "2026-08-20T11:00:00+01:00", stage: "appraisal", valuation: null, presentToken: null, createdAt: "2026-08-14" },
+  { id: "ma3", leadId: null, landlord: "Yvonne Clarke", address: "7 Beechcroft Avenue", postcode: "AL1 4TT", agent: "Rhiannon Dodge", appointmentAt: "2026-08-18T16:30:00+01:00", stage: "post_appraisal", valuation: 1450, presentToken: "sample", createdAt: "2026-08-11" },
+];
+
+const gbp = (n: number) => `£${n.toLocaleString("en-GB")}`;
+
+export default function MarketAppraisals() {
+  const [filter, setFilter] = useState<MaStage | "open">("open");
+
+  const rows = useMemo(() => {
+    const withStage = SAMPLE.map((m) => ({ ...m, live: effectiveStage(m) }));
+    const open = withStage.filter((m) => m.live !== "won" && m.live !== "lost");
+    return (filter === "open" ? open : withStage.filter((m) => m.live === filter)).sort(
+      (a, b) => urgencyOf(a) - urgencyOf(b)
+    );
+  }, [filter]);
+
+  const counts = useMemo(() => {
+    const m = new Map<MaStage, number>();
+    for (const s of SAMPLE) {
+      const k = effectiveStage(s);
+      m.set(k, (m.get(k) ?? 0) + 1);
+    }
+    return m;
+  }, []);
+
+  return (
+    <>
+      <PageHeader
+        title="Market Appraisals"
+        blurb="Booked, prepared, appraised, won. Everything between a landlord saying yes to a visit and signing terms."
+      />
+
+      <div className="mt-10">
+        <FlowTag from="Leads" to="Listings" />
+      </div>
+
+      <p className="fade-up mt-4 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12px] leading-relaxed">
+        <span className="font-semibold">Sample rows, not live.</span> The diary join
+        isn&apos;t wired yet, so these are stand-ins to shape the screen — don&apos;t quote
+        them. The stage rail, the ordering and the handover from Leads are real.
+      </p>
+
+      {/* The four stages, as counts. awaiting_valuation is derived on read —
+          an appraisal whose appointment has passed with no figure is chasing
+          itself, and nothing has to remember to move it. */}
+      <div className="fade-up mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+        {MA_STAGES.filter((s) => s.id !== "won" && s.id !== "lost").map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => setFilter(filter === s.id ? "open" : s.id)}
+            title={s.blurb}
+            className={`rounded-2xl border p-4 text-left transition-colors ${
+              filter === s.id ? "border-accent-dark bg-accent-soft/40" : "border-line/80 bg-panel"
+            }`}
+          >
+            <p className="figures text-[22px] leading-none">{counts.get(s.id) ?? 0}</p>
+            <p className="mt-1 text-[10.5px] leading-tight">{s.label}</p>
+          </button>
+        ))}
+      </div>
+
+      <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <h2 className="text-[15px]">{filter === "open" ? "Open appraisals" : MA_STAGES.find((s) => s.id === filter)?.label}</h2>
+          {filter !== "open" && (
+            <button type="button" onClick={() => setFilter("open")} className="text-[11.5px] text-muted underline">
+              Show all open
+            </button>
+          )}
+        </div>
+
+        {rows.length === 0 ? (
+          <p className="py-6 text-[12.5px] text-muted">Nothing at this stage.</p>
+        ) : (
+          <ul className="space-y-2">
+            {rows.map((m) => (
+              <li key={m.id} className="rounded-xl border border-line/70 p-3.5">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="hand text-[14px]">{m.address}</span>
+                  <Pill tone={m.live === "awaiting_valuation" ? "accent" : "neutral"}>
+                    {MA_STAGES.find((s) => s.id === m.live)?.label}
+                  </Pill>
+                </div>
+                <p className="mt-1 text-[11.5px] text-muted">
+                  {m.landlord} · {m.postcode}
+                  {m.agent ? ` · with ${m.agent}` : " · no agent recorded"}
+                  {m.appointmentAt
+                    ? ` · ${new Date(m.appointmentAt).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
+                    : " · no date booked"}
+                  {m.valuation ? ` · valued ${gbp(m.valuation)} pcm` : ""}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <ul className="mt-4 space-y-1.5 text-[11px] leading-relaxed text-muted">
+        <li>
+          <span className="font-semibold">Leads ends where this begins.</span> Booking an
+          appraisal closes the lead drawer and reopens the record here at Pre-appraisal —
+          the lead isn&apos;t deleted, it&apos;s handed on, and the link is kept both ways.
+        </li>
+        <li>
+          <span className="font-semibold">&ldquo;Awaiting valuation&rdquo; is derived, not
+          stored.</span> An appointment that has passed with no figure recorded shows itself.
+          Nothing schedules it and nothing can forget to move it.
+        </li>
+        <li>
+          Still to come: research and comparables, the best-price guide, and the
+          presentation built for the day and re-sent after.
+        </li>
+      </ul>
+    </>
+  );
+}

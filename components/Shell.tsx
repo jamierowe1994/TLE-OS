@@ -28,6 +28,9 @@ const FRONT: NavItem[] = [
   },
   { href: "/listings", label: "Listings", icon: "home" },
   { href: "/viewings", label: "Viewings", icon: "calendar" },
+  /* Between Viewings and Applications, matching the order of the work: a
+     landlord lead becomes an appraisal before anything is ever let. */
+  { href: "/market-appraisals", label: "Market Appraisals", icon: "trend-up" },
   { href: "/applications", label: "Applications", icon: "checklist" },
 ];
 const BACK: NavItem[] = [
