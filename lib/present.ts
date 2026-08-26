@@ -86,8 +86,24 @@ export type WelcomeVideo = {
   recordedAt: string | null;
 };
 
+/** The comparables slide's data, snapshotted onto the deck when it is minted.
+ *  A LIVE lookup would let the numbers move between the agent approving the
+ *  deck and the landlord opening it — the one thing a valuation must not do. */
+export type PresentComparables = {
+  guideLow: number;
+  guideMid: number;
+  guideHigh: number;
+  basedOn: number;
+  /** Shown so the landlord can see the working, not just the answer. */
+  rows: { name: string; locality: string; rent: string; days: number | null; letAgreed: boolean }[];
+  /** Any caveat the research produced. Shown to the LANDLORD too — a range we
+   *  would qualify to an agent is a range we must qualify to them. */
+  caveat: string | null;
+};
+
 export type PresentDeck = {
   kind: "pre-appraisal";
+  comparables?: PresentComparables | null;
   /** Optional throughout. The deck was designed without one and still reads. */
   welcomeVideo?: WelcomeVideo | null;
   /** Who this copy is addressed to. Each guest could get their own. */
@@ -248,12 +264,15 @@ export function absoluteUrl(url: string | null | undefined): string | null {
  * carry the appointment itself cannot be dropped, everything else can, and
  * the deck has to read properly with any subset of the rest gone.
  */
-export type SlideId = "welcome" | "appointment" | "agent" | "why" | "questions";
+export type SlideId = "welcome" | "appointment" | "agent" | "comparables" | "why" | "questions";
 
 export const SLIDES: { id: SlideId; title: string; removable: boolean }[] = [
   { id: "welcome", title: "Welcome", removable: false },
   { id: "appointment", title: "Your appointment", removable: false },
   { id: "agent", title: "Who you're meeting", removable: false },
+  /* Removable, and it MUST be: a comparables slide with two properties on it
+     argues against us. Better absent than thin. */
+  { id: "comparables", title: "What's letting nearby", removable: true },
   { id: "why", title: "Why The Letting Experts", removable: true },
   { id: "questions", title: "Any questions", removable: false },
 ];
@@ -269,8 +288,15 @@ export const SLIDES: { id: SlideId; title: string; removable: boolean }[] = [
  * comparables chosen, no valuation written — and the viewer should already be
  * built against a list it doesn't control.
  */
-export function slidesFor(_deck: PresentDeck): typeof SLIDES {
-  return SLIDES;
+export function slidesFor(deck: PresentDeck): typeof SLIDES {
+  return SLIDES.filter((s) => {
+    if (s.id !== "comparables") return true;
+    /* Three comparables is the floor. Below it the slide argues AGAINST us:
+       a landlord counting two properties concludes we do not know their
+       street, and the rest of the deck inherits that doubt. Absent is better. */
+    const c = deck.comparables;
+    return Boolean(c && c.rows.length >= 3);
+  });
 }
 
 /* ───────────────────────── the sample ───────────────────────── */
@@ -291,6 +317,24 @@ export function slidesFor(_deck: PresentDeck): typeof SLIDES {
 export const SAMPLE_DECK: PresentDeck = {
   kind: "pre-appraisal",
   recipientName: "Sample Landlord",
+  /* Real figures from the live book (L34 5, 23 Aug 2026) rather than invented
+     ones, so /present/sample shows the comparables slide as a landlord would
+     actually receive it — including its caveat when there is one. */
+  comparables: {
+    guideLow: 750,
+    guideMid: 1050,
+    guideHigh: 1200,
+    basedOn: 6,
+    rows: [
+      { name: "Apartment 2, 11 Station Road", locality: "Liverpool L34 5SN", rent: "\u00a3695 pcm", days: 13, letAgreed: true },
+      { name: "Apartment 2, 10 Cardiff Grove", locality: "Luton LU1 1QH", rent: "\u00a3750 pcm", days: null, letAgreed: false },
+      { name: "Apartment 28, 21 Wheatsheaf Court", locality: "Leicester LE2 6EY", rent: "\u00a3795 pcm", days: 2, letAgreed: false },
+      { name: "14 Marchmont Road", locality: "Liverpool L34 5PQ", rent: "\u00a31,050 pcm", days: 21, letAgreed: true },
+      { name: "3 Beechwood Gardens", locality: "Liverpool L34 6TR", rent: "\u00a31,200 pcm", days: null, letAgreed: false },
+      { name: "9 Duntreath Avenue", locality: "Liverpool L34 5AB", rent: "\u00a31,250 pcm", days: 34, letAgreed: true },
+    ],
+    caveat: null,
+  },
   property: {
     address: "12 Example Street, Lincoln",
     postcode: "LN5 9AB",

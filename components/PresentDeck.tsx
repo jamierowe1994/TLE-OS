@@ -929,6 +929,86 @@ function Agent({ deck, show }: { deck: Deck; show: boolean }) {
   );
 }
 
+
+/**
+ * What's letting nearby — the working, not just the answer.
+ *
+ * A landlord's first question about a valuation is "says who". So the range
+ * comes with the properties it was built from, named, with how long they took
+ * to let. That is the difference between a number and an argument.
+ *
+ * The caveat, when the research produced one, is shown HERE TOO. A range we
+ * would qualify to our own agent is a range we must qualify to the landlord —
+ * quoting it unqualified to the person it affects is the dishonest half of a
+ * disclosure.
+ *
+ * Snapshotted at send, never live. The figure a landlord opens on Sunday must
+ * be the figure the agent approved on Friday.
+ */
+function Comparables({ deck, show }: { deck: Deck; show: boolean }) {
+  const c = deck.comparables;
+  if (!c) return null;
+  const money = (n: number) => `\u00a3${Math.round(n).toLocaleString("en-GB")}`;
+
+  return (
+    <section
+      data-slide="comparables"
+      className="relative flex min-h-[100dvh] w-full shrink-0 snap-start flex-col"
+      style={{ background: PAPER, color: INK }}
+    >
+      <header className="px-6 pt-8 sm:px-12 sm:pt-10 lg:px-16">
+        <Mark className="h-10 sm:h-11" />
+      </header>
+
+      <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-12 lg:px-16">
+        <div className="mx-auto w-full max-w-4xl">
+          <Rise show={show} i={0}>
+            <Eyebrow>What&rsquo;s letting nearby</Eyebrow>
+            <h2 className="mt-3 text-[34px] leading-[1.05] sm:text-[50px]" style={{ fontFamily: DISPLAY }}>
+              {money(c.guideLow)}&ndash;{money(c.guideHigh)}
+              <span className="text-[18px] font-light sm:text-[24px]"> pcm</span>
+            </h2>
+            <p className="mt-2 text-[15px] font-light text-black/55">
+              Based on {c.basedOn} propert{c.basedOn === 1 ? "y" : "ies"} we are letting near you.
+              We&rsquo;ll land on the figure together on the day.
+            </p>
+            <span className="mt-5 block h-[3px] w-[34px] rounded-full" style={{ background: RED }} />
+          </Rise>
+
+          <Rise show={show} i={1}>
+            <ul className="mt-7 divide-y divide-black/8 border-y border-black/8">
+              {c.rows.slice(0, 6).map((r) => (
+                <li key={`${r.name}-${r.rent}`} className="flex items-baseline justify-between gap-4 py-3">
+                  <span className="min-w-0">
+                    <span className="block truncate text-[14px]">{r.name}</span>
+                    <span className="block text-[12px] font-light text-black/50">{r.locality}</span>
+                  </span>
+                  <span className="flex shrink-0 items-baseline gap-3">
+                    {r.days != null && (
+                      <span className="text-[12px] font-light text-black/50">
+                        {r.letAgreed ? `let in ${r.days} days` : `${r.days} days`}
+                      </span>
+                    )}
+                    <span className="text-[15px] font-medium">{r.rent}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Rise>
+
+          {c.caveat && (
+            <Rise show={show} i={2}>
+              <p className="mt-5 max-w-2xl text-[12.5px] font-light leading-relaxed text-black/55">
+                {c.caveat}
+              </p>
+            </Rise>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Why() {
   return (
     <Slide id="why">
@@ -1139,6 +1219,8 @@ export default function PresentDeck({
         return <Appointment deck={deck} show={show(i)} />;
       case "agent":
         return <Agent deck={deck} show={show(i)} />;
+      case "comparables":
+        return <Comparables deck={deck} show={show(i)} />;
       case "why":
         return <Why />;
       case "questions":
