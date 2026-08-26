@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { FlowTag, Pill } from "@/components/Wire";
-import ResearchPanel from "@/components/ResearchPanel";
+import AppraisalDrawer from "@/components/AppraisalDrawer";
 import {
   MA_STAGES,
   effectiveStage,
@@ -50,6 +50,16 @@ export default function MarketAppraisals() {
       (a, b) => urgencyOf(a) - urgencyOf(b)
     );
   }, [filter]);
+
+  /* Arriving from Leads: booking an appraisal sends the agent here with
+     ?open=<id>, so the record they were just working on reopens rather than
+     leaving them on a list to find it again. */
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("open");
+    if (id && SAMPLE.some((m) => m.id === id)) setOpenId(id);
+  }, []);
+
+  const open = SAMPLE.find((m) => m.id === openId) ?? null;
 
   const counts = useMemo(() => {
     const m = new Map<MaStage, number>();
@@ -120,7 +130,7 @@ export default function MarketAppraisals() {
               >
                 <button
                   type="button"
-                  onClick={() => setOpenId(openId === m.id ? null : m.id)}
+                  onClick={() => setOpenId(m.id)}
                   className="w-full text-left"
                 >
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -138,17 +148,13 @@ export default function MarketAppraisals() {
                   {m.valuation ? ` · valued ${gbp(m.valuation)} pcm` : ""}
                 </p>
                 </button>
-
-                {openId === m.id && (
-                  <div className="mt-3">
-                    <ResearchPanel address={m.address} postcode={m.postcode} beds={2} />
-                  </div>
-                )}
               </li>
             ))}
           </ul>
         )}
       </div>
+
+      {open && <AppraisalDrawer appraisal={open} onClose={() => setOpenId(null)} />}
 
       <ul className="mt-4 space-y-1.5 text-[11px] leading-relaxed text-muted">
         <li>

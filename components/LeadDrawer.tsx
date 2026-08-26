@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { handoverTarget } from "@/lib/market-appraisal";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DetailRow, DoneTick, PressButton, SectionHead } from "@/components/Bits";
@@ -485,6 +487,7 @@ export default function LeadDrawer({
   /** −1 / +1 through the list, so you can work a queue without going back. */
   onStep: (delta: number) => void;
 }) {
+  const router = useRouter();
   const [shown, setShown] = useState(false);
   const [tab, setTab] = useState<TabKey | null>(null);
 
@@ -1459,8 +1462,20 @@ export default function LeadDrawer({
           // Booking IS the step's work — the record moves itself on, and the
           // next step's panel is one button away rather than a hunt. The
           // take-on stays put: its second half (photos & details) is still due.
-          if (here.action === "viewing" || here.action === "appraise") advance();
+          if (here.action === "viewing") advance();
           if (here.action === "takeon") setTakeOnBooked(true);
+
+          /* BOOKING AN APPRAISAL HANDS THE RECORD OVER.
+             It does not advance the lead spine — the lead's work is finished
+             at "booked", and everything after it is a different job on a
+             different screen. So we close this drawer and reopen the record on
+             Market Appraisals at Pre-appraisal, rather than leaving the agent
+             on the Leads page wondering what just changed. See
+             lib/market-appraisal handoverTarget. */
+          if (here.action === "appraise") {
+            onClose();
+            router.push(handoverTarget(`lead-${lead.id}`));
+          }
         }}
       />
 
