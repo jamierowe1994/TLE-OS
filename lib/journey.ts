@@ -137,60 +137,98 @@ export const VIEWING_TRACK: JourneyStep[] = [
  * property compliance; at that point it stops being a person and becomes a
  * listing. These labels are the business's own words, not my reading.
  */
+/**
+ * THE LANDLORD TRACK — rebuilt 23 Aug 2026 (James).
+ *
+ * It used to run lead → appraisal → terms → take-on → ID → compliance, and the
+ * problem was the FIRST arrow. "Lead" to "appraisal" is an enormous jump: it
+ * covers every phone call, every email, every chase, and an agent who had rung
+ * three times and got nowhere had nothing to show for it. So everything got
+ * crammed into "appraisal", which then meant nothing either.
+ *
+ * Two changes:
+ *
+ * 1. THE FRONT IS BROKEN INTO TICKS. Contact, email, second contact, third
+ *    contact, book. Each is a thing an agent either did or didn't, which is
+ *    the test the whole spine is now held to: **have I sent this, have I done
+ *    this, have I made this.** Any step that can't be answered yes or no is
+ *    too big.
+ *
+ * 2. THE BACK IS GONE — moved to Market Appraisals. Terms, take-on, ID and
+ *    AML all happen AFTER a visit is booked, which is a different job on a
+ *    different screen. The lead's work finishes at "booked" and hands over.
+ *
+ * Skipping ahead is expected, not an error: a landlord who books on the first
+ * call jumps straight from Contacted to Booked, and the steps between are
+ * simply never marked. A spine that punished that would be lying about how
+ * lettings works.
+ */
 export const LANDLORD_TRACK: JourneyStep[] = [
-  /* Starts at LEAD — a lead isn't an appraisal yet: someone has to ring the
-     landlord, agree a date and get the visit in the diary.
-
-     Reshaped 8 Aug 2026 (James): appraisal and its follow-up are ONE stage —
-     recording the appraisal sets the follow-up inside the same panel.
-     Take-on & photos returns, after terms. AML and compliance merge into one
-     box, and that box carries the push. Fewer dots, each one heavier. */
   {
     id: "lead", label: "Lead", icon: "target",
     title: "New landlord lead",
     detail:
-      "They've come in from somewhere. Ring them, talk it through, and get the appraisal in the diary — the button books it and sends the confirmation.",
+      "Where it came from, and how to reach them. Read the source before you ring — a portal enquiry and a referral are not the same conversation.",
+    action: "none", cta: "Log first contact",
+  },
+  {
+    id: "contacted", label: "Contacted", icon: "call",
+    title: "First contact",
+    detail:
+      "You've spoken to them, or tried. Log the attempt either way — three unanswered calls is information, and only if somebody wrote it down.",
+    action: "none", cta: "Log the attempt",
+  },
+  {
+    id: "email", label: "Email sent", icon: "mail",
+    title: "Send them something",
+    detail:
+      "What we do, what it's worth, and why a call is worth ten minutes. It gives the second contact a reason to exist.",
+    action: "send", cta: "Send the email",
+  },
+  {
+    id: "contact2", label: "2nd contact", icon: "call",
+    title: "Second contact",
+    detail: "Follow the email up. Most landlords answer on the second or third attempt, not the first.",
+    action: "none", cta: "Log the attempt",
+  },
+  {
+    id: "contact3", label: "3rd contact", icon: "call",
+    title: "Third contact",
+    detail:
+      "The last direct attempt. If this doesn't land, they go to nurture rather than being quietly dropped.",
+    action: "none", cta: "Log the attempt",
+  },
+  {
+    id: "appraisal_booked", label: "Appraisal booked", icon: "calendar",
+    title: "Book the appraisal",
+    detail:
+      "The whole point of the spine. Booking hands the record to Market Appraisals — everything from the visit onwards happens there.",
     action: "appraise", cta: "Book the appraisal",
   },
-  {
-    id: "appraisal", label: "Appraisal", icon: "calendar",
-    title: "Market appraisal",
-    detail:
-      "Go over, walk the property, and land on the value together. Record what you found — and set the follow-up call in the same breath, because that call is where instructions are won.",
-    action: "appraisal-form", cta: "Record the appraisal",
-  },
-  {
-    id: "terms", label: "Terms", icon: "file-contract",
-    title: "Terms of business",
-    detail:
-      "Out for signature with the fee schedule and service level. Once sent, the record WAITS here and moves itself on when the signed copy comes back.",
-    action: "sign", cta: "Send the terms",
-  },
-  {
-    id: "takeon", label: "Take-on & photos", icon: "megaphone",
-    title: "Take-on & photos",
-    detail:
-      "Book a day to go over — the forecast is on the calendar, because this is the visit where the photographs get taken. Then the photos, the description and the front image, off the back of it.",
-    action: "takeon", cta: "Book the take-on",
-  },
-  {
-    id: "id", label: "ID & ownership", icon: "doc",
-    title: "Landlord ID and proof of ownership",
-    detail:
-      "Photo ID plus proof they actually own the property — title register or Land Registry. Filed here, stored in the vault, side-mounted to the compliance portal. Missing pieces never lock the record.",
-    action: "docs", cta: "Open the ID portal",
-  },
-  /* AML and property compliance share the last box — one final checks stage,
-     and its button IS the door: the moment everything clears, the record
-     stops being a person and becomes a listing. */
-  {
-    id: "checks", label: "AML & Compliance", icon: "shield",
-    title: "AML & property compliance",
-    detail:
-      "Anti-money-laundering due diligence on the landlord, plus EPC, gas safety, EICR and any licence. When these clear, push — there's nothing left that's about the person.",
-    action: "handoff", cta: "Push to a listing",
-  },
 ];
+
+/**
+ * The losing branch, drawn rather than hidden.
+ *
+ * A lead that stops answering has to go SOMEWHERE, and "nothing happened" is
+ * not a place. Nurture is a split off the contact steps, not a failure state
+ * at the end — the point is that the agent can see the fork while they are
+ * still on it.
+ *
+ * Not wired to anything yet: the nurture campaigns aren't built. Showing the
+ * branch before it works is deliberate — it tells an agent the option exists
+ * and stops "no answer" meaning "forgotten".
+ */
+export const NURTURE_BRANCH: JourneyStep = {
+  id: "nurture", label: "Nurture", icon: "mail",
+  title: "Add to nurture",
+  detail:
+    "They're not saying no, they're not answering. Nurture keeps them warm on a campaign rather than dying in someone's call list — and they can rejoin the spine whenever they reply.",
+  action: "none", cta: "Add to nurture",
+};
+
+/** Which steps a lead can peel off into nurture from. */
+export const NURTURE_FROM = ["contacted", "email", "contact2", "contact3"];
 
 /**
  * The LISTING track — what the property does once it exists: go live, get
@@ -252,16 +290,25 @@ export function trackFor(lead: Lead): JourneyStep[] {
  */
 export function startingStep(lead: Lead): number {
   const tenant = leadSide(lead) === "tenant";
+
+  /* Landlord indices after the 23 Aug rebuild:
+       0 lead · 1 contacted · 2 email sent · 3 second contact
+       4 third contact · 5 appraisal booked
+     Tenant indices: 0 enquiry · 1 qualifying call · 2 shortlists · 3 viewings.
+
+     The old map pointed "Qualified" at index 4, which under the OLD track was
+     "ID & ownership" and under the new one is "third contact". Left unchanged
+     it would have put every qualified landlord three chases deep into a spine
+     they had never been rung on — the kind of wrong that looks plausible on
+     screen and quietly misreports the whole pipeline. */
   switch (lead.stage) {
     case "New": return 0;
     case "Contacted": return 1;
-    case "Waiting": return tenant ? 2 : 1;
-    // Landlord indices: 0 lead, 1 appraisal, 2 terms, 3 take-on,
-    // 4 ID, 5 AML & compliance + push.
-    // Tenant indices are now 0 enquiry, 1 qualifying call, 2 shortlists,
-    // 3 viewings — the track ends there and the viewings spine takes over.
-    case "Viewing booked": return tenant ? 3 : 1;
-    case "Qualified": return tenant ? 2 : 4;
+    case "Waiting": return tenant ? 2 : 2; // email sent, waiting on a reply
+    case "Viewing booked": return tenant ? 3 : 5; // landlord equivalent: booked
+    // "Qualified" says we have spoken and they are worth pursuing — that is
+    // after first contact, not deep into the chase sequence.
+    case "Qualified": return tenant ? 2 : 1;
     case "Not proceeding": return 1;
     default: return 0;
   }

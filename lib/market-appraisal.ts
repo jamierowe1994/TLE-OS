@@ -22,6 +22,10 @@ export type MaStage =
   | "appraisal"
   | "awaiting_valuation"
   | "post_appraisal"
+  | "terms"
+  | "takeon"
+  | "id_ownership"
+  | "aml"
   | "won"
   | "lost";
 
@@ -31,7 +35,15 @@ export const MA_STAGES: { id: MaStage; label: string; blurb: string }[] = [
   { id: "appraisal", label: "Appraisal", blurb: "The visit itself — the presentation you show on the day." },
   { id: "awaiting_valuation", label: "Awaiting valuation", blurb: "Visit done, no figure recorded yet." },
   { id: "post_appraisal", label: "Post-appraisal", blurb: "Figure agreed, deck sent, follow-up set." },
-  { id: "won", label: "Won", blurb: "Terms signed. It becomes a listing." },
+  /* Everything below moved off the LEAD spine on 23 Aug. It all happens after
+     a visit is booked, so it belongs to the appraisal, not to the lead. This
+     is the long part, and that is accepted rather than fought — the answer is
+     smaller ticks, not fewer stages. */
+  { id: "terms", label: "Terms", blurb: "Out for signature with the fee and service level." },
+  { id: "takeon", label: "Take-on & photos", blurb: "The visit that produces the photographs, the description and the front image." },
+  { id: "id_ownership", label: "ID & ownership", blurb: "Photo ID, and proof they actually own it." },
+  { id: "aml", label: "AML & compliance", blurb: "Due diligence on the landlord, and the property's certificates." },
+  { id: "won", label: "Won", blurb: "Everything clear. It becomes a listing." },
   { id: "lost", label: "Lost", blurb: "Instructed elsewhere, or not proceeding." },
 ];
 
