@@ -455,6 +455,58 @@ photo endpoint for sold addresses, and matching back to a marketing listing hit
 1 in 10. *"A comparables slide where one property in ten has a photo reads as
 broken rather than rich."*
 
+## The landlord spine, rethought — James, 23 Aug 2026 (NOT YET BUILT)
+
+Captured verbatim in substance, to be actioned after the handover work. His
+diagnosis: **"lead → appraisal" is one enormous jump**, so everything gets
+crammed into "appraisal" and the agent cannot see what they have actually done.
+Break it into steps small enough to tick.
+
+### Leads — the landlord spine, with a losing branch
+
+What an agent needs on arrival: **the source of the lead, where it came from,
+and how to reach them.** Then the work is contact attempts, and they should be
+LOGGED rather than remembered.
+
+```
+Lead → Contacted → Send email → 2nd contact → 3rd contact → Book appraisal
+                                     ↓
+                                  Nurture
+```
+
+**Nurture is a SPLIT, not a failure.** It is drawn as its own branch so the
+agent can see where a lead goes when it stops answering, rather than the record
+simply going quiet. Not hooked up yet — that is fine, the spine can show it
+before it works.
+
+Booking the appraisal is the last step and it HANDS OVER. That also means the
+book-appraisal button moves out of Leads.
+
+### Market Appraisals — the long spine
+
+```
+Booked → Pre-appraisal → Appraisal → Awaiting valuation → Post-appraisal
+      → Terms → Take-on & photos → ID & ownership → AML & compliance
+      → becomes a Listing
+```
+
+James on the length: *"that is just the longest part, and there's not really
+much we can do about that."* Agreed — the answer is smaller ticks, not fewer
+stages.
+
+Open question he raised and did not settle: whether things like "pre-appraisal
+sent" are their own spine steps or **sub-items inside a stage**. His instinct
+was sub-items, so the spine stays readable. Worth deciding with a real screen
+in front of us rather than in the abstract.
+
+### The test to hold it against
+
+An agent logging in wants to answer three questions at a glance:
+
+> **Have I sent this? Have I done this? Have I made this?**
+
+Any stage that cannot be answered yes/no is too big.
+
 ## Waiting on someone else
 
 | Blocked on | What it unblocks |
