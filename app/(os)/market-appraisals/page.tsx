@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { FlowTag, Pill } from "@/components/Wire";
+import ResearchPanel from "@/components/ResearchPanel";
 import {
   MA_STAGES,
   effectiveStage,
@@ -23,16 +24,24 @@ import {
  * appraisals is worse than an empty one.
  */
 
+/* REAL addresses from the live REX book, deliberately.
+   Invented ones ("18 Ashworth Rise") produce an empty research panel and a
+   Homesearch mis-match, which demos the feature as broken when it isn't. The
+   landlord names are still stand-ins — the point is that the comparables and
+   the guide underneath are genuine. */
 const SAMPLE: MarketAppraisal[] = [
-  { id: "ma1", leadId: "l-carol", landlord: "Carol Whitfield", address: "18 Ashworth Rise", postcode: "LU2 7QP", agent: "Rhiannon Dodge", appointmentAt: "2026-08-25T14:00:00+01:00", stage: "booked", valuation: null, presentToken: null, createdAt: "2026-08-21" },
-  { id: "ma2", leadId: null, landlord: "Peter Nsofor", address: "Flat 4, Cavendish House", postcode: "M20 2RN", agent: "Kayleigh Wright", appointmentAt: "2026-08-20T11:00:00+01:00", stage: "appraisal", valuation: null, presentToken: null, createdAt: "2026-08-14" },
-  { id: "ma3", leadId: null, landlord: "Yvonne Clarke", address: "7 Beechcroft Avenue", postcode: "AL1 4TT", agent: "Rhiannon Dodge", appointmentAt: "2026-08-18T16:30:00+01:00", stage: "post_appraisal", valuation: 1450, presentToken: "sample", createdAt: "2026-08-11" },
+  { id: "ma1", leadId: "l-carol", landlord: "Carol Whitfield", address: "11 Station Road", postcode: "L34 5SN", agent: "Kayleigh Wright", appointmentAt: "2026-08-25T14:00:00+01:00", stage: "booked", valuation: null, presentToken: null, createdAt: "2026-08-21" },
+  { id: "ma2", leadId: null, landlord: "Peter Nsofor", address: "4 Hermosa Road", postcode: "TQ14 9LA", agent: "Rhiannon Dodge", appointmentAt: "2026-08-20T11:00:00+01:00", stage: "appraisal", valuation: null, presentToken: null, createdAt: "2026-08-14" },
+  { id: "ma3", leadId: null, landlord: "Yvonne Clarke", address: "1 Worlds End Close", postcode: "B32 1JX", agent: "Rhiannon Dodge", appointmentAt: "2026-08-18T16:30:00+01:00", stage: "post_appraisal", valuation: 1450, presentToken: "sample", createdAt: "2026-08-11" },
 ];
 
 const gbp = (n: number) => `£${n.toLocaleString("en-GB")}`;
 
 export default function MarketAppraisals() {
   const [filter, setFilter] = useState<MaStage | "open">("open");
+  /* The open appraisal. Research is expensive enough that it loads for one
+     property at a time, on the agent's ask, not for the whole list. */
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const rows = useMemo(() => {
     const withStage = SAMPLE.map((m) => ({ ...m, live: effectiveStage(m) }));
@@ -103,7 +112,17 @@ export default function MarketAppraisals() {
         ) : (
           <ul className="space-y-2">
             {rows.map((m) => (
-              <li key={m.id} className="rounded-xl border border-line/70 p-3.5">
+              <li
+                key={m.id}
+                className={`rounded-xl border p-3.5 transition-colors ${
+                  openId === m.id ? "border-accent-dark" : "border-line/70"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setOpenId(openId === m.id ? null : m.id)}
+                  className="w-full text-left"
+                >
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="hand text-[14px]">{m.address}</span>
                   <Pill tone={m.live === "awaiting_valuation" ? "accent" : "neutral"}>
@@ -118,6 +137,13 @@ export default function MarketAppraisals() {
                     : " · no date booked"}
                   {m.valuation ? ` · valued ${gbp(m.valuation)} pcm` : ""}
                 </p>
+                </button>
+
+                {openId === m.id && (
+                  <div className="mt-3">
+                    <ResearchPanel address={m.address} postcode={m.postcode} beds={2} />
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -136,8 +162,9 @@ export default function MarketAppraisals() {
           Nothing schedules it and nothing can forget to move it.
         </li>
         <li>
-          Still to come: research and comparables, the best-price guide, and the
-          presentation built for the day and re-sent after.
+          <span className="font-semibold">Click an appraisal</span> for its best-price
+          guide and the comparables behind it. Research loads one property at a time,
+          on your ask — it is a real sweep of the book, not a cached number.
         </li>
       </ul>
     </>
