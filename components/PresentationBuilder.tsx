@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import MaterialInfoPanel from "@/components/MaterialInfoPanel";
 import { Pill } from "@/components/Wire";
 import {
   BUILD_STEPS,
@@ -197,7 +198,6 @@ export default function PresentationBuilder({
                   ["Address", address],
                   ["Postcode", postcode],
                   ["Sector", d.sector ?? "—"],
-                  ["Confirmed", d.subject ? "Yes" : "Not confirmed"],
                 ].map(([k, v]) => (
                   <div key={k} className="rounded-xl border border-line/70 p-3">
                     <dt className="text-[10px] uppercase tracking-wider text-muted">{k}</dt>
@@ -205,6 +205,13 @@ export default function PresentationBuilder({
                   </div>
                 ))}
               </dl>
+
+              {/* The same panel the appraisal file shows. One component rather
+                  than two, so the deck an agent builds can never disagree with
+                  the file they built it from. "Confirmed: Yes" used to live
+                  here as a standalone box; it is now the panel's Matched pill,
+                  which says the same thing next to the evidence for it. */}
+              <MaterialInfoPanel material={d.material} warning={d.addressWarning} />
             </div>
           )}
 

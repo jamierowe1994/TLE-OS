@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { FlowTag, Pill } from "@/components/Wire";
-import AppraisalDrawer from "@/components/AppraisalDrawer";
 import {
   MA_STAGES,
   OPEN_STAGES,
@@ -33,9 +34,7 @@ const gbp = (n: number) => `£${n.toLocaleString("en-GB")}`;
 
 export default function MarketAppraisals() {
   const [filter, setFilter] = useState<MaStage | "open">("open");
-  /* The open appraisal. Research is expensive enough that it loads for one
-     property at a time, on the agent's ask, not for the whole list. */
-  const [openId, setOpenId] = useState<string | null>(null);
+  const router = useRouter();
 
   const rows = useMemo(() => {
     const withStage = SAMPLE.map((m) => ({ ...m, live: effectiveStage(m) }));
@@ -46,14 +45,12 @@ export default function MarketAppraisals() {
   }, [filter]);
 
   /* Arriving from Leads: booking an appraisal sends the agent here with
-     ?open=<id>, so the record they were just working on reopens rather than
-     leaving them on a list to find it again. */
+     ?open=<id>. That used to pop a drawer; now it forwards to the file, so the
+     old links from Leads and from the builder keep working. */
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("open");
-    if (id && SAMPLE.some((m) => m.id === id)) setOpenId(id);
-  }, []);
-
-  const open = SAMPLE.find((m) => m.id === openId) ?? null;
+    if (id && SAMPLE.some((m) => m.id === id)) router.replace(`/market-appraisals/${id}`);
+  }, [router]);
 
   const openCount = useMemo(
     () => SAMPLE.filter((m) => { const k = effectiveStage(m); return k !== "won" && k !== "lost"; }).length,
@@ -133,15 +130,13 @@ export default function MarketAppraisals() {
             {rows.map((m) => (
               <li
                 key={m.id}
-                className={`rounded-xl border p-3.5 transition-colors ${
-                  openId === m.id ? "border-accent-dark" : "border-line/70"
-                }`}
+                className="rounded-xl border border-line/70 p-3.5 transition-colors hover:border-ink"
               >
-                <button
-                  type="button"
-                  onClick={() => setOpenId(m.id)}
-                  className="w-full text-left"
-                >
+                {/* A row opens the FILE, not a drawer. An appraisal is lived in
+                    for three weeks and carries thirty fields of material
+                    information — that wants an address you can bookmark, send,
+                    and come back to. */}
+                <Link href={`/market-appraisals/${m.id}`} className="block w-full text-left">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="hand text-[14px]">{m.address}</span>
                   <span className="flex shrink-0 items-center gap-1.5">
@@ -160,14 +155,13 @@ export default function MarketAppraisals() {
                     : " · no date booked"}
                   {m.valuation ? ` · valued ${gbp(m.valuation)} pcm` : ""}
                 </p>
-                </button>
+                </Link>
               </li>
             ))}
           </ul>
         )}
       </div>
 
-      {open && <AppraisalDrawer appraisal={open} onClose={() => setOpenId(null)} />}
 
       <ul className="mt-4 space-y-1.5 text-[11px] leading-relaxed text-muted">
         <li>

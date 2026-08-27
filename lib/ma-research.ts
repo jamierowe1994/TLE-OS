@@ -36,6 +36,8 @@ import { fetchListingBook } from "@/lib/rex-listings";
  * Never trust `hs_id` alone.
  */
 
+import { shapeMaterialInfo, type MaterialInfo, type MatInfoRaw } from "@/lib/matinfo";
+
 const HS = "https://data.homesearch.co.uk/avi/api/v1";
 
 function hsAuth(): Record<string, string> | undefined {
@@ -160,6 +162,37 @@ function hsRows<T>(raw: unknown): T[] {
   return [];
 }
 
+/**
+ * Material information and the AVM, for a property we have already confirmed.
+ *
+ * Two calls in parallel because they are independent and both are cheap.
+ * `quick_valuation` is allowed to fail on its own — it is a nice-to-have sale
+ * estimate, and losing it must not cost us tenure and council tax band.
+ *
+ * NOT called here: `property/similar_on_market/{hs_id}`, which returns 403 on
+ * our token. Recorded rather than silently omitted so nobody re-adds it.
+ */
+async function materialFor(hsId: number): Promise<MaterialInfo | null> {
+  const [raw, val] = await Promise.all([
+    hsJson<MatInfoRaw | { data?: MatInfoRaw }>(`matinfo/basic/${hsId}`),
+    hsJson<{ price?: number; price_last_sold?: number; last_sold_date?: string }>(
+      `property/quick_valuation/${hsId}`
+    ),
+  ]);
+  if (!raw) return null;
+  const m = ("data" in (raw as object) ? (raw as { data?: MatInfoRaw }).data : raw) as MatInfoRaw;
+  if (!m || typeof m !== "object") return null;
+
+  const valuation = val
+    ? {
+        estimate: val.price ?? null,
+        lastSold: val.price_last_sold ?? null,
+        lastSoldDate: val.last_sold_date ?? null,
+      }
+    : null;
+  return shapeMaterialInfo(hsId, m, valuation);
+}
+
 interface HsListing {
   street?: string; postcode?: string; type?: string; beds?: number;
   agent?: string; price?: number; image?: string; listed_on?: string;
@@ -270,6 +303,17 @@ export interface MaResearch {
    *  A different question from our own comparables: this is what a tenant is
    *  choosing between, whoever is letting it. */
   onMarketNearby: MarketListing[];
+  /**
+   * Everything Homesearch knows about the building itself.
+   *
+   * Null whenever `subject` is null — and that coupling is the whole point.
+   * Material information is the most quotable thing on the page: tenure,
+   * council tax band, EPC. Showing a neighbour's tenure under this property's
+   * address is a worse failure than showing nothing, because it is confident
+   * and specific and an agent will read it out. If the address match did not
+   * survive `matchIsTrustworthy`, there is no material information.
+   */
+  material: MaterialInfo | null;
   comparables: Comparable[];
   /** Our own book's picture, which is the honest sample size. */
   guide: {
@@ -358,19 +402,23 @@ export async function getResearch(
     addressWarning = "Homesearch couldn't find this address.";
   }
 
-  /* the area picture, and what is on the market nearby with photographs */
+  /* the area picture, what is on the market nearby with photographs, and the
+     building's own material information — all independent, so all at once */
   let areaAverage: MaResearch["areaAverage"] = null;
   let market: MaResearch["market"] = null;
   let nearby: MarketListing[] = [];
-  if (sector) {
-    const [stats, listings] = await Promise.all([
-      marketFor(sector, beds),
-      onMarketNearby(sector, beds),
-    ]);
+  const [stats, listings, material] = await Promise.all([
+    sector ? marketFor(sector, beds) : Promise.resolve(null),
+    sector ? onMarketNearby(sector, beds) : Promise.resolve([]),
+    // Gated on the trusted match, not merely on having an hs_id — see the
+    // `material` field comment on MaResearch.
+    subject ? materialFor(subject.hsId) : Promise.resolve(null),
+  ]);
+  if (stats) {
     if (stats.avgRent) areaAverage = { beds, avgRent: stats.avgRent };
     market = stats.market;
-    nearby = listings;
   }
+  nearby = listings;
 
   /* comparables — our own rentals, nearest ring first.
 
@@ -387,7 +435,6 @@ export async function getResearch(
   const comparables: Comparable[] = [];
   try {
     const book = await fetchListingBook();
-    const sec = sector ? normPc(sector) : null;
     const dist = districtOf(postcode);
     const area = areaOf(postcode);
 
@@ -396,10 +443,26 @@ export async function getResearch(
       const pc = normPc(l.locality.match(/[A-Z]{1,2}\d[A-Z\d]?\s*\d?[A-Z]{0,2}/i)?.[0] ?? "");
       if (!pc) continue;
 
+      /* MEASURED BUG, and it reached the screen: a Liverpool appraisal was
+         offering comparables in LUTON and LEICESTER.
+
+         The rings used to match by string prefix. `areaOf("L34 5SN")` is "L",
+         and "LU1 1QH" and "LE2 6EY" both START WITH "L" — so every postcode
+         area beginning with L counted as the same area. The district ring had
+         the same flaw one level down: "L34" starts with "L3".
+
+         Postcode components are TOKENS, not prefixes. Parse the comparable
+         with the same functions used on the subject and compare them whole.
+         Nothing else is safe: an agent reading "same area" beside a property
+         100 miles away loses the landlord's trust in the entire guide. */
+      const cSec = sectorOf(pc);
+      const cDist = districtOf(pc);
+      const cArea = areaOf(pc);
+
       let nearness: Comparable["nearness"] | null = null;
-      if (sec && pc.startsWith(sec)) nearness = "sector";
-      else if (dist && pc.startsWith(normPc(dist))) nearness = "district";
-      else if (area && pc.startsWith(normPc(area))) nearness = "area";
+      if (sector && cSec && normPc(cSec) === normPc(sector)) nearness = "sector";
+      else if (dist && cDist && cDist === dist) nearness = "district";
+      else if (area && cArea && cArea === area) nearness = "area";
       if (!nearness) continue;
 
       comparables.push({
@@ -448,6 +511,7 @@ export async function getResearch(
     areaAverage,
     market,
     onMarketNearby: nearby,
+    material,
     // The guide and the list must describe the same sample. Reporting a range
     // "based on 43" beside twelve visible rows invites the obvious question and
     // has no good answer.
