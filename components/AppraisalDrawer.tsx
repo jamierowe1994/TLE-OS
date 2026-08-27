@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ResearchPanel from "@/components/ResearchPanel";
-import PresentationBuilder from "@/components/PresentationBuilder";
+import Link from "next/link";
 import { Pill } from "@/components/Wire";
 import { MA_STAGES, effectiveStage, needsValuation, type MarketAppraisal } from "@/lib/market-appraisal";
 
@@ -43,7 +43,6 @@ export default function AppraisalDrawer({
   onClose: () => void;
 }) {
   const [shown, setShown] = useState(false);
-  const [building, setBuilding] = useState(false);
 
   useEffect(() => {
     const t = requestAnimationFrame(() => setShown(true));
@@ -183,28 +182,18 @@ export default function AppraisalDrawer({
               {/* Named for the OUTPUT, not the activity. An agent at 8am is not
                   browsing data, they are making the thing they will put in
                   front of a landlord — "Research" made them work that out. */}
-              <button
-                type="button"
-                onClick={() => setBuilding(true)}
-                className="rounded-2xl bg-accent-dark px-4 py-3 text-[13px] font-semibold text-white"
+              <Link
+                href={`/market-appraisals/${appraisal.id}/build`}
+                className="rounded-2xl bg-accent-dark px-4 py-3 text-center text-[13px] font-semibold text-white"
               >
                 Build the presentation
-              </button>
+              </Link>
               <ResearchPanel address={appraisal.address} postcode={appraisal.postcode} beds={2} />
             </div>
           </div>
         </div>
       </aside>
 
-      {building && (
-        <PresentationBuilder
-          address={appraisal.address}
-          postcode={appraisal.postcode}
-          landlord={appraisal.landlord}
-          refId={appraisal.leadId ?? appraisal.id}
-          onClose={() => setBuilding(false)}
-        />
-      )}
     </div>
   );
 }

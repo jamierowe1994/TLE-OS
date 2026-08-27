@@ -12,6 +12,7 @@ import {
   urgencyOf,
   type MarketAppraisal,
   type MaStage,
+  SAMPLE_APPRAISALS as SAMPLE,
 } from "@/lib/market-appraisal";
 
 /**
@@ -26,16 +27,7 @@ import {
  * appraisals is worse than an empty one.
  */
 
-/* REAL addresses from the live REX book, deliberately.
-   Invented ones ("18 Ashworth Rise") produce an empty research panel and a
-   Homesearch mis-match, which demos the feature as broken when it isn't. The
-   landlord names are still stand-ins — the point is that the comparables and
-   the guide underneath are genuine. */
-const SAMPLE: MarketAppraisal[] = [
-  { id: "ma1", leadId: "l-carol", landlord: "Carol Whitfield", address: "11 Station Road", postcode: "L34 5SN", agent: "Kayleigh Wright", appointmentAt: "2026-08-25T14:00:00+01:00", stage: "booked", valuation: null, presentToken: null, createdAt: "2026-08-21" },
-  { id: "ma2", leadId: null, landlord: "Peter Nsofor", address: "4 Hermosa Road", postcode: "TQ14 9LA", agent: "Rhiannon Dodge", appointmentAt: "2026-08-20T11:00:00+01:00", stage: "appraisal", valuation: null, presentToken: null, createdAt: "2026-08-14" },
-  { id: "ma3", leadId: null, landlord: "Yvonne Clarke", address: "1 Worlds End Close", postcode: "B32 1JX", agent: "Rhiannon Dodge", appointmentAt: "2026-08-18T16:30:00+01:00", stage: "post_appraisal", valuation: 1450, presentToken: "sample", createdAt: "2026-08-11" },
-];
+
 
 const gbp = (n: number) => `£${n.toLocaleString("en-GB")}`;
 

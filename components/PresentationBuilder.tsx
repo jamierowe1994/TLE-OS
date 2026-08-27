@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import { Pill } from "@/components/Wire";
 import {
   BUILD_STEPS,
@@ -38,13 +39,18 @@ export default function PresentationBuilder({
   postcode,
   landlord,
   refId,
+  fullPage = false,
+  backHref,
   onClose,
 }: {
   address: string;
   postcode: string;
   landlord?: string;
   refId?: string;
-  onClose: () => void;
+  /** Rendered as a page rather than a modal — see the build route for why. */
+  fullPage?: boolean;
+  backHref?: string;
+  onClose?: () => void;
 }) {
   const [step, setStep] = useState(0);
   const [d, setD] = useState<MaResearch | null>(null);
@@ -132,11 +138,8 @@ export default function PresentationBuilder({
   const here = BUILD_STEPS[step].id as BuildStepId;
   const pages = pagesIn(plan);
 
-  if (typeof document === "undefined") return null;
-
-  return createPortal(
-    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-ink/45 p-4">
-      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-page shadow-2xl">
+  const body = (
+    <>
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
           <div className="min-w-0">
             <p className="hand text-[17px] leading-tight">Build the presentation</p>
@@ -144,9 +147,11 @@ export default function PresentationBuilder({
               {address} · {postcode}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="text-[18px] leading-none text-muted hover:text-ink">
-            ✕
-          </button>
+          {onClose && (
+            <button type="button" onClick={onClose} className="text-[18px] leading-none text-muted hover:text-ink">
+              ✕
+            </button>
+          )}
         </div>
 
         {/* The five steps, clickable — an agent who wants to change one thing
@@ -380,6 +385,31 @@ export default function PresentationBuilder({
             </button>
           )}
         </div>
+    </>
+  );
+
+  /* A page fills the screen and keeps its own scroll; a modal has to be
+     portalled and capped. Same content either way — only the frame differs. */
+  if (fullPage) {
+    return (
+      <div className="flex min-h-[calc(100dvh-2rem)] flex-col">
+        {backHref && (
+          <Link href={backHref} className="mb-3 inline-block text-[12px] text-muted underline">
+            ← Back to the appraisal
+          </Link>
+        )}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-line/80 bg-panel">
+          {body}
+        </div>
+      </div>
+    );
+  }
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-ink/45 p-4">
+      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-page shadow-2xl">
+        {body}
       </div>
     </div>,
     document.body
