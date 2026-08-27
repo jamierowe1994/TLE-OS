@@ -30,6 +30,7 @@
  */
 
 import { SANDBOX_EMAIL_DOMAIN } from "@/lib/sandbox";
+import { assertInternalRecipient } from "@/lib/email-policy";
 
 const API = "https://api.resend.com/emails";
 
@@ -88,6 +89,12 @@ export async function sendEmail(msg: {
   if (to.toLowerCase().endsWith(`@${SANDBOX_EMAIL_DOMAIN}`)) {
     throw new ResendBlocked("That's a sandbox address — sandbox records can't be emailed.");
   }
+  /* THE INTERNAL-ONLY RULE. This domain is for colleagues: verification links,
+     password confirmations, invites. A landlord or tenant must never receive
+     mail from it — client email waits for the public Lettings Experts domain.
+     Enforced here, at the one place mail actually leaves, rather than at the
+     call sites, which multiply. See lib/email-policy for the full reasoning. */
+  assertInternalRecipient(to);
   if (!msg.subject.trim() || !msg.html.trim()) {
     throw new ResendBlocked("The email needs a subject and a body.");
   }
