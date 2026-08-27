@@ -102,6 +102,112 @@ export function areaOf(postcode: string): string | null {
   return postcode.trim().toUpperCase().match(/^([A-Z]{1,2})/)?.[1] ?? null;
 }
 
+/**
+ * THE AREA STATISTICS ARE ONLY THREE, and that is the API, not an oversight.
+ *
+ * Measured against the live token: `area_statistics/lettings/` exposes
+ * `avg_price_on_market`, `on_market_count` and `off_market_count`. Nothing
+ * else. `avg_time_on_market`, `properties_on_market`, price bands and trends
+ * all 404 — they were guesses, and the sibling-endpoint assumption was wrong.
+ *
+ * **Time to let therefore has to be computed**, from `listed_on` on the
+ * listings feed. There is no endpoint for it anywhere and Fine & Country
+ * derive it the same way.
+ *
+ * Note the path says `lettings` while the listings routes say `let`. Getting
+ * that backwards returns a 404 with no hint.
+ */
+const AREA_STATS = ["avg_price_on_market", "on_market_count", "off_market_count"] as const;
+
+async function marketFor(sector: string, beds: number) {
+  const q = `sectors%5B%5D=${encodeURIComponent(sector)}&beds%5B%5D=${beds}`;
+  const [avg, on, off] = await Promise.all(
+    AREA_STATS.map((m) => hsJson<{ avg_price?: number; count?: number }>(`area_statistics/lettings/${m}?${q}`))
+  );
+  const onMarket = typeof on?.count === "number" ? on.count : null;
+  const offMarket = typeof off?.count === "number" ? off.count : null;
+  const total = (onMarket ?? 0) + (offMarket ?? 0);
+  return {
+    avgRent: typeof avg?.avg_price === "number" && avg.avg_price > 0 ? avg.avg_price : null,
+    market:
+      onMarket == null && offMarket == null
+        ? null
+        : {
+            onMarket,
+            offMarket,
+            // How much of the local stock is actually available. A low number
+            // is the argument for pricing confidently.
+            availabilityPct: total > 0 && onMarket != null ? Math.round((onMarket / total) * 1000) / 10 : null,
+          },
+  };
+}
+
+/**
+ * Homesearch wraps rows differently per endpoint, and getting it wrong reads
+ * as "no results" rather than as an error.
+ *
+ * MEASURED: `current_listings_crm/search/let/` returns
+ * `{ data, total, limit, offset }`. An extractor that only knew `results`
+ * returned an empty array against a 200 carrying five properties — a silent,
+ * confident zero, which is the same class of bug as REX's rejected search.
+ *
+ * One tolerant reader, used everywhere, rather than a guess per call site.
+ */
+function hsRows<T>(raw: unknown): T[] {
+  if (Array.isArray(raw)) return raw as T[];
+  const o = raw as { data?: unknown; results?: unknown; items?: unknown } | null;
+  for (const v of [o?.data, o?.results, o?.items]) if (Array.isArray(v)) return v as T[];
+  return [];
+}
+
+interface HsListing {
+  street?: string; postcode?: string; type?: string; beds?: number;
+  agent?: string; price?: number; image?: string; listed_on?: string;
+  full_address?: string; reduced_at?: string;
+}
+
+/**
+ * What is on the market nearby, WITH PHOTOGRAPHS.
+ *
+ * `current_listings_crm/search/let/` — and the `let` flavour is fully
+ * supported, which was the open question. Two encoding quirks that return a
+ * bare 404 if you get them wrong: the trailing slash before the query string
+ * is required, and `sectors[]` must be repeated rather than comma-joined.
+ *
+ * `date_listed_from` is always sent because omitting it silently narrows the
+ * window rather than widening it.
+ */
+async function onMarketNearby(sector: string, beds?: number): Promise<MarketListing[]> {
+  const parts = [
+    `sectors%5B%5D=${encodeURIComponent(sector)}`,
+    beds ? `beds%5B%5D=${beds}` : "",
+    "date_listed_from=1900-01-01",
+    "sort%5B%5D=-listed_on",
+    "limit=24",
+  ].filter(Boolean);
+  const raw = await hsJson<unknown>(`current_listings_crm/search/let/?${parts.join("&")}`);
+  const rows = hsRows<HsListing>(raw);
+
+  const today = Date.now();
+  return rows
+    .filter((r) => r.price && r.price > 0)
+    .map((r) => {
+      const listed = r.listed_on ? new Date(r.listed_on) : null;
+      return {
+        address: r.full_address ?? r.street ?? "Address not given",
+        postcode: r.postcode ?? "",
+        beds: typeof r.beds === "number" ? r.beds : null,
+        type: r.type ?? null,
+        rent: r.price ?? null,
+        image: r.image ?? null,
+        listedOn: r.listed_on ?? null,
+        daysListed: listed ? Math.max(0, Math.round((today - listed.getTime()) / 86400000)) : null,
+        agent: r.agent ?? null,
+        reducedAt: r.reduced_at ?? null,
+      };
+    });
+}
+
 /* ── the research packet ──────────────────────────────────────────────────── */
 
 export interface Comparable {
@@ -120,6 +226,30 @@ export interface Comparable {
   nearness: "sector" | "district" | "area";
 }
 
+/**
+ * A property on the market near the subject, from Homesearch — with a photo.
+ *
+ * Distinct from `Comparable`, which comes from OUR book. This is the whole
+ * local market including other agents' stock, and it is what a tenant is
+ * actually choosing between. Both belong in an appraisal and they answer
+ * different questions, so they are kept apart rather than merged.
+ */
+export interface MarketListing {
+  address: string;
+  postcode: string;
+  beds: number | null;
+  type: string | null;
+  rent: number | null;
+  /** The photograph. The reason this feed is worth calling at all. */
+  image: string | null;
+  listedOn: string | null;
+  /** Derived — Homesearch has NO time-on-market endpoint, so it is computed
+   *  from listed_on. Days a tenant has had the chance to take it. */
+  daysListed: number | null;
+  agent: string | null;
+  reducedAt: string | null;
+}
+
 export interface MaResearch {
   address: string;
   postcode: string;
@@ -129,6 +259,17 @@ export interface MaResearch {
   addressWarning: string | null;
   /** Homesearch average asking rent for this sector and bed count. */
   areaAverage: { beds: number; avgRent: number } | null;
+  /** The area picture. See MARKET_STATS below for why there are only three. */
+  market: {
+    onMarket: number | null;
+    offMarket: number | null;
+    /** On-market as a share of all known stock — how tight the sector is. */
+    availabilityPct: number | null;
+  } | null;
+  /** What is on the market RIGHT NOW near this property, with photographs.
+   *  A different question from our own comparables: this is what a tenant is
+   *  choosing between, whoever is letting it. */
+  onMarketNearby: MarketListing[];
   comparables: Comparable[];
   /** Our own book's picture, which is the honest sample size. */
   guide: {
@@ -217,15 +358,18 @@ export async function getResearch(
     addressWarning = "Homesearch couldn't find this address.";
   }
 
-  /* area average — the one lettings statistic confirmed live on our token */
+  /* the area picture, and what is on the market nearby with photographs */
   let areaAverage: MaResearch["areaAverage"] = null;
+  let market: MaResearch["market"] = null;
+  let nearby: MarketListing[] = [];
   if (sector) {
-    const stat = await hsJson<{ avg_price?: number }>(
-      `area_statistics/lettings/avg_price_on_market?sectors%5B%5D=${encodeURIComponent(sector)}&beds%5B%5D=${beds}`
-    );
-    if (typeof stat?.avg_price === "number" && stat.avg_price > 0) {
-      areaAverage = { beds, avgRent: stat.avg_price };
-    }
+    const [stats, listings] = await Promise.all([
+      marketFor(sector, beds),
+      onMarketNearby(sector, beds),
+    ]);
+    if (stats.avgRent) areaAverage = { beds, avgRent: stats.avgRent };
+    market = stats.market;
+    nearby = listings;
   }
 
   /* comparables — our own rentals, nearest ring first.
@@ -302,6 +446,8 @@ export async function getResearch(
     subject,
     addressWarning,
     areaAverage,
+    market,
+    onMarketNearby: nearby,
     // The guide and the list must describe the same sample. Reporting a range
     // "based on 43" beside twelve visible rows invites the obvious question and
     // has no good answer.
