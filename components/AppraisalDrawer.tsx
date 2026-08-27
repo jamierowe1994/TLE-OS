@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import ResearchPanel from "@/components/ResearchPanel";
 import { Pill } from "@/components/Wire";
-import { MA_STAGES, effectiveStage, type MarketAppraisal } from "@/lib/market-appraisal";
+import { MA_STAGES, effectiveStage, needsValuation, type MarketAppraisal } from "@/lib/market-appraisal";
 
 /**
  * An appraisal, opened out — the same full pop-out leads, viewings and
@@ -25,9 +25,10 @@ const NEXT: Record<string, { do: string; who: string }> = {
   booked: { do: "Send the pre-appraisal deck — two days before, with a welcome video if you can.", who: "Us" },
   pre_appraisal: { do: "Pull the comparables together and agree your opening figure before you go.", who: "Us" },
   appraisal: { do: "The visit. Walk it, then record the valuation while it is fresh.", who: "Us" },
-  awaiting_valuation: { do: "The visit has been and gone with no figure recorded. Do that first.", who: "Us" },
-  post_appraisal: { do: "Send the deck back with the figure, and set the follow-up call.", who: "Us" },
-  won: { do: "Terms signed — push it through to a listing.", who: "Us" },
+  post_appraisal: { do: "Send the deck back with the figure, set the follow-up, and get the terms out for signature.", who: "Us" },
+  takeon: { do: "Book the take-on visit — this is where the photographs and the description come from.", who: "Us" },
+  aml: { do: "ID and proof of ownership, AML on the landlord, and the property's certificates.", who: "Us" },
+  won: { do: "Everything clear — push it through to a listing.", who: "Us" },
   lost: { do: "Nothing outstanding. Worth recording why, while anyone remembers.", who: "—" },
 };
 
@@ -55,6 +56,10 @@ export default function AppraisalDrawer({
   const live = effectiveStage(appraisal);
   const at = MA_STAGES.findIndex((s) => s.id === live);
   const next = NEXT[live];
+  /* Overrides whatever the stage would otherwise suggest. A visit that has
+     happened with no figure written down is the most urgent thing on the file,
+     wherever the file happens to be sitting. */
+  const missingFigure = needsValuation(appraisal);
 
   return (
     <div className="fixed inset-0 z-[130]">
@@ -109,14 +114,18 @@ export default function AppraisalDrawer({
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="grid gap-5 p-6 xl:grid-cols-[1fr_1fr]">
             <div className="flex flex-col gap-5">
-              {next && (
+              {(next || missingFigure) && (
                 <div className="rounded-2xl border border-line/80 bg-panel p-5">
                   <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
                     Needs doing now
                   </p>
-                  <p className="mt-2.5 text-[13.5px] leading-relaxed">{next.do}</p>
+                  <p className="mt-2.5 text-[13.5px] leading-relaxed">
+                    {missingFigure
+                      ? "The visit has been and gone with no figure recorded. Do that first — everything after it waits on the valuation."
+                      : next?.do}
+                  </p>
                   <p className="mt-3 flex items-center gap-2 text-[11px] text-muted">
-                    Waiting on <Pill tone={next.who === "Us" ? "accent" : "neutral"}>{next.who}</Pill>
+                    Waiting on <Pill tone="accent">{missingFigure ? "Us" : (next?.who ?? "Us")}</Pill>
                   </p>
                 </div>
               )}

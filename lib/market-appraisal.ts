@@ -16,15 +16,24 @@
  * scheduler has to remember to move anything.
  */
 
+/**
+ * Six stages, thinned from nine on 23 Aug (James: "too many boxes").
+ *
+ * Three went, and each was absorbed rather than deleted:
+ *   awaiting_valuation → a FLAG, not a stage (see needsValuation below)
+ *   terms              → part of Post-appraisal
+ *   ID & ownership     → part of AML & compliance
+ *
+ * The test each survivor passes: it is somewhere a record can genuinely SIT
+ * for days. "Terms sent" is an event inside post-appraisal, not a place a file
+ * lives — and a stage nothing rests in is a box that only ever reads zero.
+ */
 export type MaStage =
   | "booked"
   | "pre_appraisal"
   | "appraisal"
-  | "awaiting_valuation"
   | "post_appraisal"
-  | "terms"
   | "takeon"
-  | "id_ownership"
   | "aml"
   | "won"
   | "lost";
@@ -33,19 +42,15 @@ export const MA_STAGES: { id: MaStage; label: string; blurb: string }[] = [
   { id: "booked", label: "Booked", blurb: "In the diary, confirmation sent." },
   { id: "pre_appraisal", label: "Pre-appraisal", blurb: "Research, comparables and the deck the landlord opens before you arrive." },
   { id: "appraisal", label: "Appraisal", blurb: "The visit itself — the presentation you show on the day." },
-  { id: "awaiting_valuation", label: "Awaiting valuation", blurb: "Visit done, no figure recorded yet." },
-  { id: "post_appraisal", label: "Post-appraisal", blurb: "Figure agreed, deck sent, follow-up set." },
-  /* Everything below moved off the LEAD spine on 23 Aug. It all happens after
-     a visit is booked, so it belongs to the appraisal, not to the lead. This
-     is the long part, and that is accepted rather than fought — the answer is
-     smaller ticks, not fewer stages. */
-  { id: "terms", label: "Terms", blurb: "Out for signature with the fee and service level." },
+  { id: "post_appraisal", label: "Post-appraisal", blurb: "Figure agreed, deck sent back, follow-up set, terms out for signature." },
   { id: "takeon", label: "Take-on & photos", blurb: "The visit that produces the photographs, the description and the front image." },
-  { id: "id_ownership", label: "ID & ownership", blurb: "Photo ID, and proof they actually own it." },
-  { id: "aml", label: "AML & compliance", blurb: "Due diligence on the landlord, and the property's certificates." },
+  { id: "aml", label: "AML & compliance", blurb: "ID and proof of ownership, AML on the landlord, and the property's certificates." },
   { id: "won", label: "Won", blurb: "Everything clear. It becomes a listing." },
   { id: "lost", label: "Lost", blurb: "Instructed elsewhere, or not proceeding." },
 ];
+
+/** The stages a record can be working through, for the tab strip. */
+export const OPEN_STAGES = MA_STAGES.filter((s) => s.id !== "won" && s.id !== "lost");
 
 export interface MarketAppraisal {
   id: string;
@@ -74,29 +79,36 @@ export interface MarketAppraisal {
  */
 export function effectiveStage(ma: MarketAppraisal, now = new Date()): MaStage {
   if (ma.stage === "won" || ma.stage === "lost") return ma.stage;
-  if (ma.valuation != null) {
-    return ma.stage === "post_appraisal" ? "post_appraisal" : "post_appraisal";
+  // A recorded figure means the visit produced something, so the record has
+  // moved past the appraisal whatever anyone remembered to click.
+  if (ma.valuation != null && (ma.stage === "appraisal" || ma.stage === "booked")) {
+    return "post_appraisal";
   }
-  if (ma.appointmentAt && new Date(ma.appointmentAt) < now) return "awaiting_valuation";
   return ma.stage;
+}
+
+/**
+ * The visit has been and gone and nobody wrote a figure down.
+ *
+ * This USED to be its own stage. It is better as a flag: as a stage it forced
+ * a record out of "Appraisal" into a box of its own, which made the spine
+ * longer to say something that is really an exception on a stage the record is
+ * already sitting in. As a flag it can shout from wherever the file actually
+ * is — and it is still derived, so nothing has to remember to set it.
+ */
+export function needsValuation(ma: MarketAppraisal, now = new Date()): boolean {
+  if (ma.stage === "won" || ma.stage === "lost") return false;
+  if (ma.valuation != null) return false;
+  return Boolean(ma.appointmentAt && new Date(ma.appointmentAt) < now);
 }
 
 /** Open work, worst first: overdue valuations, then soonest appointment. */
 export function urgencyOf(ma: MarketAppraisal, now = new Date()): number {
-  const s = effectiveStage(ma, now);
-  if (s === "awaiting_valuation") return 0;
+  if (needsValuation(ma, now)) return 0; // a forgotten valuation is the worst thing here
   if (!ma.appointmentAt) return 1; // booked with no date — a real defect
   return 2 + new Date(ma.appointmentAt).getTime() / 1e13;
 }
 
-/**
- * Where a lead goes when its appraisal is booked.
- *
- * James, 23 Aug: booking should CLOSE the lead drawer and reopen the record on
- * Market Appraisals at the next stage — not quietly leave the agent on the
- * Leads page wondering what changed. The lead is not deleted; it is handed on,
- * and `leadId` above keeps the thread.
- */
 export function handoverTarget(appraisalId: string): string {
   return `/market-appraisals?open=${encodeURIComponent(appraisalId)}&stage=pre_appraisal`;
 }

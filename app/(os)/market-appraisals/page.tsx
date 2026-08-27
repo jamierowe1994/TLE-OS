@@ -6,7 +6,9 @@ import { FlowTag, Pill } from "@/components/Wire";
 import AppraisalDrawer from "@/components/AppraisalDrawer";
 import {
   MA_STAGES,
+  OPEN_STAGES,
   effectiveStage,
+  needsValuation,
   urgencyOf,
   type MarketAppraisal,
   type MaStage,
@@ -61,6 +63,11 @@ export default function MarketAppraisals() {
 
   const open = SAMPLE.find((m) => m.id === openId) ?? null;
 
+  const openCount = useMemo(
+    () => SAMPLE.filter((m) => { const k = effectiveStage(m); return k !== "won" && k !== "lost"; }).length,
+    []
+  );
+
   const counts = useMemo(() => {
     const m = new Map<MaStage, number>();
     for (const s of SAMPLE) {
@@ -87,25 +94,35 @@ export default function MarketAppraisals() {
         them. The stage rail, the ordering and the handover from Leads are real.
       </p>
 
-      {/* The four stages, as counts. awaiting_valuation is derived on read —
-          an appraisal whose appointment has passed with no figure is chasing
-          itself, and nothing has to remember to move it. */}
-      <div className="fade-up mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
-        {MA_STAGES.filter((s) => s.id !== "won" && s.id !== "lost").map((s) => (
+      {/* The spine, as a strip of tabs.
+          Nine boxes across two rows read as a form to fill in. Six narrow tabs
+          read as a process with a position in it — which is what it is, and
+          what an agent is actually looking for when they arrive. */}
+      <nav className="fade-up mt-4 flex flex-wrap gap-1.5" aria-label="Appraisal stages">
+        <button
+          type="button"
+          onClick={() => setFilter("open")}
+          className={`rounded-full border px-3.5 py-1.5 text-[12px] transition-colors ${
+            filter === "open" ? "border-accent-dark bg-accent-dark text-white" : "border-line/80"
+          }`}
+        >
+          All open <span className="figures ml-1 opacity-70">{openCount}</span>
+        </button>
+        {OPEN_STAGES.map((s, i) => (
           <button
             key={s.id}
             type="button"
             onClick={() => setFilter(filter === s.id ? "open" : s.id)}
             title={s.blurb}
-            className={`rounded-2xl border p-4 text-left transition-colors ${
-              filter === s.id ? "border-accent-dark bg-accent-soft/40" : "border-line/80 bg-panel"
+            className={`rounded-full border px-3.5 py-1.5 text-[12px] transition-colors ${
+              filter === s.id ? "border-accent-dark bg-accent-dark text-white" : "border-line/80"
             }`}
           >
-            <p className="figures text-[22px] leading-none">{counts.get(s.id) ?? 0}</p>
-            <p className="mt-1 text-[10.5px] leading-tight">{s.label}</p>
+            <span className="mr-1 opacity-50">{i + 1}</span>
+            {s.label} <span className="figures ml-1 opacity-70">{counts.get(s.id) ?? 0}</span>
           </button>
         ))}
-      </div>
+      </nav>
 
       <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
         <div className="mb-3 flex items-baseline justify-between gap-3">
@@ -135,9 +152,13 @@ export default function MarketAppraisals() {
                 >
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="hand text-[14px]">{m.address}</span>
-                  <Pill tone={m.live === "awaiting_valuation" ? "accent" : "neutral"}>
-                    {MA_STAGES.find((s) => s.id === m.live)?.label}
-                  </Pill>
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {/* The forgotten-valuation flag. It used to be a stage of
+                        its own; as a flag it can shout from whichever stage
+                        the file is actually sitting on. */}
+                    {needsValuation(m) && <Pill tone="accent">No figure yet</Pill>}
+                    <Pill tone="neutral">{MA_STAGES.find((s) => s.id === m.live)?.label}</Pill>
+                  </span>
                 </div>
                 <p className="mt-1 text-[11.5px] text-muted">
                   {m.landlord} · {m.postcode}
