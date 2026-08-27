@@ -18,6 +18,57 @@ async function sha256(text: string): Promise<string> {
     .join("");
 }
 
+/**
+ * A real session gets in WITHOUT the office code.
+ *
+ * Otherwise the joining flow dead-ends: a new starter opens their emailed
+ * link, sets a password, is signed in — and is then bounced to /key for a code
+ * nobody has given them. They would have an account and still be locked out.
+ *
+ * The session is the STRONGER credential of the two. The office code is one
+ * shared string for the whole preview; a session means this specific person
+ * proved they own their mailbox and knows their own password. Demanding the
+ * weaker one on top of the stronger one protects nothing.
+ *
+ * Verified properly, not sniffed. `lib/auth` signs with node:crypto and cannot
+ * be imported into edge middleware, so the same HMAC is recomputed here with
+ * Web Crypto. Checking merely that a cookie EXISTS would mean anyone could
+ * type `os_session=x` into their browser and walk past the gate.
+ */
+function b64url(buf: ArrayBuffer): string {
+  let s = "";
+  const bytes = new Uint8Array(buf);
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function hasValidSession(token: string | undefined): Promise<boolean> {
+  const secret = process.env.AUTH_SECRET;
+  if (!token || !secret) return false;
+  const parts = token.split(".");
+  if (parts.length !== 3) return false;
+  const [userId, exp, sig] = parts;
+  if (!Number(exp) || Number(exp) < Date.now()) return false;
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${userId}.${exp}`));
+  const expected = b64url(mac);
+  /* Length-then-content compare. Not constant time — WebCrypto has no
+     timingSafeEqual — but the attacker would be forging an HMAC over a value
+     they cannot control, and every route behind this does its own proper
+     check with node:crypto. This gate is the coarse one. */
+  if (expected.length !== sig.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
+  return diff === 0;
+}
+
 export async function middleware(req: NextRequest) {
   const code = process.env.OS_ACCESS_CODE;
   if (!code) return NextResponse.next();
@@ -25,9 +76,20 @@ export async function middleware(req: NextRequest) {
   const cookie = req.cookies.get("os-key")?.value;
   if (cookie && cookie === (await sha256(code))) return NextResponse.next();
 
+  // Either credential is enough — see hasValidSession for why the session is
+  // the stronger of the two.
+  if (await hasValidSession(req.cookies.get("os_session")?.value)) {
+    return NextResponse.next();
+  }
+
+  /* Somebody with an account but no code should land on the sign-in page, not
+     on a shared-code screen they cannot answer. `next` brings them back to
+     what they were reaching for, and /sign-in refuses anything that isn't a
+     path on this site. */
   const url = req.nextUrl.clone();
+  const wanted = req.nextUrl.pathname + req.nextUrl.search;
   url.pathname = "/key";
-  url.search = "";
+  url.search = wanted && wanted !== "/" ? `?next=${encodeURIComponent(wanted)}` : "";
   return NextResponse.redirect(url);
 }
 
@@ -75,6 +137,6 @@ export const config = {
   // exempt any future /joins or /joinery, and `api/auth/verify` would leak to
   // a sibling like /api/auth/verify-phone the day somebody adds one.
   matcher: [
-    "/((?!(?:key|api/key|join|api/auth/verify|tenant|landlord|present|api/present|_next|icons|illustrations|brand)(?:/|$)|favicon\\.ico$|robots\\.txt$).*)",
+    "/((?!(?:key|api/key|join|api/auth/verify|sign-in|api/auth/login|tenant|landlord|present|api/present|_next|icons|illustrations|brand)(?:/|$)|favicon\\.ico$|robots\\.txt$).*)",
   ],
 };
