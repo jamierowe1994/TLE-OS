@@ -129,6 +129,13 @@ export default function PresentationBuilder({
       .catch((e: Error) => setError(e.message));
   }, [address, postcode]);
 
+  /* Homesearch's live market — the whole sector including other agents'
+     stock, and the only source that carries photographs. Picked separately
+     from our own book because they are different evidence. */
+  const nearby = d?.onMarketNearby ?? [];
+  const [pickedNearby, setPickedNearby] = useState<string[]>([]);
+  const keyOf = (l: { address: string; rent: number | null }) => `${l.address}|${l.rent}`;
+
   const available = useMemo(() => (d?.comparables ?? []).filter((c) => !c.letAgreed), [d]);
   const let_ = useMemo(() => (d?.comparables ?? []).filter((c) => c.letAgreed), [d]);
 
@@ -201,10 +208,88 @@ export default function PresentationBuilder({
             </div>
           )}
 
+          {d && here === "available" && nearby.length > 0 && (
+            <div className="mb-5">
+              <p className="text-[12.5px] leading-relaxed text-muted">
+                {nearby.length} on the market in {d.sector} right now — every agent&apos;s
+                stock, not just ours. This is what a tenant is choosing between.
+              </p>
+              <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {nearby.map((l) => {
+                  const k = keyOf(l);
+                  const on = pickedNearby.includes(k);
+                  return (
+                    <li key={k}>
+                      <label
+                        className={`block cursor-pointer overflow-hidden rounded-xl border transition-colors ${
+                          on ? "border-accent-dark" : "border-line/70"
+                        }`}
+                      >
+                        {/* Plain img, not next/image: these are third-party S3
+                            URLs, and a remote-image allowlist for a feed whose
+                            host may change is config that breaks silently the
+                            day it does. */}
+                        {l.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={l.image}
+                            alt=""
+                            loading="lazy"
+                            className="h-32 w-full bg-line/30 object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-32 w-full items-center justify-center bg-line/20 text-[11px] text-muted">
+                            No photograph
+                          </div>
+                        )}
+                        <div className="flex items-start gap-2 p-3">
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            onChange={() =>
+                              setPickedNearby((c) => (on ? c.filter((x) => x !== k) : [...c, k]))
+                            }
+                            className="mt-0.5 h-4 w-4 shrink-0 accent-[#e31f36]"
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-baseline justify-between gap-2">
+                              <span className="figures text-[13px]">
+                                {l.rent ? money(l.rent) : "\u2014"}
+                                <span className="text-[10.5px] text-muted"> pcm</span>
+                              </span>
+                              {l.daysListed != null && (
+                                <span className="text-[10.5px] text-muted">{l.daysListed}d listed</span>
+                              )}
+                            </span>
+                            <span className="mt-0.5 block truncate text-[11.5px]">{l.address}</span>
+                            <span className="block truncate text-[10.5px] text-muted">
+                              {[l.beds ? `${l.beds} bed` : null, l.type, l.postcode]
+                                .filter(Boolean)
+                                .join(" \u00b7 ")}
+                            </span>
+                            {l.agent && (
+                              <span className="block truncate text-[10.5px] text-muted">{l.agent}</span>
+                            )}
+                          </span>
+                        </div>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="mt-3 border-b border-line/70 pb-4 text-[11px] leading-relaxed text-muted">
+                Nothing here starts ticked — it is somebody else&apos;s stock, and putting a
+                competitor&apos;s property into our deck should be a decision, not a default.
+              </p>
+            </div>
+          )}
+
           {d && (here === "available" || here === "let") && (
             <div className="space-y-3">
               <p className="text-[12.5px] leading-relaxed text-muted">
-                {here === "available" ? BUILD_STEPS[1].blurb : BUILD_STEPS[2].blurb}
+                {here === "available"
+                  ? "From our own book — the ones we are letting and can speak to."
+                  : BUILD_STEPS[2].blurb}
               </p>
               {(here === "available" ? available : let_).length === 0 ? (
                 <p className="rounded-xl border border-line/70 p-4 text-[12.5px] text-muted">
