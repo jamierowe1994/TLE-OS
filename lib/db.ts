@@ -80,6 +80,44 @@ CREATE TABLE IF NOT EXISTS os_email_verifications (
 ALTER TABLE os_email_verifications ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT 'join';
 CREATE INDEX IF NOT EXISTS os_email_verifications_email ON os_email_verifications (email);
 
+-- What happened, and who did it.
+--
+-- Sign-ins, failed sign-ins, password resets, and every "view as" an owner
+-- opens. Append-only by convention: nothing in the product updates or deletes
+-- a row, because the value of an audit trail is entirely in not being editable
+-- by the thing it audits.
+CREATE TABLE IF NOT EXISTS os_audit (
+  id             TEXT PRIMARY KEY,
+  -- sign_in | sign_in_failed | password_reset | view_as_start | view_as_end
+  kind           TEXT NOT NULL,
+  -- Who did it. Null for a failed sign-in, where there may be no such person.
+  actor_id       TEXT,
+  actor_email    TEXT NOT NULL DEFAULT '',
+  -- Who it was done TO. Only set for view_as.
+  subject_id     TEXT,
+  subject_email  TEXT NOT NULL DEFAULT '',
+  detail         TEXT NOT NULL DEFAULT '',
+  ip             TEXT NOT NULL DEFAULT '',
+  at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_audit_at ON os_audit (at DESC);
+CREATE INDEX IF NOT EXISTS os_audit_kind ON os_audit (kind, at DESC);
+
+-- The system to-do list. James's tracker for everything still to build, kept
+-- IN the product rather than in a document, because a list you have to open
+-- another app to read is a list nobody reads.
+CREATE TABLE IF NOT EXISTS os_todos (
+  id             TEXT PRIMARY KEY,
+  title          TEXT NOT NULL,
+  detail         TEXT NOT NULL DEFAULT '',
+  area           TEXT NOT NULL DEFAULT 'general',
+  -- open | doing | done
+  state          TEXT NOT NULL DEFAULT 'open',
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  done_at        TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS os_todos_state ON os_todos (state, created_at DESC);
+
 -- Anything that belongs to one person and should follow them between
 -- machines: dashboard layout, theme, profile fields. One row per person per
 -- key, value is whatever that feature stores.

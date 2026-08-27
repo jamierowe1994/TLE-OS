@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { rexTokenFor } from "@/lib/rex-user";
@@ -24,6 +25,16 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
+  /* READ-ONLY WHILE VIEWING AS. A write made wearing somebody else's face
+     would be recorded against their name in REX — see lib/view-as. */
+  try {
+    assertNotViewingAs(req.cookies.get(VIEW_AS_COOKIE)?.value);
+  } catch (e) {
+    if (e instanceof ViewingAsRefused) {
+      return NextResponse.json({ ok: false, error: e.message }, { status: 423 });
+    }
+    throw e;
+  }
   if (!rexConfigured()) {
     return NextResponse.json({ ok: false, error: "REX isn't connected on this environment." }, { status: 503 });
   }
