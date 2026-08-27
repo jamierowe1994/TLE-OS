@@ -59,8 +59,15 @@ CREATE TABLE IF NOT EXISTS os_users (
   password_hash  TEXT NOT NULL,
   photo          TEXT,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  last_seen_at   TIMESTAMPTZ
+  last_seen_at   TIMESTAMPTZ,
+  -- THE IDENTITY SPINE. Their REX AccountUser id, which is what every figure
+  -- in the OS is scoped by: listings, leads, appraisals, applications. Without
+  -- it a person can sign in but the OS has no way to show them THEIR work, so
+  -- it would show them everybody's.
+  rex_user_id    TEXT
 );
+ALTER TABLE os_users ADD COLUMN IF NOT EXISTS rex_user_id TEXT;
+CREATE INDEX IF NOT EXISTS os_users_rex ON os_users (rex_user_id);
 
 -- Pending email verifications. The token is NEVER stored — only its SHA-256,
 -- so a read of this table cannot be turned into a sign-in. One live row per

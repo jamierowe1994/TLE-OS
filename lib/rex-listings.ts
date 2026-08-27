@@ -253,7 +253,7 @@ function toListing(l: RexListing): OsListing {
   };
 }
 
-export async function fetchListingBook(): Promise<ListingBook> {
+export async function fetchListingBook(rexUserId?: string | null): Promise<ListingBook> {
   if (!rexConfigured()) {
     return {
       listings: [],
@@ -269,6 +269,10 @@ export async function fetchListingBook(): Promise<ListingBook> {
         { name: "system_listing_state", value: "current" },
         // Without this the pages come back as sales stock — see note 1.
         { name: "listing_category_id", value: "residential_rental" },
+        /* MULTI-TENANT. An agent sees their own book and nobody else's. The
+           filter is applied at REX rather than after the fetch, so another
+           agent's stock is never in this process's memory to leak. */
+        ...(rexUserId ? [{ name: "listing_agent_1_id", value: rexUserId }] : []),
       ],
       limit: PAGE_SIZE,
       offset: page * PAGE_SIZE,

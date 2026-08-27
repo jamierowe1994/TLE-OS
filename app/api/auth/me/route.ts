@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { countUsers } from "@/lib/users";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
+import { readViewAs, VIEW_AS_COOKIE } from "@/lib/view-as";
 
 /**
  * Who is this?
@@ -23,12 +24,20 @@ export async function GET(req: NextRequest) {
   if (!hasDb()) return NextResponse.json({ ok: true, user: null, anyUsers: false, hasDb: false });
 
   const { actor, subject, viewingAs } = await whoIs(req);
+  /* A view-as can target somebody with no OS account, so the banner's name
+     comes off the token rather than out of os_users. */
+  const va = readViewAs(req.cookies.get(VIEW_AS_COOKIE)?.value);
+  const impersonating = Boolean(actor?.role === "owner" && va && va.ownerId === actor.id);
   return NextResponse.json({
     ok: true,
     user: subject,
     actor: actor ? { id: actor.id, name: actor.name, email: actor.email, role: actor.role } : null,
-    viewingAs,
-    subject: viewingAs && subject ? { name: subject.name, email: subject.email } : null,
+    viewingAs: viewingAs || impersonating,
+    subject: impersonating
+      ? { name: va!.label || subject?.name || "", email: subject?.email ?? "" }
+      : viewingAs && subject
+        ? { name: subject.name, email: subject.email }
+        : null,
     isOwner: actor?.role === "owner",
     anyUsers: (await countUsers()) > 0,
     hasDb: true,

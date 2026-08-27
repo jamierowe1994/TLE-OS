@@ -49,30 +49,58 @@ const sign = (data: string) =>
   crypto.createHmac("sha256", secret()).update(data).digest("base64url");
 
 export interface ViewAs {
-  /** The person being viewed. */
+  /** The OS account being viewed. "-" when they have no account yet. */
   subjectId: string;
   /** The owner doing the viewing — so the banner can name them and audit can too. */
   ownerId: string;
+  /**
+   * The REX id whose work to show.
+   *
+   * Carried separately from subjectId because the people worth testing as —
+   * Rhiannon, Kayleigh — have NO OS account. Requiring one would mean creating
+   * accounts for colleagues purely so somebody could look at their screen,
+   * which is a worse idea than it sounds: those accounts would then be real,
+   * sign-innable, and indistinguishable from ones the person asked for.
+   */
+  rexUserId: string | null;
+  /** Their name, for the banner. Carried so no lookup is needed to render it. */
+  label: string;
   expiresAt: number;
 }
 
-/** `subjectId.ownerId.expiry.signature` — ids are dot-free by construction. */
-export function mintViewAs(subjectId: string, ownerId: string): string {
-  const data = `${subjectId}.${ownerId}.${Date.now() + TTL_MS}`;
+/** `subjectId.ownerId.rexId.label.expiry.signature` — base64url, so dot-free. */
+const enc = (s: string) => Buffer.from(s, "utf8").toString("base64url");
+const dec = (s: string) => Buffer.from(s, "base64url").toString("utf8");
+
+export function mintViewAs(
+  subjectId: string,
+  ownerId: string,
+  rexUserId: string | null,
+  label: string
+): string {
+  const data = `${subjectId}.${ownerId}.${rexUserId ?? "-"}.${enc(label)}.${Date.now() + TTL_MS}`;
   return `${data}.${sign(data)}`;
 }
 
 export function readViewAs(token: string | undefined): ViewAs | null {
   if (!token) return null;
   const parts = token.split(".");
-  if (parts.length !== 4) return null;
-  const [subjectId, ownerId, exp, sig] = parts;
-  const expected = sign(`${subjectId}.${ownerId}.${exp}`);
+  if (parts.length !== 6) return null;
+  const [subjectId, ownerId, rexId, label64, exp, sig] = parts;
+  const expected = sign(`${subjectId}.${ownerId}.${rexId}.${label64}.${exp}`);
   const a = Buffer.from(sig);
   const b = Buffer.from(expected);
   if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
   if (Number(exp) < Date.now()) return null;
-  return { subjectId, ownerId, expiresAt: Number(exp) };
+  let label = "";
+  try { label = dec(label64); } catch { return null; }
+  return {
+    subjectId,
+    ownerId,
+    rexUserId: rexId === "-" ? null : rexId,
+    label,
+    expiresAt: Number(exp),
+  };
 }
 
 export class ViewingAsRefused extends Error {}

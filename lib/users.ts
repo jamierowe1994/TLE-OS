@@ -18,6 +18,10 @@ export interface OsUser {
   role: "owner" | "agent";
   photo: string | null;
   createdAt: string;
+  /** Their REX AccountUser id — what every figure is scoped by. Null until
+   *  linked, and a null here is why somebody would see nothing rather than
+   *  everything. */
+  rexUserId: string | null;
 }
 
 interface Row extends Record<string, unknown> {
@@ -28,6 +32,7 @@ interface Row extends Record<string, unknown> {
   photo: string | null;
   created_at: Date | string;
   password_hash?: string;
+  rex_user_id?: string | null;
 }
 
 function toUser(r: Row): OsUser {
@@ -38,6 +43,7 @@ function toUser(r: Row): OsUser {
     role: r.role === "owner" ? "owner" : "agent",
     photo: r.photo,
     createdAt: new Date(r.created_at).toISOString(),
+    rexUserId: r.rex_user_id ?? null,
   };
 }
 
@@ -52,7 +58,7 @@ export async function countUsers(): Promise<number> {
 export async function findUserById(id: string): Promise<OsUser | null> {
   if (!hasDb() || !id) return null;
   const rows = await q<Row>(
-    "SELECT id, email, name, role, photo, created_at FROM os_users WHERE id = $1",
+    "SELECT id, email, name, role, photo, created_at, rex_user_id FROM os_users WHERE id = $1",
     [id]
   );
   return rows[0] ? toUser(rows[0]) : null;
@@ -61,7 +67,7 @@ export async function findUserById(id: string): Promise<OsUser | null> {
 export async function findUserByEmail(email: string): Promise<OsUser | null> {
   if (!hasDb()) return null;
   const rows = await q<Row>(
-    "SELECT id, email, name, role, photo, created_at FROM os_users WHERE email = $1",
+    "SELECT id, email, name, role, photo, created_at, rex_user_id FROM os_users WHERE email = $1",
     [normaliseEmail(email)]
   );
   return rows[0] ? toUser(rows[0]) : null;
@@ -94,7 +100,7 @@ export async function createUser(params: {
 export async function authenticate(email: string, password: string): Promise<OsUser | null> {
   if (!hasDb()) return null;
   const rows = await q<Row>(
-    "SELECT id, email, name, role, photo, created_at, password_hash FROM os_users WHERE email = $1",
+    "SELECT id, email, name, role, photo, created_at, rex_user_id, password_hash FROM os_users WHERE email = $1",
     [normaliseEmail(email)]
   );
   const row = rows[0];
@@ -103,4 +109,33 @@ export async function authenticate(email: string, password: string): Promise<OsU
   if (!row || !ok) return null;
   await q("UPDATE os_users SET last_seen_at = NOW() WHERE id = $1", [row.id]);
   return toUser(row);
+}
+
+/**
+ * Link somebody to their REX id.
+ *
+ * Called on account creation and lazily on sign-in, because REX is the roster
+ * and the OS is just the login — a person added to REX after they got an OS
+ * account would otherwise stay unlinked forever, seeing nothing and being told
+ * nothing about why.
+ *
+ * Matched on email, which is the only stable key the two systems share.
+ */
+export async function linkRexUser(userId: string, rexUserId: string): Promise<void> {
+  if (!hasDb()) return;
+  await q(`update os_users set rex_user_id = $1 where id = $2`, [rexUserId, userId]);
+}
+
+/** Their REX id, looking it up and storing it the first time if need be. */
+export async function ensureRexLink(user: OsUser): Promise<string | null> {
+  if (user.rexUserId) return user.rexUserId;
+  try {
+    const { agentByEmail } = await import("@/lib/rex-agents");
+    const agent = await agentByEmail(user.email);
+    if (!agent?.id) return null;
+    await linkRexUser(user.id, agent.id);
+    return agent.id;
+  } catch {
+    return null;
+  }
 }

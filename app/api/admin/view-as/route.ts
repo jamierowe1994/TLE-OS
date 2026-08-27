@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOwner } from "@/lib/admin";
-import { findUserById } from "@/lib/users";
+import { findUserById, ensureRexLink } from "@/lib/users";
+import { lettingsAgents } from "@/lib/rex-agents";
 import { mintViewAs, readViewAs, VIEW_AS_COOKIE } from "@/lib/view-as";
 import { record } from "@/lib/audit";
 
@@ -24,16 +25,39 @@ export async function POST(req: NextRequest) {
   const owner = await requireOwner(req);
   if (!owner) return new NextResponse(null, { status: 404 });
 
-  const { userId } = (await req.json().catch(() => ({}))) as { userId?: string };
-  if (!userId) return NextResponse.json({ ok: false, error: "Which person?" }, { status: 400 });
+  const { userId, rexUserId } = (await req.json().catch(() => ({}))) as {
+    userId?: string;
+    rexUserId?: string;
+  };
 
-  const subject = await findUserById(userId);
-  if (!subject) return NextResponse.json({ ok: false, error: "No such person." }, { status: 404 });
+  /* Two ways in. By OS account when they have one; by REX id when they do not
+     — which is most of the team, and the people worth testing as. */
+  const subject = userId ? await findUserById(userId) : null;
+  if (userId && !subject) {
+    return NextResponse.json({ ok: false, error: "No such person." }, { status: 404 });
+  }
+  if (!subject && !rexUserId) {
+    return NextResponse.json({ ok: false, error: "Which person?" }, { status: 400 });
+  }
+
+  let rexId = rexUserId ?? null;
+  let label = subject?.name || subject?.email || "";
+  if (!rexId && subject) rexId = await ensureRexLink(subject);
+  if (!label && rexId) {
+    const agent = (await lettingsAgents().catch(() => [])).find((a) => a.id === rexId);
+    if (!agent) {
+      return NextResponse.json(
+        { ok: false, error: "That isn't one of TLE's people." },
+        { status: 403 }
+      );
+    }
+    label = agent.name;
+  }
 
   /* An owner may not wear another owner's face. The whole point is to see what
      an AGENT sees; owner-into-owner adds no testing value and would let one
      owner read another's admin screens without ever signing in as them. */
-  if (subject.role === "owner" && subject.id !== owner.id) {
+  if (subject && subject.role === "owner" && subject.id !== owner.id) {
     return NextResponse.json(
       { ok: false, error: "You can't view as another owner — only as an agent." },
       { status: 403 }
@@ -43,12 +67,12 @@ export async function POST(req: NextRequest) {
   await record({
     kind: "view_as_start",
     actorId: owner.id, actorEmail: owner.email,
-    subjectId: subject.id, subjectEmail: subject.email,
-    detail: "read-only, 30 minutes", ip: ipOf(req),
+    subjectId: subject?.id ?? null, subjectEmail: subject?.email ?? label,
+    detail: `read-only, 30 minutes, REX ${rexId ?? "unlinked"}`, ip: ipOf(req),
   });
 
-  const res = NextResponse.json({ ok: true, subject: { id: subject.id, name: subject.name, email: subject.email } });
-  res.cookies.set(VIEW_AS_COOKIE, mintViewAs(subject.id, owner.id), {
+  const res = NextResponse.json({ ok: true, subject: { name: label, rexUserId: rexId } });
+  res.cookies.set(VIEW_AS_COOKIE, mintViewAs(subject?.id ?? "-", owner.id, rexId, label), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",

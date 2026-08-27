@@ -56,13 +56,17 @@ export default function PersonPage({ params }: { params: Promise<{ rexId: string
       .catch(() => setErr("Couldn't load that person."));
   }, [rexId]);
 
+  /* Works whether or not they have an OS account. Most of the team has not
+     been invited yet, and the people worth testing as are exactly those. */
   async function viewAs() {
-    if (!d?.account) return;
+    if (!d) return;
     setBusy(true);
     const r = await fetch("/api/admin/view-as", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ userId: d.account.id }),
+      body: JSON.stringify(
+        d.account ? { userId: d.account.id } : { rexUserId: d.person.rexId }
+      ),
     });
     const j = (await r.json()) as { ok?: boolean; error?: string };
     setBusy(false);
@@ -106,7 +110,7 @@ export default function PersonPage({ params }: { params: Promise<{ rexId: string
             )}
           </p>
         </div>
-        {d.account && d.account.role !== "owner" && (
+        {d.account?.role !== "owner" && (
           <button
             type="button"
             onClick={viewAs}
