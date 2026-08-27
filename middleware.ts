@@ -57,7 +57,24 @@ export const config = {
   // Anchored, `api/key` matches `/api/key` and `/api/key/anything` but NOT
   // `/api/keys`. The two file exemptions are pinned with `$` because they are
   // exact files, not prefixes.
+  // `join` and `api/auth/verify` are exempt for the same reason as `present`:
+  // THE EMAILED TOKEN IS THE CREDENTIAL. A new starter confirming their address
+  // has no office access code — that is the entire point of sending them a
+  // link — and bouncing them to /key would mean the code has to be passed
+  // around in chat before anyone can join, which is how it leaked the first
+  // time.
+  //
+  // What guards these two instead, and it is more than the code offered:
+  //   · the address must be on the founding allowlist
+  //   · the token is 32 random bytes, hashed at rest, single use, one hour
+  //   · /start answers identically whatever happens, so it cannot be used to
+  //     discover who works here
+  //   · rate limited per address (in the database) and per IP
+  //
+  // Anchored with (?:/|$) like everything else here. Unanchored, `join` would
+  // exempt any future /joins or /joinery, and `api/auth/verify` would leak to
+  // a sibling like /api/auth/verify-phone the day somebody adds one.
   matcher: [
-    "/((?!(?:key|api/key|tenant|landlord|present|api/present|_next|icons|illustrations|brand)(?:/|$)|favicon\\.ico$|robots\\.txt$).*)",
+    "/((?!(?:key|api/key|join|api/auth/verify|tenant|landlord|present|api/present|_next|icons|illustrations|brand)(?:/|$)|favicon\\.ico$|robots\\.txt$).*)",
   ],
 };
