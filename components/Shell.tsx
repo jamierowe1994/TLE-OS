@@ -45,6 +45,17 @@ const BACK: NavItem[] = [
      everyone might do is how an OS starts to feel like a filing cabinet. */
 ];
 
+/**
+ * Owner only, and rendered only once /api/auth/me says so.
+ *
+ * A separate group rather than an entry in BACK OFFICE: the back-office rail
+ * is an agent's working day, and an environment switch does not belong one
+ * slip away from Compliance. Admin has its own sub-rail once you are inside.
+ */
+const ADMIN: NavItem[] = [
+  { href: "/admin", label: "Admin", icon: "shield" },
+];
+
 /** Clay is the house default; the attribute only exists for the others. */
 const ACCENTS = [
   { id: "", label: "Warm Clay", dot: "#de968f" },
@@ -136,6 +147,16 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [accent, setAccent] = useState("");
   const [theme, setTheme] = useState<ThemeChoice>("auto");
+  /* Owner-only nav. Decided on the ACTOR, so an owner viewing as an agent
+     keeps the Admin link and can always get back to stop. */
+  const [isOwner, setIsOwner] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { isOwner?: boolean } | null) => setIsOwner(Boolean(j?.isOwner)))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem("os-accent") ?? "";  // instant paint; the account copy syncs via usePref on the profile
@@ -249,6 +270,31 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               currentHref={currentHref}
             />
           ))}
+
+          {/* Only for owners, and only once we know. Rendering it optimistically
+              and hiding it later would flash an Admin link at every agent. */}
+          {isOwner && (
+            <>
+              <div className="mb-1 mt-3 border-t border-line/70 pt-3">
+                <p
+                  className={`overflow-hidden whitespace-nowrap px-3 text-[9px] font-bold uppercase tracking-[0.14em] text-muted/70 transition-[max-height,opacity] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                    collapsed ? "max-h-0 pb-0 opacity-0" : "max-h-5 pb-1 opacity-100"
+                  }`}
+                >
+                  Yours only
+                </p>
+              </div>
+              {ADMIN.map((item) => (
+                <NavLink
+                  key={item.href}
+                  item={item}
+                  active={pathname.startsWith(item.href)}
+                  collapsed={collapsed}
+                  currentHref={currentHref}
+                />
+              ))}
+            </>
+          )}
         </nav>
 
         {/* ── Profile, at the foot ── */}
