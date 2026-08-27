@@ -200,8 +200,9 @@ export default function AppraisalDrawer({
         <PresentationBuilder
           address={appraisal.address}
           postcode={appraisal.postcode}
+          landlord={appraisal.landlord}
+          refId={appraisal.leadId ?? appraisal.id}
           onClose={() => setBuilding(false)}
-          onCreate={() => setBuilding(false)}
         />
       )}
     </div>

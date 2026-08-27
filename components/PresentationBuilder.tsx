@@ -36,19 +36,79 @@ const money = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
 export default function PresentationBuilder({
   address,
   postcode,
+  landlord,
+  refId,
   onClose,
-  onCreate,
 }: {
   address: string;
   postcode: string;
+  landlord?: string;
+  refId?: string;
   onClose: () => void;
-  onCreate: (plan: DeckPlan, chosen: string[]) => void;
 }) {
   const [step, setStep] = useState(0);
   const [d, setD] = useState<MaResearch | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chosen, setChosen] = useState<string[]>([]);
   const [plan, setPlan] = useState<DeckPlan>(defaultPlan);
+  const [making, setMaking] = useState(false);
+  const [made, setMade] = useState<string | null>(null);
+
+  /**
+   * Mint the deck.
+   *
+   * Only the TICKED comparables travel, and only the figures they produce —
+   * the deck is a snapshot, so the range a landlord opens on Sunday is the one
+   * the agent approved on Friday. Sending the whole research packet would let
+   * the numbers move underneath them.
+   */
+  async function create() {
+    if (!d) return;
+    setMaking(true);
+    setError(null);
+    try {
+      const picked = d.comparables.filter((c) => chosen.includes(c.id));
+      const rents = picked.map((c) => c.rentMonthly).sort((a, b) => a - b);
+      const at = (q: number) => rents[Math.min(rents.length - 1, Math.floor(rents.length * q))];
+
+      const res = await fetch("/api/presentations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ref: refId ?? "",
+          recipientName: landlord ?? "",
+          address,
+          postcode,
+          comparables: rents.length
+            ? {
+                // Recomputed from what the agent CHOSE, not copied from the
+                // research. Ticking three of eight must move the range, or the
+                // deck quotes a number the chosen properties do not support.
+                guideLow: at(0.25),
+                guideMid: at(0.5),
+                guideHigh: at(0.75),
+                basedOn: rents.length,
+                rows: picked.map((c) => ({
+                  name: c.name,
+                  locality: c.locality,
+                  rent: c.rentDisplay,
+                  days: c.daysOnMarket,
+                  letAgreed: c.letAgreed,
+                })),
+                caveat: d.guide?.caveat ?? null,
+              }
+            : null,
+        }),
+      });
+      const j = (await res.json()) as { ok?: boolean; url?: string; error?: string };
+      if (j.ok && j.url) setMade(j.url);
+      else setError(j.error ?? "Couldn't create the presentation.");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setMaking(false);
+    }
+  }
 
   useEffect(() => {
     const q = new URLSearchParams({ address, postcode, beds: "2" });
@@ -210,6 +270,24 @@ export default function PresentationBuilder({
             </div>
           )}
 
+          {here === "review" && made && (
+            <div className="mb-3 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-4">
+              <p className="text-[13px] font-semibold">The presentation is ready.</p>
+              <p className="mt-1 text-[12px] leading-relaxed text-muted">
+                This is the link the landlord opens. Check it before you send it — it has
+                their name on it.
+              </p>
+              <a
+                href={made}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 inline-block text-[12.5px] underline"
+              >
+                {made}
+              </a>
+            </div>
+          )}
+
           {here === "review" && (
             <div className="space-y-3">
               <p className="text-[12.5px] leading-relaxed text-muted">
@@ -294,10 +372,11 @@ export default function PresentationBuilder({
           ) : (
             <button
               type="button"
-              onClick={() => onCreate(plan, chosen)}
-              className="rounded-lg bg-accent-dark px-3.5 py-2 text-[12px] font-semibold text-white"
+              onClick={create}
+              disabled={making || !d}
+              className="rounded-lg bg-accent-dark px-3.5 py-2 text-[12px] font-semibold text-white disabled:opacity-40"
             >
-              Create presentation
+              {making ? "Creating…" : "Create presentation"}
             </button>
           )}
         </div>

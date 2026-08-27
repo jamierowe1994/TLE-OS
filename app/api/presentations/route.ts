@@ -36,6 +36,17 @@ function origin(req: NextRequest): string {
 
 type Body = {
   ref?: string;
+  /** Straight from the presentation builder: the comparables the agent
+   *  actually ticked, and which sections they kept. Both optional — a deck
+   *  minted without the wizard still works exactly as it did. */
+  comparables?: {
+    guideLow: number;
+    guideMid: number;
+    guideHigh: number;
+    basedOn: number;
+    rows: { name: string; locality: string; rent: string; days: number | null; letAgreed: boolean }[];
+    caveat: string | null;
+  } | null;
   recipientName?: string;
   address?: string;
   postcode?: string;
@@ -138,6 +149,12 @@ export async function POST(req: NextRequest) {
     startsAt: body.startsAt ?? null,
     minutes: Number(body.minutes) > 0 ? Number(body.minutes) : 45,
     agent,
+    /* SNAPSHOTTED, not looked up. The figure a landlord opens on Sunday must
+       be the one the agent approved on Friday — see lib/present. Three
+       comparables is the floor; below that slidesFor drops the slide, so a
+       thin selection quietly becomes no slide rather than a weak one. */
+    comparables:
+      body.comparables && body.comparables.rows.length >= 3 ? body.comparables : null,
     createdAt: new Date().toISOString(),
   };
 
