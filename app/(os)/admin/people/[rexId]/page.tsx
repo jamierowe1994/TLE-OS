@@ -21,7 +21,9 @@ type Data = {
   person: { rexId: string; name: string; email: string; photo: string | null; position: string | null; phone: string | null };
   account: { id: string; role: string; hasPhoto: boolean; createdAt: string } | null;
   book: {
-    listings: Counted; properties: Counted; contacts: Counted; leads: Counted;
+    listings: Counted; onMarket: Counted; managed: Counted;
+    properties: Counted; contacts: Counted; leads: Counted;
+    appraisals: Counted; applications: Counted;
     recentListings: Array<{ id: string; address: string; status: string | null; rent: number | null }>;
     pulledAt: string;
   };
@@ -117,10 +119,14 @@ export default function PersonPage({ params }: { params: Promise<{ rexId: string
       </header>
 
       <div className="fade-up mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Count label="Listings" c={d.book.listings} />
+        <Count label="On the market" c={d.book.onMarket} />
+        <Count label="Let & managed" c={d.book.managed} />
+        <Count label="Listings, all time" c={d.book.listings} />
         <Count label="Properties" c={d.book.properties} />
-        <Count label="Contacts" c={d.book.contacts} />
         <Count label="Leads assigned" c={d.book.leads} />
+        <Count label="Appraisals" c={d.book.appraisals} />
+        <Count label="Applications" c={d.book.applications} />
+        <Count label="Contacts" c={d.book.contacts} />
       </div>
 
       <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
@@ -140,10 +146,17 @@ export default function PersonPage({ params }: { params: Promise<{ rexId: string
             ))}
           </ul>
         )}
-        <p className="mt-3 border-t border-line/70 pt-2.5 text-[10.5px] text-muted">
-          Live from REX on <span className="font-semibold">system_owner_user_id</span>, leads on{" "}
-          <span className="font-semibold">lead.assignee_id</span> — owning stock and chasing a lead
-          are different jobs, so they are counted separately.
+        <p className="mt-3 border-t border-line/70 pt-2.5 text-[10.5px] leading-relaxed text-muted">
+          Live from REX. Listings match on owner or selling agent, leads on who they&apos;re
+          assigned to, appraisals on agent 1, applications on the application&apos;s agent.
+          <br />
+          <span className="font-semibold">Viewings aren&apos;t here on purpose</span> — REX
+          calendar events carry no owning agent, so a per-person figure can&apos;t be produced.
+          Business-wide only.
+          <br />
+          These are everything this person touches in REX, which is shared across six
+          businesses — a partner who also sells for The Property Experts will show that work
+          here too.
         </p>
       </section>
     </>

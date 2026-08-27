@@ -4,19 +4,41 @@ import { rexCall } from "@/lib/rex";
 /**
  * One agent's whole book, pulled by their REX user id.
  *
- * ── The join key, measured rather than guessed ────────────────────────────
+ * ── The join keys, measured against real ids ──────────────────────────────
  *
- * `system_owner_user_id` is the field that works, and it works on Listings,
- * Properties and Contacts. Verified 27 Aug against real ids: Rhiannon Dodge
- * (57533) → 83 listings, 85 properties, 1,583 contacts. Susan (53004) → 0
- * listings, which is right: she runs the business, she does not carry stock.
+ * Corrected 27 Aug after reading the F&C pipeline and the TLE portal, which
+ * had already solved this. My first pass used `listing_agent_id` — not a
+ * field — and then fell back to `system_owner_user_id` alone. Both were wrong
+ * in different ways.
  *
- * Two dead ends recorded so nobody spends the afternoon on them again:
- *   · `listing_agent_id` is NOT searchable. REX returns "the field
- *     'listing_agent_id' is not searchable" — it exists for display only.
- *   · Leads do NOT accept `system_owner_user_id` at all. They use
- *     **`lead.assignee_id`**, which is a different question (who is chasing
- *     it) and the right one.
+ * Measured on Rhiannon Dodge (57533):
+ *
+ *   system_owner_user_id   83 listings   ← who the record BELONGS to
+ *   listing_agent_1_id     76 listings   ← who is SELLING it
+ *   listing_agent_2_id      0 listings
+ *
+ * They disagree by seven, and that is not an error to reconcile — they are
+ * different questions. F&C counts a listing as an agent's if it matches ANY
+ * of the three (`shapeListing`, searchRexListings/entry.ts:50-57), which is
+ * the honest answer to "what is Rhiannon's book".
+ *
+ * Recorded so nobody loses an afternoon to them:
+ *   · `listing_agent_id` (no digit) is NOT searchable — REX refuses it by name.
+ *   · Leads reject `system_owner_user_id` entirely. They use
+ *     **`lead.assignee_id`** — who is CHASING it, which is the better question.
+ *   · Appraisals use `agent_1_id`, applications `application.agent_id`.
+ *   · VIEWINGS CANNOT BE COUNTED PER AGENT AT ALL. They live on CalendarEvents,
+ *     which carry no owning agent — the portal hit the same wall
+ *     (lib/rex-stats.ts:436-439). Business-wide or nothing, so this page shows
+ *     nothing rather than a wrong number.
+ *
+ * ── The lettings caveat, inherited from the portal ────────────────────────
+ *
+ * TLE partners also sell for The Property Experts on the SAME REX id — six
+ * businesses share account 3517. So a raw count is "everything this person
+ * touches", not "their lettings book". Where a figure is used commercially it
+ * must narrow by its own means (rental category, `appraisal_type === "rent"`).
+ * Stated on the page rather than silently fudged.
  *
  * ── Counts first, rows second ─────────────────────────────────────────────
  *
@@ -40,10 +62,17 @@ export interface Counted {
 
 export interface AgentBook {
   rexId: string;
+  /** Owned OR sold by them — see the header on why both are counted. */
   listings: Counted;
+  /** Live on the market right now. */
+  onMarket: Counted;
+  /** Let and being managed — the recurring half of the book. */
+  managed: Counted;
   properties: Counted;
   contacts: Counted;
   leads: Counted;
+  appraisals: Counted;
+  applications: Counted;
   /** A handful of real rows, so the page shows work and not just arithmetic. */
   recentListings: Array<{ id: string; address: string; status: string | null; rent: number | null }>;
   pulledAt: string;
@@ -98,21 +127,59 @@ async function recentListings(id: string): Promise<AgentBook["recentListings"]> 
   }
 }
 
+/** Two criteria at once — REX ANDs them. */
+async function countWhere(service: string, criteria: Array<{ name: string; type: string; value: string }>): Promise<Counted> {
+  try {
+    const res = await rexCall(service, "search", { criteria, limit: 1 });
+    if (!res.ok) return { total: null, failed: true };
+    const total = (res.result as { total?: number } | undefined)?.total;
+    return typeof total === "number" ? { total, failed: false } : { total: null, failed: true };
+  } catch {
+    return { total: null, failed: true };
+  }
+}
+
 export async function agentBook(rexId: string): Promise<AgentBook> {
-  const [listings, properties, contacts, leads, rows] = await Promise.all([
-    count("Listings", "system_owner_user_id", rexId),
-    count("Properties", "system_owner_user_id", rexId),
-    count("Contacts", "system_owner_user_id", rexId),
-    // Leads are ASSIGNED, not owned — a different question, and the right one.
-    count("Leads", "lead.assignee_id", rexId),
-    recentListings(rexId),
-  ]);
+  const [owned, sold, onMarket, managed, properties, contacts, leads, appraisals, applications, rows] =
+    await Promise.all([
+      count("Listings", "system_owner_user_id", rexId),
+      count("Listings", "listing_agent_1_id", rexId),
+      countWhere("Listings", [
+        { name: "listing_agent_1_id", type: "=", value: rexId },
+        { name: "system_listing_state", type: "=", value: "current" },
+      ]),
+      countWhere("Listings", [
+        { name: "listing_agent_1_id", type: "=", value: rexId },
+        { name: "system_listing_state", type: "=", value: "leased" },
+      ]),
+      count("Properties", "system_owner_user_id", rexId),
+      count("Contacts", "system_owner_user_id", rexId),
+      count("Leads", "lead.assignee_id", rexId),
+      count("Appraisals", "agent_1_id", rexId),
+      count("TenancyApplications", "application.agent_id", rexId),
+      recentListings(rexId),
+    ]);
+
+  /* The larger of the two, not the sum: a listing an agent both owns and sells
+     would otherwise be counted twice. REX cannot express OR across fields in
+     one search, and firing a third query to union the ids would cost more than
+     the precision is worth on a page whose job is "roughly how big is this
+     book". Stated here so the number is never mistaken for exact. */
+  const listings: Counted =
+    owned.failed && sold.failed
+      ? { total: null, failed: true }
+      : { total: Math.max(owned.total ?? 0, sold.total ?? 0), failed: false };
+
   return {
     rexId,
     listings,
+    onMarket,
+    managed,
     properties,
     contacts,
     leads,
+    appraisals,
+    applications,
     recentListings: rows,
     pulledAt: new Date().toISOString(),
   };
