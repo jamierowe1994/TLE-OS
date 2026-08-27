@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { startVerification, VerificationError } from "@/lib/verification";
 import { verifyEmailFor } from "@/lib/verify-email";
 import { sendEmail, ResendBlocked, resendConfigured } from "@/lib/resend";
-import { isFoundingOwner, ExternalRecipientRefused } from "@/lib/email-policy";
+import { isFoundingOwner, isInternalAddress, wrongDomainMessage, ExternalRecipientRefused } from "@/lib/email-policy";
 import { findUserByEmail, normaliseEmail } from "@/lib/users";
 
 /**
@@ -80,6 +80,13 @@ export async function POST(req: NextRequest) {
   if (!ipAllowed(ip)) {
     console.warn(`[verify/start] rate limited ip=${ip}`);
     return NextResponse.json(SAME_ANSWER);
+  }
+
+  /* THE ONE CASE WE SAY OUT LOUD. A wrong domain is a policy, not a fact about
+     any person, so telling them leaks nothing and saves them refreshing an
+     empty inbox. Everything past this point stays silent — see SAME_ANSWER. */
+  if (email && !isInternalAddress(email)) {
+    return NextResponse.json({ ok: false, wrongDomain: true, message: wrongDomainMessage(email) }, { status: 200 });
   }
 
   try {

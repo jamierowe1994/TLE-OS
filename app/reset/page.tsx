@@ -25,21 +25,30 @@ function AskForEmail() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
+  /* A wrong DOMAIN is said out loud — it is a policy, not a fact about any
+     person, so it leaks nothing and saves them staring at an empty inbox. */
+  const [wrongDomain, setWrongDomain] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     try {
-      await fetch("/api/auth/reset/start", {
+      const r = await fetch("/api/auth/reset/start", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email }),
       });
+      const j = (await r.json()) as { wrongDomain?: boolean; message?: string };
+      if (j.wrongDomain) {
+        setWrongDomain(j.message ?? "That address isn't a Lettings Experts one.");
+        return;
+      }
+      setSent(true);
     } catch {
       /* same answer either way — see the route */
+      setSent(true);
     } finally {
       setBusy(false);
-      setSent(true);
     }
   }
 
@@ -67,6 +76,12 @@ function AskForEmail() {
       <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
         Your work email. We&apos;ll send a link to set a new one.
       </p>
+      {wrongDomain && (
+        <p className="mt-4 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3.5 text-[12.5px] leading-relaxed">
+          {wrongDomain}
+        </p>
+      )}
+
       <form onSubmit={submit} className="mt-5">
         <label htmlFor="email" className="text-[10px] uppercase tracking-wider text-muted">
           Email
@@ -78,7 +93,7 @@ function AskForEmail() {
           autoFocus
           autoComplete="email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => { setEmail(e.target.value); setWrongDomain(null); }}
           className="mt-1.5 w-full rounded-lg border border-line/80 bg-box px-3 py-2.5 text-[14px]"
         />
         <button

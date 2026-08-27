@@ -85,6 +85,35 @@ export function isInternalAddress(email: string): boolean {
 export class ExternalRecipientRefused extends Error {}
 
 /**
+ * What to SAY to somebody typing a non-TEG address into a sign-up box.
+ *
+ * ── Why this one is safe to be loud about, when the rest stay silent ──────
+ *
+ * /verify/start and /reset/start answer identically whatever happens, because
+ * a different answer per case turns the form into a staff directory: post an
+ * address, watch the response, learn whether that person works here.
+ *
+ * The DOMAIN rule leaks none of that. "We only accept @thelettingexperts.co.uk"
+ * is a policy, not a fact about any individual — it is the same answer for
+ * every address on gmail.com, and it reveals nothing about who holds an
+ * account. So it can be said out loud, and it should be: somebody typing their
+ * personal address is making an honest mistake and deserves to be told, not
+ * left refreshing an inbox.
+ *
+ * The silence stays exactly where it earns its keep — RIGHT domain, wrong
+ * person. That is the case that would leak, and it still says nothing.
+ */
+export function wrongDomainMessage(email: string): string {
+  const d = domainOf(email);
+  const list = internalDomains().map((x) => `@${x}`).join(" or ");
+  return (
+    `That's ${d ? `an @${d}` : "not a work"} address — TLE OS only lets you in on a Lettings Experts one. ` +
+    `Try your ${list} address instead. ` +
+    `If you don't have one yet, that's a question for James rather than for this box.`
+  );
+}
+
+/**
  * Refuse anything that is not a colleague.
  *
  * Throws rather than returning a boolean, so a caller cannot forget to check

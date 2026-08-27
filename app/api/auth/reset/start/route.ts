@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { startVerification, VerificationError } from "@/lib/verification";
 import { resetEmailFor } from "@/lib/verify-email";
 import { sendEmail, ResendBlocked, resendConfigured } from "@/lib/resend";
-import { ExternalRecipientRefused } from "@/lib/email-policy";
+import { ExternalRecipientRefused, isInternalAddress, wrongDomainMessage } from "@/lib/email-policy";
 import { findUserByEmail, normaliseEmail } from "@/lib/users";
 
 /**
@@ -56,6 +56,12 @@ export async function POST(req: NextRequest) {
   if (!ipAllowed(ip)) {
     console.warn(`[reset/start] rate limited ip=${ip}`);
     return NextResponse.json(SAME_ANSWER);
+  }
+
+  // Said out loud for the same reason as /verify/start — a domain is a policy,
+  // not a fact about a person.
+  if (email && !isInternalAddress(email)) {
+    return NextResponse.json({ ok: false, wrongDomain: true, message: wrongDomainMessage(email) }, { status: 200 });
   }
 
   try {
