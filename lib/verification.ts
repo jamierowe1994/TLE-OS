@@ -44,6 +44,8 @@ function mintToken(): string {
 
 const hashToken = (t: string) => createHash("sha256").update(t).digest("hex");
 
+export type Purpose = "join" | "reset";
+
 export interface Verification {
   email: string;
   expiresAt: string;
@@ -63,7 +65,10 @@ export class VerificationError extends Error {}
  * three, and the most recent one is the one that works — which is the one they
  * are looking at.
  */
-export async function startVerification(rawEmail: string): Promise<{ token: string; email: string }> {
+export async function startVerification(
+  rawEmail: string,
+  purpose: Purpose = "join"
+): Promise<{ token: string; email: string }> {
   const email = normaliseEmail(rawEmail);
   if (!email.includes("@")) throw new VerificationError("That isn't an email address.");
   /* Checked HERE as well as at the send path. A verification endpoint that
@@ -81,11 +86,11 @@ export async function startVerification(rawEmail: string): Promise<{ token: stri
   const token = mintToken();
   const expires = new Date(Date.now() + TTL_MS).toISOString();
 
-  await q(`delete from os_email_verifications where email = $1`, [email]);
+  await q(`delete from os_email_verifications where email = $1 and purpose = $2`, [email, purpose]);
   await q(
-    `insert into os_email_verifications (email, token_hash, expires_at, created_at)
-     values ($1, $2, $3, now())`,
-    [email, hashToken(token), expires]
+    `insert into os_email_verifications (email, token_hash, purpose, expires_at, created_at)
+     values ($1, $2, $3, $4, now())`,
+    [email, hashToken(token), purpose, expires]
   );
 
   return { token, email };
@@ -98,13 +103,16 @@ export async function startVerification(rawEmail: string): Promise<{ token: stri
  * operation on purpose: a "check" that a caller can perform without consuming
  * is a replayable token waiting for somebody to forget the second call.
  */
-export async function consumeVerification(token: string): Promise<Verification> {
+export async function consumeVerification(
+  token: string,
+  purpose: Purpose = "join"
+): Promise<Verification> {
   if (!token?.trim()) throw new VerificationError("That link is missing its code.");
   if (!hasDb()) throw new VerificationError("The database isn't connected on this environment.");
 
   const hash = hashToken(token.trim());
-  const rows = await q<{ email: string; token_hash: string; expires_at: Date | string }>(
-    `select email, token_hash, expires_at from os_email_verifications where token_hash = $1`,
+  const rows = await q<{ email: string; token_hash: string; expires_at: Date | string; purpose: string }>(
+    `select email, token_hash, purpose, expires_at from os_email_verifications where token_hash = $1`,
     [hash]
   );
   const row = rows[0];
@@ -114,6 +122,13 @@ export async function consumeVerification(token: string): Promise<Verification> 
      ever existed. Expiry is safe to name because they already hold a real
      token to have got here. */
   if (!row) throw new VerificationError("That link isn't valid. Ask for a new one.");
+
+  /* A join link must not set the password on a live account, and a reset link
+     must not create one. Same message either way — the holder of a real token
+     gains nothing from knowing which kind they have. */
+  if (row.purpose !== purpose) {
+    throw new VerificationError("That link isn't valid. Ask for a new one.");
+  }
 
   const a = Buffer.from(row.token_hash);
   const b = Buffer.from(hash);

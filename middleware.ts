@@ -137,6 +137,6 @@ export const config = {
   // exempt any future /joins or /joinery, and `api/auth/verify` would leak to
   // a sibling like /api/auth/verify-phone the day somebody adds one.
   matcher: [
-    "/((?!(?:key|api/key|join|api/auth/verify|sign-in|api/auth/login|tenant|landlord|present|api/present|_next|icons|illustrations|brand)(?:/|$)|favicon\\.ico$|robots\\.txt$).*)",
+    "/((?!(?:key|api/key|join|api/auth/verify|sign-in|api/auth/login|reset|api/auth/reset|tenant|landlord|present|api/present|_next|icons|illustrations|brand)(?:/|$)|favicon\\.ico$|robots\\.txt$).*)",
   ],
 };

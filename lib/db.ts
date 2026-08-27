@@ -69,9 +69,15 @@ CREATE TABLE IF NOT EXISTS os_users (
 CREATE TABLE IF NOT EXISTS os_email_verifications (
   email          TEXT NOT NULL,
   token_hash     TEXT NOT NULL UNIQUE,
+  -- 'join' or 'reset'. A token minted for one must never be spendable on the
+  -- other: a join link is issued to somebody with NO account, a reset link to
+  -- somebody WITH one, and letting them cross means a stale join link could
+  -- set the password on a live account.
+  purpose        TEXT NOT NULL DEFAULT 'join',
   expires_at     TIMESTAMPTZ NOT NULL,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE os_email_verifications ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT 'join';
 CREATE INDEX IF NOT EXISTS os_email_verifications_email ON os_email_verifications (email);
 
 -- Anything that belongs to one person and should follow them between

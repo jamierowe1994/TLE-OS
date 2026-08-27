@@ -103,3 +103,69 @@ export function verifyEmailFor(link: string): VerifyEmail {
 
   return { subject: "Confirm your TLE OS account", html, text };
 }
+
+/**
+ * The forgotten-password email.
+ *
+ * Same shell as the verification email — the dark-mode fixes are not optional
+ * here either — but the words matter more. A reset email arriving unrequested
+ * is the one that makes somebody think they have been hacked, so it says
+ * plainly that nothing has changed yet and that ignoring it is enough.
+ */
+export function resetEmailFor(link: string): VerifyEmail {
+  const safe = esc(link);
+  const text = [
+    "Setting a new TLE OS password",
+    "",
+    "Open the link below to choose a new password.",
+    "",
+    link,
+    "",
+    "The link works once and lasts an hour.",
+    "",
+    "If you didn't ask for this, ignore it. Your password has not changed and",
+    "nothing happens until the link is opened.",
+  ].join("\n");
+
+  const html = `
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+</head>
+<body style="margin:0;padding:0;background-color:#f5f5f4">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f5f5f4" style="background-color:#f5f5f4;margin:0;padding:0">
+  <tr>
+    <td align="center" style="padding:24px 12px">
+      <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff;width:560px;max-width:100%;border-radius:12px;border:1px solid #e7e5e4">
+        <tr>
+          <td style="padding:28px 26px;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1c1917;background-color:#ffffff">
+            <p style="font-size:19px;margin:0 0 18px;color:#1c1917;background-color:#ffffff">Setting a new TLE OS password</p>
+            <p style="margin:0 0 18px;color:#1c1917;background-color:#ffffff">Open the link below to choose a new one.</p>
+            <p style="margin:0 0 22px;background-color:#ffffff">
+              <a href="${safe}" style="display:inline-block;background-color:#7f1d1d;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600">Choose a new password</a>
+            </p>
+            <p style="margin:0 0 18px;font-size:13px;color:#57534e;background-color:#ffffff">
+              If the button doesn't work, paste this into your browser:<br>
+              <span style="word-break:break-all;color:#57534e">${safe}</span>
+            </p>
+            <p style="margin:0 0 18px;font-size:13px;color:#57534e;background-color:#ffffff">The link works once and lasts an hour.</p>
+            <hr style="border:none;border-top:1px solid #e7e5e4;margin:22px 0">
+            <p style="margin:0;font-size:12.5px;color:#57534e;background-color:#ffffff">
+              If you didn't ask for this, ignore it. Your password has not changed, and
+              nothing happens until the link is opened.
+            </p>
+          </td>
+        </tr>
+      </table>
+      <p style="margin:14px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:11.5px;color:#78716c">The Letting Experts</p>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`.trim();
+
+  return { subject: "Set a new TLE OS password", html, text };
+}

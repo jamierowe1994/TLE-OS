@@ -141,7 +141,11 @@ function SignIn() {
           </button>
         </form>
 
-        <p className="mt-5 border-t border-line/70 pt-4 text-[12px] text-muted">
+        <p className="mt-4 text-[12px]">
+          <Link href="/reset" className="text-muted underline">Forgotten your password?</Link>
+        </p>
+
+        <p className="mt-4 border-t border-line/70 pt-4 text-[12px] text-muted">
           No account yet?{" "}
           <Link href="/join" className="underline">
             Set one up
