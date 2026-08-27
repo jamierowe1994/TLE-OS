@@ -40,11 +40,21 @@ import { findUserByEmail } from "@/lib/users";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-async function foundingState(): Promise<Array<{ email: string; registered: boolean }>> {
+async function foundingState() {
   if (!hasDb()) return FOUNDING_OWNERS.map((email) => ({ email, registered: false }));
   const out = [];
   for (const email of FOUNDING_OWNERS) {
-    out.push({ email, registered: Boolean(await findUserByEmail(email)) });
+    const u = await findUserByEmail(email);
+    /* createdAt and name as well as the boolean: James says he never made an
+       account, yet one exists on his address. "When" is the only thing that
+       distinguishes a forgotten setup from something that needs answering. */
+    out.push({
+      email,
+      registered: Boolean(u),
+      name: u?.name ?? null,
+      role: u?.role ?? null,
+      createdAt: u?.createdAt ?? null,
+    });
   }
   return out;
 }
