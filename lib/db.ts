@@ -62,6 +62,18 @@ CREATE TABLE IF NOT EXISTS os_users (
   last_seen_at   TIMESTAMPTZ
 );
 
+-- Pending email verifications. The token is NEVER stored — only its SHA-256,
+-- so a read of this table cannot be turned into a sign-in. One live row per
+-- address: asking again replaces rather than accumulates, so the link somebody
+-- is looking at is always the one that works.
+CREATE TABLE IF NOT EXISTS os_email_verifications (
+  email          TEXT NOT NULL,
+  token_hash     TEXT NOT NULL UNIQUE,
+  expires_at     TIMESTAMPTZ NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_email_verifications_email ON os_email_verifications (email);
+
 -- Anything that belongs to one person and should follow them between
 -- machines: dashboard layout, theme, profile fields. One row per person per
 -- key, value is whatever that feature stores.
