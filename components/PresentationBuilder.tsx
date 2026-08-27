@@ -1,0 +1,308 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { Pill } from "@/components/Wire";
+import {
+  BUILD_STEPS,
+  DECK_SECTIONS,
+  defaultPlan,
+  defaultSelection,
+  pagesIn,
+  reorder,
+  type BuildStepId,
+  type DeckPlan,
+} from "@/lib/presentation-builder";
+import type { MaResearch } from "@/lib/ma-research";
+
+/**
+ * Build the presentation.
+ *
+ * Called "Build presentation", not "Research" — James, 23 Aug, and he is
+ * right: the agent is not browsing data, they are making the thing they will
+ * put in front of a landlord. Naming it after the output is what makes the
+ * button obvious at 8am.
+ *
+ * Five steps, not F&C's six. Buyer matches is dropped: a landlord does not
+ * care who is looking, they care what it lets for and how fast.
+ *
+ * Every step can be empty and the wizard still finishes — see canAdvance in
+ * lib/presentation-builder for why gating on "pick a comparable" would just
+ * make agents stop using it.
+ */
+
+const money = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
+
+export default function PresentationBuilder({
+  address,
+  postcode,
+  onClose,
+  onCreate,
+}: {
+  address: string;
+  postcode: string;
+  onClose: () => void;
+  onCreate: (plan: DeckPlan, chosen: string[]) => void;
+}) {
+  const [step, setStep] = useState(0);
+  const [d, setD] = useState<MaResearch | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<string[]>([]);
+  const [plan, setPlan] = useState<DeckPlan>(defaultPlan);
+
+  useEffect(() => {
+    const q = new URLSearchParams({ address, postcode, beds: "2" });
+    fetch(`/api/ma-research?${q}`)
+      .then((r) => r.json())
+      .then((j: MaResearch & { error?: string }) => {
+        if (j.error) return setError(j.error);
+        setD(j);
+        // Only same-sector start ticked — a pre-ticked box is a recommendation.
+        setChosen(defaultSelection(j.comparables));
+      })
+      .catch((e: Error) => setError(e.message));
+  }, [address, postcode]);
+
+  const available = useMemo(() => (d?.comparables ?? []).filter((c) => !c.letAgreed), [d]);
+  const let_ = useMemo(() => (d?.comparables ?? []).filter((c) => c.letAgreed), [d]);
+
+  const toggle = (id: string) =>
+    setChosen((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
+
+  const here = BUILD_STEPS[step].id as BuildStepId;
+  const pages = pagesIn(plan);
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[140] flex items-center justify-center bg-ink/45 p-4">
+      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-page shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
+          <div className="min-w-0">
+            <p className="hand text-[17px] leading-tight">Build the presentation</p>
+            <p className="truncate text-[11.5px] text-muted">
+              {address} · {postcode}
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="text-[18px] leading-none text-muted hover:text-ink">
+            ✕
+          </button>
+        </div>
+
+        {/* The five steps, clickable — an agent who wants to change one thing
+            shouldn't have to walk the whole wizard again. */}
+        <nav className="flex shrink-0 flex-wrap gap-1.5 border-b border-line/70 px-5 py-3">
+          {BUILD_STEPS.map((s, i) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setStep(i)}
+              title={s.blurb}
+              className={`rounded-full border px-3 py-1 text-[11.5px] transition-colors ${
+                i === step ? "border-accent-dark bg-accent-dark text-white" : "border-line/80"
+              }`}
+            >
+              <span className="mr-1 opacity-50">{i + 1}</span>
+              {s.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          {error && <p className="text-[12.5px] text-accent-dark">{error}</p>}
+          {!d && !error && <p className="text-[12.5px] text-muted">Pulling the research…</p>}
+
+          {d && here === "property" && (
+            <div className="space-y-3">
+              <p className="text-[12.5px] leading-relaxed text-muted">{BUILD_STEPS[0].blurb}</p>
+              {d.addressWarning && (
+                <p className="rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[12px] leading-relaxed">
+                  {d.addressWarning}
+                </p>
+              )}
+              <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {[
+                  ["Address", address],
+                  ["Postcode", postcode],
+                  ["Sector", d.sector ?? "—"],
+                  ["Confirmed", d.subject ? "Yes" : "Not confirmed"],
+                ].map(([k, v]) => (
+                  <div key={k} className="rounded-xl border border-line/70 p-3">
+                    <dt className="text-[10px] uppercase tracking-wider text-muted">{k}</dt>
+                    <dd className="mt-1 text-[13px]">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          )}
+
+          {d && (here === "available" || here === "let") && (
+            <div className="space-y-3">
+              <p className="text-[12.5px] leading-relaxed text-muted">
+                {here === "available" ? BUILD_STEPS[1].blurb : BUILD_STEPS[2].blurb}
+              </p>
+              {(here === "available" ? available : let_).length === 0 ? (
+                <p className="rounded-xl border border-line/70 p-4 text-[12.5px] text-muted">
+                  Nothing here for this postcode. That is a real answer, not a failure — carry
+                  on, and this section simply won&apos;t appear in the deck.
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {(here === "available" ? available : let_).map((c) => (
+                    <li key={c.id}>
+                      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-line/70 p-3 text-[12.5px]">
+                        <input
+                          type="checkbox"
+                          checked={chosen.includes(c.id)}
+                          onChange={() => toggle(c.id)}
+                          className="h-4 w-4 accent-[#e31f36]"
+                        />
+                        <span className="min-w-0 flex-1 truncate">
+                          {c.name}
+                          <span className="ml-1.5 text-[10.5px] text-muted">{c.locality}</span>
+                        </span>
+                        {c.daysOnMarket != null && (
+                          <span className="shrink-0 text-[10.5px] text-muted">
+                            {c.letAgreed ? `let in ${c.daysOnMarket}d` : `${c.daysOnMarket}d`}
+                          </span>
+                        )}
+                        <Pill tone={c.nearness === "sector" ? "accent" : "neutral"}>
+                          {c.nearness === "sector" ? "same sector" : c.nearness === "district" ? "same district" : "wider area"}
+                        </Pill>
+                        <span className="figures shrink-0">{c.rentDisplay}</span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="text-[11px] leading-relaxed text-muted">
+                Only same-sector properties start ticked. A pre-ticked box is a
+                recommendation, and recommending one from the other side of the city is how
+                you end up defending a property you have never seen.
+              </p>
+            </div>
+          )}
+
+          {d && here === "market" && (
+            <div className="space-y-3">
+              <p className="text-[12.5px] leading-relaxed text-muted">{BUILD_STEPS[3].blurb}</p>
+              {d.guide ? (
+                <div className="rounded-xl border border-line/70 p-4">
+                  <p className="figures text-[22px] leading-none">{money(d.guide.mid)} pcm</p>
+                  <p className="mt-1 text-[12px] text-muted">
+                    {money(d.guide.low)}–{money(d.guide.high)} · {d.guide.basedOn} comparables ·{" "}
+                    {d.guide.ring === "sector" ? "same sector" : d.guide.ring === "district" ? "same district" : "wider area"}
+                  </p>
+                  {d.guide.caveat && (
+                    <p className="mt-2 text-[11.5px] leading-relaxed text-accent-dark">{d.guide.caveat}</p>
+                  )}
+                </div>
+              ) : (
+                <p className="rounded-xl border border-line/70 p-4 text-[12.5px] text-muted">
+                  No guide — nothing in our book near this postcode.
+                </p>
+              )}
+              <p className="text-[12px] text-muted">
+                {d.areaAverage
+                  ? `Homesearch: average ${d.areaAverage.beds}-bed asking rent in ${d.sector} is ${money(d.areaAverage.avgRent)} pcm.`
+                  : "Homesearch has no average for this sector and bed count, so the market section will be left out."}
+              </p>
+            </div>
+          )}
+
+          {here === "review" && (
+            <div className="space-y-3">
+              <p className="text-[12.5px] leading-relaxed text-muted">
+                {pages.length} pages, {chosen.length} comparable{chosen.length === 1 ? "" : "s"}.
+                Untick to leave a section out; everything stays saved either way.
+              </p>
+              <ul className="space-y-1.5">
+                {plan.order.map((id) => {
+                  const s = DECK_SECTIONS.find((x) => x.id === id);
+                  if (!s) return null;
+                  const on = s.always || plan.enabled[s.id];
+                  return (
+                    <li
+                      key={s.id}
+                      className="flex items-center gap-3 rounded-xl border border-line/70 p-3 text-[12.5px]"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        disabled={s.always}
+                        onChange={() =>
+                          setPlan((p) => ({ ...p, enabled: { ...p.enabled, [s.id]: !p.enabled[s.id] } }))
+                        }
+                        className="h-4 w-4 accent-[#e31f36] disabled:opacity-40"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block">{s.label}</span>
+                        <span className="block text-[10.5px] text-muted">{s.blurb}</span>
+                      </span>
+                      {s.always ? (
+                        <Pill tone="neutral">always in</Pill>
+                      ) : (
+                        <span className="flex shrink-0 gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setPlan((p) => reorder(p, s.id, -1))}
+                            className="rounded border border-line/80 px-2 text-[12px]"
+                            title="Move up"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPlan((p) => reorder(p, s.id, 1))}
+                            className="rounded border border-line/80 px-2 text-[12px]"
+                            title="Move down"
+                          >
+                            ↓
+                          </button>
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="text-[11px] leading-relaxed text-muted">
+                Welcome stays first and the close stays last. Not tidiness — a deck that
+                opens on a rent table shows a landlord a number before it has said who is
+                speaking.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line/70 px-5 py-3.5">
+          <button
+            type="button"
+            onClick={() => setStep((s) => Math.max(0, s - 1))}
+            disabled={step === 0}
+            className="rounded-lg border border-line/80 px-3.5 py-2 text-[12px] disabled:opacity-40"
+          >
+            ← Back
+          </button>
+          {step < BUILD_STEPS.length - 1 ? (
+            <button
+              type="button"
+              onClick={() => setStep((s) => s + 1)}
+              className="rounded-lg bg-accent-dark px-3.5 py-2 text-[12px] font-semibold text-white"
+            >
+              Next →
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onCreate(plan, chosen)}
+              className="rounded-lg bg-accent-dark px-3.5 py-2 text-[12px] font-semibold text-white"
+            >
+              Create presentation
+            </button>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}

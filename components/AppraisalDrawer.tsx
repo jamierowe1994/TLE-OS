@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ResearchPanel from "@/components/ResearchPanel";
+import PresentationBuilder from "@/components/PresentationBuilder";
 import { Pill } from "@/components/Wire";
 import { MA_STAGES, effectiveStage, needsValuation, type MarketAppraisal } from "@/lib/market-appraisal";
 
@@ -42,6 +43,7 @@ export default function AppraisalDrawer({
   onClose: () => void;
 }) {
   const [shown, setShown] = useState(false);
+  const [building, setBuilding] = useState(false);
 
   useEffect(() => {
     const t = requestAnimationFrame(() => setShown(true));
@@ -178,11 +180,30 @@ export default function AppraisalDrawer({
             </div>
 
             <div className="flex flex-col gap-5">
+              {/* Named for the OUTPUT, not the activity. An agent at 8am is not
+                  browsing data, they are making the thing they will put in
+                  front of a landlord — "Research" made them work that out. */}
+              <button
+                type="button"
+                onClick={() => setBuilding(true)}
+                className="rounded-2xl bg-accent-dark px-4 py-3 text-[13px] font-semibold text-white"
+              >
+                Build the presentation
+              </button>
               <ResearchPanel address={appraisal.address} postcode={appraisal.postcode} beds={2} />
             </div>
           </div>
         </div>
       </aside>
+
+      {building && (
+        <PresentationBuilder
+          address={appraisal.address}
+          postcode={appraisal.postcode}
+          onClose={() => setBuilding(false)}
+          onCreate={() => setBuilding(false)}
+        />
+      )}
     </div>
   );
 }
