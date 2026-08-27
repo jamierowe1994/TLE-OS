@@ -101,11 +101,39 @@ export async function allAgents(): Promise<RexAgent[]> {
   return out;
 }
 
-/** TLE's own people. Domain is the divider — see the diary's note on why. */
+/**
+ * TLE's own people. Domain is the divider, and James confirmed it on 27 Aug.
+ *
+ * ── Why The Property Experts are excluded outright ────────────────────────
+ *
+ * Six businesses share REX account 3517, and TPE is by far the biggest — 81 of
+ * the 130 users. James: "It's a different company… The Property Experts cover
+ * SALES, so we don't want that at all in the mix."
+ *
+ * That is a business decision, not a technical one, and it is the reason this
+ * is a hard domain test rather than something cleverer.
+ *
+ * ── The disagreement this overrides, recorded on purpose ──────────────────
+ *
+ * The TLE portal does NOT do it this way. It matches on domain OR a 29-name
+ * partner roster, because it found domain-only under-reported July listings
+ * 34 vs 44 (-23%) — see TLE-portal lib/rex.ts:209-227.
+ *
+ * Measured here: TEN active TPE-domain users carry names on that roster —
+ * Rebecca Adams, Chris Wilson-Slight, Bernadine Williams, Graham Cross, James
+ * Crumpton, Rovena Buci, David Quigg, Paul Doig, Shane Yu, Zilvinas Navickis.
+ *
+ * James has been shown that list and has chosen to exclude them here. If a
+ * figure in the OS ever reads low against the portal's, this is the first
+ * place to look — the two products are answering deliberately different
+ * questions, and neither is broken.
+ */
+const TLE_DOMAIN = "@thelettingexperts.co.uk";
+
 export async function lettingsAgents(): Promise<RexAgent[]> {
   const all = await allAgents();
   return all
-    .filter((a) => a.active && a.email.endsWith("@thelettingexperts.co.uk"))
+    .filter((a) => a.active && a.email.endsWith(TLE_DOMAIN))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
