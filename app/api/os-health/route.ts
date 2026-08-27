@@ -4,6 +4,7 @@ import { resendConfigured, resendSendUnlocked, fromAddress } from "@/lib/resend"
 import { docusealConfigured, docusealSendUnlocked } from "@/lib/docuseal";
 import { rexConfigured, rexWritesLocked } from "@/lib/rex";
 import { internalDomains, FOUNDING_OWNERS } from "@/lib/email-policy";
+import { findUserByEmail } from "@/lib/users";
 
 /**
  * What is actually switched on.
@@ -38,6 +39,15 @@ import { internalDomains, FOUNDING_OWNERS } from "@/lib/email-policy";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+async function foundingState(): Promise<Array<{ email: string; registered: boolean }>> {
+  if (!hasDb()) return FOUNDING_OWNERS.map((email) => ({ email, registered: false }));
+  const out = [];
+  for (const email of FOUNDING_OWNERS) {
+    out.push({ email, registered: Boolean(await findUserByEmail(email)) });
+  }
+  return out;
+}
 
 export async function GET() {
   let db: { connected: boolean; verificationsPending: number | null; users: number | null } = {
@@ -82,7 +92,16 @@ export async function GET() {
     },
     emailPolicy: {
       internalDomains: internalDomains(),
-      foundingOwners: FOUNDING_OWNERS,
+      /* Whether each founding address already has an account — because
+         "users: 1" tells you somebody registered and not who, and /join
+         silently refuses an address that already exists. Without this, an
+         owner who cannot get a link has no way to tell "sending is locked"
+         from "you already have an account, go and sign in". Two very
+         different problems with the same symptom.
+
+         Booleans against two addresses James supplied himself. No names, no
+         hashes, no third party. */
+      founding: await foundingState(),
       note: "This domain emails colleagues only. Client email needs the public sending domain.",
     },
     rex: { configured: rexConfigured(), writesLocked: rexWritesLocked() },
