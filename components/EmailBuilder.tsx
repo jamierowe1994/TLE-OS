@@ -4,7 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CampaignStep } from "@/lib/campaigns";
 import { blocksFor, tleBrand, type StepCopy } from "@/lib/campaign-mail";
 // The ported TMKE renderer — the same module that sends, drawing the canvas.
-import { renderBlock, resolveMargin, mergeContextFor } from "@/lib/email/render.js";
+import {
+  renderBlock,
+  resolveMargin,
+  mergeContextFor,
+  FONT_STACKS,
+  BRAND_COLOURS,
+} from "@/lib/email/render.js";
 
 /**
  * The email builder.
@@ -424,6 +430,109 @@ function Fields({
   const str = (k: string) => (typeof block[k] === "string" ? (block[k] as string) : "");
   const label = (t: string) => <span className="mb-1 block text-[10.5px] text-muted">{t}</span>;
 
+  const num = (k: string) => (block[k] == null || block[k] === "" ? "" : String(block[k]));
+
+  /* ── Type controls, shared by heading / text / button ──────────────────────
+     Font, size and colour on ONE row each rather than behind a disclosure:
+     the whole reason this editor exists is that Francesca should not need to
+     ask anybody to change a word or a colour. */
+  const typography = (
+    <>
+      <label className="mt-2 block">
+        {label("Font")}
+        <select
+          className={field}
+          value={str("font")}
+          onChange={(e) => patch(block.id, "font", e.target.value)}
+        >
+          <option value="">Match the brand default</option>
+          {FONT_STACKS.map((f: { key: string; label: string; web?: boolean }) => (
+            <option key={f.key} value={f.key}>
+              {f.label}
+              {f.web ? " — not everywhere" : ""}
+            </option>
+          ))}
+        </select>
+        {/* Said HERE, at the moment of choosing, not in a help page. */}
+        {FONT_STACKS.find((f: { key: string; web?: boolean }) => f.key === str("font"))?.web && (
+          <span className="mt-1 block text-[10.5px] leading-relaxed text-amber-700">
+            Gmail and Outlook on Windows strip web fonts. Those readers see the
+            fallback, so keep this for a display word rather than a paragraph.
+          </span>
+        )}
+      </label>
+
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <label className="block">
+          {label("Size (px)")}
+          <input
+            type="number"
+            min={9}
+            max={80}
+            className={field}
+            placeholder={block.type === "heading" ? "28" : "15"}
+            value={num("size")}
+            onChange={(e) =>
+              patch(block.id, "size", e.target.value === "" ? "" : Number(e.target.value))
+            }
+          />
+        </label>
+        <label className="block">
+          {label("Line height")}
+          <input
+            type="number"
+            step="0.05"
+            min={0.9}
+            max={2.2}
+            className={field}
+            placeholder={block.type === "heading" ? "1.15" : "1.6"}
+            value={num("lineHeight")}
+            onChange={(e) =>
+              patch(block.id, "lineHeight", e.target.value === "" ? "" : Number(e.target.value))
+            }
+          />
+        </label>
+      </div>
+
+      <div className="mt-2">
+        {label("Colour")}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {BRAND_COLOURS.map((c: { key: string; label: string; hex: string }) => {
+            const on = str("color").toUpperCase() === c.hex.toUpperCase();
+            return (
+              <button
+                key={c.key}
+                type="button"
+                title={`${c.label} ${c.hex}`}
+                onClick={() => patch(block.id, "color", c.hex)}
+                className={`h-6 w-6 rounded-full border-2 transition-colors ${
+                  on ? "border-ink" : "border-line/70 hover:border-ink/40"
+                }`}
+                style={{ background: c.hex }}
+              />
+            );
+          })}
+          {/* The swatches are the brand; the field is the escape hatch. */}
+          <input
+            className={`${field} ml-1 w-24`}
+            placeholder="#hex"
+            value={str("color")}
+            onChange={(e) => patch(block.id, "color", e.target.value)}
+          />
+          {str("color") && (
+            <button
+              type="button"
+              onClick={() => patch(block.id, "color", "")}
+              className="text-[10.5px] font-semibold text-muted hover:text-ink"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+
   const align = (
     <label className="mt-2 block">
       {label("Align")}
@@ -447,7 +556,8 @@ function Fields({
           <p className="text-[11.5px] leading-relaxed text-muted">
             Type the words straight onto the email.
           </p>
-          {block.type === "heading" && align}
+          {align}
+          {typography}
         </>
       );
     case "button":
@@ -463,6 +573,7 @@ function Fields({
             />
           </label>
           {align}
+          {typography}
         </>
       );
     case "image":

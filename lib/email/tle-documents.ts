@@ -81,9 +81,15 @@ export const PILOT_INVITE: EmailDoc = {
       id: "p0",
       text: "TLE OS",
       align: "center",
-      size: 64,
-      letterSpacing: 2,
-      color: "#e31f36",
+      size: 72,
+      /* Sacramento, with a real script fallback. Gmail and Outlook on Windows
+         strip web fonts, so a good half of the list reads the fallback - which
+         is why the wordmark is still TYPE and still red, and reads fine either
+         way. See FONT_STACKS in render.js. */
+      font: "sacramento",
+      letterSpacing: 1,
+      lineHeight: 1.1,
+      color: "#E31F36",
     },
     H2C("p0b", "is nearly here, and you're first through the door"),
     SP("p0c", 4),
