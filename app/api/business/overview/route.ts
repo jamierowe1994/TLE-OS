@@ -55,16 +55,16 @@ export async function GET(req: NextRequest) {
     gci: mergeFunnel(seedFunnel.gci, "funnel.gci"),
   };
 
-  // Jan–Jun actual GCI series reconstructed from the income table.
-  const gciRow = SEED.income.monthlyTable.find(
-    (r) => r.metric === "Combined GCI (exc VAT)"
-  );
   /*
    * Monthly GCI, live from the per-month store — the chart GROWS as months
    * close rather than being a fixed Jan–Jun literal reading one seed row.
    *
-   * Falls back to the seed only when the store has nothing yet (a cold
-   * environment mid-backfill), so the chart is never blank.
+   * There is NO seed fallback. It used to chart the six hand-typed Jan–Jun
+   * figures whenever the store was cold, captioned "showing the captured 2026
+   * actuals meanwhile" — but a chart with bars on it reads as data, and nobody
+   * reads the caption under a chart that looks finished. An empty chart that
+   * says it is still gathering is slower to look at and impossible to
+   * misread.
    */
   const SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const series = await getGciSeries(month).catch(() => null);
@@ -110,13 +110,11 @@ export async function GET(req: NextRequest) {
         unreachable: series?.unreachable ?? [],
       }
     : {
-        labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
-        actual: gciRow
-          ? [gciRow.jan, gciRow.feb, gciRow.mar, gciRow.apr, gciRow.may, gciRow.jun]
-          : [],
+        labels: [],
+        actual: [],
         budget: null,
         budgetNote:
-          "Still gathering the live monthly commission from PayProp — showing the captured 2026 actuals meanwhile.",
+          "Still walking the monthly commission out of PayProp. Nothing charted until it lands — a bar drawn from an old figure looks exactly like a real one.",
         live: false,
         ytdNet: null,
         ytdGross: null,

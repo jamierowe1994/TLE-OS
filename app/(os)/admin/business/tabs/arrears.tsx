@@ -296,7 +296,7 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
       ) : (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
           <span className="font-semibold">Fetching live arrears from PayProp…</span>{" "}
-          Showing the 2026-07-06 snapshot until it lands.{" "}
+          Nothing shown until it lands — an old arrears figure is worse than a gap.{" "}
           <span className="font-semibold">
             This view is admin-only — it contains tenant personal data.
           </span>
@@ -313,8 +313,7 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
         <div className="rounded-2xl border border-line bg-card px-4 py-3 text-[13px] text-muted">
           Everything below is <strong>as at today</strong>, not {monthLabel(month)}. These are
           current-state figures — neither PayProp nor Rex stores a history of them, so a past
-          month can&apos;t be rebuilt. Live figures carry their own date; anything still on the
-          snapshot is badged and dated 11 Jul 2026.
+          month can&apos;t be rebuilt. Every figure carries its own date.
         </div>
       ) : null}
 
@@ -497,7 +496,7 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
 
       <ArrearsImport snapshots={log?.snapshots ?? []} onSaved={loadLog} />
 
-      {/* Summary cards — live where PayProp can answer, snapshot otherwise */}
+      {/* Summary cards — live where PayProp can answer, a stated gap otherwise */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard
           label="Tenants in arrears"
@@ -587,7 +586,7 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
               PayProp report/tenant/balances, both agencies, counting only negative
               balances. Country is PayProp&rsquo;s own agency — England and Wales share
               one, so they cannot be told apart here. Age counts from the first
-              snapshot of the current unbroken run, not from the missed payment.
+              first reading of the current unbroken run, not from the missed payment.
             </SourceNote>
           </h2>
           <div className="grid gap-4 lg:grid-cols-2">
@@ -664,7 +663,7 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
             })}
           </div>
           <p className="text-xs text-muted">
-            Days counted from the first snapshot in the current unbroken run of
+            Days counted from the first reading in the current unbroken run of
             arrears, not from the missed payment — the portal only knows what it
             has seen. A tenant first seen today counts as nought days, so a new
             arrear lands in the first band rather than being guessed at.

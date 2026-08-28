@@ -349,8 +349,7 @@ export default function PortfolioTab({ month, seed }: { month: string; seed: See
         <div className="rounded-2xl border border-line bg-card px-4 py-3 text-[13px] text-muted">
           Everything below is <strong>as at today</strong>, not {monthLabel(month)}. These are
           current-state figures — neither PayProp nor Rex stores a history of them, so a past
-          month can&apos;t be rebuilt. Live figures carry their own date; anything still on the
-          snapshot is badged and dated 11 Jul 2026.
+          month can&apos;t be rebuilt. Every figure carries its own date.
         </div>
       ) : null}
 
@@ -469,10 +468,10 @@ export default function PortfolioTab({ month, seed }: { month: string; seed: See
                 : o.withRlp
             }
           />
-          {/* No LEC tag exists anywhere we can read, so this stays on the
-              snapshot rather than being reported as zero. Zero would say
-              "nobody has LEC", which is a different and unevidenced claim. */}
-          <StatCard label="With LEC" stat={o.withLec} sub="no tag for this — snapshot" />
+          {/* No LEC tag exists anywhere we can read. Reported as a gap rather
+              than zero — zero would say "nobody has LEC", which is a different
+              and unevidenced claim. */}
+          <StatCard label="With LEC" stat={o.withLec} sub="no tag for this anywhere we can read" />
           <StatCard
             label="Protected %"
             stat={

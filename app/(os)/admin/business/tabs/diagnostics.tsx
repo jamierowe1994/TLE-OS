@@ -182,7 +182,7 @@ export default function DiagnosticsTab({ month }: { month: string }) {
             portal accounts to REX users; with Leads/search we can count each
             agent&rsquo;s lead records (MA requests) per month. Listings /
             appraisals reporting endpoints are still being discovered — until
-            they answer, funnel figures fall back to the dashboard snapshot.
+            they answer, those funnel figures show a dash.
           </p>
           {status?.rex?.lastError ? (
             <p className="mt-2 text-xs text-accent">Last error: {status.rex.lastError}</p>
@@ -251,7 +251,7 @@ export default function DiagnosticsTab({ month }: { month: string }) {
             <span className="font-semibold">Arrears</span> and{" "}
             <span className="font-semibold">Income</span> actuals. Once API
             access is granted, a future <code className="text-xs">lib/payprop.ts</code>{" "}
-            slots into the same live → manual → snapshot chain.
+            slots into the same live → manual → declared-gap chain.
           </p>
         </section>
 
@@ -305,9 +305,9 @@ export default function DiagnosticsTab({ month }: { month: string }) {
           Figures we couldn&rsquo;t match to a live source yet
         </h2>
         <p className="mt-1 text-xs text-muted">
-          Everything below currently renders from the 11 Jul 2026 dashboard
-          snapshot (grey SNAPSHOT badges). Work through them one by one as
-          access lands.
+          Everything below renders as a dash with a red NO SOURCE badge, and the
+          tooltip on each says which connection it is waiting on. Work through them
+          one by one as access lands.
         </p>
         <div className="mt-4 grid gap-4 lg:grid-cols-3">
           {WORKLIST.map((group) => (

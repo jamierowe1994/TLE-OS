@@ -124,7 +124,7 @@ export default function PnlTab({ month, seed }: { month: string; seed: SeedData 
         <StatCard label="Cumulative YTD at Dec" stat={rf.cumulativeYtdDec} big />
         <div className="card relative p-5">
           <div className="absolute right-4 top-4">
-            <SourceBadge source="snapshot" note={rf.sourceNote} asOf={SNAPSHOT_DATE} />
+            <SourceBadge source="manual" note={rf.sourceNote} />
           </div>
           <div className="stat-label pr-16 text-[11px] font-semibold uppercase tracking-wide text-muted">
             Break-even
@@ -150,7 +150,7 @@ export default function PnlTab({ month, seed }: { month: string; seed: SeedData 
                 setOverrides((prev) => ({ ...prev, ...applied }))
               }
             />
-            <SourceBadge source="snapshot" note={rf.sourceNote} asOf={SNAPSHOT_DATE} />
+            <SourceBadge source="manual" note={rf.sourceNote} />
           </div>
         </div>
         {error ? <p className="text-xs text-accent">{error}</p> : null}

@@ -2,8 +2,21 @@ import type { StatSource } from "@/lib/business/types";
 import { formatDateShort } from "@/lib/business/format";
 
 // Small badge tagging where a figure came from. Every stat in the UI carries
-// one so live / manual / snapshot figures can be worked through one by one.
+// one so live and hand-entered figures can be told apart at a glance.
 // Hidden in presentation mode via `body.presenting .source-badge` (globals.css).
+//
+// ── Why there is no "snapshot" any more ───────────────────────────────────
+//
+// There used to be one, for figures typed out of Susan's dashboard on 11 Jul
+// 2026 — and it was ALSO what this file fell back to for an unrecognised
+// source. That made it the worst possible default: a figure arriving without a
+// source, or with one this file had not been taught, rendered as a stale July
+// capture. Susan saw a wall of amber SNAPSHOT badges over figures that were
+// live and correct, which is exactly as misleading as the reverse.
+//
+// The fallback is now "unavailable" — red, loud, and obviously a fault. An
+// unknown source IS a bug, and it should look like one rather than quietly
+// borrowing the appearance of a real (if old) figure.
 
 const STYLES: Record<
   StatSource,
@@ -37,13 +50,8 @@ const STYLES: Record<
     label: "MANUAL",
     className: "bg-amber-50 text-amber-700 border-amber-200",
   },
-  snapshot: {
-    label: "SNAPSHOT",
-    className: "bg-gray-100 text-gray-500 border-gray-200",
-  },
-  /* Not a figure. The snapshot used to fill these gaps with July numbers; now
-     the gap shows, and the note says where the figure used to come from — so a
-     dash reads as "wire this up" rather than as "zero". */
+  /* Not a figure. The note says where the figure used to come from, so a dash
+     reads as "wire this up" rather than as "zero". */
   unavailable: {
     label: "NO SOURCE",
     className: "bg-rose-50 text-rose-700 border-rose-200",
@@ -64,8 +72,12 @@ const DOT: Record<StatSource, string> = {
   // Anything not coming from a live system reads amber: it's a to-do, not a
   // neutral fact, and grey let snapshots hide in plain sight.
   manual: "#f59e0b",
-  snapshot: "#f59e0b",
-  derived: "#f59e0b",
+  /* Slate, NOT amber. Amber is a to-do; a derived figure is not one — it is
+     worked out here FROM live figures, so it is exactly as trustworthy as the
+     numbers behind it. Painting it amber turned every ratio on the Income tab
+     (GCI per agent, net per agent, the TLE split) into a warning about itself
+     and made the whole tab read as stale. */
+  derived: "#64748b",
   /* Red, not amber. Amber is "not live yet"; this is "nothing reached it at
      all", and the two need telling apart at a glance or the gaps disappear
      into the to-do pile. */
@@ -84,24 +96,22 @@ export default function SourceBadge({
   /** Render just a colour dot (full detail in the tooltip) — for dense cards. */
   compact?: boolean;
 }) {
-  const style = STYLES[source] ?? STYLES.snapshot;
+  const style = STYLES[source] ?? STYLES.unavailable;
   let label = style.label;
-  if (source === "snapshot" && asOf) {
+  /* Date the badge when we have one — "LIVE · 28 Aug" answers "how live?"
+     without a hover, which is the question a dated figure always invites. */
+  if (asOf) {
     const short = formatDateShort(asOf);
-    if (short) label = `SNAPSHOT · ${short}`;
+    if (short) label = `${style.label} · ${short}`;
   }
-  const tooltip =
-    note ??
-    (source === "snapshot"
-      ? "Couldn't match a live stat for this yet — figure from the TLE Business Dashboard snapshot."
-      : label);
+  const tooltip = note ?? label;
 
   if (compact) {
     return (
       <span
         className="source-badge inline-block h-2 w-2 rounded-full"
-        style={{ background: DOT[source] ?? DOT.snapshot }}
-        title={asOf && source === "snapshot" ? `${label} — ${tooltip}` : `${label}${note ? ` — ${note}` : ""}`}
+        style={{ background: DOT[source] ?? DOT.unavailable }}
+        title={`${label}${note ? ` — ${note}` : ""}`}
         aria-label={label}
       />
     );

@@ -21,9 +21,21 @@ function money(v: number | null): string {
   return v == null ? "—" : formatGBP(v);
 }
 
-const HIGHLIGHT_METRICS = new Set(["Combined GCI (exc VAT)", "TOTAL INCOME"]);
+/** A row of the monthly table: the metric name, plus one key per month short
+ *  ("jan", "feb", …) and per quarter. Which keys exist depends entirely on
+ *  which months PayProp could answer for, so this cannot be a fixed shape. */
+type MonthlyRow = { metric: string } & Record<string, unknown>;
 
-const MONTHLY_COLUMNS: DataTableColumn<IncomeMonthlyRow & Record<string, unknown>>[] = [
+/** Narrow a cell back to a figure. Anything that isn't a number is unknown,
+ *  which renders as a dash — never as zero. */
+/** A declared gap: no live source reached this, and here is what it needs. */
+const gap = (note: string) => ({ value: null, source: "unavailable" as const, note });
+
+const num = (v: unknown): number | null => (typeof v === "number" ? v : null);
+
+const HIGHLIGHT_METRICS = new Set(["Combined GCI (exc VAT)"]);
+
+const MONTHLY_COLUMNS: DataTableColumn<MonthlyRow>[] = [
   {
     key: "metric",
     label: "Metric",
@@ -55,9 +67,9 @@ const QUARTERS = [
 
 function monthlyColumns(
   months: string[]
-): DataTableColumn<IncomeMonthlyRow & Record<string, unknown>>[] {
+): DataTableColumn<MonthlyRow>[] {
   const have = new Set(months.map((m) => m.slice(5)));
-  const cols: DataTableColumn<IncomeMonthlyRow & Record<string, unknown>>[] = [MONTHLY_COLUMNS[0]];
+  const cols: DataTableColumn<MonthlyRow>[] = [MONTHLY_COLUMNS[0]];
 
   for (const q of QUARTERS) {
     for (const mm of q.months) {
@@ -88,7 +100,7 @@ function monthlyColumns(
     key: "ytd",
     label: "YTD",
     align: "right",
-    render: (r) => <span className="font-semibold">{money(r.ytd)}</span>,
+    render: (r) => <span className="font-semibold">{money(num(r.ytd))}</span>,
   });
   return cols;
 }
@@ -158,6 +170,21 @@ interface LiveMoveIns {
   count: number;
   rentAdded: number;
 }
+
+/* The rows this table can show, in Susan's reading order. They must match the
+   labels /api/business/income-months answers with, verbatim — the route keys
+   its payload by these strings.
+
+   TOTAL INCOME is deliberately absent: it is GCI plus licence and joining
+   fees, and neither of those runs through PayProp. A "total" that quietly
+   omitted them would be a smaller number wearing a bigger name. */
+const METRIC_ROWS = [
+  "E&W GCI (exc VAT)",
+  "Glasgow GCI (exc VAT)",
+  "Combined GCI (exc VAT)",
+  "Paid to Associates (E&W)",
+  "Combined Net Income to TLE",
+] as const;
 
 export default function IncomeTab({ month, seed }: { month: string; seed: SeedData }) {
   const inc = seed.income;
@@ -270,7 +297,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
   // Resolved once so the card and its sub-line quote the SAME split — computed
   // twice, the sub kept reading the snapshot while the stat had gone live.
   const liveSplit = pv("splitPct");
-  const splitStat = liveSplit ?? inc.june.tleSplitPct;
+  const splitStat = liveSplit ?? gap("Needs this month's PayProp split.");
   // The partners' cash sits next to that percentage, so it has to come off the
   // same month: prev's own beneficiary total, not June's snapshot.
   /* No June fallback. Quoting June's partner cash under a live percentage put
@@ -345,34 +372,50 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
     };
   }, []);
 
+  /**
+   * The table, built from PayProp alone.
+   *
+   * This used to start from a hand-typed Jan–Jun table and let live figures
+   * fill only the BLANKS — "the snapshot wins where it exists". Which meant
+   * Jan–Jun could never update: PayProp would walk the month, come back with a
+   * number, and be discarded because a person had typed one in July. Six
+   * months of this table were permanently frozen to the capture, and looked
+   * exactly like the live months beside them.
+   *
+   * A month PayProp cannot fully answer stays null and renders as a dash. That
+   * is the honest state and it is visibly different from a figure.
+   */
   const monthlyRows = useMemo(() => {
-    if (!liveMonths) return inc.monthlyTable;
     const short = (m: string) =>
       new Date(`${m}-01T00:00:00Z`)
         .toLocaleString("en-GB", { month: "short", timeZone: "UTC" })
         .toLowerCase();
-    return inc.monthlyTable.map((row) => {
-      const live = liveMonths.rows[row.metric];
-      if (!live) return row;
-      const merged: Record<string, unknown> = { ...row };
-      for (const [month, value] of Object.entries(live)) {
-        // The snapshot wins where it exists: those are Susan's own reported
-        // figures, reconciled by a person. Live only fills the gaps.
-        if (merged[short(month)] == null) merged[short(month)] = value;
+    return METRIC_ROWS.map((metric) => {
+      const row: Record<string, unknown> = { metric };
+      const live = liveMonths?.rows[metric];
+      if (live) {
+        for (const [month, value] of Object.entries(live)) row[short(month)] = value;
       }
-      return merged as typeof row;
+      return row as MonthlyRow;
     });
-  }, [inc.monthlyTable, liveMonths]);
+  }, [liveMonths]);
 
-  const beyondSnapshot = (liveMonths?.filled ?? []).filter((m) => Number(m.slice(5)) > 6);
-  const liveMonthsNote = beyondSnapshot.length
-    ? `${beyondSnapshot
-        .map((m) => monthLabel(m))
-        .join(", ")} filled live from PayProp (net of VAT). Licence, pro and joining fees are blank there — they don't run through PayProp, and joining fees go through a separate account we can't read.`
+  /* Which months this table could actually answer for. It used to say
+     "months after June", off a hardcoded `> 6` — so in 2027 it would have
+     called January a snapshot month forever. Now it just reports what landed
+     against what was asked, which needs no calendar knowledge at all. */
+  const filledMonths = liveMonths?.filled ?? [];
+  const pendingMonths = liveMonths?.pending ?? [];
+  const liveMonthsNote = liveMonths
+    ? `${filledMonths.length} of ${filledMonths.length + pendingMonths.length} months walked from PayProp, net of VAT.${
+        pendingMonths.length
+          ? ` Still fetching ${pendingMonths.map((m) => monthLabel(m)).join(", ")}.`
+          : ""
+      } Licence, pro and joining fees are blank throughout — they don't run through PayProp, and joining fees go through a separate account we can't read.`
     : null;
 
   const gciRow = monthlyRows.find((r) => r.metric === "Combined GCI (exc VAT)");
-  const totalRow = monthlyRows.find((r) => r.metric === "TOTAL INCOME");
+  const totalRow = monthlyRows.find((r) => r.metric === "Combined Net Income to TLE");
   const monthKeys = windowMonths.map((m) =>
     new Date(`${m}-01T00:00:00Z`)
       .toLocaleString("en-GB", { month: "short", timeZone: "UTC" })
@@ -391,7 +434,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
       values: monthKeys.map((k) => cell(gciRow, k)),
     },
     {
-      name: "Total income",
+      name: "Net income to TLE",
       color: "#101014",
       values: monthKeys.map((k) => cell(totalRow, k)),
     },
@@ -514,13 +557,12 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
           only about the ones still on the seed, which stay badged and dated
           — the old wording condemned the whole tab as stale, including the
           live figures it had just fetched for the selected month. */}
-      {month !== SNAPSHOT_MONTH ? (
-        <div className="rounded-2xl border border-line bg-card px-4 py-3 text-[13px] text-muted">
-          Live figures below are for {monthLabel(month)}. Anything still badged{" "}
-          <em>snapshot</em> comes from the 11 Jul 2026 capture and answers for July only —
-          it is not {monthLabel(month)}.
-        </div>
-      ) : null}
+      {/* A banner stood here telling the reader that anything badged
+          "snapshot" was really 11 Jul 2026. There is no such badge any more —
+          the capture is gone and the source is retired — so it was pointing at
+          something that does not exist, while implying the remaining dashes
+          were July figures rather than nothing at all. Each figure carries its
+          own source; a page-wide disclaimer only competed with them. */}
 
       {/* Estimates for the selected month */}
       <section className="space-y-3">
@@ -536,7 +578,7 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
                     source: "live-payprop",
                     note: `Every fee charged this month across both agencies, exc VAT, ${live.paymentCount} payments. TLE's share plus the partners'.`,
                   }
-                : liveGciEst ?? inc.julyMtd.combinedGci
+                : liveGciEst ?? gap("Waiting on this month's PayProp walk.")
             }
             sub={
               live
@@ -547,14 +589,14 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
             }
             big
           />
-          <StatCard label="E&W GCI" stat={accountGci(live, "E&W") ?? inc.julyMtd.eAndWGci} />
-          <StatCard label="Glasgow GCI" stat={accountGci(live, "Glasgow") ?? inc.julyMtd.glasgowGci} />
+          <StatCard label="E&W GCI" stat={accountGci(live, "E&W") ?? gap("Waiting on this month's PayProp walk.")} />
+          <StatCard label="Glasgow GCI" stat={accountGci(live, "Glasgow") ?? gap("Waiting on this month's PayProp walk.")} />
           <StatCard
             label="TLE net income"
             stat={
               live
                 ? { value: Math.round(live.agencyIncome), display: gbp(live.agencyIncome), source: "live-payprop", note: "Fees kept by the agency this month." }
-                : inc.julyMtd.tleNetIncome
+                : gap("Waiting on this month's PayProp walk.")
             }
           />
           <StatCard
@@ -562,10 +604,12 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
             stat={
               live
                 ? { value: Math.round(live.paidToBeneficiaries), display: gbp(live.paidToBeneficiaries), source: "live-payprop", note: "Fees paid out to partners this month." }
-                : inc.julyMtd.paidToAssociates
+                : gap("Waiting on this month's PayProp walk.")
             }
           />
-          <StatCard label="June final GCI" stat={inc.julyMtd.juneFinalGci} sub="Previous month, final" />
+          {/* A tile labelled "June final GCI" sat here, inside a section headed
+              with the SELECTED month — a fixed month masquerading as a moving
+              one. The previous month's finals have their own section below. */}
         </div>
       </section>
 
@@ -576,14 +620,13 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
           <div className="mt-4">
             {/* A donut of two nulls draws itself as an empty ring and reads as
                 "nothing earned". Say there is no figure instead. */}
-            {inc.julyMtd.tleNetIncome.value != null &&
-            inc.julyMtd.paidToAssociates.value != null ? (
+            {live ? (
               <Donut
                 segments={[
-                  { label: "TLE net", value: inc.julyMtd.tleNetIncome.value, color: "#E31F36" },
-                  { label: "Associates", value: inc.julyMtd.paidToAssociates.value, color: "#101014" },
+                  { label: "TLE net", value: Math.round(live.agencyIncome), color: "#E31F36" },
+                  { label: "Associates", value: Math.round(live.paidToBeneficiaries), color: "#101014" },
                 ]}
-                centerLabel={inc.julyMtd.combinedGci.display ?? ""}
+                centerLabel={gbp(live.combinedGci)}
               />
             ) : (
               <p className="text-[12.5px] text-muted">
@@ -592,19 +635,29 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
               </p>
             )}
           </div>
-          <p className="mt-3 text-xs text-muted">{inc.julyMtd.splitNote}</p>
+          {/* A hand-typed sentence ("TLE £4,800 (47%) · Associates £5,400…")
+              sat here, under a donut drawn from live figures. It described
+              July and never moved, so the caption and the chart above it
+              disagreed. The donut labels its own segments. */}
         </section>
 
         <section className="lg:col-span-2">
           <h2 className="mb-3 text-sm font-semibold">{prevLabel} — final</h2>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <StatCard label="Total GCI" stat={pv("totalGci") ?? inc.june.totalGci} />
-            <StatCard label="Total income" stat={inc.june.totalIncome} />
-            <StatCard label="TLE net income" stat={pv("tleNet") ?? inc.june.tleNetIncome} />
-            <StatCard label="GCI per agent" stat={pv("gciPerAgent") ?? inc.june.gciPerAgent} />
+            {/* These fell back to inc.june.* — literally June's figures, under a
+                heading that renders the PREVIOUS month's name. On 28 August that
+                put June's £44,309 under "July 2026 — final". The fallback is
+                gone; the live figure or a dash. */}
+            <StatCard label="Total GCI" stat={pv("totalGci") ?? gap(`${prevLabel} hasn't been walked from PayProp yet.`)} />
+            <StatCard
+              label="Total income"
+              stat={gap("GCI plus licence and joining fees. Licence fees need the P&L upload and joining fees run through a separate bank account, so this can't be totalled live yet.")}
+            />
+            <StatCard label="TLE net income" stat={pv("tleNet") ?? gap(`${prevLabel} hasn't been walked from PayProp yet.`)} />
+            <StatCard label="GCI per agent" stat={pv("gciPerAgent") ?? gap(`${prevLabel} hasn't been walked from PayProp yet.`)} />
             <StatCard
               label="Net income per agent"
-              stat={pv("netPerAgent") ?? inc.june.netIncomePerAgent}
+              stat={pv("netPerAgent") ?? gap(`${prevLabel} hasn't been walked from PayProp yet.`)}
             />
             <StatCard
               label="TLE split of E&W GCI"
@@ -615,9 +668,9 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
                   : undefined
               }
             />
-            <StatCard label="Monthly licence" stat={inc.june.monthlyLicence} />
-            <StatCard label="Pro licence" stat={inc.june.proLicence} />
-            <StatCard label="Joining fees" stat={inc.june.joiningFees} />
+            <StatCard label="Monthly licence" stat={gap("Licence fees don't run through PayProp. Needs the P&L upload.")} />
+            <StatCard label="Pro licence" stat={gap("Licence fees don't run through PayProp. Needs the P&L upload.")} />
+            <StatCard label="Joining fees" stat={gap("Joining fees run through a separate bank account we can't read — Barclays/QuickBooks only.")} />
           </div>
         </section>
       </div>
@@ -629,7 +682,6 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
         </h2>
         <DataTable columns={monthlyColumns(windowMonths)} rows={monthlyRows} compact />
         {liveMonthsNote && <p className="text-xs text-muted">{liveMonthsNote}</p>}
-        <p className="text-xs text-muted">{inc.modelNote}</p>
       </section>
 
       {/* GCI vs total income bars */}
@@ -640,17 +692,22 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
         </div>
       </section>
 
-      {/* Licence fee table */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold">Licence fee income — 2026</h2>
-        <DataTable columns={LICENCE_COLUMNS} rows={inc.licenceFeeTable} compact />
-      </section>
+      {/* The licence-fee table and the year-on-year growth chips stood here.
+          Both were hand-typed in July with no live path of any kind: licence
+          fees never touch PayProp, and the YoY percentages were worked out
+          once, by a person, against figures we can no longer reproduce.
 
-      {/* YoY growth */}
-      <section className="card space-y-3 p-5">
-        <h2 className="text-sm font-semibold">Year-on-year GCI growth (gross, exc VAT)</h2>
-        <YoyChips label="2024 → 2025" data={inc.yoyGrowthPct["2024to2025"]} />
-        <YoyChips label="2025 → 2026" data={inc.yoyGrowthPct["2025to2026"]} />
+          They are not coming back as literals. Licence fees arrive with the
+          P&L upload; year-on-year needs two comparable years of measured GCI,
+          and we have measured from Aug 2026 only. */}
+      <section className="card space-y-2 p-5">
+        <h2 className="text-sm font-semibold">Licence fees and year-on-year growth</h2>
+        <p className="max-w-2xl text-[12.5px] leading-relaxed text-muted">
+          Not shown yet. Licence and joining fees don&rsquo;t run through PayProp — they need
+          the P&amp;L upload before they can be reported. Year-on-year growth needs two full
+          years measured the same way, and the portal has measured its own figures since
+          August 2026.
+        </p>
       </section>
     </div>
   );

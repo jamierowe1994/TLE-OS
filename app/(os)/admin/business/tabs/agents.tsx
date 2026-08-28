@@ -820,11 +820,8 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
         }}
       />
       <p className="mt-2 flex items-center gap-2 text-[11px] text-muted">
-        <SourceBadge source="snapshot" asOf="2026-07-11" />
         MA = market appraisals · Li = listings · Vw = viewings · Ap =
-        applications · MI = move-ins · Pn = pipeline. Viewings total 28 here vs
-        46 on the KPI Overview funnel — different report cuts on the source
-        dashboard.
+        applications · MI = move-ins · Pn = pipeline.
       </p>
 
       {/* ------------------------- agent drill-down ------------------------- */}
@@ -878,7 +875,7 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
       <p className="mb-3 text-xs text-muted">
         Link each portal account to its roster agent so their dashboard picks
         up the right seed stats, REX user and Meta campaign. Figures on this
-        page come from the dashboard snapshot until those links go live.
+        page show a dash until those links go live.
       </p>
 
       {loading ? (

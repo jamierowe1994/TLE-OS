@@ -4,14 +4,20 @@
 export type StatSource =
   | "live-rex" | "live-meta" | "live-propoly" | "live-teg" | "live-ghl" | "live-payprop"
   | "manual"
-  | "snapshot"
   /**
    * No live source reached this figure.
    *
-   * NOT the same as zero, and not the same as a snapshot. It says "we could not
-   * find this out", which is a fact an owner can act on — chase the connection,
-   * or accept that PayProp genuinely cannot see it. A stale number in its place
-   * says nothing at all while looking like an answer.
+   * NOT the same as zero. It says "we could not find this out", which is a fact
+   * an owner can act on — chase the connection, or accept that PayProp
+   * genuinely cannot see it. A stale number in its place says nothing at all
+   * while looking like an answer.
+   *
+   * There used to be a "snapshot" source beside this one, for figures typed out
+   * of Susan's dashboard on 11 Jul 2026. It is gone, and deliberately not
+   * replaceable: while it existed it was also the DEFAULT that SourceBadge fell
+   * back to, so any figure arriving with an unrecognised source silently
+   * rendered as a stale July capture. Live figures wore a stale badge, which is
+   * the same lie in the other direction.
    */
   | "unavailable"
   | "derived";
@@ -20,7 +26,9 @@ export interface StatValue {
   value: number | null;            // null = genuinely unknown → render "—"
   display?: string;                // preformatted ("£12,000", "90%") — use when set
   source: StatSource;
-  note?: string;                   // e.g. "Couldn't match a live REX stat yet — figure from TLE Business Dashboard snapshot, 11 Jul 2026"
+  /** Say the SYSTEM and the QUERY: "PayProp report/tenant/balances, negative
+   *  balances only" answers the question; "PayProp" invites the follow-up. */
+  note?: string;
   asOf?: string;                   // ISO date of the figure
 }
 

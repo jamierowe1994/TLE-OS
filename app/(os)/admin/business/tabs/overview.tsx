@@ -1126,7 +1126,7 @@ export default function Overview({ month }: { month: string }) {
   const hlPipeline: StatValue = live?.totals
     ? asLive(
         live.totals.pipeline,
-        "Live from REX — let-agreed forward pipeline RIGHT NOW (the snapshot's 51 was the same measure as of 11 Jul)."
+        "Live from REX — let-agreed forward pipeline RIGHT NOW ."
       )
     : d.headline.pipeline;
 
@@ -1581,13 +1581,13 @@ export default function Overview({ month }: { month: string }) {
       {live?.totals ? (
         <p className="hide-when-presenting text-[11px] text-muted">
           Live tiles: REX summed across {live.agentsCounted} lettings agents
-          {live.propoly ? " · move-ins live from Propoly" : ""} · everything grey is the {d.headline.lastUpdated} snapshot, and
-          goes live as each integration lands (PayProp next for the money figures).
+          {live.propoly ? " · move-ins live from Propoly" : ""}. Anything showing a dash has no
+          live source yet — hover it to see which connection it needs.
         </p>
       ) : live?.propoly ? (
         <p className="hide-when-presenting text-[11px] text-muted">
-          Move-ins live from Propoly · REX live sums appear on the deployed site · grey tiles are the {d.headline.lastUpdated}{" "}
-          snapshot until each integration lands.
+          Move-ins live from Propoly · REX live sums appear on the deployed site. Anything
+          showing a dash has no live source yet — hover it to see which connection it needs.
         </p>
       ) : null}
     </div>

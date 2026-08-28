@@ -262,8 +262,7 @@ export default function ComplianceTab({ month, seed }: { month: string; seed: Se
       ) : (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
           <span className="font-semibold">Sweeping REX for compliance…</span> Around two minutes
-          cold — every entry in the account, read once and kept for six hours. Showing the
-          11 Jul 2026 snapshot until it lands.
+          cold — every entry in the account, read once and kept for six hours. Nothing shown until it lands.
         </div>
       )}
 

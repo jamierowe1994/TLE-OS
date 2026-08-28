@@ -15,6 +15,7 @@ import { BRAND } from "@/lib/business/brand";
 import type { UserProfile } from "@/lib/business/types";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only — erased at build
 import { currentMonth, monthLabel, monthProgressLabel, recentMonths } from "@/lib/business/format";
+import Freshness from "@/components/business/Freshness";
 
 import Overview from "@/app/(os)/admin/business/tabs/overview";
 import PaidLeads from "@/app/(os)/admin/business/tabs/paid-leads";
@@ -222,7 +223,7 @@ function AdminShell({
       } catch {
         if (!cancelled) {
           setSeedError(
-            "Couldn't load the business snapshot data — refresh to try again."
+            "Couldn't load the business figures — refresh to try again."
           );
         }
       }
@@ -373,7 +374,11 @@ function AdminShell({
             </span>
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          {/* How old the figures are, and a way to force a walk — because the
+              sources are otherwise refreshed on a schedule, and "is this
+              today's number?" is the first thing asked on a call. */}
+          <Freshness />
           <select
             value={month}
             onChange={(e) => setMonth(e.target.value)}

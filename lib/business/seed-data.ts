@@ -249,35 +249,10 @@ export const SEED = {
       partnerSplitPct: snap(53, "53%", "TLE / Partner split (E&W GCI): TLE 47% / Partners 53% (£15,982 TLE · £17,686 partners)"),
     },
     // TLE Business Income — Jan–Jun 2026 (all fees exc VAT · E&W from Summary of Fees + Glasgow from Glasgow fees report)
-    monthlyTable: [
-      { metric: "E&W management fees", jan: 17398, feb: 17838, mar: 23266, q1: 58502, apr: 19558, may: 18126, jun: 24619, q2: 62303, ytd: 120805 },
-      { metric: "E&W set up fees", jan: 6710, feb: 7600, mar: 12882, q1: 27192, apr: 10188, may: 15843, jun: 7345, q2: 33376, ytd: 60568 },
-      { metric: "E&W other fees", jan: 548, feb: 293, mar: 1184, q1: 2025, apr: 1074, may: 0, jun: 2568, q2: 3642, ytd: 5667 },
-      { metric: "E&W GCI (exc VAT)", jan: 24656, feb: 25731, mar: 37332, q1: 87719, apr: 30820, may: 33969, jun: 34532, q2: 99321, ytd: 187040 },
-      { metric: "Glasgow GCI (exc VAT)", jan: 4394, feb: 3253, mar: 4381, q1: 12028, apr: 4269, may: 4903, jun: 5077, q2: 14249, ytd: 26277 },
-      { metric: "Combined GCI (exc VAT)", jan: 29050, feb: 28984, mar: 41713, q1: 99747, apr: 35089, may: 38872, jun: 39609, q2: 113570, ytd: 213317 },
-      { metric: "Paid to Associates (E&W)", jan: 11475, feb: 12889, mar: 18775, q1: 43139, apr: 15587, may: 16826, jun: 17686, q2: 50099, ytd: 93238 },
-      { metric: "Combined Net Income to TLE", jan: 13471, feb: 12885, mar: 16935, q1: 43291, apr: 14451, may: 16491, jun: 15982, q2: 46924, ytd: 90216 },
-      { metric: "Monthly licence fees", jan: 3967, feb: 3800, mar: 2600, q1: 10367, apr: 3500, may: -1350, jun: 1950, q2: 4100, ytd: 14467 },
-      { metric: "Pro licence fees", jan: 300, feb: 300, mar: 300, q1: 900, apr: null, may: null, jun: 1500, q2: 1500, ytd: 2400 },
-      { metric: "Joining fees", jan: 2000, feb: 2000, mar: 4000, q1: 8000, apr: 1000, may: null, jun: 1250, q2: 2250, ytd: 10250 },
-      { metric: "Total Licence Income", jan: 6267, feb: 6100, mar: 6900, q1: 19267, apr: 4500, may: -1350, jun: 4700, q2: 7850, ytd: 27117 },
-      { metric: "TOTAL INCOME", jan: 35317, feb: 35084, mar: 48613, q1: 119014, apr: 39589, may: 37522, jun: 44309, q2: 121420, ytd: 240434 },
-    ] satisfies IncomeMonthlyRow[],
-    licenceFeeTable: [
-      { month: "January", monthlyLicence: 3967, proLicence: 300, joiningFees: 2000, total: 6267 },
-      { month: "February", monthlyLicence: 3800, proLicence: 300, joiningFees: 2000, total: 6100 },
-      { month: "March", monthlyLicence: 2600, proLicence: 300, joiningFees: 4000, total: 6900 },
-      { month: "April", monthlyLicence: 3500, proLicence: null, joiningFees: 1000, total: 4500 },
-      { month: "May", monthlyLicence: -1350, proLicence: null, joiningFees: null, total: -1350 },
-      { month: "June", monthlyLicence: 1950, proLicence: 1500, joiningFees: 1250, total: 4700 },
-      { month: "YTD Total", monthlyLicence: 14467, proLicence: 2400, joiningFees: 10250, total: 27117 },
-    ] satisfies LicenceFeeRow[],
+    /* monthlyTable removed — hand-typed Jan-Jun. The table is built from /api/business/income-months now */
+    /* licenceFeeTable removed — hand-typed. Licence fees need the P&L upload (task 13) */
     // Year on Year — Gross GCI exc VAT growth %
-    yoyGrowthPct: {
-      "2024to2025": { Jan: 28, Feb: 146, Mar: 185, Apr: 64, May: 73, Jun: 168, Jul: 85, Aug: 213, Sep: 110, Oct: 42, Nov: 56, Dec: 17 } as Record<string, number>,
-      "2025to2026": { Jan: 80, Feb: 7, Mar: 57, Apr: 40, May: 33, Jun: 39 } as Record<string, number>,
-    },
+    /* yoyGrowthPct removed — hand-typed percentages against figures we cannot reproduce */
     modelNote:
       "GCI split roughly TLE 40-47% / Partners 53-60% on E&W; Glasgow (Sean McMahon) pays 0 to associates; licence income = monthly licence + pro licence (£100+VAT × 15 partners) + joining fees (£1,000+VAT). PayProp is the source for GCI actuals (not yet accessible — PayProp pending).",
   },

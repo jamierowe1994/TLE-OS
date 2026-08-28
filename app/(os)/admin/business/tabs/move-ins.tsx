@@ -428,7 +428,7 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
       return {
         value: base.value + addedRows.length,
         source: "manual",
-        note: `${base.value} from the 11 Jul 2026 snapshot + ${addedRows.length} added in the portal for ${monthLabel(month)}`,
+        note: `${base.value} from Propoly + ${addedRows.length} added in the portal for ${monthLabel(month)}`,
       };
     }
     return base;
@@ -597,13 +597,12 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
           only about the ones still on the seed, which stay badged and dated
           — the old wording condemned the whole tab as stale, including the
           live figures it had just fetched for the selected month. */}
-      {month !== SNAPSHOT_MONTH ? (
-        <div className="rounded-2xl border border-line bg-card px-4 py-3 text-[13px] text-muted">
-          Live figures below are for {monthLabel(month)}. Anything still badged{" "}
-          <em>snapshot</em> comes from the 11 Jul 2026 capture and answers for July only —
-          it is not {monthLabel(month)}.
-        </div>
-      ) : null}
+      {/* A banner stood here telling the reader that anything badged
+          "snapshot" was really 11 Jul 2026. There is no such badge any more —
+          the capture is gone and the source is retired — so it was pointing at
+          something that does not exist, while implying the remaining dashes
+          were July figures rather than nothing at all. Each figure carries its
+          own source; a page-wide disclaimer only competed with them. */}
 
       {/* Header stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -637,7 +636,7 @@ export default function MoveInsTab({ month, seed }: { month: string; seed: SeedD
             <p className="mt-0.5 text-xs text-muted">
               Adds a row to the move-ins table for {monthLabel(month)} (marked
               ADDED, stored as a manual actual) and bumps the completed count —
-              the snapshot rows themselves stay as captured.
+              the Propoly rows themselves are never edited here.
             </p>
           </div>
           {!formOpen ? (

@@ -272,7 +272,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
   return (
     <div>
       {/* ------------------------- roll-up hero ------------------------- */}
-      <SectionTitle source="Agent-set forecasts (live from the portal) · actuals via manual override → dashboard snapshot">
+      <SectionTitle source="Agent-set forecasts, live from the portal · actuals from PayProp, with manual override">
         Partner Forecast Roll-up — {monthLabel(month)}
       </SectionTitle>
 
