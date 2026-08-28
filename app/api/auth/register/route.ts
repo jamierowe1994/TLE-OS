@@ -83,16 +83,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  /* ALWAYS requires a signed-in person now, including for the very first
+     account. The old first-user bypass leaned on the office access code being
+     the outer door; that door is gone, so the bypass would have made this
+     endpoint a way to mint an account from the open internet. Joining is
+     /join, which needs a token emailed to the address. */
   const existing = await countUsers();
-  if (existing > 0) {
-    // Not the first: an existing signed-in person must be doing the inviting.
-    const me = await findUserById(verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value) ?? "");
-    if (!me) {
-      return NextResponse.json(
-        { ok: false, error: "Accounts are created by someone already signed in." },
-        { status: 401 }
-      );
-    }
+  const me = await findUserById(verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value) ?? "");
+  if (!me) {
+    return NextResponse.json(
+      { ok: false, error: "Accounts are created by someone already signed in, or through an invite link." },
+      { status: 401 }
+    );
   }
 
   if (await findUserByEmail(email)) {
