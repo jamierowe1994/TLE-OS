@@ -535,9 +535,16 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
         <StatCard
           label="Protected (RLP/LEC)"
           stat={s.protectedCount}
-          sub={`${s.protectedClaimable.display ?? "£0.00"} claimable — ${
-            (s.totalInArrears.value ?? 0) - (s.protectedCount.value ?? 0)
-          } unprotected`}
+          /* Two unknowns do not subtract to zero. Without both figures this
+             said "0 unprotected", which is the most reassuring possible way to
+             say "we have no idea". */
+          sub={
+            s.totalInArrears.value != null && s.protectedCount.value != null
+              ? `${s.protectedClaimable.display ?? "—"} claimable — ${
+                  s.totalInArrears.value - s.protectedCount.value
+                } unprotected`
+              : "Unprotected count needs both figures — one is missing."
+          }
         />
         <StatCard
           label="% of rent roll"

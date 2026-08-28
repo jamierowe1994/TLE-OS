@@ -41,6 +41,13 @@ const STYLES: Record<
     label: "SNAPSHOT",
     className: "bg-gray-100 text-gray-500 border-gray-200",
   },
+  /* Not a figure. The snapshot used to fill these gaps with July numbers; now
+     the gap shows, and the note says where the figure used to come from — so a
+     dash reads as "wire this up" rather than as "zero". */
+  unavailable: {
+    label: "NO SOURCE",
+    className: "bg-rose-50 text-rose-700 border-rose-200",
+  },
   derived: {
     label: "DERIVED",
     className: "bg-slate-100 text-slate-600 border-slate-200",
@@ -59,6 +66,10 @@ const DOT: Record<StatSource, string> = {
   manual: "#f59e0b",
   snapshot: "#f59e0b",
   derived: "#f59e0b",
+  /* Red, not amber. Amber is "not live yet"; this is "nothing reached it at
+     all", and the two need telling apart at a glance or the gaps disappear
+     into the to-do pile. */
+  unavailable: "#e11d48",
 };
 
 export default function SourceBadge({

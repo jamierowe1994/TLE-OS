@@ -1,7 +1,20 @@
 // Core data model — CONTRACT (all build lanes import from here).
 // Do not change shapes without updating the build spec.
 
-export type StatSource = "live-rex" | "live-meta" | "live-propoly" | "live-teg" | "live-ghl" | "live-payprop" | "manual" | "snapshot" | "derived";
+export type StatSource =
+  | "live-rex" | "live-meta" | "live-propoly" | "live-teg" | "live-ghl" | "live-payprop"
+  | "manual"
+  | "snapshot"
+  /**
+   * No live source reached this figure.
+   *
+   * NOT the same as zero, and not the same as a snapshot. It says "we could not
+   * find this out", which is a fact an owner can act on — chase the connection,
+   * or accept that PayProp genuinely cannot see it. A stale number in its place
+   * says nothing at all while looking like an answer.
+   */
+  | "unavailable"
+  | "derived";
 
 export interface StatValue {
   value: number | null;            // null = genuinely unknown → render "—"

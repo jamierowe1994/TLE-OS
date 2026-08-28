@@ -587,7 +587,9 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
               [
                 ...bv.baselineCosts.direct.map((r) => ({ ...r, label: `${r.label} (direct)` })),
                 ...bv.baselineCosts.fixed,
-                { label: "TOTAL BASELINE COSTS", value: bv.baselineCosts.total.value ?? 0 },
+                /* Null is not £0 of costs — that would read as a business with no
+                   overheads at all. */
+                { label: "TOTAL BASELINE COSTS", value: bv.baselineCosts.total.value ?? "—" },
               ] as unknown as Record<string, unknown>[]
             }
             compact

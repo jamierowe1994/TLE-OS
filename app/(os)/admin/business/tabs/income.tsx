@@ -572,13 +572,23 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
         <section className="card p-5">
           <h2 className="text-sm font-semibold">TLE / partner split — {monthLabel(month)} est</h2>
           <div className="mt-4">
-            <Donut
-              segments={[
-                { label: "TLE net", value: inc.julyMtd.tleNetIncome.value ?? 0, color: "#E31F36" },
-                { label: "Associates", value: inc.julyMtd.paidToAssociates.value ?? 0, color: "#101014" },
-              ]}
-              centerLabel={inc.julyMtd.combinedGci.display ?? ""}
-            />
+            {/* A donut of two nulls draws itself as an empty ring and reads as
+                "nothing earned". Say there is no figure instead. */}
+            {inc.julyMtd.tleNetIncome.value != null &&
+            inc.julyMtd.paidToAssociates.value != null ? (
+              <Donut
+                segments={[
+                  { label: "TLE net", value: inc.julyMtd.tleNetIncome.value, color: "#E31F36" },
+                  { label: "Associates", value: inc.julyMtd.paidToAssociates.value, color: "#101014" },
+                ]}
+                centerLabel={inc.julyMtd.combinedGci.display ?? ""}
+              />
+            ) : (
+              <p className="text-[12.5px] text-muted">
+                No live split yet — this needs the month&rsquo;s PayProp figures, which are
+                fetching above.
+              </p>
+            )}
           </div>
           <p className="mt-3 text-xs text-muted">{inc.julyMtd.splitNote}</p>
         </section>

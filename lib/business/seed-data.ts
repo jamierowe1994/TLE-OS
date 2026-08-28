@@ -1,7 +1,21 @@
-// SEED lane — lib/seed-data.ts
-// Full transcription of Susan's TLE Business Dashboard (Base44),
-// https://tle-business-dashboard.base44.app/Dashboard — captured 11 Jul 2026.
-// Every StatValue here is source "snapshot", asOf 2026-07-11. Do not invent or round.
+// SEED lane — THE FIGURES HAVE BEEN REMOVED. 28 Aug 2026.
+//
+// This was a full transcription of Susan's Base44 dashboard captured 11 Jul
+// 2026. Those numbers were right that day and wrong now, and they were being
+// shown whenever a live source had not landed — so a stale figure and a
+// working one looked identical.
+//
+// snap(), snapP() and nullStat() now all return a declared GAP: value null,
+// source "unavailable", and a note saying where the figure used to come from.
+// The structure below is untouched, so every tab still finds its fields and
+// nothing had to be rewritten; only the values are gone.
+//
+// The source lines are deliberately kept. "PayProp arrears report" tells you
+// exactly where to go and wire it, which is what turns each dash into a task
+// rather than a shrug. The original numbers are in git and in the TLE portal.
+//
+// DO NOT reintroduce literals here. If a figure cannot be fetched, the honest
+// answer is the dash.
 //
 // NOTES FROM THE CAPTURE:
 // - The Base44 "P&L" tab is password-protected and was NOT captured. The H2
@@ -57,12 +71,42 @@ export {
   nameMatchesAgent,
 };
 
-/** Build a snapshot StatValue. `src` = the source line shown on the dashboard. */
-function snap(value: number | null, display?: string, src?: string): StatValue {
-  const note = src ? `${SNAPSHOT_NOTE} · Source: ${src}` : SNAPSHOT_NOTE;
-  const stat: StatValue = { value, source: "snapshot", note, asOf: SNAPSHOT_DATE };
-  if (display) stat.display = display;
-  return stat;
+/**
+ * THE SNAPSHOT NO LONGER RETURNS FIGURES.
+ *
+ * ── Why the numbers were removed rather than the file ─────────────────────
+ *
+ * These were hand-keyed for 11 July 2026. They were right that day and are
+ * wrong now, and every month that passes makes them wronger while they carry
+ * on looking like answers. James: "get rid of the snapshot completely and stop
+ * falling back on it."
+ *
+ * Deleting the file would have meant editing ten tabs at once and blanking any
+ * tile whose live source has not landed yet, with nothing to say which. So the
+ * SHAPE stays — every tab still finds the field it expects — and the VALUE
+ * goes. Each becomes an explicit "no live source reached this", which renders
+ * as an em dash with the reason in the badge.
+ *
+ * That turns a silent wrong number into a visible gap, and a visible gap is a
+ * to-do list: every dash on Susan's screens is now a connection worth chasing,
+ * and the ones that stay dashed are the figures we genuinely cannot see —
+ * licence fees, joining fees, anything through the separate bank account.
+ *
+ * The original figures are not lost. They are in git, and in the TLE portal
+ * this was ported from.
+ *
+ * The parameters are kept so ~500 call sites do not need rewriting, and so the
+ * SOURCE LINE survives — knowing a figure used to come from "PayProp arrears
+ * report" is exactly what tells you where to go and wire it.
+ */
+function snap(_value: number | null, _display?: string, src?: string): StatValue {
+  return {
+    value: null,
+    source: "unavailable",
+    note: src
+      ? `No live source for this yet. It used to come from: ${src}.`
+      : "No live source for this yet.",
+  };
 }
 
 
@@ -659,7 +703,9 @@ export type SeedData = typeof SEED;
 const NULL_NOTE = SNAPSHOT_NOTE;
 
 function nullStat(): StatValue {
-  return { value: null, source: "snapshot", note: NULL_NOTE, asOf: SNAPSHOT_DATE };
+  /* Already null; it just called itself a snapshot, which put an amber
+     "SNAPSHOT" badge on a figure that never existed. */
+  return { value: null, source: "unavailable", note: NULL_NOTE };
 }
 
 function statFrom(value: number | null, src: string): StatValue {
@@ -762,13 +808,15 @@ export function agentPortfolio(agentKey: string): PortfolioRow | null {
 
 const PERIOD_CAPTURE_DATE = "2026-07-21";
 
-function snapP(value: number | null, display?: string, src?: string): StatValue {
-  const note = src
-    ? `Figure from Susan's Base44 dashboard, period view (captured 21 Jul 2026) · Source: ${src}`
-    : `Figure from Susan's Base44 dashboard, period view (captured 21 Jul 2026)`;
-  const stat: StatValue = { value, source: "snapshot", note, asOf: PERIOD_CAPTURE_DATE };
-  if (display) stat.display = display;
-  return stat;
+/** The period-view capture. Same treatment as snap() — see its note. */
+function snapP(_value: number | null, _display?: string, src?: string): StatValue {
+  return {
+    value: null,
+    source: "unavailable",
+    note: src
+      ? `No live source for this yet. It used to come from: ${src}.`
+      : "No live source for this yet.",
+  };
 }
 
 export interface PeriodKpis {
