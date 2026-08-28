@@ -49,10 +49,10 @@ export async function PATCH(req: NextRequest) {
   }
 
   const userId = typeof body.userId === "string" ? body.userId : null;
-  if (!userId) {
+  if (!(await requireCapability(req, "see:business"))) {
     return NextResponse.json({ error: "userId is required." }, { status: 400 });
   }
-  const existing = await findById(userId);
+  const existing = await findById(userId!);
   if (!existing) {
     return NextResponse.json({ error: "User not found." }, { status: 404 });
   }
@@ -79,7 +79,7 @@ export async function PATCH(req: NextRequest) {
     patch.adminNotes = [...(existing.adminNotes ?? []), note];
   }
 
-  const updated = await updateUser(userId, patch);
+  const updated = await updateUser(userId!, patch);
   if (!updated) {
     return NextResponse.json({ error: "User not found." }, { status: 404 });
   }
