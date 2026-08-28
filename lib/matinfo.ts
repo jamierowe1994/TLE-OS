@@ -123,6 +123,16 @@ export interface MatGroup {
   fields: MatField[];
 }
 
+/**
+ * Groups that carry more words than an agent can use in front of a landlord.
+ *
+ * Construction runs to five prose descriptions ("Cavity wall, filled cavity",
+ * "(another dwelling above)") and Risks is mostly a column of No. Both are
+ * genuinely useful when somebody goes looking, and both are noise on the screen
+ * where you are choosing what goes into a deck. Hidden there, kept on the file.
+ */
+export const VERBOSE_GROUPS = ["build", "risk"];
+
 export interface MaterialInfo {
   hsId: number;
   /** Grouped for display. Empty groups are dropped before you get here. */

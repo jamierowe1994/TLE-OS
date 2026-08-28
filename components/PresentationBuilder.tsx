@@ -193,25 +193,15 @@ export default function PresentationBuilder({
                   {d.addressWarning}
                 </p>
               )}
-              <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {[
-                  ["Address", address],
-                  ["Postcode", postcode],
-                  ["Sector", d.sector ?? "—"],
-                ].map(([k, v]) => (
-                  <div key={k} className="rounded-xl border border-line/70 p-3">
-                    <dt className="text-[10px] uppercase tracking-wider text-muted">{k}</dt>
-                    <dd className="mt-1 text-[13px]">{v}</dd>
-                  </div>
-                ))}
-              </dl>
-
               {/* The same panel the appraisal file shows. One component rather
                   than two, so the deck an agent builds can never disagree with
                   the file they built it from. "Confirmed: Yes" used to live
                   here as a standalone box; it is now the panel's Matched pill,
                   which says the same thing next to the evidence for it. */}
-              <MaterialInfoPanel material={d.material} warning={d.addressWarning} />
+              {/* The address is already in the header two lines up, and the
+                  panel repeats property type. James spotted the duplication:
+                  "you've got them in the boxes above". One or the other. */}
+              <MaterialInfoPanel material={d.material} warning={d.addressWarning} hideVerbose />
             </div>
           )}
 
@@ -221,7 +211,7 @@ export default function PresentationBuilder({
                 {nearby.length} on the market in {d.sector} right now — every agent&apos;s
                 stock, not just ours. This is what a tenant is choosing between.
               </p>
-              <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {nearby.map((l) => {
                   const k = keyOf(l);
                   const on = pickedNearby.includes(k);
@@ -242,10 +232,14 @@ export default function PresentationBuilder({
                             src={l.image}
                             alt=""
                             loading="lazy"
-                            className="h-32 w-full bg-line/30 object-cover"
+                            /* Taller. h-32 cropped these to a letterbox and
+                               cut the roofline off every terrace — a property
+                               photo with no property in it. 4:3 keeps the
+                               building whole at four across. */
+                            className="aspect-[4/3] w-full bg-line/30 object-cover"
                           />
                         ) : (
-                          <div className="flex h-32 w-full items-center justify-center bg-line/20 text-[11px] text-muted">
+                          <div className="flex aspect-[4/3] w-full items-center justify-center bg-line/20 text-[11px] text-muted">
                             No photograph
                           </div>
                         )}

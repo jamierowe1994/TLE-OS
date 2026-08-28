@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { Pill } from "@/components/Wire";
-import { valuationLines, type MaterialInfo } from "@/lib/matinfo";
+import { valuationLines, VERBOSE_GROUPS, type MaterialInfo } from "@/lib/matinfo";
 
 /**
  * Material information, as an agent reads it.
@@ -40,12 +41,17 @@ export default function MaterialInfoPanel({
   material,
   warning,
   loading,
+  hideVerbose = false,
 }: {
   material: MaterialInfo | null;
+  /** Drop Construction and Risks — see VERBOSE_GROUPS. */
+  hideVerbose?: boolean;
   /** The address-match warning, when Homesearch matched a different property. */
   warning?: string | null;
   loading?: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+
   if (loading) {
     return (
       <div className="rounded-2xl border border-line/80 bg-panel p-5">
@@ -74,6 +80,10 @@ export default function MaterialInfoPanel({
     );
   }
 
+  /* Collapsed by default. James, 28 Aug: this is research material, not
+     something an agent needs open every time they glance at the file. The six
+     headline fields answer the questions a landlord actually asks in the first
+     two minutes; the other twenty-odd are for when somebody goes looking. */
   const all = material.groups.flatMap((g) => g.fields);
   const headline = HEADLINE.map((l) => all.find((f) => f.label === l)).filter(
     (f): f is NonNullable<typeof f> => Boolean(f)
@@ -119,8 +129,27 @@ export default function MaterialInfoPanel({
         </div>
       )}
 
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="mt-3.5 flex w-full items-center justify-between rounded-xl border border-line/70 px-3.5 py-2.5 text-[12.5px] transition-colors hover:border-ink"
+      >
+        <span>{open ? "Hide the detail" : "More information"}</span>
+        <span className={`text-[11px] text-muted transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+      </button>
+
+      {/* Grid-rows rather than max-height: a fixed max-height either clips a
+          long panel or leaves a gap under a short one, and this panel's length
+          depends on how much Homesearch happens to hold. */}
+      <div
+        className={`grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+        }`}
+      >
+        <div className="overflow-hidden">
       <div className="mt-4 space-y-3.5">
-        {material.groups.map((g) => (
+        {material.groups.filter((g) => !hideVerbose || !VERBOSE_GROUPS.includes(g.id)).map((g) => (
           <div key={g.id}>
             <p className="text-[10.5px] font-semibold">{g.title}</p>
             <dl className="mt-1.5 grid gap-x-5 gap-y-1 sm:grid-cols-2">
@@ -139,6 +168,8 @@ export default function MaterialInfoPanel({
         From Homesearch, live. Blanks are fields Homesearch does not hold for this
         property — not fields we chose to leave out.
       </p>
+        </div>
+      </div>
     </div>
   );
 }

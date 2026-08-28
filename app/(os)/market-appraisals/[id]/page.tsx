@@ -144,44 +144,46 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
         <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
           Where it&apos;s up to
         </p>
-        <ol className="mt-4 space-y-0">
+        {/* ACROSS, not down. James, 28 Aug — and he is right: a spine is a
+            journey, and a journey reads left to right. Vertically it looked
+            like a checklist of unrelated jobs; horizontally you can see at a
+            glance how far along a file is, which is the only question the
+            panel exists to answer.
+
+            It scrolls sideways rather than wrapping. Seven stages wrapped onto
+            two rows would put "Won" underneath "Booked" and undo the reading
+            order the change is for. */}
+        <ol className="-mx-1 mt-4 flex gap-1 overflow-x-auto px-1 pb-2">
           {spine.map((s, i, arr) => {
             const done = i < at;
             const here = s.id === live;
             return (
-              <li key={s.id} className="relative flex gap-3.5 pb-5 last:pb-0">
-                {/* The spine itself — a line down the page, not a row of pills.
-                    It is the thing James asked for by name, and it reads as a
-                    journey rather than as a status field. */}
-                {i < arr.length - 1 && (
+              <li key={s.id} className="flex min-w-[132px] flex-1 shrink-0 flex-col">
+                <div className="flex items-center">
                   <span
-                    aria-hidden
-                    className={`absolute left-[10px] top-[22px] h-full w-[1.5px] ${
-                      done ? "bg-accent-dark/50" : "bg-line"
+                    className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[10px] ${
+                      done
+                        ? "border-accent-dark bg-accent-soft text-accent-dark"
+                        : here
+                          ? "border-accent-dark bg-accent-dark text-white"
+                          : "border-line bg-panel text-muted"
                     }`}
-                  />
-                )}
-                <span
-                  className={`relative z-10 mt-0.5 flex h-[21px] w-[21px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[10px] ${
-                    done
-                      ? "border-accent-dark bg-accent-soft text-accent-dark"
-                      : here
-                        ? "border-accent-dark bg-accent-dark text-white"
-                        : "border-line bg-panel text-muted"
-                  }`}
-                >
-                  {done ? "✓" : i + 1}
-                </span>
-                <span className="min-w-0 pt-0.5">
-                  <span
-                    className={`block text-[13px] leading-tight ${here ? "font-semibold" : "text-muted"}`}
                   >
-                    {s.label}
+                    {done ? "\u2713" : i + 1}
                   </span>
-                  <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">
-                    {s.blurb}
-                  </span>
+                  {i < arr.length - 1 && (
+                    <span
+                      aria-hidden
+                      className={`h-[1.5px] flex-1 ${done ? "bg-accent-dark/50" : "bg-line"}`}
+                    />
+                  )}
+                </div>
+                <span className={`mt-2 pr-3 text-[12px] leading-tight ${here ? "font-semibold" : "text-muted"}`}>
+                  {s.label}
                 </span>
+                {here && (
+                  <span className="mt-0.5 pr-3 text-[10.5px] leading-snug text-muted">{s.blurb}</span>
+                )}
               </li>
             );
           })}
