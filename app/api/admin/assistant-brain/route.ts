@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
 import { assistantConfigured, budget } from "@/lib/assistant-brain";
+import { systemMap } from "@/lib/system-map";
 
 /**
  * Whether the assistant can currently answer, and what he has spent today.
@@ -24,5 +25,8 @@ export async function GET(req: NextRequest) {
     configured: assistantConfigured(),
     spent: b.spent,
     cap: b.cap,
+    /* Returned so the console can show exactly what he has been told. An
+       assistant whose context you cannot read is one you cannot correct. */
+    map: systemMap(),
   });
 }

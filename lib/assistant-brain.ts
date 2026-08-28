@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { hasDb, q } from "@/lib/db";
 import { listKnowledge } from "@/lib/business/knowledge-store";
 import { getBrief } from "@/lib/assistant-brief";
+import { systemMap } from "@/lib/system-map";
 
 /**
  * The assistant's actual brain. Claude, over the knowledge we hold.
@@ -92,6 +93,9 @@ are in the middle of something else.
 How to answer:
 - Answer from the material below. It is the only thing you actually know about
   how this business works.
+- The system map explains where things live and what order they happen in. It
+  deliberately contains NO figures — if somebody wants a number, tell them which
+  screen shows it rather than guessing at it.
 - If the material does not cover it, say so in one sentence and say the question
   has been passed to James. Do not guess at a process, a figure, or a policy —
   a confident wrong answer about a landlord or a deal is worse than no answer.
@@ -113,6 +117,11 @@ How to answer:
 guidance above:\n\n${brief.body.trim()}`,
     });
   }
+
+  /* How the system works, generated from the system. Sits between the brief
+     and the written knowledge: it is more stable than the facts and less
+     authoritative than James's instructions. */
+  blocks.push({ type: "text", text: systemMap() });
 
   if (knowledge) {
     blocks.push({

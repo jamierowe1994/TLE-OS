@@ -72,7 +72,7 @@ function when(iso: string | null) {
 
 export default function AssistantConsole() {
   const [lines, setLines] = useState<Line[] | null>(null);
-  const [brain, setBrain] = useState<{ live: boolean; spent: number; cap: number } | null>(null);
+  const [brain, setBrain] = useState<{ live: boolean; spent: number; cap: number; map?: string } | null>(null);
   const [brief, setBrief] = useState<string | null>(null);
   const [briefBy, setBriefBy] = useState<string>("");
   const [savingBrief, setSavingBrief] = useState(false);
@@ -90,7 +90,7 @@ export default function AssistantConsole() {
       .catch(() => setBrief(""));
     fetch("/api/admin/assistant-brain")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { live: boolean; spent: number; cap: number } | null) => setBrain(d))
+      .then((d: { live: boolean; spent: number; cap: number; map?: string } | null) => setBrain(d))
       .catch(() => setBrain(null));
     fetch("/api/admin/assistant-log")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("no"))))
@@ -206,6 +206,29 @@ export default function AssistantConsole() {
             ))}
           </ul>
         )}
+      </section>
+
+      {/* ---------------------- what he already knows -------------------- */}
+      <section className="fade-up mt-8">
+        <h2 className="text-sm font-semibold uppercase tracking-wide">
+          What he already knows
+        </h2>
+        <p className="mt-1 max-w-[64ch] text-[12px] leading-relaxed text-muted">
+          Generated from the system itself every time he answers &mdash; the stage names,
+          their order and the wording all come from the same definitions the screens
+          render from. Change a process and this changes with it; nobody has to remember
+          to update it. It carries no figures on purpose: a number written into his
+          context is stale the moment it&rsquo;s written, so he points at the screen that
+          shows it instead.
+        </p>
+        <details className="mt-3 rounded-xl border border-line/70 bg-panel p-4">
+          <summary className="cursor-pointer text-[12.5px] text-muted hover:text-ink">
+            Read it as he reads it
+          </summary>
+          <pre className="mt-3 max-h-[50vh] overflow-auto whitespace-pre-wrap text-[11.5px] leading-relaxed text-muted">
+            {brain?.map ?? "Loading…"}
+          </pre>
+        </details>
       </section>
 
       {/* ------------------------- the brief ---------------------------- */}
