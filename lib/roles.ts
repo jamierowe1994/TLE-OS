@@ -58,6 +58,7 @@ export type Capability =
   | "see:business"      // Susan's stats — GCI, forecasts, arrears, income
   | "see:wiring"        // connections, health, environment state
   | "see:reports"       // bugs and faults from the pilot
+  | "see:pretenancy"    // Kirstie's run-up to a move-in
   | "see:everything"    // unscoped data rather than only your own book
   | "manage:people"     // invite, reset, view-as
   | "manage:roles";     // hand out the roles above
@@ -65,19 +66,19 @@ export type Capability =
 const MATRIX: Record<Role, Capability[]> = {
   owner: [
     "admin:open", "see:people", "see:business", "see:wiring",
-    "see:reports", "see:everything", "manage:people", "manage:roles",
+    "see:reports", "see:pretenancy", "see:everything", "manage:people", "manage:roles",
   ],
   /* Susan runs the business, so she sees all of it and all of the people — but
      NOT the wiring. Not a slight: those screens are where sending is armed and
      write locks are read, and that is a developer's console, not an MD's. */
   super_admin: [
     "admin:open", "see:people", "see:business", "see:reports",
-    "see:everything", "manage:people",
+    "see:pretenancy", "see:everything", "manage:people",
   ],
   /* The mirror image. A contractor brought in to debug REX needs the
      connections page and has no business reading anybody's earnings. */
   developer: ["admin:open", "see:wiring", "see:reports"],
-  support: ["admin:open", "see:people", "see:reports"],
+  support: ["admin:open", "see:people", "see:reports", "see:pretenancy"],
   agent: [],
 };
 
