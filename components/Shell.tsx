@@ -154,7 +154,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetch("/api/auth/me")
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: { isOwner?: boolean } | null) => setIsOwner(Boolean(j?.isOwner)))
+      .then((j: { canAdmin?: boolean } | null) => setIsOwner(Boolean(j?.canAdmin)))
       .catch(() => {});
   }, []);
 

@@ -145,11 +145,13 @@ function SignIn() {
           <Link href="/reset" className="text-muted underline">Forgotten your password?</Link>
         </p>
 
-        <p className="mt-4 border-t border-line/70 pt-4 text-[12px] text-muted">
-          No account yet?{" "}
-          <Link href="/join" className="underline">
-            Set one up
-          </Link>
+        {/* No "set one up" link, deliberately. TLE OS is INVITE ONLY: having a
+            Lettings Experts address is not the same as being meant to be in
+            here, and a self-serve doorway quietly makes it so. The /join route
+            still exists — it is where an invite link lands — but you have to
+            have been sent one. */}
+        <p className="mt-4 border-t border-line/70 pt-4 text-[11.5px] leading-relaxed text-muted">
+          Accounts are by invite. If you should have one and don&apos;t, ask James.
         </p>
       </div>
       <p className="mt-4 text-center text-[11px] text-muted">The Letting Experts</p>
