@@ -587,9 +587,15 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
               [
                 ...bv.baselineCosts.direct.map((r) => ({ ...r, label: `${r.label} (direct)` })),
                 ...bv.baselineCosts.fixed,
-                /* Null is not £0 of costs — that would read as a business with no
-                   overheads at all. */
-                { label: "TOTAL BASELINE COSTS", value: bv.baselineCosts.total.value ?? "—" },
+                /* Null is not £0 of costs — that would read as a business with
+                   no overheads at all.
+                   
+                   And the sentinel must be null, not the string "—". money()
+                   guards null and NaN; a string sails past both, reaches
+                   Intl.NumberFormat, and renders the literal text "£NaN" on
+                   Susan's screen. Caught comparing this file against the
+                   portal it was ported from. */
+                { label: "TOTAL BASELINE COSTS", value: bv.baselineCosts.total.value ?? null },
               ] as unknown as Record<string, unknown>[]
             }
             compact

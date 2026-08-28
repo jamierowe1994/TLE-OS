@@ -48,11 +48,19 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const userId = typeof body.userId === "string" ? body.userId : null;
+  /* Two separate things, which a paste during the port had merged into one:
+     the capability check (401) and the missing-userId guard (400). The merged
+     version dropped the null check entirely and then reported an auth failure
+     as "userId is required", which is a misleading answer to a question nobody
+     asked. */
   if (!(await requireCapability(req, "see:business"))) {
+    return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+  }
+  const userId = typeof body.userId === "string" ? body.userId : null;
+  if (!userId) {
     return NextResponse.json({ error: "userId is required." }, { status: 400 });
   }
-  const existing = await findById(userId!);
+  const existing = await findById(userId);
   if (!existing) {
     return NextResponse.json({ error: "User not found." }, { status: 404 });
   }

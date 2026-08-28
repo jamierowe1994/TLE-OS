@@ -2,6 +2,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { hasDb, q } from "@/lib/db";
 import { listKnowledge } from "@/lib/business/knowledge-store";
+import { getBrief } from "@/lib/assistant-brief";
 
 /**
  * The assistant's actual brain. Claude, over the knowledge we hold.
@@ -75,7 +76,10 @@ export async function budget(): Promise<Budget> {
  * the last one — the whole thing is stable, so the whole thing caches.
  */
 async function systemBlocks(): Promise<Anthropic.TextBlockParam[]> {
-  const entries = await listKnowledge().catch(() => []);
+  const [entries, brief] = await Promise.all([
+    listKnowledge().catch(() => []),
+    getBrief().catch(() => ({ body: "", updatedBy: "", updatedAt: null })),
+  ]);
   const knowledge = entries
     .map((e) => `## ${e.title}\n\n${e.content}`)
     .join("\n\n---\n\n");
@@ -97,6 +101,18 @@ How to answer:
 - You cannot take actions, open pages, or change anything. You answer questions.`;
 
   const blocks: Anthropic.TextBlockParam[] = [{ type: "text", text: persona }];
+
+  /* James's brief goes BEFORE the facts. Instructions have to be read ahead of
+     the material they apply to — and putting it here rather than after means it
+     can override the built-in persona above, which is the point: the default is
+     a starting position, not a policy. */
+  if (brief.body.trim()) {
+    blocks.push({
+      type: "text",
+      text: `Standing instructions from James, which take precedence over the general
+guidance above:\n\n${brief.body.trim()}`,
+    });
+  }
 
   if (knowledge) {
     blocks.push({

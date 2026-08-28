@@ -28,6 +28,28 @@ import AssistantCharacter from "@/components/AssistantCharacter";
  * answers wrong is worse than one that admits it is young.
  */
 
+/* A starting shape rather than an empty box. Nobody writes a good brief from a
+   blank field, and the headings are the four things James asked for. */
+const BRIEF_PLACEHOLDER = `What he's here to do
+e.g. Help TLE partner agents get unstuck without having to ring anyone. Most
+questions will be about listings, viewings, applications, compliance and getting
+paid.
+
+How he should talk
+e.g. Like a helpful colleague who has been here a while. Warm but not chatty.
+Never corporate.
+
+How he should respond
+e.g. Answer the question first, then the detail. If it isn't covered, say so
+plainly rather than guessing. Never invent a figure or a policy.
+
+Language
+e.g. Plain English, UK spelling. No jargon unless the agent used it first.
+
+The process, roughly
+e.g. Appraisal, then listing, then viewings, then application, then referencing,
+then move-in. Propoly is where a deal lives; REX is the CRM.`;
+
 type Line = {
   id: string;
   userEmail: string;
@@ -51,10 +73,21 @@ function when(iso: string | null) {
 export default function AssistantConsole() {
   const [lines, setLines] = useState<Line[] | null>(null);
   const [brain, setBrain] = useState<{ live: boolean; spent: number; cap: number } | null>(null);
+  const [brief, setBrief] = useState<string | null>(null);
+  const [briefBy, setBriefBy] = useState<string>("");
+  const [savingBrief, setSavingBrief] = useState(false);
+  const [briefFlash, setBriefFlash] = useState<string | null>(null);
   const [who, setWho] = useState<string>("");
   const [denied, setDenied] = useState(false);
 
   const load = useCallback(() => {
+    fetch("/api/admin/assistant-brief")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { brief?: { body: string; updatedBy: string } } | null) => {
+        setBrief(d?.brief?.body ?? "");
+        setBriefBy(d?.brief?.updatedBy ?? "");
+      })
+      .catch(() => setBrief(""));
     fetch("/api/admin/assistant-brain")
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { live: boolean; spent: number; cap: number } | null) => setBrain(d))
@@ -77,6 +110,23 @@ export default function AssistantConsole() {
   /* The worklist: what agents actually asked, newest first. Read off the same
      log as the transcript below rather than a second store — one source, so
      the two can never disagree about what was said. */
+  async function saveBrief() {
+    setSavingBrief(true);
+    setBriefFlash(null);
+    try {
+      const r = await fetch("/api/admin/assistant-brief", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ body: brief ?? "" }),
+      });
+      setBriefFlash(r.ok ? "Saved. He'll use this on the next question." : "Couldn't save that.");
+    } catch {
+      setBriefFlash("Couldn't save that.");
+    } finally {
+      setSavingBrief(false);
+    }
+  }
+
   const questions = (lines ?? []).filter((l) => l.role === "agent" && l.kind === "ask");
   /* Agents only — the assistant's own lines would swamp the picker. */
   const people = [...new Set((lines ?? []).filter((l) => l.role === "agent").map((l) => l.userEmail))].sort();
@@ -156,6 +206,41 @@ export default function AssistantConsole() {
             ))}
           </ul>
         )}
+      </section>
+
+      {/* ------------------------- the brief ---------------------------- */}
+      <section className="fade-up mt-8">
+        <h2 className="text-sm font-semibold uppercase tracking-wide">His brief</h2>
+        <p className="mt-1 max-w-[64ch] text-[12px] leading-relaxed text-muted">
+          Who he is and how he behaves &mdash; how to talk, how to respond, what he&rsquo;s
+          here to do. Separate from the knowledge below, which is facts about the
+          business. This is read first and overrides his built-in manners, so anything
+          here wins.
+        </p>
+
+        <textarea
+          value={brief ?? ""}
+          onChange={(e) => setBrief(e.target.value)}
+          rows={14}
+          spellCheck
+          placeholder={BRIEF_PLACEHOLDER}
+          className="mt-3 w-full rounded-xl border border-line/80 bg-box p-3.5 text-[12.5px] leading-relaxed outline-none focus:border-accent"
+        />
+
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={saveBrief}
+            disabled={savingBrief || brief === null}
+            className="rounded-lg bg-accent-dark px-4 py-2 text-[12.5px] font-semibold text-white disabled:opacity-40"
+          >
+            {savingBrief ? "Saving…" : "Save brief"}
+          </button>
+          <span className="text-[11.5px] text-muted">
+            {briefFlash ??
+              (briefBy ? `Last saved by ${briefBy}.` : "Nothing written yet — he'll use his defaults.")}
+          </span>
+        </div>
       </section>
 
       {/* ---------------------------- the log ---------------------------- */}

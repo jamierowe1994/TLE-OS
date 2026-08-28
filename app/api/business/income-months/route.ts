@@ -100,9 +100,14 @@ export async function GET() {
   /* The LIVE month included. It was months-to-last-complete, which on the 28th
      of August ends at July — see the note on the business page about why a
      closed-report rule is wrong on a screen Susan runs the business from. */
+  /* CLOSED months only. An earlier pass appended the current month, which put a
+     part-month column in a row of complete ones — smaller, entirely plausible,
+     and marked as walked-from-PayProp with nothing saying it was partial. That
+     is the exact shape of the discrepancy this dashboard has been burned by.
+     
+     The in-progress month already has its own home: the estimate tiles at the
+     top of the Income tab, which say "est" on their face. */
   const months = monthsThisYearToDate();
-  const live = currentMonth();
-  if (!months.includes(live)) months.push(live);
   if (!months.length) {
     // January. There is no complete month this year yet.
     return NextResponse.json({ months: [], rows: {}, filled: [] });

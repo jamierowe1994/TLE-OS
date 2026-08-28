@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
 import { getAgentEarningsForMonths } from "@/lib/business/payprop-income";
-import { getAgentBook, normaliseAgentName } from "@/lib/business/payprop-portfolio";
+import { getAgentBook } from "@/lib/business/payprop-portfolio";
+import { agentKeysForName } from "@/lib/business/roster";
 import { getPropolyAgentDeals } from "@/lib/business/propoly-deals";
 import { getComplianceAsAt } from "@/lib/business/rex-stats";
 import { LIVE_START } from "@/lib/business/roster";
@@ -99,7 +100,16 @@ export async function GET(req: NextRequest) {
     r.status === "fulfilled" ? r.value : null;
 
   const compliance = val(complianceR);
-  const key = normaliseAgentName(agent);
+  /* Matched with the roster's QUALIFIER-AWARE keys, not by normalising the
+     name.
+     
+     normaliseAgentName strips the parenthetical, so "Sean McMahon (Edinburgh)"
+     and "Sean Mc Mahon (Glasgow)" both collapse to the same key — .find()
+     would then hand Edinburgh's certificates to Glasgow, or miss entirely on
+     the spacing difference and report a clean book. Two real partners, and the
+     roster carries the qualifier precisely because these tables spell people
+     inconsistently. This is what the portal used; the port lost it. */
+  const keys = agentKeysForName(agent);
 
   return NextResponse.json({
     /* Echoed so the drill-down can discard an answer for a partner or month
@@ -112,6 +122,8 @@ export async function GET(req: NextRequest) {
     book: val(bookR),
     deals: val(dealsR),
     compliance:
-      compliance?.byAgent?.find((r) => normaliseAgentName(r.label) === key) ?? null,
+      compliance?.byAgent?.find((r) =>
+        agentKeysForName(r.label).some((k) => keys.includes(k))
+      ) ?? null,
   });
 }

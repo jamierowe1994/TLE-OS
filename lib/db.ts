@@ -503,6 +503,28 @@ CREATE TABLE IF NOT EXISTS os_cache (
   computed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- The assistant's standing brief: who he is and how he behaves.
+--
+-- James, 29 Aug: "I need to give some general context about what he's here to
+-- do and how he can help… how he should talk, how he should respond to things,
+-- what his language should be like, what he's here to do."
+--
+-- Deliberately SEPARATE from assistant_knowledge, which holds facts about the
+-- business. This is the standing instruction — the difference between what he
+-- knows and who he is. Keeping them apart matters for two reasons: the brief
+-- wants to be edited as one continuous piece of writing rather than chopped
+-- into titled entries, and it goes into the prompt FIRST, ahead of the facts,
+-- because instructions have to be read before the material they apply to.
+--
+-- One row, always. Versioning would be a nice-to-have; a second row would be a
+-- bug, so the primary key is a constant.
+CREATE TABLE IF NOT EXISTS os_assistant_brief (
+  id          TEXT PRIMARY KEY DEFAULT 'brief',
+  body        TEXT NOT NULL DEFAULT '',
+  updated_by  TEXT NOT NULL DEFAULT '',
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Everything anyone says to the assistant, and everything he says back.
 --
 -- James, 29 Aug: "each agent will have a stored log, and we'll save all of that

@@ -415,6 +415,11 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
     : null;
 
   const gciRow = monthlyRows.find((r) => r.metric === "Combined GCI (exc VAT)");
+  /* NOT "TOTAL INCOME". That row existed only in the hand-keyed capture — it
+     is GCI plus licence, pro and joining fees, and PayProp cannot see the last
+     three (they run through a separate bank account). The live row set has no
+     equivalent, so this plots what we can actually measure: TLE's retained
+     share. The heading below says so. */
   const totalRow = monthlyRows.find((r) => r.metric === "Combined Net Income to TLE");
   const monthKeys = windowMonths.map((m) =>
     new Date(`${m}-01T00:00:00Z`)
@@ -684,9 +689,18 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
         {liveMonthsNote && <p className="text-xs text-muted">{liveMonthsNote}</p>}
       </section>
 
-      {/* GCI vs total income bars */}
+      {/* The heading has to name what is actually plotted. It said "total
+          income" over a series that is TLE's net share — roughly 60% lower —
+          which is precisely the shape of a reconciliation discrepancy: the
+          layout looks right and the number is a different measure. */}
       <section className="card p-5">
-        <h2 className="text-sm font-semibold">Combined GCI vs total income — {rangeLabel}</h2>
+        <h2 className="text-sm font-semibold">
+          Combined GCI vs net income to TLE — {rangeLabel}
+        </h2>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
+          Net income to TLE, not total income. Licence, pro and joining fees run through a
+          separate bank account, so PayProp cannot see them and no live total exists yet.
+        </p>
         <div className="mt-4">
           <Bars labels={barLabels} series={barSeries} format={(n) => `£${formatNum(n / 1000)}k`} />
         </div>

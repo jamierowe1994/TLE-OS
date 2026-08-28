@@ -26,20 +26,14 @@ export interface AdminForecastRow {
 }
 
 export async function GET(req: NextRequest) {
-  const me = await requireCapability(req, "see:business");
-  if (!me) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+  /* One check. The port left four stacked here, one of which looked up the
+     OS user's id in the PORTAL's users table — two different id spaces, so it
+     never matched and this route answered 401 to everybody, including Susan.
+     
+     The capability IS the authorisation. There is nothing this route needs
+     from a business-user row. */
   if (!(await requireCapability(req, "see:business"))) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
-  }
-  const sessionUser = await findById(me.id);
-  if (!sessionUser) {
-    return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
-  }
-  if (!(await requireCapability(req, "see:business"))) {
-    return NextResponse.json(
-      { error: "This area is locked to the business owner." },
-      { status: 403 }
-    );
   }
 
   const monthParam = req.nextUrl.searchParams.get("month");
