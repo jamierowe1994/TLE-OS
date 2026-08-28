@@ -160,6 +160,16 @@ export default function AdminPage() {
 
   return (
     <PresentProvider>
+      {/* THE WAY OUT.
+          The ported shell renders `fixed inset-0`, so it covers the admin rail
+          completely — James got in and had no route back to his own view
+          except the browser's back button. This sits above it on purpose. */}
+      <a
+        href="/admin"
+        className="hide-when-presenting fixed left-4 top-4 z-[60] rounded-full border border-line/80 bg-panel px-3.5 py-1.5 text-[12px] shadow-[0_6px_18px_-8px_rgba(0,0,0,0.35)]"
+      >
+        ← Back to my view
+      </a>
       <AdminShell user={user} onSignOut={handleSignOut} />
     </PresentProvider>
   );

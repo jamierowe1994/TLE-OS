@@ -577,3 +577,163 @@ h1, h2, h3, h4, h5 {
   }
   .envelope-dashes { opacity: 0; }
 }
+
+
+/* ══════════════════════════════════════════════════════════════════════════
+   SUSAN'S FIGURES — styles ported from the TLE portal.
+
+   The port brought 13 tabs of markup across but not the stylesheet behind it,
+   so every `.card` rendered as a bare div: no border, no padding, no lift.
+   That is why the tiles ran together with nothing dividing them.
+
+   Everything below is SCOPED TO `.type-admin`, the class the ported shell
+   already puts on its root. Unscoped, `.card` and `.stat-value` are generic
+   enough to collide with the OS's own screens the moment somebody reuses the
+   name — and a style leak that only shows up on one tab of one page is a
+   miserable thing to track down.
+
+   Deleted with the rest of the port when the portal is finally retired.
+   ══════════════════════════════════════════════════════════════════════════ */
+.type-admin .type-admin {
+  --font-body: var(--font-montserrat), system-ui, -apple-system, sans-serif;
+  --font-heading: var(--font-montserrat), system-ui, -apple-system, sans-serif;
+  --font-figures: var(--font-montserrat), system-ui, -apple-system, sans-serif;
+  font-family: var(--font-body);
+}
+.type-admin .accent-text { color: var(--accent); }
+.type-admin .accent-soft-bg { background-color: var(--accent-soft); }
+.type-admin .written {
+  font-family: var(--font-shantell), var(--font-montserrat), system-ui, sans-serif;
+}
+.type-admin .tnum { font-variant-numeric: tabular-nums; }
+.type-admin .card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+}
+.type-admin .card-flat {
+  background: transparent;
+}
+.type-admin .dash-surface .card {
+  border-color: rgba(16, 16, 20, 0.12);
+  box-shadow:
+    0 1px 2px rgba(16, 16, 20, 0.05),
+    0 4px 14px rgba(16, 16, 20, 0.05);
+}
+.type-admin .dash-surface .hairline {
+  border-color: rgba(16, 16, 20, 0.14);
+}
+.type-admin .dash-cards .card {
+  border-width: 1.5px;
+  border-color: rgba(16, 16, 20, 0.85);
+  box-shadow:
+    0 1px 2px rgba(16, 16, 20, 0.05),
+    0 4px 14px rgba(16, 16, 20, 0.05);
+}
+.type-admin .stat-value {
+  font-family: var(--font-figures);
+  font-size: clamp(28px, 2.6vw, 36px);
+  font-weight: 500; /* was 600 — the whole surface leans lighter now */
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.type-admin .btn-press {
+  transition: transform 0.18s cubic-bezier(0.34, 1.4, 0.5, 1);
+}
+.type-admin .btn-press:hover { transform: translateY(-2px); }
+.type-admin .btn-press:active { transform: translateY(0) scale(0.95); }
+.type-admin .fade-up { animation: fade-up 0.24s ease both; }
+.type-admin .menu-pop { animation: menu-pop 0.13s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.type-admin .swing-down {
+  transform-origin: top center;
+  animation: swing-down 0.45s cubic-bezier(0.34, 1.4, 0.5, 1) both;
+}
+.type-admin .outline-cards .card {
+  background: transparent;
+  border-width: 1.5px;
+  border-color: rgba(16, 16, 20, 0.85);
+  box-shadow: none !important;
+}
+.type-admin .outline-cards.soft-cards .card {
+  border-width: 1px;
+  border-color: rgba(16, 16, 20, 0.22);
+}
+.type-admin .duo-loader {
+  position: relative;
+  width: 68px;
+  height: 68px;
+}
+.duo-loader::before,
+.type-admin .duo-loader::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 24px;
+  height: 24px;
+  border: 3px solid currentColor;
+  border-radius: 5px;
+  animation: duo-orbit 1.7s cubic-bezier(0.45, 0.05, 0.35, 0.95) infinite;
+}
+.type-admin .duo-loader::after {
+  animation-delay: -0.85s; /* half a lap behind — always chasing */
+}
+.type-admin .cal-pop {
+  transform-origin: bottom center;
+  animation: cal-pop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.type-admin .bar-fill {
+  animation: bar-fill 0.9s cubic-bezier(0.22, 1, 0.36, 1) var(--delay, 0ms) both;
+  transform-origin: left center;
+}
+.type-admin .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.type-admin .no-scrollbar::-webkit-scrollbar { display: none; }
+.type-admin .blob {
+  animation: blob-squash 0.55s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+.type-admin .skew-caption {
+  animation: caption-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.type-admin .bob-dot {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: bob 1.05s ease-in-out infinite;
+}
+.type-admin .bob-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.type-admin .bob-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.type-admin .zoom-backdrop {
+  animation: zoom-backdrop 0.26s ease-out both;
+}
+.type-admin .houses-bird {
+  animation: bird-bob calc(var(--beat) * 4) ease-in-out infinite;
+  animation-delay: var(--delay);
+}
+.type-admin .houses-bird .wing {
+  transform-box: fill-box;
+  /* the shoulder, where both wings meet */
+  transform-origin: 50% 100%;
+  animation: bird-flap var(--beat) ease-in-out infinite;
+  animation-delay: var(--delay);
+}
+.type-admin .houses-bird .wing-r {
+  animation-name: bird-flap-r;
+}
+/* tile edges — James asked for a faint line so each figure reads as its own
+   box rather than as text floating on a shared background. Stated explicitly
+   rather than relying on the extracted .card rule, because that rule is the
+   one most likely to be lost the next time this section is tidied. */
+.type-admin .card,
+.type-admin .card-flat,
+.type-admin .card-lift {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel, var(--card, #fff));
+}
