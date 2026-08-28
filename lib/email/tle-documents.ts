@@ -36,6 +36,15 @@ const T = (id: string, text: string): Block => ({ type: "text", id, text, bg: ""
 const BTN = (id: string, text: string, url: string, align: "left" | "center" = "left"): Block => ({
   type: "button", id, text, url, color: "", align,
 });
+const H2C = (id: string, text: string): Block => ({
+  type: "heading", id, text, align: "center", color: "#3b3b3c", size: 17, lineHeight: 1.35,
+});
+const TC = (id: string, text: string): Block => ({ type: "text", id, text, align: "center", bg: "" });
+/* Width in PX, not a percentage: Outlook ignores max-width on images and will
+   happily print a 1040px illustration at full size, blowing the card apart. */
+const IMG = (id: string, url: string, alt: string, width: number): Block => ({
+  type: "image", id, url, alt, linkUrl: "", align: "center", width,
+});
 const SP = (id: string, height = 16): Block => ({ type: "spacer", id, height });
 const DIV = (id: string): Block => ({ type: "divider", id, color: "#E7E2DD" });
 const FOOT = (id: string, note: string): Block => ({
@@ -58,56 +67,71 @@ export const SITE = "https://tle-os-production.up.railway.app";
  * and the closing line asks for the thing that is genuinely most useful and
  * least likely to be volunteered: the parts they never open.
  */
-export const PILOT_INVITE = {
-  subject: "You're in first, {{firstName}}",
-  preheader: "Early access to TLE OS, before anyone else sees it.",
+export const PILOT_INVITE: EmailDoc = {
+  subject: "You're in, {{firstName}} 🛫",
+  preheader: "TLE OS, and you get it before anybody else.",
   mode: "blocks",
   blocks: [
-    H("p1", "You're in first."),
-    T(
-      "p2",
-      "Hi {{firstName}},<br><br>We're building TLE OS - one place for your leads, your listings, your appraisals and your paperwork, instead of four. It goes live to everyone on <strong>14 October</strong>.<br><br>You're getting it now."
-    ),
+    /* The wordmark as TYPE, not an image. Half of email clients block images
+       by default, and a launch email whose first impression is a grey box
+       with a broken-image icon has already lost the room. The letterhead
+       above it already carries the company; this says which THING. */
+    {
+      type: "heading",
+      id: "p0",
+      text: "TLE OS",
+      align: "center",
+      size: 64,
+      letterSpacing: 2,
+      color: "#e31f36",
+    },
+    H2C("p0b", "is nearly here, and you're first through the door"),
+    SP("p0c", 4),
+    IMG("p1", `${SITE}/illustrations/notioly/paper-airplane.png`, "Launching something", 300),
+    H("p2", "You're in."),
     T(
       "p3",
-      "There are five of you. You've been picked because you'd notice the difference between something that works and something that only demos well."
-    ),
-    BTN("p4", "Set up your account", `${SITE}/join`),
-    SP("p5", 8),
-    DIV("p6"),
-    H2("p7", "What to do first"),
-    T(
-      "p8",
-      "Sign in and use it for your <strong>real</strong> work for a week. Book a genuine appraisal, open your genuine listings, look at your own leads. It's wired to live REX and PayProp data, so what you see is your actual book, not a demo."
+      "Hi {{firstName}},<br><br>We've been building <strong>TLE OS</strong> - one place for your leads, your listings, your appraisals and your paperwork, instead of four things and a spreadsheet.<br><br>It opens to everyone on <strong>14 October</strong>. You're getting it now."
     ),
     T(
-      "p9",
-      "Don't work around anything. If something is slower than the way you do it today, that's the single most valuable thing you can tell us."
+      "p4",
+      "There are five of you. You were picked because you'd spot the difference between something that genuinely works and something that only looks good in a demo."
     ),
-    DIV("p10"),
-    H2("p11", "When it's wrong, say so from where it broke"),
+    DIV("p5"),
+    H2("p6", "Nothing you do can break anything"),
     T(
-      "p12",
-      "There's a <strong>report a problem</strong> button on every screen. It sends us the page you were on and what you were doing, so we don't have to work out which bit you meant.<br><br>Use it for anything. A wrong number, a button that doesn't do what it says, a page that looks bad on your phone. Especially the small things: those are the ones that never get reported and never get fixed."
+      "p7",
+      "This is a <strong>sandbox</strong>. Click every button, book fake appraisals, drag things about, try to break it. <strong>Nothing writes back to REX.</strong> No landlord gets emailed, no record changes, nothing leaves the building.<br><br>That stays true until we deliberately turn it on, and we'll tell you the day we do. So genuinely - go and have a play."
     ),
-    DIV("p13"),
-    H2("p14", "The question we'll actually ask you"),
+    DIV("p8"),
+    H2("p9", "Some of it won't work yet, and that's the point"),
     T(
-      "p15",
-      "In three weeks we'll ask which parts you've <strong>never opened</strong>. Not your favourite feature. The tabs you walked past every day.<br><br>That tells us what to cut and what to move, and it's the reason for running a pilot at all."
+      "p10",
+      "We're building this as you use it. You will find half-finished corners, buttons that don't do much yet, and the odd number that looks wrong.<br><br>That isn't you doing it wrong. It's just where we are."
     ),
-    SP("p16", 8),
+    DIV("p11"),
+    H2("p12", "When something's wrong, say so"),
     T(
-      "p17",
-      "Anything at all, reply to this. It comes straight to me.<br><br>James"
+      "p13",
+      "There's a <strong>report a problem</strong> button on every single screen. Hit it the second something looks off and it sends us the page you were on, so you never have to explain which bit you meant.<br><br>Use it for the small things especially. A wonky number, a page that looks odd on your phone, a word that's just wrong. Those are the ones nobody reports and nobody fixes."
     ),
-    FOOT("p18", "You're getting this because you're on the TLE OS pilot."),
+    DIV("p14"),
+    H2("p15", "One thing we'll ask you in three weeks"),
+    T(
+      "p16",
+      "Not what you liked. <strong>Which bits you never opened.</strong><br><br>The tabs you walked straight past every day tell us what to cut and what to move, and that's the whole reason for doing this with five people first instead of fifty."
+    ),
+    SP("p17", 12),
+    /* The button is the LAST thing, as asked. Everything above it is the
+       reason to press it; a call to action higher up would be pressed before
+       any of it had been read. */
+    BTN("p18", "Set up your account →", `${SITE}/join`, "center"),
+    SP("p19", 8),
+    TC("p20", "Anything at all, just reply. It comes straight to me.<br><br><strong>James</strong>"),
+    FOOT("p21", "You're getting this because you're one of the five on the TLE OS pilot."),
   ],
-  /* Signed "James" in the body, so the renderer's automatic sign-off would
-     repeat it - and it prints an em dash, which house style does not use in
-     anything a client reads. */
   branding: { showSignoff: false },
-} as const;
+};
 
 /**
  * Launch day.

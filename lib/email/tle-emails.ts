@@ -58,7 +58,16 @@ export type CatalogEntry = {
   /** True when nothing in the OS sends this yet. Honesty over tidiness. */
   draft?: boolean;
   summary: string;
-  render: () => { subject: string; html: string };
+  /**
+   * The block document behind this email, when there is one.
+   *
+   * Present = Francesca can edit it in the builder. Absent = it is hand-rolled
+   * HTML owned by another file (the account emails carry Outlook dark-mode
+   * fixes the block shell does not do) or generated from a live record, and
+   * an editor that appeared to own it would be lying.
+   */
+  doc?: EmailDoc;
+  render: (override?: EmailDoc) => { subject: string; html: string };
 };
 
 /** Stand-in appointment, so the appraisal emails render as a real example. */
@@ -73,11 +82,14 @@ const SAMPLE_INVITE: AppraisalInvite = {
   presentationUrl: `${SITE}/present/example`,
 };
 
-const blocks = (doc: EmailDoc) => () =>
-  renderTemplate(doc, { brand: { ...tleBrand(), ...(doc.branding ?? {}) } }) as {
-    subject: string;
-    html: string;
-  };
+/* An override replaces the WORDS, never the branding: the document in code
+   keeps ownership of showSignoff and the rest, so an edit in the builder
+   cannot accidentally reinstate the duplicate sign-off. */
+const blocks = (doc: EmailDoc) => (override?: EmailDoc) =>
+  renderTemplate(
+    { ...doc, ...(override ?? {}), branding: doc.branding },
+    { brand: { ...tleBrand(), ...(doc.branding ?? {}) } }
+  ) as { subject: string; html: string };
 
 export const TLE_EMAILS: CatalogEntry[] = [
   {
@@ -91,6 +103,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
     draft: true,
     summary:
       "Tells an agent they're on the pilot, what to do in the first week, how to report a problem from the page it broke on, and that we'll be asking which parts they never opened.",
+    doc: PILOT_INVITE,
     render: blocks(PILOT_INVITE),
   },
   {
@@ -104,6 +117,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
     draft: true,
     summary:
       "Announces TLE OS is open to everyone. Leads on what changes for the reader rather than on features, and names the pilot so it doesn't read as a first draft.",
+    doc: LAUNCH_ANNOUNCEMENT,
     render: blocks(LAUNCH_ANNOUNCEMENT),
   },
 

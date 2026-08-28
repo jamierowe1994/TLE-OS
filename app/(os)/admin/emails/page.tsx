@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import EmailBuilder from "@/components/EmailBuilder";
+import type { CampaignStep } from "@/lib/campaigns";
 
 /**
  * Every email the OS sends, in one place, as the recipient will see it.
@@ -30,6 +32,8 @@ type Row = {
   fires: string;
   to: string;
   draft: boolean;
+  /** Block-authored, so the builder can own it. Hand-rolled ones cannot. */
+  editable: boolean;
   summary: string;
 };
 
@@ -124,11 +128,22 @@ function Reader({ row, onClose }: { row: Row; onClose: () => void }) {
   const [subject, setSubject] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [facts, setFacts] = useState(false);
+  const [doc, setDoc] = useState<{ subject: string; blocks: Record<string, unknown>[] } | null>(null);
+  const [index, setIndex] = useState<number>(-1);
+  const [edited, setEdited] = useState(false);
+  const [building, setBuilding] = useState(false);
 
   const load = useCallback(() => {
     fetch(`/api/admin/emails?id=${encodeURIComponent(row.id)}`)
       .then((r) => r.json())
-      .then((j) => (j.ok ? (setHtml(j.html), setSubject(j.subject)) : setError(j.error)))
+      .then((j) => {
+        if (!j.ok) return setError(j.error);
+        setHtml(j.html);
+        setSubject(j.subject);
+        setDoc(j.doc ?? null);
+        setIndex(j.index ?? -1);
+        setEdited(Boolean(j.edited));
+      })
       .catch(() => setError("Couldn't render it."));
   }, [row.id]);
 
@@ -150,10 +165,24 @@ function Reader({ row, onClose }: { row: Row; onClose: () => void }) {
               needs, and it is the one part a preview pane normally hides. */}
           <p className="truncate text-[11.5px] text-muted">{subject || row.summary}</p>
         </div>
+        {edited && (
+          <span className="rounded-full border border-amber-500/50 px-2.5 py-0.5 text-[10px] font-semibold text-amber-700">
+            Edited here
+          </span>
+        )}
+        {row.editable && doc && (
+          <button
+            type="button"
+            onClick={() => setBuilding(true)}
+            className="ml-auto rounded-full bg-accent-dark px-4 py-1.5 text-[11.5px] font-semibold text-page"
+          >
+            Edit
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setFacts((f) => !f)}
-          className="ml-auto rounded-full border border-line/70 px-3.5 py-1.5 text-[11.5px] hover:border-ink/40"
+          className={`${row.editable && doc ? "" : "ml-auto "}rounded-full border border-line/70 px-3.5 py-1.5 text-[11.5px] hover:border-ink/40`}
         >
           {facts ? "Hide details" : "Details"}
         </button>
@@ -202,6 +231,36 @@ function Reader({ row, onClose }: { row: Row; onClose: () => void }) {
           />
         )}
       </div>
+
+      {/* The same drag-and-drop builder the marketing campaigns use. Nothing
+          is forked: one editor means one place where a block type or a
+          spacing rule is fixed. It is campaign-shaped, so the catalogue hands
+          it a stand-in step; `initial` carries the real document and wins. */}
+      {building && doc && (
+        <EmailBuilder
+          campaignId="email-catalog"
+          stepIndex={index}
+          step={
+            {
+              day: 0,
+              channel: "email",
+              subject: doc.subject,
+              gist: row.summary,
+              body: [],
+            } as unknown as CampaignStep
+          }
+          initial={{ subject: doc.subject, blocks: doc.blocks }}
+          onClose={() => setBuilding(false)}
+          onSaved={(copy) => {
+            setEdited(Boolean(copy));
+            if (copy) setDoc({ subject: copy.subject ?? doc.subject, blocks: copy.blocks });
+            /* Re-render from the SERVER rather than trusting the editor's
+               own canvas: the canvas draws one block at a time without the
+               shell, so it is not proof the finished email still works. */
+            load();
+          }}
+        />
+      )}
     </div>
   );
 }
