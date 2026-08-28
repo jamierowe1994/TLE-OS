@@ -323,6 +323,19 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 Your profile
                 <span className="ml-auto text-muted">→</span>
               </Link>
+              {/* Settings, distinct from profile. Profile is who you are;
+                  settings is how the OS behaves for you — and the custom
+                  fields an agent invents have to be findable again a fortnight
+                  later, which "under your name somewhere" is not. */}
+              <Link
+                href="/settings"
+                onClick={() => setProfileOpen(false)}
+                className="mb-2 flex items-center gap-2 rounded-lg border border-line/70 px-2.5 py-2 text-[12px] font-semibold transition-colors hover:border-ink/40"
+              >
+                <DoodleIcon name="settings" size={14} className="text-accent-dark" />
+                Your settings
+                <span className="ml-auto text-muted">→</span>
+              </Link>
               <Link
                 href="/account"
                 onClick={() => setProfileOpen(false)}
