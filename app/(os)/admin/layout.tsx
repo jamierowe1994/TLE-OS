@@ -50,6 +50,11 @@ const GROUPS: Array<{ title: string | null; items: Array<{ href: string; label: 
       { href: "/admin/connections", label: "Wiring" },
       { href: "/admin/activity", label: "Activity" },
       { href: "/admin/todo", label: "To do" },
+      /* Deliberately NOT in the "Views" group: VIEW_PREFIXES is derived from
+         that group, and any href in it unmounts this rail. Note /emails also
+         exists in the main OS nav — that one is the agent-facing audit of
+         what currently sends; this is the catalogue of what we would send. */
+      { href: "/admin/emails", label: "Emails" },
     ],
   },
 ];

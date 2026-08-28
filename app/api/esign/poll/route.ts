@@ -27,9 +27,15 @@ export const runtime = "nodejs";
 
 function authorised(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
-  // No secret set means an environment nobody has locked down yet; the
-  // campaign runner takes the same view.
-  if (!secret) return true;
+  /* No secret set: open on a laptop, CLOSED in production.
+     
+     This used to return true unconditionally — "an environment nobody has
+     locked down yet". That was survivable only while middleware happened to
+     redirect every unauthenticated request, which made it look locked when it
+     was not. Now that cron routes are deliberately exempt from that redirect
+     (they authenticate themselves), an unset secret in production would put
+     this endpoint on the open internet. Fail shut. */
+  if (!secret) return process.env.NODE_ENV !== "production";
   const given = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
   const a = Buffer.from(given);
   const b = Buffer.from(secret);

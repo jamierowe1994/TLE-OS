@@ -93,7 +93,51 @@ async function hasValidSession(token: string | undefined): Promise<boolean> {
   return diff === 0;
 }
 
+/**
+ * Routes a MACHINE calls, which therefore cannot be sent to a sign-in page.
+ *
+ * ── The bug this fixes ────────────────────────────────────────────────────
+ *
+ * Every one of these authenticates itself — a constant-time comparison against
+ * CRON_SECRET, or an owner session. But this middleware matched them anyway and
+ * answered a cron's POST with `307 → /sign-in`. A scheduler follows the
+ * redirect, gets an HTML login page, sees a 200, and reports success. So the
+ * cron James set up had been failing silently: no error anywhere, nothing
+ * warmed, and the only symptom was figures that never got fresher.
+ *
+ * Measured 28 Aug 2026 against the live site: all five returned 307.
+ *
+ * ── Why exempting them is safe ────────────────────────────────────────────
+ *
+ * Because the redirect was never what protected them. Each route checks its own
+ * secret in constant time and refuses without one; the middleware was a second
+ * lock on a door that already had one, and it was jamming the door shut against
+ * the one caller allowed through.
+ *
+ * Two of them (esign/poll, scheduled-sends/run) used to treat an UNSET secret
+ * as "open" — fine while nothing could reach them, dangerous the moment they
+ * became reachable. Both now fail shut in production. That fix is a
+ * precondition of this list, not a coincidence: do not add a route here
+ * without checking it refuses when its secret is missing.
+ */
+const MACHINE_ROUTES = [
+  "/api/business/backfill",           // freezes closed months into gci_months
+  "/api/business/income-months/warm", // the warmer James already scheduled
+  "/api/teg/sync",                    // pulls the roster from the TEG Hub
+  "/api/campaigns/run",               // nurture sends
+  "/api/esign/poll",                  // DocuSeal envelope status
+  "/api/scheduled-sends/run",         // queued email
+];
+
 export async function middleware(req: NextRequest) {
+  /* Straight through to the route, which does its own authentication. Exact
+     match, not startsWith — a prefix test would exempt
+     /api/teg/sync-everything too, and that is how an allowlist quietly
+     becomes a wildcard. */
+  if (MACHINE_ROUTES.includes(req.nextUrl.pathname)) {
+    return NextResponse.next();
+  }
+
   /**
    * With no AUTH_SECRET the door stands open — local dev only.
    *
