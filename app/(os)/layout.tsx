@@ -3,7 +3,7 @@ import IntroGate from "@/components/IntroGate";
 import Shell from "@/components/Shell";
 import ThemeGate from "@/components/ThemeGate";
 import ViewAsBar from "@/components/ViewAsBar";
-import ReportBug from "@/components/ReportBug";
+import HelpDock from "@/components/HelpDock";
 
 export default function OsLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -24,7 +24,7 @@ export default function OsLayout({ children }: { children: React.ReactNode }) {
         {/* Follows the agent everywhere, because the report has to be one click
             from the page that caused it. Also carries the page tracker. */}
         <Suspense fallback={null}>
-          <ReportBug />
+          <HelpDock />
         </Suspense>
       </IntroGate>
     </ThemeGate>

@@ -21,7 +21,20 @@ import { usePathname, useRouter } from "next/navigation";
  * under the mark, which is the one thing that has to be unmistakable.
  */
 
-const GROUPS: Array<{ title: string | null; items: Array<{ href: string; label: string; exact?: boolean }> }> = [
+/* `rule` draws a divider and a gap ABOVE the group.
+   James, 28 Aug: "We should have a break line, then a bit of a gap, then
+   Views, so then all the different views, and then Systems, with another break
+   just above Systems."
+   
+   The point is that these are three different KINDS of thing, not one list of
+   eleven. The top four are the OS itself; Views are other people's whole
+   screens; System is plumbing. A heading alone was not enough separation to
+   make that read at a glance. */
+const GROUPS: Array<{
+  title: string | null;
+  rule?: boolean;
+  items: Array<{ href: string; label: string; exact?: boolean }>;
+}> = [
   {
     title: null,
     items: [
@@ -35,6 +48,7 @@ const GROUPS: Array<{ title: string | null; items: Array<{ href: string; label: 
     /* One entry per person, because that is genuinely how these differ: each is
        somebody's whole working picture, not a feature of the OS. */
     title: "Views",
+    rule: true,
     items: [
       { href: "/admin/business", label: "Susan's view" },
       { href: "/admin/marketing", label: "Francesca's view" },
@@ -43,6 +57,7 @@ const GROUPS: Array<{ title: string | null; items: Array<{ href: string; label: 
   },
   {
     title: "System",
+    rule: true,
     items: [
       /* Wiring lives HERE and not on an agent's profile. James: "they don't
          need to see that. That's for my referencing and testing." An agent's
@@ -55,6 +70,9 @@ const GROUPS: Array<{ title: string | null; items: Array<{ href: string; label: 
          exists in the main OS nav — that one is the agent-facing audit of
          what currently sends; this is the catalogue of what we would send. */
       { href: "/admin/emails", label: "Emails" },
+      /* Where James feeds the assistant. The agent-facing side of it lives in
+         the help panel; this is the console behind it. */
+      { href: "/admin/assistant", label: "Assistant" },
     ],
   },
 ];
@@ -132,7 +150,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
           <nav aria-label="Admin" className="min-h-0 flex-1 overflow-y-auto">
             {GROUPS.map((g) => (
-              <div key={g.title ?? "top"} className={g.title ? "mt-3" : ""}>
+              <div
+                key={g.title ?? "top"}
+                className={
+                  g.rule
+                    ? "mt-5 border-t border-line/70 pt-4"
+                    : g.title
+                      ? "mt-3"
+                      : ""
+                }
+              >
                 {g.title && (
                   <p className="mb-1.5 px-3 text-[9px] font-bold uppercase tracking-[0.14em] text-muted/70">
                     {g.title}
