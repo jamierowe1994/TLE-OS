@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import SignInArt from "@/components/SignInArt";
 
 /**
  * Signing in.
@@ -74,10 +75,19 @@ function SignIn() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
-      <div className="rounded-2xl border border-line/80 bg-panel p-7">
-        <h1 className="hand text-[22px] leading-tight">Sign in</h1>
-        <p className="mt-2 text-[12.5px] leading-relaxed text-muted">TLE OS</p>
+    <main className="mx-auto flex min-h-screen max-w-4xl flex-col justify-center px-6 py-12">
+      {/* One card, the illustration inside it rather than beside it — the box
+          in the middle of the page is the bit James liked, and a drawing
+          floating outside it would undo that. It drops away under md: on a
+          phone the form is the whole job and 320px of artwork above it just
+          pushes the password field off the screen. */}
+      <div className="flex items-center gap-8 rounded-2xl border border-line/80 bg-panel p-7 md:p-10">
+        <SignInArt />
+        <div className="min-w-0 flex-1">
+        <h1 className="hand text-[26px] leading-tight">TLE OS</h1>
+        <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+          Sign in with your work email.
+        </p>
 
         {error && (
           <p className="mt-4 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[12.5px] leading-relaxed">
@@ -153,6 +163,7 @@ function SignIn() {
         <p className="mt-4 border-t border-line/70 pt-4 text-[11.5px] leading-relaxed text-muted">
           Accounts are by invite. If you should have one and don&apos;t, ask James.
         </p>
+        </div>
       </div>
       <p className="mt-4 text-center text-[11px] text-muted">The Letting Experts</p>
     </main>
