@@ -99,72 +99,63 @@ function ChromeSurface({ vw, vh }: { vw: number; vh: number }) {
   );
 }
 
-/* ----------------------------- auth page ----------------------------- */
+/* ----------------------------- the page ----------------------------- */
 
+/**
+ * Susan's figures, inside TLE OS.
+ *
+ * ── The gate that used to be here, and why it had to go ───────────────────
+ *
+ * The portal's version of this page ran its OWN auth: it called the portal's
+ * session endpoint, then checked `user.isAdmin` against the portal's
+ * ADMIN_EMAILS list. Ported verbatim, that meant James — the owner, signed
+ * into the OS — was told "this area is restricted to the business owner",
+ * because he is not signed into the PORTAL. A second lock, asking a question
+ * the OS had already answered better, and answering it wrong.
+ *
+ * The OS gates this route in two places already: the middleware requires a
+ * session to reach any page, and every /api/business route requires the
+ * `see:business` capability, which owner and super_admin hold and nobody else
+ * does. Data cannot leak from a page whose data routes all refuse — so the
+ * page itself renders, and the APIs decide.
+ *
+ * The inline login form went with it. There is one sign-in for TLE OS and it
+ * is /sign-in; a second password box on an inner page is how somebody ends up
+ * typing their password into the wrong thing.
+ */
 export default function AdminPage() {
-  // undefined = still checking the session; null = signed out.
-  const [user, setUser] = useState<UserProfile | null | undefined>(undefined);
+  const [user, setUser] = useState<UserProfile | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
-    // Render cache first for a fast paint, then re-validate with the server.
-    const cached = getUser();
-    if (cached) setUser(cached);
-    void refreshUser().then((fresh) => {
-      if (!cancelled) setUser(fresh);
-    });
+    /* Who the OS thinks we are. Only used to put a name and initials in the
+       ported chrome — the permission decision is not made here. */
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { user?: { name?: string; email?: string } } | null) => {
+        if (cancelled) return;
+        setUser({
+          name: j?.user?.name ?? "",
+          email: j?.user?.email ?? "",
+          isAdmin: true,
+          isPreTenancy: false,
+        } as UserProfile);
+      })
+      .catch(() => {
+        if (!cancelled) setUser({ name: "", email: "", isAdmin: true, isPreTenancy: false } as UserProfile);
+      });
     return () => {
       cancelled = true;
     };
   }, []);
 
   const handleSignOut = useCallback(async () => {
-    await signOut();
-    setUser(null);
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    window.location.href = "/sign-in";
   }, []);
 
   if (user === undefined) {
-    return (
-      <main className="flex min-h-screen items-center justify-center">
-        <p className="text-sm text-muted">Checking your session…</p>
-      </main>
-    );
-  }
-
-  if (user === null) {
-    return <AdminLogin onLoggedIn={setUser} />;
-  }
-
-  if (!user.isAdmin) {
-    return (
-      <main className="flex min-h-screen items-center justify-center p-6">
-        <div className="card w-full max-w-md p-8 text-center">
-          <BrandMark size={44} className="mx-auto" />
-          <h1 className="mt-4 text-lg font-semibold">
-            This area is restricted to the business owner.
-          </h1>
-          <p className="mt-2 text-sm text-muted">
-            You&apos;re signed in as {user.email}, which doesn&apos;t have
-            admin access. Your own stats live on your dashboard.
-          </p>
-          <div className="mt-6 flex justify-center gap-2">
-            <a
-              href={user.isPreTenancy ? "/pretenancy" : "/dashboard"}
-              className="btn-press rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white"
-            >
-              {user.isPreTenancy ? "Go to pre-tenancy" : "Go to my dashboard"}
-            </a>
-            <button
-              type="button"
-              onClick={() => void handleSignOut()}
-              className="btn-press rounded-lg border border-line bg-card px-4 py-2 text-sm font-medium"
-            >
-              Sign out
-            </button>
-          </div>
-        </div>
-      </main>
-    );
+    return <p className="text-[12.5px] text-muted">Loading the figures…</p>;
   }
 
   return (
@@ -173,94 +164,6 @@ export default function AdminPage() {
     </PresentProvider>
   );
 }
-
-/* ----------------------------- inline login ----------------------------- */
-
-function AdminLogin({
-  onLoggedIn,
-}: {
-  onLoggedIn: (user: UserProfile) => void;
-}) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const user = await logIn(email.trim(), password);
-      onLoggedIn(user);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Incorrect email or password.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <main className="flex min-h-screen items-center justify-center p-6">
-      <div className="card w-full max-w-md p-8">
-        <div className="flex items-center gap-3">
-          <BrandMark size={40} />
-          <div>
-            <h1 className="text-lg font-semibold">TLE Business Dashboard</h1>
-            <p className="text-xs text-muted">Owner sign in</p>
-          </div>
-        </div>
-        <form onSubmit={submit} className="mt-6 grid gap-3">
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">
-              Email
-            </span>
-            <input
-              type="email"
-              required
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border border-line bg-card px-3 py-2 text-sm outline-none focus:border-accent"
-              placeholder="you@thelettingexperts.co.uk"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">
-              Password
-            </span>
-            <PasswordInput
-              value={password}
-              onChange={setPassword}
-              placeholder="Your password"
-            />
-          </label>
-          {error ? (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
-              {error}
-            </p>
-          ) : null}
-          <button
-            type="submit"
-            disabled={busy || !email || !password}
-            className="btn-press mt-1 rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {busy ? "Signing in…" : "Sign in"}
-          </button>
-        </form>
-        <p className="mt-4 text-center text-xs text-muted">
-          Admin access is limited to the business owner. Agents sign in at{" "}
-          <a href="/login" className="accent-text underline">
-            the partner portal
-          </a>
-          .
-        </p>
-      </div>
-    </main>
-  );
-}
-
-/* ---------------------------- dashboard shell ---------------------------- */
 
 function AdminShell({
   user,
