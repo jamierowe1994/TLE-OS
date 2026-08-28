@@ -14,7 +14,7 @@ import { getUser, logIn, refreshUser, signOut } from "@/lib/business/session";
 import { BRAND } from "@/lib/business/brand";
 import type { UserProfile } from "@/lib/business/types";
 import type { SeedData } from "@/lib/business/seed-data"; // type-only — erased at build
-import { currentMonth, monthLabel, monthProgressLabel, previousMonth, recentMonths } from "@/lib/business/format";
+import { currentMonth, monthLabel, monthProgressLabel, recentMonths } from "@/lib/business/format";
 
 import Overview from "@/app/(os)/admin/business/tabs/overview";
 import PaidLeads from "@/app/(os)/admin/business/tabs/paid-leads";
@@ -160,17 +160,7 @@ export default function AdminPage() {
 
   return (
     <PresentProvider>
-      {/* THE WAY OUT.
-          The ported shell renders `fixed inset-0`, so it covers the admin rail
-          completely — James got in and had no route back to his own view
-          except the browser's back button. This sits above it on purpose. */}
-      <a
-        href="/admin"
-        className="hide-when-presenting fixed left-4 top-4 z-[60] rounded-full border border-line/80 bg-panel px-3.5 py-1.5 text-[12px] shadow-[0_6px_18px_-8px_rgba(0,0,0,0.35)]"
-      >
-        ← Back to my view
-      </a>
-      <AdminShell user={user} onSignOut={handleSignOut} />
+<AdminShell user={user} onSignOut={handleSignOut} />
     </PresentProvider>
   );
 }
@@ -193,7 +183,21 @@ function AdminShell({
   //
   // Resolved once per mount rather than at module load, so a tab left open
   // overnight on the 31st picks up the new month on its next visit.
-  const [month, setMonth] = useState(previousMonth);
+  /* THE MONTH YOU ARE STANDING IN, not the last closed one.
+     
+     This defaulted to previousMonth() — deliberately, under a reporting rule
+     that says a figure for an unfinished month is always wrong because the
+     month is still accumulating. That rule is right for a CLOSED report and
+     wrong for this screen. James, 28 Aug: "it should always pull through the
+     most recent figures. It's not a snapshot of this business, it should be a
+     live figure." On the 28th, being shown July is being shown four-week-old
+     news about a business you are running today.
+     
+     The safeguard stays and does the real work: isLiveMonth() and
+     monthProgressLabel() already sit on this page, so a live month announces
+     itself as "day 28 of 31" instead of quietly passing as final. That is what
+     stops a part-month being mistaken for a bad month — not hiding it. */
+  const [month, setMonth] = useState(currentMonth);
   const [autoCycle, setAutoCycle] = useState(false);
   const [seed, setSeed] = useState<SeedData | null>(null);
   const [seedError, setSeedError] = useState<string | null>(null);

@@ -54,9 +54,47 @@ const GROUPS: Array<{ title: string | null; items: Array<{ href: string; label: 
   },
 ];
 
+/**
+ * A person's view takes the WHOLE window.
+ *
+ * Susan's, Francesca's and Kirstie's are each somebody's entire working screen
+ * with its own left rail. Mine on top of theirs is two rails fighting, and on
+ * Susan's it sat over her tabs so they could not be clicked at all.
+ *
+ * Derived from the Views group rather than written out again, and decided HERE
+ * rather than in each page. Three pages had to remember to hide it and one
+ * didn't — which is not a mistake anybody makes on purpose, it is what happens
+ * when a rule lives in three places. Add a fourth view to the group above and
+ * it inherits this for free.
+ */
+const VIEW_PREFIXES = GROUPS.find((g) => g.title === "Views")!.items.map((i) => i.href);
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const router = useRouter();
+  const inSomeonesView = VIEW_PREFIXES.some((h) => path.startsWith(h));
+
+  /* Not hidden with CSS — not rendered. A hidden rail still traps focus and
+     still answers a screen reader, and "why does tab go somewhere invisible"
+     is a horrible afternoon. */
+  if (inSomeonesView) {
+    return (
+      <div className="admin-scope">
+        <style>{`
+          [data-os-sidebar] { display: none !important; }
+          [data-os-content] { padding-left: 0 !important; margin-left: 0 !important; }
+        `}</style>
+        <button
+          type="button"
+          onClick={() => router.push("/admin")}
+          className="fixed left-4 top-4 z-[80] rounded-full border border-line/80 bg-panel px-3.5 py-1.5 text-[12px] shadow-[0_6px_18px_-8px_rgba(0,0,0,0.35)]"
+        >
+          ← Back to my view
+        </button>
+        {children}
+      </div>
+    );
+  }
 
   return (
     <div className="admin-scope">

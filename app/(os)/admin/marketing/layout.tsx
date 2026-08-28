@@ -33,16 +33,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
     <>
       {/* Her workspace takes the window — James's admin rail steps aside, the
           same way the agent sidebar steps aside for admin. */}
-      <style>{`[data-admin-rail] { display: none !important; }`}</style>
-
-      <Link
-        href="/admin"
-        className="fixed left-4 top-4 z-[60] rounded-full border border-line/80 bg-panel px-3.5 py-1.5 text-[12px] shadow-[0_6px_18px_-8px_rgba(0,0,0,0.35)]"
-      >
-        ← Back to admin
-      </Link>
-
-      <div className="flex gap-6 pt-10">
+<div className="flex gap-6 pt-10">
         <nav
           aria-label="Marketing"
           className="sticky top-6 hidden h-fit w-52 shrink-0 flex-col gap-0.5 md:flex"
