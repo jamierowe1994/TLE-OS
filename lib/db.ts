@@ -125,6 +125,63 @@ CREATE TABLE IF NOT EXISTS os_todos (
 );
 CREATE INDEX IF NOT EXISTS os_todos_state ON os_todos (state, created_at DESC);
 
+-- THE PILOT. Who has been invited to try the platform before launch.
+--
+-- Replaces the hard-coded FOUNDING_OWNERS list: an invite is a row somebody
+-- created deliberately, which is a far better answer to "who may have an
+-- account" than a constant that needs a deploy to change.
+CREATE TABLE IF NOT EXISTS os_invites (
+  email          TEXT PRIMARY KEY,
+  name           TEXT NOT NULL DEFAULT '',
+  rex_user_id    TEXT,
+  invited_by     TEXT NOT NULL DEFAULT '',
+  invited_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- When the invite email actually went. Null means created but never sent.
+  sent_at        TIMESTAMPTZ,
+  accepted_at    TIMESTAMPTZ
+);
+
+-- WHAT THE PILOT ACTUALLY USES.
+--
+-- One row per person per page per day, counted. Not one row per view: five
+-- agents over six weeks would be a hundred thousand rows to answer a question
+-- ("is anyone opening Compliance?") that a daily count answers exactly as well.
+--
+-- The point is the ABSENCE as much as the presence — a tab nobody has ever
+-- opened is the finding, and that can only be seen by comparing this against
+-- the full list of tabs.
+CREATE TABLE IF NOT EXISTS os_page_views (
+  user_id        TEXT NOT NULL,
+  path           TEXT NOT NULL,
+  day            DATE NOT NULL,
+  views          INTEGER NOT NULL DEFAULT 1,
+  last_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, path, day)
+);
+CREATE INDEX IF NOT EXISTS os_page_views_path ON os_page_views (path);
+
+-- BUGS AND FAULTS, reported by the pilot from the button in the corner.
+--
+-- The context column holds what the reporter should not have to type: the page
+-- they were on, their browser, the viewport. Half of bug triage is working out
+-- where somebody was standing, and asking them is how a report becomes a
+-- conversation instead of a fix.
+CREATE TABLE IF NOT EXISTS os_bugs (
+  id             TEXT PRIMARY KEY,
+  reporter_id    TEXT,
+  reporter_email TEXT NOT NULL DEFAULT '',
+  body           TEXT NOT NULL,
+  path           TEXT NOT NULL DEFAULT '',
+  context        JSONB,
+  -- open | ack | fixed | wontfix
+  state          TEXT NOT NULL DEFAULT 'open',
+  -- bug | idea | confusing  — "I did not understand this" is worth catching
+  -- separately from "this is broken", and a pilot produces far more of it.
+  kind           TEXT NOT NULL DEFAULT 'bug',
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_bugs_state ON os_bugs (state, created_at DESC);
+
 -- Anything that belongs to one person and should follow them between
 -- machines: dashboard layout, theme, profile fields. One row per person per
 -- key, value is whatever that feature stores.

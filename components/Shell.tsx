@@ -204,7 +204,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
+      {/* Tagged so /admin can hide it — an owner in the admin centre is not
+          doing an agent's job, and the rail invites them to wander into the
+          business-wide book by accident. See app/(os)/admin/layout.tsx. */}
       <aside
+        data-os-sidebar
         className={`sticky top-3 mb-3 ml-3 mt-3 hidden h-[calc(100vh-24px)] shrink-0 flex-col overflow-hidden rounded-3xl border border-line/80 bg-panel py-5 transition-[width,padding] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] lg:flex ${
           collapsed ? "w-[72px] px-2.5" : "w-60 px-4"
         }`}

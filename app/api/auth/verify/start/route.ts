@@ -4,6 +4,7 @@ import { verifyEmailFor } from "@/lib/verify-email";
 import { sendEmail, ResendBlocked, resendConfigured } from "@/lib/resend";
 import { isFoundingOwner, isInternalAddress, wrongDomainMessage, ExternalRecipientRefused } from "@/lib/email-policy";
 import { findUserByEmail, normaliseEmail } from "@/lib/users";
+import { isInvited } from "@/lib/pilot";
 
 /**
  * "Send me a link so I can set up my account."
@@ -93,8 +94,12 @@ export async function POST(req: NextRequest) {
     /* Who may have an account at all. Today that is the two founding
        addresses; when the invite flow lands this becomes "is there a pending
        invite for this address". Everything else about the route stays. */
-    if (!isFoundingOwner(email)) {
-      console.warn(`[verify/start] not on the allowlist: ${email}`);
+    /* THE INVITE LIST IS THE ALLOWLIST. A founding owner still gets in — James
+       and Susan must never be locked out by an empty table — but everybody else
+       needs a row somebody deliberately created, which is a far better answer
+       to "who may have an account" than a constant needing a deploy. */
+    if (!isFoundingOwner(email) && !(await isInvited(email))) {
+      console.warn(`[verify/start] not invited: ${email}`);
       return NextResponse.json(SAME_ANSWER);
     }
     if (await findUserByEmail(email)) {

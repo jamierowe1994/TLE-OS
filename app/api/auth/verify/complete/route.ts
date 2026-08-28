@@ -3,6 +3,7 @@ import { consumeVerification, VerificationError } from "@/lib/verification";
 import { createSessionToken, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { createUser, findUserByEmail } from "@/lib/users";
 import { isFoundingOwner } from "@/lib/email-policy";
+import { isInvited, markInviteAccepted } from "@/lib/pilot";
 import { hasDb } from "@/lib/db";
 
 /**
@@ -70,7 +71,7 @@ export async function POST(req: NextRequest) {
   }
 
   /* Re-checked at the moment of creation, not trusted from an hour ago. */
-  if (!isFoundingOwner(email)) {
+  if (!isFoundingOwner(email) && !(await isInvited(email))) {
     return NextResponse.json(
       { ok: false, error: "That address isn't allowed an account yet. Ask James to add you." },
       { status: 403 }
@@ -87,6 +88,7 @@ export async function POST(req: NextRequest) {
   }
 
   const user = await createUser({ email, name, password });
+  await markInviteAccepted(email);
 
   /* Signed straight in. They have just proved they own the address and chosen
      a password thirty seconds ago; making them type it again immediately is
