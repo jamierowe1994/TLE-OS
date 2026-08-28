@@ -144,6 +144,14 @@ export default function PresentationBuilder({
     { radius: 0, beds: 0, minRent: 0, maxRent: 0, type: "" }
   );
   const [refiltering, setRefiltering] = useState(false);
+  /* The split view. Off by default: most of the time an agent is skimming
+     cards, and a map that is always there costs half the width for a question
+     they have not asked yet. */
+  const [mapOpen, setMapOpen] = useState(false);
+  /* The last pin clicked. That property jumps to the top of the list so the
+     agent can see what they just pointed at without hunting for it — which is
+     the whole reason for putting the two side by side. */
+  const [focused, setFocused] = useState<string | null>(null);
 
   async function applyFilters(next: typeof filters) {
     setFilters(next);
@@ -287,6 +295,15 @@ export default function PresentationBuilder({
                         className="w-20 rounded-lg border border-line/80 bg-panel px-2 py-1.5 text-[12px]" />
                     </span>
                   </label>
+                  <button
+                    type="button"
+                    onClick={() => setMapOpen((m) => !m)}
+                    className={`rounded-lg border px-3 py-1.5 text-[11.5px] transition-colors ${
+                      mapOpen ? "border-accent-dark bg-accent-dark text-white" : "border-line/80"
+                    }`}
+                  >
+                    {mapOpen ? "Hide map" : "Map"}
+                  </button>
                   {(filters.radius || filters.beds || filters.type || filters.minRent || filters.maxRent) ? (
                     <button type="button"
                       onClick={() => applyFilters({ radius: 0, beds: 0, minRent: 0, maxRent: 0, type: "" })}
@@ -302,27 +319,38 @@ export default function PresentationBuilder({
                 </p>
               </div>
 
-              {/* The map sits ABOVE the grid, not beside it. Side by side at
-                  this width gives you a cramped map and two-across cards; the
-                  agent looks at the map to understand the area, then reads the
-                  cards to choose. That is a sequence, so it is stacked. */}
-              <div className="mb-4">
-                <MarketMap
-                  listings={nearby}
-                  centre={d.subjectPoint}
-                  selected={pickedNearby}
-                  onSelect={(k) =>
-                    setPickedNearby((c) => (c.includes(k) ? c.filter((x) => x !== k) : [...c, k]))
-                  }
-                />
-              </div>
-
               <p className="text-[12.5px] leading-relaxed text-muted">
                 {nearby.length} on the market — every agent&apos;s stock, not just ours.
                 This is what a tenant is choosing between.
+                {mapOpen && focused ? " Clicking a price brings it to the top." : ""}
               </p>
-              <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {nearby.map((l) => {
+
+              {/* SPLIT VIEW. Cards left, map right, both scrolling in their own
+                  right — the Airbnb shape, and it works for the same reason:
+                  you point at somewhere on the map and read about it without
+                  either half moving out from under you.
+
+                  The map is STICKY rather than scrolling with the list. A map
+                  that leaves the screen while you scroll the results is a map
+                  you have to keep scrolling back to. */}
+              <div className={mapOpen ? "mt-3 flex gap-4" : "mt-3"}>
+                <ul
+                  className={
+                    mapOpen
+                      ? "grid max-h-[560px] flex-1 grid-cols-1 content-start gap-3 overflow-y-auto pr-1 xl:grid-cols-2"
+                      : "grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                  }
+                >
+                {[...nearby]
+                  .sort((a, b) => {
+                    /* Only the clicked one moves. A full re-sort on every click
+                       would shuffle the list under the agent's cursor, which is
+                       worse than not helping at all. */
+                    if (focused === keyOf(a)) return -1;
+                    if (focused === keyOf(b)) return 1;
+                    return 0;
+                  })
+                  .map((l) => {
                   const k = keyOf(l);
                   const on = pickedNearby.includes(k);
                   return (
@@ -387,7 +415,30 @@ export default function PresentationBuilder({
                     </li>
                   );
                 })}
-              </ul>
+                </ul>
+
+                {mapOpen && (
+                  <div className="hidden w-[46%] shrink-0 lg:block">
+                    <div className="sticky top-2">
+                      <MarketMap
+                        listings={nearby}
+                        centre={d.subjectPoint}
+                        selected={pickedNearby}
+                        onSelect={(k) => {
+                          /* Clicking a price does TWO things: it brings that
+                             card to the top so you can read it, and it ticks
+                             it. James asked for both, and separating them
+                             would mean clicking a pin then hunting for the
+                             card you just pointed at. */
+                          setFocused(k);
+                          setPickedNearby((c) => (c.includes(k) ? c.filter((x) => x !== k) : [...c, k]));
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <p className="mt-3 border-b border-line/70 pb-4 text-[11px] leading-relaxed text-muted">
                 Nothing here starts ticked — it is somebody else&apos;s stock, and putting a
                 competitor&apos;s property into our deck should be a decision, not a default.

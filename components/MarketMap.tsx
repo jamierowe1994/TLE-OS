@@ -44,6 +44,7 @@ export default function MarketMap({
   const holder = useRef<HTMLDivElement | null>(null);
   const map = useRef<import("leaflet").Map | null>(null);
   const layer = useRef<import("leaflet").LayerGroup | null>(null);
+  const resizeObs = useRef<ResizeObserver | null>(null);
 
   const points = listings.filter((l) => l.lat != null && l.lon != null);
   const keyOf = (l: MarketListing) => `${l.address}|${l.rent}`;
@@ -108,6 +109,18 @@ export default function MarketMap({
         if (onSelect) m.on("click", () => onSelect(k));
       }
 
+      /* Leaflet measures its container once, at creation. This map is created
+         inside a layout that CHANGES — the split view halves its width the
+         moment the Map button is pressed — so without this it keeps the old
+         width and renders tiles into a strip with grey either side. Observing
+         the element covers the toggle, a window resize and the sidebar
+         collapsing, none of which fire a Leaflet event. */
+      const ro = new ResizeObserver(() => map.current?.invalidateSize());
+      ro.observe(holder.current);
+      resizeObs.current?.disconnect();
+      resizeObs.current = ro;
+      map.current.invalidateSize();
+
       if (bounds.length) {
         map.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
       } else if (centre) {
@@ -116,6 +129,7 @@ export default function MarketMap({
     })();
     return () => {
       cancelled = true;
+      resizeObs.current?.disconnect();
     };
   }, [points, centre, selected, onSelect]);
 
