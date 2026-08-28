@@ -327,13 +327,14 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
   const [liveMonths, setLiveMonths] = useState<{
     rows: Record<string, Record<string, number | null>>;
     filled: string[];
+    pending?: string[];
   } | null>(null);
 
   useEffect(() => {
     let alive = true;
     fetch("/api/business/income-months", { cache: "no-store" })
       .then((r) => r.json())
-      .then((d) => alive && d?.rows && setLiveMonths({ rows: d.rows, filled: d.filled ?? [] }))
+      .then((d) => alive && d?.rows && setLiveMonths({ rows: d.rows, filled: d.filled ?? [], pending: d.pending ?? [] }))
       .catch(() => {
         /* The snapshot alone is still a table. */
       });
@@ -405,9 +406,52 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
           the dedicated agency-income report needs a scope we weren&rsquo;t granted.
         </div>
       ) : (
+        /* NO SNAPSHOT. It used to fill this gap with 11 Jul 2026 figures and
+           say "until they land" — so a screen that had loaded NOTHING looked
+           identical to one that had loaded everything, and the numbers were
+           built for a month that has since passed. James: "get rid of the
+           snapshot completely and stop falling back on it."
+           
+           What replaces it is the truth, with a denominator: how many months
+           are ready, which are still coming, and roughly how long that takes.
+           PayProp pages at 25 rows, so one cold month is ~1,400 rows and
+           genuinely takes minutes. Saying so is the difference between waiting
+           and wondering whether it is broken. */
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
-          <span className="font-semibold">Fetching live figures from PayProp…</span>{" "}
-          Showing the 11 Jul 2026 snapshot until they land.
+          <p>
+            <span className="font-semibold">
+              Still fetching {monthLabel(month)} from PayProp.
+            </span>{" "}
+            Nothing is shown in its place — an old figure here would be worse than a gap.
+          </p>
+          {liveMonths && (
+            <>
+              <p className="mt-1.5 text-[12px]">
+                {liveMonths.filled.length} of {liveMonths.filled.length + (liveMonths.pending?.length ?? 0)}{" "}
+                months ready
+                {liveMonths.pending?.length
+                  ? ` · still coming: ${liveMonths.pending.map(monthLabel).join(", ")}`
+                  : ""}
+                .
+              </p>
+              <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-amber-200">
+                <div
+                  className="h-full rounded-full bg-amber-500 transition-[width] duration-500"
+                  style={{
+                    width: `${Math.round(
+                      (liveMonths.filled.length /
+                        Math.max(1, liveMonths.filled.length + (liveMonths.pending?.length ?? 0))) * 100
+                    )}%`,
+                  }}
+                />
+              </div>
+              <p className="mt-1.5 text-[11.5px]">
+                A month PayProp has not been asked for before takes a few minutes — it pages at
+                25 rows and a month is around 1,400 of them. Once fetched it is kept, so this is
+                slow once rather than slow always.
+              </p>
+            </>
+          )}
         </div>
       )}
 

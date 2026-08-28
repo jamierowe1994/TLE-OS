@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getGciHistory } from "@/lib/business/gci-history";
-import { monthsThisYearToDate } from "@/lib/business/format";
+import { currentMonth, monthsThisYearToDate } from "@/lib/business/format";
 
 /**
  * The TLE Business Income table, month by month, live.
@@ -46,7 +46,12 @@ const GCI_ROWS = {
 } as const;
 
 export async function GET() {
+  /* The LIVE month included. It was months-to-last-complete, which on the 28th
+     of August ends at July — see the note on the business page about why a
+     closed-report rule is wrong on a screen Susan runs the business from. */
   const months = monthsThisYearToDate();
+  const live = currentMonth();
+  if (!months.includes(live)) months.push(live);
   if (!months.length) {
     // January. There is no complete month this year yet.
     return NextResponse.json({ months: [], rows: {}, filled: [] });
@@ -65,6 +70,14 @@ export async function GET() {
     [GCI_ROWS.tleNet]: {},
   };
 
+  /* WHAT IS ACTUALLY READY, reported rather than papered over.
+     
+     getGciHistory is non-blocking on a cold month: it starts the walk and
+     returns nothing for that month. PayProp pages at 25 rows, so one cold
+     month is ~1,400 rows ≈ 56 sequential requests — genuinely minutes. The
+     screen used to fill the gap with a July snapshot and say "until they
+     land", which meant a page that had loaded NOTHING looked identical to one
+     that had loaded everything, and nobody could tell whether to wait. */
   const filled: string[] = [];
   for (const month of months) {
     const m = by[month];
@@ -91,10 +104,15 @@ export async function GET() {
     filled.push(month);
   }
 
+  const pending = months.filter((m) => !filled.includes(m));
   return NextResponse.json({
     months,
     rows,
     filled,
+    /* Named, so the screen can say "5 of 8 months ready, August still coming"
+       instead of a spinner with no end in sight. */
+    pending,
+    warming: pending.length > 0,
     source: "PayProp, net of VAT",
   });
 }

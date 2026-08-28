@@ -451,6 +451,61 @@ function NewsWidget({ w, h }: { w: number; h: number }) {
   );
 }
 
+/**
+ * The agent's own figures, live.
+ *
+ * One fetch shared by every tile that needs it — five tiles each calling the
+ * same route on mount is five identical REX round trips on one page load.
+ *
+ * A failure is null, not zero. "You have no leads" and "we couldn't reach REX"
+ * are different sentences, and an agent would act on the first one.
+ */
+type MyFigures = {
+  onMarket: number | null;
+  managed: number | null;
+  leads: number | null;
+  appraisals: number | null;
+  applications: number | null;
+};
+
+let figuresPromise: Promise<{ figures?: MyFigures; scope?: string; unlinked?: boolean } | null> | null = null;
+
+export function useMyFigures() {
+  const [state, setState] = useState<{
+    figures: MyFigures | null;
+    scope: string;
+    unlinked: boolean;
+    loading: boolean;
+  }>({ figures: null, scope: "", unlinked: false, loading: true });
+
+  useEffect(() => {
+    let alive = true;
+    figuresPromise ??= fetch("/api/my/figures")
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    void figuresPromise.then((j) => {
+      if (!alive) return;
+      setState({
+        figures: j?.figures ?? null,
+        scope: j?.scope ?? "",
+        unlinked: Boolean(j?.unlinked),
+        loading: false,
+      });
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  return state;
+}
+
+/** A figure, or an honest dash — never a stand-in number. */
+export function Figure({ n }: { n: number | null | undefined }) {
+  if (n == null) return <span className="text-muted">—</span>;
+  return <>{n.toLocaleString("en-GB")}</>;
+}
+
 export const WIDGETS: Record<string, WidgetDef> = {
   "leads-today": {
     label: "Leads today", icon: "pack/target", hint: "count → trend → the names themselves",
@@ -677,21 +732,33 @@ export const WIDGETS: Record<string, WidgetDef> = {
     defaultW: 4, defaultH: 1,
     sizes: { s: [2, 1], m: [4, 1], l: [4, 2] },
     render: (w, h) => {
+      /* LIVE, and this agent's own. These were literals — 14, 9, 3, 24, 6,
+         568, 2 — on the first screen anybody sees. Viewings and move-ins are
+         gone rather than kept: REX calendar events carry no owning agent, so a
+         per-agent viewings count cannot be produced, and a business-wide one
+         sitting beside an agent's own everything-else is the most misleading
+         number that could be on this screen. */
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      const { figures, unlinked, loading } = useMyFigures();
       const STAGES = [
-        { label: "Leads", value: 14, href: "/leads" },
-        { label: "Appointments", value: 9, href: "/viewings" },
-        { label: "Appraisals", value: 3 },
-        { label: "Properties", value: 24, href: "/listings" },
-        { label: "Applications", value: 6, href: "/applications" },
-        { label: "Portfolio", value: 568, href: "/portfolio" },
-        { label: "Move-ins", value: 2 },
-      ].slice(0, w >= 4 ? 7 : w >= 2 ? 4 : 2);
+        { label: "Leads", value: figures?.leads ?? null, href: "/leads" },
+        { label: "Appraisals", value: figures?.appraisals ?? null, href: "/market-appraisals" },
+        { label: "On market", value: figures?.onMarket ?? null, href: "/listings" },
+        { label: "Applications", value: figures?.applications ?? null, href: "/applications" },
+        { label: "Managed", value: figures?.managed ?? null, href: "/portfolio" },
+      ].slice(0, w >= 4 ? 5 : w >= 2 ? 4 : 2);
       return (
         <>
           <div className="mb-3 flex items-center justify-between gap-3">
             <Head icon="trend-up" label="Pipeline snapshot" />
-            {w >= 3 && <FlowTag from="REX + PayProp" />}
+            {w >= 3 && !unlinked && <FlowTag from="REX" />}
           </div>
+          {unlinked && (
+            <p className="mb-2 text-[11px] leading-relaxed text-accent-dark">
+              We can&apos;t tell which REX user you are, so these would be somebody
+              else&apos;s numbers. Ask James to link your account.
+            </p>
+          )}
           <div className={`grid gap-4 ${w >= 4 ? "grid-cols-7" : w >= 2 ? "grid-cols-4" : "grid-cols-2"}`}>
             {STAGES.map((p, i) => {
               const inner = (
@@ -702,13 +769,13 @@ export const WIDGETS: Record<string, WidgetDef> = {
                       {p.label}
                     </span>
                   </span>
-                  <span className="figures mt-1.5 block text-[24px] leading-none">{p.value}</span>
-                  {/* Taller: the story BETWEEN the numbers. */}
-                  {h >= 2 && i < STAGES.length - 1 && (
-                    <span className="figures mt-2 block text-[10.5px] text-accent-dark">
-                      {["64%", "33%", "—", "25%", "—", "0.4%"][i] ?? "—"} convert →
-                    </span>
-                  )}
+                  <span className="figures mt-1.5 block text-[24px] leading-none">
+                    {loading ? <span className="text-muted">·</span> : <Figure n={p.value} />}
+                  </span>
+                  {/* The conversion percentages were invented too, and a made-up
+                      rate under a live number is worse than under a fake one —
+                      it borrows the credibility of the figure above it. Gone
+                      until they are derived from these counts. */}
                 </>
               );
               return p.href ? (
