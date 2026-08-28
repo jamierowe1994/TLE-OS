@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { countUsers } from "@/lib/users";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
+import { can } from "@/lib/roles";
 import { readViewAs, VIEW_AS_COOKIE } from "@/lib/view-as";
 
 /**
@@ -39,6 +40,10 @@ export async function GET(req: NextRequest) {
         ? { name: subject.name, email: subject.email }
         : null,
     isOwner: actor?.role === "owner",
+    /* What the sidebar actually needs: may they open admin at all. Roles beyond
+       owner now hold that too — support and developer among them. */
+    canAdmin: can(actor?.role, "admin:open"),
+    role: actor?.role ?? null,
     anyUsers: (await countUsers()) > 0,
     hasDb: true,
   });

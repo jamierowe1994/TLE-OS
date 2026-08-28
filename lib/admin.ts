@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById, type OsUser } from "@/lib/users";
 import { readViewAs, VIEW_AS_COOKIE } from "@/lib/view-as";
+import { can, type Capability } from "@/lib/roles";
 
 /**
  * Who is an owner, and who is the OS pretending to be.
@@ -44,4 +45,19 @@ export async function whoIs(req: NextRequest): Promise<Who> {
 export async function requireOwner(req: NextRequest): Promise<OsUser | null> {
   const { actor } = await whoIs(req);
   return actor?.role === "owner" ? actor : null;
+}
+
+/**
+ * The signed-in person, if they hold a capability. Null otherwise.
+ *
+ * Decided on the ACTOR, never the subject — an owner viewing as an agent must
+ * keep their own permissions, or they would lose the admin bar mid-session and
+ * be unable to stop.
+ */
+export async function requireCapability(
+  req: NextRequest,
+  capability: Capability
+): Promise<OsUser | null> {
+  const { actor } = await whoIs(req);
+  return actor && can(actor.role, capability) ? actor : null;
 }

@@ -230,9 +230,31 @@ function ChoosePassword({ token }: { token: string }) {
   );
 }
 
+/**
+ * No token, no join.
+ *
+ * The "give us your email and we'll send a link" form has gone: it let anybody
+ * with a Lettings Experts address start the process themselves, which is not
+ * what invite-only means. An invite now begins in the admin centre, and this
+ * page only finishes it.
+ */
 function Join() {
   const token = useSearchParams().get("token");
-  return token ? <ChoosePassword token={token} /> : <AskForEmail />;
+  if (token) return <ChoosePassword token={token} />;
+  return (
+    <Panel>
+      <h1 className="hand text-[22px] leading-tight">You&apos;ll need an invite</h1>
+      <p className="mt-3 text-[13px] leading-relaxed">
+        TLE OS is invite only. When somebody adds you, a link arrives by email and brings
+        you back here to set your password.
+      </p>
+      <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
+        Already have an account?{" "}
+        <a href="/sign-in" className="underline">Sign in</a>. Forgotten your password?{" "}
+        <a href="/reset" className="underline">Reset it</a>.
+      </p>
+    </Panel>
+  );
 }
 
 export default function JoinPage() {

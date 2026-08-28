@@ -22,6 +22,7 @@ const TABS = [
   { href: "/admin", label: "Overview", exact: true },
   { href: "/admin/people", label: "People" },
   { href: "/admin/pre-launch", label: "Pre-launch" },
+  { href: "/admin/permissions", label: "Permissions" },
   { href: "/admin/connections", label: "Connections" },
   { href: "/admin/activity", label: "Activity" },
   { href: "/admin/todo", label: "To do" },
