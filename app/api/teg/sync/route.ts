@@ -142,13 +142,37 @@ export async function POST(req: NextRequest) {
     .filter((p) => !p.partnerPackage && p.personType !== "Support Team")
     .map((p) => p.name ?? p.email);
 
+  /* The same NAME on two rows means two records with two different emails —
+     our key is the email, so a duplicate person survives de-duplication and
+     the join can land on whichever of the two it meets first. If one has the
+     bio and the other doesn't, that is a coin toss on a landlord-facing page.
+     Surfaced here because the Hub is where it has to be merged; nothing this
+     end can fix it. */
+  const byName = new Map<string, number>();
+  for (const p of people) {
+    const n = (p.name ?? p.email).trim().toLowerCase();
+    byName.set(n, (byName.get(n) ?? 0) + 1);
+  }
+  const duplicated = people
+    .filter((p) => (byName.get((p.name ?? p.email).trim().toLowerCase()) ?? 0) > 1)
+    .map((p) => `${p.name ?? "?"} <${p.email}>`)
+    .sort();
+
   return NextResponse.json({
     ok: true,
     pulled: people.length,
     written,
     withBio: people.length - missingBio.length,
     withPhoto: people.length - missingPhoto.length,
-    withPackage: people.length - missingPackage.length,
+    /* Counted directly, NOT as (total - missing). missingPackage deliberately
+       excludes Support Team, who correctly have no package — so subtracting it
+       from the total counted those people as HAVING one and overstated the
+       figure. Exactly the arithmetic this dashboard has been punished for
+       elsewhere: a number that looks like an answer and is measuring
+       something else. */
+    withPackage: people.filter((p) => p.partnerPackage).length,
+    supportTeam: people.filter((p) => p.personType === "Support Team").length,
+    duplicated,
     missingBio,
     missingPhoto,
     /* Support Team excluded: a package is a partner's commercial tier and they
