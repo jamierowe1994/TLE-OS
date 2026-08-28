@@ -606,6 +606,18 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
                   owed: inBand.reduce((n, p) => n + p.owed, 0),
                 };
               });
+              /* Anyone whose run starts at the OLDEST reading we hold was
+                 already behind when capture began — their age is a floor, not
+                 a fact. This matters more here than anywhere: if capture began
+                 25 days ago then every long-standing debt in the book lands in
+                 "Less than 30 days" and the screen reads as though nobody is
+                 seriously behind. Counted so the caption can say so. */
+              const floorDate = log?.snapshots[0] ?? null;
+              const atLeast = floorDate
+                ? people.filter(
+                    (p) => sinceOf.get(`${p.tenant}|${p.property}`)?.since === floorDate
+                  ).length
+                : 0;
               const total = people.reduce((n, p) => n + p.owed, 0);
               // `people` excludes the not-yet-moved-in, so this total is arrears only.
               return (
@@ -637,6 +649,15 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
                       ))}
                     </div>
                   )}
+                  {atLeast > 0 ? (
+                    <p className="mt-2.5 text-[11px] leading-relaxed text-muted">
+                      {atLeast === people.length ? "All" : atLeast} of these{" "}
+                      {atLeast === 1 ? "was" : "were"} already behind when we started
+                      watching on {formatDate(log!.snapshots[0])}, so{" "}
+                      {atLeast === 1 ? "its" : "their"} age is a minimum — the debt may be
+                      considerably older.
+                    </p>
+                  ) : null}
                   {pending.length > 0 ? (
                     <div className="mt-3 border-t border-line/60 pt-3">
                       <div className="flex items-baseline justify-between gap-3">
@@ -666,7 +687,9 @@ export default function ArrearsTab({ month, seed }: { month: string; seed: SeedD
             Days counted from the first reading in the current unbroken run of
             arrears, not from the missed payment — the portal only knows what it
             has seen. A tenant first seen today counts as nought days, so a new
-            arrear lands in the first band rather than being guessed at.
+            arrear lands in the first band rather than being guessed at. Anyone
+            already behind at the first reading is aged from that reading, which
+            is a floor and not their real age; each card says how many.
           </p>
         </section>
       ) : null}
