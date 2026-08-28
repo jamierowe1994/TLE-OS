@@ -69,13 +69,17 @@ export async function logLine(p: {
   text: string;
   path?: string;
   kind?: LogKind;
+  inTokens?: number;
+  outTokens?: number;
 }): Promise<void> {
   if (!hasDb()) return;
   try {
     await q(
-      `INSERT INTO os_assistant_log (id, user_id, user_email, thread, role, text, path, kind)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [uid(), p.userId, p.userEmail, p.thread, p.role, p.text, p.path ?? "", p.kind ?? "ask"]
+      `INSERT INTO os_assistant_log
+         (id, user_id, user_email, thread, role, text, path, kind, in_tokens, out_tokens)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+      [uid(), p.userId, p.userEmail, p.thread, p.role, p.text, p.path ?? "", p.kind ?? "ask",
+       p.inTokens ?? 0, p.outTokens ?? 0]
     );
   } catch {
     /* Losing a log line is a shame. Losing the answer because the log failed

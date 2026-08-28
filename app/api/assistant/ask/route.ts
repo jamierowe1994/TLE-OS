@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { logLine, myHistory, isOnboarded, type LogKind } from "@/lib/assistant-log";
+import { ask, budget, assistantConfigured } from "@/lib/assistant-brain";
 
 /**
  * Talking to the assistant.
@@ -9,21 +10,16 @@ import { logLine, myHistory, isOnboarded, type LogKind } from "@/lib/assistant-l
  * GET  → this person's own history, and whether they've been introduced
  * POST → logs what they said, logs what he says back, returns the reply
  *
- * ── There is no model behind this ────────────────────────────────────────
+ * ── The introduction is a script; the questions go to Claude ─────────────
  *
- * Worth stating at the top of the file that answers it: nothing here calls
- * Claude or anything else. No key, no SDK, no network. Every reply below is
- * written by hand.
+ * Deliberately split. "What's your name" then "what will you need help with"
+ * is a fixed sequence, and a model would make it LESS reliable: the point of
+ * an initiation is that everybody gets asked the same two things and gives a
+ * clean, comparable answer. Scripts are better at that than models.
  *
- * That is not a stub. The onboarding James described — "what's your name",
- * then "what do you think you'll need the most help with" — is a SCRIPT, and
- * scripts do not need a model. Wiring one in would have made the introduction
- * less reliable, not more: a fixed sequence asks the same two questions of
- * everybody and gets a clean, comparable answer out of each, which is exactly
- * what you want from an initiation.
- *
- * The model belongs at the point where somebody asks something we did not
- * anticipate. Until then, the honest reply is that we have written it down.
+ * Real questions go to Claude, over the knowledge base, with a daily spend
+ * ceiling — see lib/assistant-brain.ts. Where there is no key or the ceiling
+ * has been reached, he says so plainly rather than pretending.
  *
  * ── Own history only ──────────────────────────────────────────────────────
  *
@@ -35,26 +31,33 @@ import { logLine, myHistory, isOnboarded, type LogKind } from "@/lib/assistant-l
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-/** A reply, written by hand, honest about what it is. */
-function reply(kind: LogKind, said: string): string {
+/** The two scripted turns of the introduction. */
+function scripted(kind: LogKind, said: string): string | null {
   const first = said.trim().split(/\s+/)[0] ?? "";
   if (kind === "onboarding-name") {
     return `Good to meet you, ${first}. What do you think you'll need the most help with?`;
   }
   if (kind === "onboarding-help") {
-    return "Noted, thank you — that goes straight to James and it shapes what gets built first. Ask me anything from here and I'll pass it on.";
+    return "Noted, thank you — that goes to James and it shapes what gets built first. Ask me anything from here.";
   }
-  /* Deliberately not "I'll find that out for you". He can't, and a help system
-     that over-promises spends the credit it needs later. */
-  return "Written down and sent to James. I can't answer that myself yet, but questions like yours are what the help centre gets built from.";
+  return null;
 }
 
 export async function GET(req: NextRequest) {
   const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
   if (!userId) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
 
-  const [history, onboarded] = await Promise.all([myHistory(userId), isOnboarded(userId)]);
-  return NextResponse.json({ history, onboarded });
+  const [history, onboarded, b] = await Promise.all([
+    myHistory(userId),
+    isOnboarded(userId),
+    budget(),
+  ]);
+  return NextResponse.json({
+    history,
+    onboarded,
+    /* So the panel can say what he is rather than guess. */
+    live: assistantConfigured() && b.left > 0,
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -79,8 +82,44 @@ export async function POST(req: NextRequest) {
   const common = { userId, userEmail: me.email, thread, path };
 
   await logLine({ ...common, role: "agent", text: text.slice(0, 4000), kind });
-  const answer = reply(kind, text);
-  await logLine({ ...common, role: "assistant", text: answer, kind });
 
-  return NextResponse.json({ reply: answer, kind });
+  const canned = scripted(kind, text);
+  if (canned) {
+    await logLine({ ...common, role: "assistant", text: canned, kind });
+    return NextResponse.json({ reply: canned, kind });
+  }
+
+  /* Their own recent turns, so a follow-up like "and the second one?" lands.
+     Capped in the brain, not here. */
+  const history = (await myHistory(userId, 12)).map((l) => ({
+    role: l.role === "assistant" ? ("assistant" as const) : ("user" as const),
+    text: l.text,
+  }));
+
+  let answer;
+  try {
+    answer = await ask(history, text);
+  } catch (e) {
+    /* A model outage must not lose the question — it is still logged above,
+       and it is still a guide somebody needed. */
+    const msg =
+      "Something went wrong reaching me just then. Your question is saved and has gone to James.";
+    await logLine({ ...common, role: "assistant", text: msg, kind });
+    return NextResponse.json({
+      reply: msg,
+      kind,
+      error: e instanceof Error ? e.message : "unknown",
+    });
+  }
+
+  await logLine({
+    ...common,
+    role: "assistant",
+    text: answer.text,
+    kind,
+    inTokens: answer.inTokens,
+    outTokens: answer.outTokens,
+  });
+
+  return NextResponse.json({ reply: answer.text, kind, live: !answer.canned });
 }

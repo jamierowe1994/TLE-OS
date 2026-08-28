@@ -50,10 +50,15 @@ function when(iso: string | null) {
 
 export default function AssistantConsole() {
   const [lines, setLines] = useState<Line[] | null>(null);
+  const [brain, setBrain] = useState<{ live: boolean; spent: number; cap: number } | null>(null);
   const [who, setWho] = useState<string>("");
   const [denied, setDenied] = useState(false);
 
   const load = useCallback(() => {
+    fetch("/api/admin/assistant-brain")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { live: boolean; spent: number; cap: number } | null) => setBrain(d))
+      .catch(() => setBrain(null));
     fetch("/api/admin/assistant-log")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("no"))))
       .then((d: { lines?: Line[] }) => setLines(d.lines ?? []))
@@ -87,17 +92,30 @@ export default function AssistantConsole() {
       <section className="fade-up mt-8 flex flex-wrap items-center gap-5 rounded-2xl border border-line/70 bg-panel p-5">
         <AssistantCharacter mood="thinking" size={92} track={false} />
         <div className="min-w-[220px] flex-1">
-          <p className="text-[13.5px]">He can&rsquo;t answer anything yet</p>
-          <p className="mt-1 max-w-[52ch] text-[12px] leading-relaxed text-muted">
-            There is no model behind him — no key, no cost, no calls. The panel in the
-            corner says so rather than guessing, because a help system that answers
-            confidently and wrongly is worse than one that admits it is young. Questions
-            go into the list below instead.
-          </p>
-          <p className="mt-2 text-[11.5px] text-muted">
-            Needs an <span className="font-semibold">ANTHROPIC_API_KEY</span> and a spend
-            ceiling before it goes near the pilot.
-          </p>
+          {brain?.live ? (
+            <>
+              <p className="text-[13.5px]">He&rsquo;s answering</p>
+              <p className="mt-1 max-w-[52ch] text-[12px] leading-relaxed text-muted">
+                Claude, over the operational knowledge below — and told to say when
+                something isn&rsquo;t covered rather than guess at a process or a figure.
+                A confident wrong answer about a landlord is worse than no answer.
+              </p>
+              <p className="mt-2 text-[11.5px] text-muted">
+                {brain.spent.toLocaleString("en-GB")} of{" "}
+                {brain.cap.toLocaleString("en-GB")} tokens used today. Over the ceiling he
+                says so and passes the question on rather than stopping.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-[13.5px]">He can&rsquo;t answer at the moment</p>
+              <p className="mt-1 max-w-[52ch] text-[12px] leading-relaxed text-muted">
+                Either no <span className="font-semibold">ANTHROPIC_API_KEY</span> is set,
+                or today&rsquo;s ceiling has been reached. Questions still land in the list
+                below, and the panel says which it is rather than pretending.
+              </p>
+            </>
+          )}
         </div>
       </section>
 

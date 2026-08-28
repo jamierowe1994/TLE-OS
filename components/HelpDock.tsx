@@ -53,6 +53,7 @@ export default function HelpDock() {
   const [stage, setStage] = useState<"ask" | "onboarding-name" | "onboarding-help">("ask");
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [live, setLive] = useState(false);
 
   const [kind, setKind] = useState("bug");
   const [fb, setFb] = useState("");
@@ -119,6 +120,7 @@ export default function HelpDock() {
     const r = await fetch("/api/assistant/ask", { cache: "no-store" })
       .then((x) => (x.ok ? x.json() : null))
       .catch(() => null);
+    setLive(Boolean(r?.live));
     const history: Line[] = (r?.history ?? []).map((h: Line) => ({ role: h.role, text: h.text }));
 
     if (r && !r.onboarded) {
@@ -282,9 +284,13 @@ export default function HelpDock() {
                       Send
                     </button>
                   </div>
+                  {/* Says which of the two he currently is. Claiming to answer
+                      when the key is missing, or claiming not to when it is
+                      there, are both worse than the extra line of state. */}
                   <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
-                    I can&rsquo;t answer on my own yet — everything you ask goes to James, and the
-                    answers become the help centre.
+                    {live
+                      ? "I answer from what the business has written down, and I'll say so when it isn't covered. Everything you ask goes to James either way."
+                      : "I can't answer on my own just now — everything you ask goes to James, and the answers become the help centre."}
                   </p>
                 </>
               ) : sent ? (

@@ -531,8 +531,15 @@ CREATE TABLE IF NOT EXISTS os_assistant_log (
   -- ask | onboarding-name | onboarding-help — so the initiation answers can be
   -- read separately from the questions, and neither pollutes the other.
   kind        TEXT NOT NULL DEFAULT 'ask',
+  -- What the exchange cost. Kept per line rather than aggregated so the daily
+  -- ceiling and the per-person view read from the same rows — a separate
+  -- counter is a second source of truth that drifts.
+  in_tokens   INTEGER NOT NULL DEFAULT 0,
+  out_tokens  INTEGER NOT NULL DEFAULT 0,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE os_assistant_log ADD COLUMN IF NOT EXISTS in_tokens INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE os_assistant_log ADD COLUMN IF NOT EXISTS out_tokens INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS os_assistant_log_user ON os_assistant_log (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS os_assistant_log_time ON os_assistant_log (created_at DESC);
 
