@@ -210,14 +210,105 @@ interface HsListing {
  * `date_listed_from` is always sent because omitting it silently narrows the
  * window rather than widening it.
  */
-async function onMarketNearby(sector: string, beds?: number): Promise<MarketListing[]> {
-  const parts = [
-    `sectors%5B%5D=${encodeURIComponent(sector)}`,
-    beds ? `beds%5B%5D=${beds}` : "",
+/**
+ * Postcode → lat/lon, via postcodes.io.
+ *
+ * ONS open data, no key, no rate limit worth worrying about. Homesearch has no
+ * geocoder of its own and — see below — no radius parameter either, so this is
+ * the only way to ask "within N miles".
+ *
+ * A failure is not fatal: the caller falls back to the sector, which is what
+ * the feed did before radius existed.
+ */
+const geoCache = new Map<string, { lat: number; lon: number } | null>();
+
+async function geocode(postcode: string): Promise<{ lat: number; lon: number } | null> {
+  const key = postcode.trim().toUpperCase();
+  if (geoCache.has(key)) return geoCache.get(key)!;
+  try {
+    const r = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(key)}`, {
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!r.ok) throw new Error(String(r.status));
+    const j = (await r.json()) as { result?: { latitude?: number; longitude?: number } };
+    const lat = j.result?.latitude;
+    const lon = j.result?.longitude;
+    const out = typeof lat === "number" && typeof lon === "number" ? { lat, lon } : null;
+    geoCache.set(key, out);
+    return out;
+  } catch {
+    geoCache.set(key, null);
+    return null;
+  }
+}
+
+/**
+ * What a tenant is choosing between, filtered.
+ *
+ * ── HOMESEARCH HAS NO RADIUS PARAMETER ────────────────────────────────────
+ *
+ * It takes a BOUNDING BOX — north/south/east/west in decimal degrees. So a
+ * radius in miles becomes a box: latitude is a constant 69 miles per degree,
+ * longitude shrinks with the cosine of latitude, which at UK latitudes is
+ * roughly 0.6. Omit the cosine and a "2 mile" box is nearly 3.5 miles wide and
+ * 2 miles tall — an agent would be shown stock a third further away than they
+ * asked for, in one direction only.
+ *
+ * Proven in the F&C pipeline before being written here.
+ *
+ * ── Why the default is the SECTOR, not two miles ──────────────────────────
+ *
+ * F&C default to a 2-mile radius because sales comparables are thin on the
+ * ground. Lettings are not: the tight local set is usually the honest one, and
+ * widening should be something an agent chooses, not something that happened
+ * to them. So radius is opt-in and the sector remains the default.
+ */
+export interface MarketFilters {
+  /** Miles. 0 or undefined means "stay in the sector". */
+  radiusMiles?: number;
+  beds?: number;
+  minRent?: number;
+  maxRent?: number;
+  /** Homesearch's own type letter: H house, F flat. */
+  type?: "H" | "F";
+}
+
+async function onMarketNearby(
+  sector: string,
+  beds?: number,
+  postcode?: string,
+  filters: MarketFilters = {}
+): Promise<MarketListing[]> {
+  const wantBeds = filters.beds ?? beds;
+  const parts: string[] = [
     "date_listed_from=1900-01-01",
     "sort%5B%5D=-listed_on",
-    "limit=24",
-  ].filter(Boolean);
+    "limit=48",
+  ];
+
+  /* Radius wins over sector when asked for and geocodable — the box IS the
+     area, and sending both would intersect them and quietly return less than
+     either. */
+  let box: { n: number; s: number; e: number; w: number } | null = null;
+  if (filters.radiusMiles && filters.radiusMiles > 0 && postcode) {
+    const g = await geocode(postcode);
+    if (g) {
+      const dLat = filters.radiusMiles / 69;
+      const dLon = filters.radiusMiles / (69 * Math.cos((g.lat * Math.PI) / 180));
+      box = { n: g.lat + dLat, s: g.lat - dLat, e: g.lon + dLon, w: g.lon - dLon };
+    }
+  }
+  if (box) {
+    parts.push(`north=${box.n.toFixed(6)}`, `south=${box.s.toFixed(6)}`,
+               `east=${box.e.toFixed(6)}`, `west=${box.w.toFixed(6)}`);
+  } else {
+    parts.push(`sectors%5B%5D=${encodeURIComponent(sector)}`);
+  }
+
+  if (wantBeds) parts.push(`beds%5B%5D=${wantBeds}`);
+  if (filters.type) parts.push(`type=${filters.type}`);
+  if (filters.minRent) parts.push(`price_from=${Math.round(filters.minRent)}`);
+  if (filters.maxRent) parts.push(`price_to=${Math.round(filters.maxRent)}`);
   const raw = await hsJson<unknown>(`current_listings_crm/search/let/?${parts.join("&")}`);
   const rows = hsRows<HsListing>(raw);
 
@@ -314,6 +405,9 @@ export interface MaResearch {
    * survive `matchIsTrustworthy`, there is no material information.
    */
   material: MaterialInfo | null;
+  /** What the on-market feed was actually asked for — so the page can say so
+   *  rather than leaving an agent to guess why a property is in the list. */
+  marketFilters: MarketFilters & { appliedRadius: boolean };
   comparables: Comparable[];
   /** Our own book's picture, which is the honest sample size. */
   guide: {
@@ -382,7 +476,8 @@ function buildGuide(comps: Comparable[]): MaResearch["guide"] {
 export async function getResearch(
   address: string,
   postcode: string,
-  beds = 2
+  beds = 2,
+  filters: MarketFilters = {}
 ): Promise<MaResearch> {
   const sector = sectorOf(postcode);
 
@@ -409,7 +504,7 @@ export async function getResearch(
   let nearby: MarketListing[] = [];
   const [stats, listings, material] = await Promise.all([
     sector ? marketFor(sector, beds) : Promise.resolve(null),
-    sector ? onMarketNearby(sector, beds) : Promise.resolve([]),
+    sector ? onMarketNearby(sector, beds, postcode, filters) : Promise.resolve([]),
     // Gated on the trusted match, not merely on having an hs_id — see the
     // `material` field comment on MaResearch.
     subject ? materialFor(subject.hsId) : Promise.resolve(null),
@@ -511,6 +606,10 @@ export async function getResearch(
     areaAverage,
     market,
     onMarketNearby: nearby,
+    marketFilters: {
+      ...filters,
+      appliedRadius: Boolean(filters.radiusMiles && filters.radiusMiles > 0 && (await geocode(postcode))),
+    },
     material,
     // The guide and the list must describe the same sample. Reporting a range
     // "based on 43" beside twelve visible rows invites the obvious question and

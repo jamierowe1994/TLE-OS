@@ -18,9 +18,19 @@ export async function GET(req: NextRequest) {
   if (!address || !postcode) {
     return NextResponse.json({ error: "address and postcode are required" }, { status: 400 });
   }
+  const radius = Number(req.nextUrl.searchParams.get("radius") ?? 0);
+  const minRent = Number(req.nextUrl.searchParams.get("minRent") ?? 0);
+  const maxRent = Number(req.nextUrl.searchParams.get("maxRent") ?? 0);
+  const typeRaw = req.nextUrl.searchParams.get("type");
+  const type = typeRaw === "H" || typeRaw === "F" ? typeRaw : undefined;
   const beds = Math.min(6, Math.max(1, Number(p.get("beds") ?? 2) || 2));
   try {
-    return NextResponse.json(await getResearch(address, postcode, beds));
+    return NextResponse.json(await getResearch(address, postcode, beds, {
+      radiusMiles: Number.isFinite(radius) && radius > 0 ? radius : undefined,
+      minRent: minRent > 0 ? minRent : undefined,
+      maxRent: maxRent > 0 ? maxRent : undefined,
+      type,
+    }));
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
   }

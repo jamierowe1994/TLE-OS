@@ -135,6 +135,34 @@ export default function PresentationBuilder({
      from our own book because they are different evidence. */
   const nearby = d?.onMarketNearby ?? [];
   const [pickedNearby, setPickedNearby] = useState<string[]>([]);
+  /* THE FILTER BAR. Radius defaults to 0 — the sector — because widening
+     should be something an agent chooses, not something that happened to them.
+     See MarketFilters in lib/ma-research for why F&C's 2-mile default is right
+     for sales and wrong for lettings. */
+  const [filters, setFilters] = useState<{ radius: number; beds: number; minRent: number; maxRent: number; type: "" | "H" | "F" }>(
+    { radius: 0, beds: 0, minRent: 0, maxRent: 0, type: "" }
+  );
+  const [refiltering, setRefiltering] = useState(false);
+
+  async function applyFilters(next: typeof filters) {
+    setFilters(next);
+    setRefiltering(true);
+    const q = new URLSearchParams({ address, postcode, beds: "2" });
+    if (next.radius) q.set("radius", String(next.radius));
+    if (next.beds) q.set("beds", String(next.beds));
+    if (next.minRent) q.set("minRent", String(next.minRent));
+    if (next.maxRent) q.set("maxRent", String(next.maxRent));
+    if (next.type) q.set("type", next.type);
+    try {
+      const r = await fetch(`/api/ma-research?${q}`);
+      const j = (await r.json()) as MaResearch & { error?: string };
+      if (!j.error) setD(j);
+    } catch {
+      /* leave the previous feed up rather than blanking it */
+    } finally {
+      setRefiltering(false);
+    }
+  }
   const keyOf = (l: { address: string; rent: number | null }) => `${l.address}|${l.rent}`;
 
   const available = useMemo(() => (d?.comparables ?? []).filter((c) => !c.letAgreed), [d]);
@@ -207,9 +235,75 @@ export default function PresentationBuilder({
 
           {d && here === "available" && nearby.length > 0 && (
             <div className="mb-5">
+              {/* Say what the list was ASKED for, so nobody has to guess why a
+                  property is in it. */}
+              <div className="mb-3 rounded-xl border border-line/70 bg-box p-3">
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="text-[11px]">
+                    <span className="block text-[9.5px] uppercase tracking-wide text-muted">
+                      How far out — {filters.radius ? `${filters.radius} miles` : d.sector}
+                    </span>
+                    <input
+                      type="range" min={0} max={10} step={0.5}
+                      value={filters.radius}
+                      onChange={(e) => applyFilters({ ...filters, radius: Number(e.target.value) })}
+                      className="mt-1.5 w-44 accent-[#e31f36]"
+                    />
+                  </label>
+                  <label className="text-[11px]">
+                    <span className="block text-[9.5px] uppercase tracking-wide text-muted">Beds</span>
+                    <select
+                      value={filters.beds}
+                      onChange={(e) => applyFilters({ ...filters, beds: Number(e.target.value) })}
+                      className="mt-1 rounded-lg border border-line/80 bg-panel px-2 py-1.5 text-[12px]"
+                    >
+                      <option value={0}>Any</option>
+                      {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-[11px]">
+                    <span className="block text-[9.5px] uppercase tracking-wide text-muted">Type</span>
+                    <select
+                      value={filters.type}
+                      onChange={(e) => applyFilters({ ...filters, type: e.target.value as "" | "H" | "F" })}
+                      className="mt-1 rounded-lg border border-line/80 bg-panel px-2 py-1.5 text-[12px]"
+                    >
+                      <option value="">Any</option>
+                      <option value="H">Houses</option>
+                      <option value="F">Flats</option>
+                    </select>
+                  </label>
+                  <label className="text-[11px]">
+                    <span className="block text-[9.5px] uppercase tracking-wide text-muted">Rent £</span>
+                    <span className="mt-1 flex items-center gap-1">
+                      <input type="number" placeholder="min" value={filters.minRent || ""}
+                        onChange={(e) => setFilters({ ...filters, minRent: Number(e.target.value) })}
+                        onBlur={() => applyFilters(filters)}
+                        className="w-20 rounded-lg border border-line/80 bg-panel px-2 py-1.5 text-[12px]" />
+                      <input type="number" placeholder="max" value={filters.maxRent || ""}
+                        onChange={(e) => setFilters({ ...filters, maxRent: Number(e.target.value) })}
+                        onBlur={() => applyFilters(filters)}
+                        className="w-20 rounded-lg border border-line/80 bg-panel px-2 py-1.5 text-[12px]" />
+                    </span>
+                  </label>
+                  {(filters.radius || filters.beds || filters.type || filters.minRent || filters.maxRent) ? (
+                    <button type="button"
+                      onClick={() => applyFilters({ radius: 0, beds: 0, minRent: 0, maxRent: 0, type: "" })}
+                      className="rounded-lg border border-line/80 px-2.5 py-1.5 text-[11.5px] text-muted">
+                      Reset
+                    </button>
+                  ) : null}
+                </div>
+                <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
+                  {refiltering ? "Searching…" : d.marketFilters?.appliedRadius
+                    ? `Within ${filters.radius} miles of ${postcode} — a box, because Homesearch has no radius; the width is narrowed by latitude so it stays circular-ish.`
+                    : `Sector ${d.sector} only. Drag the slider to reach further out.`}
+                </p>
+              </div>
+
               <p className="text-[12.5px] leading-relaxed text-muted">
-                {nearby.length} on the market in {d.sector} right now — every agent&apos;s
-                stock, not just ours. This is what a tenant is choosing between.
+                {nearby.length} on the market — every agent&apos;s stock, not just ours.
+                This is what a tenant is choosing between.
               </p>
               <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {nearby.map((l) => {
