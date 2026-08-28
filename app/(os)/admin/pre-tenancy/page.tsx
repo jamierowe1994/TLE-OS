@@ -319,7 +319,25 @@ function PreTenancyLogin({ onLoggedIn }: { onLoggedIn: (u: UserProfile) => void 
     }
   }
 
+  /* FULL PAGE, not a panel inside the admin rail.
+
+     This is Kirstie's whole working screen. Squeezed into the admin content
+     column it reads as an embed of somebody else's product rather than as her
+     view — which is exactly what James saw. The rail is hidden the same way
+     the admin layout hides the agent sidebar: CSS against the element, so the
+     theme, the view-as bar and the bug button all survive. */
   return (
+    <>
+      <style>{`[data-admin-rail] { display: none !important; }`}</style>
+      {/* The way back. Same pill as Susan's view, and the same reason: this
+          screen covers the rail, so without it the only route out is the
+          browser's back button. */}
+      <a
+        href="/admin"
+        className="fixed left-4 top-4 z-[60] rounded-full border border-line/80 bg-panel px-3.5 py-1.5 text-[12px] shadow-[0_6px_18px_-8px_rgba(0,0,0,0.35)]"
+      >
+        ← Back to my view
+      </a>
     <main className="flex min-h-screen items-center justify-center bg-white px-6">
       <form onSubmit={submit} className="w-full max-w-sm">
         <div className="mb-10 flex items-center justify-center gap-2.5">
@@ -353,6 +371,7 @@ function PreTenancyLogin({ onLoggedIn }: { onLoggedIn: (u: UserProfile) => void 
         </button>
       </form>
     </main>
+    </>
   );
 }
 

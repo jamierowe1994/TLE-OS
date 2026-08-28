@@ -71,6 +71,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       <div className="flex gap-6">
         <nav
+          data-admin-rail
           aria-label="Admin"
           className="sticky top-6 hidden h-fit w-52 shrink-0 flex-col gap-4 md:flex"
         >
@@ -113,6 +114,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {/* On a phone the rail becomes a scrolling strip — a 52px column beside
             content on a 375px screen leaves neither of them usable. */}
         <nav
+          data-admin-rail
           aria-label="Admin"
           className="mb-4 flex gap-1.5 overflow-x-auto pb-1 md:hidden"
         >
