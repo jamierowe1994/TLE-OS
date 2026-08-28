@@ -9,7 +9,7 @@ import { q } from "@/lib/db";
 /**
  * The one big sweep: walk every closed month once, and never walk it again.
  *
- * POST /api/business/backfill?months=6[&from=YYYY-MM]
+ * POST /api/business/backfill[?months=1][&from=YYYY-MM]
  *   → { done, frozen, remaining, nextFrom, tookMs }
  *
  * James: "go through every single month with one big sweep and then just store
@@ -23,10 +23,31 @@ import { q } from "@/lib/db";
  * ≈ 56 sequential requests. From MONEY_FLOOR (Jan 2022) that is well over
  * 3,000 requests — hours, against a maxDuration ceiling of 800 seconds.
  *
- * So each call takes a BOUNDED bite (default 6 months), freezes what it got,
+ * So each call takes a BOUNDED bite (default ONE month), freezes what it got,
  * and reports `remaining` and `nextFrom`. Call it until `done` is true. A
  * killed request costs you that bite and nothing else, because everything
  * earlier is already frozen in Postgres.
+ *
+ * ── Why the bite is one month, not six ────────────────────────────────────
+ *
+ * The default was 6 and it never returned. Measured on the live site 28 Aug
+ * 2026: curl came back with an EMPTY body, which is a request killed in
+ * flight, not an error the app ever saw.
+ *
+ * `maxDuration = 800` below is the SERVERLESS ceiling. It is not the only
+ * ceiling. Railway's edge proxy gives up on a request long before that —
+ * around five minutes — so the handler is still working when the connection
+ * is already gone. Raising maxDuration cannot help; nobody is listening.
+ *
+ * The backfill allows up to 3 minutes per month (PER_MONTH_WAIT_MS in
+ * gci-history). Six months therefore WANTS up to 18 minutes against a proxy
+ * that grants about five. One month fits with room to spare, and the caller
+ * loops.
+ *
+ * The lesson worth keeping: a timeout you control is not the timeout that
+ * decides. Size the bite to the shortest ceiling in the chain, which is
+ * whichever proxy, load balancer or CDN sits in front — not the one in your
+ * own config.
  *
  * ── Why it doesn't need a new table ───────────────────────────────────────
  *
@@ -48,9 +69,10 @@ import { q } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-/* The ceiling, because the whole point is to spend it. A bite that gets killed
-   halfway leaves the months it already froze frozen, so the next call starts
-   after them rather than starting over. */
+/* Kept high, but do NOT read this as "a request may take 800 seconds" — see
+   the note above. Railway's proxy closes the connection first, so this is a
+   backstop for the function, not a promise to the caller. The bite size is
+   what actually keeps a call inside the real limit. */
 export const maxDuration = 800;
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -89,7 +111,10 @@ export async function POST(req: NextRequest) {
 
   const p = req.nextUrl.searchParams;
   const from = MONTH_RE.test(p.get("from") ?? "") ? p.get("from")! : MONEY_FLOOR;
-  const bite = Math.min(Math.max(Number(p.get("months") ?? 6) || 6, 1), 24);
+  /* One month per call by default. Bigger bites are still allowed — pass
+     ?months=N — but they only make sense somewhere without a five-minute
+     proxy in front, so the default is the one that works HERE. */
+  const bite = Math.min(Math.max(Number(p.get("months") ?? 1) || 1, 1), 24);
 
   /* Never the current month: it is still accumulating, and freezing a
      part-month would archive a bad month as a fact. */
