@@ -188,7 +188,7 @@ export default function PreLaunch() {
         <h2 className="text-[15px]">What they&apos;ve found</h2>
         {d.bugs.length === 0 ? (
           <p className="mt-2 text-[12.5px] text-muted">
-            Nothing reported yet. The assistant sits in the bottom-right of every screen — questions asked through him land here too.
+            Nothing reported yet. The assistant sits in the bottom-right of every screen; feedback given through him lands here.
           </p>
         ) : (
           <ul className="mt-3 space-y-2">
@@ -196,14 +196,10 @@ export default function PreLaunch() {
               <li key={b.id} className="rounded-xl border border-line/70 p-3">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="text-[12.5px]">
-                    {/* Questions get the green, because they are not a
-                        problem — each one is a guide somebody needed and could
-                        not find, so the list of them is the writing order for
-                        the help centre. Buried among the defects they read as
-                        noise. */}
-                    <Pill tone={b.kind === "bug" ? "accent" : b.kind === "question" ? "good" : "neutral"}>
-                      {b.kind}
-                    </Pill>
+                    {/* Questions do NOT appear here — they go to the assistant
+                        log, which is a different thing from a defect and has
+                        its own screen. This list is what is broken. */}
+                    <Pill tone={b.kind === "bug" ? "accent" : "neutral"}>{b.kind}</Pill>
                     <span className="ml-2 text-muted">
                       {b.reporterEmail} on {b.path || "—"}
                     </span>

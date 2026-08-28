@@ -503,6 +503,39 @@ CREATE TABLE IF NOT EXISTS os_cache (
   computed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Everything anyone says to the assistant, and everything he says back.
+--
+-- James, 29 Aug: "each agent will have a stored log, and we'll save all of that
+-- information… because we can use that for training data. Everything that any
+-- agent asks it, we should log into a log category, which I should then be able
+-- to go into and see what they've been talking about."
+--
+-- Two uses, and they pull in different directions, so both are served here
+-- rather than picking one:
+--   · the AGENT needs their own thread back when they reopen the panel
+--   · JAMES needs to read across everybody to see where people get stuck
+--
+-- The thread column groups one sitting; role is who spoke. Keeping the
+-- assistant's replies as rows too, not just the questions, is what makes this
+-- training data rather than a list of complaints: a question is only half an
+-- exchange, and what we said back is the half that might have been wrong.
+CREATE TABLE IF NOT EXISTS os_assistant_log (
+  id          TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL,
+  user_email  TEXT NOT NULL DEFAULT '',
+  thread      TEXT NOT NULL DEFAULT '',
+  -- agent | assistant
+  role        TEXT NOT NULL DEFAULT 'agent',
+  text        TEXT NOT NULL,
+  path        TEXT NOT NULL DEFAULT '',
+  -- ask | onboarding-name | onboarding-help — so the initiation answers can be
+  -- read separately from the questions, and neither pollutes the other.
+  kind        TEXT NOT NULL DEFAULT 'ask',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_assistant_log_user ON os_assistant_log (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS os_assistant_log_time ON os_assistant_log (created_at DESC);
+
 -- People, as the TEG Team Hub knows them.
 --
 -- The Hub (a Base44 app) is the group's register of everyone who joins: brand,

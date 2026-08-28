@@ -77,17 +77,23 @@ export default function Dashboard() {
           is no clever way to keep a floating element off arbitrary content;
           the fix is to stop it floating.
       
-          So he sits in the flow, after the board, right-aligned, in white
-          space he owns. Add a widget and the grid grows and pushes him down;
-          he is always at the foot of the page and never on top of anything,
-          because nothing is ever underneath him. */}
-      <div className="pointer-events-none mt-12 hidden justify-end pb-20 pr-2 sm:flex">
+          So he sits in the flow, after the board, in white space he owns. Add
+          a widget and the grid grows and pushes him down; he is always at the
+          foot of the page and never on top of anything, because nothing is
+          ever underneath him.
+
+          LEFT, not right — the assistant now lives in the bottom-right corner
+          of every screen, and two characters in the same corner is a crowd.
+          And MIRRORED, so he faces into the page: a character looking off the
+          edge leads the eye away from everything that matters, which is the
+          one thing a decorative figure must never do. */}
+      <div className="pointer-events-none mt-12 hidden justify-start pb-20 pl-2 sm:flex">
         {/* keyed: real alpha, no blending — a fixed layer drops blends, which
             is how the white box came back. .art inverts him in the dark. */}
         <BlendVideo
           keyed
           src="/illustrations/dog-wag-3.mp4"
-          className="art pointer-events-none block w-56 lg:w-64"
+          className="art pointer-events-none block w-56 -scale-x-100 lg:w-64"
         />
       </div>
     </>

@@ -28,13 +28,14 @@ import AssistantCharacter from "@/components/AssistantCharacter";
  * answers wrong is worse than one that admits it is young.
  */
 
-type Bug = {
+type Line = {
   id: string;
-  reporterEmail: string;
-  body: string;
+  userEmail: string;
+  thread: string;
+  role: "agent" | "assistant";
+  text: string;
   path: string;
   kind: string;
-  state: string;
   createdAt: string;
 };
 
@@ -48,13 +49,14 @@ function when(iso: string | null) {
 }
 
 export default function AssistantConsole() {
-  const [bugs, setBugs] = useState<Bug[] | null>(null);
+  const [lines, setLines] = useState<Line[] | null>(null);
+  const [who, setWho] = useState<string>("");
   const [denied, setDenied] = useState(false);
 
   const load = useCallback(() => {
-    fetch("/api/admin/pilot")
+    fetch("/api/admin/assistant-log")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("no"))))
-      .then((d: { bugs?: Bug[] }) => setBugs(d.bugs ?? []))
+      .then((d: { lines?: Line[] }) => setLines(d.lines ?? []))
       .catch(() => setDenied(true));
   }, []);
   useEffect(load, [load]);
@@ -67,7 +69,13 @@ export default function AssistantConsole() {
     );
   }
 
-  const questions = (bugs ?? []).filter((b) => b.kind === "question");
+  /* The worklist: what agents actually asked, newest first. Read off the same
+     log as the transcript below rather than a second store — one source, so
+     the two can never disagree about what was said. */
+  const questions = (lines ?? []).filter((l) => l.role === "agent" && l.kind === "ask");
+  /* Agents only — the assistant's own lines would swamp the picker. */
+  const people = [...new Set((lines ?? []).filter((l) => l.role === "agent").map((l) => l.userEmail))].sort();
+  const shown = who ? (lines ?? []).filter((l) => l.userEmail === who) : (lines ?? []);
 
   return (
     <>
@@ -108,7 +116,7 @@ export default function AssistantConsole() {
           Each one is a guide somebody needed and couldn&rsquo;t find. Write from the top.
         </p>
 
-        {bugs === null ? (
+        {lines === null ? (
           <p className="mt-4 text-[12.5px] text-muted">Loading…</p>
         ) : questions.length === 0 ? (
           <p className="mt-4 rounded-xl border border-dashed border-line p-4 text-[12.5px] text-muted">
@@ -121,11 +129,65 @@ export default function AssistantConsole() {
               <li key={q.id} className="rounded-xl border border-line/70 bg-panel p-3.5">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="text-[12px] text-muted">
-                    {q.reporterEmail} on {q.path || "—"}
+                    {q.userEmail} on {q.path || "—"}
                   </span>
                   <span className="shrink-0 text-[11px] text-muted">{when(q.createdAt)}</span>
                 </div>
-                <p className="mt-1.5 text-[13px]">{q.body}</p>
+                <p className="mt-1.5 text-[13px]">{q.text}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* ---------------------------- the log ---------------------------- */}
+      <section className="fade-up mt-8">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide">Conversations</h2>
+          {people.length > 1 && (
+            <select
+              value={who}
+              onChange={(e) => setWho(e.target.value)}
+              className="rounded-lg border border-line bg-card px-2.5 py-1.5 text-[12.5px] outline-none focus:border-accent"
+              aria-label="Filter by person"
+            >
+              <option value="">Everyone</option>
+              {people.map((e) => (
+                <option key={e} value={e}>{e}</option>
+              ))}
+            </select>
+          )}
+        </div>
+        <p className="mt-1 max-w-[62ch] text-[12px] leading-relaxed text-muted">
+          Everything anyone has said to him, and everything he said back. Both halves are
+          kept on purpose — a question is only half an exchange, and what we replied is
+          the half that might have been wrong.
+        </p>
+
+        {lines === null ? (
+          <p className="mt-4 text-[12.5px] text-muted">Loading…</p>
+        ) : shown.length === 0 ? (
+          <p className="mt-4 rounded-xl border border-dashed border-line p-4 text-[12.5px] text-muted">
+            Nothing said yet.
+          </p>
+        ) : (
+          <ul className="mt-3 space-y-1.5">
+            {shown.map((l) => (
+              <li
+                key={l.id}
+                className={`rounded-xl border p-3 ${
+                  l.role === "agent" ? "border-line/70 bg-panel" : "border-line/40 bg-box"
+                }`}
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="text-[11.5px] text-muted">
+                    {l.role === "agent" ? l.userEmail : "Assistant"}
+                    {l.kind !== "ask" ? ` · ${l.kind.replace("onboarding-", "intro: ")}` : ""}
+                    {l.path ? ` · ${l.path}` : ""}
+                  </span>
+                  <span className="shrink-0 text-[11px] text-muted">{when(l.createdAt)}</span>
+                </div>
+                <p className="mt-1 text-[13px]">{l.text}</p>
               </li>
             ))}
           </ul>
