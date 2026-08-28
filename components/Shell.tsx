@@ -150,11 +150,18 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   /* Owner-only nav. Decided on the ACTOR, so an owner viewing as an agent
      keeps the Admin link and can always get back to stop. */
   const [isOwner, setIsOwner] = useState(false);
+  const [me, setMe] = useState<{ name?: string; email?: string; photo?: string | null } | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/me")
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: { canAdmin?: boolean } | null) => setIsOwner(Boolean(j?.canAdmin)))
+      .then((j: { canAdmin?: boolean; user?: { name?: string; email?: string; photo?: string | null } } | null) => {
+        setIsOwner(Boolean(j?.canAdmin));
+        /* The SUBJECT, not the actor — while viewing as somebody, the foot
+           should show whose screen you are looking at, which is the whole
+           point of the red banner above it agreeing. */
+        setMe(j?.user ?? null);
+      })
       .catch(() => {});
   }, []);
 
@@ -380,17 +387,37 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               collapsed ? "justify-center px-0" : "px-3"
             }`}
           >
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[11px] font-bold text-accent-dark">
-              TLE
-            </span>
+            {/* Whose screen this is. It said "The Letting Experts" — true of
+                everybody, and therefore no use to anybody. Once agents have
+                their own scoped view, the foot of the sidebar is the one place
+                that answers "am I looking at MY figures". */}
+            {me?.photo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={me.photo}
+                alt=""
+                className="h-8 w-8 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[11px] font-bold text-accent-dark">
+                {(me?.name || me?.email || "?")
+                  .split(/[\s@.]+/)
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .map((w) => w[0]?.toUpperCase())
+                  .join("")}
+              </span>
+            )}
             <span
               className={`min-w-0 flex-1 overflow-hidden transition-[max-width,opacity,margin] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
                 collapsed ? "ml-0 max-w-0 opacity-0" : "ml-0 max-w-[150px] opacity-100"
               }`}
             >
-              <span className="hand block truncate text-[13px]">The Letting Experts</span>
-              <span className="block whitespace-nowrap text-[10px] text-muted">
-                Preview access · {process.env.NEXT_PUBLIC_BUILD}
+              <span className="hand block truncate text-[13px]">
+                {me?.name || me?.email || "Signing in…"}
+              </span>
+              <span className="block truncate whitespace-nowrap text-[10px] text-muted">
+                {me?.email && me?.name ? me.email : "The Letting Experts"}
               </span>
             </span>
             {!collapsed && (

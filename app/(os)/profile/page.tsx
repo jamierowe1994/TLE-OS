@@ -194,8 +194,15 @@ export default function ProfilePage() {
                     {initials}
                   </span>
                 )}
-                <span className="absolute inset-x-0 bottom-0 bg-ink/60 py-1 text-center text-[8.5px] font-semibold uppercase tracking-wide text-page opacity-0 transition-opacity group-hover:opacity-100">
-                  {profile.photo ? "Change" : "Add photo"}
+                {/* A camera in the middle rather than a word across the
+                    bottom. "Add photo" set in 8.5px across a 20px strip is a
+                    label fighting for room it hasn't got; an icon says the
+                    same thing and leaves the face visible. */}
+                <span className="absolute inset-0 flex items-center justify-center bg-ink/45 opacity-0 transition-opacity group-hover:opacity-100">
+                  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.6" style={{ color: "var(--page)" }}>
+                    <path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.2l1.1-1.6A1 1 0 0 1 8.6 5h6.8a1 1 0 0 1 .8.4L17.3 7h2.2A1.5 1.5 0 0 1 21 8.5v9A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5z" strokeLinejoin="round" />
+                    <circle cx="12" cy="12.8" r="3.4" />
+                  </svg>
                 </span>
                 <input
                   type="file"
