@@ -1,0 +1,1208 @@
+"use client";
+
+// Admin · Agents tab — per-agent July MTD KPI table (seed, via the admin-gated
+// /api/admin/seed fetch in the shell) merged with live portal-account links,
+// the Partner Net Income YTD table, a row-click agent drill-down (forecast,
+// ads link, portfolio, compliance), and the user management panel (link
+// account ↔ agentKey / REX / Meta, reset password).
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import DataTable from "@/components/business/DataTable";
+import SourceBadge from "@/components/business/SourceBadge";
+import StatCard from "@/components/business/StatCard";
+import type { SeedData } from "@/lib/business/seed-data"; // type-only — erased at build
+import { ROSTER, agentKeysForName } from "@/lib/business/roster";
+import type { AgentForecast, UserProfile } from "@/lib/business/types";
+import { formatDate, formatGBP, formatNum, formatPct, monthLabel } from "@/lib/business/format";
+import type { StatValue } from "@/lib/business/types";
+
+/* ------------------------------ helpers ------------------------------ */
+
+function money(value: number | null | undefined): ReactNode {
+  if (value == null || Number.isNaN(value)) return "—";
+  if (value < 0) {
+    return <span className="text-red-600">({formatGBP(Math.abs(value))})</span>;
+  }
+  return formatGBP(value);
+}
+
+const TIER_STYLES: Record<string, string> = {
+  TOP: "border-green-200 bg-green-50 text-green-700",
+  MID: "border-amber-200 bg-amber-50 text-amber-700",
+  DEV: "border-gray-200 bg-gray-100 text-gray-600",
+  NEW: "border-blue-200 bg-blue-50 text-blue-700",
+  TOTAL: "border-line bg-card text-ink",
+};
+
+function TierChip({ tier }: { tier: string }) {
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+        TIER_STYLES[tier] ?? TIER_STYLES.DEV
+      }`}
+    >
+      {tier}
+    </span>
+  );
+}
+
+const TAG_STYLES: Record<string, string> = {
+  NEW: "border-blue-200 bg-blue-50 text-blue-700",
+  GLASGOW: "border-purple-200 bg-purple-50 text-purple-700",
+  TLE: "border-red-200 bg-accent-soft text-accent",
+};
+
+function SectionTitle({
+  children,
+  source,
+}: {
+  children: ReactNode;
+  source?: string;
+}) {
+  return (
+    <div className="mb-3 mt-8 first:mt-0">
+      <h2 className="text-sm font-semibold uppercase tracking-wide">{children}</h2>
+      {source ? (
+        <p className="mt-0.5 text-[11px] text-muted">Source: {source}</p>
+      ) : null}
+    </div>
+  );
+}
+
+/* ------------------------- tolerant API parsing ------------------------- */
+
+type AdminUser = UserProfile & { adminNotes?: { at: string; text: string }[] };
+
+/** One row of GET /api/admin/forecasts — forecast nested under `forecast`. */
+interface AdminForecastRow {
+  agentKey: string;
+  displayName: string;
+  userLinked: boolean;
+  forecast: AgentForecast | null;
+}
+
+function extractUsers(payload: unknown): AdminUser[] {
+  if (Array.isArray(payload)) return payload as AdminUser[];
+  if (payload && typeof payload === "object") {
+    const obj = payload as Record<string, unknown>;
+    if (Array.isArray(obj.users)) return obj.users as AdminUser[];
+  }
+  return [];
+}
+
+function extractForecastRows(payload: unknown): AdminForecastRow[] {
+  if (payload && typeof payload === "object") {
+    const obj = payload as Record<string, unknown>;
+    if (Array.isArray(obj.rows)) return obj.rows as AdminForecastRow[];
+  }
+  return [];
+}
+
+/* ------------------------- user management row ------------------------- */
+
+function UserRow({
+  user,
+  onSaved,
+}: {
+  user: AdminUser;
+  onSaved: (updated: AdminUser) => void;
+}) {
+  const [agentKey, setAgentKey] = useState(user.agentKey ?? "");
+  const [rexUserId, setRexUserId] = useState(user.rexUserId ?? "");
+  const [metaCampaignId, setMetaCampaignId] = useState(user.metaCampaignId ?? "");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const [linking, setLinking] = useState(false);
+
+  // One click: probe REX for this agent's email, and assign the id we find.
+  // The fallback for anyone signup couldn't auto-link (e.g. added to REX later).
+  async function findInRex() {
+    setLinking(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/business/rex-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      const data = (await res.json()) as {
+        linked?: boolean;
+        rexUserId?: string;
+        matchedBy?: "email" | "name";
+        matchedEmail?: string;
+        reason?: string;
+        user?: AdminUser;
+        error?: string;
+      };
+      if (data.linked && data.rexUserId) {
+        setRexUserId(data.rexUserId);
+        setMessage(
+          data.matchedBy === "name"
+            ? `Linked to REX ${data.rexUserId} by name — REX has them as ${data.matchedEmail}. Worth a check.`
+            : `Linked to REX user ${data.rexUserId}.`
+        );
+        if (data.user) onSaved(data.user);
+      } else {
+        setMessage(data.reason ?? data.error ?? "Couldn't find them in REX.");
+      }
+    } catch {
+      setMessage("Couldn't reach REX just now.");
+    } finally {
+      setLinking(false);
+    }
+  }
+
+  const dirty =
+    agentKey !== (user.agentKey ?? "") ||
+    rexUserId !== (user.rexUserId ?? "") ||
+    metaCampaignId !== (user.metaCampaignId ?? "");
+
+  async function save() {
+    setSaving(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/business/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          agentKey: agentKey || null,
+          rexUserId: rexUserId || null,
+          metaCampaignId: metaCampaignId || null,
+        }),
+      });
+      const data = (await res.json()) as { user?: AdminUser; error?: string };
+      if (!res.ok || !data.user) {
+        setMessage(data.error ?? "Couldn't save changes.");
+      } else {
+        setMessage("Saved.");
+        onSaved(data.user);
+      }
+    } catch {
+      setMessage("Couldn't save changes.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function resetPassword() {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        `Reset ${user.name}'s password? Their current password stops working immediately.`
+      )
+    ) {
+      return;
+    }
+    setResetting(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/business/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      const data = (await res.json()) as { tempPassword?: string; error?: string };
+      if (!res.ok || !data.tempPassword) {
+        setMessage(data.error ?? "Couldn't reset the password.");
+      } else {
+        setTempPassword(data.tempPassword);
+      }
+    } catch {
+      setMessage("Couldn't reset the password.");
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  const inputClass =
+    "w-full rounded-lg border border-line bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-accent";
+
+  return (
+    <div className="card p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <span className="text-sm font-semibold">{user.name}</span>
+          <span className="ml-2 text-xs text-muted">{user.email}</span>
+          {user.isAdmin ? (
+            <span className="ml-2 inline-flex rounded-full border border-red-200 bg-accent-soft px-2 py-0.5 text-[10px] font-semibold text-accent">
+              ADMIN
+            </span>
+          ) : null}
+        </div>
+        <span className="text-[11px] text-muted">
+          Joined {formatDate(user.createdAt)}
+        </span>
+      </div>
+
+      <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+            Agent (roster link)
+          </span>
+          <select
+            className={inputClass}
+            value={agentKey}
+            onChange={(e) => setAgentKey(e.target.value)}
+          >
+            <option value="">— Not linked —</option>
+            {ROSTER.map((r) => (
+              <option key={r.agentKey} value={r.agentKey}>
+                {r.displayName}
+                {r.active ? "" : " (inactive)"}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+            REX user id
+          </span>
+          <div className="flex items-center gap-2">
+            <input
+              className={inputClass}
+              value={rexUserId}
+              onChange={(e) => setRexUserId(e.target.value)}
+              placeholder="AccountUsers id"
+            />
+            <button
+              type="button"
+              onClick={() => void findInRex()}
+              disabled={linking}
+              title={`Search REX for ${user.email} and assign their id`}
+              className="btn-press shrink-0 rounded-lg border border-line bg-card px-2.5 py-2 text-[12px] font-medium text-muted transition hover:text-ink disabled:opacity-50"
+            >
+              {linking ? "Finding…" : "Find in REX"}
+            </button>
+          </div>
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-muted">
+            Meta campaign id(s)
+          </span>
+          <input
+            className={inputClass}
+            value={metaCampaignId}
+            onChange={(e) => setMetaCampaignId(e.target.value)}
+            placeholder="Campaign id — comma-separate for several"
+          />
+        </label>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={!dirty || saving}
+          className="btn-press rounded-lg bg-accent px-3.5 py-1.5 text-[13px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button
+          type="button"
+          onClick={() => void resetPassword()}
+          disabled={resetting}
+          className="btn-press rounded-lg border border-line bg-card px-3.5 py-1.5 text-[13px] font-medium disabled:opacity-40"
+        >
+          {resetting ? "Resetting…" : "Reset password"}
+        </button>
+        {message ? <span className="text-xs text-muted">{message}</span> : null}
+      </div>
+
+      {tempPassword ? (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
+          Temporary password:{" "}
+          <code className="tnum font-semibold">{tempPassword}</code> — shown
+          once, pass it to {user.name} and ask them to change it in their
+          profile.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* --------------------------------- tab --------------------------------- */
+
+interface AgentLive {
+  name: string;
+  agentKey: string | null;
+  marketAppraisals: number | null;
+  listings: number | null;
+  pipeline: number | null;
+  managed: number | null;
+  rentRoll: number | null;
+}
+
+interface LivePayload {
+  month: string;
+  linkedCount: number;
+  totalAgents: number;
+  totals: { marketAppraisals: number; listings: number; pipeline: number; managed: number; rentRoll: number };
+  /** Per agent from REX, for the selected month. Fetched all along and never
+   *  read — the table below was built entirely from the July seed. */
+  perAgent?: AgentLive[];
+}
+
+/** Per agent from PayProp for the selected month, attributed by property. */
+/**
+ * Performance bands, on the month's GCI.
+ *
+ * THE THRESHOLDS ARE PLACEHOLDERS AND ARE MEANT TO BE ARGUED WITH. James asked
+ * for the bands now and said he would set the real figures later, so they are
+ * three constants in one place rather than logic spread through a component —
+ * changing the business's definition of a high performer should be a one-line
+ * edit, not a hunt.
+ *
+ * Where they came from, so the first argument starts somewhere real: combined
+ * GCI runs about £39,600 a month across roughly 30 partners, so the average
+ * partner earns about £1,320. £2,000 is comfortably above that, £750 is
+ * comfortably below, and the middle band is deliberately the widest — most
+ * people are ordinary, and a scheme that calls half the office a problem gets
+ * ignored.
+ *
+ * Somebody with NO figures is not "needs development". They are unmatched, or
+ * new, or on holiday, and calling that underperformance is how a report loses
+ * its audience. They get their own band.
+ */
+const BANDS = [
+  { id: "high", label: "High performers", min: 2000, tone: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  { id: "middle", label: "Middle performers", min: 750, tone: "bg-amber-50 text-amber-700 border-amber-200" },
+  { id: "develop", label: "Needs development", min: 0, tone: "bg-rose-50 text-rose-700 border-rose-200" },
+  { id: "none", label: "No figures this month", min: -1, tone: "bg-slate-50 text-slate-600 border-slate-200" },
+] as const;
+
+type BandId = (typeof BANDS)[number]["id"];
+
+function bandFor(gci: number | null): BandId {
+  if (gci == null) return "none";
+  if (gci >= 2000) return "high";
+  if (gci >= 750) return "middle";
+  return "develop";
+}
+
+interface AgentMoney {
+  key: string;
+  name: string;
+  gciGross: number;
+  gciNet: number;
+  rent: number;
+  properties: number;
+  tenancies: number;
+  payments: number;
+}
+
+export default function Agents({ month, seed }: { month: string; seed: SeedData }) {
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [forecastRows, setForecastRows] = useState<AdminForecastRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [live, setLive] = useState<LivePayload | null>(null);
+  const [agentMoney, setAgentMoney] = useState<AgentMoney[]>([]);
+  const [liveLoading, setLiveLoading] = useState(true);
+  // Each partner's managed book and commission, live from PayProp.
+  const [book, setBook] = useState<{
+    byAgent: Record<string, { names: string[]; properties: number; rentRoll: number; activeTenancies: number }>;
+  } | null>(null);
+  const [earnings, setEarnings] = useState<Array<{ name: string; amount: number; payments: number }> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let tries = 0;
+    const ask = () => {
+      fetch(`/api/business/payprop-live?month=${encodeURIComponent(month)}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d: {
+          portfolio?: { byAgent: Record<string, { names: string[]; properties: number; rentRoll: number; activeTenancies: number }> } | null;
+          income?: { byPartner?: Array<{ name: string; amount: number; payments: number }> } | null;
+          byAgent?: AgentMoney[];
+        }) => {
+          if (cancelled) return;
+          if (d.portfolio) setBook(d.portfolio);
+          if (d.income?.byPartner) setEarnings(d.income.byPartner);
+          // Property-attributed money for the selected month. byPartner above
+          // is beneficiary-attributed and is £0 for every Scotland agent,
+          // because Scotland's fees go straight to the agency — so this is the
+          // figure the table actually uses.
+          if (d.byAgent?.length) setAgentMoney(d.byAgent);
+          if ((!d.portfolio || !d.income) && tries++ < 40) setTimeout(ask, 5000);
+        })
+        .catch(() => {});
+    };
+    ask();
+    return () => {
+      cancelled = true;
+    };
+  }, [month]);
+
+  // Live REX totals across linked agents — separate from the fast seed render
+  // because it fans out several REX calls (cached server-side for 3 min).
+  useEffect(() => {
+    let cancelled = false;
+    setLiveLoading(true);
+    fetch(`/api/business/live-funnel?month=${encodeURIComponent(month)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled) setLive(d);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLiveLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [month]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [uRes, fRes] = await Promise.all([
+        fetch("/api/business/users", { cache: "no-store" }),
+        fetch(`/api/business/forecasts?month=${encodeURIComponent(month)}`, { cache: "no-store" }),
+      ]);
+      if (uRes.ok) setUsers(extractUsers(await uRes.json()));
+      else setError("Couldn't load portal accounts.");
+      if (fRes.ok) setForecastRows(extractForecastRows(await fRes.json()));
+    } catch {
+      setError("Couldn't load portal accounts.");
+    } finally {
+      setLoading(false);
+    }
+  }, [month]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const usersByAgentKey = useMemo(() => {
+    const map = new Map<string, AdminUser>();
+    for (const u of users) if (u.agentKey) map.set(u.agentKey, u);
+    return map;
+  }, [users]);
+
+  // agentKey → that agent's self-set forecast for the month (where one exists).
+  const forecastByAgentKey = useMemo(() => {
+    const map = new Map<string, AgentForecast>();
+    for (const r of forecastRows) {
+      if (r.forecast) map.set(r.agentKey, r.forecast);
+    }
+    return map;
+  }, [forecastRows]);
+
+  /** Portal account (if any) for a verbatim KPI-table agent name. */
+  function linkedUserForName(name: string): AdminUser | null {
+    for (const key of agentKeysForName(name)) {
+      const user = usersByAgentKey.get(key);
+      if (user) return user;
+    }
+    return null;
+  }
+
+  /** Forecast (if any) for a verbatim KPI-table agent name. */
+  function forecastForName(name: string): AgentForecast | null {
+    for (const key of agentKeysForName(name)) {
+      const f = forecastByAgentKey.get(key);
+      if (f) return f;
+    }
+    return null;
+  }
+
+  /*
+   * THE PER-AGENT TABLE, built from live sources for the SELECTED month.
+   *
+   * It used to be built entirely from seed.agentKpisJulyMtd — one captured
+   * month, one fixed list of people. Anyone not in that capture simply did not
+   * exist on this page, which is why "pull each individual person's figures,
+   * even if they're not starting up" wasn't possible.
+   *
+   * Now the row set is the UNION of everyone the live sources know about, so a
+   * partner appears the moment they transact. Two sources, joined on the
+   * normalised name:
+   *   REX      (live.perAgent)  — market appraisals, listings, pipeline
+   *   PayProp  (agentMoney)     — GCI, rent, properties, tenancies
+   * The seed fills only what neither can answer (viewings, applications), and
+   * is badged so it can't be mistaken for the selected month.
+   */
+  const norm = (n: string) => n.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const rexByName = new Map((live?.perAgent ?? []).map((a) => [norm(a.name), a]));
+  const moneyByName = new Map(agentMoney.map((a) => [norm(a.name), a]));
+  const seedByName = new Map(seed.agentKpisJulyMtd.rows.map((r) => [norm(r.agent), r]));
+
+  // Everyone any source knows, not just whoever was in the July capture.
+  const everyName = new Map<string, string>();
+  for (const a of agentMoney) everyName.set(norm(a.name), a.name);
+  for (const a of live?.perAgent ?? []) everyName.set(norm(a.name), a.name);
+  for (const r of seed.agentKpisJulyMtd.rows) if (!everyName.has(norm(r.agent))) everyName.set(norm(r.agent), r.agent);
+
+  const isSeedMonth = month === "2026-07";
+  const liveRows = [...everyName.entries()].map(([key, displayName]) => {
+    const rex = rexByName.get(key);
+    const cash = moneyByName.get(key);
+    const sd = seedByName.get(key);
+    const linked = linkedUserForName(displayName);
+    const forecast = forecastForName(displayName);
+    return {
+      tier: sd?.tier ?? "—",
+      agent: displayName,
+      portal: linked
+        ? forecast?.gciTarget != null
+          ? `Linked · forecast ${formatGBP(forecast.gciTarget)}`
+          : "Linked"
+        : "No portal account",
+      isLinked: !!linked,
+      // Money and REX counts are for the SELECTED month.
+      gci: cash ? Math.round(cash.gciNet) : null,
+      rent: cash ? Math.round(cash.rent) : null,
+      props: cash?.properties ?? null,
+      tens: cash?.tenancies ?? null,
+      ma: rex?.marketAppraisals ?? null,
+      li: rex?.listings ?? null,
+      pn: rex?.pipeline ?? null,
+      // No live per-agent source exists for these two. Shown only for the month
+      // the capture describes, rather than under every heading.
+      vw: isSeedMonth ? (sd?.vw ?? null) : null,
+      ap: isSeedMonth ? (sd?.ap ?? null) : null,
+      mi: isSeedMonth ? (sd?.mi ?? null) : null,
+    };
+  });
+  // Biggest earner first; unmatched people fall to the bottom rather than
+  // being hidden, because "who has no figures" is itself worth seeing.
+  liveRows.sort((a, b) => (b.gci ?? -1) - (a.gci ?? -1));
+
+  const banded = liveRows.map((r) => ({ ...r, band: bandFor(r.gci) }));
+  const bandCounts = BANDS.map((b) => ({
+    ...b,
+    n: banded.filter((r) => r.band === b.id).length,
+    gci: banded.filter((r) => r.band === b.id).reduce((t, r) => t + (r.gci ?? 0), 0),
+  }));
+
+  // TOTAL row summed from the very rows above it, so the table proves its own
+  // arithmetic — the reconciliation check this page exists for.
+  const sum = (k: "gci" | "rent" | "props" | "tens" | "ma" | "li" | "pn") =>
+    liveRows.reduce((t, r) => t + ((r[k] as number | null) ?? 0), 0);
+  const totalRow = {
+    tier: "TOTAL",
+    agent: "TOTAL",
+    portal: "",
+    isLinked: false,
+    gci: sum("gci"),
+    rent: sum("rent"),
+    props: sum("props"),
+    tens: sum("tens"),
+    ma: sum("ma"),
+    li: sum("li"),
+    pn: sum("pn"),
+    vw: null,
+    ap: null,
+    mi: null,
+  };
+  const kpiRowsLive = [...banded, { ...totalRow, band: "none" as BandId }];
+
+  const netIncomeRows = [
+    ...seed.partnerNetIncome.rows,
+    seed.partnerNetIncome.eAndWTotal,
+  ];
+
+  const unlinkedRoster = ROSTER.filter(
+    (r) => r.active && !usersByAgentKey.has(r.agentKey)
+  );
+
+  const num = (v: unknown) => formatNum(v as number | null);
+
+  const liveCards = live
+    ? [
+        { label: "Market appraisals", value: formatNum(live.totals.marketAppraisals), sub: monthLabel(month) },
+        { label: "On-market listings", value: formatNum(live.totals.listings), sub: "Currently listed" },
+        { label: "Pipeline", value: formatNum(live.totals.pipeline), sub: "Let agreed" },
+        { label: "Managed properties", value: formatNum(live.totals.managed), sub: "Let & managed" },
+        { label: "Rent roll / month", value: formatGBP(live.totals.rentRoll), sub: "Under management" },
+      ]
+    : [];
+
+  return (
+    <div>
+      {/* ----------------------- live REX totals ----------------------- */}
+      {/* ---- live from PayProp: each partner's book and commission ---- */}
+      {book ? (
+        <>
+          <SectionTitle>Live from PayProp</SectionTitle>
+          <div className="card mb-6 p-5">
+            <p className="text-[12.5px] text-muted">
+              Managed properties and rent under management come from PayProp&rsquo;s
+              own responsible-agent field; commission is what each partner was
+              actually paid this month.
+            </p>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-[12.5px]">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+                    <th className="pb-2 font-semibold">Partner</th>
+                    <th className="pb-2 text-right font-semibold">Properties</th>
+                    <th className="pb-2 text-right font-semibold">Tenancies</th>
+                    <th className="pb-2 text-right font-semibold">Rent / month</th>
+                    <th className="pb-2 text-right font-semibold">Earned this month</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.values(book.byAgent)
+                    .sort((a, b) => b.properties - a.properties)
+                    .map((a) => {
+                      const label = a.names.join(" / ");
+                      // Commission is keyed by the beneficiary name PayProp
+                      // pays, which may differ from the property's agent name.
+                      const paid = (earnings ?? []).find((e) =>
+                        a.names.some(
+                          (n) => n.toLowerCase().trim() === e.name.toLowerCase().trim()
+                        )
+                      );
+                      return (
+                        <tr key={label} className="border-t border-line">
+                          <td className="py-2">{label}</td>
+                          <td className="py-2 text-right tnum">{a.properties}</td>
+                          <td className="py-2 text-right tnum">{a.activeTenancies}</td>
+                          <td className="py-2 text-right tnum">
+                            £{Math.round(a.rentRoll).toLocaleString("en-GB")}
+                          </td>
+                          <td className="py-2 text-right tnum">
+                            {paid
+                              ? `£${Math.round(paid.amount).toLocaleString("en-GB")}`
+                              : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      <SectionTitle>Live from REX</SectionTitle>
+      {liveLoading && !live ? (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="card h-24 animate-pulse" />
+          ))}
+        </div>
+      ) : live && live.linkedCount > 0 ? (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {liveCards.map((c) => (
+              <div key={c.label} className="card relative p-4">
+                <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full border border-green-200 bg-green-50 px-1.5 py-0.5 text-[9px] font-semibold text-green-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> LIVE
+                </span>
+                <div className="stat-label pr-12 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  {c.label}
+                </div>
+                <div className="stat-value mt-2 text-[24px]">{c.value}</div>
+                <div className="mt-1 text-[11px] text-muted">{c.sub}</div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-muted">
+            Live from REX across{" "}
+            <span className="font-semibold text-ink">
+              {live.linkedCount} of {live.totalAgents}
+            </span>{" "}
+            agents linked to a REX id. Link more accounts below to grow the live figures.
+          </p>
+        </>
+      ) : (
+        <p className="rounded-xl border border-line bg-card px-4 py-3 text-[13px] text-muted">
+          No agents are linked to a REX id yet. Set an agent&rsquo;s REX id in the accounts below and
+          their live appraisals, listings, pipeline and portfolio will roll up here.
+        </p>
+      )}
+
+      {/* ----------------------- per-agent KPI table ----------------------- */}
+      <SectionTitle source={seed.agentKpisJulyMtd.source}>
+        Per-Agent KPIs — {monthLabel(month)}
+      </SectionTitle>
+      <p className="mb-2 text-xs text-muted">
+        Click an agent&rsquo;s row to open their drill-down (forecast, ads,
+        portfolio, compliance). GCI, rent, properties and tenancies are{" "}
+        {monthLabel(month)} from PayProp, attributed by property — so the TOTAL row
+        is the same figure the Overview shows, split. MA, listings and pipeline are
+        live from Rex.{" "}
+        {month === "2026-07"
+          ? "Viewings and applications come from the July capture."
+          : "Viewings and applications have no live per-partner source, so they are blank for any month but July 2026."}{" "}
+        Properties and tenancies count what actually transacted that month, which
+        is lower than a partner&rsquo;s book where a property took no payment.
+        Attribution uses today&rsquo;s property map, so a property that changed
+        hands counts to whoever holds it now.
+      </p>
+      {error ? (
+        <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs text-red-700">
+          {error}
+        </p>
+      ) : null}
+
+      {/* The shape of the month, before the names. Four numbers answer "how
+          many are carrying this" faster than thirty rows do. */}
+      <div className="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {bandCounts.map((b) => (
+          <div key={b.id} className={`rounded-xl border px-3 py-2.5 ${b.tone}`}>
+            <p className="text-lg font-semibold leading-none">{b.n}</p>
+            <p className="mt-1 text-[11px] leading-tight">{b.label}</p>
+            {b.id !== "none" && (
+              <p className="text-[11px] opacity-70">
+                {formatGBP(b.gci)}
+                {b.id === "high" ? " · ≥ £2,000" : b.id === "middle" ? " · £750–£2,000" : " · under £750"}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="mb-3 text-[11px] text-muted">
+        Bands are on this month&rsquo;s GCI and the thresholds are placeholders — set to
+        sit either side of the ~£1,320 average partner. Tell me the real figures and
+        they&rsquo;re a one-line change. Nobody with no figures is counted as
+        underperforming.
+      </p>
+
+      <DataTable
+        columns={[
+          {
+            key: "tier",
+            label: "Tier",
+            render: (row) => <TierChip tier={String(row.tier)} />,
+          },
+          { key: "agent", label: "Agent" },
+          {
+            key: "portal",
+            label: "Portal account",
+            render: (row) =>
+              row.portal ? (
+                <span
+                  className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                    row.isLinked
+                      ? "border-green-200 bg-green-50 text-green-700"
+                      : "border-gray-200 bg-gray-100 text-gray-500"
+                  }`}
+                >
+                  {String(row.portal)}
+                </span>
+              ) : (
+                ""
+              ),
+          },
+          { key: "gci", label: "GCI exc VAT", align: "right", render: (row) => money(row.gci as number | null) },
+          {
+            key: "band",
+            label: "Band",
+            render: (row) => {
+              if (row.agent === "TOTAL") return "";
+              const b = BANDS.find((x) => x.id === row.band);
+              if (!b) return "";
+              return (
+                <span className={`rounded-full border px-2 py-0.5 text-[11px] ${b.tone}`}>
+                  {b.label}
+                </span>
+              );
+            },
+          },
+          { key: "rent", label: "Rent pcm", align: "right", render: (row) => money(row.rent as number | null) },
+          { key: "props", label: "Props", align: "right", render: (row) => num(row.props) },
+          { key: "tens", label: "Tenancies", align: "right", render: (row) => num(row.tens) },
+          { key: "ma", label: "MA", align: "right", render: (row) => num(row.ma) },
+          { key: "li", label: "Li", align: "right", render: (row) => num(row.li) },
+          { key: "vw", label: "Vw", align: "right", render: (row) => num(row.vw) },
+          { key: "ap", label: "Ap", align: "right", render: (row) => num(row.ap) },
+          { key: "mi", label: "MI", align: "right", render: (row) => num(row.mi) },
+          { key: "pn", label: "Pn", align: "right", render: (row) => num(row.pn) },
+        ]}
+        rows={kpiRowsLive as unknown as Record<string, unknown>[]}
+        compact
+        onRowClick={(row) => {
+          const name = String(row.agent);
+          if (name !== "TOTAL") setSelectedAgent(name);
+        }}
+      />
+      <p className="mt-2 flex items-center gap-2 text-[11px] text-muted">
+        <SourceBadge source="snapshot" asOf="2026-07-11" />
+        MA = market appraisals · Li = listings · Vw = viewings · Ap =
+        applications · MI = move-ins · Pn = pipeline. Viewings total 28 here vs
+        46 on the KPI Overview funnel — different report cuts on the source
+        dashboard.
+      </p>
+
+      {/* ------------------------- agent drill-down ------------------------- */}
+      {selectedAgent ? (
+        <AgentDrilldown
+          name={selectedAgent}
+          month={month}
+          seed={seed}
+          live={liveRows.find((r) => norm(r.agent) === norm(selectedAgent)) ?? null}
+          user={linkedUserForName(selectedAgent)}
+          forecast={forecastForName(selectedAgent)}
+          onClose={() => setSelectedAgent(null)}
+        />
+      ) : null}
+
+      {/* --------------------- partner net income YTD --------------------- */}
+      <SectionTitle source={seed.partnerNetIncome.source}>
+        Partner Net Income — YTD 2026
+      </SectionTitle>
+      <DataTable
+        columns={[
+          {
+            key: "agent",
+            label: "Agent",
+            render: (row) => (
+              <span className={row.agent === "E&W Total" ? "font-semibold" : ""}>
+                {String(row.agent)}
+                {row.tag ? (
+                  <span
+                    className={`ml-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                      TAG_STYLES[String(row.tag)] ?? TAG_STYLES.NEW
+                    }`}
+                  >
+                    {String(row.tag)}
+                  </span>
+                ) : null}
+                {row.agent === "Sean Mc Mahon (Glasgow)" ? " †" : ""}
+              </span>
+            ),
+          },
+          { key: "jan", label: "Jan", align: "right", render: (row) => money(row.jan as number | null) },
+          { key: "feb", label: "Feb", align: "right", render: (row) => money(row.feb as number | null) },
+          { key: "mar", label: "Mar", align: "right", render: (row) => money(row.mar as number | null) },
+          { key: "apr", label: "Apr", align: "right", render: (row) => money(row.apr as number | null) },
+          { key: "may", label: "May", align: "right", render: (row) => money(row.may as number | null) },
+          { key: "jun", label: "Jun", align: "right", render: (row) => money(row.jun as number | null) },
+          {
+            key: "ytdTotal",
+            label: "YTD Total",
+            align: "right",
+            render: (row) => (
+              <span className="font-semibold">{money(row.ytdTotal as number)}</span>
+            ),
+          },
+        ]}
+        rows={netIncomeRows as unknown as Record<string, unknown>[]}
+        compact
+        onRowClick={(row) => {
+          const name = String(row.agent);
+          if (name !== "E&W Total" && name !== "TOTAL") setSelectedAgent(name);
+        }}
+      />
+      <p className="mt-2 text-[11px] text-muted">{seed.partnerNetIncome.glasgowNote}</p>
+
+      {/* ------------------------- user management ------------------------- */}
+      <SectionTitle>Portal accounts — link & manage</SectionTitle>
+      <p className="mb-3 text-xs text-muted">
+        Link each portal account to its roster agent so their dashboard picks
+        up the right seed stats, REX user and Meta campaign. Figures on this
+        page come from the dashboard snapshot until those links go live.
+      </p>
+
+      {loading ? (
+        <p className="text-sm text-muted">Loading portal accounts…</p>
+      ) : users.length === 0 ? (
+        <div className="card p-5 text-sm text-muted">
+          No portal accounts yet — agents create their own via Sign up on the
+          landing page.
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {users.map((u) => (
+            <UserRow
+              key={u.id}
+              user={u}
+              onSaved={(updated) =>
+                setUsers((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+              }
+            />
+          ))}
+        </div>
+      )}
+
+      {unlinkedRoster.length > 0 ? (
+        <div className="mt-4">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+            Roster agents with no linked portal account ({unlinkedRoster.length})
+          </h3>
+          <div className="flex flex-wrap gap-1.5">
+            {unlinkedRoster.map((r) => (
+              <span
+                key={r.agentKey}
+                className="inline-flex rounded-full border border-line bg-card px-2.5 py-1 text-[11px] text-muted"
+                title={`agentKey: ${r.agentKey} · ${r.region} · ${r.partnerType}`}
+              >
+                {r.displayName}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* ------------------------------ drill-down ------------------------------ */
+
+/** Live StatValue wrapper — carries the source so the badge is honest. */
+function liveStat(
+  value: number | null,
+  display: string | undefined,
+  source: "live-payprop" | "live-rex",
+  note: string
+): StatValue {
+  return { value, display, source, note, asOf: new Date().toISOString().slice(0, 10) };
+}
+
+/** Snapshot StatValue wrapper for seed figures shown in the drill-down. */
+function snapStat(
+  value: number | null,
+  display?: string,
+  note?: string
+): { value: number | null; display?: string; source: "snapshot"; note?: string; asOf: string } {
+  return { value, display, source: "snapshot", note, asOf: "2026-07-11" };
+}
+
+function AgentDrilldown({
+  name,
+  month,
+  seed,
+  live,
+  user,
+  forecast,
+  onClose,
+}: {
+  name: string;
+  month: string;
+  seed: SeedData;
+  /** This partner's row from the live table above — the SAME object, so the
+   *  drill-down cannot disagree with the row that opened it. */
+  live: {
+    gci: number | null; rent: number | null; props: number | null; tens: number | null;
+    ma: number | null; li: number | null; pn: number | null;
+    vw: number | null; ap: number | null; mi: number | null;
+  } | null;
+  user: (UserProfile & { adminNotes?: { at: string; text: string }[] }) | null;
+  forecast: AgentForecast | null;
+  onClose: () => void;
+}) {
+  const keys = agentKeysForName(name);
+  const matches = (rowName: string) =>
+    agentKeysForName(rowName).some((k) => keys.includes(k));
+
+  const roster = ROSTER.filter((r) => keys.includes(r.agentKey));
+  const kpi = seed.agentKpisJulyMtd.rows.find((r) => matches(r.agent)) ?? null;
+  const netIncome = seed.partnerNetIncome.rows.find((r) => matches(r.agent)) ?? null;
+  const portfolio = seed.portfolio.byPartner.find((r) => matches(r.agent)) ?? null;
+  const compliance = seed.compliance.byAgent.find((r) => matches(r.agent)) ?? null;
+  const moveIns = seed.moveInsJuly.rows.filter((r) => matches(r.agent));
+  const pipeline = [...seed.julyPipeline, ...seed.forwardPipeline].filter((r) =>
+    matches(r.agent)
+  );
+
+  return (
+    <section className="card mt-6 border-accent/30 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold">{name} — drill-down</h3>
+          <p className="mt-0.5 text-xs text-muted">
+            {roster.length > 0
+              ? roster
+                  .map((r) => `${r.displayName} · ${r.region} · ${r.partnerType}`)
+                  .join("  |  ")
+              : "Not matched to a roster agent."}
+            {user ? ` · Portal account: ${user.email}` : " · No portal account linked."}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="btn-press rounded-lg border border-line bg-card px-3 py-1.5 text-[13px] font-medium"
+        >
+          Close
+        </button>
+      </div>
+
+      {/* Forecast */}
+      <h4 className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wide text-muted">
+        Forecast — {monthLabel(month)} (self-set in the portal)
+      </h4>
+      {forecast ? (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <StatCard
+            label="GCI target"
+            stat={{
+              value: forecast.gciTarget,
+              display: formatGBP(forecast.gciTarget),
+              source: "manual",
+              note: "Agent-set forecast from the portal forecast store",
+            }}
+          />
+          <StatCard
+            label="Move-ins target"
+            stat={{ value: forecast.moveInsTarget, source: "manual" }}
+          />
+          <StatCard
+            label="MAs target"
+            stat={{ value: forecast.maTarget, source: "manual" }}
+          />
+          <div className="card p-4 text-xs text-muted">
+            {forecast.notes ? `“${forecast.notes}”` : "No notes."}
+            <div className="mt-1.5">Updated {formatDate(forecast.updatedAt)}</div>
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-muted">
+          No forecast set for {monthLabel(month)}
+          {user ? "" : " — no portal account is linked to this agent yet"}.
+        </p>
+      )}
+
+      {/* This partner's figures for the SELECTED month — the same row object
+          the table above rendered, so the two cannot disagree. Was a fixed July
+          seed block, which meant a drill-down showed July whatever month was
+          picked, and showed nothing at all for anyone outside that capture. */}
+      <h4 className="mb-2 mt-4 text-[11px] font-semibold uppercase tracking-wide text-muted">
+        KPIs — {monthLabel(month)}
+      </h4>
+      {live ? (
+        <>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
+            <StatCard
+              label="GCI exc VAT"
+              stat={liveStat(live.gci, live.gci != null ? formatGBP(live.gci) : undefined, "live-payprop",
+                "Fees charged on this partner's properties, net of VAT, in the selected month.")}
+            />
+            <StatCard
+              label="Rent pcm"
+              stat={liveStat(live.rent, live.rent != null ? formatGBP(live.rent) : undefined, "live-payprop",
+                "Rent passed through to landlords on this partner's properties in the selected month. Volume, not income.")}
+            />
+            <StatCard
+              label="Properties"
+              stat={liveStat(live.props, undefined, "live-payprop",
+                "Properties that actually transacted in the selected month — lower than the book where a property took no payment.")}
+            />
+            <StatCard
+              label="Tenancies"
+              stat={liveStat(live.tens, undefined, "live-payprop",
+                "Distinct tenants who paid in the selected month.")}
+            />
+            <StatCard label="MAs" stat={liveStat(live.ma, undefined, "live-rex", "Market appraisals recorded in Rex for the selected month.")} />
+            <StatCard label="Listings" stat={liveStat(live.li, undefined, "live-rex", "Rental listings instructed in the selected month.")} />
+            <StatCard label="Pipeline" stat={liveStat(live.pn, undefined, "live-rex", "Deals in progression right now — a current-state figure, not a month figure.")} />
+          </div>
+          {live.vw != null || live.ap != null || live.mi != null ? (
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <StatCard label="Viewings" stat={snapStat(live.vw)} />
+              <StatCard label="Applications" stat={snapStat(live.ap)} />
+              <StatCard label="Move-ins" stat={snapStat(live.mi)} />
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-muted">
+              Viewings, applications and move-ins have no live per-partner source — they
+              exist only in the July 2026 capture, so they aren&rsquo;t shown for{" "}
+              {monthLabel(month)}.
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="text-xs text-muted">
+          No figures for {monthLabel(month)} — this partner had no PayProp or Rex activity
+          that month.
+        </p>
+      )}
+
+      {/* Ads / income / portfolio / compliance */}
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <div>
+          <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+            Meta ads
+          </h4>
+          <div className="card p-4 text-xs">
+            {user?.metaCampaignId ? (
+              <>
+                <span className="inline-flex rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[10px] font-semibold text-green-700">
+                  Campaign linked
+                </span>
+                <span className="ml-2 tnum">{user.metaCampaignId}</span>
+                <p className="mt-1.5 text-muted">
+                  Live spend / leads / CPL render on the agent&rsquo;s own
+                  dashboard (Ads page) via the Meta Graph API.
+                </p>
+              </>
+            ) : (
+              <p className="text-muted">
+                No Meta campaign linked{user ? "" : " (no portal account)"} —
+                link one in the portal accounts panel below to light up their
+                live ads stats.
+              </p>
+            )}
+          </div>
+          <h4 className="mb-2 mt-3 text-[11px] font-semibold uppercase tracking-wide text-muted">
+            Net income & activity
+          </h4>
+          <div className="grid grid-cols-2 gap-3">
+            <StatCard
+              label="Net income YTD"
+              stat={snapStat(
+                netIncome ? netIncome.ytdTotal : null,
+                netIncome ? formatGBP(netIncome.ytdTotal) : undefined,
+                seed.partnerNetIncome.source
+              )}
+            />
+            <StatCard
+              label="July move-ins / pipeline"
+              stat={snapStat(moveIns.length, `${moveIns.length} / ${pipeline.length}`)}
+              sub={`${moveIns.length} completed · ${pipeline.length} in pipeline`}
+            />
+          </div>
+        </div>
+        <div>
+          <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+            Portfolio (PayProp snapshot)
+          </h4>
+          {portfolio ? (
+            <div className="grid grid-cols-2 gap-3">
+              <StatCard label="Managed" stat={snapStat(portfolio.managed)} />
+              <StatCard label="Let only" stat={snapStat(portfolio.letOnly)} />
+              <StatCard label="Total properties" stat={snapStat(portfolio.total)} />
+              <StatCard
+                label="Rent roll"
+                stat={snapStat(
+                  portfolio.rentRoll,
+                  portfolio.rentRoll != null ? formatGBP(portfolio.rentRoll) : undefined
+                )}
+              />
+            </div>
+          ) : (
+            <p className="text-xs text-muted">Not in the portfolio-by-partner table.</p>
+          )}
+          <h4 className="mb-2 mt-3 text-[11px] font-semibold uppercase tracking-wide text-muted">
+            Compliance (REX PM snapshot)
+          </h4>
+          {compliance ? (
+            <div className="grid grid-cols-3 gap-3">
+              <StatCard label="Items" stat={snapStat(compliance.total)} />
+              <StatCard
+                label="Overdue"
+                stat={snapStat(compliance.overdue)}
+                sub={formatPct(compliance.pctOverdue)}
+              />
+              <StatCard label="Upcoming" stat={snapStat(compliance.upcoming)} />
+            </div>
+          ) : (
+            <p className="text-xs text-muted">
+              No compliance items recorded against this agent.
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}

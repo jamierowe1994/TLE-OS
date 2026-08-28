@@ -1,0 +1,233 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ForecastChart from "@/components/business/charts/ForecastChart";
+import { formatGBP, formatNum, monthLabel } from "@/lib/business/format";
+
+export interface SavedForecast {
+  gciTarget: number | null;
+  portfolioTarget: number | null;
+}
+
+interface ForecastBuilderProps {
+  monthKeys: string[]; // ["2026-01" … "2026-12"]
+  monthLabels: string[]; // ["Jan" … "Dec"]
+  actualsNetIncome: (number | null)[]; // per month (Jan–Jun known)
+  currentMonthIndex: number; // e.g. 6 for July
+  savedForecasts: Record<string, SavedForecast>;
+  currentManaged: number; // current managed-property count
+  avgFeePerProperty: number; // £/property/month (estimated)
+  onSaved?: () => void;
+  /** Render without the card chrome — for when it lives inside another box. */
+  bare?: boolean;
+  /** Snapshot mode: no revenue/portfolio toggle, tighter chart + readouts. */
+  compact?: boolean;
+}
+
+type Mode = "revenue" | "portfolio";
+
+const round100 = (v: number) => Math.round(v / 100) * 100;
+
+export default function ForecastBuilder({
+  monthKeys,
+  monthLabels,
+  actualsNetIncome,
+  currentMonthIndex,
+  savedForecasts,
+  currentManaged,
+  avgFeePerProperty,
+  onSaved,
+  bare = false,
+  compact = false,
+}: ForecastBuilderProps) {
+  const [mode, setMode] = useState<Mode>("revenue");
+  const [saved, setSaved] = useState<Record<string, SavedForecast>>(savedForecasts);
+  const [flash, setFlash] = useState(false);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const editableFrom = currentMonthIndex;
+  const n = monthKeys.length;
+
+  useEffect(() => setSaved(savedForecasts), [savedForecasts]);
+
+  const canPortfolio = avgFeePerProperty > 0;
+
+  // The value shown for a month in the active mode (saved value, or carried
+  // forward from the previous month as a starting suggestion).
+  const draft = useMemo(() => {
+    const lastActual = (() => {
+      for (let i = actualsNetIncome.length - 1; i >= 0; i--) if (actualsNetIncome[i] != null) return actualsNetIncome[i] as number;
+      return null;
+    })();
+    const arr: (number | null)[] = new Array(n).fill(null);
+    let prev = mode === "revenue" ? (lastActual ?? avgFeePerProperty * currentManaged) : currentManaged;
+    for (let i = editableFrom; i < n; i++) {
+      const s = saved[monthKeys[i]];
+      const savedVal = mode === "revenue" ? s?.gciTarget : s?.portfolioTarget;
+      const val = savedVal != null ? savedVal : Math.round(prev);
+      arr[i] = val;
+      prev = val;
+    }
+    return arr;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, saved, n, editableFrom, currentManaged, avgFeePerProperty]);
+
+  const [live, setLive] = useState<(number | null)[]>(draft);
+  useEffect(() => setLive(draft), [draft]);
+
+  // Chart series for the active mode.
+  const actualsSeries = useMemo(() => {
+    if (mode === "revenue") return actualsNetIncome;
+    // Portfolio: anchor the line at the current managed count (last known month).
+    const a: (number | null)[] = new Array(n).fill(null);
+    if (editableFrom - 1 >= 0) a[editableFrom - 1] = currentManaged;
+    return a;
+  }, [mode, actualsNetIncome, n, editableFrom, currentManaged]);
+
+  const fmt = mode === "revenue"
+    ? (v: number) => (v >= 1000 ? `£${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)}k` : `£${Math.round(v)}`)
+    : (v: number) => `${Math.round(v)}`;
+
+  const flashSaved = useCallback(() => {
+    setFlash(true);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlash(false), 1400);
+  }, []);
+
+  async function commit(i: number, rawValue: number) {
+    // A month before editableFrom is closed and already carries an actual —
+    // writing a forecast over one destroys a partner's history. The chart only
+    // hands out handles from editableFrom, but this is the write path, so it
+    // checks for itself rather than trusting its caller.
+    if (i < editableFrom) return;
+    const monthKey = monthKeys[i];
+    let gciTarget: number;
+    let portfolioTarget: number;
+    if (mode === "revenue") {
+      gciTarget = round100(rawValue);
+      portfolioTarget = avgFeePerProperty > 0 ? Math.round(gciTarget / avgFeePerProperty) : 0;
+    } else {
+      portfolioTarget = Math.max(0, Math.round(rawValue));
+      gciTarget = Math.round(portfolioTarget * avgFeePerProperty);
+    }
+    setSaved((s) => ({ ...s, [monthKey]: { gciTarget, portfolioTarget } }));
+    try {
+      const res = await fetch("/api/my/forecast", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: monthKey, gciTarget, portfolioTarget }),
+      });
+      if (res.ok) {
+        flashSaved();
+        onSaved?.();
+      }
+    } catch {
+      /* keep the optimistic value */
+    }
+  }
+
+  // Readouts over the editable months.
+  const editable = live.slice(editableFrom).filter((v): v is number => v != null);
+  const totalGci = mode === "revenue"
+    ? editable.reduce((t, v) => t + round100(v), 0)
+    : editable.reduce((t, v) => t + Math.round(v) * avgFeePerProperty, 0);
+  const endPortfolio = mode === "portfolio" && live[n - 1] != null ? Math.round(live[n - 1] as number) : null;
+  const rangeLabel = `${monthLabels[editableFrom]}–${monthLabels[n - 1]}`;
+
+  const howItWorks =
+    mode === "revenue"
+      ? "The solid line is what you've earned. Drag each future month's dot to set your forecast — it saves as you go."
+      : `Drag each month to the number of managed properties you expect. £ is estimated at ${formatGBP(avgFeePerProperty)}/property/month.`;
+
+  return (
+    <div className={bare ? "" : "card card-lift p-5 sm:p-6"}>
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="text-[12px] font-semibold uppercase tracking-wide text-muted">
+          {rangeLabel} {monthKeys[0].slice(0, 4)}
+        </h2>
+        {/* How it works lives on hover, not on the page — the chart is legible
+            without it, and the instructions only matter the first time. */}
+        <span
+          tabIndex={0}
+          role="note"
+          aria-label={howItWorks}
+          title={howItWorks}
+          className="flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-line text-[9px] font-semibold text-muted transition hover:border-ink hover:text-ink"
+        >
+          i
+        </span>
+        {flash ? (
+          <span className="fade-up rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] font-semibold text-green-700">
+            Saved ✓
+          </span>
+        ) : null}
+        {/* revenue / portfolio toggle — dropped in snapshot mode */}
+        <div className={`ml-auto ${compact ? "hidden" : "flex"} overflow-hidden rounded-lg border border-line`}>
+          <button
+            type="button"
+            onClick={() => setMode("revenue")}
+            className={`px-3 py-1.5 text-[12px] font-medium ${mode === "revenue" ? "bg-accent text-white" : "bg-card text-muted hover:text-ink"}`}
+          >
+            By revenue
+          </button>
+          <button
+            type="button"
+            onClick={() => canPortfolio && setMode("portfolio")}
+            disabled={!canPortfolio}
+            title={canPortfolio ? "" : "Needs your portfolio + fee data"}
+            className={`px-3 py-1.5 text-[12px] font-medium ${mode === "portfolio" ? "bg-accent text-white" : "bg-card text-muted hover:text-ink disabled:opacity-40"}`}
+          >
+            By portfolio size
+          </button>
+        </div>
+      </div>
+
+      <div className={compact ? "mt-3" : "mt-4"}>
+        <ForecastChart
+          height={compact ? 200 : 260}
+          labels={monthLabels}
+          actuals={actualsSeries}
+          forecast={live}
+          editableFrom={editableFrom}
+          onChange={(i, v) => setLive((cur) => cur.map((x, idx) => (idx === i ? v : x)))}
+          onCommit={(i, v) => void commit(i, v)}
+          format={fmt}
+        />
+      </div>
+
+      {/* readouts — smaller in snapshot mode */}
+      <div className={`mt-4 grid border-t border-line pt-4 sm:grid-cols-3 ${compact ? "gap-3" : "gap-4"}`}>
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+            {mode === "revenue" ? "Forecast total" : "Est. fees total"} · {rangeLabel}
+          </div>
+          <div className={`stat-value mt-1.5 ${compact ? "text-[17px]" : "text-[22px]"}`}>{formatGBP(totalGci)}</div>
+          <div className="mt-0.5 text-xs text-muted">Sum of your forecast months</div>
+        </div>
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+            {mode === "revenue" ? "Avg / month" : "Portfolio by year-end"}
+          </div>
+          <div className={`stat-value mt-1.5 ${compact ? "text-[17px]" : "text-[22px]"}`}>
+            {mode === "revenue"
+              ? editable.length
+                ? formatGBP(Math.round(totalGci / editable.length))
+                : "—"
+              : endPortfolio != null
+                ? formatNum(endPortfolio)
+                : "—"}
+          </div>
+          <div className="mt-0.5 text-xs text-muted">
+            {mode === "revenue" ? `Across ${editable.length} months` : `From ${formatNum(currentManaged)} now`}
+          </div>
+        </div>
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">This month</div>
+          <div className={`stat-value mt-1.5 ${compact ? "text-[17px]" : "text-[22px]"}`}>
+            {live[currentMonthIndex] != null ? fmt(live[currentMonthIndex] as number) : "—"}
+          </div>
+          <div className="mt-0.5 text-xs text-muted">{monthLabel(monthKeys[currentMonthIndex])}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
