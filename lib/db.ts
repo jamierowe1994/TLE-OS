@@ -182,6 +182,42 @@ CREATE TABLE IF NOT EXISTS os_bugs (
 );
 CREATE INDEX IF NOT EXISTS os_bugs_state ON os_bugs (state, created_at DESC);
 
+-- CUSTOM ATTRIBUTES — fields a person invents for themselves.
+--
+-- Two tables, because a definition and a value are different lifetimes. Rename
+-- a field and every value it holds should follow; delete a lead and its values
+-- go with it while the definition stays.
+--
+-- Deliberately PER PERSON (owner_id). James: "they will stay personal to that
+-- account." One agent tracking "Boiler serviced?" must not put that column on
+-- everybody else's leads — that is how a CRM ends up with forty fields nobody
+-- filled in.
+CREATE TABLE IF NOT EXISTS os_attr_defs (
+  id             TEXT PRIMARY KEY,
+  owner_id       TEXT NOT NULL,
+  -- leads | listings | viewings | market_appraisals
+  entity         TEXT NOT NULL,
+  label          TEXT NOT NULL,
+  -- text | yesno | select
+  kind           TEXT NOT NULL DEFAULT 'text',
+  -- For 'select' only. JSON array of strings.
+  options        JSONB,
+  position       INTEGER NOT NULL DEFAULT 0,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_attr_defs_owner ON os_attr_defs (owner_id, entity, position);
+
+-- The values. record_id is whatever that entity is keyed on — a REX id, a
+-- sample id — kept as TEXT so it never has to care.
+CREATE TABLE IF NOT EXISTS os_attr_values (
+  def_id         TEXT NOT NULL,
+  record_id      TEXT NOT NULL,
+  value          TEXT NOT NULL DEFAULT '',
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (def_id, record_id)
+);
+CREATE INDEX IF NOT EXISTS os_attr_values_def ON os_attr_values (def_id, value);
+
 -- Anything that belongs to one person and should follow them between
 -- machines: dashboard layout, theme, profile fields. One row per person per
 -- key, value is whatever that feature stores.

@@ -123,6 +123,15 @@ export default function ProfilePage() {
   function save(next: Profile) {
     setProfile(next);
     storeProfile(next);
+    /* Name and photo go to the DATABASE as well as to this browser. The
+       sidebar, decks and emails all read os_users — a headshot saved only
+       locally is invisible everywhere but this page, and gone on a second
+       machine. Fire and forget: a failed sync must not block the form. */
+    void fetch("/api/profile", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: next.name, photo: next.photo ?? null }),
+    }).catch(() => {});
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1600);
   }
