@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import MaterialInfoPanel from "@/components/MaterialInfoPanel";
+import MarketMap from "@/components/MarketMap";
 import { Pill } from "@/components/Wire";
 import {
   BUILD_STEPS,
@@ -299,6 +300,21 @@ export default function PresentationBuilder({
                     ? `Within ${filters.radius} miles of ${postcode} — a box, because Homesearch has no radius; the width is narrowed by latitude so it stays circular-ish.`
                     : `Sector ${d.sector} only. Drag the slider to reach further out.`}
                 </p>
+              </div>
+
+              {/* The map sits ABOVE the grid, not beside it. Side by side at
+                  this width gives you a cramped map and two-across cards; the
+                  agent looks at the map to understand the area, then reads the
+                  cards to choose. That is a sequence, so it is stacked. */}
+              <div className="mb-4">
+                <MarketMap
+                  listings={nearby}
+                  centre={d.subjectPoint}
+                  selected={pickedNearby}
+                  onSelect={(k) =>
+                    setPickedNearby((c) => (c.includes(k) ? c.filter((x) => x !== k) : [...c, k]))
+                  }
+                />
               </div>
 
               <p className="text-[12.5px] leading-relaxed text-muted">

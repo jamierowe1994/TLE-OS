@@ -197,6 +197,7 @@ interface HsListing {
   street?: string; postcode?: string; type?: string; beds?: number;
   agent?: string; price?: number; image?: string; listed_on?: string;
   full_address?: string; reduced_at?: string;
+  lat?: number; lon?: number;
 }
 
 /**
@@ -328,6 +329,8 @@ async function onMarketNearby(
         daysListed: listed ? Math.max(0, Math.round((today - listed.getTime()) / 86400000)) : null,
         agent: r.agent ?? null,
         reducedAt: r.reduced_at ?? null,
+        lat: typeof r.lat === "number" ? r.lat : null,
+        lon: typeof r.lon === "number" ? r.lon : null,
       };
     });
 }
@@ -483,6 +486,10 @@ export interface MarketListing {
   daysListed: number | null;
   agent: string | null;
   reducedAt: string | null;
+  /** Every row carries these — measured, not hoped for. The map needs them and
+   *  a listing without them is simply not plotted rather than dropped. */
+  lat: number | null;
+  lon: number | null;
 }
 
 export interface MaResearch {
@@ -521,6 +528,8 @@ export interface MaResearch {
   marketFilters: MarketFilters & { appliedRadius: boolean };
   /** What WE have let nearby, and how fast — see recentlyLet. */
   recentlyLet: RecentLet[];
+  /** The appraisal property itself, for the map's centre pin. From matinfo. */
+  subjectPoint: { lat: number; lon: number } | null;
   comparables: Comparable[];
   /** Our own book's picture, which is the honest sample size. */
   guide: {
@@ -720,6 +729,10 @@ export async function getResearch(
     market,
     onMarketNearby: nearby,
     recentlyLet: await recentlyLet(postcode),
+    subjectPoint:
+      material?.lat != null && material?.lon != null
+        ? { lat: material.lat, lon: material.lon }
+        : await geocode(postcode),
     marketFilters: {
       ...filters,
       appliedRadius: Boolean(filters.radiusMiles && filters.radiusMiles > 0 && (await geocode(postcode))),
