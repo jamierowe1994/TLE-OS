@@ -379,7 +379,7 @@ export default function PresentationBuilder({
             </div>
           )}
 
-          {d && (here === "available" || here === "let") && (
+          {d && here === "available" && (
             <div className="space-y-3">
               <p className="text-[12.5px] leading-relaxed text-muted">
                 {here === "available"
@@ -425,6 +425,40 @@ export default function PresentationBuilder({
                 recommendation, and recommending one from the other side of the city is how
                 you end up defending a property you have never seen.
               </p>
+            </div>
+          )}
+
+          {d && here === "let" && (
+            <div className="mb-5">
+              <p className="text-[12.5px] leading-relaxed text-muted">
+                What <span className="font-semibold">we</span> have let in {d.postcode.split(" ")[0]},
+                most recent first, and how long each took. This is ours rather than the whole
+                market&apos;s — and &ldquo;let in nine days&rdquo; is the most persuasive number an
+                agent has.
+              </p>
+              {d.recentlyLet.length === 0 ? (
+                <p className="mt-3 rounded-xl border border-dashed border-line p-4 text-[12.5px] leading-relaxed text-muted">
+                  Nothing let in this district yet. That is our book being thin here rather than
+                  a fault — better said plainly than papered over with something from further away.
+                </p>
+              ) : (
+                <ul className="mt-3 space-y-1">
+                  {d.recentlyLet.map((l, i) => (
+                    <li key={`${l.address}-${i}`} className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line/40 py-2 text-[12.5px]">
+                      <span className="min-w-0">
+                        {l.address}
+                        <span className="ml-2 text-[11px] text-muted">
+                          {[l.beds ? `${l.beds} bed` : null, l.postcode].filter(Boolean).join(" \u00b7 ")}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-muted">
+                        {l.rent ? <span className="figures text-ink">{money(l.rent)}</span> : "\u2014"}
+                        {l.daysToLet != null ? ` \u00b7 let in ${l.daysToLet}d` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 

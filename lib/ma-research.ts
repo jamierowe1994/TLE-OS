@@ -332,6 +332,117 @@ async function onMarketNearby(
     });
 }
 
+/**
+ * WHAT WE HAVE ACTUALLY LET NEARBY.
+ *
+ * ── Why this step was empty ───────────────────────────────────────────────
+ *
+ * "Recently let" showed nothing, and the reason was structural rather than a
+ * thin book: `fetchListingBook` only ever asks REX for
+ * `system_listing_state: "current"`. A property we have LET is not current —
+ * REX moves it to **"leased"** — so a let property was never in the book to be
+ * filtered. The `letAgreed` flag on a current listing means something narrower:
+ * agreed but not yet completed.
+ *
+ * Measured 28 Aug: 279 current rentals, and **445 leased** we had never looked
+ * at. The most persuasive evidence an agent has — "we let this one in nine
+ * days" — was sitting one query away the whole time.
+ *
+ * ── Why it is its own call ────────────────────────────────────────────────
+ *
+ * It answers a different question from the on-market feed. That one is what a
+ * tenant is choosing between TODAY, from every agent. This is what WE let, and
+ * how fast. A landlord wants both and they are not interchangeable.
+ */
+export interface RecentLet {
+  address: string;
+  postcode: string;
+  beds: number | null;
+  rent: number | null;
+  /**
+   * NOT POPULATED, and deliberately.
+   *
+   * The obvious pair — authority_date_start to state_date — gave 608 and 573
+   * days on real NN5 lets. That is not time to let; it is the length of the
+   * instruction, and REX moves the state when the AUTHORITY ends rather than
+   * when a tenant moved in. Shown to a landlord as "let in 608 days" it would
+   * be both absurd and quotable.
+   *
+   * Left null until the right field is found. A blank an agent can ask about
+   * beats a confident number that is measuring something else.
+   */
+  daysToLet: number | null;
+  letOn: string | null;
+}
+
+interface RexLeased {
+  id?: string | number;
+  price_rent?: number;
+  attr_bedrooms?: number;
+  state_date?: string;
+  authority_date_start?: string;
+  property?: {
+    adr_street_number?: string; adr_street_name?: string;
+    adr_suburb_or_town?: string; adr_postcode?: string;
+  };
+}
+
+async function recentlyLet(postcode: string, limit = 12): Promise<RecentLet[]> {
+  const dist = districtOf(postcode);
+  if (!dist) return [];
+  try {
+    const { rexCall } = await import("@/lib/rex");
+    const res = await rexCall("Listings", "search", {
+      criteria: [
+        { name: "system_listing_state", value: "leased" },
+        { name: "listing_category_id", value: "residential_rental" },
+        /* Filtered AT REX, not after. Sorted by state_date the 120 most recent
+           lets are Bristol and Peterborough, so a Northampton appraisal saw
+           none of its own — the list looked empty when five existed.
+           `property.adr_postcode` is the searchable field; bare `adr_postcode`
+           is refused by name. */
+        { name: "property.adr_postcode", type: "like", value: `${dist}%` },
+      ],
+      limit: 40,
+      order_by: { state_date: "desc" },
+    });
+    if (!res.ok) return [];
+    const rows = ((res.result as { rows?: RexLeased[] } | undefined)?.rows ?? []) as RexLeased[];
+
+    const want = normPc(dist);
+    const out: RecentLet[] = [];
+    for (const r of rows) {
+      const pc = (r.property?.adr_postcode ?? "").toUpperCase();
+      /* Same postcode DISTRICT. Sector alone returns almost nothing outside a
+         dense patch, and the wider area produced Luton comparables for a
+         Liverpool flat — the bug this file has already been bitten by once. */
+      // REX has already narrowed to the district; this catches NN1 matching NN10.
+      if (!pc || !normPc(pc).startsWith(want)) continue;
+      const started = r.authority_date_start ? new Date(r.authority_date_start) : null;
+      const let_ = r.state_date ? new Date(r.state_date) : null;
+      const addr = [r.property?.adr_street_number, r.property?.adr_street_name]
+        .filter(Boolean).join(" ") || "Address not recorded";
+      /* REX carries a row per tenancy, so the same address appears once per
+         let. For "what have we let round here" that reads as two properties
+         when it is one. Most recent wins — they are already sorted. */
+      const full = r.property?.adr_suburb_or_town ? `${addr}, ${r.property.adr_suburb_or_town}` : addr;
+      if (out.some((x) => x.address === full && x.postcode === pc)) continue;
+      out.push({
+        address: full,
+        postcode: pc,
+        beds: typeof r.attr_bedrooms === "number" ? r.attr_bedrooms : null,
+        rent: typeof r.price_rent === "number" ? r.price_rent : null,
+        daysToLet: null,
+        letOn: r.state_date ?? null,
+      });
+      if (out.length >= limit) break;
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 /* ── the research packet ──────────────────────────────────────────────────── */
 
 export interface Comparable {
@@ -408,6 +519,8 @@ export interface MaResearch {
   /** What the on-market feed was actually asked for — so the page can say so
    *  rather than leaving an agent to guess why a property is in the list. */
   marketFilters: MarketFilters & { appliedRadius: boolean };
+  /** What WE have let nearby, and how fast — see recentlyLet. */
+  recentlyLet: RecentLet[];
   comparables: Comparable[];
   /** Our own book's picture, which is the honest sample size. */
   guide: {
@@ -606,6 +719,7 @@ export async function getResearch(
     areaAverage,
     market,
     onMarketNearby: nearby,
+    recentlyLet: await recentlyLet(postcode),
     marketFilters: {
       ...filters,
       appliedRadius: Boolean(filters.radiusMiles && filters.radiusMiles > 0 && (await geocode(postcode))),
