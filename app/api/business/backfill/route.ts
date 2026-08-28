@@ -183,9 +183,27 @@ export async function POST(req: NextRequest) {
     frozen,
     missed,
     remaining,
-    /* Where to resume. Named explicitly so a caller loops on the response
-       rather than recomputing the calendar and getting it subtly wrong. */
-    nextFrom: remaining > 0 ? (outstanding.find((m) => !frozen.includes(m)) ?? null) : null,
+    /* Where to resume — the first outstanding month AFTER the ones just
+       attempted, not the first outstanding month full stop.
+       
+       It used to return the earliest unfrozen month, which for a month that
+       cannot be answered is the month we just failed on. `nextFrom` never
+       advanced, so a caller looping on it retried the same unanswerable month
+       every three minutes forever and `done` never arrived. Measured: two
+       consecutive calls for 2022-01 returned byte-identical responses.
+       
+       Skipping past a miss is right because misses are reported separately and
+       the month stays outstanding — a later call with an explicit `from` can
+       retry it. What must not happen is one dead month blocking every live
+       month behind it. */
+    nextFrom:
+      remaining > 0
+        ? (outstanding.find((m) => m > batch[batch.length - 1] && !frozen.includes(m)) ?? null)
+        : null,
+    /* Named so a caller can tell "nothing left to do" from "nothing left I can
+       do" — with nextFrom null and remaining above zero, the rest is
+       unanswerable rather than pending. */
+    stuck: remaining > 0 && !outstanding.some((m) => m > batch[batch.length - 1]),
     funnelMonths,
     tookMs: Date.now() - started,
   });

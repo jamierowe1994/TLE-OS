@@ -94,7 +94,28 @@ const DEFINITION_VERSION = 3;
  * runs back to at least January 2022, so the commission chart is free to go
  * back further than the funnel can.
  */
-export const MONEY_FLOOR = "2022-01";
+/**
+ * The earliest month PayProp can actually answer for.
+ *
+ * Was "2022-01", which was aspiration rather than measurement. Measured
+ * against the live site 28 Aug 2026:
+ *
+ *   · 2022-01 was requested twice, waited the full 180s patience both times,
+ *     and never resolved — not slow, never coming.
+ *   · Every month from 2025-08 to 2026-07 was ALREADY stored, all twelve.
+ *   · "43 months remaining" from 2022-01 is exactly 2022-01 … 2025-07 — i.e.
+ *     precisely the span with no data, and nothing else.
+ *
+ * So the archive was complete the whole time and the backfill was reporting 43
+ * months of outstanding work that could never be done. A floor that predates
+ * the data does not produce a fuller history; it produces a permanent backlog
+ * and a `done` that never arrives.
+ *
+ * If PayProp history is ever extended backwards, lower this — but measure
+ * first, by asking for one month below the floor and seeing whether it
+ * resolves.
+ */
+export const MONEY_FLOOR = "2025-08";
 
 /** Patience per month when explicitly backfilling. One cold month is ~1,400
  *  rows at PayProp's 25-row page cap, i.e. ~56 sequential requests. */
