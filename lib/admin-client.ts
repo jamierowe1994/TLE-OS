@@ -6,6 +6,10 @@ export type Person = {
   rexId: string; name: string; email: string; userId: string | null;
   role: string | null; hasAccount: boolean; hasPhoto: boolean;
   createdAt: string | null; lastSeenAt: string | null;
+  /** From the TEG Team Hub: Basic | Pro | Academy, or null. Support Team
+   *  correctly have none — a blank here is not always a gap. */
+  partnerPackage: string | null;
+  hasBio: boolean;
 };
 export type Audit = {
   id: string; kind: string; actorEmail: string; subjectEmail: string; detail: string; at: string;

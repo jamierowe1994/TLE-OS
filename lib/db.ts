@@ -502,6 +502,47 @@ CREATE TABLE IF NOT EXISTS os_cache (
   payload        JSONB NOT NULL,
   computed_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- People, as the TEG Team Hub knows them.
+--
+-- The Hub (a Base44 app) is the group's register of everyone who joins: brand,
+-- contact details, compliance, partner package and bio. It is the master for
+-- facts about a PERSON, the way Propoly is master for a deal — so the OS reads
+-- it and never writes back.
+--
+-- Why a local copy at all, rather than calling the Hub when a page needs a bio:
+--
+--   1. A landlord-facing page must not fail because a third-party app is down
+--      or slow. A bio is decoration; it can be stale, it cannot be a hard
+--      dependency of a page that has to render.
+--   2. It is one HTTP call for ~49 people instead of one per profile view.
+--   3. James is filling these in by hand over time and wants a ping to re-pull.
+--      A sync target makes "ping" mean something specific.
+--
+-- Keyed on the lower-cased email, because that is the only field the Hub
+-- declares unique (and it declares it case-INSENSITIVE, while the stored data
+-- genuinely mixes case — Amrit.Bhogal@TheLettingExperts.co.uk sits next to
+-- sean.mcmahon@thelettingexperts.co.uk). Never compare these raw.
+--
+-- rex_id is the better join where it exists but is only populated on the ~20
+-- records that came from Rex, so it is an indexed column rather than the key.
+--
+-- payload keeps the whole record. The Hub has ~120 fields and will grow; this
+-- way a new one we want later needs no migration, just a read.
+CREATE TABLE IF NOT EXISTS os_teg_people (
+  email            TEXT PRIMARY KEY,
+  rex_id           TEXT,
+  name             TEXT,
+  job_title        TEXT,
+  person_type      TEXT,
+  partner_package  TEXT,
+  bio              TEXT,
+  photo_url        TEXT,
+  status           TEXT,
+  payload          JSONB NOT NULL DEFAULT '{}'::jsonb,
+  synced_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_teg_people_rex_id ON os_teg_people (rex_id);
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

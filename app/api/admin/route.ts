@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { listTegPeople } from "@/lib/teg-people";
 import { requireOwner } from "@/lib/admin";
 import { recent } from "@/lib/audit";
 import { hasDb, q } from "@/lib/db";
@@ -41,6 +42,13 @@ export async function GET(req: NextRequest) {
   }
 
   const byEmail = new Map(accounts.map((a) => [a.email.toLowerCase(), a]));
+
+  /* The Hub's copy of these people — package and whether they have a bio yet.
+     Read from our local table, so the admin centre never waits on Base44 and
+     never breaks when it is down. */
+  const teg = new Map(
+    (await listTegPeople().catch(() => [])).map((t) => [t.email.toLowerCase(), t])
+  );
   const people = roster.map((r) => {
     const acct = byEmail.get(r.email.toLowerCase());
     return {
@@ -53,6 +61,8 @@ export async function GET(req: NextRequest) {
       hasPhoto: Boolean(acct?.photo),
       createdAt: acct ? new Date(acct.created_at).toISOString() : null,
       lastSeenAt: acct?.last_seen_at ? new Date(acct.last_seen_at).toISOString() : null,
+      partnerPackage: teg.get(r.email.toLowerCase())?.partnerPackage ?? null,
+      hasBio: Boolean(teg.get(r.email.toLowerCase())?.bio),
     };
   });
 
@@ -65,6 +75,8 @@ export async function GET(req: NextRequest) {
       userId: a.id, role: a.role, hasAccount: true, hasPhoto: Boolean(a.photo),
       createdAt: new Date(a.created_at).toISOString(),
       lastSeenAt: a.last_seen_at ? new Date(a.last_seen_at).toISOString() : null,
+      partnerPackage: teg.get(a.email.toLowerCase())?.partnerPackage ?? null,
+      hasBio: Boolean(teg.get(a.email.toLowerCase())?.bio),
     });
   }
 

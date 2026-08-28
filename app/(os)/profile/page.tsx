@@ -55,9 +55,15 @@ const DEFAULT_PROFILE: Profile = {
   bio: "",
 };
 
-/** The agency's packages — shown on the profile so the agent always knows
- *  what they're on. Sample: this account sits on Growth. */
-const PLAN: "Starter" | "Growth" | "Pro" = "Growth";
+/* A hardcoded `const PLAN = "Growth"` stood here, shown to every agent as
+   their package. It was a sample value on a ladder (Starter → Growth → Pro)
+   that TLE does not use — the real packages are Basic, Pro and Academy, and
+   they live on each person's record in the TEG Team Hub.
+
+   So every partner was being told, confidently and in their own profile, that
+   they were on a plan that does not exist. It now comes from /api/teg/me, and
+   shows nothing at all when the Hub has no package for them — which is the
+   honest answer for the five partners whose record is blank. */
 
 /**
  * An agent's own paperwork — what a SELF-EMPLOYED lettings agent has to
@@ -92,6 +98,24 @@ const CONNECTIONS = [
 
 export default function ProfilePage() {
   const [tab, setTab] = useState<TabKey>("info");
+  /* Their package, from the TEG Hub via the local copy. null while it loads
+     and null if the Hub has none for them — the pill simply doesn't render,
+     rather than inventing a tier. */
+  const [pkg, setPkg] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/teg/me", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { partnerPackage?: string | null } | null) => {
+        if (alive) setPkg(d?.partnerPackage ?? null);
+      })
+      .catch(() => {
+        /* A missing package badge must never break the profile page. */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
   const [saved, setSaved] = useState(false);
   const [theme, setTheme] = useState<ThemeChoice>("auto");
@@ -250,17 +274,20 @@ export default function ProfilePage() {
                   The Letting Experts · {profile.patch}
                 </p>
                 {/* The package, always visible — nobody should have to ask
-                    what they're on. Starter → Growth → Pro. */}
-                <button
-                  type="button"
-                  onClick={() => setTab("ads")}
-                  className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-[11px] font-semibold text-accent-dark transition-opacity hover:opacity-80"
-                  title="See what Pro adds"
-                >
-                  <DoodleIcon name="rocket" size={12} />
-                  {PLAN} plan
-                  {PLAN !== "Pro" && <span className="text-muted">· upgrade →</span>}
-                </button>
+                    what they're on. Hidden rather than guessed when the Hub
+                    holds no package for them. */}
+                {pkg ? (
+                  <button
+                    type="button"
+                    onClick={() => setTab("ads")}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-[11px] font-semibold text-accent-dark transition-opacity hover:opacity-80"
+                    title="What your package includes"
+                  >
+                    <DoodleIcon name="rocket" size={12} />
+                    {pkg} package
+                    {pkg !== "Pro" && <span className="text-muted">· upgrade →</span>}
+                  </button>
+                ) : null}
               </div>
               {saved && (
                 <Pill tone="good">

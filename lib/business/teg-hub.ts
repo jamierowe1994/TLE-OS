@@ -59,6 +59,14 @@ export interface TegTeamMember {
   status?: string; // Pre Compliant | Onboarded | Trading | On Hold | Departed | Onboarding | Active | On Leave | Duplicate
   trading_name?: string;
   partner_package?: string;
+  /** Long free text, landlord- and tenant-facing. Blank on most records today
+   *  — James is writing them by hand, so this fills in behind us. */
+  bio?: string;
+  /** The master headshot. Empty for every TLE person as of 28 Aug 2026; the
+   *  field's own description in the Hub calls it the one place to enter a
+   *  photo so every app can consume it. */
+  photo_url?: string;
+  job_title?: string;
   location_id?: string;
   territory_postcodes?: string[];
   date_signed?: string;
@@ -96,12 +104,71 @@ const TM_FIELDS = [
   "status",
   "trading_name",
   "partner_package",
+  "bio",
+  "photo_url",
+  "job_title",
   "location_id",
   "date_signed",
   "date_launched",
   "leave_date",
   "rex_id",
 ];
+
+/* ------------------------------ the roster ------------------------------- */
+
+/**
+ * Every TLE person the Hub holds — for the os_teg_people sync.
+ *
+ * Deliberately WIDER than the headcount query below, which asks for
+ * `person_type: "Partner", active: true` because it is counting who is trading.
+ * This one wants everybody:
+ *
+ *   · Support Team, because they have profiles too
+ *   · Departed and Duplicate, because a past agent still appears on last
+ *     year's deals and a historic file with no agent on it is worse than one
+ *     naming someone who has left
+ *
+ * Brand is matched by NAME, not by a hardcoded id, for the same reason the
+ * headcount does it: a Base44 re-seed changes ids and would silently return
+ * nobody. Sub-brands count — six people are primary TPE or Prestige and trade
+ * as TLE, and dropping them would lose six partners.
+ */
+export async function fetchTleRoster(): Promise<TegTeamMember[]> {
+  if (!tegHubConfigured()) return [];
+
+  const brands = await tegHubCall<TegBrand[]>({ action: "list", entity: "Brand", limit: 200 });
+  const tleIds = (brands ?? [])
+    .filter((b) => {
+      const n = b.name?.toLowerCase() ?? "";
+      return n.includes("letting") && !n.includes("lite");
+    })
+    .map((b) => b.id);
+  if (!tleIds.length) return [];
+
+  /* `sub_brands` is an ARRAY of Brand relations, so it needs the
+     array-contains idiom. Plain equality matches nothing — this is the exact
+     shape the Hub's own fetchTeamMembers function uses. */
+  const people = await tegHubCall<TegTeamMember[]>({
+    action: "search",
+    entity: "TeamMember",
+    query: {
+      $or: [
+        { primary_brand_id: { $in: tleIds } },
+        { sub_brands: { $in: tleIds } },
+      ],
+    },
+    fields: TM_FIELDS,
+    /* The endpoint's own default is 50. Passing this is not optional or the
+       roster quietly truncates at a third of its size. */
+    limit: 500,
+  });
+
+  /* $or across two fields returns the same record twice if somebody lists
+     their own primary brand in sub_brands as well. */
+  const seen = new Map<string, TegTeamMember>();
+  for (const p of people ?? []) if (p.id) seen.set(p.id, p);
+  return [...seen.values()];
+}
 
 /* ------------------------------ headcount -------------------------------- */
 

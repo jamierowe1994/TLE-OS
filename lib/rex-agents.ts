@@ -1,5 +1,6 @@
 import { rexCall } from "./rex";
 import { absoluteUrl, firstNameOf, type PresentAgent } from "./present";
+import { getTegPerson } from "./teg-people";
 
 /**
  * The people, from REX.
@@ -156,15 +157,28 @@ export async function presentAgentFor(
   fallback: { name: string; email: string },
   bio: string
 ): Promise<PresentAgent> {
-  const rex = await agentByEmail(email).catch(() => null);
-  const name = rex?.name || fallback.name || "";
+  /* Two people-directories, asked in order of how likely each is to be right.
+     REX first because its headshots are real today (~70% have one) and already
+     the right crop. The TEG Hub is authoritative for a person but its
+     photo_url is empty for every TLE record as of 28 Aug 2026 — James is
+     uploading them, so this fallback fills in behind us without another
+     change. */
+  const [rex, teg] = await Promise.all([
+    agentByEmail(email).catch(() => null),
+    getTegPerson({ email }).catch(() => null),
+  ]);
+  const name = rex?.name || teg?.name || fallback.name || "";
   return {
     name,
     firstName: firstNameOf(name),
-    title: rex?.title ?? "",
+    title: rex?.title || teg?.jobTitle || "",
     email: rex?.email || fallback.email || "",
     phone: rex?.phone ?? "",
-    photo: rex?.photo ?? null,
-    bio,
+    photo: rex?.photo ?? teg?.photoUrl ?? null,
+    /* The caller's bio wins — it is what the agent typed about themselves in
+       the OS, and their own words beat the register's. The Hub is the
+       fallback, which is what makes a partner who has never opened the profile
+       page still get a real introduction instead of the generic one. */
+    bio: bio.trim() || teg?.bio || "",
   };
 }
