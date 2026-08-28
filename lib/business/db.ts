@@ -39,6 +39,24 @@ const OWNED = new Set([
   "history_funnels",
   "integration_cache",
   "propoly_cache",
+  /* payprop_tokens — and this one is not optional, it is load-bearing.
+   *
+   * PayProp UK is OAuth-only. Its refresh token ROTATES: every refresh returns
+   * a new one and invalidates the old. The token lives in this single shared
+   * row, which both products read.
+   *
+   * Leave it off this list and the failure is silent and total. TLE OS reads
+   * the token, refreshes, PayProp issues a new one and kills the old — and the
+   * write-back is REFUSED. The row still holds the dead token. The next call
+   * from either product gets invalid_grant, and every PayProp figure in BOTH
+   * apps quietly becomes zero. Nothing errors loudly; the money simply
+   * disappears from the screen.
+   *
+   * The rule that follows, and it must survive this file:
+   * THERE IS ONLY EVER ONE REFRESHER. Both products share one row precisely so
+   * that whoever refreshes writes the new token back for the other. Two
+   * independent token stores would invalidate each other on alternate calls. */
+  "payprop_tokens",
 ]);
 
 /* `users` is DELIBERATELY NOT in that list.
