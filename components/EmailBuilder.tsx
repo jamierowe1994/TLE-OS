@@ -10,6 +10,8 @@ import {
   mergeContextFor,
   FONT_STACKS,
   BRAND_COLOURS,
+  COLUMN_LAYOUTS,
+  makeBlock,
 } from "@/lib/email/render.js";
 
 /**
@@ -30,11 +32,21 @@ import {
 
 type Block = Record<string, unknown> & { type: string; id: string };
 
+/* Everything the RENDERER can already draw. The builder used to offer six
+   types against the renderer's twenty, because it kept its own smaller block
+   factory (see below) - so layouts, testimonials and the rest existed and
+   were simply unreachable. */
 const PALETTE = [
   { type: "heading", label: "Heading" },
   { type: "text", label: "Text" },
   { type: "button", label: "Button" },
   { type: "image", label: "Image" },
+  { type: "columns", label: "Layout" },
+  { type: "quote", label: "Testimonial" },
+  { type: "faq", label: "Q&A" },
+  { type: "video", label: "Video" },
+  { type: "social", label: "Social" },
+  { type: "logo", label: "Logo" },
   { type: "divider", label: "Divider" },
   { type: "spacer", label: "Space" },
 ];
@@ -45,27 +57,17 @@ const MERGE = [
 ];
 
 /** The blocks whose words are typed straight onto the canvas. */
-const TYPEABLE = new Set(["heading", "text", "button"]);
+const TYPEABLE = new Set(["heading", "text", "button", "quote"]);
 
 let seq = 0;
 const nid = () => `eb_${Date.now().toString(36)}_${(seq++).toString(36)}`;
 
-function fresh(type: string): Block {
-  switch (type) {
-    case "heading":
-      return { type, id: nid(), text: "A short, plain headline", align: "left", color: "" };
-    case "text":
-      return { type, id: nid(), text: "Write the next paragraph here.", bg: "" };
-    case "button":
-      return { type, id: nid(), text: "Book a call", url: "https://thelettingexperts.co.uk", align: "left", color: "" };
-    case "image":
-      return { type, id: nid(), url: "", alt: "", linkUrl: "", align: "center" };
-    case "divider":
-      return { type, id: nid(), color: "#E2E8F0" };
-    default:
-      return { type: "spacer", id: nid(), height: 24 };
-  }
-}
+/* The renderer owns what a new block looks like. This used to be a second
+   switch here that covered six types and drifted from it - which is exactly
+   how a `columns` block added by the builder could come out shaped
+   differently from one the renderer expects. */
+const fresh = (type: string): Block => makeBlock(type) as Block;
+
 
 export default function EmailBuilder({
   campaignId,
@@ -570,6 +572,59 @@ function Fields({
               placeholder="https://…"
               value={str("url")}
               onChange={(e) => patch(block.id, "url", e.target.value)}
+            />
+          </label>
+          {align}
+          {typography}
+        </>
+      );
+    case "columns":
+      return (
+        <>
+          <label className="block">
+            {label("Layout")}
+            <select
+              className={field}
+              value={str("layout") || "50-50"}
+              onChange={(e) => patch(block.id, "layout", e.target.value)}
+            >
+              {COLUMN_LAYOUTS.map((l: { key: string; label: string }) => (
+                <option key={l.key} value={l.key}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="mt-2 flex items-center gap-2 text-[11.5px]">
+            <input
+              type="checkbox"
+              checked={block.stackMobile !== false}
+              onChange={(e) => patch(block.id, "stackMobile", e.target.checked)}
+            />
+            {/* Four columns at 140px each on a phone is unreadable, so this is
+                on by default and turning it off is the deliberate act. */}
+            Stack into one column on a phone
+          </label>
+          <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
+            The columns render, but dropping content INTO them is not built
+            yet. Use one layout block per row and put the pictures in from the
+            code side for now.
+          </p>
+        </>
+      );
+    case "quote":
+      return (
+        <>
+          <p className="text-[11.5px] leading-relaxed text-muted">
+            Type the quote straight onto the email.
+          </p>
+          <label className="mt-2 block">
+            {label("Who said it")}
+            <input
+              className={field}
+              placeholder="A landlord in Chorlton"
+              value={str("who")}
+              onChange={(e) => patch(block.id, "who", e.target.value)}
             />
           </label>
           {align}
