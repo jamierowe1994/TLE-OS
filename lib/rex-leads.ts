@@ -189,7 +189,21 @@ function toLead(l: RexLead, enquiry: Lead["enquiry"]): Lead {
 }
 
 /** Walk the newest enquiries and return the lettings book. */
-export async function fetchLeadBook(): Promise<LeadBook> {
+/**
+ * @param rexUserId  Whose leads. Null or omitted returns the whole business.
+ *
+ * MULTI-TENANT. Filtered AT REX on `lead.assignee_id`, not after the walk, and
+ * the difference is the whole feature: this function reads the 500 NEWEST
+ * leads business-wide. One agent's share of those is a handful, so filtering
+ * afterwards would hand them a nearly empty screen and call it their book.
+ *
+ * `lead.assignee_id` is measured, not assumed — Rhiannon Dodge 1,856, Kayleigh
+ * Wright 331. Note the `lead.` prefix: bare `assignee_id` is refused, and
+ * `system_owner_user_id` (which works on Listings) is not a permissible lead
+ * field at all. Assignee is also the better question here — who is CHASING it,
+ * rather than who happens to own the record.
+ */
+export async function fetchLeadBook(rexUserId?: string | null): Promise<LeadBook> {
   if (!rexConfigured()) {
     return { leads: [], scanned: 0, setAside: { sales: 0, unclear: 0 }, total: null, newestAt: null };
   }
@@ -205,6 +219,9 @@ export async function fetchLeadBook(): Promise<LeadBook> {
       limit: PAGE_SIZE,
       offset: page * PAGE_SIZE,
       order_by: { system_ctime: "desc" }, // an OBJECT here — the array form 400s
+      ...(rexUserId
+        ? { criteria: [{ name: "lead.assignee_id", type: "=", value: rexUserId }] }
+        : {}),
     });
     if (!res.ok) break;
     if (total === null) {
