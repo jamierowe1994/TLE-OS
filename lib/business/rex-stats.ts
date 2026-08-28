@@ -2026,7 +2026,7 @@ export interface AgentApplication {
     guarantors?: Array<{ name: string | null; email: string | null; phone: string | null }>;
   };
   /** Portal overlay: pre-tenancy notes/stage-moves/checklist (lib/deal-store). */
-  portal?: import("@/lib/types").DealPortalOverlay;
+  portal?: import("@/lib/business/types").DealPortalOverlay;
   /**
    * Rent that actually landed for this property, from PayProp — the only
    * milestone on the progression board with a source of truth behind it.
@@ -2868,7 +2868,7 @@ export async function getComplianceCensus(): Promise<ComplianceCensus | null> {
   if (censusMem.data && Date.now() - censusMem.at < CENSUS_TTL_MS) return censusMem.data;
   if (!rexConfigured()) return null;
 
-  const { readCache, writeCache } = await import("@/lib/integration-cache");
+  const { readCache, writeCache } = await import("@/lib/business/integration-cache");
   if (!censusMem.data) {
     const stored = await readCache<ComplianceCensus>(CENSUS_KEY).catch(() => null);
     if (stored?.data?.rows?.length) {

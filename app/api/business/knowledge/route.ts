@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionToken, SESSION_COOKIE, isAdminEmail } from "@/lib/auth";
+import { requireCapability } from "@/lib/admin";
 import { findById } from "@/lib/business/users-store";
 import {
   listKnowledge,
@@ -12,32 +12,26 @@ import {
 //   POST   /api/admin/knowledge          { id?, title, content } → { entry }
 //   DELETE /api/admin/knowledge?id=...   → { deleted }
 
-async function requireAdmin(req: NextRequest) {
-  const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
-  const user = userId ? await findById(userId) : null;
-  if (!user) {
-    return { error: NextResponse.json({ error: "Unauthorised" }, { status: 401 }) };
+async function requireAdmin(req: NextRequest): Promise<NextResponse | null> {
+  /* ONE auth system. The portal guarded this with its own session plus an
+     ADMIN_EMAILS list; in the OS the same job is a capability, so owner and
+     super_admin pass and nobody else does — including developers, who have no
+     business reading the money. */
+  if (!(await requireCapability(req, "see:business"))) {
+    return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
-  if (!isAdminEmail(user.email)) {
-    return {
-      error: NextResponse.json(
-        { error: "This area is locked to the business owner." },
-        { status: 403 }
-      ),
-    };
-  }
-  return { user };
+  return null;
 }
 
 export async function GET(req: NextRequest) {
   const gate = await requireAdmin(req);
-  if (gate.error) return gate.error;
+  if (gate) return gate;
   return NextResponse.json({ entries: await listKnowledge() });
 }
 
 export async function POST(req: NextRequest) {
   const gate = await requireAdmin(req);
-  if (gate.error) return gate.error;
+  if (gate) return gate;
 
   let body: unknown;
   try {
@@ -67,7 +61,7 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const gate = await requireAdmin(req);
-  if (gate.error) return gate.error;
+  if (gate) return gate;
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Bad request" }, { status: 400 });

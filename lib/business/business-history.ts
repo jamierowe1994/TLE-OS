@@ -3,7 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 import { DATA_DIR } from "@/lib/business/data-dir";
 import { hasDb, q } from "@/lib/business/db";
-import { rexConfigured, rexLettingsAgents } from "@/lib/rex";
+import { rexConfigured, rexLettingsAgents } from "@/lib/business/rex";
 import { getBusinessMonthCounts } from "@/lib/business/rex-stats";
 import { getPropolyMoveInsInRange } from "@/lib/business/propoly-deals";
 import { HISTORY_FLOOR, withinHistory } from "@/lib/business/roster";

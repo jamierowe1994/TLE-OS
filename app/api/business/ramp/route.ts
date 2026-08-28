@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionToken, SESSION_COOKIE, isAdminEmail } from "@/lib/auth";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/business/auth";
+import { requireCapability } from "@/lib/admin";
 import { findById } from "@/lib/business/users-store";
 import { getTegHeadcount } from "@/lib/business/teg-hub";
 import { getAgentRampCounts } from "@/lib/business/rex-stats";
 import { getAgentMoveInsInWindow } from "@/lib/business/propoly-deals";
-import { rexConfigured, rexLettingsAgents } from "@/lib/rex";
+import { rexConfigured, rexLettingsAgents } from "@/lib/business/rex";
 import { loadSnapshot, saveSnapshot } from "@/lib/business/propoly-snapshot";
 
 // Partner ramp-time report — the YTD new-starter cohort cross-referenced
@@ -109,7 +110,7 @@ function minIso(a: string, b: string): string {
 export async function GET(req: NextRequest) {
   const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
   const admin = userId ? await findById(userId) : null;
-  if (!admin || !isAdminEmail(admin.email)) {
+  if (!admin || !(await requireCapability(req, "see:business"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const year = String(new Date().getUTCFullYear());

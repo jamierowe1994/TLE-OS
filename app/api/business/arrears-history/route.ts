@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionToken, SESSION_COOKIE, isAdminEmail } from "@/lib/auth";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/business/auth";
+import { requireCapability } from "@/lib/admin";
 import { findById } from "@/lib/business/users-store";
 import {
   arrearsSpells,
@@ -30,7 +31,7 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 async function admin(req: NextRequest) {
   const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
   const user = userId ? await findById(userId) : null;
-  return user && isAdminEmail(user.email) ? user : null;
+  return user && Boolean(await requireCapability(req, "see:business")) ? user : null;
 }
 
 export async function GET(req: NextRequest) {

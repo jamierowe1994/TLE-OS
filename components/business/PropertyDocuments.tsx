@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/business/DoodleIcon";
-import { rexListingUrl } from "@/lib/rex-links";
+import { rexListingUrl } from "@/lib/business/rex-links";
 import DocumentSheet, { type SheetDoc } from "@/components/business/DocumentSheet";
 
 // Everything on file for a property, from both sides — and all of it opens

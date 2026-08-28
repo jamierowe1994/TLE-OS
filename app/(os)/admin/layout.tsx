@@ -22,6 +22,11 @@ const TABS = [
   { href: "/admin", label: "Overview", exact: true },
   { href: "/admin/people", label: "People" },
   { href: "/admin/pre-launch", label: "Pre-launch" },
+  /* Susan's figures, in James's rail. He asked for it explicitly and the
+     reason outlives her: "I'm always going to need to check on them." It does
+     not depend on her having an account — it is the same data, read with the
+     same capability. */
+  { href: "/admin/business", label: "Susan's figures" },
   { href: "/admin/permissions", label: "Permissions" },
   { href: "/admin/connections", label: "Connections" },
   { href: "/admin/activity", label: "Activity" },

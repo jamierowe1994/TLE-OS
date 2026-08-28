@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionToken, SESSION_COOKIE } from "@/lib/auth";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/business/auth";
+import { requireCapability } from "@/lib/admin";
 import { findById } from "@/lib/business/users-store";
 import { isAdminEmail } from "@/lib/business/brand";
 import { getComplianceAsAt } from "@/lib/business/rex-stats";
@@ -28,7 +29,7 @@ const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 export async function GET(req: NextRequest) {
   const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
   const user = userId ? await findById(userId) : null;
-  if (!user || !isAdminEmail(user.email)) {
+  if (!user || !(await requireCapability(req, "see:business"))) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
   const param = req.nextUrl.searchParams.get("month");

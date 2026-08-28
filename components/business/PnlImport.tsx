@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { parsePnlImport, type ParsedPnl } from "@/lib/pnl-import";
+import { parsePnlImport, type ParsedPnl } from "@/lib/business/pnl-import";
 import type { H2ReforecastRow } from "@/lib/business/seed-types";
 import { formatGBP } from "@/lib/business/format";
 

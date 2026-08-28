@@ -1,5 +1,5 @@
 import "server-only";
-import { payPropAccounts, payPropGetAll, type PayPropAccountId } from "@/lib/payprop";
+import { payPropAccounts, payPropGetAll, type PayPropAccountId } from "@/lib/business/payprop";
 import { readCache, writeCache } from "@/lib/business/integration-cache";
 
 // The managed book out of PayProp, attributable to the partner who runs each

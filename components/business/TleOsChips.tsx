@@ -1,6 +1,6 @@
 "use client";
 
-import { PLATFORMS } from "@/lib/platforms";
+import { PLATFORMS } from "@/lib/business/platforms";
 
 // The TLE OS chip box: every app in the registry, thrown up from behind the
 // rail's bottom line and tumbled back down behind it.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { PropertyNote } from "@/lib/property-notes-store";
+import type { PropertyNote } from "@/lib/business/property-notes-store";
 
 // The conversation log against a property: agent's notes on the left as
 // outline bubbles, the team's on the right filled in. Saving folds the

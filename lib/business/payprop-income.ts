@@ -1,5 +1,5 @@
 import "server-only";
-import { payPropAccounts, payPropCanAuth, payPropGetAll, type PayPropAccountId } from "@/lib/payprop";
+import { payPropAccounts, payPropCanAuth, payPropGetAll, type PayPropAccountId } from "@/lib/business/payprop";
 import { readCache, writeCache } from "@/lib/business/integration-cache";
 import { getPortfolioBook, normaliseAgentName, propertyKey } from "@/lib/business/payprop-portfolio";
 
@@ -1624,7 +1624,7 @@ export async function getAgentFeeLines(
   displayName: string,
   month: string
 ): Promise<FeeLine[] | null> {
-  const { payPropConfigured } = await import("@/lib/payprop");
+  const { payPropConfigured } = await import("@/lib/business/payprop");
   if (!payPropConfigured()) return null;
   const { ids } = await agentBeneficiaryIds(email, displayName);
   if (ids.length === 0) return [];
@@ -1638,7 +1638,7 @@ export async function getAgentFeeLines(
   const pages = await paymentsSettledInRange(from, to);
   // Property NAMES come from the portfolio book, which already walks
   // export/properties hourly — no extra PayProp calls for the invoice tool.
-  const { getPortfolioBook } = await import("@/lib/payprop-portfolio");
+  const { getPortfolioBook } = await import("@/lib/business/payprop-portfolio");
   const book = await getPortfolioBook().catch(() => null);
   const names = new Map<string, string>();
   for (const agent of Object.values(book?.byAgent ?? {})) {

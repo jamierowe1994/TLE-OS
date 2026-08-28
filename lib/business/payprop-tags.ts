@@ -1,4 +1,4 @@
-import { payPropAccounts, payPropGet, payPropGetAll, type PayPropAccountId } from "@/lib/payprop";
+import { payPropAccounts, payPropGet, payPropGetAll, type PayPropAccountId } from "@/lib/business/payprop";
 
 /**
  * Rent protection, from PayProp's tags.

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionToken, SESSION_COOKIE, isAdminEmail } from "@/lib/auth";
+import { requireCapability } from "@/lib/admin";
 import { findById, listUsers, updateUser, toAdmin } from "@/lib/business/users-store";
 import type { StoredUser } from "@/lib/business/users-store";
 import type { AdminNote } from "@/lib/business/types";
@@ -9,38 +9,20 @@ import { ROSTER } from "@/lib/business/seed-data";
 // (agentKey ↔ roster, rexUserId ↔ REX AccountUsers, metaCampaignId ↔ Meta).
 // Session + ADMIN_EMAILS gated.
 
-async function requireAdmin(
-  req: NextRequest
-): Promise<{ ok: true } | { ok: false; res: NextResponse }> {
-  const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
-  if (!userId) {
-    return {
-      ok: false,
-      res: NextResponse.json({ error: "Unauthorised" }, { status: 401 }),
-    };
+async function requireAdmin(req: NextRequest): Promise<NextResponse | null> {
+  /* ONE auth system. The portal guarded this with its own session plus an
+     ADMIN_EMAILS list; in the OS the same job is a capability, so owner and
+     super_admin pass and nobody else does — including developers, who have no
+     business reading the money. */
+  if (!(await requireCapability(req, "see:business"))) {
+    return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
-  const user = await findById(userId);
-  if (!user) {
-    return {
-      ok: false,
-      res: NextResponse.json({ error: "Unauthorised" }, { status: 401 }),
-    };
-  }
-  if (!isAdminEmail(user.email)) {
-    return {
-      ok: false,
-      res: NextResponse.json(
-        { error: "This area is locked to the business owner." },
-        { status: 403 }
-      ),
-    };
-  }
-  return { ok: true };
+  return null;
 }
 
 export async function GET(req: NextRequest) {
   const gate = await requireAdmin(req);
-  if (!gate.ok) return gate.res;
+  if (gate) return gate;
   const users = await listUsers();
   return NextResponse.json({ users });
 }
@@ -57,7 +39,7 @@ function asNullableString(value: unknown): string | null {
 // null (or "") clears a field. `note` appends an admin note, never replaces.
 export async function PATCH(req: NextRequest) {
   const gate = await requireAdmin(req);
-  if (!gate.ok) return gate.res;
+  if (gate) return gate;
 
   let body: Record<string, unknown>;
   try {

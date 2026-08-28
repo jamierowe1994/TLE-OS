@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionToken, isAdminEmail, SESSION_COOKIE } from "@/lib/auth";
+import { requireCapability } from "@/lib/admin";
 import { findById } from "@/lib/business/users-store";
 import {
   getOverrides,
@@ -18,19 +18,12 @@ import { currentMonth } from "@/lib/business/format";
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 async function requireAdmin(req: NextRequest): Promise<NextResponse | null> {
-  const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
-  if (!userId) {
+  /* ONE auth system. The portal guarded this with its own session plus an
+     ADMIN_EMAILS list; in the OS the same job is a capability, so owner and
+     super_admin pass and nobody else does — including developers, who have no
+     business reading the money. */
+  if (!(await requireCapability(req, "see:business"))) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
-  }
-  const user = await findById(userId);
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
-  }
-  if (!isAdminEmail(user.email)) {
-    return NextResponse.json(
-      { error: "This area is locked to the business owner." },
-      { status: 403 }
-    );
   }
   return null;
 }

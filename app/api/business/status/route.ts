@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifySessionToken, SESSION_COOKIE, isAdminEmail } from "@/lib/auth";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/business/auth";
+import { requireCapability } from "@/lib/admin";
 import { findById } from "@/lib/business/users-store";
 import { getRexStatus } from "@/lib/business/rex-stats";
 import { metaConfigPresence } from "@/lib/business/meta";
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
-  if (!isAdminEmail(user.email)) {
+  if (!(await requireCapability(req, "see:business"))) {
     return NextResponse.json(
       { error: "This area is locked to the business owner." },
       { status: 403 }

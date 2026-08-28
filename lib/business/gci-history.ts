@@ -2,7 +2,7 @@ import "server-only";
 import { hasDb, q } from "@/lib/business/db";
 import { getAgencyIncome, type AgencyIncome, type AgentSlice } from "@/lib/business/payprop-income";
 import { currentMonth } from "@/lib/business/format";
-import type { PayPropAccountId } from "@/lib/payprop";
+import type { PayPropAccountId } from "@/lib/business/payprop";
 
 /**
  * Commission per month, computed once and kept.
