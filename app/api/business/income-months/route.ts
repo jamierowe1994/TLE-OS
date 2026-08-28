@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getGciHistory } from "@/lib/business/gci-history";
 import { currentMonth, monthsThisYearToDate } from "@/lib/business/format";
+import { hasDb, q } from "@/lib/business/db";
 
 /**
  * The TLE Business Income table, month by month, live.
@@ -45,6 +46,56 @@ const GCI_ROWS = {
   tleNet: "Combined Net Income to TLE",
 } as const;
 
+/**
+ * SELF-WARMING — so nobody has to schedule anything.
+ *
+ * A cold month is minutes of PayProp paging. Somebody has to absorb that, and
+ * the only question is who: Susan opening her figures at nine, or a background
+ * job at first light that nobody is watching.
+ *
+ * Railway's cron runs a SERVICE on a schedule rather than pinging a URL, so
+ * using it would mean deploying a second service whose entire job is to make
+ * one HTTP call — a whole extra deployment, and one more thing to forget
+ * exists. This does the same work with nothing to maintain.
+ *
+ * Once a day, at most: the first request after the marker goes stale kicks the
+ * walk off IN THE BACKGROUND and returns immediately with whatever is already
+ * cached. The person who triggers it waits for nothing; they simply see the
+ * progress bar move while they read the rest of the page.
+ *
+ * The marker lives in os_cache, NOT in a module variable. Railway restarts
+ * containers, and an in-memory flag would mean a fresh warm on every deploy
+ * and every cold start — several of those in an afternoon is exactly the
+ * hammering the daily limit exists to prevent.
+ */
+const WARM_KEY = "income:last-warm";
+const WARM_EVERY_MS = 20 * 60 * 60 * 1000; // once a day, with room to drift
+
+async function warmIfStale(months: string[]): Promise<void> {
+  if (!hasDb() || !months.length) return;
+  try {
+    const rows = await q<{ computed_at: Date }>(
+      "SELECT computed_at FROM os_cache WHERE key = $1",
+      [WARM_KEY]
+    );
+    const last = rows[0]?.computed_at ? new Date(rows[0].computed_at).getTime() : 0;
+    if (Date.now() - last < WARM_EVERY_MS) return;
+
+    /* Claim it BEFORE starting. Two people opening the page in the same second
+       would otherwise both see a stale marker and both start a walk. */
+    await q(
+      `INSERT INTO os_cache (key, payload, computed_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET computed_at = NOW()`,
+      [WARM_KEY, JSON.stringify({ startedAt: new Date().toISOString() })]
+    );
+
+    // Deliberately not awaited — the caller gets their page now.
+    void getGciHistory(months[0], months[months.length - 1], { wait: true }).catch(() => {});
+  } catch {
+    /* A warm that cannot start must never break the page it was warming. */
+  }
+}
+
 export async function GET() {
   /* The LIVE month included. It was months-to-last-complete, which on the 28th
      of August ends at July — see the note on the business page about why a
@@ -58,6 +109,8 @@ export async function GET() {
   }
 
   // Keyed by month, not a list — see lib/gci-history.
+  void warmIfStale(months);
+
   const by = await getGciHistory(months[0], months[months.length - 1]).catch(
     () => ({}) as Awaited<ReturnType<typeof getGciHistory>>
   );
