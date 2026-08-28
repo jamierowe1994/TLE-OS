@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE, verifySessionToken } from "@/lib/business/auth";
 import { requireCapability } from "@/lib/admin";
-import { findById } from "@/lib/business/users-store";
 import { isAdminEmail } from "@/lib/business/brand";
 import { payPropConfigured } from "@/lib/business/payprop";
 import {
@@ -23,9 +21,7 @@ import { currentMonth } from "@/lib/business/format";
 // Both halves are best-effort: if PayProp is unreachable the field comes back
 // null and the tab falls back to the snapshot rather than showing nothing.
 export async function GET(req: NextRequest) {
-  const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
-  const user = userId ? await findById(userId) : null;
-  if (!user || !(await requireCapability(req, "see:business"))) {
+  if (!(await requireCapability(req, "see:business"))) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
   if (!payPropConfigured()) {

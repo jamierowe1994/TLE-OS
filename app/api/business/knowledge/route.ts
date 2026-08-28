@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
-import { findById } from "@/lib/business/users-store";
 import {
   listKnowledge,
   upsertKnowledge,

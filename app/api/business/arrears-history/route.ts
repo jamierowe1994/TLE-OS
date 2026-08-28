@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE, verifySessionToken } from "@/lib/business/auth";
 import { requireCapability } from "@/lib/admin";
-import { findById } from "@/lib/business/users-store";
 import {
   arrearsSpells,
   captureToday,
@@ -29,9 +27,7 @@ const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 async function admin(req: NextRequest) {
-  const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
-  const user = userId ? await findById(userId) : null;
-  return user && Boolean(await requireCapability(req, "see:business")) ? user : null;
+  return await requireCapability(req, "see:business");
 }
 
 export async function GET(req: NextRequest) {
