@@ -338,8 +338,8 @@ export default function ComplianceTab({ month, seed }: { month: string; seed: Se
                   }
                 : {
                     value: null,
-                    source: "snapshot",
-                    note: "Not in the July snapshot — this one only exists once REX has been read.",
+                    source: "unavailable",
+                    note: "This one only exists once REX has been read — waiting on the live read.",
                   }
             }
             big
@@ -429,10 +429,11 @@ export default function ComplianceTab({ month, seed }: { month: string; seed: Se
             </p>
           </>
         ) : (
-          <>
-            <DataTable columns={AGENT_COLUMNS} rows={[...c.byAgent, c.byAgentTotal]} compact />
-            <p className="text-xs text-muted">{c.source}</p>
-          </>
+          /* No seed fallback — REX's sweep is slow cold, and filling the wait
+             with the 7 Jul capture meant the table read as finished. */
+          <p className="text-xs text-muted">
+            Waiting on REX for the partner split. The sweep takes a couple of minutes cold.
+          </p>
         )}
       </section>
 

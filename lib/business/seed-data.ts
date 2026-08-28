@@ -214,80 +214,13 @@ export const SEED = {
   },
 
   /* ---- Tab 3: Move-ins July (10 rows · total 12M cost value £5,659) ---- */
-  moveInsJuly: {
-    rows: [
-      { agent: "Geraldine Mulhern", property: "7 Kynaston Crescent, Thornton Heath, CR7 7BS", applicationDate: null, moveInDate: "01 Jul 2026", letType: "New Let", serviceLevel: "Tenant Find", rentPcm: 2100, setupFee: 1500, monthlyMgmtFee: 0, twelveMonthValue: 1500 },
-      { agent: "Rhiannon Dodge", property: "20 Queensway, Newton Abbot, TQ12 4BL", applicationDate: null, moveInDate: "01 Jul 2026", letType: "New Let", serviceLevel: "Tenant Find", rentPcm: 1150, setupFee: 479, monthlyMgmtFee: 0, twelveMonthValue: 479 },
-      { agent: "Lianna Denholm", property: "12 Queens Gardens, St Andrews, KY16 9TA", applicationDate: null, moveInDate: "01 Jul 2026", letType: "Relet", serviceLevel: "EFM no RLP", rentPcm: 4300, setupFee: 0, monthlyMgmtFee: 258, twelveMonthValue: 258 },
-      { agent: "Lianna Denholm", property: "42/6 Argyle Place, Edinburgh, EH3 9AR", applicationDate: null, moveInDate: "01 Jul 2026", letType: "Relet", serviceLevel: "EFM no RLP", rentPcm: 3250, setupFee: 0, monthlyMgmtFee: 195, twelveMonthValue: 195 },
-      { agent: "Richard Callow", property: "43 Sandy Lane, Oxford, OX4 6AN", applicationDate: null, moveInDate: "01 Jul 2026", letType: "New Let", serviceLevel: "Tenant Find", rentPcm: 3000, setupFee: 750, monthlyMgmtFee: 0, twelveMonthValue: 750 },
-      { agent: "Lauren Engley", property: "10 Highland Road, Bath, BA2 1DY", applicationDate: null, moveInDate: "01 Jul 2026", letType: "Relet", serviceLevel: "Tenant Find", rentPcm: 3000, setupFee: 1200, monthlyMgmtFee: 270, twelveMonthValue: 1470 },
-      { agent: "James Crumpton", property: "27 Rock House, Bethel Road, Bristol, BS5 7NN", applicationDate: null, moveInDate: "01 Jul 2026", letType: "New Let", serviceLevel: "Tenant Find", rentPcm: 900, setupFee: 450, monthlyMgmtFee: 0, twelveMonthValue: 450 },
-      { agent: "Rhiannon Dodge", property: "Room 4, 5a Newton Road, Kingskerswell, TQ12 5EQ", applicationDate: null, moveInDate: "08 Jul 2026", letType: "Relet", serviceLevel: "EFM with RLP", rentPcm: 750, setupFee: 350, monthlyMgmtFee: 75, twelveMonthValue: 425 },
-      { agent: "Richard Callow", property: "7 Westrup Close, Oxford, OX3 0HZ", applicationDate: null, moveInDate: "10 Jul 2026", letType: "New Let", serviceLevel: "EFM no RLP", rentPcm: 1800, setupFee: 0, monthlyMgmtFee: 0, twelveMonthValue: 0 },
-      { agent: "Richard Callow", property: "44 Glebe Way, Stowmarket, IP14 5TL", applicationDate: null, moveInDate: "10 Jul 2026", letType: "New Let", serviceLevel: "EFM no RLP", rentPcm: 1100, setupFee: 0, monthlyMgmtFee: 132, twelveMonthValue: 132 },
-    ] satisfies MoveInRow[],
-    totalTwelveMonthValue: snap(5659, "£5,659", "Lettings Support - Move In Report"),
-  },
+  /* moveInsJuly removed — the 11 Jul capture. move-ins.tsx reads Propoly live for any month */
 
   /* ---- Tab 3: July pipeline — 26 properties (expected July move-ins) ---- */
-  julyPipeline: [
-    { agent: "Joe Patten", property: "Room 2, 32 Elm Close, Huntingdon, PE29 7AS", expectedMoveIn: "03 Jul 2026", serviceLevel: "Tenant Find", status: "PLC Sign Off", rentPcm: 550, period: "july" },
-    { agent: "Lianna Denholm", property: "40 (1f2) Marchmont Crescent, Edinburgh, EH9 1HG", expectedMoveIn: "TBC", serviceLevel: "EFM no RLP", status: "Tenancy Generation", rentPcm: 4250, period: "july" },
-    { agent: "Dan Richards", property: "8 95 Springthorpe Green, Birmingham, B24 0TW", expectedMoveIn: "TBC", serviceLevel: "EFM with RLP", status: "PLC Sign Off", rentPcm: 925, period: "july" },
-    { agent: "Kirstie Wallington", property: "Flat 4, 28 Fosse Road South, Leicester, LE3 0QD", expectedMoveIn: "TBC", serviceLevel: "EFM no RLP", status: "Tenancy Generation", rentPcm: 670, period: "july" },
-    { agent: "Sean McMahon", property: "141 St Leonards Street, Edinburgh, EH8 9RB", expectedMoveIn: "12 Jul 2026", serviceLevel: "Tenant Find", status: "PLC Sign Off", rentPcm: 950, period: "july" },
-    { agent: "Sean McMahon", property: "32 Westerton Avenue, Larkhall, ML9 1JQ", expectedMoveIn: "12 Jul 2026", serviceLevel: "EFM with RLP", status: "PLC Sign Off", rentPcm: 650, period: "july" },
-    { agent: "Sean McMahon", property: "2a Kings Court, Ayr, KA8 0AD", expectedMoveIn: "16 Jul 2026", serviceLevel: "EFM with RLP", status: "Tenancy Generation", rentPcm: 600, period: "july" },
-    { agent: "Tony Poon", property: "49 Cedar Road, Oxford, OX2 9ED", expectedMoveIn: "24 Jul 2026", serviceLevel: "EFM with RLP", status: "PLC Sign Off", rentPcm: 1800, period: "july" },
-    { agent: "Sean McMahon", property: "Flat 5, 35 McDonald Road, Edinburgh, EH7 4LY", expectedMoveIn: "27 Jul 2026", serviceLevel: "Tenant Find", status: "Signing and Move in Monies", rentPcm: 1600, period: "july" },
-    { agent: "Sean McMahon", property: "11 Albion Street, Motherwell, ML1 1XJ", expectedMoveIn: "27 Jul 2026", serviceLevel: "EFM with RLP", status: "PLC Sign Off", rentPcm: 700, period: "july" },
-    { agent: "Rhiannon Dodge", property: "Flat 9, Riva House, Dawlish, EX7 9HR", expectedMoveIn: "30 Jul 2026", serviceLevel: "Tenant Find", status: "PLC Sign Off", rentPcm: 850, period: "july" },
-    { agent: "Rhiannon Dodge", property: "Steps Cottage, 2 Iddesleigh Terrace, Dawlish, EX7 9HS", expectedMoveIn: "31 Jul 2026", serviceLevel: "EFM no RLP", status: "PLC Sign Off", rentPcm: 795, period: "july" },
-    { agent: "Lianna Denholm", property: "5 Douglas Gardens Mews, Edinburgh, EH4 3BZ", expectedMoveIn: "08 Jul 2026", serviceLevel: "EFM no RLP", status: "Awaiting References", rentPcm: 2600, period: "july" },
-    { agent: "Lianna Denholm", property: "The Doo'cot, Mansefield House, Callander, FK17 8BL", expectedMoveIn: "09 Jul 2026", serviceLevel: "EFM no RLP", status: "Awaiting References", rentPcm: 595, period: "july" },
-    { agent: "Rhiannon Dodge", property: "Flat 3, 15 Marine Parade, Dawlish, EX7 9DL", expectedMoveIn: "18 Jul 2026", serviceLevel: "EFM with RLP", status: "Awaiting References", rentPcm: 725, period: "july" },
-    { agent: "Kayleigh Wright", property: "Flat 1, 11 Station Road, Liverpool, L34 5SN", expectedMoveIn: "14 Jul 2026", serviceLevel: "EFM with RLP", status: "Awaiting References", rentPcm: 725, period: "july" },
-    { agent: "Stuart Roper", property: "First Floor Flat, 130 Chesterfield Road, Bristol, BS16", expectedMoveIn: "TBC", serviceLevel: "EFM with RLP", status: "Awaiting References", rentPcm: 3100, period: "july" },
-    { agent: "Stuart Roper", property: "127 Forest Road, Fishponds, Bristol, BS16 3ST", expectedMoveIn: "TBC", serviceLevel: "EFM with RLP", status: "Awaiting References", rentPcm: 2600, period: "july" },
-    { agent: "Kayleigh Wright", property: "Flat 3, 11 Station Road, Prescot, L34 5SN", expectedMoveIn: "26 Jul 2026", serviceLevel: "EFM with RLP", status: "Awaiting References", rentPcm: 795, period: "july" },
-    { agent: "Bernadine Williams", property: "4 Bowerman Court, Watford, WD19", expectedMoveIn: "29 Jul 2026", serviceLevel: "EFM no RLP", status: "Awaiting References", rentPcm: 1500, period: "july" },
-    { agent: "Sean McMahon", property: "89/1 Restalrig Road South, Edinburgh, EH7", expectedMoveIn: "28 Jul 2026", serviceLevel: "EFM with RLP", status: "Awaiting References", rentPcm: 950, period: "july" },
-    { agent: "Joe Patten", property: "Room 3, 2 Norwich Street, Wisbech, PE13 2LE", expectedMoveIn: "TBC", serviceLevel: "EFM no RLP", status: "PLC Sign Off", rentPcm: 550, period: "july" },
-    { agent: "Dan Richards", property: "15 Roxby Gardens, Wolverhampton, WV6 0TL", expectedMoveIn: "TBC", serviceLevel: "Tenant Find", status: "Awaiting References", rentPcm: 1200, period: "july" },
-    { agent: "Lianna Denholm", property: "17/7 Upper Grove Place, Edinburgh, EH3 8AX", expectedMoveIn: "TBC", serviceLevel: "EFM no RLP", status: "PLC Sign Off", rentPcm: 4000, period: "july" },
-    { agent: "Rhiannon Dodge", property: "Room 2, 66 Fore Street, Kingsteignton, TQ12 3AU", expectedMoveIn: "TBC", serviceLevel: "EFM no RLP", status: "Signing and Move in Monies", rentPcm: 625, period: "july" },
-    { agent: "Sean McMahon", property: "9 Duntreath Place, Edinburgh, EH16 4ZA", expectedMoveIn: "TBC", serviceLevel: "EFM no RLP", status: "Awaiting References", rentPcm: 1650, period: "july" },
-  ] satisfies PipelineRow[],
+  /* julyPipeline removed — the 11 Jul capture. Propoly is the source of truth for the pipeline */
 
   /* ---- Tab 3: Forward pipeline — Aug–Sep · 25 properties ---- */
-  forwardPipeline: [
-    { agent: "Kayleigh Wright", property: "Flat 2, 11 Station Road, Liverpool, L34 5SN", expectedMoveIn: "01 Aug 2026", serviceLevel: "EFM with RLP", status: "Awaiting References", rentPcm: 680, period: "aug-sep" },
-    { agent: "Tony Poon", property: "Flat 64, Dara House, London, NW9 0BR", expectedMoveIn: "01 Aug 2026", serviceLevel: "Tenant Find", status: "Awaiting References", rentPcm: 2000, period: "aug-sep" },
-    { agent: "Tony Poon", property: "15a Crowborough Lane, Milton Keynes, MK7", expectedMoveIn: "01 Aug 2026", serviceLevel: "EFM with RLP", status: "Awaiting References", rentPcm: 2300, period: "aug-sep" },
-    { agent: "Richard Callow", property: "Room 3, 32 Waylen Street, Reading, RG1 7UR", expectedMoveIn: "01 Aug 2026", serviceLevel: "EFM with RLP", status: "Awaiting References", rentPcm: 725, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "160 Gloucester Road, Bristol, BS34 5BQ", expectedMoveIn: "03 Aug 2026", serviceLevel: "Tenant Find", status: "Awaiting References", rentPcm: 2900, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 1, 52 Sunflower Road, Emersons Green, Bristol, BS16", expectedMoveIn: "09 Aug 2026", serviceLevel: "EFM no RLP", status: "Awaiting References", rentPcm: 800, period: "aug-sep" },
-    { agent: "Richard Callow", property: "73 Horspath Road, Oxford, OX4 2QP", expectedMoveIn: "09 Aug 2026", serviceLevel: "Tenant Find", status: "Awaiting References", rentPcm: 3300, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 5, 166 Gloucester Road North, Filton, BS34 7QA", expectedMoveIn: "14 Aug 2026", serviceLevel: "Tenant Find", status: "PLC Sign Off", rentPcm: 795, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 25, 166 Gloucester Road North, Filton, BS34 7QA", expectedMoveIn: "15 Aug 2026", serviceLevel: "Tenant Find", status: "PLC Sign Off", rentPcm: 795, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 52, 166 Gloucester Road North, Filton, BS34 7QA", expectedMoveIn: "15 Aug 2026", serviceLevel: "Tenant Find", status: "Awaiting References", rentPcm: 795, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 31, 166 Gloucester Road North, Filton, BS34 7QA", expectedMoveIn: "15 Aug 2026", serviceLevel: "Tenant Find", status: "Awaiting References", rentPcm: 795, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 54, 166 Gloucester Road North, Filton, BS34 7QA", expectedMoveIn: "15 Aug 2026", serviceLevel: "Tenant Find", status: "Awaiting References", rentPcm: 895, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 50, 166 Gloucester Road North, Filton, BS34 7QA", expectedMoveIn: "16 Aug 2026", serviceLevel: "Tenant Find", status: "Awaiting References", rentPcm: 795, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 67, 166 Gloucester Road North, Filton, BS34 7QA", expectedMoveIn: "15 Aug 2026", serviceLevel: "Tenant Find", status: "PLC Sign Off", rentPcm: 795, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 38, 166 Gloucester Road North, Filton, BS34 7QA", expectedMoveIn: "15 Aug 2026", serviceLevel: "Tenant Find", status: "PLC Sign Off", rentPcm: 795, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 27, 166 Gloucester Road North, Filton, BS34 7QA", expectedMoveIn: "15 Aug 2026", serviceLevel: "Tenant Find", status: "PLC Sign Off", rentPcm: 795, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 10, 166 Gloucester Road North, Filton, BS34 7QA", expectedMoveIn: "15 Aug 2026", serviceLevel: "Tenant Find", status: "Awaiting References", rentPcm: 795, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 68, 166 Gloucester Road North, Filton, BS34 7QA", expectedMoveIn: "29 Aug 2026", serviceLevel: "Tenant Find", status: "PLC Sign Off", rentPcm: 795, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 69, 166 Gloucester Road North, Filton, BS34 7QA", expectedMoveIn: "26 Aug 2026", serviceLevel: "Tenant Find", status: "Awaiting References", rentPcm: 795, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 3, 52 Sunflower Road, Emersons Green, Bristol, BS16", expectedMoveIn: "24 Aug 2026", serviceLevel: "EFM no RLP", status: "Awaiting References", rentPcm: 800, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 40, 166 Gloucester Road North, Filton, BS34 7QA", expectedMoveIn: "01 Sep 2026", serviceLevel: "Tenant Find", status: "Awaiting References", rentPcm: 795, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 20, 166 Gloucester Road North, Filton, BS34 7QA", expectedMoveIn: "01 Sep 2026", serviceLevel: "Tenant Find", status: "Awaiting References", rentPcm: 795, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 36, 166 Gloucester Road North, Filton, BS34 7QA", expectedMoveIn: "01 Sep 2026", serviceLevel: "Tenant Find", status: "Awaiting References", rentPcm: 795, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 46, 166 Gloucester Road North, Filton, BS34 7QA", expectedMoveIn: "17 Sep 2026", serviceLevel: "Tenant Find", status: "Awaiting References", rentPcm: 795, period: "aug-sep" },
-    { agent: "Lauren Engley", property: "Room 65, 166 Gloucester Road, Filton, Bristol, BS34", expectedMoveIn: "01 Sep 2026", serviceLevel: "Tenant Find", status: "Awaiting References", rentPcm: 795, period: "aug-sep" },
-  ] satisfies PipelineRow[],
+  /* forwardPipeline removed — the Aug-Sep capture. The month toggle now reaches either side, live */
 
   /* ---- Tab 4: Income ---- */
   income: {
@@ -475,38 +408,7 @@ export const SEED = {
   /* ---- Tab 6: Partner net income — YTD 2026 ---- */
   // † Glasgow (Margo Wilson Jan–Apr · Sean Mc Mahon from May): 70% of GCI less
   //   £50+VAT per move-in (transaction fee) and £150+VAT per month (licence fee)
-  partnerNetIncome: {
-    rows: [
-      { agent: "Rhiannon Dodge", jan: 1956, feb: 2851, mar: 3105, apr: 2719, may: 2429, jun: 3007, ytdTotal: 16067 },
-      { agent: "Bernadine Williams", jan: 1125, feb: 1268, mar: 2664, apr: 2739, may: 1062, jun: 1343, ytdTotal: 10202 },
-      { agent: "Joe Patten", jan: 1193, feb: 1279, mar: 3635, apr: 1585, may: 1574, jun: 1420, ytdTotal: 10687 },
-      { agent: "James Crumpton", jan: 1506, feb: 2026, mar: 1281, apr: 2397, may: 1459, jun: 1426, ytdTotal: 10094 },
-      { agent: "Sean McMahon (Edinburgh)", jan: 1287, feb: 1697, mar: 1815, apr: 2188, may: 1691, jun: 2347, ytdTotal: 11026 },
-      { agent: "Tony Poon", jan: 1304, feb: 658, mar: 1125, apr: 861, may: 1168, jun: 1112, ytdTotal: 6228 },
-      { agent: "Dan Richards", jan: 789, feb: 645, mar: 908, apr: 503, may: 673, jun: 390, ytdTotal: 3908 },
-      { agent: "Claire Riley", jan: 514, feb: 667, mar: 717, apr: 717, may: 628, jun: 632, ytdTotal: 3876 },
-      { agent: "Kirstie Wallington", jan: 312, feb: 323, mar: 633, apr: 626, may: 363, jun: 352, ytdTotal: 2609 },
-      { agent: "Graham Cross", jan: 277, feb: 523, mar: 312, apr: 312, may: 312, jun: 399, ytdTotal: 2134 },
-      { agent: "Kayleigh Wright", jan: null, feb: null, mar: 684, apr: 522, may: 828, jun: 475, ytdTotal: 2509 },
-      { agent: "Chris Wilson-Slight", jan: 336, feb: 368, mar: 184, apr: 184, may: 365, jun: 215, ytdTotal: 1653 },
-      { agent: "Stuart Roper", jan: 315, feb: 315, mar: 327, apr: 73, may: 73, jun: 395, ytdTotal: 1497 },
-      { agent: "Geraldine Mulhern", jan: null, feb: null, mar: 825, apr: null, may: null, jun: 753, ytdTotal: 1578 },
-      { agent: "Rebecca Adams", jan: 160, feb: 160, mar: 160, apr: 160, may: 160, jun: 110, ytdTotal: 908 },
-      { agent: "Richard Callow", jan: null, feb: null, mar: 329, apr: null, may: 462, jun: 440, ytdTotal: 1231 },
-      { agent: "David Quigg", jan: 206, feb: null, mar: null, apr: null, may: null, jun: null, ytdTotal: 206 },
-      { agent: "Brian Hankins-Lewis", jan: 28, feb: 38, mar: null, apr: null, may: null, jun: null, ytdTotal: 66 },
-      { agent: "Lianna Denholm", tag: "NEW", jan: null, feb: null, mar: null, apr: null, may: 2327, jun: 2700, ytdTotal: 5027 },
-      { agent: "Paul Doig", tag: "NEW", jan: null, feb: null, mar: null, apr: null, may: 449, jun: null, ytdTotal: 449 },
-      { agent: "Zilvinas Navickis", tag: "NEW", jan: null, feb: null, mar: null, apr: null, may: null, jun: 96, ytdTotal: 96 },
-      { agent: "Lauren Engley", tag: "NEW", jan: null, feb: null, mar: null, apr: null, may: 392, jun: 77, ytdTotal: 469 },
-      { agent: "Sean Mc Mahon (Glasgow)", tag: "GLASGOW", jan: 2601, feb: 1863, mar: 2589, apr: 3189, may: 3379, jun: 3554, ytdTotal: 17175 },
-      { agent: "TLE Central", tag: "TLE", jan: 1628, feb: 1248, mar: 1882, apr: 2062, may: 1621, jun: 1729, ytdTotal: 10170 },
-    ] satisfies PartnerNetIncomeRow[],
-    eAndWTotal: { agent: "E&W Total", jan: 11475, feb: 12889, mar: 18775, apr: 15587, may: 16826, jun: 17686, ytdTotal: 93238 } satisfies PartnerNetIncomeRow,
-    glasgowNote:
-      "† Glasgow (Margo Wilson Jan–Apr · Sean Mc Mahon from May): 70% of GCI less £50+VAT per move-in (transaction fee) and £150+VAT per month (licence fee)",
-    source: "Net commission paid to partners · exc VAT · from monthly fee report",
-  },
+  /* partnerNetIncome removed — 24 rows under six hardcoded month columns; unbackfillable before LIVE_START */
 
   /* ---- Tab 7: Portfolio (PayProp-sourced — no API access yet) ---- */
   portfolio: {
@@ -534,31 +436,7 @@ export const SEED = {
       rentRollTotal: snap(357431, "£357,431", "PayProp portfolio report — monthly rent roll"),
     },
     // Portfolio by partner — June 2026 · Managed = EFM with & without RLP/LEC + Rent Collect · RLP column includes LEC
-    byPartner: [
-      { agent: "Sean Mc Mahon (Glasgow)", managed: 83, letOnly: 0, total: 83, rlpLec: 13, rentRoll: 38625, avgRent: 465 },
-      { agent: "Rhiannon Dodge", managed: 51, letOnly: 21, total: 72, rlpLec: 36, rentRoll: 47335, avgRent: 928 },
-      { agent: "Joe Patten", managed: 47, letOnly: 7, total: 54, rlpLec: 4, rentRoll: 41787, avgRent: 889 },
-      { agent: "Lianna Denholm", managed: 32, letOnly: 0, total: 32, rlpLec: 0, rentRoll: 32590, avgRent: 1018 },
-      { agent: "James Crumpton", managed: 21, letOnly: 21, total: 42, rlpLec: 12, rentRoll: 28395, avgRent: 1352 },
-      { agent: "Sean McMahon (Edinburgh)", managed: 18, letOnly: 37, total: 55, rlpLec: 7, rentRoll: 22750, avgRent: 1264 },
-      { agent: "Bernadine Williams", managed: 16, letOnly: 13, total: 29, rlpLec: 1, rentRoll: 24225, avgRent: 1514 },
-      { agent: "Tony Poon", managed: 13, letOnly: 2, total: 15, rlpLec: 12, rentRoll: 25920, avgRent: 1994 },
-      { agent: "Dan Richards", managed: 12, letOnly: 14, total: 26, rlpLec: 5, rentRoll: 12600, avgRent: 1050 },
-      { agent: "Claire Riley", managed: 10, letOnly: 2, total: 12, rlpLec: 8, rentRoll: 14288, avgRent: 1429 },
-      { agent: "Richard Callow", managed: 6, letOnly: 5, total: 11, rlpLec: 2, rentRoll: 7425, avgRent: 1238 },
-      { agent: "Kayleigh Wright", managed: 6, letOnly: 3, total: 9, rlpLec: 4, rentRoll: 6870, avgRent: 1145 },
-      { agent: "Stuart Roper", managed: 5, letOnly: 2, total: 7, rlpLec: 2, rentRoll: 9250, avgRent: 1850 },
-      { agent: "Graham Cross", managed: 5, letOnly: 0, total: 5, rlpLec: 5, rentRoll: 6112, avgRent: 1222 },
-      { agent: "Chris Wilson-Slight", managed: 6, letOnly: 0, total: 6, rlpLec: 6, rentRoll: 6250, avgRent: 1042 },
-      { agent: "Lauren Engley", managed: 3, letOnly: 17, total: 20, rlpLec: 0, rentRoll: 2400, avgRent: 800 },
-      { agent: "Kirstie Wallington", managed: 2, letOnly: 12, total: 14, rlpLec: 1, rentRoll: 2075, avgRent: 1038 },
-      { agent: "Rebecca Adams", managed: 2, letOnly: 2, total: 4, rlpLec: 2, rentRoll: 2650, avgRent: 1325 },
-      { agent: "Zilvinas Navickis", managed: 2, letOnly: 0, total: 2, rlpLec: 1, rentRoll: 3200, avgRent: 1600 },
-      { agent: "Geraldine Mulhern", managed: 1, letOnly: 2, total: 3, rlpLec: 0, rentRoll: 2150, avgRent: 2150 },
-      { agent: "Paul Doig", managed: 1, letOnly: 0, total: 1, rlpLec: 1, rentRoll: 2200, avgRent: 2200 },
-      { agent: "Shane Yu", managed: 0, letOnly: 1, total: 1, rlpLec: 0, rentRoll: null, avgRent: null },
-      { agent: "TLE Central", managed: 20, letOnly: 0, total: 20, rlpLec: 9, rentRoll: 18335, avgRent: 917 },
-    ] satisfies PortfolioRow[],
+    /* byPartner removed — the June PayProp report. getAgentBook + getPortfolioBook answer this live */
     totals: { agent: "TOTAL", managed: 362, letOnly: 163, total: 528, rlpLec: 131, rentRoll: 357431, avgRent: null } satisfies PortfolioRow,
     source: "E&W & Glasgow PayProp portfolio report · June 2026 · PayProp API access pending",
   },
@@ -632,22 +510,7 @@ export const SEED = {
       { type: "Fire Risk Assessment", total: 6, overdue: 4, upcoming: 2 },
     ] satisfies ComplianceTypeRow[],
     byTypeTotal: { type: "Total", total: 136, overdue: 69, upcoming: 67 } satisfies ComplianceTypeRow,
-    byAgent: [
-      { agent: "Sean McMahon", total: 50, overdue: 24, upcoming: 26, pctOverdue: 48 },
-      { agent: "Lianna Denholm", total: 29, overdue: 13, upcoming: 16, pctOverdue: 45 },
-      { agent: "Rhiannon Dodge", total: 19, overdue: 3, upcoming: 16, pctOverdue: 16 },
-      { agent: "Joe Patten", total: 13, overdue: 11, upcoming: 2, pctOverdue: 85 },
-      { agent: "Lauren Engley", total: 4, overdue: 4, upcoming: 0, pctOverdue: 100 },
-      { agent: "Richard Callow", total: 4, overdue: 3, upcoming: 1, pctOverdue: 75 },
-      { agent: "Tony Poon", total: 4, overdue: 2, upcoming: 2, pctOverdue: 50 },
-      { agent: "Chris Wilson-Slight", total: 3, overdue: 2, upcoming: 1, pctOverdue: 67 },
-      { agent: "Dan Richards", total: 3, overdue: 1, upcoming: 2, pctOverdue: 33 },
-      { agent: "Bernadine Williams", total: 2, overdue: 1, upcoming: 1, pctOverdue: 50 },
-      { agent: "Stuart Roper", total: 2, overdue: 2, upcoming: 0, pctOverdue: 100 },
-      { agent: "Claire Riley", total: 1, overdue: 1, upcoming: 0, pctOverdue: 100 },
-      { agent: "Graham Cross", total: 1, overdue: 1, upcoming: 0, pctOverdue: 100 },
-      { agent: "Kirstie Wallington", total: 1, overdue: 1, upcoming: 0, pctOverdue: 100 },
-    ] satisfies ComplianceAgentRow[],
+    /* byAgent removed — the 7 Jul REX PM capture. getComplianceAsAt().byAgent answers this live */
     byAgentTotal: { agent: "Total", total: 136, overdue: 69, upcoming: 67, pctOverdue: 51 } satisfies ComplianceAgentRow,
     // Sample of the 136 item rows shown on the source dashboard (earliest/most overdue first)
     sampleItems: [
@@ -755,49 +618,18 @@ export function agentSeedStats(agentKey: string, month?: string): FunnelStats {
   };
 }
 
-/**
- * July move-ins for one agent (rows verbatim from the Move-ins Jul table).
- *
- * Same rule as agentSeedStats above: these rows describe July 2026 and nothing
- * else, so when a month is asked for they only answer for July. Without it the
- * dashboard's move-in fallback listed July's tenancies under a June heading
- * whenever PayProp couldn't be reached — a confident, checkable, wrong answer.
- */
-export function agentMoveIns(agentKey: string, month?: string): MoveInRow[] {
-  if (month && month !== SNAPSHOT_MONTH) return [];
-  return SEED.moveInsJuly.rows.filter((r) => nameMatchesAgent(r.agent, agentKey));
-}
+/* ── Five per-agent seed readers removed, 28 Aug 2026 ─────────────────────
+   agentMoveIns · agentPipeline · agentNetIncomeYtd · agentCompliance ·
+   agentPortfolio
 
-/**
- * Pipeline rows for one agent — July pipeline + Aug–Sep forward pipeline
- * combined; each row carries `period: "july" | "aug-sep"`.
- * NOTE: unqualified "Sean McMahon" pipeline rows match BOTH Sean keys — the
- * source dashboard does not split them between Edinburgh and Glasgow.
- */
-export function agentPipeline(agentKey: string): PipelineRow[] {
-  return [...SEED.julyPipeline, ...SEED.forwardPipeline].filter((r) =>
-    nameMatchesAgent(r.agent, agentKey),
-  );
-}
+   They read the six July row-tables that have gone, and every one of them had
+   zero callers — the drill-down did its own inline `seed.x.find(...)` instead,
+   so these were being maintained while answering nobody.
 
-/** Jan–Jun + YTD net income row for one agent, or null if not in the table. */
-export function agentNetIncomeYtd(agentKey: string): PartnerNetIncomeRow | null {
-  return SEED.partnerNetIncome.rows.find((r) => nameMatchesAgent(r.agent, agentKey)) ?? null;
-}
+   The live per-partner equivalents are getPropolyAgentDeals, getAgentBook,
+   getAgentEarningsForMonths and getComplianceAsAt().byAgent — all of which
+   also had no callers until /api/business/agent-live introduced them. */
 
-/**
- * Compliance counts row for one agent, or null.
- * NOTE: the source table has a single unqualified "Sean McMahon" row — it is
- * returned for BOTH sean-mcmahon-edinburgh and sean-mcmahon-glasgow.
- */
-export function agentCompliance(agentKey: string): ComplianceAgentRow | null {
-  return SEED.compliance.byAgent.find((r) => nameMatchesAgent(r.agent, agentKey)) ?? null;
-}
-
-/** Portfolio-by-partner row for one agent, or null. */
-export function agentPortfolio(agentKey: string): PortfolioRow | null {
-  return SEED.portfolio.byPartner.find((r) => nameMatchesAgent(r.agent, agentKey)) ?? null;
-}
 
 /* ==================== Per-period KPIs (Base44, 21 Jul 2026) ==================== */
 // Susan's Base44 dashboard has working period pills; these figures were read

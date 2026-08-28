@@ -17,7 +17,10 @@ export default function SourceNote({
    *  report/tenant/balances, negative balances only" answers the question;
    *  "PayProp" invites the follow-up. */
   children: string;
-  tone?: "live" | "snapshot" | "derived";
+  /** "unavailable" = nothing reached this yet. Red, and distinct from
+   *  "snapshot" amber on purpose — a figure that is merely old and a figure
+   *  that does not exist are different problems with different fixes. */
+  tone?: "live" | "snapshot" | "derived" | "unavailable";
 }) {
   const [show, setShow] = useState(false);
   const colour =
@@ -25,9 +28,17 @@ export default function SourceNote({
       ? "text-green-600/80 hover:text-green-700"
       : tone === "derived"
         ? "text-slate-500/80 hover:text-slate-600"
-        : "text-amber-600/80 hover:text-amber-700";
+        : tone === "unavailable"
+          ? "text-rose-600/80 hover:text-rose-700"
+          : "text-amber-600/80 hover:text-amber-700";
   const prefix =
-    tone === "live" ? "Live" : tone === "derived" ? "Worked out here" : "Snapshot";
+    tone === "live"
+      ? "Live"
+      : tone === "derived"
+        ? "Worked out here"
+        : tone === "unavailable"
+          ? "No source"
+          : "Snapshot";
 
   return (
     <span className="source-badge relative inline-block align-middle">

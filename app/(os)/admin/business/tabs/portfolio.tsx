@@ -254,8 +254,6 @@ export default function PortfolioTab({ month, seed }: { month: string; seed: See
       }
     : null;
 
-  const rows = [...p.byPartner, p.totals];
-
   return (
     <div className="space-y-6">
       {/* Source banner */}
@@ -269,7 +267,7 @@ export default function PortfolioTab({ month, seed }: { month: string; seed: See
       ) : (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
           <span className="font-semibold">Fetching the live book from PayProp…</span>{" "}
-          Showing the June 2026 portfolio report until it lands.
+          Nothing shown until it lands — the walk takes a moment cold.
         </div>
       )}
 
@@ -555,15 +553,16 @@ export default function PortfolioTab({ month, seed }: { month: string; seed: See
       <section className="space-y-3">
         <h2 className="text-sm font-semibold">
           Portfolio by partner{" "}
-          {live
-            ? `— live (${livePartnerRows.length} partners)`
-            : `— June 2026 (${p.byPartner.length} partners)`}
-          <SourceNote tone={live ? "live" : "snapshot"}>
+          {live ? `— live (${livePartnerRows.length} partners)` : ""}
+          <SourceNote tone={live ? "live" : "unavailable"}>
             {live
               ? "PayProp portfolio walk, both agencies, as it stands today. Managed and let-only come from each partner's own service-level split; average rent is worked out per partner rather than blended down from the whole book."
-              : "The June capture. The live PayProp book has not answered yet."}
+              : "The live PayProp book has not answered yet."}
           </SourceNote>
         </h2>
+        {/* No seed fallback. It rendered the June book under a live heading
+            while PayProp was still walking, so the table looked finished and
+            was a month out. A wait that says it is waiting is better. */}
         {live && liveTotals ? (
           <>
             <DataTable
@@ -578,10 +577,7 @@ export default function PortfolioTab({ month, seed }: { month: string; seed: See
             </p>
           </>
         ) : (
-          <>
-            <DataTable columns={COLUMNS} rows={rows} compact />
-            <p className="text-xs text-muted">{p.source}</p>
-          </>
+          <p className="text-xs text-muted">Waiting on PayProp for the partner split.</p>
         )}
       </section>
     </div>

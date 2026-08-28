@@ -1378,7 +1378,7 @@ export default function Overview({ month }: { month: string }) {
                 : {
                     value: null,
                     display: "—",
-                    source: "snapshot",
+                    source: "unavailable",
                     note: "PayProp holds COMMISSION, not total business income. Susan's captured total is about £27k above year-to-date commission over the same window, and that gap is not VAT (PayProp's VAT is a flat 20%) — so it is revenue from somewhere PayProp cannot see. Needs a definition before it can be computed live.",
                   }
             }

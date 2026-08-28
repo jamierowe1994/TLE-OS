@@ -35,10 +35,15 @@ export function resolveStat(
     };
   }
   if (snapshot != null) {
-    // Snapshot StatValues arrive pre-tagged (source/note/asOf) — pass through.
+    // Pre-tagged (source/note/asOf) — pass through. Since the snapshot was
+    // emptied these arrive already marked "unavailable", which is the point:
+    // the tag travels with the value instead of being decided here.
     return snapshot;
   }
-  return { value: null, source: "snapshot" };
+  /* Live missing, manual missing, snapshot missing. Nothing reached this tile
+     at all — which is NOT the same as a stale figure and must not wear the
+     same badge. */
+  return { value: null, source: "unavailable", note: "No source reached this figure." };
 }
 
 /** Percentage 0..100 (not clamped) — null when it can't be computed. */

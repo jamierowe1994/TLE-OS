@@ -539,7 +539,9 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
   for (const a of live?.perAgent ?? []) everyName.set(norm(a.name), a.name);
   for (const r of seed.agentKpisJulyMtd.rows) if (!everyName.has(norm(r.agent))) everyName.set(norm(r.agent), r.agent);
 
-  const isSeedMonth = month === "2026-07";
+  /* `isSeedMonth = month === "2026-07"` stood here — a hardcoded month
+     literal, the exact fault that had this dashboard reporting July in
+     August. Its last reader went with the capture. */
   const liveRows = [...everyName.entries()].map(([key, displayName]) => {
     const rex = rexByName.get(key);
     const cash = moneyByName.get(key);
@@ -563,11 +565,6 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
       ma: rex?.marketAppraisals ?? null,
       li: rex?.listings ?? null,
       pn: rex?.pipeline ?? null,
-      // No live per-agent source exists for these two. Shown only for the month
-      // the capture describes, rather than under every heading.
-      vw: isSeedMonth ? (sd?.vw ?? null) : null,
-      ap: isSeedMonth ? (sd?.ap ?? null) : null,
-      mi: isSeedMonth ? (sd?.mi ?? null) : null,
     };
   });
   // Biggest earner first; unmatched people fall to the bottom rather than
@@ -603,10 +600,6 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
   };
   const kpiRowsLive = [...banded, { ...totalRow, band: "none" as BandId }];
 
-  const netIncomeRows = [
-    ...seed.partnerNetIncome.rows,
-    seed.partnerNetIncome.eAndWTotal,
-  ];
 
   const unlinkedRoster = ROSTER.filter(
     (r) => r.active && !usersByAgentKey.has(r.agentKey)
@@ -847,54 +840,38 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
         />
       ) : null}
 
-      {/* --------------------- partner net income YTD --------------------- */}
-      <SectionTitle source={seed.partnerNetIncome.source}>
-        Partner Net Income — YTD 2026
-      </SectionTitle>
-      <DataTable
-        columns={[
-          {
-            key: "agent",
-            label: "Agent",
-            render: (row) => (
-              <span className={row.agent === "E&W Total" ? "font-semibold" : ""}>
-                {String(row.agent)}
-                {row.tag ? (
-                  <span
-                    className={`ml-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                      TAG_STYLES[String(row.tag)] ?? TAG_STYLES.NEW
-                    }`}
-                  >
-                    {String(row.tag)}
-                  </span>
-                ) : null}
-                {row.agent === "Sean Mc Mahon (Glasgow)" ? " †" : ""}
-              </span>
-            ),
-          },
-          { key: "jan", label: "Jan", align: "right", render: (row) => money(row.jan as number | null) },
-          { key: "feb", label: "Feb", align: "right", render: (row) => money(row.feb as number | null) },
-          { key: "mar", label: "Mar", align: "right", render: (row) => money(row.mar as number | null) },
-          { key: "apr", label: "Apr", align: "right", render: (row) => money(row.apr as number | null) },
-          { key: "may", label: "May", align: "right", render: (row) => money(row.may as number | null) },
-          { key: "jun", label: "Jun", align: "right", render: (row) => money(row.jun as number | null) },
-          {
-            key: "ytdTotal",
-            label: "YTD Total",
-            align: "right",
-            render: (row) => (
-              <span className="font-semibold">{money(row.ytdTotal as number)}</span>
-            ),
-          },
-        ]}
-        rows={netIncomeRows as unknown as Record<string, unknown>[]}
-        compact
-        onRowClick={(row) => {
-          const name = String(row.agent);
-          if (name !== "E&W Total" && name !== "TOTAL") setSelectedAgent(name);
-        }}
-      />
-      <p className="mt-2 text-[11px] text-muted">{seed.partnerNetIncome.glasgowNote}</p>
+      {/* --------------------- partner net income YTD ---------------------
+          The Jan–Jun 2026 per-partner table used to live here: 24 rows of
+          hand-keyed figures under six hardcoded month columns.
+
+          It went for three reasons, in order of weight:
+
+          1. It could never roll over. The columns were literally jan…jun, so
+             it would still have said "YTD 2026" and stopped at June in
+             December. Hardcoded month literals are the exact fault that had
+             this dashboard reporting "July month to date" in August.
+          2. It cannot be made live. The portal measures its own figures from
+             LIVE_START (Aug 2026) and there is deliberately no backfill —
+             Jan–Jul exists only in Susan's typed sheet. A measured half-year
+             and a typed one on the same row describes the change of method,
+             not the business.
+          3. It was already redundant. The live PayProp table above reports
+             earnings per partner for whichever month is selected, and the
+             drill-down now totals them from August.
+
+          The figures are not lost — they are in git, and in Susan's sheet,
+          which is where they came from. */}
+      <SectionTitle>Partner Net Income</SectionTitle>
+      <p className="mb-2 max-w-2xl text-[12.5px] leading-relaxed text-muted">
+        Per-partner earnings are in the live PayProp table above, for whichever month is
+        selected. Open a partner for their total since August 2026.
+      </p>
+      <p className="max-w-2xl text-[11px] leading-relaxed text-muted">
+        There is no January–July line here on purpose. The portal measures its own figures
+        from August 2026; everything before that was typed into a spreadsheet by hand, and
+        the two aren&rsquo;t the same measurement. Susan&rsquo;s sheet remains the record for
+        the earlier months.
+      </p>
 
       {/* ------------------------- user management ------------------------- */}
       <SectionTitle>Portal accounts — link & manage</SectionTitle>
@@ -953,19 +930,40 @@ export default function Agents({ month, seed }: { month: string; seed: SeedData 
 function liveStat(
   value: number | null,
   display: string | undefined,
-  source: "live-payprop" | "live-rex",
-  note: string
+  source: "live-payprop" | "live-rex" | "live-propoly",
+  note?: string
 ): StatValue {
   return { value, display, source, note, asOf: new Date().toISOString().slice(0, 10) };
 }
 
-/** Snapshot StatValue wrapper for seed figures shown in the drill-down. */
-function snapStat(
-  value: number | null,
-  display?: string,
-  note?: string
-): { value: number | null; display?: string; source: "snapshot"; note?: string; asOf: string } {
-  return { value, display, source: "snapshot", note, asOf: "2026-07-11" };
+/**
+ * One partner's live detail, from /api/business/agent-live.
+ *
+ * Named ...Detail because AgentLive above is a ROW in the partner table — a
+ * different thing at a different grain, and letting the two share a name is
+ * how a row ends up rendered as a drill-down.
+ */
+interface AgentLiveDetail {
+  agent: string;
+  month: string;
+  months: string[];
+  liveStart: string;
+  earnings: Array<{
+    month: string;
+    earnings: { earnedNet: number; matched: boolean } | null;
+  }> | null;
+  book: {
+    properties: number;
+    rentRoll: number;
+    serviceLevels: Record<string, number>;
+  } | null;
+  deals: Array<{ stage: string }> | null;
+  compliance: {
+    total: number;
+    overdue: number;
+    upcoming: number;
+    pctOverdue: number;
+  } | null;
 }
 
 function AgentDrilldown({
@@ -985,8 +983,7 @@ function AgentDrilldown({
   live: {
     gci: number | null; rent: number | null; props: number | null; tens: number | null;
     ma: number | null; li: number | null; pn: number | null;
-    vw: number | null; ap: number | null; mi: number | null;
-  } | null;
+    } | null;
   user: (UserProfile & { adminNotes?: { at: string; text: string }[] }) | null;
   forecast: AgentForecast | null;
   onClose: () => void;
@@ -997,13 +994,57 @@ function AgentDrilldown({
 
   const roster = ROSTER.filter((r) => keys.includes(r.agentKey));
   const kpi = seed.agentKpisJulyMtd.rows.find((r) => matches(r.agent)) ?? null;
-  const netIncome = seed.partnerNetIncome.rows.find((r) => matches(r.agent)) ?? null;
-  const portfolio = seed.portfolio.byPartner.find((r) => matches(r.agent)) ?? null;
-  const compliance = seed.compliance.byAgent.find((r) => matches(r.agent)) ?? null;
-  const moveIns = seed.moveInsJuly.rows.filter((r) => matches(r.agent));
-  const pipeline = [...seed.julyPipeline, ...seed.forwardPipeline].filter((r) =>
-    matches(r.agent)
-  );
+
+  /* Net income, portfolio, compliance, move-ins and pipeline used to be five
+     lookups into the 11 July capture — so opening a partner from the LIVE
+     table above silently reverted every figure to July, addresses and rents
+     included. They now come from one per-partner call. */
+  const [agentLive, setAgentLive] = useState<AgentLiveDetail | null>(null);
+  const [agentLiveState, setAgentLiveState] = useState<"loading" | "ok" | "error">("loading");
+
+  const rosterKey = roster[0]?.agentKey ?? null;
+  useEffect(() => {
+    let cancelled = false;
+    setAgentLive(null);
+    setAgentLiveState("loading");
+    const qs = new URLSearchParams({ agent: name, month });
+    if (user?.email) qs.set("email", user.email);
+    if (rosterKey) qs.set("agentKey", rosterKey);
+    fetch(`/api/business/agent-live?${qs}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d: AgentLiveDetail) => {
+        /* Discard an answer for a partner or month that has since been
+           navigated away from — the race that put one month's figures under
+           another's heading on the Overview. */
+        if (cancelled || d.agent !== name || d.month !== month) return;
+        setAgentLive(d);
+        setAgentLiveState("ok");
+      })
+      .catch(() => {
+        if (!cancelled) setAgentLiveState("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [name, month, user?.email, rosterKey]);
+
+  const earnedToDate = agentLive?.earnings?.length
+    ? agentLive.earnings.reduce<number | null>(
+        (n, e) => (e.earnings ? (n ?? 0) + e.earnings.earnedNet : n),
+        null
+      )
+    : null;
+  const book = agentLive?.book ?? null;
+  const svc = book?.serviceLevels ?? {};
+  const countSvc = (re: RegExp) =>
+    Object.entries(svc)
+      .filter(([k]) => re.test(k))
+      .reduce((n, [, v]) => n + v, 0);
+  const deals = agentLive?.deals ?? null;
+  /* Counted off the array that is rendered, so the figure and the list behind
+     it cannot disagree. */
+  const dealsLive = deals?.filter((d) => d.stage !== "unsuccessful") ?? null;
+  const compliance = agentLive?.compliance ?? null;
 
   return (
     <section className="card mt-6 border-accent/30 p-5">
@@ -1097,19 +1138,15 @@ function AgentDrilldown({
             <StatCard label="Listings" stat={liveStat(live.li, undefined, "live-rex", "Rental listings instructed in the selected month.")} />
             <StatCard label="Pipeline" stat={liveStat(live.pn, undefined, "live-rex", "Deals in progression right now — a current-state figure, not a month figure.")} />
           </div>
-          {live.vw != null || live.ap != null || live.mi != null ? (
-            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <StatCard label="Viewings" stat={snapStat(live.vw)} />
-              <StatCard label="Applications" stat={snapStat(live.ap)} />
-              <StatCard label="Move-ins" stat={snapStat(live.mi)} />
-            </div>
-          ) : (
-            <p className="mt-2 text-xs text-muted">
-              Viewings, applications and move-ins have no live per-partner source — they
-              exist only in the July 2026 capture, so they aren&rsquo;t shown for{" "}
-              {monthLabel(month)}.
-            </p>
-          )}
+          {/* Viewings / applications / move-ins per partner came only from the
+              July capture, so with it gone this is a standing gap rather than
+              a month-by-month one. Named, because a partner quietly missing
+              three activity figures reads as three zeros. */}
+          <p className="mt-2 text-xs text-muted">
+            Viewings, applications and move-ins aren&rsquo;t broken down per partner by any
+            live source yet. REX holds the appointments; nothing attributes them to a
+            partner we can query.
+          </p>
         </>
       ) : (
         <p className="text-xs text-muted">
@@ -1149,56 +1186,82 @@ function AgentDrilldown({
           </h4>
           <div className="grid grid-cols-2 gap-3">
             <StatCard
-              label="Net income YTD"
-              stat={snapStat(
-                netIncome ? netIncome.ytdTotal : null,
-                netIncome ? formatGBP(netIncome.ytdTotal) : undefined,
-                seed.partnerNetIncome.source
+              label="Earned since Aug 2026"
+              stat={liveStat(
+                earnedToDate,
+                earnedToDate != null ? formatGBP(earnedToDate) : undefined,
+                "live-payprop",
+                /* Deliberately not "YTD". The portal measures from Aug 2026;
+                   Jan–Jul exists only in Susan's hand-keyed sheet, and a
+                   typed half-year added to a measured one describes the
+                   change of method rather than the business. */
+                "Fees net of VAT, summed from August 2026 — the first month the portal measures its own figures. Earlier months were hand-keyed and are not added in."
               )}
+              sub={agentLive?.earnings?.some((e) => e.earnings?.matched === false)
+                ? "No PayProp beneficiary matches this partner"
+                : undefined}
             />
             <StatCard
-              label="July move-ins / pipeline"
-              stat={snapStat(moveIns.length, `${moveIns.length} / ${pipeline.length}`)}
-              sub={`${moveIns.length} completed · ${pipeline.length} in pipeline`}
+              label="Live pipeline"
+              stat={liveStat(
+                dealsLive ? dealsLive.length : null,
+                undefined,
+                "live-propoly",
+                "Deals in progression in Propoly right now — a current-state figure, not a month figure."
+              )}
+              sub={
+                deals
+                  ? `${deals.length - (dealsLive?.length ?? 0)} unsuccessful, not counted`
+                  : undefined
+              }
             />
           </div>
         </div>
         <div>
           <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-            Portfolio (PayProp snapshot)
+            Portfolio
           </h4>
-          {portfolio ? (
+          {agentLiveState === "loading" ? (
+            <p className="text-xs text-muted">Reading their book from PayProp…</p>
+          ) : book ? (
             <div className="grid grid-cols-2 gap-3">
-              <StatCard label="Managed" stat={snapStat(portfolio.managed)} />
-              <StatCard label="Let only" stat={snapStat(portfolio.letOnly)} />
-              <StatCard label="Total properties" stat={snapStat(portfolio.total)} />
+              {/* Managed / let-only split off their own service levels — the
+                  same derivation the Portfolio tab uses, so the drill-down and
+                  the table it opened from cannot disagree. */}
+              <StatCard label="Managed" stat={liveStat(countSvc(/managed|efm/i), undefined, "live-payprop")} />
+              <StatCard label="Let only" stat={liveStat(countSvc(/let\s*only/i), undefined, "live-payprop")} />
+              <StatCard label="Total properties" stat={liveStat(book.properties, undefined, "live-payprop")} />
               <StatCard
                 label="Rent roll"
-                stat={snapStat(
-                  portfolio.rentRoll,
-                  portfolio.rentRoll != null ? formatGBP(portfolio.rentRoll) : undefined
-                )}
+                stat={liveStat(book.rentRoll, formatGBP(book.rentRoll), "live-payprop")}
               />
-            </div>
-          ) : (
-            <p className="text-xs text-muted">Not in the portfolio-by-partner table.</p>
-          )}
-          <h4 className="mb-2 mt-3 text-[11px] font-semibold uppercase tracking-wide text-muted">
-            Compliance (REX PM snapshot)
-          </h4>
-          {compliance ? (
-            <div className="grid grid-cols-3 gap-3">
-              <StatCard label="Items" stat={snapStat(compliance.total)} />
-              <StatCard
-                label="Overdue"
-                stat={snapStat(compliance.overdue)}
-                sub={formatPct(compliance.pctOverdue)}
-              />
-              <StatCard label="Upcoming" stat={snapStat(compliance.upcoming)} />
             </div>
           ) : (
             <p className="text-xs text-muted">
-              No compliance items recorded against this agent.
+              PayProp didn&rsquo;t answer for this partner. Nothing shown rather than a
+              stale book.
+            </p>
+          )}
+          <h4 className="mb-2 mt-3 text-[11px] font-semibold uppercase tracking-wide text-muted">
+            Compliance
+          </h4>
+          {agentLiveState === "loading" ? (
+            <p className="text-xs text-muted">Reading compliance from REX…</p>
+          ) : compliance ? (
+            <div className="grid grid-cols-3 gap-3">
+              <StatCard label="Items" stat={liveStat(compliance.total, undefined, "live-rex")} />
+              <StatCard
+                label="Overdue"
+                stat={liveStat(compliance.overdue, undefined, "live-rex")}
+                sub={formatPct(compliance.pctOverdue)}
+              />
+              <StatCard label="Upcoming" stat={liveStat(compliance.upcoming, undefined, "live-rex")} />
+            </div>
+          ) : (
+            <p className="text-xs text-muted">
+              {agentLiveState === "error"
+                ? "Couldn't reach REX for compliance."
+                : "No compliance items recorded against this partner."}
             </p>
           )}
         </div>

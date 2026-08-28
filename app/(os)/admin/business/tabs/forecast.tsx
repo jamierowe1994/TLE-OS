@@ -314,7 +314,7 @@ export default function Forecast({ month, seed }: { month: string; seed: SeedDat
         <StatCard
           big
           label="Actual MTD (combined GCI)"
-          stat={data?.actualMtd ?? { value: null, source: "snapshot" }}
+          stat={data?.actualMtd ?? { value: null, source: "unavailable", note: "Month-to-date actuals haven't loaded." }}
         />
         <StatCard
           big

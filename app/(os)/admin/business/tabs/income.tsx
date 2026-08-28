@@ -273,8 +273,10 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
   const splitStat = liveSplit ?? inc.june.tleSplitPct;
   // The partners' cash sits next to that percentage, so it has to come off the
   // same month: prev's own beneficiary total, not June's snapshot.
-  const splitPartnerNet =
-    liveSplit && prev ? gbp(prev.paidToBeneficiaries) : inc.june.partnerNetIncome.display ?? "";
+  /* No June fallback. Quoting June's partner cash under a live percentage put
+     two different months on one line, and the empty string is the honest
+     answer when this month's beneficiary total hasn't landed. */
+  const splitPartnerNet = liveSplit && prev ? gbp(prev.paidToBeneficiaries) : "";
 
 
   // Live estimate input: this month's completed move-ins from Propoly.
