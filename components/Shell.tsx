@@ -26,11 +26,13 @@ const FRONT: NavItem[] = [
       { href: "/leads?side=landlord", label: "Landlord" },
     ],
   },
+  /* Straight after Leads, because that is the order the landlord side runs
+     in: a landlord lead becomes an appraisal BEFORE there is anything to list.
+     It sat after Viewings, which is the tenant side's order and made the rail
+     read as one queue when it is two. */
+  { href: "/market-appraisals", label: "Market Appraisals", icon: "trend-up" },
   { href: "/listings", label: "Listings", icon: "home" },
   { href: "/viewings", label: "Viewings", icon: "calendar" },
-  /* Between Viewings and Applications, matching the order of the work: a
-     landlord lead becomes an appraisal before anything is ever let. */
-  { href: "/market-appraisals", label: "Market Appraisals", icon: "trend-up" },
   { href: "/applications", label: "Applications", icon: "checklist" },
 ];
 const BACK: NavItem[] = [
@@ -204,8 +206,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   }
 
   async function signOut() {
-    await fetch("/api/key", { method: "DELETE" }).catch(() => null);
-    router.push("/key");
+    /* The session, not the old access code. This still called /api/key and
+       pushed to /key — both retired when the shared code went. Signing out
+       cleared a cookie nothing reads and landed on a page that redirects. */
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
+    router.push("/sign-in");
     router.refresh();
   }
 
@@ -312,8 +317,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <div className="mt-auto">
           {profileOpen && !collapsed && (
             <div className="fade-up mb-2 rounded-2xl border border-line/80 bg-panel p-3">
-              {/* The full profile lives on its own page — this panel keeps
-                  the two-second jobs (theme, accent, sign out). */}
+              {/* ONE door, not three.
+                  "Your profile", "Your settings" and "Your account" were three
+                  entries for one idea — James: "they're the same thing". Three
+                  doors to the same room means every visit starts with a guess,
+                  and the thing somebody wants is behind whichever one they did
+                  not pick. Appearance moved inside too: a theme picker in a
+                  dropdown is a setting hiding from the settings page. */}
               <Link
                 href="/profile"
                 onClick={() => setProfileOpen(false)}
@@ -323,69 +333,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                 Your profile
                 <span className="ml-auto text-muted">→</span>
               </Link>
-              {/* Settings, distinct from profile. Profile is who you are;
-                  settings is how the OS behaves for you — and the custom
-                  fields an agent invents have to be findable again a fortnight
-                  later, which "under your name somewhere" is not. */}
-              <Link
-                href="/settings"
-                onClick={() => setProfileOpen(false)}
-                className="mb-2 flex items-center gap-2 rounded-lg border border-line/70 px-2.5 py-2 text-[12px] font-semibold transition-colors hover:border-ink/40"
-              >
-                <DoodleIcon name="settings" size={14} className="text-accent-dark" />
-                Your settings
-                <span className="ml-auto text-muted">→</span>
-              </Link>
-              <Link
-                href="/account"
-                onClick={() => setProfileOpen(false)}
-                className="mb-3 flex items-center gap-2 rounded-lg border border-line/70 px-2.5 py-2 text-[12px] font-semibold transition-colors hover:border-ink/40"
-              >
-                <DoodleIcon name="key" size={14} className="text-accent-dark" />
-                Your account
-                <span className="ml-auto text-muted">→</span>
-              </Link>
-              <p className="text-[10px] font-bold uppercase tracking-wide text-muted">
-                Appearance
-              </p>
-              <div className="mt-2 flex gap-1">
-                {(["light", "dark", "auto"] as const).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={(e) => pickTheme(t, e)}
-                    className={`flex-1 rounded-lg border px-1.5 py-1.5 text-[10.5px] font-medium capitalize transition-colors ${
-                      theme === t
-                        ? "border-accent-dark bg-accent-soft text-accent-dark"
-                        : "border-line/70 text-muted hover:text-ink"
-                    }`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-
-              <p className="mt-3 text-[10px] font-bold uppercase tracking-wide text-muted">
-                Your accent
-              </p>
-              <div className="mt-2 flex gap-2">
-                {ACCENTS.map((a) => (
-                  <button
-                    key={a.id}
-                    type="button"
-                    title={a.label}
-                    onClick={() => pickAccent(a.id)}
-                    className={`h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 ${
-                      accent === a.id ? "border-ink" : "border-line/60"
-                    }`}
-                    style={{ backgroundColor: a.dot }}
-                  />
-                ))}
-              </div>
               <button
                 type="button"
                 onClick={signOut}
-                className="mt-3 flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left text-xs font-semibold text-muted transition-colors hover:text-ink"
+                className="flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left text-xs font-semibold text-muted transition-colors hover:text-ink"
               >
                 <DoodleIcon name="logout" size={14} className="text-muted" />
                 Sign out

@@ -4,24 +4,21 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 /**
- * Admin's own world, with its own rail.
+ * Admin's own rail — the SAME panel as the agent sidebar, different contents.
  *
- * ── Why a left rail rather than the strip across the top ──────────────────
+ * James, 28 Aug: "the same navigation bar style that we have put on the
+ * homepage, with the line around the outside… it's just a mirror version with
+ * just different options."
  *
- * The strip was fine at five tabs. It is not fine at ten, and admin is now
- * growing a section per person — Susan, Francesca, Kirstie, and whoever comes
- * after. Tabs across the top wrap onto a second line and then read as two
- * unrelated rows; a left rail just gets longer, which is the one direction
- * this list is certain to go.
+ * That is the right instinct and worth naming: an owner stepping into admin has
+ * not gone to a different product, they have changed what they are working on.
+ * A rail that looks the same says so. A differently-shaped one makes admin feel
+ * bolted on, which is exactly what it is underneath and exactly what it should
+ * not feel like.
  *
- * It also lets the list be GROUPED. "People" and "Susan's view" are different
- * kinds of thing — one is a job you do, the other is a place you look — and a
- * flat strip cannot say so.
- *
- * ── The agent sidebar is still hidden ─────────────────────────────────────
- *
- * Two rails would be one too many, and the OS's own is a list of an agent's
- * jobs, none of which is what an owner is doing in here.
+ * So: same rounded panel, same border, same wordmark, same rule under it, same
+ * type and spacing. Only the list below the line differs — and the word ADMIN
+ * under the mark, which is the one thing that has to be unmistakable.
  */
 
 const GROUPS: Array<{ title: string | null; items: Array<{ href: string; label: string; exact?: boolean }> }> = [
@@ -35,8 +32,8 @@ const GROUPS: Array<{ title: string | null; items: Array<{ href: string; label: 
     ],
   },
   {
-    /* One entry per person, because that is genuinely how these differ: each
-       is somebody's whole working picture, not a feature of the OS. */
+    /* One entry per person, because that is genuinely how these differ: each is
+       somebody's whole working picture, not a feature of the OS. */
     title: "Views",
     items: [
       { href: "/admin/business", label: "Susan's view" },
@@ -47,7 +44,10 @@ const GROUPS: Array<{ title: string | null; items: Array<{ href: string; label: 
   {
     title: "System",
     items: [
-      { href: "/admin/connections", label: "Connections" },
+      /* Wiring lives HERE and not on an agent's profile. James: "they don't
+         need to see that. That's for my referencing and testing." An agent's
+         connections page is a different thing — theirs, and further down. */
+      { href: "/admin/connections", label: "Wiring" },
       { href: "/admin/activity", label: "Activity" },
       { href: "/admin/todo", label: "To do" },
     ],
@@ -60,58 +60,74 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="admin-scope">
-      {/* Hides the agent sidebar for the whole of /admin. Done in CSS against
-          the shell's own element rather than by restructuring the layout tree,
-          because the shell also carries the theme, the intro gate and the
-          view-as bar — all of which must survive. */}
+      {/* The agent sidebar steps aside for the whole of /admin. Done in CSS
+          against the element rather than by restructuring the tree, because
+          the shell also carries the theme, the intro gate, the view-as bar and
+          the report button — all of which must survive. */}
       <style>{`
         [data-os-sidebar] { display: none !important; }
         [data-os-content] { padding-left: 0 !important; margin-left: 0 !important; }
       `}</style>
 
-      <div className="flex gap-6">
-        <nav
+      <div className="flex gap-5">
+        <aside
           data-admin-rail
-          aria-label="Admin"
-          className="sticky top-6 hidden h-fit w-52 shrink-0 flex-col gap-4 md:flex"
+          className="sticky top-3 mb-3 hidden h-[calc(100vh-24px)] w-60 shrink-0 flex-col overflow-hidden rounded-3xl border border-line/80 bg-panel px-4 py-5 md:flex"
         >
-          {GROUPS.map((g) => (
-            <div key={g.title ?? "top"}>
-              {g.title && (
-                <p className="mb-1.5 px-3 text-[9px] font-bold uppercase tracking-[0.14em] text-muted/70">
-                  {g.title}
-                </p>
-              )}
-              <ul className="space-y-0.5">
-                {g.items.map((t) => {
-                  const on = t.exact ? path === t.href : path.startsWith(t.href);
-                  return (
-                    <li key={t.href}>
-                      <Link
-                        href={t.href}
-                        className={`block rounded-lg px-3 py-2 text-[12.5px] transition-colors ${
-                          on ? "bg-accent-soft font-semibold text-accent-dark" : "text-muted hover:text-ink"
-                        }`}
-                      >
-                        {t.label}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
+          <div className="flex items-center px-1">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/house.png" alt="" className="art h-7 w-7" />
+            <span className="hand ml-2 text-[17px] leading-none">TLE OS</span>
+          </div>
+          <p className="mt-1 px-1 text-[9px] font-bold uppercase tracking-[0.16em] text-accent-dark">
+            Admin
+          </p>
+
+          {/* The line around the outside is the panel's border; this is the one
+              under the mark, exactly as the agent rail has it. */}
+          <div className="mb-1 mt-3 border-t border-line/70 pt-3" />
+
+          <nav aria-label="Admin" className="min-h-0 flex-1 overflow-y-auto">
+            {GROUPS.map((g) => (
+              <div key={g.title ?? "top"} className={g.title ? "mt-3" : ""}>
+                {g.title && (
+                  <p className="mb-1.5 px-3 text-[9px] font-bold uppercase tracking-[0.14em] text-muted/70">
+                    {g.title}
+                  </p>
+                )}
+                <ul className="space-y-0.5">
+                  {g.items.map((t) => {
+                    const on = t.exact ? path === t.href : path.startsWith(t.href);
+                    return (
+                      <li key={t.href}>
+                        <Link
+                          href={t.href}
+                          className={`block rounded-lg px-3 py-2 text-[12.5px] transition-colors ${
+                            on
+                              ? "bg-accent-soft font-semibold text-accent-dark"
+                              : "text-muted hover:text-ink"
+                          }`}
+                        >
+                          {t.label}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </nav>
 
           <button
             type="button"
             onClick={() => router.push("/dashboard")}
-            className="mt-2 rounded-lg border border-line/80 px-3 py-2 text-[12px] text-muted"
+            className="mt-auto rounded-lg border border-line/80 px-3 py-2 text-[12px] text-muted transition-colors hover:border-ink"
           >
-            Leave admin
+            ← Leave admin
           </button>
-        </nav>
+        </aside>
 
-        {/* On a phone the rail becomes a scrolling strip — a 52px column beside
+        {/* On a phone the rail becomes a scrolling strip — a 240px column beside
             content on a 375px screen leaves neither of them usable. */}
         <nav
           data-admin-rail
@@ -134,7 +150,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           })}
         </nav>
 
-        <div className="min-w-0 flex-1">{children}</div>
+        <div className="min-w-0 flex-1 py-3">{children}</div>
       </div>
     </div>
   );

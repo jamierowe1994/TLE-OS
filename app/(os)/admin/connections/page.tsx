@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
+import WiringSheet from "@/components/WiringSheet";
 
 /**
  * The switches — moved here off Profile, where an agent could see them.
@@ -58,6 +59,14 @@ export default function AdminConnections() {
         Switches live in Railway, not here. This page reports; it never changes anything — a page
         that could arm a send is a page that can arm one by accident.
       </p>
+
+      {/* The full wiring sheet, moved off an agent's profile. James: "they
+          don't need to see that, that's for my referencing and testing."
+          Their own Connections tab stays where it was; this is the detail
+          behind it, and it belongs to whoever is debugging. */}
+      <section className="fade-up mt-4">
+        <WiringSheet />
+      </section>
     </>
   );
 }

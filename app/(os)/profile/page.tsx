@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
+import CustomAttributes from "@/components/CustomAttributes";
 import { PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
 import RexSignIn from "@/components/RexSignIn";
-import WiringSheet from "@/components/WiringSheet";
 import { usePref, usePrefsHome } from "@/lib/prefs-store";
 import {
   applyTheme, readTheme, writeTheme,
@@ -23,16 +23,20 @@ import {
  * hangs off. Everything else is theirs to write.
  */
 
-type TabKey = "info" | "appearance" | "compliance" | "connections" | "portals" | "wiring" | "ads";
+type TabKey = "info" | "appearance" | "custom" | "compliance" | "connections" | "portals" | "ads";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "info", label: "Profile information" },
   { key: "appearance", label: "Appearance" },
+  /* Your own fields, and the filters that come with them. */
+  { key: "custom", label: "Custom attributes" },
   { key: "compliance", label: "Personal compliance" },
   { key: "connections", label: "Connections" },
   { key: "portals", label: "Portals" },
-  { key: "wiring", label: "The wiring" },
   { key: "ads", label: "Ads" },
+  /* "The wiring" USED to be here. It has moved to /admin — James: "they don't
+     need to see that, that's for my referencing and testing." An agent's own
+     Connections tab stays; the environment switches are not theirs. */
 ];
 
 const ACCENTS = [
@@ -625,7 +629,7 @@ export default function ProfilePage() {
         )}
 
         {/* ══ THE WIRING — what's genuinely connected, live-checked. ══ */}
-        {tab === "wiring" && <WiringSheet />}
+        {tab === "custom" && <CustomAttributes />}
 
         {/* ══ ADS — the one page that sells something. Layout after the
             reference: a small mark, a big centred line with the accent
