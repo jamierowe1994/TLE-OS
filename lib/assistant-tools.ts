@@ -7,6 +7,7 @@ import { getListingContacts, getListingDetail } from "@/lib/business/rex-stats";
 import { portalLinksFor } from "@/lib/rex-portal-links";
 import { rexCall, rexConfigured } from "@/lib/rex";
 import { requiredCerts, statusOf, type CompProperty } from "@/lib/compliance";
+import type { ActionProposal } from "@/lib/assistant-actions";
 
 /**
  * WHAT STEVE CAN ACTUALLY GO AND FIND OUT.
@@ -435,6 +436,175 @@ const myBook: AssistantTool = {
   },
 };
 
+/* ==========================================================================
+   PROPOSING AN ACTION.
+
+   None of these do anything. Each composes a proposal, which comes back to
+   the person as a card with a button on it; pressing the button is what acts.
+   The tool result says so explicitly, because a model that thinks it has just
+   sent an email will tell somebody it has.
+   ========================================================================== */
+
+/** Every proposal tool answers in this shape; the brain picks `__proposal` up. */
+function proposed(proposal: ActionProposal, tellTheModel: string) {
+  return { __proposal: proposal, done: false, note: tellTheModel };
+}
+
+/** Resolve a listing the caller is allowed to touch, or explain why not. */
+async function scopedListing(listingId: string, ctx: ToolContext) {
+  const refusal = refuseUnscoped(ctx.scope);
+  if (refusal) return refusal;
+  if (!listingId) return { error: "I need a listingId — use find_property first." };
+  const book = await bookFor(ctx.scope.rexUserId);
+  const found = book.listings.find((l) => String(l.id) === listingId);
+  if (!found && !ctx.scope.everything) {
+    return { error: "That property isn't on your book, so I can't act on it." };
+  }
+  return { listing: found ?? null, address: found ? `${found.name}, ${found.locality}` : `listing ${listingId}` };
+}
+
+const proposeNote: AssistantTool = {
+  name: "propose_note",
+  description:
+    "Put a note on a property's file in the OS. Call this when somebody wants something recorded against a property — what a landlord said, what they agreed, what to remember. Composes the note and shows it to them to confirm; it is NOT saved until they press the button. Notes live in the OS, not in REX.",
+  input_schema: {
+    type: "object",
+    properties: {
+      listingId: { type: "string", description: "From find_property." },
+      text: { type: "string", description: "The note, in their words where you have them." },
+    },
+    required: ["listingId", "text"],
+  },
+  label: () => "Writing a note…",
+  async run(input, ctx) {
+    const got = await scopedListing(str(input.listingId), ctx);
+    if ("error" in got) return got;
+    const text = str(input.text);
+    if (!text) return { error: "The note is empty." };
+    return proposed(
+      { kind: "note", listingId: str(input.listingId), address: got.address, text },
+      "Shown to them for confirmation. Tell them it's ready and to press Save — do NOT say it has been saved."
+    );
+  },
+};
+
+const proposeReminder: AssistantTool = {
+  name: "propose_reminder",
+  description:
+    "Set a reminder in the OS diary. Call this for 'remind me to…', 'chase this on Friday', 'don't let me forget'. Work out the date yourself from what they said and pass it as a full ISO timestamp. Shows it to them to confirm; nothing is saved until they press the button. Reminders are OS-only — they do NOT reach REX or a 365 calendar, and you must say so.",
+  input_schema: {
+    type: "object",
+    properties: {
+      title: { type: "string", description: "What to remind them of." },
+      startsAt: { type: "string", description: "Full ISO timestamp, e.g. 2026-09-04T09:00:00.000Z." },
+      listingId: { type: "string", description: "Optional. The property it concerns, from find_property." },
+      mins: { type: "number", description: "Optional. Length in minutes, default 30." },
+    },
+    required: ["title", "startsAt"],
+  },
+  label: (i) => `Setting a reminder: ${str(i.title).slice(0, 40) || "…"}`,
+  async run(input, ctx) {
+    const refusal = refuseUnscoped(ctx.scope);
+    if (refusal) return refusal;
+    const title = str(input.title);
+    const startsAt = str(input.startsAt);
+    const when = new Date(startsAt);
+    if (!title) return { error: "The reminder needs a name." };
+    if (Number.isNaN(when.getTime())) return { error: "That date didn't parse. Give me a full ISO timestamp." };
+    if (when.getTime() < Date.now() - 60_000) return { error: "That's in the past — did you mean next year, or a different day?" };
+
+    let address: string | null = null;
+    const listingId = str(input.listingId) || null;
+    if (listingId) {
+      const got = await scopedListing(listingId, ctx);
+      if ("error" in got) return got;
+      address = got.address;
+    }
+    const mins = typeof input.mins === "number" && input.mins > 0 ? Math.min(Math.max(input.mins, 15), 480) : 30;
+    return proposed(
+      { kind: "reminder", listingId, address, title, startsAt: when.toISOString(), mins },
+      "Shown to them for confirmation. It is not set until they press the button. Say plainly that it will live in the OS diary only, not REX or their 365 calendar."
+    );
+  },
+};
+
+const proposeWriteUp: AssistantTool = {
+  name: "propose_write_up",
+  description:
+    "Rewrite a property's portal advert. Call this when somebody wants the description improved, rewritten, or written from scratch. Read the property with property_detail first so the copy is true — never invent a bedroom count, a garden, or a feature the record doesn't have. Shows them the new copy to approve; it is NOT saved until they press the button. Saving publishes to Rightmove, Zoopla and OnTheMarket within about five to ten minutes, so say that.",
+  input_schema: {
+    type: "object",
+    properties: {
+      listingId: { type: "string", description: "From find_property." },
+      heading: { type: "string", description: "The advert headline." },
+      body: { type: "string", description: "The full advert body." },
+    },
+    required: ["listingId", "heading", "body"],
+  },
+  label: () => "Drafting the advert…",
+  async run(input, ctx) {
+    const got = await scopedListing(str(input.listingId), ctx);
+    if ("error" in got) return got;
+    const heading = str(input.heading);
+    const body = str(input.body);
+    if (!heading || !body) return { error: "An advert needs both a headline and a body." };
+    if (body.length > 20_000) return { error: "That write-up is longer than REX will take." };
+    return proposed(
+      { kind: "write-up", listingId: str(input.listingId), address: got.address, heading, body },
+      "Shown to them to approve. It is NOT saved yet. Tell them what you changed and why, and that pressing Save puts it on the portals in about five to ten minutes."
+    );
+  },
+};
+
+const proposeEmail: AssistantTool = {
+  name: "propose_email",
+  description:
+    "Compose an email to a property's landlord or tenant. Call this when somebody wants to write to either. You do not choose the address — name the property and the role, and the real contact is looked up. Shows them the finished message; it is NOT sent by you. Sending through REX is not wired yet, so tell them it is ready to copy rather than that it has gone.",
+  input_schema: {
+    type: "object",
+    properties: {
+      listingId: { type: "string", description: "From find_property." },
+      to: { type: "string", enum: ["landlord", "tenant"], description: "Which of the two." },
+      subject: { type: "string", description: "Subject line." },
+      body: { type: "string", description: "The message. Sign it off as them, not as you." },
+    },
+    required: ["listingId", "to", "subject", "body"],
+  },
+  label: (i) => `Composing an email to the ${str(i.to) || "landlord"}…`,
+  async run(input, ctx) {
+    const got = await scopedListing(str(input.listingId), ctx);
+    if ("error" in got) return got;
+    const to = str(input.to) === "tenant" ? "tenant" : "landlord";
+    const subject = str(input.subject);
+    const body = str(input.body);
+    if (!subject || !body) return { error: "An email needs a subject and a body." };
+
+    /* The address is resolved HERE, from REX, not taken from the model — and
+       resolved again at execution. Whatever it thinks it is writing to, the
+       card shows the person actually on the record. */
+    const people = await getListingContacts(str(input.listingId));
+    const want = to === "landlord" ? /landlord|owner|vendor/i : /tenant/i;
+    const match = people.find((c) => c.role && want.test(c.role) && c.email);
+    if (!match) {
+      const roles = people.length ? people.map((c) => c.role ?? "no role").join(", ") : "nothing at all";
+      return { error: `I can't find a ${to} with an email on that property. REX returned ${roles}.` };
+    }
+    return proposed(
+      {
+        kind: "email",
+        listingId: str(input.listingId),
+        address: got.address,
+        to,
+        toName: match.name,
+        toEmail: match.email as string,
+        subject,
+        body,
+      },
+      `Composed and addressed to ${match.name}. It has NOT been sent — you cannot send. Tell them it is ready and that they can copy it out.`
+    );
+  },
+};
+
 /* Fixed order. The tool list renders BEFORE the system prompt, so reordering
    it — or building it per person — moves every byte after it and throws away
    the prompt cache on every request. It is a constant for that reason. */
@@ -445,7 +615,17 @@ export const TOOLS: AssistantTool[] = [
   complianceDue,
   portalPresence,
   myBook,
+  proposeNote,
+  proposeReminder,
+  proposeWriteUp,
+  proposeEmail,
 ];
+
+/** Pull the proposal out of a tool result, if it made one. */
+export function proposalIn(result: unknown): ActionProposal | null {
+  const p = (result as { __proposal?: unknown } | null)?.__proposal;
+  return p && typeof p === "object" ? (p as ActionProposal) : null;
+}
 
 export const TOOL_SCHEMAS: Anthropic.Tool[] = TOOLS.map((t) => ({
   name: t.name,

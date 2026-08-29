@@ -4,7 +4,8 @@ import { hasDb, q } from "@/lib/db";
 import { listKnowledge } from "@/lib/business/knowledge-store";
 import { getBrief } from "@/lib/assistant-brief";
 import { systemMap } from "@/lib/system-map";
-import { labelFor, runTool, TOOL_SCHEMAS } from "@/lib/assistant-tools";
+import { labelFor, proposalIn, runTool, TOOL_SCHEMAS } from "@/lib/assistant-tools";
+import type { ActionProposal } from "@/lib/assistant-actions";
 import type { Scope } from "@/lib/scope";
 
 /**
@@ -158,11 +159,26 @@ adverts, somebody's whole book. Use them.
 - A tool that returns an error, or a note, is telling you something the person
   needs to hear. Pass it on in your own words rather than swallowing it.
 
-WHAT YOU STILL CANNOT DO. You cannot change a record, send an email, or write
-anything back to REX. That is not squeamishness, it is that those have no undo
-and you are one misheard address away from mailing the wrong landlord. If
-somebody asks you to send or change something, say plainly that you can't do it
-yet, tell them the screen where they can, and link it.`;
+YOU CAN ALSO DO THINGS — BY PROPOSING THEM. The propose_ tools compose a note,
+a reminder, a rewritten advert, or an email. Each one comes back to the person
+as a card with a button, and PRESSING THE BUTTON IS WHAT ACTS. You never act.
+
+- Never say you have done it. You have written it, not done it. "Here's the
+  note, press Save" — not "I've saved the note". Getting this wrong means
+  somebody walks away believing an advert went live when it didn't.
+- Propose one thing at a time. Two cards in one reply and neither gets read.
+- Say what pressing it will actually cause. A write-up goes to Rightmove,
+  Zoopla and OnTheMarket in about five to ten minutes. A reminder lives in the
+  OS diary only, never REX or a 365 calendar. Notes are OS-only too.
+- Get the facts before you write the words. A rewritten advert is a live public
+  document — read the property first and never invent a bedroom, a garden, or a
+  feature the record doesn't hold.
+- You cannot send email. propose_email composes it and addresses it correctly,
+  and the person copies it out. Say that plainly rather than implying it went.
+
+Anything else that changes a record — creating a listing, moving a deal, editing
+a tenancy — you still cannot do. Say so, name the screen where they can, and
+link it.`;
 
   const blocks: Anthropic.TextBlockParam[] = [{ type: "text", text: persona }];
 
@@ -288,6 +304,9 @@ export interface Answer {
   canned: boolean;
   /** What he actually went and read, in order, for the widget and the log. */
   steps: string[];
+  /** The one thing he is offering to DO, awaiting a button. Only ever one:
+   *  a card with two actions on it is a card nobody reads before pressing. */
+  proposal: ActionProposal | null;
 }
 
 /**
@@ -365,6 +384,7 @@ export async function ask(
       outTokens: 0,
       canned: true,
       steps: [],
+      proposal: null,
     };
   }
 
@@ -378,6 +398,7 @@ export async function ask(
       outTokens: 0,
       canned: true,
       steps: [],
+      proposal: null,
     };
   }
 
@@ -390,6 +411,7 @@ export async function ask(
 
   const system = await systemBlocks();
   const steps: string[] = [];
+  let proposal: ActionProposal | null = null;
   let inTokens = 0;
   let outTokens = 0;
   let spent = 0;
@@ -438,6 +460,7 @@ export async function ask(
         outTokens,
         canned: false,
         steps,
+        proposal,
       };
     }
 
@@ -454,6 +477,10 @@ export async function ask(
         path: ctx.path,
         openListingId: ctx.openListingId,
       });
+      /* Last one wins, and there is only ever one on the card. If he proposed
+         twice in a turn the second is what he was actually talking about by
+         the end of it. */
+      proposal = proposalIn(out) ?? proposal;
       results.push({
         type: "tool_result",
         tool_use_id: call.id,
@@ -473,5 +500,6 @@ export async function ask(
     outTokens,
     canned: false,
     steps,
+    proposal,
   };
 }

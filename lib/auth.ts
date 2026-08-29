@@ -65,6 +65,43 @@ export function createSessionToken(userId: string): string {
   return `${data}.${sign(data)}`;
 }
 
+/**
+ * A short-lived signed envelope for something the server said and expects back.
+ *
+ * Steve proposes an action, the browser shows it on a card, and the person
+ * presses the button. Between those two moments the proposal is sitting in a
+ * page where anything could edit it, so what comes back is not trusted for
+ * being well-formed — it is trusted for carrying our own signature.
+ *
+ * Same HMAC as the session token, and the same constant-time compare. Ten
+ * minutes is deliberately short: this is the gap between reading a card and
+ * clicking it, not a session.
+ */
+const ENVELOPE_MS = 10 * 60_000;
+
+export function sealPayload(payload: unknown): string {
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const exp = String(Date.now() + ENVELOPE_MS);
+  return `${body}.${exp}.${sign(`${body}.${exp}`)}`;
+}
+
+/** The payload if we signed it and it hasn't expired; null otherwise. */
+export function openPayload<T>(sealed: string | undefined): T | null {
+  if (!sealed) return null;
+  const parts = sealed.split(".");
+  if (parts.length !== 3) return null;
+  const [body, exp, sig] = parts;
+  const a = Buffer.from(sig);
+  const b = Buffer.from(sign(`${body}.${exp}`));
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  if (Number(exp) < Date.now()) return null;
+  try {
+    return JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as T;
+  } catch {
+    return null;
+  }
+}
+
 /** The userId behind a valid, unexpired token; null otherwise. */
 export function verifySessionToken(token: string | undefined): string | null {
   if (!token) return null;

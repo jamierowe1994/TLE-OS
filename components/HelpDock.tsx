@@ -50,6 +50,50 @@ type Line = {
   /** What he went and read to answer. Absent on history and on his own
    *  scripted lines; only a live tool-using reply has any. */
   steps?: string[];
+  /** Something he is offering to do, and our own sealed copy of it. The card
+   *  renders from `card`; the button sends `sealed` back untouched, because
+   *  what executes must be what the server composed. */
+  card?: Proposal;
+  sealed?: string;
+  /** Set once the button has been pressed, so it cannot be pressed twice. */
+  settled?: string;
+};
+
+/** Mirrors ActionProposal server-side, narrowed to what the card draws. */
+type Proposal = {
+  kind: "note" | "reminder" | "write-up" | "email";
+  address?: string | null;
+  text?: string;
+  title?: string;
+  startsAt?: string;
+  heading?: string;
+  body?: string;
+  toName?: string;
+  toEmail?: string;
+  subject?: string;
+};
+
+/* What each card says on it. Kept out of the markup so the promise a button
+   makes and the words next to it can never drift apart. */
+const CARD_TITLE: Record<Proposal["kind"], string> = {
+  note: "Note, ready to save",
+  reminder: "Reminder, ready to set",
+  "write-up": "New advert, ready to publish",
+  email: "Email, ready to copy",
+};
+const CARD_BUTTON: Record<Proposal["kind"], string> = {
+  note: "Save note",
+  reminder: "Set reminder",
+  "write-up": "Publish it",
+  email: "Copy it",
+};
+/* The consequence, spelled out. Somebody pressing a button in a chat bubble
+   deserves to know it reaches Rightmove. */
+const CARD_EFFECT: Record<Proposal["kind"], string> = {
+  note: "Saves to the property file in the OS. Not sent to REX.",
+  reminder: "Goes in the OS diary only - not REX, not your 365 calendar.",
+  "write-up": "Writes to REX and goes live on Rightmove, Zoopla and OnTheMarket in about five to ten minutes.",
+  email: "Nothing is sent. Steve can't send yet - this is the finished message and the right address, to copy out.",
 };
 
 export default function HelpDock() {
@@ -187,6 +231,54 @@ export default function HelpDock() {
     }
   }
 
+  /**
+   * The button. The only thing in this component that changes anything.
+   *
+   * Sends back the SEALED proposal and nothing else — not the card the person
+   * has been looking at, which is a copy for reading. Marks the line settled
+   * first so a double-click can't act twice, and appends whatever the server
+   * says happened as its own line, in his voice.
+   */
+  async function confirm(at: number) {
+    const line = lines[at];
+    if (!line?.sealed || line.settled) return;
+
+    /* Email is the one card with nothing to execute. Steve cannot send, so the
+       card already IS the deliverable — the finished message and the right
+       address. Posting it to the server would only come back to say so, and a
+       button that returns "didn't go" reads as a failure when nothing failed.
+       So it copies, and says it copied. */
+    if (line.card?.kind === "email") {
+      const text = `To: ${line.card.toName} <${line.card.toEmail}>\nSubject: ${line.card.subject ?? ""}\n\n${line.card.body ?? ""}`;
+      try {
+        await navigator.clipboard.writeText(text);
+        setLines((l) => l.map((x, i) => (i === at ? { ...x, settled: "done" } : x)));
+      } catch {
+        setLines((l) => [
+          ...l,
+          { role: "assistant", text: "Your browser wouldn't let me reach the clipboard — select the message above and copy it." },
+        ]);
+      }
+      return;
+    }
+
+    setLines((l) => l.map((x, i) => (i === at ? { ...x, settled: "…" } : x)));
+    setBusy(true);
+    const r = await fetch("/api/assistant/act", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ sealed: line.sealed, thread: thread.current }),
+    })
+      .then((x) => x.json())
+      .catch(() => null);
+    setBusy(false);
+    const said = r?.message ?? r?.error ?? "That didn't go through. Try asking me again.";
+    setLines((l) => [
+      ...l.map((x, i) => (i === at ? { ...x, settled: r?.ok ? "done" : "failed" } : x)),
+      { role: "assistant", text: said },
+    ]);
+  }
+
   async function say() {
     const text = draft.trim();
     if (!text || busy) return;
@@ -215,7 +307,13 @@ export default function HelpDock() {
     const answer = r?.reply ?? "Something went wrong sending that. Try again in a moment.";
     setLines((l) => [
       ...l,
-      { role: "assistant", text: answer, steps: Array.isArray(r?.steps) ? r.steps : undefined },
+      {
+        role: "assistant",
+        text: answer,
+        steps: Array.isArray(r?.steps) ? r.steps : undefined,
+        card: r?.proposal,
+        sealed: r?.sealed,
+      },
     ]);
     setBusy(false);
 
@@ -391,6 +489,76 @@ export default function HelpDock() {
                             <p className="mt-1 pl-1 text-[10px] leading-relaxed text-muted">
                               {l.steps.join(" · ")}
                             </p>
+                          )}
+                          {/* THE CARD. Everything that is about to happen, in
+                              full, before it happens — the recipient, the whole
+                              text, and what pressing it will cause. A summary
+                              here would defeat the point of asking. */}
+                          {l.card && (
+                            <div className="mt-2 rounded-xl border border-line bg-box/60 p-2.5">
+                              <p className="text-[10px] uppercase tracking-[0.08em] text-muted">
+                                {CARD_TITLE[l.card.kind] ?? "Ready"}
+                                {l.card.address ? ` · ${l.card.address}` : ""}
+                              </p>
+                              {l.card.kind === "email" && (
+                                <p className="mt-1 text-[11.5px]">
+                                  To <span className="font-semibold">{l.card.toName}</span>{" "}
+                                  <span className="text-muted">{l.card.toEmail}</span>
+                                </p>
+                              )}
+                              {l.card.kind === "reminder" && l.card.startsAt && (
+                                <p className="mt-1 text-[11.5px] text-muted">
+                                  {new Date(l.card.startsAt).toLocaleString("en-GB", {
+                                    weekday: "short", day: "numeric", month: "short",
+                                    hour: "2-digit", minute: "2-digit",
+                                  })}
+                                </p>
+                              )}
+                              {(l.card.subject || l.card.heading || l.card.title) && (
+                                <p className="mt-1 text-[12px] font-semibold">
+                                  {l.card.subject ?? l.card.heading ?? l.card.title}
+                                </p>
+                              )}
+                              {(l.card.body || l.card.text) && (
+                                <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap text-[11.5px] leading-relaxed text-muted">
+                                  {l.card.body ?? l.card.text}
+                                </p>
+                              )}
+                              <p className="mt-2 text-[10px] leading-relaxed text-muted">
+                                {CARD_EFFECT[l.card.kind]}
+                              </p>
+                              <div className="mt-2 flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => confirm(i)}
+                                  disabled={Boolean(l.settled) || busy}
+                                  className="rounded-lg bg-accent-dark px-3 py-1.5 text-[11.5px] font-semibold text-white disabled:opacity-40"
+                                >
+                                  {l.settled === "done"
+                                    ? l.card.kind === "email"
+                                      ? "Copied"
+                                      : "Done"
+                                    : l.settled === "failed"
+                                      ? "Didn't go"
+                                      : l.settled
+                                        ? "…"
+                                        : CARD_BUTTON[l.card.kind]}
+                                </button>
+                                {!l.settled && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setLines((ls) =>
+                                        ls.map((x, j) => (j === i ? { ...x, settled: "cancelled" } : x))
+                                      )
+                                    }
+                                    className="text-[11.5px] text-muted underline underline-offset-2"
+                                  >
+                                    No thanks
+                                  </button>
+                                )}
+                              </div>
+                            </div>
                           )}
                         </div>
                       )

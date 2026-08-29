@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { sealPayload, SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { scopeFor } from "@/lib/scope";
 import { findUserById } from "@/lib/users";
 import {
@@ -170,5 +170,11 @@ export async function POST(req: NextRequest) {
     /* What he actually went and read. Shown under the reply, because an
        assistant that quotes a rent should be able to say where it got it. */
     steps: answer.steps,
+    /* The card, if he offered to do something. Sent BOTH ways: `proposal` for
+       the widget to render, `sealed` for it to hand back untouched. What gets
+       executed is the sealed copy, so an edited card is a rejected one. */
+    ...(answer.proposal
+      ? { proposal: answer.proposal, sealed: sealPayload(answer.proposal) }
+      : {}),
   });
 }
