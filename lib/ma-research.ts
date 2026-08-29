@@ -198,6 +198,10 @@ interface HsListing {
   agent?: string; price?: number; image?: string; listed_on?: string;
   full_address?: string; reduced_at?: string;
   lat?: number; lon?: number;
+  /** "on market" | "let agreed" | "withdrawn". See the filter below. */
+  status?: string;
+  /** The advert itself. Every row carries one — measured. */
+  link?: string;
 }
 
 /**
@@ -314,8 +318,23 @@ async function onMarketNearby(
   const rows = hsRows<HsListing>(raw);
 
   const today = Date.now();
+  /* WITHDRAWN STOCK IS NOT THE MARKET, and it was most of this list.
+     
+     The only filter here was "has a price", so anything Homesearch still held
+     a record of came through. Measured 29 Aug with this exact query: NN5 4
+     returned 20 rows of which 3 were actually available, PE1 2 returned 20 of
+     which 6 were, and BS16 7 returned 20 of which NONE were. A landlord was
+     being shown withdrawn listings as live competition and priced against them.
+
+     "let agreed" stays. It is still advertised and somebody has accepted it,
+     which makes it the best evidence on the page — it is labelled on the card
+     rather than passed off as available. */
   return rows
     .filter((r) => r.price && r.price > 0)
+    .filter((r) => {
+      const st = String(r.status ?? "").trim().toLowerCase();
+      return st === "on market" || st === "let agreed";
+    })
     .map((r) => {
       const listed = r.listed_on ? new Date(r.listed_on) : null;
       return {
@@ -327,6 +346,11 @@ async function onMarketNearby(
         image: r.image ?? null,
         listedOn: r.listed_on ?? null,
         daysListed: listed ? Math.max(0, Math.round((today - listed.getTime()) / 86400000)) : null,
+        status:
+          String(r.status ?? "").trim().toLowerCase() === "let agreed"
+            ? ("let agreed" as const)
+            : ("on market" as const),
+        link: r.link ?? null,
         agent: r.agent ?? null,
         reducedAt: r.reduced_at ?? null,
         lat: typeof r.lat === "number" ? r.lat : null,
@@ -529,8 +553,21 @@ export interface MarketListing {
   beds: number | null;
   type: string | null;
   rent: number | null;
-  /** The photograph. The reason this feed is worth calling at all. */
+  /** The photograph. The reason this feed is worth calling at all. Homesearch
+   *  returns exactly ONE per listing — there is no gallery to page through,
+   *  measured against the raw feed on 29 Aug. 95% of rows carry it. */
   image: string | null;
+  /**
+   * Whether it is still available, or already agreed.
+   *
+   * "let agreed" is the rental STC: still advertised, but somebody has
+   * accepted. It is the freshest evidence of what the market actually PAYS,
+   * as opposed to what it asks — so it is kept and labelled rather than
+   * dropped. Withdrawn stock never reaches here at all.
+   */
+  status: "on market" | "let agreed";
+  /** The advert, so an agent can open the real thing rather than trust us. */
+  link: string | null;
   listedOn: string | null;
   /** Derived — Homesearch has NO time-on-market endpoint, so it is computed
    *  from listed_on. Days a tenant has had the chance to take it. */
