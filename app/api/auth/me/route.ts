@@ -22,11 +22,22 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  if (!hasDb()) return NextResponse.json({ ok: true, user: null, anyUsers: false, hasDb: false });
+  if (!hasDb()) {
+    return NextResponse.json(
+      { ok: true, user: null, anyUsers: false, hasDb: false },
+      { headers: { "cache-control": "private, no-store, max-age=0, must-revalidate" } }
+    );
+  }
 
   const { actor, subject, viewingAs } = await whoIs(req);
   /* A view-as can target somebody with no OS account, so the banner's name
      comes off the token rather than out of os_users. */
+  /* Measured on the live site 29 Aug: this endpoint answered 200 with NO
+     cache-control header at all. Cloudflare was not caching it (DYNAMIC), so
+     nothing had gone wrong — but the only thing standing between one person's
+     identity and another's browser was a CDN's default behaviour, which is not
+     a guarantee anybody wrote down. Said explicitly now. */
+  const noStore = { "cache-control": "private, no-store, max-age=0, must-revalidate" };
   const va = readViewAs(req.cookies.get(VIEW_AS_COOKIE)?.value);
   /* Only claim it when there is genuinely somebody to be. This used to be
      driven by the cookie alone, so the red banner announced "viewing as
@@ -59,5 +70,5 @@ export async function GET(req: NextRequest) {
     role: actor?.role ?? null,
     anyUsers: (await countUsers()) > 0,
     hasDb: true,
-  });
+  }, { headers: noStore });
 }

@@ -48,10 +48,27 @@ const ACCENTS = [
 const PROFILE_KEY = "tle-profile-v1";
 
 type Profile = { name: string; phone: string; patch: string; bio: string; photo?: string };
+/**
+ * EMPTY. Never a person.
+ *
+ * This held "James Rowe", a phone placeholder and his patch, and the page
+ * merged saved preferences OVER it while never asking who was signed in. So
+ * anybody with nothing saved yet — which is every new account, on their very
+ * first screen — was shown James's name and area as their own.
+ *
+ * Susan hit it on 29 Aug, minutes after redeeming her invite: "it's currently
+ * showing all of my details rather than hers." The join flow lands on
+ * /profile, so this was the first thing she ever saw in the OS.
+ *
+ * It is the snapshot mistake wearing different clothes. A placeholder that
+ * looks like real data gets believed, and this one did not just show a stale
+ * figure — it told a colleague she was somebody else. A default must be blank,
+ * because blank is obviously nothing and a name is obviously something.
+ */
 const DEFAULT_PROFILE: Profile = {
-  name: "James Rowe",
-  phone: "07XXX XXXXXX",
-  patch: "Nottinghamshire & the North West",
+  name: "",
+  phone: "",
+  patch: "",
   bio: "",
 };
 
@@ -133,8 +150,30 @@ export default function ProfilePage() {
   const [storedAccent, storeAccent] = usePref<string>("os-accent", "");
   const prefsHome = usePrefsHome();
 
+  /* Who is actually signed in. The page used to never ask, which is how a
+     hardcoded name came to stand in for everybody who had saved nothing yet.
+     The account is the base; anything they have since typed here wins over it,
+     because a person editing their own name means it. */
   useEffect(() => {
-    if (storedProfile) setProfile({ ...DEFAULT_PROFILE, ...storedProfile });
+    let alive = true;
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { user?: { name?: string; photo?: string | null } } | null) => {
+        if (!alive || !j?.user) return;
+        setProfile((p) => ({
+          ...p,
+          name: p.name || j.user!.name || "",
+          photo: p.photo ?? j.user!.photo ?? undefined,
+        }));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (storedProfile) setProfile((p) => ({ ...p, ...storedProfile }));
   }, [storedProfile]);
 
   useEffect(() => {
