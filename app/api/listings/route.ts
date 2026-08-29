@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { scopeFor } from "@/lib/scope";
-import { fetchListingBook, type ListingBook } from "@/lib/rex-listings";
-import { hasDb, q } from "@/lib/db";
+import { cacheKeyFor, heldFor, refresh, FRESH_MS, STALE_MS } from "@/lib/listings-cache";
 import { rexConfigured } from "@/lib/rex";
 
 /**
@@ -11,77 +10,14 @@ import { rexConfigured } from "@/lib/rex";
  *
  * The book changes far more slowly than the lead feed, so it holds longer:
  * a listing added five minutes ago is not the emergency a lead is.
+ *
+ * The cache itself lives in lib/listings-cache.ts, because the write-up route
+ * has to be able to clear it and a route module is the wrong place to keep
+ * state another route owns a share of.
  */
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-/* v2: the book gained the portal write-up. A cached object that grows a field
-   keeps serving the old shape under the old key, so the field reads as missing
-   on every environment that has already warmed the cache. */
-/* v3, and the version bump is load-bearing: the book is now SCOPED, so a
-   cached v2 object holds one agent's book under a key that says "everyone".
-   Serving that to the next person is a cross-tenant leak, not a stale figure. */
-const CACHE_KEY_BASE = "listings:v3";
-const cacheKeyFor = (rexUserId: string | null) =>
-  rexUserId ? `${CACHE_KEY_BASE}:agent:${rexUserId}` : `${CACHE_KEY_BASE}:all`;
-const FRESH_MS = 10 * 60 * 1000;
-const STALE_MS = 6 * 60 * 60 * 1000;
-
-interface Cached {
-  book: ListingBook;
-  at: number;
-}
-
-/* Keyed by scope, not a single slot. One shared `memory` would hand the first
-   agent's book to the second — the exact bug this whole change exists to
-   prevent, reintroduced one layer up. */
-const memory = new Map<string, Cached>();
-const refreshing = new Map<string, Promise<Cached>>();
-
-async function readStored(key: string): Promise<Cached | null> {
-  if (!hasDb()) return null;
-  try {
-    const rows = await q<{ payload: { book: ListingBook }; computed_at: Date }>(
-      "SELECT payload, computed_at FROM os_cache WHERE key = $1",
-      [key]
-    );
-    if (!rows[0]) return null;
-    return { book: rows[0].payload.book, at: new Date(rows[0].computed_at).getTime() };
-  } catch {
-    return null;
-  }
-}
-
-async function store(key: string, entry: Cached): Promise<void> {
-  if (!hasDb()) return;
-  try {
-    await q(
-      `INSERT INTO os_cache (key, payload, computed_at) VALUES ($1, $2, NOW())
-       ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, computed_at = NOW()`,
-      [key, JSON.stringify({ book: entry.book })]
-    );
-  } catch {
-    /* a cache that won't write is a slow page, not a broken one */
-  }
-}
-
-function refresh(key: string, rexUserId: string | null): Promise<Cached> {
-  const live = refreshing.get(key);
-  if (live) return live;
-  const p = fetchListingBook(rexUserId)
-    .then(async (book) => {
-      const entry = { book, at: Date.now() };
-      memory.set(key, entry);
-      await store(key, entry);
-      return entry;
-    })
-    .finally(() => {
-      refreshing.delete(key);
-    });
-  refreshing.set(key, p);
-  return p;
-}
 
 export async function GET(req: NextRequest) {
   if (!rexConfigured()) {
@@ -105,7 +41,7 @@ export async function GET(req: NextRequest) {
   }
   const key = cacheKeyFor(scope.rexUserId);
 
-  const held = memory.get(key) ?? (await readStored(key));
+  const held = await heldFor(key);
   const age = held ? Date.now() - held.at : Infinity;
 
   if (held && age < FRESH_MS) {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { rexTokenFor } from "@/lib/rex-user";
-import { hasDb, q } from "@/lib/db";
+import { invalidateListingBook } from "@/lib/listings-cache";
 
 /**
  * Save a listing's portal write-up back to REX.
@@ -86,14 +86,11 @@ export async function POST(req: NextRequest) {
       ?.related?.listing_adverts ?? [];
     const net = rows.find((a) => a.advert_type === "internet") ?? null;
 
-    // The book is cached, and it now holds a stale write-up for this listing.
-    if (hasDb()) {
-      try {
-        await q("DELETE FROM os_cache WHERE key = $1", ["listings:v2"]);
-      } catch {
-        /* a cache that won't clear is a stale read, not a failed save */
-      }
-    }
+    // The book is cached in two layers, and both now hold a stale write-up for
+    // this listing. Clearing them is part of the save, not housekeeping after
+    // it: leave either one and the screen answers "no it didn't" to a write
+    // that plainly did.
+    await invalidateListingBook();
 
     return NextResponse.json({
       ok: true,

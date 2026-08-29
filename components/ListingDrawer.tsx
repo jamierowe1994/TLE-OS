@@ -59,6 +59,10 @@ export type Listing = {
   advertBody?: string | null;
 };
 
+/** One live advert on a public portal. Mirrors lib/rex-portal-links.ts, kept
+ *  local so a client component never reaches into the REX client. */
+type PortalLink = { portal: string; url: string; remoteId: string | null };
+
 type TabKey = "home" | "property" | "marketing" | "photos" | "documents";
 
 /* Property and Marketing are EDIT tabs — the facts they hold moved up into
@@ -163,6 +167,12 @@ export default function ListingDrawer({
   /* Asked once, read by the header pill and by the Documents tab. */
   const terms = useListingTerms(listing?.id ?? null);
   const [booking, setBooking] = useState(false);
+
+  /* Where this property is actually advertised, live from REX's portal feed
+     rows. Fetched per listing rather than carried on the book: the book is one
+     cached object for the whole branch and these are one call per property. */
+  const [portals, setPortals] = useState<PortalLink[]>([]);
+  const [portalsLoading, setPortalsLoading] = useState(false);
 
   const [type, setType] = useState("");
   const [beds, setBeds] = useState(0);
@@ -276,6 +286,32 @@ export default function ListingDrawer({
     setEditingCopy(false);
     setSaved(null);
     setCopyError(null);
+  }, [listing?.id]);
+
+  /* The advert links, per listing. Cleared FIRST so stepping to the next
+     property can never show the last one's Rightmove link for the moment
+     before the new answer lands, and guarded by `off` because the drawer's
+     arrows can step faster than REX replies. */
+  useEffect(() => {
+    setPortals([]);
+    const id = listing?.id;
+    if (!id) return;
+    let off = false;
+    setPortalsLoading(true);
+    fetch(`/api/listings/portals?id=${encodeURIComponent(id)}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (!off && j?.ok) setPortals(Array.isArray(j.portals) ? j.portals : []);
+      })
+      /* A link we can't fetch is a missing button, not an error worth showing:
+         the two buttons beside it still work. */
+      .catch(() => {})
+      .finally(() => {
+        if (!off) setPortalsLoading(false);
+      });
+    return () => {
+      off = true;
+    };
   }, [listing?.id]);
 
   async function saveCopy() {
@@ -473,7 +509,53 @@ export default function ListingDrawer({
                     <DoodleIcon name="calendar" size={14} />
                     Arrange viewing
                   </PressButton>
+
                 </div>
+
+                {/* Straight out to the live advert, one link per portal this
+                    property is actually feeding. The URLs are the ones the
+                    portals issued back to REX, so a link here opens exactly
+                    what a tenant sees — and its absence means the feed isn't
+                    running, which is worth knowing too.
+
+                    Deliberately lighter than the two buttons above. The column
+                    they share is a fixed ~187px on desktop, so everything in it
+                    stacks; at full button weight three portals would bury the
+                    two actions that actually do something under a wall of
+                    identical pills. These are somewhere to GO, not something to
+                    DO, and they read that way. */}
+                {(portalsLoading || portals.length > 0) && (
+                  <div className="mt-3.5">
+                    {/* One icon on the label, none on the chips. The column is
+                        187px wide: an icon per chip costs ~17px each and is
+                        the difference between "Rightmove Zoopla" sharing a line
+                        and all three going single file. */}
+                    <p className="flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.08em] text-muted">
+                      <DoodleIcon name="link" size={11} />
+                      Live advert
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                      {portalsLoading && portals.length === 0 ? (
+                        <span className="rounded-full border border-line px-2.5 py-1 text-[11.5px] text-muted">
+                          Checking…
+                        </span>
+                      ) : (
+                        portals.map((p) => (
+                          <a
+                            key={p.portal}
+                            href={p.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title={`Open this property on ${p.portal}`}
+                            className="press-ring rounded-full border border-line px-2.5 py-1 text-[11.5px] text-muted transition-colors hover:border-ink/30 hover:text-ink"
+                          >
+                            {p.portal}
+                          </a>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* The landlord, because the first question on any property is
