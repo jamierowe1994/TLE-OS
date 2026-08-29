@@ -5,6 +5,7 @@ import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
 import { loadAdmin, when, type AdminData } from "@/lib/admin-client";
+import { ROLES, ROLE_LABEL, ROLE_BLURB } from "@/lib/roles";
 
 /** Everyone in REX, joined to who actually has an account here. */
 export default function AdminPeople() {
@@ -38,6 +39,65 @@ export default function AdminPeople() {
       load();
     } catch {
       setTegNote("Couldn't reach the Hub.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /**
+   * Set what somebody IS, from the page where you are already looking at them.
+   *
+   * James, 29 Aug: "if I go on to people and then click on a name, I can't do
+   * anything with it. I need to be able to go into pre-tenancy, and then where
+   * it says agent, I need to be able to select."
+   *
+   * Permissions could always do this and Kirstie was never on it, because that
+   * screen lists ACCOUNTS and she has not joined yet. She is on this one, which
+   * lists everybody in REX — so this is where the control belongs, and the
+   * split between "has an account" and "does not" is handled here rather than
+   * being something to know about.
+   *
+   * TWO DESTINATIONS, one control:
+   *   · With an account, it changes the role on the account, now.
+   *   · Without one, it sets the role on their INVITE, so they arrive as that
+   *     rather than as an agent. Which is exactly what went wrong for Susan —
+   *     she redeemed her link and could not open a single business screen.
+   *
+   * The second is the reason this is not simply a link to Permissions: the role
+   * usually needs deciding BEFORE somebody joins, and until now there was
+   * nowhere to decide it.
+   */
+  async function setPersonRole(
+    p: { userId: string | null; hasAccount: boolean; email: string; name: string; rexId: string },
+    role: string
+  ) {
+    setBusy(p.email);
+    setFlash(null);
+    try {
+      const r =
+        p.hasAccount && p.userId
+          ? await fetch("/api/admin/permissions", {
+              method: "PATCH",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ userId: p.userId, role }),
+            })
+          : await fetch("/api/admin/pilot", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ email: p.email, name: p.name, rexUserId: p.rexId, role }),
+            });
+      const j = (await r.json()) as { ok?: boolean; error?: string };
+      const label = ROLE_LABEL[role as keyof typeof ROLE_LABEL] ?? role;
+      setFlash(
+        j.ok === false
+          ? (j.error ?? "That didn't work.")
+          : p.hasAccount
+            ? `${p.name} is now ${label}.`
+            : `${p.name} will join as ${label}.`
+      );
+      load();
+    } catch {
+      setFlash("That didn't work.");
     } finally {
       setBusy(null);
     }
@@ -105,6 +165,35 @@ export default function AdminPeople() {
               {p.email}{p.rexId ? ` · REX ${p.rexId}` : " · not in REX"}
               {p.hasAccount ? ` · last in ${when(p.lastSeenAt)}` : ""}
             </p>
+            {/* The role, on every person — with an account or not. Someone who
+                has not joined yet is precisely who most needs this set, because
+                the alternative is inviting them and then remembering to come
+                back and fix it. */}
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              <label className="text-[11.5px] text-muted" htmlFor={`role-${p.email}`}>
+                {p.hasAccount ? "Role" : "Joins as"}
+              </label>
+              <select
+                id={`role-${p.email}`}
+                value={p.role ?? "agent"}
+                disabled={busy !== null}
+                onChange={(e) => setPersonRole(p, e.target.value)}
+                title={ROLE_BLURB[(p.role ?? "agent") as keyof typeof ROLE_BLURB]}
+                className="rounded-lg border border-line/80 bg-panel px-2.5 py-1.5 text-[11.5px] disabled:opacity-40"
+              >
+                {ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABEL[r]}
+                  </option>
+                ))}
+              </select>
+              {!p.hasAccount && (
+                <span className="text-[11px] text-muted">
+                  They haven&apos;t joined yet — this is what they&apos;ll arrive as.
+                </span>
+              )}
+            </div>
+
             {p.hasAccount && p.userId && (
               <div className="mt-2.5 flex flex-wrap gap-2">
                 {p.rexId && (
