@@ -246,7 +246,7 @@ export default function MarketMap({
 
   if (!KEY || failed) {
     return (
-      <div className="flex h-[calc(100dvh-200px)] w-full items-center justify-center rounded-2xl border border-dashed border-line/70 p-6 text-center">
+      <div className="flex h-full min-h-[320px] w-full items-center justify-center rounded-2xl border border-dashed border-line/70 p-6 text-center">
         <p className="text-[12.5px] leading-relaxed text-muted">
           The map needs <span className="font-semibold">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</span> on
           this environment.
@@ -259,10 +259,10 @@ export default function MarketMap({
 
   return (
     <>
-      <div className="relative">
+      <div className="relative h-full">
         <div
           ref={holder}
-          className="h-[calc(100dvh-200px)] w-full overflow-hidden rounded-2xl border border-line/70 bg-line/10"
+          className="h-full w-full overflow-hidden rounded-2xl border border-line/70 bg-line/10"
         />
 
         {/* Three dots while Google is still arriving. An empty grey rectangle
@@ -364,7 +364,7 @@ export default function MarketMap({
                 style={{ left: p.x, top: p.y, transform: "translate(-50%, calc(-100% - 20px))" }}
               >
                 <div className="pointer-events-auto w-[248px] overflow-hidden rounded-2xl border border-line/70 bg-page shadow-[0_18px_40px_-12px_rgba(0,0,0,0.35)]">
-                  <div className="relative">
+                  <div className="relative h-full">
                     {open.image ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={open.image} alt="" className="h-[140px] w-full object-cover" />
@@ -436,15 +436,17 @@ export default function MarketMap({
               </div>
             );
           })()}
-      </div>
 
-      <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
-        Rents rather than pins, so the shape of the local market reads in one look. Drag to move
-        it, and use the buttons to zoom.{" "}
-        {listings.length - points.length > 0
-          ? `${listings.length - points.length} without a location aren't plotted — they're still in the list.`
-          : ""}
-      </p>
+        {/* Only the part that is a FACT survives. "Drag to move it" was telling
+            an agent how a map works; this says how many properties the map is
+            not showing them, which they cannot work out for themselves. It sits
+            ON the map so it costs no height — the screen is trying to fit. */}
+        {listings.length - points.length > 0 && (
+          <span className="pointer-events-none absolute bottom-3 left-3 z-[5] rounded-full bg-page/90 px-3 py-1 text-[10.5px] text-muted shadow-sm backdrop-blur">
+            {listings.length - points.length} without a location aren&apos;t plotted &mdash; still in the list.
+          </span>
+        )}
+      </div>
     </>
   );
 }

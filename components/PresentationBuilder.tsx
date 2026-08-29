@@ -397,6 +397,37 @@ export default function PresentationBuilder({
     </button>
   ) : null;
 
+  const walk = (
+    <>
+      <button
+        type="button"
+        onClick={() => setStep((s) => Math.max(0, s - 1))}
+        disabled={step === 0}
+        className="rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] transition-colors hover:border-ink/40 disabled:opacity-40"
+      >
+        ← Back
+      </button>
+      {step < BUILD_STEPS.length - 1 ? (
+        <button
+          type="button"
+          onClick={() => setStep((s) => s + 1)}
+          className="rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-white"
+        >
+          Next →
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={create}
+          disabled={making || !d}
+          className="rounded-full bg-accent-dark px-3.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
+        >
+          {making ? "Creating…" : "Create presentation"}
+        </button>
+      )}
+    </>
+  );
+
   const body = (
     <>
         <div className="flex shrink-0 items-center justify-between gap-3 px-0 py-3">
@@ -406,11 +437,21 @@ export default function PresentationBuilder({
               {address} · {postcode}
             </p>
           </div>
-          {onClose && (
-            <button type="button" onClick={onClose} className="text-[18px] leading-none text-muted hover:text-ink">
-              ✕
-            </button>
-          )}
+          {/* BACK AND NEXT LIVE UP HERE NOW. James, 29 Aug: "move the next
+              button and the back button up there and into that space."
+
+              They were a footer, and a footer is a bar the screen has to pay
+              for on every step whether or not anything else needs the room.
+              On the title line they cost nothing — the line was already there
+              and half empty — and the map gets the height back. */}
+          <div className="flex shrink-0 items-center gap-2">
+            {walk}
+            {onClose && (
+              <button type="button" onClick={onClose} className="ml-1 text-[18px] leading-none text-muted hover:text-ink">
+                ✕
+              </button>
+            )}
+          </div>
         </div>
 
         {/* The five steps, clickable — an agent who wants to change one thing
@@ -433,7 +474,20 @@ export default function PresentationBuilder({
           {mapToggle}
         </nav>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-0 py-3">
+        {/* WHEREVER THE PAGE ENDS IS WHERE THE MAP ENDS. James, 29 Aug.
+
+            With the map open this stops being the scroller and becomes a
+            column: the map takes whatever height is left after the title line
+            and the steps, and the CARDS are the only thing that moves. No
+            calc(100vh - a-number-I-guessed) — that number was wrong on every
+            screen except the one it was measured on. */}
+        <div
+          className={
+            mapMounted && here === "available"
+              ? "flex min-h-0 flex-1 flex-col overflow-hidden px-0 py-3"
+              : "min-h-0 flex-1 overflow-y-auto px-0 py-3"
+          }
+        >
           {error && <p className="text-[12.5px] text-accent-dark">{error}</p>}
           {!d && !error && <p className="text-[12.5px] text-muted">Pulling the research…</p>}
 
@@ -458,7 +512,7 @@ export default function PresentationBuilder({
           )}
 
           {d && here === "available" && nearby.length > 0 && (
-            <div className="mb-5">
+            <div className={mapMounted ? "flex min-h-0 flex-1 flex-col" : "mb-5"}>
               {/* NO BOX. The filter row is the row — a bordered, tinted panel
                   around four controls was a container drawn for its own sake,
                   and it cost the screen the vertical space that made the map
@@ -494,7 +548,7 @@ export default function PresentationBuilder({
                   The map is STICKY rather than scrolling with the list. A map
                   that leaves the screen while you scroll the results is a map
                   you have to keep scrolling back to. */}
-              <div className={mapMounted ? "mt-3 flex gap-4" : "mt-3"}>
+              <div className={mapMounted ? "mt-3 flex min-h-0 flex-1 gap-4" : "mt-3"}>
                 {/* WITH THE MAP OPEN THE LIST IS THE ONLY THING THAT SCROLLS.
                     James, 29 Aug: "if we scroll, it only scrolls the properties
                     on the left. If we do scroll on the right, it just moves the
@@ -512,7 +566,7 @@ export default function PresentationBuilder({
                          the whitespace IS the separation — tight gaps make two
                          properties read as one, because nothing else says
                          where the first one stops. */
-                      ? "grid h-[calc(100dvh-200px)] flex-1 grid-cols-1 content-start gap-x-4 gap-y-6 overflow-y-auto pr-1 xl:grid-cols-2"
+                      ? "grid min-h-0 flex-1 grid-cols-1 content-start gap-x-4 gap-y-6 overflow-y-auto pr-1 xl:grid-cols-2"
                       : "grid gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
                   }
                 >
@@ -655,11 +709,11 @@ export default function PresentationBuilder({
                     being squashed into it. */}
                 {mapMounted && (
                   <div
-                    className={`hidden shrink-0 overflow-hidden transition-[width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:block ${
+                    className={`hidden h-full shrink-0 overflow-hidden transition-[width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:block ${
                       mapIn ? "w-[58%] opacity-100" : "w-0 opacity-0"
                     }`}
                   >
-                    <div className="sticky top-2 min-w-[440px]">
+                    <div className="h-full min-w-[440px]">
                       <MarketMap
                         listings={nearby}
                         centre={d.subjectPoint}
@@ -686,10 +740,6 @@ export default function PresentationBuilder({
                 )}
               </div>
 
-              <p className="mt-3 border-b border-line/70 pb-4 text-[11px] leading-relaxed text-muted">
-                Nothing here starts ticked — it is somebody else&apos;s stock, and putting a
-                competitor&apos;s property into our deck should be a decision, not a default.
-              </p>
             </div>
           )}
 
@@ -893,34 +943,6 @@ export default function PresentationBuilder({
           )}
         </div>
 
-        <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line/70 px-5 py-3.5">
-          <button
-            type="button"
-            onClick={() => setStep((s) => Math.max(0, s - 1))}
-            disabled={step === 0}
-            className="rounded-lg border border-line/80 px-3.5 py-2 text-[12px] disabled:opacity-40"
-          >
-            ← Back
-          </button>
-          {step < BUILD_STEPS.length - 1 ? (
-            <button
-              type="button"
-              onClick={() => setStep((s) => s + 1)}
-              className="rounded-lg bg-accent-dark px-3.5 py-2 text-[12px] font-semibold text-white"
-            >
-              Next →
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={create}
-              disabled={making || !d}
-              className="rounded-lg bg-accent-dark px-3.5 py-2 text-[12px] font-semibold text-white disabled:opacity-40"
-            >
-              {making ? "Creating…" : "Create presentation"}
-            </button>
-          )}
-        </div>
     </>
   );
 
