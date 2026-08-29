@@ -82,13 +82,25 @@ interface BoardDeal {
   rentReceived?: { amount: number; on: string; paidOut: boolean } | null;
   /** A PayProp rent schedule starting — the independent check on move day. */
   rentSchedule?: { from: string; rent: number } | null;
+  /** Rent owed on a tenancy that has already started. Never a pre-move-in
+   *  invoice — the route drops those, or most of this board would read as
+   *  in arrears. */
+  arrears?: { owed: number; lastPayment: string | null } | null;
 }
 
 interface BoardSummary {
   /** Whether PayProp's money reports loaded at all. Without this, "no rent
    *  anywhere" and "not looked yet" render identically, and only one of them
    *  means anything. */
-  moneyCoverage?: { loaded: boolean; months: string[]; withRent: number; withSchedule: number; total: number };
+  moneyCoverage?: {
+    loaded: boolean;
+    months: string[];
+    withRent: number;
+    withSchedule: number;
+    inArrears?: number;
+    arrearsLoaded?: boolean;
+    total: number;
+  };
   pipelineTotal: number;
   byStage: { key: string; label: string; count: number }[];
   overdue: number;

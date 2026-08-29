@@ -12,7 +12,7 @@ import { effectivePortalStage, getOverlays } from "@/lib/business/deal-store";
 import { getPortfolioBook, propertyKey } from "@/lib/business/payprop-portfolio";
 import { getTenancyRegister } from "@/lib/business/payprop-tenancy";
 import { getTobRegister, type TobStatus } from "@/lib/business/rex-esign";
-import { getRentReceived, getMoveIns } from "@/lib/business/payprop-income";
+import { getRentReceived, getMoveIns, getArrears } from "@/lib/business/payprop-income";
 import { PORTAL_STAGES, portalStageOf } from "@/lib/business/propoly-stages";
 import type { DealPortalOverlay } from "@/lib/business/types";
 
@@ -105,6 +105,16 @@ export interface PreTenancyDeal {
    * schedule for them is the disagreement worth seeing.
    */
   rentSchedule: { from: string; rent: number } | null;
+  /**
+   * Rent genuinely OWED on a tenancy that has already started.
+   *
+   * Only started tenancies. PayProp reports every tenant in debit, and on a
+   * pre-tenancy board almost none of them have moved in yet — their "balance"
+   * is an invoice raised ahead of a move-in, which payprop-income warns reads
+   * identically to a late payer. Carrying those would have painted most of this
+   * board as in arrears and sent Kirstie chasing rent that is not due.
+   */
+  arrears: { owed: number; lastPayment: string | null } | null;
 }
 
 export async function GET(req: NextRequest) {
@@ -151,6 +161,9 @@ export async function GET(req: NextRequest) {
     getMoveIns(thisMonth).catch(() => null),
     getMoveIns(prevMonth).catch(() => null),
   ]).catch(() => [null, null] as const);
+  /* Arrears is not month-scoped — it is a balance as at now. Same cachedAsync
+     contract as the rest: null cold, fills in behind. */
+  const arrearsWork = getArrears().catch(() => null);
 
   const [deals, forecast] = await Promise.all([
     getAllPropolyDeals().catch(() => null),
@@ -207,6 +220,35 @@ export async function GET(req: NextRequest) {
     const older = (a: { on: string } | undefined) => !a || r.receivedOn < a.on;
     if (r.propertyId && older(rentById.get(r.propertyId))) rentById.set(r.propertyId, hit);
     if (r.propertyKey && older(rentByKey.get(r.propertyKey))) rentByKey.set(r.propertyKey, hit);
+  }
+
+  /* ARREARS, AND THE ONE THING THAT MAKES IT SAFE HERE.
+     getArrears returns every tenant in debit, INCLUDING those whose tenancy has
+     not started. payprop-income says why in its own words: "a balance owing on
+     a tenancy that has not started yet is not a debt — it is an invoice raised
+     ahead of a move-in that has not happened... every not-yet-moved-in tenant
+     reads as a late payer."
+
+     This board is made almost entirely of tenancies that have not started. A
+     naive join would therefore paint nearly every deal on it as in arrears —
+     the same shape of error as asking compliance with the wrong id, and this
+     one would have had Kirstie chasing tenants for rent that is not yet due.
+
+     So only a STARTED tenancy's balance is carried. A pre-move-in invoice is
+     already visible as the rent schedule, so nothing is lost by dropping it. */
+  const arrears = await arrearsWork;
+  const asAt = now.toISOString().slice(0, 10);
+  const arrearsById = new Map<string, { owed: number; lastPayment: string | null }>();
+  const arrearsByKey = new Map<string, { owed: number; lastPayment: string | null }>();
+  for (const t of arrears?.tenants ?? []) {
+    const started = t.tenancyStart != null && t.tenancyStart <= asAt;
+    if (!started || t.owed <= 0) continue;
+    const hit = { owed: t.owed, lastPayment: t.lastPayment };
+    if (t.propertyId) arrearsById.set(String(t.propertyId), hit);
+    const k = propertyKey(t.property);
+    /* Worst debt wins a contested key rather than the last one written — an
+       ambiguous address should not quietly under-report what is owed. */
+    if (k && (arrearsByKey.get(k)?.owed ?? 0) < t.owed) arrearsByKey.set(k, hit);
   }
 
   const schedById = new Map<string, { from: string; rent: number }>();
@@ -317,6 +359,12 @@ export async function GET(req: NextRequest) {
     /* A rent schedule starting within 60 days of the claimed move-in — the
        same window the tenancy join uses, for the same reason. This is the
        independent check on move day, which has only ever had Propoly's word. */
+    /* Arrears joins on the same key as everything else, and needs no date
+       window of its own: the balance is already gated on the tenancy having
+       started, and a started tenancy at this address IS this deal's by the time
+       a deal is that far along. */
+    const arrearsHit = key ? arrearsByKey.get(key) : undefined;
+
     const schedRaw = key ? schedByKey.get(key) : undefined;
     const schedHit =
       schedRaw && d.app.startDate != null &&
@@ -417,6 +465,7 @@ export async function GET(req: NextRequest) {
       holdingInvoice: holdingHit ?? null,
       rentReceived: rentHit ?? null,
       rentSchedule: schedHit ?? null,
+      arrears: arrearsHit ?? null,
       app: match
         ? { ...d.app, image: match.image, images: match.images, listingId: match.listingId }
         : d.app,
@@ -475,6 +524,8 @@ export async function GET(req: NextRequest) {
       months: [prevMonth, thisMonth],
       withRent: active.filter((d) => d.rentReceived != null).length,
       withSchedule: active.filter((d) => d.rentSchedule != null).length,
+      inArrears: active.filter((d) => d.arrears != null).length,
+      arrearsLoaded: arrears != null,
       total: active.length,
     },
   };

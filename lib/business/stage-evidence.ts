@@ -56,6 +56,9 @@ export interface EvidenceDeal {
   depositReplacement?: string | null;
   /** Claimed move-in. Used to give a lagging system time before accusing it. */
   startDate?: string | null;
+  /** Rent owed on a tenancy that has ALREADY STARTED. The route gates this;
+   *  an unstarted tenancy's balance is an invoice, not a debt. */
+  arrears?: { owed: number; lastPayment: string | null } | null;
 }
 
 /** Whole days since a date, or null when there is no date to count from. */
@@ -193,6 +196,21 @@ export function stageEvidence(
     }
 
     case "rent_payment": {
+      /* Owing money OUTRANKS having paid some. A tenant who paid the first
+         month and then stopped shows both a receipt and a balance, and the
+         balance is the thing worth her morning. Reported before the good news
+         rather than after it, because a stage that says "£1,250 received" with
+         a debt hidden underneath is worse than saying nothing. */
+      if (d.arrears && d.arrears.owed > 0) {
+        return {
+          tone: "warn",
+          text: `${gbp(d.arrears.owed)} owed — ${
+            d.arrears.lastPayment
+              ? `last payment ${when(d.arrears.lastPayment)}`
+              : "no payment ever received"
+          }.`,
+        };
+      }
       if (d.rentReceived) {
         return {
           tone: "ok",
