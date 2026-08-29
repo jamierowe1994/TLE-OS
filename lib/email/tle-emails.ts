@@ -40,6 +40,8 @@ import {
 import { renderPlain } from "@/lib/campaign-mail";
 import {
   LAUNCH_ANNOUNCEMENT,
+  COMPLIANCE_CHASE_AGENT,
+  COMPLIANCE_CHASE_LANDLORD,
   SITE,
   type EmailDoc,
 } from "@/lib/email/tle-documents";
@@ -80,6 +82,50 @@ const SAMPLE_INVITE: AppraisalInvite = {
   agentName: "Rhiannon Dodge",
   agentPhone: "0161 883 2525",
   presentationUrl: `${SITE}/present/example`,
+};
+
+/**
+ * A worked example, so the preview shows what actually goes out.
+ *
+ * James asked to see these "when they're going out", and a card full of
+ * {{certLabel}} is not that — it is the template, which is a different thing
+ * and reads as unfinished. The appraisal emails already do this with a
+ * stand-in appointment; these get a stand-in property.
+ *
+ * Substituted at PREVIEW time only. The stored document keeps its placeholders,
+ * because that is what the builder edits and what the sender fills.
+ */
+const COMPLIANCE_SAMPLE: Record<string, string> = {
+  count: "3",
+  certLabel: "Gas safety certificate",
+  address: "41 Harewood Road, Coventry CV4 8LP",
+  expires: "12 September 2026",
+  whenPretty: "12 September",
+  daysLeft: "14",
+  agentName: "Michael Healy",
+  rows: [
+    "<strong>41 Harewood Road</strong> — Gas safety, expires in 12 days",
+    "<strong>8 Lower Station Road</strong> — EICR, expires in 26 days",
+    "<strong>2 Norwich Street</strong> — EPC, no certificate on file",
+  ]
+    .join("<br>")
+    .replace(/—/g, "-"),
+};
+
+/** Fill a document's placeholders with the worked example above. */
+const withSample = (doc: EmailDoc): EmailDoc => {
+  const fill = (t: string) =>
+    t.replace(/\{\{(\w+)\}\}/g, (m, k: string) => COMPLIANCE_SAMPLE[k] ?? m);
+  return {
+    ...doc,
+    subject: fill(doc.subject),
+    blocks: doc.blocks.map((b) => {
+      const anyB = b as unknown as Record<string, unknown>;
+      const next: Record<string, unknown> = { ...anyB };
+      if (typeof anyB.text === "string") next.text = fill(anyB.text);
+      return next as unknown as (typeof doc.blocks)[number];
+    }),
+  };
 };
 
 /* An override replaces the WORDS, never the branding: the document in code
@@ -123,6 +169,36 @@ export const TLE_EMAILS: CatalogEntry[] = [
     render: blocks(LAUNCH_ANNOUNCEMENT),
   },
 
+  {
+    id: "compliance-chase-agent",
+    group: "Compliance",
+    name: "Certificates Due — Agent",
+    audience: "partner",
+    trigger:
+      "Daily, for any certificate that has crossed into the 30, 14 or 7 day band, or has expired",
+    fires: "app/api/compliance/reminders/run (cron, POST with x-cron-key)",
+    to: "The letting agent whose book the property is on",
+    summary:
+      "One email per agent, not per certificate — a dozen properties would otherwise be a dozen emails on a Monday, which is how a chase becomes something people filter. Worst first, expired at the top. Chased by BAND rather than exact day, so a missed run does not mean a certificate is never chased at all.",
+    doc: COMPLIANCE_CHASE_AGENT,
+    render: (o) => blocks(withSample(o ?? COMPLIANCE_CHASE_AGENT))(),
+  },
+  {
+    id: "compliance-chase-landlord",
+    group: "Compliance",
+    name: "Certificate Renewal — Landlord",
+    audience: "landlord",
+    trigger:
+      "The same bands, but one email per property per certificate — a landlord owns one or two houses and a list means nothing to them",
+    fires:
+      "NOT WIRED — lib/email-policy refuses every non-internal address until the public Lettings Experts domain exists. This is what it will say on the day that lands.",
+    to: "The landlord, with their agent copied",
+    draft: true,
+    summary:
+      "One property, one certificate, one date. States the obligation plainly and offers the two real paths — they arrange it and send it in, or we book a contractor. No urgency dressing: a certificate is a legal obligation, and making every reminder shout leaves nothing to distinguish the genuinely urgent ones.",
+    doc: COMPLIANCE_CHASE_LANDLORD,
+    render: (o) => blocks(withSample(o ?? COMPLIANCE_CHASE_LANDLORD))(),
+  },
   {
     id: "account-verify",
     group: "Accounts",
@@ -225,4 +301,4 @@ The Letting Experts`
   },
 ];
 
-export const EMAIL_GROUPS = ["Pre-launch", "Market appraisals", "Terms of business", "Accounts"];
+export const EMAIL_GROUPS = ["Pre-launch", "Market appraisals", "Compliance", "Terms of business", "Accounts"];

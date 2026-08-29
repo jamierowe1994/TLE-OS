@@ -199,3 +199,92 @@ export const LAUNCH_ANNOUNCEMENT = {
   ],
   branding: { showSignoff: false },
 } as const;
+
+/* ─────────────────────── compliance reminders ───────────────────────
+ *
+ * Two documents, because a chase has two readers with two different jobs.
+ *
+ * THE AGENT gets a list. They may have a dozen properties across several
+ * landlords, and one email per certificate would be a dozen emails on a Monday
+ * — which is how a chase becomes something you filter. So: everything on their
+ * book that needs a certificate, in one place, worst first.
+ *
+ * THE LANDLORD gets ONE property and ONE certificate. They own one or two
+ * houses and a list is meaningless to them; what they need is the address, the
+ * document, and the date it stops being valid.
+ *
+ * The tracker's rule is that every reminder addresses BOTH — an agent must
+ * never be surprised by a chase on their own file. The landlord half is written
+ * here and deliberately not wired: lib/email-policy refuses any non-internal
+ * address until the public Lettings Experts domain exists, so this is what it
+ * WILL say, previewable now and sendable the day that domain lands.
+ *
+ * No deadline theatre. The band is stated as a fact — "expires in 14 days" —
+ * because a certificate is a legal obligation and dressing it up as urgency
+ * makes the genuinely urgent ones indistinguishable. */
+
+export const COMPLIANCE_CHASE_AGENT = {
+  subject: "{{count}} of your properties need a certificate",
+  preheader: "Gas, EICR and EPC coming up for renewal on your book.",
+  mode: "blocks",
+  blocks: [
+    H("ca1", "Certificates due on your book"),
+    T(
+      "ca2",
+      "Hi {{firstName}},<br><br>These properties need a certificate renewing. They're listed worst first - anything already expired is at the top, because a let can't legally proceed without it."
+    ),
+    T("ca3", "{{rows}}"),
+    BTN("ca4", "Open Compliance", `${SITE}/compliance`),
+    SP("ca5", 8),
+    DIV("ca6"),
+    H2("ca7", "What we need from you"),
+    T(
+      "ca8",
+      "Chase the landlord for the certificate, or book the contractor if that's the arrangement on the property. Once the certificate is on file the reminder stops by itself - there's nothing to tick off."
+    ),
+    T(
+      "ca9",
+      "If a property on this list isn't yours any more, that's worth telling us: it means the record is wrong, and the landlord may be getting chased by nobody."
+    ),
+    SP("ca10", 8),
+    T("ca11", "The Letting Experts"),
+    FOOT("ca12", "You're getting this because these properties are on your book."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+export const COMPLIANCE_CHASE_LANDLORD = {
+  subject: "{{certLabel}} at {{address}} expires {{whenPretty}}",
+  preheader: "We need the renewed certificate before it lapses.",
+  mode: "blocks",
+  blocks: [
+    H("cl1", "{{certLabel}} is due for renewal"),
+    T(
+      "cl2",
+      "Hi {{firstName}},<br><br>The {{certLabel}} for <strong>{{address}}</strong> expires on <strong>{{expires}}</strong>, which is {{daysLeft}} days away."
+    ),
+    T(
+      "cl3",
+      "By law the property must hold a valid certificate for as long as it is let. If it lapses we have to stop marketing it, and an existing tenancy can be affected too - so we chase these early rather than close to the date."
+    ),
+    SP("cl4", 8),
+    DIV("cl5"),
+    H2("cl6", "What happens next"),
+    T(
+      "cl7",
+      "<strong>If you arrange it yourself:</strong> send us the certificate when you have it and we'll put it on the property's file."
+    ),
+    T(
+      "cl8",
+      "<strong>If we arrange it:</strong> reply and we'll book a contractor and let you know the date."
+    ),
+    T(
+      "cl9",
+      "Either way {{agentName}} is copied in on this and can pick it up with you."
+    ),
+    SP("cl10", 8),
+    T("cl11", "The Letting Experts"),
+    FOOT("cl12", "You're getting this because you let a property through The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
