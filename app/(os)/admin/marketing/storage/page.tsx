@@ -16,7 +16,7 @@ import DoodleIcon from "@/components/DoodleIcon";
  * The page read that as a dead bucket and had been printing "Couldn't reach the
  * bucket" since the day it was written, on a bucket that was perfectly healthy.
  *
- * So the shelf needs a prefix of its own, and now has one: documents/library/.
+ * So the shelf needs a prefix of its own, and now has one: library/shelf/.
  * Everything here is uploaded to and listed from that single reference, which
  * keeps the scoping guarantee intact rather than punching a hole in it.
  *
@@ -28,15 +28,30 @@ import DoodleIcon from "@/components/DoodleIcon";
  *
  * ── What it will not take ─────────────────────────────────────────────────
  *
- * PDFs and images, up to 25MB, because those are the types the document scope
- * allows in lib/r2.ts. A Word or PowerPoint file is refused BY THE SERVER, so
- * the limit is stated up front here rather than discovered halfway through an
- * upload. Widening it is a change to SCOPES, and James's call — the bucket
- * holds right-to-rent evidence as well as brochures.
+ * PDFs, images, Word and PowerPoint, up to 25MB. That list is the `library`
+ * scope in lib/r2.ts, which exists precisely so this shelf can take Office
+ * files WITHOUT compliance evidence being able to. Anything else is refused by
+ * the server, so the limits are stated up front here rather than discovered
+ * halfway through a 20MB upload.
  */
 
-/** The one reference this shelf lives under. */
-const LIBRARY_REF = "library";
+/** The scope and reference this shelf lives under: library/shelf/… */
+const LIBRARY_SCOPE = "library";
+const LIBRARY_REF = "shelf";
+
+/** Mirrors the library scope's server-side list — a hint to the file picker,
+ *  never the rule. lib/r2.ts is the only thing that decides. */
+const ACCEPT = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+].join(",");
 
 interface StoredFile {
   key: string;
@@ -72,7 +87,7 @@ export default function Storage() {
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch(`/api/r2/list?scope=document&ref=${LIBRARY_REF}`, {
+      const r = await fetch(`/api/r2/list?scope=${LIBRARY_SCOPE}&ref=${LIBRARY_REF}`, {
         cache: "no-store",
       });
       const j = await r.json();
@@ -103,7 +118,7 @@ export default function Storage() {
       for (const file of Array.from(picked)) {
         const body = new FormData();
         body.set("file", file);
-        body.set("scope", "document");
+        body.set("scope", LIBRARY_SCOPE);
         body.set("ref", LIBRARY_REF);
         const res = await fetch("/api/r2/upload", { method: "POST", body });
         const j = await res.json();
@@ -134,7 +149,7 @@ export default function Storage() {
                 ? "Looking…"
                 : failed
                   ? "Couldn't read the shelf."
-                  : `${files.length} file${files.length === 1 ? "" : "s"} · PDFs and images, up to 25MB each`}
+                  : `${files.length} file${files.length === 1 ? "" : "s"} · PDFs, images, Word and PowerPoint, up to 25MB each`}
             </p>
           </div>
 
@@ -142,7 +157,7 @@ export default function Storage() {
             ref={picker}
             type="file"
             multiple
-            accept="application/pdf,image/jpeg,image/png,image/webp,image/heic"
+            accept={ACCEPT}
             className="hidden"
             onChange={(e) => upload(e.target.files)}
           />

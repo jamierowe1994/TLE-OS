@@ -111,6 +111,47 @@ export const SCOPES = {
     ],
     maxBytes: 25 * 1024 * 1024,
   },
+  /**
+   * The File Store — guides, brochures, decks, anything the office has made.
+   *
+   * A scope of its own rather than widening `document`, which is the obvious
+   * move and the wrong one. `document` is what compliance certificates, ID and
+   * proof of ownership are filed under; adding Word and PowerPoint to it would
+   * let somebody file a .docx as an EICR certificate or right-to-rent evidence,
+   * everywhere in the OS, to save one line here. Evidence should be a PDF or a
+   * photograph of the real thing, and it stays that way.
+   *
+   * James, 29 Aug, asked for Word and PowerPoint — for Francesca's shelf, which
+   * is what this is. Nothing else can reach this prefix, because the scope is
+   * only ever named by the File Store page.
+   *
+   * Legacy .doc and .ppt are included alongside .docx and .pptx: the office has
+   * material going back years and a file being old is not a reason to refuse
+   * it. Note the match is on the browser's reported MIME type and is exact, so
+   * anything arriving as application/octet-stream is refused and told so by
+   * name rather than quietly accepted.
+   */
+  library: {
+    prefix: "library",
+    types: [
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/heic",
+      // Word
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      // PowerPoint
+      "application/vnd.ms-powerpoint",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ],
+    /* Same ceiling as documents on purpose. The upload route buffers the whole
+       file in memory before it goes to R2, so this number is also how much RAM
+       one upload costs the container. Raising it for big decks is a one-line
+       change, but it is a resource decision rather than a policy one. */
+    maxBytes: 25 * 1024 * 1024,
+  },
 } as const;
 
 export type Scope = keyof typeof SCOPES;

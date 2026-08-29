@@ -31,13 +31,15 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
-  if (!r2Configured) {
-    return NextResponse.json(
-      { ok: false, error: "Storage isn't configured on this environment." },
-      { status: 503 }
-    );
-  }
-
+  /* The allowlist runs BEFORE the configured check, and the order is the point.
+     It used to be the other way round, which meant that on any machine without
+     credentials — every developer's, and every preview — this route answered
+     "storage isn't configured" to everything and the guards below were never
+     once executed. A rule you cannot exercise anywhere except production is a
+     rule you are hoping about.
+     /api/r2/list already had it this way round and says so; this route was the
+     odd one out. Nothing reaches R2 any earlier: the vault check simply sits
+     immediately before the only line that needs it. */
   let form: FormData;
   try {
     form = await req.formData();
@@ -76,6 +78,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { ok: false, error: `${file.type || "That file type"} isn't allowed here.` },
       { status: 415 }
+    );
+  }
+
+  /* Everything above this line is a decision we can make without a vault.
+     Everything below needs one. */
+  if (!r2Configured) {
+    return NextResponse.json(
+      { ok: false, error: "Storage isn't configured on this environment." },
+      { status: 503 }
     );
   }
 
