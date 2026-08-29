@@ -54,7 +54,20 @@ export interface EvidenceDeal {
   rentReceived?: { amount: number; on: string; paidOut: boolean } | null;
   rentSchedule?: { from: string; rent: number } | null;
   depositReplacement?: string | null;
+  /** Claimed move-in. Used to give a lagging system time before accusing it. */
+  startDate?: string | null;
 }
+
+/** Whole days since a date, or null when there is no date to count from. */
+function daysSince(iso: string | null | undefined, now: Date): number | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  return Math.floor((now.getTime() - t) / 86_400_000);
+}
+
+/** How long PayProp gets to catch up before a missing deposit is a finding. */
+const DEPOSIT_GRACE_DAYS = 14;
 
 function when(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -74,9 +87,12 @@ const gbp = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
 export function stageEvidence(
   stageKey: string,
   d: EvidenceDeal,
-  opts: { reached: boolean; moneyLoaded: boolean }
+  opts: { reached: boolean; moneyLoaded: boolean; now?: Date }
 ): StageEvidence {
   const { reached, moneyLoaded } = opts;
+  /* Injected rather than read, so the grace period below can be tested at a
+     chosen date instead of only ever on the day somebody runs it. */
+  const now = opts.now ?? new Date();
 
   switch (stageKey) {
     /* Propoly having a deal row IS the deal starting. There is no second
@@ -138,11 +154,21 @@ export function stageEvidence(
             : "Registered in PayProp.",
         };
       }
+      /* A grace period, because deposit registration LAGS. The server's own
+         verification flag has always waited 14 days past move-in before
+         accusing anybody, and a check that nags the morning after completion
+         is one she learns to scroll past — which costs the real ones too.
+
+         No move-in date means no clock to run, so it stays quiet rather than
+         guessing. */
+      const since = daysSince(d.startDate, now);
+      const overdue = since != null && since >= DEPOSIT_GRACE_DAYS;
       return {
-        tone: reached ? "warn" : "none",
-        text: reached
-          ? "Nothing registered in PayProp against this tenancy."
-          : "Nothing registered in PayProp yet.",
+        tone: reached && overdue ? "warn" : "none",
+        text:
+          reached && overdue
+            ? `Nothing registered in PayProp, ${since} days after move-in.`
+            : "Nothing registered in PayProp yet.",
       };
     }
 

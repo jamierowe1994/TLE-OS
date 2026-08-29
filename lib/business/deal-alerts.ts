@@ -56,7 +56,19 @@ export interface AlertDeal extends EvidenceDeal {
   agentName?: string | null;
   archived?: boolean;
   statusKey?: string;
+  /* Server-computed checks that are NOT a disagreement with an outside system.
+     stageEvidence answers "what can PayProp, REX or DocuSign show", and there
+     is a whole class of gap it cannot speak to: things the portal itself is the
+     register for. The deposit scheme is the example — nothing upstream records
+     which scheme holds a deposit, so an empty entry is a real gap rather than a
+     sync problem, and only we can know it. */
+  flags?: Array<{ kind: string; label: string }>;
 }
+
+/** Flags that are genuine attention items rather than a restatement of the
+ *  per-stage evidence. deposit-unverified and plc-mismatch are deliberately
+ *  absent: the stage checks below already say both, in more detail. */
+const REGISTER_GAP_FLAGS = new Set(["scheme-missing"]);
 
 const stageIndex = (key: string) => PORTAL_STAGES.findIndex((s) => s.key === key);
 
@@ -103,6 +115,22 @@ export function dealAlerts(
         address,
         agentName,
         text: stageEvidence("rent_payment", d, { reached: true, moneyLoaded: true }).text,
+      });
+    }
+
+    /* Gaps in our OWN register, which no outside system can answer for. Kept
+       in the same alert set so the chip, the modal and the digest have exactly
+       one idea of what needs a look. */
+    for (const f of d.flags ?? []) {
+      if (!REGISTER_GAP_FLAGS.has(f.kind)) continue;
+      out.push({
+        dealId: d.app.id,
+        stageKey: "deposit",
+        key: `${d.app.id}:${f.kind}`,
+        tone: "attention",
+        address,
+        agentName,
+        text: f.label,
       });
     }
 

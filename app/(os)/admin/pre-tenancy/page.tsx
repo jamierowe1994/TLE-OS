@@ -41,6 +41,7 @@ import type {
 import type { AgentApplication } from "@/lib/business/rex-stats";
 import { rexListingUrl } from "@/lib/business/rex-links";
 import { stageEvidence } from "@/lib/business/stage-evidence";
+import { dealAlerts, type DealAlert } from "@/lib/business/deal-alerts";
 import BoardLoading from "@/components/business/BoardLoading";
 
 /* ------------------------------- data shapes ------------------------------- */
@@ -568,12 +569,33 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
       .sort((a, b) => (a.app.startDate ?? "").localeCompare(b.app.startDate ?? ""));
   }, [base]);
 
-  // Built off base for the same reason the move-ins are: a dock that can
-  // disagree with the board behind it teaches people to trust neither.
-  const flaggedDeals = useMemo(
-    () => (base ?? []).filter((d) => (d.flags?.length ?? 0) > 0),
-    [base]
+  /* WHAT NEEDS A LOOK — decided in one place.
+     Built off base for the same reason the move-ins are: a dock that can
+     disagree with the board behind it teaches people to trust neither.
+
+     It used to filter on the server's `flags`, which meant the chip, the panel
+     and (later) the digest each had their own idea of what "wrong" means. Now
+     all three read lib/business/deal-alerts, which reads the same
+     stageEvidence the Progression column renders. If the panel says a deposit
+     is missing, the chip counts it and the email will say the same thing.
+
+     Requires the money to have loaded — a cold PayProp cache would otherwise
+     announce that every deal on the board has lost its deposit and its rent. */
+  const alerts = useMemo(
+    () =>
+      dealAlerts(
+        (base ?? []).map((d) => ({ ...d, startDate: d.app.startDate })),
+        { moneyLoaded: summary?.moneyCoverage?.loaded ?? false }
+      ),
+    [base, summary]
   );
+  /* Only the ones asking for attention. Rent arriving is good news and belongs
+     in the digest, not in a chip that means "something is wrong". */
+  const attention = useMemo(() => alerts.filter((a) => a.tone === "attention"), [alerts]);
+  const flaggedDeals = useMemo(() => {
+    const ids = new Set(attention.map((a) => a.dealId));
+    return (base ?? []).filter((d) => ids.has(d.app.id));
+  }, [base, attention]);
 
   const activeTab = tabs.find((t) => t.key === tab) ?? tabs[0];
   const open = openId ? (deals ?? []).find((d) => d.app.id === openId) ?? null : null;
@@ -1059,6 +1081,7 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
       {checksOpen ? (
         <ChecksModal
           deals={flaggedDeals}
+          alerts={attention}
           onClose={() => setChecksOpen(false)}
           onOpenDeal={(id: string) => {
             setChecksOpen(false);
@@ -1495,7 +1518,11 @@ function DealWorkspace({
         </div>
 
         {/* ---- banners ---- */}
-        {(moved && meta?.stageBy) || actionError || cancelled || deal.archived || (deal.flags?.length ?? 0) > 0 ? (
+        {(moved && meta?.stageBy) ||
+        actionError ||
+        cancelled ||
+        deal.archived ||
+        (deal.flags ?? []).some((f) => f.kind === "scheme-missing") ? (
           <div className="space-y-2 px-5 pt-4 sm:px-8">
             {cancelled ? (
               <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-[12px] text-red-700">
@@ -1539,7 +1566,14 @@ function DealWorkspace({
             {/* Claim-vs-record checks. Not stored anywhere — fixing the data
                 (tick the scheme, sort the PayProp record) clears the banner
                 on the next load, which is the whole design. */}
-            {(deal.flags ?? []).map((f) => (
+            {/* Only the checks the Progression column cannot make. The banner
+                used to repeat all three flags directly above a stage list that
+                now says two of them per stage, in more detail and with the
+                evidence attached — the same fact stated twice in two places
+                reads as two problems. `scheme-missing` stays because nothing
+                upstream records which scheme holds a deposit: we are the
+                register, so only we can notice the gap. */}
+            {(deal.flags ?? []).filter((f) => f.kind === "scheme-missing").map((f) => (
               <p
                 key={f.kind}
                 className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-800"
@@ -1978,10 +2012,11 @@ function DealWorkspace({
                             need chasing, and the checks would all read as
                             failures. */}
                         {!cancelled ? (() => {
-                          const ev = stageEvidence(s.key, deal, {
-                            reached: i <= currentIdx,
-                            moneyLoaded,
-                          });
+                          const ev = stageEvidence(
+                            s.key,
+                            { ...deal, startDate: deal.app.startDate },
+                            { reached: i <= currentIdx, moneyLoaded }
+                          );
                           return (
                             <p
                               className={`mt-1 flex items-start gap-1.5 text-[11.5px] leading-relaxed ${
@@ -3024,13 +3059,24 @@ function TasksTab({
 /** The fortnight ahead, soonest first — the other question she asks all day. */
 function ChecksModal({
   deals,
+  alerts,
   onClose,
   onOpenDeal,
 }: {
   deals: BoardDeal[];
+  /* The reasons, from the same place the Progression column gets them. The
+     modal used to render the server's `flags`, so a deal could be listed here
+     for one reason and show a different one when you opened it. */
+  alerts: DealAlert[];
   onClose: () => void;
   onOpenDeal: (dealId: string) => void;
 }) {
+  const byDeal = new Map<string, DealAlert[]>();
+  for (const a of alerts) {
+    const cur = byDeal.get(a.dealId);
+    if (cur) cur.push(a);
+    else byDeal.set(a.dealId, [a]);
+  }
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div
@@ -3071,9 +3117,9 @@ function ChecksModal({
                     {d.agentName ?? "Unassigned"}
                   </span>
                 </span>
-                {(d.flags ?? []).map((f) => (
-                  <span key={f.kind} className="mt-1 block text-[11.5px] leading-snug text-amber-800">
-                    {f.label}
+                {(byDeal.get(d.app.id) ?? []).map((a) => (
+                  <span key={a.key} className="mt-1 block text-[11.5px] leading-snug text-amber-800">
+                    {a.text}
                   </span>
                 ))}
               </button>
