@@ -83,17 +83,22 @@ export default function MarketMap({
       if (!map.current) {
         map.current = L.map(holder.current, {
           zoomControl: true,
-          /* The wheel stays OFF and the +/- buttons do the zooming.
+          /* The wheel zooms, and it only became safe once the layout changed.
            *
-           * Airbnb can grab the wheel because its map is the page. Ours sits
-           * beside a scrolling column of cards, so a map that swallows the
-           * wheel makes the list impossible to get past on a laptop — you put
-           * the pointer in the wrong half and the page stops moving.
+           * It was off, for a good reason at the time: the map used to sit
+           * beside a column that scrolled THE PAGE, so a map that swallowed
+           * the wheel made the list impossible to get past — put the pointer
+           * in the wrong half and everything stopped moving.
            *
-           * Ctrl-scroll still zooms; that is Leaflet's own affordance and it
-           * prints a hint the first time somebody tries. Dragging works
-           * normally, which is the part James actually asked for. */
-          scrollWheelZoom: false,
+           * That is no longer true. The map is fixed full height and the list
+           * scrolls inside itself, so the two halves no longer compete for the
+           * wheel: over the cards it scrolls the cards, over the map it zooms
+           * the map. Which is what the reference does, and what James asked
+           * for once the map stopped moving.
+           *
+           * If this map is ever dropped back into a page that scrolls behind
+           * it, turn this off again — the trap returns with the layout. */
+          scrollWheelZoom: true,
         });
         /* A QUIET BASEMAP, which is most of the difference.
          *
