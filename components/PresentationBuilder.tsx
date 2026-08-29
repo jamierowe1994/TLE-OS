@@ -407,8 +407,12 @@ export default function PresentationBuilder({
                 <ul
                   className={
                     mapOpen
-                      ? "grid h-[calc(100vh-260px)] flex-1 grid-cols-1 content-start gap-3 overflow-y-auto pr-1 xl:grid-cols-2"
-                      : "grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                      /* Wider gaps than a boxed grid needs. With no border
+                         the whitespace IS the separation — tight gaps make two
+                         properties read as one, because nothing else says
+                         where the first one stops. */
+                      ? "grid h-[calc(100vh-260px)] flex-1 grid-cols-1 content-start gap-x-4 gap-y-6 overflow-y-auto pr-1 xl:grid-cols-2"
+                      : "grid gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
                   }
                 >
                 {[...nearby]
@@ -425,63 +429,115 @@ export default function PresentationBuilder({
                   const on = pickedNearby.includes(k);
                   return (
                     <li key={k}>
-                      <label
-                        className={`block cursor-pointer overflow-hidden rounded-xl border transition-colors ${
-                          on ? "border-accent-dark" : "border-line/70"
-                        }`}
-                      >
-                        {/* Plain img, not next/image: these are third-party S3
-                            URLs, and a remote-image allowlist for a feed whose
-                            host may change is config that breaks silently the
-                            day it does. */}
-                        {l.image ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={l.image}
-                            alt=""
-                            loading="lazy"
-                            /* Taller. h-32 cropped these to a letterbox and
-                               cut the roofline off every terrace — a property
-                               photo with no property in it. 4:3 keeps the
-                               building whole at four across. */
-                            className="aspect-[4/3] w-full bg-line/30 object-cover"
-                          />
-                        ) : (
-                          <div className="flex aspect-[4/3] w-full items-center justify-center bg-line/20 text-[11px] text-muted">
-                            No photograph
-                          </div>
-                        )}
-                        <div className="flex items-start gap-2 p-3">
-                          <input
-                            type="checkbox"
-                            checked={on}
-                            onChange={() =>
-                              setPickedNearby((c) => (on ? c.filter((x) => x !== k) : [...c, k]))
-                            }
-                            className="mt-0.5 h-4 w-4 shrink-0 accent-[#e31f36]"
-                          />
-                          <span className="min-w-0 flex-1">
-                            <span className="flex items-baseline justify-between gap-2">
-                              <span className="figures text-[13px]">
-                                {l.rent ? money(l.rent) : "\u2014"}
-                                <span className="text-[10.5px] text-muted"> pcm</span>
-                              </span>
-                              {l.daysListed != null && (
-                                <span className="text-[10.5px] text-muted">{l.daysListed}d listed</span>
-                              )}
+                      {/* NO BOX. James, 29 Aug: "I like the fact that they
+                          don't have white boxes underneath like we do. We've
+                          got the photo, and then we've got our connecting line
+                          to make it into a tile."
+
+                          He is right, and the reason is that the border was
+                          doing no work. It drew a container around a
+                          photograph that is already a rectangle, and the line
+                          under the picture split one property into two halves.
+                          The photo has a shape of its own; the words belong to
+                          it by sitting underneath, not by being fenced in with
+                          it. Selection is shown on the tick and a ring on the
+                          PHOTO instead — the border was carrying that meaning
+                          and losing it in the process. */}
+                      <div className="group cursor-pointer" onClick={() => setFocused(k)}>
+                        <div className="relative">
+                          {/* Plain img, not next/image: these are third-party
+                              S3 URLs, and a remote-image allowlist for a feed
+                              whose host may change is config that breaks
+                              silently the day it does. */}
+                          {l.image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={l.image}
+                              alt=""
+                              loading="lazy"
+                              /* 4:3 keeps a terrace whole. h-32 cropped these
+                                 to a letterbox and cut the roofline off every
+                                 one — a property photo with no property in it. */
+                              className={`aspect-[4/3] w-full rounded-2xl bg-line/30 object-cover transition-all ${
+                                on ? "ring-2 ring-accent-dark ring-offset-2 ring-offset-page" : ""
+                              }`}
+                            />
+                          ) : (
+                            <div
+                              className={`flex aspect-[4/3] w-full items-center justify-center rounded-2xl bg-line/20 text-[11px] text-muted ${
+                                on ? "ring-2 ring-accent-dark ring-offset-2 ring-offset-page" : ""
+                              }`}
+                            >
+                              No photograph
+                            </div>
+                          )}
+
+                          {/* The tick sits ON the photo, like the heart in the
+                              reference. It was a checkbox in the row of text,
+                              which put the one deliberate action on the card
+                              in the least deliberate place. */}
+                          <button
+                            type="button"
+                            aria-label={on ? "Remove from the deck" : "Add to the deck"}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPickedNearby((c) =>
+                                on ? c.filter((x) => x !== k) : [...c, k]
+                              );
+                            }}
+                            className={`absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full text-[13px] shadow-sm transition-transform hover:scale-110 ${
+                              on ? "bg-accent-dark text-white" : "bg-page/85 text-muted"
+                            }`}
+                          >
+                            &#10003;
+                          </button>
+
+                          {l.status === "let agreed" && (
+                            <span className="absolute left-2 top-2 rounded-full bg-page/95 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-accent-dark shadow-sm">
+                              Let agreed
                             </span>
-                            <span className="mt-0.5 block truncate text-[11.5px]">{l.address}</span>
-                            <span className="block truncate text-[10.5px] text-muted">
-                              {[l.beds ? `${l.beds} bed` : null, l.type, l.postcode]
-                                .filter(Boolean)
-                                .join(" \u00b7 ")}
-                            </span>
-                            {l.agent && (
-                              <span className="block truncate text-[10.5px] text-muted">{l.agent}</span>
-                            )}
-                          </span>
+                          )}
+
+                          {/* The advert, revealed on hover — the reference's
+                              little arrow. Homesearch gives one photograph, so
+                              there is nothing to page through; the arrow goes
+                              to the real listing where the rest of them are. */}
+                          {l.link && (
+                            <a
+                              href={l.link}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label="Open the advert"
+                              className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-page/90 text-[13px] text-ink opacity-0 shadow-sm transition-all hover:scale-110 group-hover:opacity-100"
+                            >
+                              &rarr;
+                            </a>
+                          )}
                         </div>
-                      </label>
+
+                        {/* Floating underneath, on the page. No panel, no line. */}
+                        <div className="px-0.5 pt-2">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className="figures text-[13.5px]">
+                              {l.rent ? money(l.rent) : "\u2014"}
+                              <span className="text-[10.5px] text-muted"> pcm</span>
+                            </span>
+                            {l.daysListed != null && (
+                              <span className="text-[10.5px] text-muted">{l.daysListed}d listed</span>
+                            )}
+                          </div>
+                          <p className="mt-0.5 truncate text-[12px]">{l.address}</p>
+                          <p className="truncate text-[10.5px] text-muted">
+                            {[l.beds ? `${l.beds} bed` : null, l.type, l.postcode]
+                              .filter(Boolean)
+                              .join(" \u00b7 ")}
+                          </p>
+                          {l.agent && (
+                            <p className="truncate text-[10.5px] text-muted">{l.agent}</p>
+                          )}
+                        </div>
+                      </div>
                     </li>
                   );
                 })}
