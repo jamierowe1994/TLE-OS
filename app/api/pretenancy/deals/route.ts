@@ -10,9 +10,8 @@ import {
 } from "@/lib/business/rex-stats";
 import { effectivePortalStage, getOverlays } from "@/lib/business/deal-store";
 import { getPortfolioBook, propertyKey } from "@/lib/business/payprop-portfolio";
-import { getTenancyRegister } from "@/lib/business/payprop-tenancy";
 import { getTobRegister, type TobStatus } from "@/lib/business/rex-esign";
-import { getRentReceived, getMoveIns, getArrears } from "@/lib/business/payprop-income";
+import { loadMoneyContext, moneyForDeal } from "@/lib/business/deal-money";
 import { PORTAL_STAGES, portalStageOf } from "@/lib/business/propoly-stages";
 import type { DealPortalOverlay } from "@/lib/business/types";
 
@@ -135,35 +134,12 @@ export async function GET(req: NextRequest) {
   const bookWork = getPortfolioBook().catch(() => null);
   // Same serve-stale contract as the book: these return instantly from cache
   // and refresh behind. A null register costs badges, never the board.
-  const registerWork = getTenancyRegister().catch(() => null);
   const tobWork = getTobRegister().catch(() => null);
-
-  /* The money, this month and last.
-     Two months rather than one because a deal that moved in on the 28th has
-     its first rent in the following month as often as not, and a board that
-     forgot last month would show "no rent yet" on a tenancy that has been
-     paying for a fortnight. Derived from now(), so it rolls over on its own —
-     a month literal here is the exact bug this codebase keeps being bitten by.
-
-     Both go through cachedAsync, which returns NULL on a cold key and computes
-     behind. So null means "not loaded", never "no rent", and it is treated that
-     way everywhere below. */
+  /* Every PayProp join lives in lib/business/deal-money, so this route and the
+     alert runner cannot drift apart on four date windows and a loose address
+     key. Started here to overlap Propoly like the rest. */
   const now = new Date();
-  const thisMonth = now.toISOString().slice(0, 7);
-  const prevMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
-    .toISOString()
-    .slice(0, 7);
-  const rentWork = Promise.all([
-    getRentReceived(thisMonth).catch(() => null),
-    getRentReceived(prevMonth).catch(() => null),
-  ]).catch(() => [null, null] as const);
-  const moveInWork = Promise.all([
-    getMoveIns(thisMonth).catch(() => null),
-    getMoveIns(prevMonth).catch(() => null),
-  ]).catch(() => [null, null] as const);
-  /* Arrears is not month-scoped — it is a balance as at now. Same cachedAsync
-     contract as the rest: null cold, fills in behind. */
-  const arrearsWork = getArrears().catch(() => null);
+  const moneyWork = loadMoneyContext(now).catch(() => null);
 
   const [deals, forecast] = await Promise.all([
     getAllPropolyDeals().catch(() => null),
@@ -196,77 +172,11 @@ export async function GET(req: NextRequest) {
   // it overlaps the Propoly fetch; by here it is usually already done.
   const photos = await photosWork;
   const book = await bookWork;
-  const register = await registerWork;
   const tob = await tobWork;
+  const money = await moneyWork;
+  /** The register, for the verification flags below. */
+  const register = money?.register ?? null;
 
-  /* Two months folded into one lookup, EARLIEST receipt winning.
-     The question this answers is "has rent started", not "what came in last" —
-     so a tenancy paying since last month should show its first payment, not its
-     most recent. Same rule the agent board already uses.
-
-     Indexed by PayProp id AND by address key. The id is the reliable join and
-     is tried first everywhere below; the key is the fallback for a deal with no
-     id, and it is loose enough that it may only ever be evidence. */
-  const [rentThis, rentPrev] = await rentWork;
-  const [moveInsThis, moveInsPrev] = await moveInWork;
-  /** False when neither month loaded — lets the screen say "not loaded yet"
-   *  rather than showing an absence it has not actually checked. */
-  const moneyLoaded = Boolean(rentThis || rentPrev);
-
-  const rentById = new Map<string, { amount: number; on: string; paidOut: boolean }>();
-  const rentByKey = new Map<string, { amount: number; on: string; paidOut: boolean }>();
-  for (const r of [...(rentPrev?.receipts ?? []), ...(rentThis?.receipts ?? [])]) {
-    const hit = { amount: r.amount, on: r.receivedOn, paidOut: r.paidOut };
-    const older = (a: { on: string } | undefined) => !a || r.receivedOn < a.on;
-    if (r.propertyId && older(rentById.get(r.propertyId))) rentById.set(r.propertyId, hit);
-    if (r.propertyKey && older(rentByKey.get(r.propertyKey))) rentByKey.set(r.propertyKey, hit);
-  }
-
-  /* ARREARS, AND THE ONE THING THAT MAKES IT SAFE HERE.
-     getArrears returns every tenant in debit, INCLUDING those whose tenancy has
-     not started. payprop-income says why in its own words: "a balance owing on
-     a tenancy that has not started yet is not a debt — it is an invoice raised
-     ahead of a move-in that has not happened... every not-yet-moved-in tenant
-     reads as a late payer."
-
-     This board is made almost entirely of tenancies that have not started. A
-     naive join would therefore paint nearly every deal on it as in arrears —
-     the same shape of error as asking compliance with the wrong id, and this
-     one would have had Kirstie chasing tenants for rent that is not yet due.
-
-     So only a STARTED tenancy's balance is carried. A pre-move-in invoice is
-     already visible as the rent schedule, so nothing is lost by dropping it. */
-  const arrears = await arrearsWork;
-  const asAt = now.toISOString().slice(0, 10);
-  const arrearsById = new Map<string, { owed: number; lastPayment: string | null }>();
-  const arrearsByKey = new Map<string, { owed: number; lastPayment: string | null }>();
-  for (const t of arrears?.tenants ?? []) {
-    const started = t.tenancyStart != null && t.tenancyStart <= asAt;
-    if (!started || t.owed <= 0) continue;
-    const hit = { owed: t.owed, lastPayment: t.lastPayment };
-    if (t.propertyId) arrearsById.set(String(t.propertyId), hit);
-    const k = propertyKey(t.property);
-    /* Worst debt wins a contested key rather than the last one written — an
-       ambiguous address should not quietly under-report what is owed. */
-    if (k && (arrearsByKey.get(k)?.owed ?? 0) < t.owed) arrearsByKey.set(k, hit);
-  }
-
-  const schedById = new Map<string, { from: string; rent: number }>();
-  const schedByKey = new Map<string, { from: string; rent: number }>();
-  for (const p of [...(moveInsPrev?.properties ?? []), ...(moveInsThis?.properties ?? [])]) {
-    const hit = { from: p.from, rent: p.rent };
-    if (p.propertyId && !schedById.has(p.propertyId)) schedById.set(p.propertyId, hit);
-    if (p.propertyKey && !schedByKey.has(p.propertyKey)) schedByKey.set(p.propertyKey, hit);
-  }
-
-  // Compliance needs the CONFIDENT listing ids, so resolve those first and do
-  // one chunked read for the whole board rather than a call per deal.
-  //
-  // Deliberately the confident matcher, never the photo one: the photo matcher
-  // falls back to "same postcode, best guess", which is fine for a picture and
-  // dangerous for a compliance verdict — showing another property's expired gas
-  // certificate against this deal is worse than showing nothing.
-  //
   // Deadlined like the photos. ComplianceEntries is the slowest thing REX does,
   // and Kirstie's board must render without it rather than hang.
   /* Keyed by PROPERTY id, not listing id. REX hangs compliance entries off the
@@ -309,70 +219,11 @@ export async function GET(req: NextRequest) {
     // PayProp id. Keys where two properties disagree were dropped upstream, so
     // a hit here is unambiguous or it is absent.
     const key = propertyKey(d.app.propertyName);
-    const rlpHit = key ? register?.rlpByKey[key] : undefined;
-    // The PayProp tenancy at this address is usually the SITTING tenant, not
-    // this deal's — attaching it unqualified made "DEPOSIT HELD" claim a
-    // deposit the new deal doesn't have yet (review find). Attach only when
-    // the tenancy start sits within 60 days of the deal's move-in, i.e. it
-    // plausibly IS this deal, registered after completion.
-    const tenancyRaw = key ? register?.tenancyByKey[key] : undefined;
-    const withinWindow =
-      tenancyRaw?.startDate != null &&
-      d.app.startDate != null &&
-      Math.abs(
-        (new Date(tenancyRaw.startDate).getTime() -
-          new Date(d.app.startDate).getTime()) /
-          86_400_000
-      ) <= 60;
-    const tenancyHit = withinWindow ? tenancyRaw : undefined;
-    const schemeHit = key ? register?.schemeByKey[key] : undefined;
-    // Same discipline as the tenancy join: a holding invoice from the LAST
-    // let must not render on this deal. Asymmetric window because holding
-    // deposits are invoiced before move-in: from 90 days before to 30 after.
-    const holdingRaw = key ? register?.holdingByKey[key] : undefined;
-    const holdingDelta =
-      holdingRaw?.fromDate != null && d.app.startDate != null
-        ? (new Date(holdingRaw.fromDate).getTime() -
-            new Date(d.app.startDate).getTime()) /
-          86_400_000
-        : null;
-    const holdingHit =
-      holdingDelta != null && holdingDelta >= -90 && holdingDelta <= 30
-        ? holdingRaw
-        : undefined;
-    /* Rent that arrived BEFORE this deal's move-in is the SITTING tenant's, not
-       this one's — the same trap the tenancy and holding joins already guard
-       against, and the one that would otherwise show a brand new deal as fully
-       paid on the strength of the outgoing tenancy. Seven days of slack because
-       a first month is routinely paid the week before the keys.
-
-       No move-in date means no judgement is possible, so nothing is attached.
-       An unqualified match here is exactly how the wrong property's money ends
-       up beside somebody's deal. */
-    const rentRaw = key ? rentByKey.get(key) : undefined;
-    const rentHit =
-      rentRaw && d.app.startDate != null &&
-      (new Date(rentRaw.on).getTime() - new Date(d.app.startDate).getTime()) / 86_400_000 >= -7
-        ? rentRaw
-        : undefined;
-
-    /* A rent schedule starting within 60 days of the claimed move-in — the
-       same window the tenancy join uses, for the same reason. This is the
-       independent check on move day, which has only ever had Propoly's word. */
-    /* Arrears joins on the same key as everything else, and needs no date
-       window of its own: the balance is already gated on the tenancy having
-       started, and a started tenancy at this address IS this deal's by the time
-       a deal is that far along. */
-    const arrearsHit = key ? arrearsByKey.get(key) : undefined;
-
-    const schedRaw = key ? schedByKey.get(key) : undefined;
-    const schedHit =
-      schedRaw && d.app.startDate != null &&
-      Math.abs(
-        (new Date(schedRaw.from).getTime() - new Date(d.app.startDate).getTime()) / 86_400_000
-      ) <= 60
-        ? schedRaw
-        : undefined;
+    /* Every window and every fallback lives in deal-money now. The seven
+       hand-rolled joins that were here are the same code the alert runner
+       needs, and two copies of the most fragile logic in this stack would have
+       drifted the first time either was touched. */
+    const m = money ? moneyForDeal(money, d.app.propertyName, d.app.startDate) : null;
 
     // ToB rides the CONFIDENT matcher, not the photo one — the photo match
     // deliberately falls back to "same postcode, best guess", which is fine
@@ -407,7 +258,7 @@ export async function GET(req: NextRequest) {
         d.app.startDate != null &&
         d.app.startDate <
           new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10);
-      if (claimsDeposit && moveInPassed && !isFlatfair && !tenancyHit?.depositId) {
+      if (claimsDeposit && moveInPassed && !isFlatfair && !m?.tenancy?.depositId) {
         flags.push({
           kind: "deposit-unverified",
           label:
@@ -418,7 +269,7 @@ export async function GET(req: NextRequest) {
       // 2. Past the PLC stage while PayProp records the property as Without
       // RLP. Legitimate when the landlord declined cover — the flag asks the
       // question rather than asserting the answer.
-      if (stageIdx > plcStageIdx && rlpHit && !rlpHit.disabledOnly && rlpHit.status === "without") {
+      if (stageIdx > plcStageIdx && m?.rlp?.status === "without") {
         flags.push({
           kind: "plc-mismatch",
           label:
@@ -442,13 +293,8 @@ export async function GET(req: NextRequest) {
       // disabledOnly evidence is excluded outright: the census found two
       // properties whose only RLP wording sits on a switched-off instruction,
       // and a dead instruction is not a statement about cover.
-      rlp:
-        rlpHit && !rlpHit.disabledOnly
-          ? { status: rlpHit.status, evidence: rlpHit.evidence }
-          : null,
-      tenancy: tenancyHit
-        ? { startDate: tenancyHit.startDate, depositId: tenancyHit.depositId }
-        : null,
+      rlp: m?.rlp ?? null,
+      tenancy: m?.tenancy ?? null,
       /* ToB stays on the LISTING id — REX's e-sign register really is keyed
          that way. Compliance moves to the PROPERTY id, because that is what
          ComplianceEntries hangs off. The two ids living on the same match
@@ -461,11 +307,11 @@ export async function GET(req: NextRequest) {
       flags,
       // A Flatfair deal has no cash deposit — suggesting a scheme under the
       // "no deposit to register" note was a contradiction on screen (review).
-      schemeSuggestion: isFlatfair ? null : (schemeHit ?? null),
-      holdingInvoice: holdingHit ?? null,
-      rentReceived: rentHit ?? null,
-      rentSchedule: schedHit ?? null,
-      arrears: arrearsHit ?? null,
+      schemeSuggestion: isFlatfair ? null : (m?.schemeSuggestion ?? null),
+      holdingInvoice: m?.holdingInvoice ?? null,
+      rentReceived: m?.rentReceived ?? null,
+      rentSchedule: m?.rentSchedule ?? null,
+      arrears: m?.arrears ?? null,
       app: match
         ? { ...d.app, image: match.image, images: match.images, listingId: match.listingId }
         : d.app,
@@ -520,12 +366,12 @@ export async function GET(req: NextRequest) {
        against anything is indistinguishable from a board whose money reports
        have not warmed yet, and the second one is not a finding. */
     moneyCoverage: {
-      loaded: moneyLoaded,
-      months: [prevMonth, thisMonth],
+      loaded: money?.loaded ?? false,
+      months: money?.months ?? [],
       withRent: active.filter((d) => d.rentReceived != null).length,
       withSchedule: active.filter((d) => d.rentSchedule != null).length,
       inArrears: active.filter((d) => d.arrears != null).length,
-      arrearsLoaded: arrears != null,
+      arrearsLoaded: money?.arrearsLoaded ?? false,
       total: active.length,
     },
   };

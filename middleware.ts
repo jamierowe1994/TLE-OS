@@ -127,6 +127,7 @@ const MACHINE_ROUTES = [
   "/api/campaigns/run",               // nurture sends
   "/api/esign/poll",                  // DocuSeal envelope status
   "/api/scheduled-sends/run",         // queued email
+  "/api/pretenancy/alerts/run",       // the pre-tenancy digest
 ];
 
 export async function middleware(req: NextRequest) {
