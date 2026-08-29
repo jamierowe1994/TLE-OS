@@ -19,7 +19,7 @@ type Health = {
   emailPolicy: { internalDomains: string[]; note: string };
   /* Optional so an older deploy of the API doesn't blank the whole page. */
   launchPad?: { configured: boolean; base: string | null; keySet: boolean };
-  propoly?: { configured: boolean };
+  propoly?: { configured: boolean; keySet?: boolean; agentSet?: boolean };
   payProp?: { configured: boolean };
   ghl?: { configured: boolean };
   tegHub?: { configured: boolean };
@@ -77,7 +77,14 @@ export default function AdminConnections() {
       h.propoly
         ? h.propoly.configured
           ? "Connected · the pre-tenancy board has its deals"
-          : "Not connected — needs a key and an agent name: either PROPOLY_API_KEY + PROPOLY_AGENT_NAME, or the older PROPOLY_PASSWORD + PROPOLY_USERNAME. Kirstie's board stays empty until both are set."
+          : h.propoly.keySet && h.propoly.agentSet
+            ? "Both variables ARE set on this deploy, but the client still reports unconfigured — it is holding a value read before they existed. Redeploy rather than re-paste."
+            : `Not connected — ${[
+                h.propoly.keySet ? null : "no key (PROPOLY_API_KEY or PROPOLY_PASSWORD)",
+                h.propoly.agentSet ? null : "no agent name (PROPOLY_AGENT_NAME or PROPOLY_USERNAME)",
+              ]
+                .filter(Boolean)
+                .join(" and ")}. Kirstie's board stays empty until both are set.`
         : "This deploy of the API predates the check.",
     ],
     [

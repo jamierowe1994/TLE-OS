@@ -14,13 +14,37 @@ import "server-only";
 // real data.
 
 const BASE = (process.env.PROPOLY_API_BASE ?? "https://api.propoly.com").replace(/\/$/, "");
-// Accept both naming schemes — the Railway variables may use the
-// username/password names from before we saw the real header names.
-const API_KEY = process.env.PROPOLY_API_KEY ?? process.env.PROPOLY_PASSWORD ?? "";
-const AGENT_NAME = process.env.PROPOLY_AGENT_NAME ?? process.env.PROPOLY_USERNAME ?? "";
+
+/**
+ * Read on every call, NOT captured once when the module loads.
+ *
+ * These were three top-level consts. A top-level const is evaluated the first
+ * time the module is imported, and in a Next build that can happen while the
+ * bundle is being produced rather than while the server is running — at which
+ * point the value is whatever the BUILD had, and a variable added afterwards
+ * can never be seen no matter how many times the service restarts. The symptom
+ * is exactly the one James hit: the variables are plainly set on Railway and
+ * the app insists Propoly is not configured.
+ *
+ * Reading inside a function costs nothing measurable and removes the entire
+ * class of problem. Both naming schemes stay: the Railway variables predate our
+ * seeing the real header names, so PROPOLY_PASSWORD / PROPOLY_USERNAME are as
+ * valid as PROPOLY_API_KEY / PROPOLY_AGENT_NAME and always have been.
+ *
+ * Trimmed, because a value pasted into a dashboard with a trailing newline or a
+ * stray space is still truthy and still fails at the header — which looks
+ * identical to a wrong key and is a far worse afternoon.
+ */
+function apiKey(): string {
+  return (process.env.PROPOLY_API_KEY ?? process.env.PROPOLY_PASSWORD ?? "").trim();
+}
+
+function agentName(): string {
+  return (process.env.PROPOLY_AGENT_NAME ?? process.env.PROPOLY_USERNAME ?? "").trim();
+}
 
 export function propolyConfigured(): boolean {
-  return Boolean(API_KEY && AGENT_NAME);
+  return Boolean(apiKey() && agentName());
 }
 
 /* ------------------------------------------------------------------------ */
@@ -62,8 +86,8 @@ async function getToken(force = false): Promise<string> {
 
   const res = await fetch(`${BASE}/api/v1/token`, {
     headers: {
-      "x-api-key": API_KEY,
-      "agent-name": AGENT_NAME,
+      "x-api-key": apiKey(),
+      "agent-name": agentName(),
       Accept: "application/json",
     },
     cache: "no-store",
@@ -103,7 +127,7 @@ export interface PropolyResult {
  * probe can show exactly what the API said.
  */
 export async function propolyGet(path: string): Promise<PropolyResult> {
-  const keyHeaders = { "x-api-key": API_KEY, "agent-name": AGENT_NAME };
+  const keyHeaders = { "x-api-key": apiKey(), "agent-name": agentName() };
   let token = await getToken();
   let res = await fetch(`${BASE}${path}`, {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...keyHeaders },

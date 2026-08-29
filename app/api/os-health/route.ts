@@ -158,7 +158,24 @@ export async function GET() {
      *   GHL        nurture campaigns
      *   TEG Hub    the group's people register
      */
-    propoly: { configured: propolyConfigured() },
+    /* The two halves reported separately, and read HERE at request time.
+       `configured` comes from the propoly module; these two are a fresh look at
+       the environment inside the running handler. If the halves say set and
+       `configured` still says no, the module is holding a value captured before
+       the variables existed — a completely different fix from "paste the key
+       in", and previously indistinguishable from it.
+
+       Booleans, never the values. Both naming schemes count, because both
+       work. */
+    propoly: {
+      configured: propolyConfigured(),
+      keySet: Boolean(
+        (process.env.PROPOLY_API_KEY ?? process.env.PROPOLY_PASSWORD ?? "").trim()
+      ),
+      agentSet: Boolean(
+        (process.env.PROPOLY_AGENT_NAME ?? process.env.PROPOLY_USERNAME ?? "").trim()
+      ),
+    },
     payProp: { configured: payPropConfigured() },
     ghl: { configured: ghlConfigured() },
     tegHub: { configured: tegHubConfigured() },
