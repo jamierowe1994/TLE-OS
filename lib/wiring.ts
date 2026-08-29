@@ -81,9 +81,9 @@ export const WIRING: WiringRow[] = [
   {
     system: "rex",
     area: "The safety catch",
-    item: "🔒 The OS cannot write to REX at all",
-    state: "manual",
-    note: "Locked 9 Aug at James's instruction, and enforced rather than promised: every REX call goes through one function, and that function will only carry a method it recognises as read-only. It's an allowlist, so anything new or unrecognised is refused by default — a button wired up by mistake cannot reach a real record. Verified against 36 of REX's actual write methods (publish, create, update, upload, archive, purge, toggle, send…): all refused; 11 reads still pass. Lifting it for one supervised test means naming that exact method in REX_ALLOW_WRITES — there is deliberately no blanket 'on'.",
+    item: "🔓 One REX write is open: saving a listing's write-up. Everything else is still refused",
+    state: "live",
+    note: "Locked 9 Aug at James's instruction, and enforced rather than promised: every REX call goes through one function, and that function will only carry a method it recognises as read-only. It's an allowlist, so anything new or unrecognised is refused by default — a button wired up by mistake cannot reach a real record. Verified against 36 of REX's actual write methods (publish, create, update, upload, archive, purge, toggle, send…): all refused; 11 reads still pass. On 29 Aug the catch was lifted for exactly ONE call — Listings/update — and that write is now live in front of the team. Every other write is still refused by the same allowlist. Opening another means naming that exact method in REX_ALLOW_WRITES; there is deliberately no blanket 'on', and clearing the variable re-locks everything.",
   },
   {
     system: "rex",
@@ -95,9 +95,16 @@ export const WIRING: WiringRow[] = [
   {
     system: "rex",
     area: "Listings & publishing",
-    item: "Publish a listing to Rightmove / Zoopla / OnTheMarket",
+    item: "Edit a live advert and have it reach Rightmove, Zoopla and OnTheMarket",
+    state: "live",
+    note: "Proven end to end on 29 Aug 2026, on a real property (Flat 1, 4 Hermosa Road) with James watching. Editing the write-up in Marketing and pressing Save writes to REX, REX queues its own portal upload within seconds, the job completes in about 4 seconds across all three portals, and the change is visible on Rightmove in ABOUT FIVE MINUTES. Budget 5-10 minutes when telling anyone. Nothing else is needed after Save — no separate publish step, no chasing.",
+  },
+  {
+    system: "rex",
+    area: "Listings & publishing",
+    item: "Publish a DRAFT listing to the portals for the first time",
     state: "untested",
-    note: "The full pipeline exists and is exposed to us: ListingPublication/publish, setActivePublicationChannels, ListingPortalUploads/queue. Rightmove, Zoopla and OnTheMarket are active portal profiles on the account, and current listings are feeding live (checked against a real Rightmove link). No write has ever been fired — first publish should be a supervised test on a throwaway draft.",
+    note: "Different call, still never fired. ListingPublication/publish, setActivePublicationChannels and ListingPortalUploads/queue are all exposed to us, and Rightmove, Zoopla and OnTheMarket are active portal profiles. But what was proven on 29 Aug was editing a listing that was ALREADY published; putting a draft on the market for the first time has not been tested. First publish should still be a supervised test on a throwaway draft.",
   },
   {
     system: "rex",
@@ -109,9 +116,16 @@ export const WIRING: WiringRow[] = [
   {
     system: "rex",
     area: "Listings & publishing",
-    item: "Create / edit listings and properties from the OS",
+    item: "Create listings and properties from the OS",
     state: "untested",
-    note: "listings and properties both expose create + update to our session (settled 3 Aug via describe). Same rule: exists, never executed.",
+    note: "listings and properties both expose create + update to our session (settled 3 Aug via describe). Editing one FIELD GROUP — the portal write-up — has since been proven and is live; creating a listing or property from scratch has not been, and + Add new listing is still not connected.",
+  },
+  {
+    system: "rex",
+    area: "Listings & publishing",
+    item: "Who the edit is recorded as",
+    state: "untested",
+    note: "The save carries the editing person's own REX token so the record says who did it, falling back to the office service account when there isn't one. James's first test recorded as 'System User' because his OS account has no REX link. That fallback is correct behaviour, but it means the audit trail is only as good as the links: an agent saving a write-up needs to show up in REX as THEM, and that has not been tested with a real agent yet.",
   },
   {
     system: "rex",
