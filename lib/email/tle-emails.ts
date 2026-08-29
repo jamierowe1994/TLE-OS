@@ -27,6 +27,7 @@
 import { renderTemplate } from "@/lib/email/render.js";
 import { tleBrand } from "@/lib/campaign-mail";
 import { verifyEmailFor, resetEmailFor } from "@/lib/verify-email";
+import { pilotInviteEmail } from "@/lib/email/pilot-email";
 import {
   bodyFor,
   confirmBodyFor,
@@ -38,7 +39,6 @@ import {
 } from "@/lib/appraisal-email";
 import { renderPlain } from "@/lib/campaign-mail";
 import {
-  PILOT_INVITE,
   LAUNCH_ANNOUNCEMENT,
   SITE,
   type EmailDoc,
@@ -102,9 +102,11 @@ export const TLE_EMAILS: CatalogEntry[] = [
     to: "The five pilot agents",
     draft: true,
     summary:
-      "Tells an agent they're on the pilot, what to do in the first week, how to report a problem from the page it broke on, and that we'll be asking which parts they never opened.",
-    doc: PILOT_INVITE,
-    render: blocks(PILOT_INVITE),
+      "One line and one button: they're in, and here's the way in. Stripped back from a full block document on 29 Aug — everything else it used to say belongs in the first conversation, not the doorway. Hand-rolled on the shared shell, so it is no longer editable in the builder.",
+    render: () => {
+      const m = pilotInviteEmail(`${SITE}/join?token=example`, "Rhiannon");
+      return { subject: m.subject, html: m.html };
+    },
   },
   {
     id: "launch-announcement",
