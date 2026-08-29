@@ -68,6 +68,8 @@ export default function HelpDock() {
   const timers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const thread = useRef(String(Date.now()));
   const scroller = useRef<HTMLDivElement | null>(null);
+  /** Whether we've already dropped to the bottom since the panel opened. */
+  const landed = useRef(false);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -100,9 +102,42 @@ export default function HelpDock() {
     return () => timers.current.forEach(clearTimeout);
   }, [signedIn, open, rest]);
 
+  /**
+   * Always sitting on the newest message.
+   *
+   * James, 29 Aug: "it should always push you down to the bottom of the chat
+   * where the most recent message is, because otherwise there's literally no
+   * point." Quite - an answer you have to scroll to find is a worse answer.
+   *
+   * Three things the old one-liner got wrong:
+   *
+   *   · It only watched `lines` and `busy`, so opening the panel onto a loaded
+   *     history left you at the TOP of it, looking at the oldest thing he said.
+   *   · It scrolled in the same tick the list grew, before the browser had laid
+   *     the new message out, so scrollHeight was still the old height and it
+   *     landed one message short. A frame's wait fixes that properly.
+   *   · Smooth from the top of a long history is a visible crawl, and it can be
+   *     interrupted. Arriving is instant; only replies that land while you are
+   *     watching are worth animating.
+   */
   useEffect(() => {
-    scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
-  }, [lines, busy]);
+    if (!open || tab !== "help") {
+      landed.current = false;
+      return;
+    }
+    const el = scroller.current;
+    if (!el) return;
+    const id = requestAnimationFrame(() => {
+      el.scrollTo({ top: el.scrollHeight, behavior: landed.current ? "smooth" : "auto" });
+      /* Only counts as landed once there was something to land ON. Opening
+         runs this effect immediately, while the history is still being
+         fetched and the list is empty — marking that as arrival would make
+         the real history, a moment later, animate slowly down from the top.
+         Which is the crawl this was written to avoid. */
+      if (lines.length) landed.current = true;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [lines, busy, open, tab]);
 
   if (!signedIn) return null;
 
@@ -254,15 +289,7 @@ export default function HelpDock() {
                           {l.text}
                         </p>
                       ) : (
-                        <AssistantSays
-                          key={i}
-                          text={l.text}
-                          screens={screens}
-                          /* Taking somebody somewhere and leaving the bubble
-                             open would cover the screen they just asked to be
-                             shown. He gets out of the way. */
-                          onNavigate={() => setOpen(false)}
-                        />
+                        <AssistantSays key={i} text={l.text} screens={screens} />
                       )
                     )}
                     {busy && (

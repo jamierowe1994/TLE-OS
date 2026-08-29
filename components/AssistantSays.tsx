@@ -39,11 +39,9 @@ const LINK = /\[([^\]]+)\]\((\/[^)\s]*)\)/g;
 export default function AssistantSays({
   text,
   screens,
-  onNavigate,
 }: {
   text: string;
   screens: Screen[];
-  onNavigate?: () => void;
 }) {
   const router = useRouter();
 
@@ -70,10 +68,22 @@ export default function AssistantSays({
   }
   parts.push(text.slice(last));
 
-  const go = (href: string) => {
-    router.push(href);
-    onNavigate?.();
-  };
+  /**
+   * Take them there and STAY OPEN.
+   *
+   * This used to close the bubble on the way, on the reasoning that he should
+   * get out of the way of the screen he had just shown you. James, 29 Aug:
+   * "if we've asked it to do something, it should persist. If we're changing
+   * pages, it should persist throughout."
+   *
+   * He is right and the original reasoning was backwards. Arriving somewhere
+   * new is the moment you most need the instructions still in front of you -
+   * closing them means reading an answer, following one step of it, and then
+   * having to reopen him and find your place to get the next. The dock lives in
+   * the (os) layout, so it survives client-side navigation on its own; keeping
+   * it open is simply a matter of not slamming it shut.
+   */
+  const go = (href: string) => router.push(href);
 
   return (
     <div className="mr-6 rounded-2xl rounded-bl-md bg-box px-3 py-2">
