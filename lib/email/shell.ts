@@ -93,7 +93,7 @@ export function emailShell(opts: ShellOpts): string {
     <td align="center" style="padding:40px 12px">
       <table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff;width:520px;max-width:100%">
         <tr>
-          <td align="center" style="padding:38px 34px 34px;background-color:#ffffff">
+          <td align="center" style="padding:38px 34px 48px;background-color:#ffffff">
 
             <img src="${ORIGIN}/brand/tle-os-wordmark.png?v=${ASSET_V}" width="160" alt="TLE OS"
                  style="display:block;margin:0 auto;width:160px;max-width:60%;height:auto;border:0;outline:none;text-decoration:none;font-family:'Bradley Hand','Segoe Script',cursive;font-size:26px;color:#1c1917">
@@ -101,9 +101,9 @@ export function emailShell(opts: ShellOpts): string {
             <img src="${ORIGIN}/${opts.image}?v=${ASSET_V}" width="260" alt=""
                  style="display:block;margin:24px auto 0;width:260px;max-width:78%;height:auto;border:0;outline:none;text-decoration:none">
 
-            <p style="margin:30px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:23px;line-height:1.25;font-weight:700;color:#1c1917;background-color:#ffffff">${esc(opts.heading)}</p>
+            <p style="margin:44px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:30px;line-height:1.2;font-weight:700;color:#1c1917;background-color:#ffffff">${esc(opts.heading)}</p>
 
-            <p style="margin:12px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14.5px;line-height:1.55;color:#57534e;background-color:#ffffff">${esc(opts.intro)}</p>
+            <p style="margin:14px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14.5px;line-height:1.55;color:#57534e;background-color:#ffffff">${esc(opts.intro)}</p>
 
             <!-- Black, not the brand red: it is the only thing to press. -->
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:26px auto 0">
@@ -126,8 +126,26 @@ ${
 
       <table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" style="width:520px;max-width:100%">
         <tr>
-          <td align="center" style="padding:22px 34px 0">
-            <p style="margin:0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:11.5px;letter-spacing:0.04em;color:#a8a29e">
+          <td align="center" style="padding:8px 34px 0">
+
+            <!-- A rule, drawn as a one-pixel TABLE CELL rather than an <hr>.
+                 Outlook gives hr its own margins and its own colour and there
+                 is no reliable way to argue with it; a cell with a real
+                 bgcolor lands the same everywhere.
+
+                 452px is the text column — 520 less the 34px padding either
+                 side — so it stops exactly where the words above it do.
+
+                 height, line-height and font-size are all pinned to keep it
+                 one pixel: Outlook gives an empty cell a line's worth of
+                 height otherwise, and the hairline arrives as a grey band. -->
+            <table role="presentation" width="452" cellpadding="0" cellspacing="0" border="0" style="width:452px;max-width:100%">
+              <tr>
+                <td height="1" bgcolor="#e7e5e4" style="background-color:#e7e5e4;height:1px;line-height:1px;font-size:0">&nbsp;</td>
+              </tr>
+            </table>
+
+            <p style="margin:20px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:11.5px;letter-spacing:0.04em;color:#a8a29e">
               Instagram &nbsp;·&nbsp; Facebook &nbsp;·&nbsp; LinkedIn
             </p>
             <p style="margin:12px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:12px;color:#78716c">The Lettings Experts</p>
