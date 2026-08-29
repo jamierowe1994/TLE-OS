@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { can, type Capability } from "@/lib/roles";
 
 /**
  * Admin's own rail — the SAME panel as the agent sidebar, different contents.
@@ -30,18 +32,34 @@ import { usePathname, useRouter } from "next/navigation";
    eleven. The top four are the OS itself; Views are other people's whole
    screens; System is plumbing. A heading alone was not enough separation to
    make that read at a glance. */
+/**
+ * Every entry now names the capability it needs, and the rail only draws what
+ * you can actually use.
+ *
+ * It used to draw all eleven for anybody who could open admin at all, which was
+ * survivable while admin meant "James and Susan" and stops being survivable the
+ * moment somebody is given ONE screen. Kirstie's whole job is the run-up to a
+ * move-in; a rail offering her Wiring, Permissions and Susan's figures — every
+ * one of which refuses her — is a menu of ten doors and one key.
+ *
+ * The pages were never unguarded; they each check for themselves. This stops
+ * the rail advertising what they will refuse.
+ */
 const GROUPS: Array<{
   title: string | null;
   rule?: boolean;
-  items: Array<{ href: string; label: string; exact?: boolean }>;
+  items: Array<{ href: string; label: string; exact?: boolean; needs: Capability }>;
 }> = [
   {
     title: null,
     items: [
-      { href: "/admin", label: "Overview", exact: true },
-      { href: "/admin/people", label: "People" },
-      { href: "/admin/permissions", label: "Permissions" },
-      { href: "/admin/pre-launch", label: "Pre-launch" },
+      /* Overview is the staff census, so it wants the same capability its
+         tiles do — otherwise it is the one link that greets a pre-tenancy
+         user with a refusal. */
+      { href: "/admin", label: "Overview", exact: true, needs: "see:people" },
+      { href: "/admin/people", label: "People", needs: "see:people" },
+      { href: "/admin/permissions", label: "Permissions", needs: "manage:roles" },
+      { href: "/admin/pre-launch", label: "Pre-launch", needs: "see:reports" },
     ],
   },
   {
@@ -50,9 +68,9 @@ const GROUPS: Array<{
     title: "Views",
     rule: true,
     items: [
-      { href: "/admin/business", label: "Susan's view" },
-      { href: "/admin/marketing", label: "Francesca's view" },
-      { href: "/admin/pre-tenancy", label: "Kirstie's view" },
+      { href: "/admin/business", label: "Susan's view", needs: "see:business" },
+      { href: "/admin/marketing", label: "Francesca's view", needs: "see:business" },
+      { href: "/admin/pre-tenancy", label: "Kirstie's view", needs: "see:pretenancy" },
     ],
   },
   {
@@ -62,17 +80,17 @@ const GROUPS: Array<{
       /* Wiring lives HERE and not on an agent's profile. James: "they don't
          need to see that. That's for my referencing and testing." An agent's
          connections page is a different thing — theirs, and further down. */
-      { href: "/admin/connections", label: "Wiring" },
-      { href: "/admin/activity", label: "Activity" },
-      { href: "/admin/todo", label: "To do" },
+      { href: "/admin/connections", label: "Wiring", needs: "see:wiring" },
+      { href: "/admin/activity", label: "Activity", needs: "see:people" },
+      { href: "/admin/todo", label: "To do", needs: "see:reports" },
       /* Deliberately NOT in the "Views" group: VIEW_PREFIXES is derived from
          that group, and any href in it unmounts this rail. Note /emails also
          exists in the main OS nav — that one is the agent-facing audit of
          what currently sends; this is the catalogue of what we would send. */
-      { href: "/admin/emails", label: "Emails" },
+      { href: "/admin/emails", label: "Emails", needs: "see:business" },
       /* Where James feeds the assistant. The agent-facing side of it lives in
          the help panel; this is the console behind it. */
-      { href: "/admin/assistant", label: "Assistant" },
+      { href: "/admin/assistant", label: "Assistant", needs: "see:reports" },
     ],
   },
 ];
@@ -95,6 +113,46 @@ const VIEW_PREFIXES = GROUPS.find((g) => g.title === "Views")!.items.map((i) => 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const router = useRouter();
+
+  /* Undefined until we know. Same rule the agent rail follows for the Admin
+     link: filtering optimistically would draw the full list and then take
+     entries away, which looks like a glitch to everyone and like a demotion to
+     the person it happens to. Every hook here sits ABOVE the early return
+     below — there is no ESLint in this repo to catch it if they drift. */
+  const [role, setRole] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    let gone = false;
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { role?: string | null } | null) => {
+        if (!gone) setRole(j?.role ?? null);
+      })
+      .catch(() => {
+        if (!gone) setRole(null);
+      });
+    return () => {
+      gone = true;
+    };
+  }, []);
+
+  const groups = useMemo(() => {
+    if (role === undefined) return [];
+    return GROUPS.map((g) => ({ ...g, items: g.items.filter((i) => can(role, i.needs)) })).filter(
+      (g) => g.items.length > 0
+    );
+  }, [role]);
+
+  /* Somebody holding one screen should land ON it. Kirstie clicking Admin
+     would otherwise arrive at an Overview she cannot read, with a rail
+     offering her exactly one thing — a door that opens onto a corridor. */
+  const firstUsable = groups[0]?.items[0]?.href;
+  useEffect(() => {
+    if (role === undefined || path !== "/admin") return;
+    if (can(role, "see:people")) return; // the Overview is theirs to read
+    if (firstUsable && firstUsable !== "/admin") router.replace(firstUsable);
+  }, [role, path, firstUsable, router]);
+
   const inSomeonesView = VIEW_PREFIXES.some((h) => path.startsWith(h));
 
   /* Not hidden with CSS — not rendered. A hidden rail still traps focus and
@@ -103,9 +161,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (inSomeonesView) {
     return (
       <div className="admin-scope">
+        {/* ALL the padding, not just the left. These pages declare
+            `min-h-screen` as though they own the window; leaving the shell's
+            `py-8` on meant they were a full screen tall inside a container
+            inset from the top and bottom, and therefore always overflowed by
+            exactly that padding. The horizontal-only reset was written when
+            this selector matched nothing, so it never had to be right. */}
         <style>{`
           [data-os-sidebar] { display: none !important; }
-          [data-os-content] { padding-left: 0 !important; margin-left: 0 !important; }
+          [data-os-content] { padding: 0 !important; margin: 0 !important; }
         `}</style>
         <button
           type="button"
@@ -124,10 +188,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* The agent sidebar steps aside for the whole of /admin. Done in CSS
           against the element rather than by restructuring the tree, because
           the shell also carries the theme, the intro gate, the view-as bar and
-          the report button — all of which must survive. */}
+          the report button — all of which must survive.
+
+          The content padding is deliberately LEFT ALONE here. The rule used to
+          strip it too, but the selector matched nothing, so every admin page
+          has always been laid out inside the shell's padding and looks right
+          that way. Now that the handle exists, stripping it would move every
+          admin screen flush to the window edge — a change nobody asked for. */}
       <style>{`
         [data-os-sidebar] { display: none !important; }
-        [data-os-content] { padding-left: 0 !important; margin-left: 0 !important; }
       `}</style>
 
       <div className="flex gap-5">
@@ -149,7 +218,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <div className="mb-1 mt-3 border-t border-line/70 pt-3" />
 
           <nav aria-label="Admin" className="min-h-0 flex-1 overflow-y-auto">
-            {GROUPS.map((g) => (
+            {groups.map((g) => (
               <div
                 key={g.title ?? "top"}
                 className={
@@ -204,7 +273,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           aria-label="Admin"
           className="mb-4 flex gap-1.5 overflow-x-auto pb-1 md:hidden"
         >
-          {GROUPS.flatMap((g) => g.items).map((t) => {
+          {groups.flatMap((g) => g.items).map((t) => {
             const on = t.exact ? path === t.href : path.startsWith(t.href);
             return (
               <Link

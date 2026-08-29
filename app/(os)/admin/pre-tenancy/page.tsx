@@ -15,7 +15,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from "react-dom";
 import BrandMark from "@/components/business/BrandMark";
 import PasswordInput from "@/components/business/PasswordInput";
-import WorkspaceSwitcher from "@/components/business/WorkspaceSwitcher";
 import { NotesThread } from "@/components/business/DealNotes";
 import DoodleIcon from "@/components/business/DoodleIcon";
 import TleOsChips from "@/components/business/TleOsChips";
@@ -571,16 +570,23 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
   return (
     <main className="type-admin flex min-h-screen flex-col bg-page">
       {/* ---- header ---- */}
+      {/* ---- header ----
+          The Lettings Experts mark and the "Pre-Tenancy" caption have gone.
+          James, 29 Aug: "we don't need the Lettings Experts logo at the top
+          with pretenancy. It's fairly obvious that this is hers." Quite — she
+          signs into one product, on her own screen, all day. A logo telling her
+          whose software she is using is a landing page's job, not a workspace's,
+          and the rail already carries the wordmark.
+
+          The switcher it sat in went with it, which also removes a dead end: it
+          linked to /pretenancy, a route that does not exist in this app, so the
+          one control in the header 404'd.
+
+          What is left is her profile, and only on the right. The empty flex div
+          that used to hold the task chips went too. */}
       <header className="sticky top-0 z-30 border-b border-line bg-page/90 backdrop-blur">
-        <div className="flex items-center gap-3 px-5 py-4 sm:px-8">
-          <WorkspaceSwitcher user={user} current="pretenancy" size={28} />
-
+        <div className="flex items-center gap-3 px-5 py-3 sm:px-8">
           <div className="ml-auto flex items-center gap-3">
-            {/* Tasks moved to the dock, bottom right — the header is just
-                the brand and her profile now. */}
-            <div className="hidden items-center gap-2 sm:flex">
-            </div>
-
             <ProfileMenu
               user={user}
               onOpenMailbox={() => setMailboxOpen(true)}
@@ -655,8 +661,30 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
             };
 
             return (
+              /**
+               * The rail, in the house style at last.
+               *
+               * It was a 236px column with a single right-hand border, static,
+               * scrolling away with the page. Every other rail in the OS —
+               * the agent's and admin's — is the same thing: a floating panel
+               * with a border the whole way round, pinned near the top with a
+               * small inset. James, 29 Aug: "the nav bar is too big. It's not
+               * in the right position... put the navigation bar in a similar
+               * location to what we have on the actual agent view."
+               *
+               * `self-start` is the part that is easy to miss. In a flex row a
+               * child stretches to full height by default, and a sticky element
+               * that is already as tall as its container has nowhere to stick
+               * to — so it silently does nothing. Shell's rail avoids this by
+               * being a direct child of a `min-h-screen` row; here the row is a
+               * flex context, so the rail has to opt out of stretching first.
+               *
+               * The width matches the other two (w-60) rather than 236px,
+               * because "nearly the same" is what makes a screen feel like a
+               * different product.
+               */
               <section
-                className="enter enter-up flex w-[236px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-line pr-4"
+                className="enter enter-up sticky top-4 flex max-h-[calc(100vh-120px)] w-60 shrink-0 flex-col gap-1 self-start overflow-y-auto rounded-3xl border border-line/80 bg-panel p-3"
                 style={enterAt(80)}
               >
                 {/* The title lives over the deals now, not here — the rail is

@@ -358,7 +358,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             Preview
           </span>
         </header>
-        <main className="w-full flex-1 px-5 py-8 lg:px-10 2xl:px-14">
+        {/* data-os-content is the handle the admin layout reaches for when a
+            person's whole view needs the window. It was being targeted by CSS
+            that matched nothing, so "full screen" was never full screen — the
+            view sat inside this padding and overflowed by exactly its height. */}
+        <main data-os-content className="w-full flex-1 px-5 py-8 lg:px-10 2xl:px-14">
           {children}
         </main>
       </div>

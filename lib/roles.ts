@@ -32,7 +32,14 @@
  *    administer this system any more" is a trap, not a feature.
  */
 
-export const ROLES = ["owner", "super_admin", "developer", "support", "agent"] as const;
+export const ROLES = [
+  "owner",
+  "super_admin",
+  "developer",
+  "support",
+  "pretenancy",
+  "agent",
+] as const;
 export type Role = (typeof ROLES)[number];
 
 export const ROLE_LABEL: Record<Role, string> = {
@@ -40,6 +47,7 @@ export const ROLE_LABEL: Record<Role, string> = {
   super_admin: "Super admin",
   developer: "Developer",
   support: "Support",
+  pretenancy: "Pre-tenancy",
   agent: "Agent",
 };
 
@@ -48,6 +56,7 @@ export const ROLE_BLURB: Record<Role, string> = {
   super_admin: "The whole business — every figure, every person. No environment switches.",
   developer: "The wiring: connections, health, diagnostics. Not the money.",
   support: "People and reported problems. No business figures.",
+  pretenancy: "The run-up to a move-in, across every agent's deals. Nothing else.",
   agent: "Their own book and nothing else.",
 };
 
@@ -79,6 +88,16 @@ const MATRIX: Record<Role, Capability[]> = {
      connections page and has no business reading anybody's earnings. */
   developer: ["admin:open", "see:wiring", "see:reports"],
   support: ["admin:open", "see:people", "see:reports", "see:pretenancy"],
+  /* Kirstie. Her whole job is the run-up to a move-in, and until now there was
+     no role that granted it: the only way to give her the pre-tenancy board was
+     `support`, which also hands over the staff list and every pilot bug report.
+     Somebody needing one screen should not be given three.
+
+     `see:everything` is not a generosity here, it is the job — she works every
+     agent's deals, not her own book, and without it her board would be empty.
+     `admin:open` only gets her through the door; the admin rail shows her the
+     one entry she can use. */
+  pretenancy: ["admin:open", "see:pretenancy", "see:everything"],
   agent: [],
 };
 
