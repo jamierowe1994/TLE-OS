@@ -215,7 +215,7 @@ export default function PresentationBuilder({
 
   const body = (
     <>
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between gap-3 px-0 py-4">
           <div className="min-w-0">
             <p className="hand text-[17px] leading-tight">Build the presentation</p>
             <p className="truncate text-[11.5px] text-muted">
@@ -817,9 +817,17 @@ export default function PresentationBuilder({
             ← Back to the appraisal
           </Link>
         )}
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-line/80 bg-panel">
-          {body}
-        </div>
+        {/* NO PANEL. James, 29 Aug: "where we've got the container box for
+            build a presentation, I think we should just get rid of it."
+
+            Same reasoning as the cards. As a modal the box was the thing that
+            made it a modal — it had to end somewhere. As a PAGE it is a box
+            drawn around the whole page, so the border traces the window and
+            the tint separates the screen from nothing. It also cost the map
+            its edges: a full-bleed map inside a rounded panel is a map with a
+            frame around it, which is precisely the look this screen has been
+            trying to lose. */}
+        <div className="flex min-h-0 flex-1 flex-col">{body}</div>
       </div>
     );
   }

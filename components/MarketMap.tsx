@@ -123,6 +123,50 @@ export default function MarketMap({
           map.current = new google.maps.Map(holder.current, {
             center: centre ? { lat: centre.lat, lng: centre.lon } : { lat: 53.4, lng: -2.9 },
             zoom: 13,
+            /* ── THE STYLE, AND WHY THERE IS ONE NOW ────────────────────
+             *
+             * The last note here said "no style array on purpose", because a
+             * custom style was how the map kept ending up grey. That held
+             * while the requirement was "keep Google's colours". It is not the
+             * requirement any more: at street zoom the default map fills with
+             * Ken's Takeaway, Tesco Extra, Pizza Queen and a hospital P, and
+             * an agent is trying to read four rents through it.
+             *
+             * So the POIs go and the palette is stated. That is also the
+             * answer to "why does Airbnb's look different" — theirs is a
+             * custom style too. The default Google map is not what they are
+             * showing; nobody's product map is.
+             *
+             * The palette is the one James described: green countryside, grey
+             * built-up, blue water. Roads are kept because a comparables map
+             * without roads is a scatter of dots — the whole point is seeing
+             * that the cheap ones back onto the main road. */
+            styles: [
+              /* Every shop, restaurant, school and cash machine. This is the
+                 clutter, and it is all of it in one rule. */
+              { featureType: "poi", stylers: [{ visibility: "off" }] },
+              { featureType: "transit", stylers: [{ visibility: "off" }] },
+              /* Parks stay, as shape only. Green space beside a property is
+                 worth seeing; its name is not. */
+              {
+                featureType: "poi.park",
+                elementType: "geometry",
+                stylers: [{ visibility: "on" }, { color: "#dcecd2" }],
+              },
+              { featureType: "landscape.natural", elementType: "geometry", stylers: [{ color: "#e4efdc" }] },
+              { featureType: "landscape.man_made", elementType: "geometry", stylers: [{ color: "#f2f1ef" }] },
+              { featureType: "water", elementType: "geometry", stylers: [{ color: "#c3ddf2" }] },
+              { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
+              { featureType: "road", elementType: "geometry.stroke", stylers: [{ visibility: "off" }] },
+              { featureType: "road.arterial", elementType: "geometry", stylers: [{ color: "#fdfcfa" }] },
+              { featureType: "road.highway", elementType: "geometry", stylers: [{ color: "#f7e7c3" }] },
+              /* Street names stay but quieten down — an agent needs to find
+                 the road, not read a signpost. */
+              { elementType: "labels.text.fill", stylers: [{ color: "#6b6560" }] },
+              { elementType: "labels.text.stroke", stylers: [{ color: "#ffffff" }, { weight: 2 }] },
+              { featureType: "road", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+              { featureType: "administrative", elementType: "geometry", stylers: [{ visibility: "off" }] },
+            ],
             disableDefaultUI: true,
             /* Drag yes, wheel no — see the note at the top. */
             scrollwheel: false,
