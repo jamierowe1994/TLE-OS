@@ -244,14 +244,20 @@ export default function PresentationBuilder({
     let live = true;
     fetch(`/api/ma-photos?ids=${photoIds}`)
       .then((r) => r.json())
-      .then((j: { photos?: Record<string, string[]> }) => {
+      .then((j: { photos?: Record<string, string[]>; adverts?: Record<string, string | null> }) => {
         if (!live || !j.photos) return;
         setD((prev) =>
           prev
             ? {
                 ...prev,
                 onMarketNearby: prev.onMarketNearby.map((l) =>
-                  l.listingId ? { ...l, photos: j.photos![String(l.listingId)] ?? [] } : l
+                  l.listingId
+                    ? {
+                        ...l,
+                        photos: j.photos![String(l.listingId)] ?? [],
+                        advert: j.adverts?.[String(l.listingId)] ?? null,
+                      }
+                    : l
                 ),
               }
             : prev
@@ -746,6 +752,27 @@ export default function PresentationBuilder({
                             <span className="absolute left-2 top-2 rounded-full bg-page/95 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-accent-dark shadow-sm">
                               Let agreed
                             </span>
+                          )}
+
+                          {/* THE REAL ADVERT, bottom right and out of the
+                              gallery arrows' way. This existed before and
+                              pointed at Homesearch's bearer-token API URL — a
+                              401 in front of a landlord. `current_listings/
+                              <id>/url` resolves the actual Rightmove or
+                              OnTheMarket page; 19 of 21 rows have one, and the
+                              arrow is simply absent on the two that do not. */}
+                          {l.advert && (
+                            <a
+                              href={l.advert}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label="Open the advert"
+                              title="Open the advert"
+                              className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-page/90 text-[13px] text-ink opacity-0 shadow-sm transition-all hover:scale-110 group-hover:opacity-100"
+                            >
+                              &#8599;
+                            </a>
                           )}
 
                           {/* PAGE THE PHOTOGRAPHS WITHOUT LEAVING THE LIST.

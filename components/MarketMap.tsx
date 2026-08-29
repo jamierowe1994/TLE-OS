@@ -472,6 +472,16 @@ export default function MarketMap({
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
+                    {open.advert && (
+                      <a
+                        href={open.advert}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-block text-[10.5px] text-muted underline hover:text-ink"
+                      >
+                        See the full advert
+                      </a>
+                    )}
                   </div>
                 </div>
               </div>

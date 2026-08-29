@@ -298,6 +298,24 @@ export async function listingPhotos(id: number): Promise<string[]> {
   return raw.filter((u): u is string => typeof u === "string" && u.startsWith("http"));
 }
 
+/**
+ * The REAL advert — Rightmove or OnTheMarket — for one listing.
+ *
+ * `current_listings/<id>/url` resolves it. Measured 29 Aug on NN5 4: 19 of the
+ * 21 rows this screen shows have one, 18 Rightmove and 1 OnTheMarket.
+ *
+ * The fragment Homesearch appends is `#/?channel=RES_BUY` on properties that
+ * are RENTALS — their channel is simply wrong. It is dropped rather than
+ * passed on: a fragment never reaches the server, so the advert loads either
+ * way, and sending a landlord a rental with "buy" in the address bar is not
+ * worth the risk of it doing something.
+ */
+export async function listingAdvert(id: number): Promise<string | null> {
+  const j = await hsJson<{ url?: string | null }>(`current_listings/${id}/url`);
+  const u = typeof j?.url === "string" ? j.url.split("#")[0] : null;
+  return u && u.startsWith("http") ? u : null;
+}
+
 async function onMarketNearby(
   sector: string,
   postcode?: string,
@@ -593,6 +611,12 @@ export interface MarketListing {
    * genuinely have none.
    */
   photos?: string[];
+  /**
+   * The advert on Rightmove or OnTheMarket, so an agent can open the real
+   * thing rather than trust us. Filled in alongside `photos` — see
+   * listingAdvert, and `listingId` for the 401 this replaced.
+   */
+  advert?: string | null;
   /**
    * Whether it is still available, or already agreed.
    *
