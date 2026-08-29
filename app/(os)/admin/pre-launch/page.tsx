@@ -54,7 +54,7 @@ export default function PreLaunch() {
   const [busy, setBusy] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   /* The generated link lives ONLY here, in the browser of the owner who asked
-     for it. It is a credential for an hour, so it is never put in the flash
+     for it. It is a credential for a day, so it is never put in the flash
      message, the URL or anywhere it could be shoulder-read off a shared
      screen without being asked for. */
   const [magic, setMagic] = useState<{ email: string; url: string } | null>(null);
@@ -101,7 +101,7 @@ export default function PreLaunch() {
     setMagic({ email: c.email, url: j.url });
     try {
       await navigator.clipboard.writeText(j.url);
-      setFlash(`Link copied. It works once and lasts an hour.`);
+      setFlash(`Link copied. It works once and lasts 24 hours.`);
     } catch {
       // Clipboard refused (Safari without a user gesture, an insecure origin).
       // The link is on screen either way, so this is a nudge and not a failure.
@@ -166,7 +166,7 @@ export default function PreLaunch() {
           <div className="mt-3.5 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3.5">
             <p className="text-[12px]">
               <span className="font-semibold">Link for {magic.email}</span> - works once,
-              expires in an hour. Send it however actually reaches them.
+              expires in 24 hours. Send it however actually reaches them.
             </p>
             <p className="mt-2 break-all rounded-lg border border-line/70 bg-card px-3 py-2 font-mono text-[11px]">
               {magic.url}

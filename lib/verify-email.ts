@@ -34,7 +34,7 @@ export function verifyEmailFor(link: string): VerifyEmail {
     "",
     link,
     "",
-    "The link works once and lasts an hour.",
+    "The link works once and lasts 24 hours.",
     "",
     "We'll never email you a password, and nobody here can see the one you choose.",
     "If you weren't expecting this, ignore it — nothing happens until the link is opened.",
@@ -85,7 +85,7 @@ export function verifyEmailFor(link: string): VerifyEmail {
               If the button doesn't work, paste this into your browser:<br>
               <span style="word-break:break-all;color:#57534e">${safe}</span>
             </p>
-            <p style="margin:0 0 18px;font-size:13px;color:#57534e;background-color:#ffffff">The link works once and lasts an hour.</p>
+            <p style="margin:0 0 18px;font-size:13px;color:#57534e;background-color:#ffffff">The link works once and lasts 24 hours.</p>
             <hr style="border:none;border-top:1px solid #e7e5e4;margin:22px 0">
             <p style="margin:0;font-size:12.5px;color:#57534e;background-color:#ffffff">
               We'll never email you a password, and nobody here can see the one you choose.

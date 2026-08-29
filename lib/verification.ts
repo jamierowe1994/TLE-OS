@@ -35,7 +35,24 @@ import { assertInternalRecipient } from "@/lib/email-policy";
  */
 
 /** One hour. See rule 3. */
-const TTL_MS = 60 * 60 * 1000;
+/**
+ * How long a link lives, by what it is for.
+ *
+ * A JOIN link is handed over as much as it is emailed - our own mail is
+ * currently landing in Microsoft quarantine, so an invite can sit unseen for
+ * hours and then be released. An hour meant a link that was dead before the
+ * person ever saw it. A day covers a quarantine release, an evening, and a
+ * "sorry, only just seen this" the next morning.
+ *
+ * A RESET link stays at an hour and should not be lengthened to match. It is
+ * a password-recovery credential sent to an address that may itself be the
+ * thing that is compromised, and the short window IS the protection. The two
+ * links look alike and are not alike.
+ */
+const TTL_BY_PURPOSE: Record<Purpose, number> = {
+  join: 24 * 60 * 60 * 1000,
+  reset: 60 * 60 * 1000,
+};
 
 /** Long enough that guessing is hopeless: 32 bytes, url-safe. */
 function mintToken(): string {
@@ -84,7 +101,7 @@ export async function startVerification(
   }
 
   const token = mintToken();
-  const expires = new Date(Date.now() + TTL_MS).toISOString();
+  const expires = new Date(Date.now() + TTL_BY_PURPOSE[purpose]).toISOString();
 
   await q(`delete from os_email_verifications where email = $1 and purpose = $2`, [email, purpose]);
   await q(
@@ -139,7 +156,7 @@ export async function consumeVerification(
   const expiresAt = new Date(row.expires_at);
   if (Number.isNaN(expiresAt.getTime()) || expiresAt.getTime() < Date.now()) {
     await q(`delete from os_email_verifications where token_hash = $1`, [hash]);
-    throw new VerificationError("That link has expired — they last an hour. Ask for a new one.");
+    throw new VerificationError("That link has expired. Ask for a new one.");
   }
 
   // Single use. Deleted before the caller does anything with the result, so a

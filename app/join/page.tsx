@@ -74,7 +74,7 @@ function AskForEmail() {
         <h1 className="hand text-[22px] leading-tight">Check your email</h1>
         <p className="mt-3 text-[13px] leading-relaxed">
           If that address can have an account, a link is on its way. It works once and
-          lasts an hour.
+          lasts 24 hours.
         </p>
         <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
           Nothing arrives? Check junk first. If it&apos;s still not there, the address may

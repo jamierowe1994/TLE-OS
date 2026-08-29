@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
      column means the OS emailed somebody, and a hand-delivered link that
      never arrives would otherwise look identical to one that did.
 
-     The URL is a CREDENTIAL for one hour. It is returned to the owner who
+     The URL is a CREDENTIAL for 24 hours. It is returned to the owner who
      asked for it and never logged, never emailed and never stored anywhere
      but the browser that requested it. */
   if (link) {
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         ok: true,
         url: `${origin}/join?token=${encodeURIComponent(token)}`,
-        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       });
     } catch (e) {
       return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 400 });
