@@ -30,6 +30,8 @@
  */
 
 import { SANDBOX_EMAIL_DOMAIN } from "@/lib/sandbox";
+import { hasDb, q } from "@/lib/db";
+import { uid } from "@/lib/auth";
 import { assertInternalRecipient } from "@/lib/email-policy";
 
 const API = "https://api.resend.com/emails";
@@ -58,6 +60,46 @@ export function fromAddress(): string | null {
 
 export interface SendResult {
   id: string;
+}
+
+/**
+ * Keep a copy of what actually went out.
+ *
+ * ── Stored, not re-rendered ───────────────────────────────────────────────
+ *
+ * Re-rendering a template on demand answers a different question: it shows
+ * what that email would look like TODAY and presents it as what somebody
+ * received a fortnight ago. These templates changed several times in one
+ * afternoon — the copy, the animation and the whole shell were replaced
+ * between one invite and the next. A record that quietly updates itself is
+ * not a record.
+ *
+ * ── The link is redacted first ────────────────────────────────────────────
+ *
+ * An invite carries a live one-time join token. Keeping it would put a working
+ * credential in a table any owner can read, so somebody could open the log and
+ * claim an account before its owner did. The href is replaced here, at write
+ * time, so the button still renders and can no longer be spent.
+ *
+ * ── It must never break a send ────────────────────────────────────────────
+ *
+ * The mail has already left by the time this runs. A failure to file the copy
+ * is not a failure to deliver, and must not be reported as one.
+ */
+async function archive(to: string, subject: string, html: string): Promise<void> {
+  if (!hasDb()) return;
+  try {
+    const safe = html.replace(
+      /href="[^"]*(?:token=|\/join\?|\/reset\/)[^"]*"/g,
+      'href="#link-removed-from-this-copy"'
+    );
+    await q(
+      `INSERT INTO os_sent_emails (id, to_email, subject, html) VALUES ($1,$2,$3,$4)`,
+      [uid(), to, subject, safe]
+    );
+  } catch {
+    /* Filing the copy is not the job. Delivering was. */
+  }
 }
 
 export async function sendEmail(msg: {
@@ -117,6 +159,7 @@ export async function sendEmail(msg: {
   });
 
   const text = await res.text();
+  if (res.ok) await archive(to, msg.subject, msg.html);
   if (!res.ok) {
     /* Resend's own words. "The domain is not verified" is a fixable
        instruction; "send failed" is not. */

@@ -183,6 +183,40 @@ CREATE TABLE IF NOT EXISTS os_page_views (
 );
 CREATE INDEX IF NOT EXISTS os_page_views_path ON os_page_views (path);
 
+-- Every email that actually left, as it left.
+--
+-- James, 29 Aug: "I should be able to click on the email to Francesca and be
+-- able to click it to open it to see if it's actually what's been sent."
+--
+-- WHY THE HTML IS STORED RATHER THAN RE-RENDERED
+--
+-- Re-rendering the template on demand answers a different question. It shows
+-- what that email would look like TODAY, and presents it as what somebody
+-- received a fortnight ago. Every template here has changed several times in
+-- one afternoon; the copy, the animation and the whole shell were replaced
+-- between one invite and the next. A record that quietly updates itself is
+-- not a record.
+--
+-- THE LINK IS REDACTED BEFORE IT IS STORED
+--
+-- An invite email contains a live one-time join token. Keeping it here would
+-- put a working credential in a table that any owner can read, so somebody
+-- could open the log and use it to claim an account before its owner did.
+-- The href is replaced at write time; the button still renders, and it can no
+-- longer be spent. This is a record of how an email LOOKED, not a way back
+-- into it.
+CREATE TABLE IF NOT EXISTS os_sent_emails (
+  id          TEXT PRIMARY KEY,
+  to_email    TEXT NOT NULL,
+  subject     TEXT NOT NULL DEFAULT '',
+  html        TEXT NOT NULL DEFAULT '',
+  -- Who caused it, when it is a person rather than a schedule.
+  actor_email TEXT NOT NULL DEFAULT '',
+  sent_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_sent_emails_at ON os_sent_emails (sent_at DESC);
+CREATE INDEX IF NOT EXISTS os_sent_emails_to ON os_sent_emails (lower(to_email));
+
 -- BUGS AND FAULTS, reported by the pilot from the button in the corner.
 --
 -- The context column holds what the reporter should not have to type: the page
