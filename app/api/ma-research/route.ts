@@ -23,10 +23,18 @@ export async function GET(req: NextRequest) {
   const maxRent = Number(req.nextUrl.searchParams.get("maxRent") ?? 0);
   const typeRaw = req.nextUrl.searchParams.get("type");
   const type = typeRaw === "H" || typeRaw === "F" ? typeRaw : undefined;
-  const beds = Math.min(6, Math.max(1, Number(p.get("beds") ?? 2) || 2));
+  /* Two different questions wearing one parameter.
+     
+     ?beds= absent or 0 means "any size" for the on-market LIST — that is what
+     the Any beds control sends, and it used to be clamped up to 2, so Any
+     silently meant two-bed. The area STATISTICS still need a size, because
+     Homesearch has no all-sizes average, so they keep the old default. */
+  const askedBeds = Math.min(6, Math.max(0, Math.round(Number(p.get("beds") ?? 0)) || 0));
+  const statsBeds = askedBeds || 2;
   try {
-    return NextResponse.json(await getResearch(address, postcode, beds, {
+    return NextResponse.json(await getResearch(address, postcode, statsBeds, {
       radiusMiles: Number.isFinite(radius) && radius > 0 ? radius : undefined,
+      beds: askedBeds || undefined,
       minRent: minRent > 0 ? minRent : undefined,
       maxRent: maxRent > 0 ? maxRent : undefined,
       type,

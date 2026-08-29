@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import MaterialInfoPanel from "@/components/MaterialInfoPanel";
@@ -17,6 +17,7 @@ import {
   type DeckPlan,
 } from "@/lib/presentation-builder";
 import type { MaResearch } from "@/lib/ma-research";
+import { listingKey } from "@/lib/listing-key";
 
 /**
  * Build the presentation.
@@ -154,10 +155,18 @@ export default function PresentationBuilder({
   }
 
   useEffect(() => {
-    const q = new URLSearchParams({ address, postcode, beds: "2" });
+    /* NO beds. The filter starts on "Any beds", so the first list must be any
+       size too — sending 2 here meant the screen opened already filtered to
+       two-bed while the control said Any, and setting the control BACK to Any
+       changed nothing because it sent 2 as well. */
+    const q = new URLSearchParams({ address, postcode });
+    const mine = ++reqSeq.current;
     fetch(`/api/ma-research?${q}`)
       .then((r) => r.json())
       .then((j: MaResearch & { error?: string }) => {
+        /* Somebody has already filtered. This is the opening list, and it is
+           now the wrong one — see reqSeq. */
+        if (mine !== reqSeq.current) return;
         if (j.error) return setError(j.error);
         setD(j);
         // Only same-sector start ticked — a pre-ticked box is a recommendation.
@@ -203,11 +212,79 @@ export default function PresentationBuilder({
      agent can see what they just pointed at without hunting for it — which is
      the whole reason for putting the two side by side. */
   const [focused, setFocused] = useState<string | null>(null);
+  /**
+   * WHICH PHOTOGRAPH EACH CARD IS SHOWING.
+   *
+   * Keyed by the card's own key rather than by index, so paging through a
+   * property's pictures survives the list re-sorting under it when a pin is
+   * clicked. Keyed by index it would have looked like the photographs jumped
+   * between houses.
+   */
+  const [slide, setSlide] = useState<Record<string, number>>({});
+
+  /**
+   * The galleries, fetched AFTER the cards are up.
+   *
+   * One upstream call per listing, so this deliberately does not block the
+   * research request — see /api/ma-photos. The results are folded back onto
+   * the listing objects themselves, which means the map's popup card gets
+   * them too without a second piece of plumbing.
+   *
+   * `ids` is a string rather than an array so the effect fires when the LIST
+   * changes and not on every render — a dependency array holding a fresh
+   * array literal never compares equal, and this would have refetched the
+   * whole gallery set forever.
+   */
+  const photoIds = (d?.onMarketNearby ?? [])
+    .map((l) => l.listingId)
+    .filter((n): n is number => typeof n === "number")
+    .join(",");
+  useEffect(() => {
+    if (!photoIds) return;
+    let live = true;
+    fetch(`/api/ma-photos?ids=${photoIds}`)
+      .then((r) => r.json())
+      .then((j: { photos?: Record<string, string[]> }) => {
+        if (!live || !j.photos) return;
+        setD((prev) =>
+          prev
+            ? {
+                ...prev,
+                onMarketNearby: prev.onMarketNearby.map((l) =>
+                  l.listingId ? { ...l, photos: j.photos![String(l.listingId)] ?? [] } : l
+                ),
+              }
+            : prev
+        );
+      })
+      /* No error state. Every card already has its lead photograph; a gallery
+         that does not arrive costs an arrow, not a property. */
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [photoIds]);
+
+  /**
+   * LAST REQUEST WINS, AND ONLY THE LAST ONE.
+   *
+   * This is why the beds filter "didn't work". Homesearch takes a second or
+   * two, the first unfiltered load is in flight while the screen is already
+   * usable, and whichever response arrived LAST used to win. Pick 3 bed early
+   * and the opening request lands afterwards and quietly puts the whole list
+   * back — the control had moved, the list had not, and nothing looked broken.
+   *
+   * A counter rather than an AbortController because the stale response is not
+   * an error to be handled, it is an answer to a question nobody is asking any
+   * more. It is read and discarded.
+   */
+  const reqSeq = useRef(0);
 
   async function applyFilters(next: typeof filters) {
     setFilters(next);
     setRefiltering(true);
-    const q = new URLSearchParams({ address, postcode, beds: "2" });
+    const mine = ++reqSeq.current;
+    const q = new URLSearchParams({ address, postcode });
     if (next.radius) q.set("radius", String(next.radius));
     if (next.beds) q.set("beds", String(next.beds));
     if (next.minRent) q.set("minRent", String(next.minRent));
@@ -216,14 +293,17 @@ export default function PresentationBuilder({
     try {
       const r = await fetch(`/api/ma-research?${q}`);
       const j = (await r.json()) as MaResearch & { error?: string };
+      if (mine !== reqSeq.current) return;
       if (!j.error) setD(j);
     } catch {
       /* leave the previous feed up rather than blanking it */
     } finally {
-      setRefiltering(false);
+      if (mine === reqSeq.current) setRefiltering(false);
     }
   }
-  const keyOf = (l: { address: string; rent: number | null }) => `${l.address}|${l.rent}`;
+  /* Shared with the map, so a pin and a card agree on which house they are.
+     See listingKey for why it is not the address. */
+  const keyOf = listingKey;
 
   /**
    * ONE SET OF CONTROLS, RENDERED IN ONE OF TWO PLACES.
@@ -582,6 +662,21 @@ export default function PresentationBuilder({
                   .map((l) => {
                   const k = keyOf(l);
                   const on = pickedNearby.includes(k);
+                  /* The lead photograph FIRST, then the gallery. The two
+                     sources overlap — `image` is usually also in `images` —
+                     so the lead one is deduped out rather than shown twice. */
+                  const shots = l.photos?.length
+                    ? [l.image, ...l.photos.filter((u) => u !== l.image)].filter(
+                        (u): u is string => Boolean(u)
+                      )
+                    : l.image
+                      ? [l.image]
+                      : [];
+                  const at = shots.length ? ((slide[k] ?? 0) % shots.length + shots.length) % shots.length : 0;
+                  const step = (e: React.MouseEvent, by: number) => {
+                    e.stopPropagation();
+                    setSlide((m) => ({ ...m, [k]: (m[k] ?? 0) + by }));
+                  };
                   return (
                     <li key={k}>
                       {/* NO BOX. James, 29 Aug: "I like the fact that they
@@ -604,10 +699,10 @@ export default function PresentationBuilder({
                               S3 URLs, and a remote-image allowlist for a feed
                               whose host may change is config that breaks
                               silently the day it does. */}
-                          {l.image ? (
+                          {shots.length ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={l.image}
+                              src={shots[at]}
                               alt=""
                               loading="lazy"
                               /* 4:3 keeps a terrace whole. h-32 cropped these
@@ -653,21 +748,58 @@ export default function PresentationBuilder({
                             </span>
                           )}
 
-                          {/* The advert, revealed on hover — the reference's
-                              little arrow. Homesearch gives one photograph, so
-                              there is nothing to page through; the arrow goes
-                              to the real listing where the rest of them are. */}
-                          {l.link && (
-                            <a
-                              href={l.link}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              aria-label="Open the advert"
-                              className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-page/90 text-[13px] text-ink opacity-0 shadow-sm transition-all hover:scale-110 group-hover:opacity-100"
-                            >
-                              &rarr;
-                            </a>
+                          {/* PAGE THE PHOTOGRAPHS WITHOUT LEAVING THE LIST.
+                              James, 29 Aug: "as we hover over to see the
+                              photos, the arrow should pop up in the middle of
+                              the right-hand side... every time we click the
+                              button it will then show us a different photo."
+
+                              This arrow used to open "the advert", which was
+                              really Homesearch's bearer-token API URL — a 401
+                              in front of a landlord. Now it does the thing it
+                              always looked like it did.
+
+                              Only when there IS more than one: an arrow that
+                              returns you to the same picture is worse than no
+                              arrow, because you press it twice to find out. */}
+                          {shots.length > 1 && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => step(e, -1)}
+                                aria-label="Previous photograph"
+                                className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-page/90 text-[13px] text-ink opacity-0 shadow-sm transition-all hover:scale-110 group-hover:opacity-100"
+                              >
+                                &#8249;
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => step(e, 1)}
+                                aria-label="Next photograph"
+                                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-page/90 text-[13px] text-ink opacity-0 shadow-sm transition-all hover:scale-110 group-hover:opacity-100"
+                              >
+                                &#8250;
+                              </button>
+
+                              {/* How many, and where you are in them. Without
+                                  this the arrows are a loop with no end and no
+                                  sense of how much there is left to see. */}
+                              <span className="pointer-events-none absolute inset-x-0 bottom-2 flex items-center justify-center gap-1">
+                                {shots.slice(0, 6).map((_, i) => (
+                                  <span
+                                    key={i}
+                                    className={`h-1.5 w-1.5 rounded-full transition-all ${
+                                      i === Math.min(at, 5) ? "bg-white" : "bg-white/55"
+                                    }`}
+                                  />
+                                ))}
+                                {shots.length > 6 && (
+                                  <span className="ml-0.5 text-[9px] font-semibold text-white/90">
+                                    {at + 1}/{shots.length}
+                                  </span>
+                                )}
+                              </span>
+                            </>
                           )}
                         </div>
 

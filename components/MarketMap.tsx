@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { MarketListing } from "@/lib/ma-research";
+import { listingKey } from "@/lib/listing-key";
 
 /**
  * The market, on a map.
@@ -99,9 +100,18 @@ export default function MarketMap({
   const [pts, setPts] = useState<Pt[]>([]);
   const [subject, setSubject] = useState<{ x: number; y: number } | null>(null);
   const [open, setOpen] = useState<MarketListing | null>(null);
+  /* Which photograph the popup is showing. Reset when a different pin is
+     opened — otherwise the third picture of one house becomes the third
+     picture of the next, and on a house with fewer it becomes the first. */
+  const [popAt, setPopAt] = useState(0);
+  const openKey = open ? listingKey(open) : null;
+  useEffect(() => {
+    setPopAt(0);
+  }, [openKey]);
 
   const points = listings.filter((l) => l.lat != null && l.lon != null);
-  const keyOf = (l: MarketListing) => `${l.address}|${l.rent}`;
+  /* The same identity the cards use — see listingKey. */
+  const keyOf = listingKey;
 
   /** Recompute every pixel position from the current projection. */
   const project = useCallback(() => {
@@ -358,6 +368,17 @@ export default function MarketMap({
           (() => {
             const p = pts.find((q) => q.key === keyOf(open));
             if (!p) return null;
+            /* Same gallery as the cards, same order — the lead photograph
+               first, then the rest with it deduped out. See
+               MarketListing.photos for where these come from. */
+            const shots = open.photos?.length
+              ? [open.image, ...open.photos.filter((u) => u !== open.image)].filter(
+                  (u): u is string => Boolean(u)
+                )
+              : open.image
+                ? [open.image]
+                : [];
+            const at = shots.length ? ((popAt % shots.length) + shots.length) % shots.length : 0;
             return (
               <div
                 className="fade-up pointer-events-none absolute z-[4]"
@@ -365,13 +386,43 @@ export default function MarketMap({
               >
                 <div className="pointer-events-auto w-[248px] overflow-hidden rounded-2xl border border-line/70 bg-page shadow-[0_18px_40px_-12px_rgba(0,0,0,0.35)]">
                   <div className="relative h-full">
-                    {open.image ? (
+                    {shots.length ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={open.image} alt="" className="h-[140px] w-full object-cover" />
+                      <img src={shots[at]} alt="" className="h-[140px] w-full object-cover" />
                     ) : (
                       <div className="flex h-[140px] w-full items-center justify-center bg-line/20 text-[11px] text-muted">
                         No photograph
                       </div>
+                    )}
+                    {shots.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          aria-label="Previous photograph"
+                          onClick={() => setPopAt((n) => n - 1)}
+                          className="absolute left-2 top-[70px] flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-page/90 text-[12px] shadow-sm transition-transform hover:scale-110"
+                        >
+                          &#8249;
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Next photograph"
+                          onClick={() => setPopAt((n) => n + 1)}
+                          className="absolute left-[212px] top-[70px] flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full bg-page/90 text-[12px] shadow-sm transition-transform hover:scale-110"
+                        >
+                          &#8250;
+                        </button>
+                        <span className="pointer-events-none absolute inset-x-0 top-[122px] flex items-center justify-center gap-1">
+                          {shots.slice(0, 6).map((_, i) => (
+                            <span
+                              key={i}
+                              className={`h-1.5 w-1.5 rounded-full ${
+                                i === Math.min(at, 5) ? "bg-white" : "bg-white/55"
+                              }`}
+                            />
+                          ))}
+                        </span>
+                      </>
                     )}
                     <button
                       type="button"
@@ -421,16 +472,6 @@ export default function MarketMap({
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
-                    {open.link && (
-                      <a
-                        href={open.link}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-2 inline-block text-[10.5px] text-muted underline hover:text-ink"
-                      >
-                        See the full advert
-                      </a>
-                    )}
                   </div>
                 </div>
               </div>

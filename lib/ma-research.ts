@@ -278,13 +278,34 @@ export interface MarketFilters {
   type?: "H" | "F";
 }
 
+/** `…/current_listings/16619342` → 16619342. */
+function idFromLink(link?: string | null): number | null {
+  const m = /\/(\d+)\/?$/.exec(link ?? "");
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Every photograph Homesearch holds for one listing.
+ *
+ * One call per property, so it is deliberately NOT part of getResearch — see
+ * MarketListing.photos. Returns [] rather than throwing: a card with one
+ * picture is a working card, and a whole list that fails to load because a
+ * gallery 404'd is not.
+ */
+export async function listingPhotos(id: number): Promise<string[]> {
+  const j = await hsJson<{ images?: unknown }>(`current_listings/${id}`);
+  const raw = Array.isArray(j?.images) ? j!.images : [];
+  return raw.filter((u): u is string => typeof u === "string" && u.startsWith("http"));
+}
+
 async function onMarketNearby(
   sector: string,
-  beds?: number,
   postcode?: string,
   filters: MarketFilters = {}
 ): Promise<MarketListing[]> {
-  const wantBeds = filters.beds ?? beds;
+  /* NO FALLBACK. Undefined means every size, because that is what the control
+     above the list says. See the note on getResearch. */
+  const wantBeds = filters.beds;
   const parts: string[] = [
     "date_listed_from=1900-01-01",
     "sort%5B%5D=-listed_on",
@@ -350,7 +371,7 @@ async function onMarketNearby(
           String(r.status ?? "").trim().toLowerCase() === "let agreed"
             ? ("let agreed" as const)
             : ("on market" as const),
-        link: r.link ?? null,
+        listingId: idFromLink(r.link),
         agent: r.agent ?? null,
         reducedAt: r.reduced_at ?? null,
         lat: typeof r.lat === "number" ? r.lat : null,
@@ -553,10 +574,25 @@ export interface MarketListing {
   beds: number | null;
   type: string | null;
   rent: number | null;
-  /** The photograph. The reason this feed is worth calling at all. Homesearch
-   *  returns exactly ONE per listing — there is no gallery to page through,
-   *  measured against the raw feed on 29 Aug. 95% of rows carry it. */
+  /** The lead photograph, straight off the search feed. 95% of rows carry it. */
   image: string | null;
+  /**
+   * THE REST OF THE GALLERY — and there is one.
+   *
+   * The search feed returns a single `image`, which is why this file used to
+   * say there was no gallery to page through. That was true of the SEARCH
+   * endpoint and false of the property: `current_listings/<id>` carries an
+   * `images` array, and it is usually the full set an agent uploaded.
+   *
+   * Measured 29 Aug against NN5 4, on the 21 rows this screen actually shows:
+   * 8/10 on market and 11/11 let agreed carry one, 162 photographs in total.
+   *
+   * Filled in by /api/ma-photos AFTER the cards are on screen — 21 extra calls
+   * upstream is a second of waiting, and it must not be a second of waiting
+   * for the list itself. Empty until then, and empty forever for the rows that
+   * genuinely have none.
+   */
+  photos?: string[];
   /**
    * Whether it is still available, or already agreed.
    *
@@ -566,8 +602,18 @@ export interface MarketListing {
    * dropped. Withdrawn stock never reaches here at all.
    */
   status: "on market" | "let agreed";
-  /** The advert, so an agent can open the real thing rather than trust us. */
-  link: string | null;
+  /**
+   * Homesearch's own API URL for this listing — NOT an advert.
+   *
+   * It was being rendered as "See the full advert" behind an arrow on the
+   * card and a link in the map popup. Both opened
+   * `data.homesearch.co.uk/avi/api/v1/current_listings/<id>`, which is a
+   * bearer-token endpoint: an agent clicking it in front of a landlord got a
+   * 401, not a property. There is no public advert URL in this feed — hs_id
+   * comes back null on these rows — so the arrow now pages the photographs
+   * instead, which is what it looked like it did anyway.
+   */
+  listingId: number | null;
   listedOn: string | null;
   /** Derived — Homesearch has NO time-on-market endpoint, so it is computed
    *  from listed_on. Days a tenant has had the chance to take it. */
@@ -683,6 +729,16 @@ function buildGuide(comps: Comparable[]): MaResearch["guide"] {
  * town and produce "comparables" five miles away that a landlord will
  * immediately dismiss, taking the rest of the guide's credibility with them.
  */
+/**
+ * `beds` is the AREA-STATISTICS bed count, not a filter on the list.
+ *
+ * Homesearch's market endpoint has to be asked about a specific size — there
+ * is no "all sizes" average — so this stays a number with a default. What is
+ * on the market is a different question, and it is filtered by `filters.beds`
+ * ALONE. They were the same argument, which meant "Any beds" quietly meant
+ * two: `filters.beds ?? beds` fell through to the statistics default and the
+ * list came back 2-bed only while the control said Any.
+ */
 export async function getResearch(
   address: string,
   postcode: string,
@@ -714,7 +770,7 @@ export async function getResearch(
   let nearby: MarketListing[] = [];
   const [stats, listings, material] = await Promise.all([
     sector ? marketFor(sector, beds) : Promise.resolve(null),
-    sector ? onMarketNearby(sector, beds, postcode, filters) : Promise.resolve([]),
+    sector ? onMarketNearby(sector, postcode, filters) : Promise.resolve([]),
     // Gated on the trusted match, not merely on having an hs_id — see the
     // `material` field comment on MaResearch.
     subject ? materialFor(subject.hsId) : Promise.resolve(null),
