@@ -239,6 +239,25 @@ CREATE TABLE IF NOT EXISTS os_bugs (
 );
 CREATE INDEX IF NOT EXISTS os_bugs_state ON os_bugs (state, created_at DESC);
 
+-- The screen as it looked when they reported it.
+--
+-- A separate table, not a column on os_bugs, and that is the whole point: a
+-- JPEG is tens of kilobytes and the reports list reads every row. Hanging it
+-- off the bug would make opening the list drag every picture with it, so the
+-- list stays light and a picture is fetched only when somebody looks at one.
+--
+-- Deleted after 30 days. It captures whatever was on screen, which on this
+-- product means landlord names, tenant details and arrears — a bigger data
+-- footprint than anything else the OS keeps. Long enough to investigate what
+-- the pilot reports, short enough that it never becomes an archive nobody
+-- remembers holding.
+CREATE TABLE IF NOT EXISTS os_bug_shots (
+  bug_id     TEXT PRIMARY KEY,
+  shot       TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_bug_shots_at ON os_bug_shots (created_at);
+
 -- CUSTOM ATTRIBUTES — fields a person invents for themselves.
 --
 -- Two tables, because a definition and a value are different lifetimes. Rename

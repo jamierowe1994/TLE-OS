@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import AssistantCharacter, { type Mood } from "@/components/AssistantCharacter";
+import { captureScreen } from "@/lib/screenshot";
 import AssistantSays, { type Screen } from "@/components/AssistantSays";
 
 /**
@@ -246,6 +247,17 @@ export default function HelpDock() {
   async function sendFeedback() {
     setBusy(true);
     setMood("thinking");
+    /* A picture of what they were looking at, taken before the report goes.
+       James, 29 Aug: Susan hit a problem and the next thing that had to happen
+       was "can you send me a screenshot?" — a round trip to learn something
+       the browser already knew.
+
+       Awaited rather than fired alongside, because the point is to catch the
+       screen as it is NOW. It returns null on any failure and the report goes
+       without it: somebody who has just hit a bug must not then hit a second
+       one trying to tell us about the first. */
+    const shot = await captureScreen();
+
     await fetch("/api/bugs", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -253,6 +265,7 @@ export default function HelpDock() {
         body: fb,
         path,
         kind,
+        shot,
         context: {
           viewport: `${window.innerWidth}x${window.innerHeight}`,
           ua: navigator.userAgent.slice(0, 160),
@@ -284,6 +297,7 @@ export default function HelpDock() {
         title="Help and feedback"
         aria-label="Help and feedback"
         aria-expanded={open}
+        data-hide-from-shot
         className="fixed bottom-2 right-3 z-[190] text-ink transition-transform hover:scale-105 active:scale-95"
       >
         <AssistantCharacter mood={mood} size={76} />
@@ -293,6 +307,7 @@ export default function HelpDock() {
         <div
           /* Shifted left of the character so the tail lands on his head rather
              than beside it, and so the bubble does not sit directly over him. */
+          data-hide-from-shot
           className="fade-up fixed bottom-[104px] right-[68px] z-[190] w-[min(340px,calc(100vw-2.5rem))]"
         >
           <div className="relative rounded-[22px] border border-line/80 bg-panel p-4 shadow-[0_20px_50px_-16px_rgba(0,0,0,0.4)]">

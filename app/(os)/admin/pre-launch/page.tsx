@@ -73,6 +73,20 @@ export default function PreLaunch() {
      accepted any address; only the UI insisted on a roster. */
   const [manual, setManual] = useState({ name: "", email: "", role: "support" });
 
+  /* The screen as it looked when a report was filed. Fetched one at a time,
+     on demand: every report carries a JPEG and pulling them all to draw a list
+     of sentences would be most of a megabyte to read a paragraph. */
+  const [shots, setShots] = useState<Record<string, string | null>>({});
+
+  async function loadShot(id: string) {
+    if (id in shots) return;
+    setShots((m) => ({ ...m, [id]: null }));
+    const j = await fetch(`/api/admin/bug-shot?id=${encodeURIComponent(id)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    setShots((m) => ({ ...m, [id]: j?.shot ?? null }));
+  }
+
   const load = useCallback(() => {
     fetch("/api/admin/pilot")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("no"))))
@@ -388,6 +402,30 @@ export default function PreLaunch() {
                   <span className="shrink-0 text-[11px] text-muted">{when(b.createdAt)}</span>
                 </div>
                 <p className="mt-1.5 whitespace-pre-wrap text-[12.5px] leading-relaxed">{b.body}</p>
+                {/* What they were looking at. Not every report has one — it
+                    only started being captured on 29 Aug, and a browser that
+                    refuses to draw the canvas still files the words. */}
+                {b.id in shots ? (
+                  shots[b.id] ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={shots[b.id]!}
+                      alt={`Screen when ${b.reporterEmail} reported this`}
+                      className="mt-2 w-full rounded-lg border border-line/70"
+                    />
+                  ) : (
+                    <p className="mt-2 text-[11px] text-muted">No picture with this one.</p>
+                  )
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void loadShot(b.id)}
+                    className="mt-2 text-[11px] text-muted underline hover:text-ink"
+                  >
+                    See their screen
+                  </button>
+                )}
+
                 <div className="mt-2 flex gap-2">
                   {(["ack", "fixed", "wontfix"] as const)
                     .filter((s) => s !== b.state)

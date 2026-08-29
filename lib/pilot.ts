@@ -186,16 +186,47 @@ export interface Bug {
 export async function logBug(p: {
   reporterId?: string | null; reporterEmail?: string;
   body: string; path?: string; kind?: string; context?: Record<string, unknown>;
+  /** A JPEG data URL of their screen. Optional, and never worth failing over. */
+  shot?: string | null;
 }): Promise<void> {
   if (!hasDb()) return;
+  const id = uid();
   await q(
     `insert into os_bugs (id, reporter_id, reporter_email, body, path, kind, context)
      values ($1,$2,$3,$4,$5,$6,$7)`,
     [
-      uid(), p.reporterId ?? null, p.reporterEmail ?? "", p.body.trim(),
+      id, p.reporterId ?? null, p.reporterEmail ?? "", p.body.trim(),
       p.path ?? "", p.kind ?? "bug", p.context ? JSON.stringify(p.context) : null,
     ]
   );
+
+  if (!p.shot) return;
+  try {
+    await q(`insert into os_bug_shots (bug_id, shot) values ($1,$2)
+             on conflict (bug_id) do nothing`, [id, p.shot]);
+    /* Retention, swept here rather than on a schedule. Thirty days, decided by
+       James: long enough to investigate anything the pilot reports, short
+       enough that pictures of landlord and tenant details never quietly become
+       an archive. Doing it on write means there is no cron to forget, and no
+       endpoint to leave unguarded — the sweep cannot outlive the feature. */
+    await q(`delete from os_bug_shots where created_at < now() - interval '30 days'`);
+  } catch {
+    /* The report is filed. A picture that would not store is not a failure
+       worth telling the person about — they came to report something else. */
+  }
+}
+
+/** The screen as it looked, or null. Fetched only when somebody opens one. */
+export async function bugShot(bugId: string): Promise<string | null> {
+  if (!hasDb()) return null;
+  try {
+    const rows = await q<{ shot: string }>(
+      `select shot from os_bug_shots where bug_id = $1`, [bugId]
+    );
+    return rows[0]?.shot ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function bugs(limit = 100): Promise<Bug[]> {

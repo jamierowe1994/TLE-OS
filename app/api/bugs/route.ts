@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
 
   const b = (await req.json().catch(() => ({}))) as {
     body?: string; path?: string; kind?: string; context?: Record<string, unknown>;
+    shot?: string;
   };
   if (!b.body?.trim()) {
     return NextResponse.json({ ok: false, error: "Tell us what happened." }, { status: 400 });
@@ -42,6 +43,15 @@ export async function POST(req: NextRequest) {
       ...(b.context ?? {}),
       ...(viewingAs ? { viewingAs: subject?.email ?? subject?.name ?? true } : {}),
     },
+    /* Guarded rather than trusted: a data URL is the only thing accepted, and
+       only up to a size a screenshot could plausibly be. The field is posted
+       by a browser, so it is an untrusted string like any other. */
+    shot:
+      typeof b.shot === "string" &&
+      b.shot.startsWith("data:image/jpeg;base64,") &&
+      b.shot.length < 3_000_000
+        ? b.shot
+        : null,
   });
   return NextResponse.json({ ok: true });
 }
