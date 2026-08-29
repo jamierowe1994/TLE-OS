@@ -3,7 +3,7 @@ import { consumeVerification, VerificationError } from "@/lib/verification";
 import { createSessionToken, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { createUser, findUserByEmail } from "@/lib/users";
 import { isFoundingOwner } from "@/lib/email-policy";
-import { isInvited, markInviteAccepted } from "@/lib/pilot";
+import { isInvited, invitedRole, markInviteAccepted } from "@/lib/pilot";
 import { hasDb } from "@/lib/db";
 
 /**
@@ -87,7 +87,16 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const user = await createUser({ email, name, password });
+  /* The role comes off the INVITE, which only an owner can write, and never
+     off this request. The person redeeming a link has no say in what they
+     become — otherwise the join form would be a self-service permission
+     screen, and the one thing it must never be is that.
+
+     A founding owner has no invite row to read, so they fall to "owner" the
+     same way they always did. Everyone else gets what was chosen for them,
+     and null still means agent. */
+  const role = isFoundingOwner(email) ? "owner" : await invitedRole(email);
+  const user = await createUser({ email, name, password, role });
   await markInviteAccepted(email);
 
   /* Signed straight in. They have just proved they own the address and chosen

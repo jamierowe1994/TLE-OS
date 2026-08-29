@@ -26,6 +26,8 @@ type Candidate = {
   invited: boolean;
   sentAt: string | null;
   hasAccount: boolean;
+  /** What they were invited as. Null on invites made before roles existed. */
+  role: string | null;
 };
 type Usage = { path: string; label: string; views: number; people: number; lastAt: string | null };
 type Bug = {
@@ -58,6 +60,11 @@ export default function PreLaunch() {
      message, the URL or anywhere it could be shoulder-read off a shared
      screen without being asked for. */
   const [magic, setMagic] = useState<{ email: string; url: string } | null>(null);
+  /* What each person will BE when they redeem, keyed by address.
+     Held per row rather than as one setting because a pilot list is mixed —
+     Susan runs the business, Kirstie is pre-tenancy, the partners are agents —
+     and one shared dropdown would quietly apply the last choice to everybody. */
+  const [roles, setRoles] = useState<Record<string, string>>({});
 
   const load = useCallback(() => {
     fetch("/api/admin/pilot")
@@ -72,7 +79,10 @@ export default function PreLaunch() {
     const r = await fetch("/api/admin/pilot", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: c.email, name: c.name, rexUserId: c.rexId, send }),
+      body: JSON.stringify({
+        email: c.email, name: c.name, rexUserId: c.rexId,
+        role: roles[c.email] ?? "agent", send,
+      }),
     });
     const j = (await r.json()) as { ok?: boolean; message?: string; error?: string };
     setBusy(null);
@@ -93,7 +103,10 @@ export default function PreLaunch() {
     const r = await fetch("/api/admin/pilot", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: c.email, name: c.name, rexUserId: c.rexId, link: true }),
+      body: JSON.stringify({
+        email: c.email, name: c.name, rexUserId: c.rexId,
+        role: roles[c.email] ?? "agent", link: true,
+      }),
     });
     const j = (await r.json()) as { ok?: boolean; url?: string; error?: string };
     setBusy(null);
@@ -208,6 +221,25 @@ export default function PreLaunch() {
                 ) : c.invited ? (
                   <Pill tone="neutral">On the list</Pill>
                 ) : null}
+                {!c.hasAccount && (
+                  /* Chosen BEFORE the invite goes, because it takes effect the
+                     moment they redeem. Setting it afterwards means somebody
+                     has to remember, and the person who forgets finds out when
+                     the MD opens the OS and can see nothing. */
+                  <select
+                    value={roles[c.email] ?? c.role ?? "agent"}
+                    onChange={(e) => setRoles((r) => ({ ...r, [c.email]: e.target.value }))}
+                    disabled={busy !== null}
+                    title="What they can see once they join"
+                    className="rounded-lg border border-line bg-card px-2 py-1.5 text-[11.5px] outline-none focus:border-accent disabled:opacity-40"
+                  >
+                    <option value="agent">Agent</option>
+                    <option value="support">Support</option>
+                    <option value="developer">Developer</option>
+                    <option value="super_admin">Super admin</option>
+                    <option value="owner">Owner</option>
+                  </select>
+                )}
                 {!c.hasAccount && (
                   <button
                     type="button"

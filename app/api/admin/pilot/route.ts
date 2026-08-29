@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOwner } from "@/lib/admin";
+import { asRole } from "@/lib/roles";
 import { addInvite, invites, markInviteSent, removeInvite, tabUsage, bugs } from "@/lib/pilot";
 import { lettingsAgents } from "@/lib/rex-agents";
 import { findUserByEmail } from "@/lib/users";
@@ -30,6 +31,10 @@ export async function GET(req: NextRequest) {
         ...r,
         invited: Boolean(inv),
         sentAt: inv?.sentAt ?? null,
+        /* So the picker shows what was already chosen rather than resetting to
+           Agent every time the page loads — which would invite somebody to
+           re-send an invite and silently demote the person. */
+        role: inv?.role ?? null,
         hasAccount: Boolean(acct),
         lastSeenAt: null as string | null,
       };
@@ -47,12 +52,21 @@ export async function POST(req: NextRequest) {
   const owner = await requireOwner(req);
   if (!owner) return new NextResponse(null, { status: 404 });
 
-  const { email, name, rexUserId, send, link } = (await req.json().catch(() => ({}))) as {
-    email?: string; name?: string; rexUserId?: string; send?: boolean; link?: boolean;
+  const { email, name, rexUserId, role, send, link } = (await req.json().catch(() => ({}))) as {
+    email?: string; name?: string; rexUserId?: string; role?: string;
+    send?: boolean; link?: boolean;
   };
   if (!email) return NextResponse.json({ ok: false, error: "Which person?" }, { status: 400 });
 
-  await addInvite({ email, name, rexUserId, by: owner.email });
+  /* Recorded on the invite so it applies the moment they redeem, rather than
+     being something somebody has to remember to set afterwards — which is what
+     went wrong for Susan: she joined as an "agent", a role with no
+     capabilities, and could not open a single business screen.
+
+     Safe to accept here because this whole route is requireOwner, and only an
+     owner may hand out roles anyway. `asRole` narrows anything unrecognised to
+     "agent", so a typo cannot mint a permission. */
+  await addInvite({ email, name, rexUserId, role: role ? asRole(role) : null, by: owner.email });
 
   /* ── The link, without the email ──────────────────────────────────────────
      Our own mail is landing in Microsoft quarantine, so the invite arrives

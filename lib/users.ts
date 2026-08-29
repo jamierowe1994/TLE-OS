@@ -1,6 +1,7 @@
 import "server-only";
 import { hashPassword, uid, verifyPassword } from "@/lib/auth";
 import { hasDb, q } from "@/lib/db";
+import { asRole } from "@/lib/roles";
 
 /**
  * The people who work here — stored in `os_users`, which the OS owns
@@ -78,14 +79,24 @@ export async function createUser(params: {
   email: string;
   name: string;
   password: string;
+  /**
+   * What they become. Must come from the INVITE the owner wrote, never from
+   * anything the person redeeming it sent — see the note in the join route.
+   * Anything unrecognised falls to "agent" via asRole rather than being
+   * trusted, so a bad value cannot mint a permission.
+   */
+  role?: string | null;
 }): Promise<OsUser> {
   const email = normaliseEmail(params.email);
   const first = (await countUsers()) === 0;
+  /* The very first account owns the place regardless — there is nobody to have
+     invited them, and an OS with no owner cannot be administered at all. */
+  const role = first ? "owner" : asRole(params.role);
   const rows = await q<Row>(
     `INSERT INTO os_users (id, email, name, role, password_hash)
      VALUES ($1, $2, $3, $4, $5)
      RETURNING id, email, name, role, photo, created_at`,
-    [uid(), email, params.name.trim(), first ? "owner" : "agent", hashPassword(params.password)]
+    [uid(), email, params.name.trim(), role, hashPassword(params.password)]
   );
   return toUser(rows[0]);
 }

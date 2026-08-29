@@ -40,6 +40,8 @@ export interface Invite {
   email: string;
   name: string;
   rexUserId: string | null;
+  /** The role they get on redeeming. Null = the default (agent). */
+  role: string | null;
   invitedAt: string;
   sentAt: string | null;
   acceptedAt: string | null;
@@ -48,14 +50,15 @@ export interface Invite {
 export async function invites(): Promise<Invite[]> {
   if (!hasDb()) return [];
   const rows = await q<{
-    email: string; name: string; rex_user_id: string | null;
+    email: string; name: string; rex_user_id: string | null; role: string | null;
     invited_at: Date; sent_at: Date | null; accepted_at: Date | null;
-  }>(`select email, name, rex_user_id, invited_at, sent_at, accepted_at
+  }>(`select email, name, rex_user_id, role, invited_at, sent_at, accepted_at
         from os_invites order by invited_at desc`);
   return rows.map((r) => ({
     email: r.email,
     name: r.name,
     rexUserId: r.rex_user_id,
+    role: r.role,
     invitedAt: new Date(r.invited_at).toISOString(),
     sentAt: r.sent_at ? new Date(r.sent_at).toISOString() : null,
     acceptedAt: r.accepted_at ? new Date(r.accepted_at).toISOString() : null,
@@ -72,15 +75,37 @@ export async function isInvited(email: string): Promise<boolean> {
 }
 
 export async function addInvite(p: {
-  email: string; name?: string; rexUserId?: string | null; by: string;
+  email: string; name?: string; rexUserId?: string | null; role?: string | null; by: string;
 }): Promise<void> {
   if (!hasDb()) return;
   await q(
-    `insert into os_invites (email, name, rex_user_id, invited_by)
-     values ($1,$2,$3,$4)
-     on conflict (email) do update set name = excluded.name, rex_user_id = excluded.rex_user_id`,
-    [normaliseEmail(p.email), p.name ?? "", p.rexUserId ?? null, p.by]
+    `insert into os_invites (email, name, rex_user_id, role, invited_by)
+     values ($1,$2,$3,$4,$5)
+     on conflict (email) do update set name = excluded.name,
+       rex_user_id = excluded.rex_user_id, role = excluded.role`,
+    [normaliseEmail(p.email), p.name ?? "", p.rexUserId ?? null, p.role ?? null, p.by]
   );
+}
+
+/**
+ * The role this address was invited as, or null.
+ *
+ * Read at REDEEM time, from the invite the owner created — never taken from
+ * whatever the browser posts. That is the whole security property: the person
+ * accepting an invite has no say in what they become, and the only screen that
+ * can set it is owner-gated.
+ */
+export async function invitedRole(email: string): Promise<string | null> {
+  if (!hasDb()) return null;
+  try {
+    const rows = await q<{ role: string | null }>(
+      `select role from os_invites where email = $1`,
+      [normaliseEmail(email)]
+    );
+    return rows[0]?.role ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function markInviteSent(email: string): Promise<void> {

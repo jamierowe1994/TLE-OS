@@ -153,6 +153,17 @@ CREATE TABLE IF NOT EXISTS os_invites (
   accepted_at    TIMESTAMPTZ
 );
 
+-- The role they get when they redeem.
+--
+-- Without this every invite produced an "agent", a role holding no
+-- capabilities at all — so Susan, who runs the business, redeemed her link on
+-- 29 Aug and could not open a single business screen. Nothing was wrong with
+-- her account; nobody could have given it the right role in the first place.
+--
+-- Null means "whatever the default is", which keeps every invite made before
+-- this column existed behaving exactly as it did.
+ALTER TABLE os_invites ADD COLUMN IF NOT EXISTS role TEXT;
+
 -- WHAT THE PILOT ACTUALLY USES.
 --
 -- One row per person per page per day, counted. Not one row per view: five
