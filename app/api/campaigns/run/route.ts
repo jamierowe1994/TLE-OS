@@ -292,9 +292,15 @@ export async function POST(req: NextRequest) {
       if (!/^\d+$/.test(row.record_id)) {
         throw new Error("No REX contact record for this enrolment, so the send would land nowhere.");
       }
+      /* Nurture runs on a timer, so there is no signed-in person to send as.
+         It must therefore NAME one, as a REX user id. Until somebody decides
+         who nurture comes from, this refuses rather than sending a landlord an
+         email from the office account - see NoSenderIdentity. */
       const sent = await sendMerge(
         { contactId: row.record_id },
-        { subject: mail.subject, body: mail.html }
+        { subject: mail.subject, body: mail.html },
+        null,
+        { sendFromUserId: process.env.REX_CAMPAIGN_SEND_AS ?? null }
       );
       if (!sent.ok) throw new Error(sent.error);
       await advance(row.id, plan.index, true);

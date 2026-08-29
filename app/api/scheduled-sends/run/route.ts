@@ -4,6 +4,7 @@ import { timingSafeEqual } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { rexConfigured, RexWriteBlocked } from "@/lib/rex";
 import { sendMerge } from "@/lib/rex-mailmerge";
+import { rexTokenFor } from "@/lib/rex-user";
 import { renderPlain } from "@/lib/campaign-mail";
 
 /**
@@ -103,9 +104,14 @@ export async function POST(req: NextRequest) {
       if (!row.contact_id) {
         throw new Error(`No REX contact on this queued send (${row.to_email}), so it would land nowhere.`);
       }
+      /* Queued by a person, sent by a timer. The queue records who queued it,
+         so it goes out as THEM - that is the point of queuing rather than
+         sending. With no REX link for that person it refuses, because the
+         alternative is a landlord hearing from the office account. */
       const merged = await sendMerge(
         { contactId: row.contact_id },
-        { subject: mail.subject, body: mail.html }
+        { subject: mail.subject, body: mail.html },
+        await rexTokenFor(row.queued_by ?? null)
       );
       if (!merged.ok) throw new Error(merged.error);
 

@@ -103,6 +103,35 @@ export async function previewMerge(
 export const MERGE_WRITE = "MailMerge/queueMergeUsingObjects";
 
 /**
+ * NOTHING GOES TO A LANDLORD FROM "THE SYSTEM".
+ *
+ * James's rule, 29 Aug: an email to a landlord is from their agent, personally,
+ * or it does not go. REX already works this way — a merge records a
+ * `send_from_user` and every one on this account went out as a named person
+ * (Ed Firth, Graham Cross, Alex Broadley), never as a shared address. The From
+ * is simply whoever the API call is authenticated as.
+ *
+ * Which is exactly where it can go wrong, and did once already today. When an
+ * OS account has no REX link, rexTokenFor() returns null and every REX call
+ * falls back to the office service account. This morning that made a write-up
+ * edit read as "System User" in an audit trail — a shrug. The same fallback on
+ * an email puts a stranger's name on a message to a landlord, and there is no
+ * undo on that at all.
+ *
+ * So a send with no identity is refused rather than quietly attributed. The
+ * caller must be able to send AS somebody: their own REX token, or an explicit
+ * REX user id. Not both is fine; neither is not.
+ */
+export class NoSenderIdentity extends Error {
+  constructor() {
+    super(
+      "That email would have gone out from the office account rather than from you, so I haven't sent it. Connect your REX sign-in in your profile and it'll go from your own address."
+    );
+    this.name = "NoSenderIdentity";
+  }
+}
+
+/**
  * Send it, for real.
  *
  * Throws RexWriteBlocked on a locked environment — callers should catch it and
@@ -116,6 +145,12 @@ export async function sendMerge(
   actorToken?: string | null,
   opts?: { sendFromUserId?: string | null; locationId?: string | null }
 ): Promise<{ ok: true; result: unknown } | { ok: false; error: string }> {
+  /* Who it is FROM, before what it says. See NoSenderIdentity above: with
+     neither a personal token nor a named REX user, this would go out as the
+     office service account, and a landlord would get a message from somebody
+     who does not exist. */
+  if (!actorToken && !opts?.sendFromUserId) throw new NoSenderIdentity();
+
   const res = await rexCall("MailMerge", "queueMergeUsingObjects", {
     merge_type: "email",
     merge_objects: [mergeObject(target, content)],

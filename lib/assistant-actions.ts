@@ -4,7 +4,7 @@ import { bookFor, invalidateListingBook } from "@/lib/listings-cache";
 import { getListingContacts } from "@/lib/business/rex-stats";
 import { addPropertyNote } from "@/lib/business/property-notes-store";
 import { isExpiredToken, rexCall, RexWriteBlocked } from "@/lib/rex";
-import { MERGE_WRITE, previewMerge, sendMerge } from "@/lib/rex-mailmerge";
+import { MERGE_WRITE, NoSenderIdentity, previewMerge, sendMerge } from "@/lib/rex-mailmerge";
 import { rexTokenFor } from "@/lib/rex-user";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
@@ -241,6 +241,11 @@ async function doEmail(
       message: `Sent to ${who.name} at ${who.email}. It's on their REX timeline, so whoever picks them up next can see it.`,
     };
   } catch (e) {
+    if (e instanceof NoSenderIdentity) {
+      /* Not a failure of the email. They are not linked, so it would have gone
+         out from the office account instead of from them. */
+      return { ok: false, blocked: true, message: e.message };
+    }
     if (e instanceof RexWriteBlocked) {
       return {
         ok: false,
