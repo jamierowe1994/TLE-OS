@@ -20,7 +20,12 @@ export type AuditKind =
   | "sign_in_failed"
   | "password_reset"
   | "view_as_start"
-  | "view_as_end";
+  | "view_as_end"
+  /* Arming or disarming a send. Recorded because a switch that turns on
+     outbound mail is the single most consequential control in the product, and
+     "who turned it on, and when" is the first question after anything goes
+     wrong with one. */
+  | "switch_changed";
 
 export interface AuditRow {
   id: string;

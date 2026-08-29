@@ -9,6 +9,7 @@ import { dealAlerts, digestText, type AlertDeal, type DealAlert } from "@/lib/bu
 import { alreadySent, markSent, clearResolved } from "@/lib/business/alert-store";
 import { sendEmail } from "@/lib/resend";
 import { can } from "@/lib/roles";
+import { switchOn } from "@/lib/switches";
 
 /**
  * The thing that notices, and tells somebody.
@@ -24,9 +25,10 @@ import { can } from "@/lib/roles";
  *
  * 1. CRON_SECRET, checked in constant time. Without it anybody who guesses a
  *    URL can make the system send mail.
- * 2. PRETENANCY_ALERTS=on. Sending is off until somebody turns it on, exactly
- *    as campaign sending is. A scheduler that has never run in anger should not
- *    have its first run be a real one.
+ * 2. The "Pre-tenancy digest" switch on Admin -> Switches, which is off until
+ *    somebody arms it and asks them to type a phrase to do so. A scheduler that
+ *    has never run in anger should not have its first run be a real one.
+ *    PRETENANCY_ALERTS still decides until that toggle is first used.
  * 3. The email policy in lib/resend, which refuses any address that is not
  *    internal. That is the reason this version tells Kirstie and nobody else:
  *    the OS domain must never mail a landlord or a tenant, and the public
@@ -117,7 +119,7 @@ export async function GET(req: NextRequest) {
     alerts: alerts.length,
     alreadyTold: sent.length,
     wouldSend: fresh.length,
-    sendingArmed: process.env.PRETENANCY_ALERTS === "on",
+    sendingArmed: await switchOn("pretenancy_alerts"),
     to: await recipients().catch(() => []),
     digest: fresh.length ? digestText(fresh) : null,
   });
@@ -161,12 +163,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ sent: false, reason: "Nothing new.", cleared });
   }
 
-  if (process.env.PRETENANCY_ALERTS !== "on") {
+  if (!(await switchOn("pretenancy_alerts"))) {
     /* HELD, not skipped and not recorded. It comes up again on the next run,
        so arming this later loses nothing. */
     return NextResponse.json({
       sent: false,
-      reason: 'Sending is off. Set PRETENANCY_ALERTS="on" to arm it.',
+      reason: "Sending is off. Arm it on Admin -> Switches.",
       wouldSend: fresh.length,
       cleared,
     });

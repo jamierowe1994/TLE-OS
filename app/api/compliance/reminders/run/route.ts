@@ -8,6 +8,7 @@ import { buildQueue, buildTracker, type QueuedReminder } from "@/lib/compliance-
 import { chasesSent, markChased } from "@/lib/compliance-chase-store";
 import { renderComplianceAgentChase } from "@/lib/email/tle-emails";
 import { sendEmail } from "@/lib/resend";
+import { switchOn } from "@/lib/switches";
 
 /**
  * The certificate chase, sent.
@@ -183,7 +184,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     dryRun: true,
     ...p,
-    sendingArmed: process.env.COMPLIANCE_CHASES === "on",
+    sendingArmed: await switchOn("compliance_chases"),
     wouldEmail: p.groups.filter((g) => g.to && !g.problem).length,
     cannotEmail: p.groups.filter((g) => !g.to || g.problem).map((g) => ({
       agent: g.agentName,
@@ -224,12 +225,15 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  if (process.env.COMPLIANCE_CHASES !== "on") {
+  /* Armed from Admin -> Switches now, not from Railway. The stored value wins
+     once somebody has touched the toggle; until then COMPLIANCE_CHASES still
+     decides, so nothing changed state the day this shipped. */
+  if (!(await switchOn("compliance_chases"))) {
     /* HELD, not skipped and not recorded: it comes round again on the next run,
        so arming this later loses nothing. */
     return NextResponse.json({
       sent: false,
-      reason: 'Sending is off. Set COMPLIANCE_CHASES="on" to arm it.',
+      reason: "Sending is off. Arm it on Admin -> Switches.",
       wouldEmail: sendable.length,
     });
   }

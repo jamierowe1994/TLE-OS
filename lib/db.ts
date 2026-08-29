@@ -417,6 +417,30 @@ CREATE TABLE IF NOT EXISTS os_compliance_chases_sent (
 CREATE INDEX IF NOT EXISTS os_compliance_chases_property
   ON os_compliance_chases_sent (property_id);
 
+-- THE SWITCHES. What is armed, decided in the product rather than in Railway.
+--
+-- James, 29 Aug: "rather than me having to go in and do variables, I should
+-- have toggles in my settings where I can turn it on and off... at the moment
+-- I'm going to have to sit down on the day it goes live and type in a tonne of
+-- variables."
+--
+-- An environment variable was never chosen for safety on purpose; it was simply
+-- where a flag goes when there is no product yet. It happens to be awkward, and
+-- awkwardness was doing real work: you cannot arm a send from your phone by
+-- accident. Moving these into the product removes that, so the friction moves
+-- with them - see CONFIRM in lib/switches, which is typed and checked on the
+-- SERVER, not merely in a dialog.
+--
+-- A row exists only once somebody has touched a switch. Until then the old
+-- environment variable still decides, so this table changes nothing on the day
+-- it ships and everything stays exactly as armed as it was.
+CREATE TABLE IF NOT EXISTS os_switches (
+  key            TEXT PRIMARY KEY,
+  is_on          BOOLEAN NOT NULL DEFAULT FALSE,
+  changed_by     TEXT NOT NULL DEFAULT '',
+  changed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Who is on which campaign.
 --
 -- Its own table, not a field on the case, because the questions are asked

@@ -82,6 +82,11 @@ const GROUPS: Array<{
          need to see that. That's for my referencing and testing." An agent's
          connections page is a different thing — theirs, and further down. */
       { href: "/admin/connections", label: "Wiring", needs: "see:wiring" },
+      /* Separate from Wiring on purpose. Wiring reports and never changes
+         anything - its own note says a page that could arm a send is a page
+         that can arm one by accident. This is the one that arms, and it is
+         owner-gated rather than merely admin-gated. */
+      { href: "/admin/switches", label: "Switches", needs: "manage:roles" },
       { href: "/admin/activity", label: "Activity", needs: "see:people" },
       { href: "/admin/todo", label: "To do", needs: "see:reports" },
       /* Deliberately NOT in the "Views" group: VIEW_PREFIXES is derived from

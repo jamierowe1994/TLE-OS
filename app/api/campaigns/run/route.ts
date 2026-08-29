@@ -7,6 +7,7 @@ import { CAMPAIGNS, type Campaign } from "@/lib/campaigns";
 import { dispositionOf, nextDue, type StepPlan } from "@/lib/scheduler";
 import { renderStep, type StepCopy } from "@/lib/campaign-mail";
 import { rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
+import { switchOn } from "@/lib/switches";
 
 /**
  * The scheduler — the thing that makes a campaign a campaign rather than a list.
@@ -86,8 +87,14 @@ type Verdict = {
   overtaken?: number;
 };
 
-function sendingOn(): boolean {
-  return (process.env.CAMPAIGN_SENDING ?? "").toLowerCase() === "on";
+/* Armed from Admin -> Switches now rather than CAMPAIGN_SENDING. Async
+   because the answer lives in the database; until somebody touches the toggle
+   the old variable still decides, so nothing changed state on deploy.
+
+   Read ONCE per run and passed down, not called six times: a switch that could
+   answer differently halfway through a run is a run that half sent. */
+async function sendingOn(): Promise<boolean> {
+  return switchOn("campaign_sending");
 }
 
 /** A cron key, or a signed-in person. Constant-time so the key can't be
@@ -148,9 +155,12 @@ function planFor(
 export async function GET(req: NextRequest) {
   if (!authorised(req)) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   if (!hasDb()) {
-    return NextResponse.json({ ran: false, sending: sendingOn(), due: [], reason: "No database on this environment." });
+    return NextResponse.json({ ran: false, sending: await sendingOn(), due: [], reason: "No database on this environment." });
   }
   const now = new Date();
+  /* Read ONCE per run. A switch consulted six times could answer differently
+     halfway through, and a run that half sent is worse than one that did not. */
+  const armed = await sendingOn();
   const [rows, copy, byId] = await Promise.all([activeRows(), storedCopy(), campaignsById()]);
   const due: Verdict[] = [];
 
@@ -176,13 +186,13 @@ export async function GET(req: NextRequest) {
             ? "unwritten"
             : !row.email
               ? "no_email"
-              : sendingOn()
+              : armed
                 ? "sent"
                 : "held",
     });
   }
 
-  return NextResponse.json({ ran: false, dry: true, sending: sendingOn(), checked: rows.length, due });
+  return NextResponse.json({ ran: false, dry: true, sending: armed, checked: rows.length, due });
 }
 
 /* ─────────────────────────── the real run ─────────────────────────── */
@@ -204,6 +214,9 @@ export async function POST(req: NextRequest) {
   }
 
   const now = new Date();
+  /* Read ONCE per run. A switch consulted six times could answer differently
+     halfway through, and a run that half sent is worse than one that did not. */
+  const armed = await sendingOn();
   const [rows, copy, byId] = await Promise.all([activeRows(), storedCopy(), campaignsById()]);
   const done: Verdict[] = [];
 
@@ -232,7 +245,7 @@ export async function POST(req: NextRequest) {
       done.push({ ...base, outcome: "unwritten", detail: "Marketing hasn't written this one yet." });
       continue;
     }
-    if (disp === "send" && !sendingOn()) {
+    if (disp === "send" && !armed) {
       done.push({ ...base, outcome: "held", detail: "CAMPAIGN_SENDING is off." });
       continue;
     }
@@ -299,7 +312,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     ran: true,
-    sending: sendingOn(),
+    sending: armed,
     checked: rows.length,
     acted: done.length,
     results: done,
