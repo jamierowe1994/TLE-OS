@@ -88,12 +88,14 @@ export const TOOLS: Tool[] = [
     blurb:
       "Run ads to the doors you want, and work everything that comes back without leaving here.",
     icon: "rocket",
-    href: null,
-    status: "building",
+    href: "/tools/launchpad",
+    /* Live, but only the funnel. Working a lead still happens in Launch Pad
+       and the screen says so — "live" here means opening it does something
+       real, which it now does. */
+    status: "live",
     access: "paid",
     group: "prospecting",
     gate: "launchpad",
-    note: "Being rebuilt into the OS so it stops being a second place to sign in to.",
   },
 ];
 

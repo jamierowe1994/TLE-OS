@@ -133,6 +133,72 @@ export async function getLaunchPadAccess(
   }
 }
 
+/** Where a lead sits today. Decided by Launch Pad, never re-derived here. */
+export type LeadBucket = "uncontacted" | "follow-up" | "resting" | "won" | "closed";
+
+export interface MirroredLead {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  source: string;
+  stage: string;
+  bucket: LeadBucket;
+  receivedAt: string;
+  followUpAt: string | null;
+  appointmentAt: string | null;
+  adName: string | null;
+  note: string;
+  deepLink: string;
+  attempts: number;
+}
+
+export interface Funnel {
+  /** False when they are entitled but have never signed into Launch Pad. */
+  found: boolean;
+  leads: MirroredLead[];
+  counts: Partial<Record<LeadBucket, number>>;
+  /** When Launch Pad judged "resting" — see the endpoint's note on the clock. */
+  computedAt: string | null;
+  appUrl: string | null;
+}
+
+/**
+ * One agent's funnel, mirrored.
+ *
+ * Returns null on any failure, which the screen must render as "couldn't load"
+ * rather than as an empty funnel. An agent shown zero leads believes it.
+ */
+export async function fetchLaunchPadLeads(email: string): Promise<Funnel | null> {
+  if (!launchPadConfigured() || !email.trim()) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const res = await fetch(
+      `${base()}/api/partner/leads?email=${encodeURIComponent(email.trim().toLowerCase())}`,
+      {
+        headers: { Authorization: `Bearer ${process.env.ADS_API_KEY}` },
+        cache: "no-store",
+        signal: controller.signal,
+      }
+    );
+    if (!res.ok) return null;
+    const j = (await res.json()) as Partial<Funnel>;
+    if (!Array.isArray(j.leads)) return null;
+    return {
+      found: Boolean(j.found),
+      leads: j.leads as MirroredLead[],
+      counts: j.counts ?? {},
+      computedAt: j.computedAt ?? null,
+      appUrl: j.appUrl ?? null,
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * The same question, asked about every address we hold for one person.
  *
