@@ -121,9 +121,19 @@ function shell(opts: {
             <img src="${ORIGIN}/brand/tle-os-wordmark.png" width="160" alt="TLE OS"
                  style="display:block;margin:0 auto;width:160px;max-width:60%;height:auto;border:0;outline:none;text-decoration:none;font-family:'Bradley Hand','Segoe Script',cursive;font-size:26px;color:#1c1917">
 
-            <!-- The picture. PNG, because Outlook will not draw an SVG. -->
-            <img src="${ORIGIN}/illustrations/buildings-street.png" width="260" alt=""
-                 style="display:block;margin:26px auto 0;width:260px;max-width:80%;height:auto;border:0;outline:none;text-decoration:none">
+            <!-- A key turning in a lock: the action, and the trade, in one
+                 drawing. An animated GIF, which IS the one moving format email
+                 supports — Gmail, Apple Mail, iOS and most webmail play it.
+
+                 Outlook on Windows renders only the FIRST frame, because it
+                 draws HTML with Word's engine. So frame one is not a title
+                 card or a blank: it is the key already in the lock, a complete
+                 picture that says the same thing standing still. Everything
+                 after it is a bonus for the clients that can show it.
+
+                 Not SVG (Outlook draws none) and not CSS (stripped). -->
+            <img src="${ORIGIN}/illustrations/unlock.gif" width="230" alt=""
+                 style="display:block;margin:24px auto 0;width:230px;max-width:70%;height:auto;border:0;outline:none;text-decoration:none">
 
             <p style="margin:30px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:23px;line-height:1.25;font-weight:700;color:#1c1917;background-color:#ffffff">${esc(opts.heading)}</p>
 
