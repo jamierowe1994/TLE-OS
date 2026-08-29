@@ -35,6 +35,24 @@ const esc = (s: string) =>
 const ORIGIN = (process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/, "");
 
 /**
+ * Asset version. BUMP THIS whenever the wordmark or the animation changes.
+ *
+ * Gmail does not fetch an image from us — it proxies it through
+ * googleusercontent and CACHES it against the URL. So a corrected file at the
+ * same address is never seen: the old copy is served from the proxy, and
+ * re-sending the email changes nothing because the URL has not changed.
+ *
+ * That is exactly what happened on 29 Aug. The GIF's off-white plate was fixed,
+ * deployed, and verified live byte-for-byte — and the box was still there in
+ * the inbox, because the proxy had already kept the previous one.
+ *
+ * A query string is part of the cache key, so bumping this is enough. It costs
+ * nothing and it is the difference between "fixed" and "fixed where anyone can
+ * see it".
+ */
+const ASSET_V = "2";
+
+/**
  * The shell both account emails sit in.
  *
  * ── Why it looks like this ────────────────────────────────────────────────
@@ -118,7 +136,7 @@ function shell(opts: {
                  The alt text carries real weight — Outlook blocks images by
                  default until somebody presses "download pictures", so a good
                  number of people will only ever see these two words. -->
-            <img src="${ORIGIN}/brand/tle-os-wordmark.png" width="160" alt="TLE OS"
+            <img src="${ORIGIN}/brand/tle-os-wordmark.png?v=${ASSET_V}" width="160" alt="TLE OS"
                  style="display:block;margin:0 auto;width:160px;max-width:60%;height:auto;border:0;outline:none;text-decoration:none;font-family:'Bradley Hand','Segoe Script',cursive;font-size:26px;color:#1c1917">
 
             <!-- James's line drawing, from his Sign-in Loop. An animated GIF,
@@ -142,7 +160,7 @@ function shell(opts: {
                  picture; everyone else watches it arrive.
 
                  Not SVG (Outlook draws none) and not CSS (stripped). -->
-            <img src="${ORIGIN}/illustrations/sign-in.gif" width="260" alt=""
+            <img src="${ORIGIN}/illustrations/sign-in.gif?v=${ASSET_V}" width="260" alt=""
                  style="display:block;margin:24px auto 0;width:260px;max-width:78%;height:auto;border:0;outline:none;text-decoration:none">
 
             <p style="margin:30px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:23px;line-height:1.25;font-weight:700;color:#1c1917;background-color:#ffffff">${esc(opts.heading)}</p>
