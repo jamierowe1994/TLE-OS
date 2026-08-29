@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import AssistantCharacter, { type Mood } from "@/components/AssistantCharacter";
 import { captureScreen } from "@/lib/screenshot";
 import AssistantSays, { type Screen } from "@/components/AssistantSays";
+import { getOpenListing } from "@/lib/open-record";
 
 /**
  * The character in the corner, and what he says.
@@ -43,7 +44,13 @@ import AssistantSays, { type Screen } from "@/components/AssistantSays";
 const PHONE_MS = 60_000;
 const SLEEP_MS = 120_000;
 
-type Line = { role: "agent" | "assistant"; text: string };
+type Line = {
+  role: "agent" | "assistant";
+  text: string;
+  /** What he went and read to answer. Absent on history and on his own
+   *  scripted lines; only a live tool-using reply has any. */
+  steps?: string[];
+};
 
 export default function HelpDock() {
   const path = usePathname();
@@ -191,13 +198,25 @@ export default function HelpDock() {
     const r = await fetch("/api/assistant/ask", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text, kind: stage, thread: thread.current, path }),
+      /* Where they are and what they have open. Read at send time rather than
+   held in state: the drawer can open and close between messages, and the
+   only moment this needs to be true is now. */
+        body: JSON.stringify({
+          text,
+          kind: stage,
+          thread: thread.current,
+          path,
+          openListingId: getOpenListing(),
+        }),
     })
       .then((x) => (x.ok ? x.json() : null))
       .catch(() => null);
 
     const answer = r?.reply ?? "Something went wrong sending that. Try again in a moment.";
-    setLines((l) => [...l, { role: "assistant", text: answer }]);
+    setLines((l) => [
+      ...l,
+      { role: "assistant", text: answer, steps: Array.isArray(r?.steps) ? r.steps : undefined },
+    ]);
     setBusy(false);
 
     /* Thinking ends the moment he has something to say, and he says it —
@@ -361,12 +380,27 @@ export default function HelpDock() {
                           {l.text}
                         </p>
                       ) : (
-                        <AssistantSays key={i} text={l.text} screens={screens} />
+                        <div key={i}>
+                          <AssistantSays text={l.text} screens={screens} />
+                          {/* What he actually read. An assistant that quotes
+                              a rent should be able to show where it came
+                              from — and when he says he could not find
+                              something, this is the difference between
+                              "he looked" and "he could not be bothered". */}
+                          {l.steps && l.steps.length > 0 && (
+                            <p className="mt-1 pl-1 text-[10px] leading-relaxed text-muted">
+                              {l.steps.join(" · ")}
+                            </p>
+                          )}
+                        </div>
                       )
                     )}
                     {busy && (
                       <p className="mr-6 rounded-2xl rounded-bl-md bg-box px-3 py-2 text-[12.5px] text-muted">
-                        …
+                        {/* He may be doing several lookups now, which takes
+                            seconds rather than milliseconds. A bare ellipsis
+                            for that long reads as a hang. */}
+                        Having a look…
                       </p>
                     )}
                   </div>

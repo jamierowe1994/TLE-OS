@@ -18,6 +18,7 @@ import { landlordFor, LISTING_TRACK, listingStartingStep } from "@/lib/journey";
 import { LEADS, leadSide } from "@/lib/leads-sample";
 import { DIARY } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
+import { setOpenListing } from "@/lib/open-record";
 import type { TenancyLink } from "@/lib/tenancy-link";
 import { saveLabel, useCaseState } from "@/lib/case-state";
 import { useListingTerms } from "@/lib/use-listing-terms";
@@ -286,6 +287,15 @@ export default function ListingDrawer({
     setEditingCopy(false);
     setSaved(null);
     setCopyError(null);
+  }, [listing?.id]);
+
+  /* Tell Steve what they're looking at, so "how many bedrooms is this one"
+     resolves without him asking which one. Cleared on unmount as well as on
+     close — a drawer left open when they navigate away would otherwise keep
+     answering for a property that is no longer on screen. */
+  useEffect(() => {
+    setOpenListing(listing?.id ?? null);
+    return () => setOpenListing(null);
   }, [listing?.id]);
 
   /* The advert links, per listing. Cleared FIRST so stepping to the next

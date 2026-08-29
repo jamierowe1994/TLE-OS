@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { scopeFor } from "@/lib/scope";
 import { findUserById } from "@/lib/users";
 import {
   logLine,
@@ -103,6 +104,7 @@ export async function POST(req: NextRequest) {
     kind?: string;
     thread?: string;
     path?: string;
+    openListingId?: string;
   };
   const text = (b.text ?? "").trim();
   if (!text) return NextResponse.json({ error: "Say something first." }, { status: 400 });
@@ -111,6 +113,9 @@ export async function POST(req: NextRequest) {
     b.kind === "onboarding-name" || b.kind === "onboarding-help" ? b.kind : "ask";
   const thread = (b.thread ?? "").slice(0, 64) || "t";
   const path = (b.path ?? "").slice(0, 200);
+  /* The record open in front of them. It is what turns "how many bedrooms is
+     this one" from an unanswerable question into a lookup. */
+  const openListingId = (b.openListingId ?? "").slice(0, 40) || null;
   const common = { userId, userEmail: me.email, thread, path };
 
   await logLine({ ...common, role: "agent", text: text.slice(0, 4000), kind });
@@ -128,9 +133,14 @@ export async function POST(req: NextRequest) {
     text: l.text,
   }));
 
+  /* WHOSE data may his tools read. Resolved here, from the request, and
+     handed down — a tool that decided its own scope would be one forgotten
+     import away from answering across the whole group. */
+  const scope = await scopeFor(req);
+
   let answer;
   try {
-    answer = await ask(history, text);
+    answer = await ask(history, text, { scope, path, openListingId });
   } catch (e) {
     /* A model outage must not lose the question — it is still logged above,
        and it is still a guide somebody needed. */
@@ -153,5 +163,12 @@ export async function POST(req: NextRequest) {
     outTokens: answer.outTokens,
   });
 
-  return NextResponse.json({ reply: answer.text, kind, live: !answer.canned });
+  return NextResponse.json({
+    reply: answer.text,
+    kind,
+    live: !answer.canned,
+    /* What he actually went and read. Shown under the reply, because an
+       assistant that quotes a rent should be able to say where it got it. */
+    steps: answer.steps,
+  });
 }

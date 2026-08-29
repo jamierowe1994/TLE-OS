@@ -92,6 +92,26 @@ export function refresh(key: string, rexUserId: string | null): Promise<Cached> 
 }
 
 /**
+ * The book for one scope, from cache when there is one.
+ *
+ * The route wants stale-while-revalidate manners and a `stale` flag to render;
+ * a caller that just needs the listings (the assistant's tools, say) wants the
+ * book and nothing else. Both go through the same two layers, so asking twice
+ * costs one REX fetch rather than two.
+ */
+export async function bookFor(rexUserId: string | null): Promise<ListingBook> {
+  const key = cacheKeyFor(rexUserId);
+  const held = await heldFor(key);
+  if (held && Date.now() - held.at < STALE_MS) {
+    /* Warm it behind them if it's going off, but answer from what we hold —
+       a person waiting on a reply should not pay for a book refresh. */
+    if (Date.now() - held.at >= FRESH_MS) void refresh(key, rexUserId);
+    return held.book;
+  }
+  return (await refresh(key, rexUserId)).book;
+}
+
+/**
  * Forget the book, everywhere, for everyone.
  *
  * Called after a write that changes what the book says about a listing. It

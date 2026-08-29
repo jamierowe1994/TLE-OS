@@ -4,6 +4,8 @@ import { hasDb, q } from "@/lib/db";
 import { listKnowledge } from "@/lib/business/knowledge-store";
 import { getBrief } from "@/lib/assistant-brief";
 import { systemMap } from "@/lib/system-map";
+import { labelFor, runTool, TOOL_SCHEMAS } from "@/lib/assistant-tools";
+import type { Scope } from "@/lib/scope";
 
 /**
  * The assistant's actual brain. Claude, over the knowledge we hold.
@@ -131,8 +133,36 @@ How to answer:
   rail is what they were already failing to navigate, so pointing at it by name
   and leaving them to find it is half an answer. Only ever use paths from the
   map; anything else is dropped, and an invented one would be a dead button.
-- You cannot change a record, send anything, or look anything up. You answer
-  questions and you can take somebody to the right screen.`;
+
+YOU CAN LOOK THINGS UP. You have tools that read the live system — properties,
+bedrooms and rents, landlords and their phone numbers, compliance, portal
+adverts, somebody's whole book. Use them.
+
+- If a question has a factual answer in the business, GO AND GET IT. Do not say
+  you cannot look something up, and do not answer a property question from
+  memory or from the general guidance. Reach for a tool first and answer from
+  what comes back.
+- When somebody names a property, call find_property before anything else. You
+  need its id, and the address they say out loud is rarely the address REX
+  holds — "Kenneth Close" is Kenneth Bradshaw Close, Coventry. If more than one
+  candidate comes back, ask which they meant. If none does, say so plainly and
+  say where else it might be.
+- CHAIN THE TOOLS. "How many bedrooms is X" is find_property then
+  property_detail, in one go, without asking permission in between. Somebody
+  mid-task does not want to be asked whether you may look.
+- A tool that returns "not recorded in REX" has given you a real answer: the
+  business does not hold that fact. Say that. It is genuinely useful and it is
+  the opposite of a guess. Never fill the gap yourself — bedrooms are missing
+  from most of the book, and an invented bedroom count on a live advert is far
+  worse than an honest blank.
+- A tool that returns an error, or a note, is telling you something the person
+  needs to hear. Pass it on in your own words rather than swallowing it.
+
+WHAT YOU STILL CANNOT DO. You cannot change a record, send an email, or write
+anything back to REX. That is not squeamishness, it is that those have no undo
+and you are one misheard address away from mailing the wrong landlord. If
+somebody asks you to send or change something, say plainly that you can't do it
+yet, tell them the screen where they can, and link it.`;
 
   const blocks: Anthropic.TextBlockParam[] = [{ type: "text", text: persona }];
 
@@ -256,19 +286,85 @@ export interface Answer {
   outTokens: number;
   /** True when the cap or the missing key answered instead of Claude. */
   canned: boolean;
+  /** What he actually went and read, in order, for the widget and the log. */
+  steps: string[];
 }
 
 /**
- * Ask. Returns the whole answer — this is a two-sentence help reply, not an
- * essay, so streaming would add plumbing for no perceptible gain.
+ * How many times round the tool loop before we stop him.
+ *
+ * Six is enough for find → detail → contacts → compliance with room to spare,
+ * and it is a backstop rather than a budget: the token cap below is the real
+ * ceiling. It exists because a model that misreads a tool error can otherwise
+ * retry the same call until the cap notices, and the cap is counted in output
+ * tokens, which a tight loop of small calls burns slowly.
  */
-export async function ask(history: Turn[], question: string): Promise<Answer> {
+const MAX_TOOL_ROUNDS = 6;
+
+/** Where the caller is and what they have open, so "this property" resolves. */
+export interface AskContext {
+  scope: Scope;
+  path: string | null;
+  openListingId: string | null;
+}
+
+/**
+ * The screen context, as a message rather than a system block.
+ *
+ * It CANNOT go in the system prompt. That prompt is one cached prefix and this
+ * changes on every message — interpolating it would invalidate the cache on
+ * every single request and quietly multiply the bill, which is the exact trap
+ * the header of this file warns about. As a leading user-turn note it sits
+ * after the breakpoint, changes freely, and costs nothing.
+ */
+function contextNote(ctx: AskContext): string | null {
+  const bits: string[] = [];
+  if (ctx.path) bits.push(`They are on the ${ctx.path} screen.`);
+  if (ctx.openListingId) {
+    bits.push(
+      `They have listing ${ctx.openListingId} open in front of them. If they say "this property", "it", or "here", that is the one — use that id directly and do not ask them which property they mean.`
+    );
+  }
+  bits.push(
+    ctx.scope.everything
+      ? "They can see the whole business."
+      : `You are answering as ${ctx.scope.label || "them"}, and may only use their own properties.`
+  );
+  return bits.length ? `[Context, not from them: ${bits.join(" ")}]` : null;
+}
+
+/**
+ * Ask, with tools.
+ *
+ * ── Why this is a hand-written loop ──────────────────────────────────────
+ *
+ * The SDK ships a tool runner that would drive this for us. Three things kept
+ * it hand-written, and if any of them stops being true, switch:
+ *
+ *   • The daily cap has to be re-checked BETWEEN rounds. A tool loop makes N
+ *     model calls per question, and the old code checked the ceiling once,
+ *     before the first. Left alone, one question could spend several replies'
+ *     worth of tokens past a cap that thinks it is holding.
+ *   • Every round's usage has to be ACCUMULATED. The route logs one number per
+ *     turn; reporting only the last call's usage would under-report the spend
+ *     the cap is counted from, so the meter would drift low forever.
+ *   • The widget shows what he is doing. The steps come out of this loop.
+ *
+ * Streaming is still not worth it: the visible reply is two or three sentences
+ * and the wait is the lookups, which the step labels already narrate.
+ */
+export async function ask(
+  history: Turn[],
+  question: string,
+  ctx: AskContext
+): Promise<Answer> {
   if (!assistantConfigured()) {
     return {
       text: "I can't answer on my own yet — your question has gone to James, and the answers become the help centre.",
       inTokens: 0,
       outTokens: 0,
       canned: true,
+      steps: [],
     };
   }
 
@@ -281,40 +377,101 @@ export async function ask(history: Turn[], question: string): Promise<Answer> {
       inTokens: 0,
       outTokens: 0,
       canned: true,
+      steps: [],
     };
   }
 
   const client = new Anthropic();
+  const note = contextNote(ctx);
   const messages: Anthropic.MessageParam[] = [
     ...history.slice(-10).map((t) => ({ role: t.role, content: t.text })),
-    { role: "user" as const, content: question },
+    { role: "user" as const, content: note ? `${note}\n\n${question}` : question },
   ];
 
-  const res = await client.messages.create({
-    model: MODEL,
-    /* Short answers by design, and a hard stop well under the remaining
-       budget so one reply can never blow the day's cap on its own. */
-    max_tokens: Math.min(700, Math.max(120, b.left)),
-    /* Low effort on purpose. This is lookup-and-summarise over material we
-       already hold, not reasoning — higher effort would spend more and answer
-       no better. */
-    output_config: { effort: "low" },
-    system: await systemBlocks(),
-    messages,
-  });
+  const system = await systemBlocks();
+  const steps: string[] = [];
+  let inTokens = 0;
+  let outTokens = 0;
+  let spent = 0;
 
-  const text = houseStyle(
-    res.content
-      .filter((c): c is Anthropic.TextBlock => c.type === "text")
-      .map((c) => c.text)
-      .join("\n")
-      .trim()
-  );
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    /* The ceiling, re-read every round against what THIS turn has already
+       spent. Without the running subtraction a single question could walk
+       straight past a cap that was true when it started. */
+    const left = b.left - spent;
+    if (left <= 0) {
+      steps.push("Stopped — daily budget reached");
+      break;
+    }
 
+    const res = await client.messages.create({
+      model: MODEL,
+      max_tokens: Math.min(1200, Math.max(200, left)),
+      /* Medium, not low. Low is explicitly "fewer and more consolidated tool
+         calls" — the right setting when there was nothing to call and the
+         wrong one now: it produced an assistant that would rather answer from
+         memory than go and look. */
+      output_config: { effort: "medium" },
+      system,
+      tools: TOOL_SCHEMAS,
+      messages,
+    });
+
+    inTokens += res.usage.input_tokens + (res.usage.cache_read_input_tokens ?? 0);
+    outTokens += res.usage.output_tokens;
+    spent += res.usage.output_tokens;
+
+    const calls = res.content.filter(
+      (c): c is Anthropic.ToolUseBlock => c.type === "tool_use"
+    );
+    if (!calls.length || res.stop_reason !== "tool_use") {
+      const text = houseStyle(
+        res.content
+          .filter((c): c is Anthropic.TextBlock => c.type === "text")
+          .map((c) => c.text)
+          .join("\n")
+          .trim()
+      );
+      return {
+        text: text || "I couldn't put an answer together for that one — it's gone to James.",
+        inTokens,
+        outTokens,
+        canned: false,
+        steps,
+      };
+    }
+
+    /* The whole assistant turn goes back, tool_use blocks included — dropping
+       them breaks the pairing and the next request is rejected. */
+    messages.push({ role: "assistant", content: res.content });
+
+    const results: Anthropic.ToolResultBlockParam[] = [];
+    for (const call of calls) {
+      const input = (call.input ?? {}) as Record<string, unknown>;
+      steps.push(labelFor(call.name, input));
+      const out = await runTool(call.name, input, {
+        scope: ctx.scope,
+        path: ctx.path,
+        openListingId: ctx.openListingId,
+      });
+      results.push({
+        type: "tool_result",
+        tool_use_id: call.id,
+        content: JSON.stringify(out),
+      });
+    }
+    /* Every result in ONE user message. Splitting them across several teaches
+       him not to ask for things in parallel again. */
+    messages.push({ role: "user", content: results });
+  }
+
+  /* Ran out of rounds with tools still pending. Say so rather than returning
+     an empty bubble that reads as a crash. */
   return {
-    text: text || "I couldn't put an answer together for that one — it's gone to James.",
-    inTokens: res.usage.input_tokens + (res.usage.cache_read_input_tokens ?? 0),
-    outTokens: res.usage.output_tokens,
+    text: "I went round in circles on that one and stopped rather than keep going. Ask me again, or a bit more specifically.",
+    inTokens,
+    outTokens,
     canned: false,
+    steps,
   };
 }
