@@ -178,9 +178,15 @@ function shell(opts: {
 
             <p style="margin:26px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.6;color:#78716c;background-color:#ffffff">${esc(opts.footnote)}</p>
 
-            <!-- The raw link. Kept because a button that does not survive a
-                 corporate mail rewriter leaves somebody with nothing. -->
-            <p style="margin:14px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#a8a29e;background-color:#ffffff;word-break:break-all">${safe}</p>
+            <!-- The raw link used to sit here as a fallback for corporate mail
+                 rewriters that mangle the button. James took it out on 29 Aug:
+                 it is the ugliest thing on an otherwise clean page, and a long
+                 token-bearing URL printed under a button reads like the phishing
+                 it is trying not to be.
+
+                 It is NOT lost. The plain-text alternative carries the link in
+                 full, which is what a text-only reader gets and what most
+                 rewriters fall back to. -->
 
           </td>
         </tr>
