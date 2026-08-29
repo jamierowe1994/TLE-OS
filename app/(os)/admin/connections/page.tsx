@@ -63,15 +63,21 @@ export default function AdminConnections() {
        whole deal pipeline and its absence is the loudest: with it unset the
        pre-tenancy board is empty and says so, which is how this omission was
        found — by reading a banner on Kirstie's screen rather than the page
-       whose job this is. The variable names are stated because both are
-       required and either one missing produces the identical empty board. */
+       whose job this is.
+
+       BOTH naming schemes are listed, and that matters. lib/business/propoly
+       reads PROPOLY_API_KEY ?? PROPOLY_PASSWORD and PROPOLY_AGENT_NAME ??
+       PROPOLY_USERNAME, because the Railway variables predate our seeing the
+       real header names. Naming only the newer pair sent James looking for two
+       variables he does not have and never needed — the older pair he already
+       uses on the portal works exactly as well. */
     [
       "Propoly (deals)",
       Boolean(h.propoly?.configured),
       h.propoly
         ? h.propoly.configured
           ? "Connected · the pre-tenancy board has its deals"
-          : "Not connected — needs PROPOLY_API_KEY and PROPOLY_AGENT_NAME. Kirstie's board is empty until both are set."
+          : "Not connected — needs a key and an agent name: either PROPOLY_API_KEY + PROPOLY_AGENT_NAME, or the older PROPOLY_PASSWORD + PROPOLY_USERNAME. Kirstie's board stays empty until both are set."
         : "This deploy of the API predates the check.",
     ],
     [

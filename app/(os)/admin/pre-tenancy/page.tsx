@@ -596,7 +596,11 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col px-5 pt-4 sm:px-8">
+      {/* Left padding is 12px so the rail sits exactly where the home page's
+          does — Shell pins that one with `ml-3`, and "nearly the same margin"
+          is the thing that makes a screen feel like a different product. The
+          right stays roomy: only the rail has to line up with anything. */}
+      <div className="flex min-h-0 flex-1 flex-col pl-3 pr-5 pt-4 sm:pr-8">
         {!configured ? (
           <div className="card p-6 text-sm text-muted">
             Propoly isn&apos;t connected yet — the deal board appears as soon as the
@@ -633,29 +637,49 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
               const activeT = t.key === activeTab.key;
               const v = stageVisual(t.key);
               return (
+                /**
+                 * The same nav item the home page draws, not a cousin of it.
+                 *
+                 * James, 29 Aug: "look at the icons and the Holding fee text.
+                 * Can you please replicate more similarly what we have in the
+                 * actual navigation bar for the home page? Same size and icon
+                 * likeness."
+                 *
+                 * Matched to NavLink in components/Shell.tsx, item for item:
+                 * rounded-xl px-3 py-2.5, the `hand` face at 13.5px, and a 17px
+                 * doodle rather than 26px. The old icon was half again too big
+                 * and the label a size up and bold, which is what made a rail
+                 * of eight stages read as a menu of buttons instead of a
+                 * sidebar — and what pushed "Tenancy agreement" into an
+                 * ellipsis at this width.
+                 *
+                 * Active is the soft tint the rest of the OS uses, not a
+                 * bordered box: highlight by reducing contrast, not adding it.
+                 * The icon takes the accent when active exactly as NavLink's
+                 * does, which is the "likeness" the rail was missing.
+                 *
+                 * The count stays. The home rail has nothing to count; this one
+                 * is a pipeline and the number IS the information.
+                 */
                 <button
                   type="button"
                   onClick={() => setTab(t.key)}
-                  className={`relative flex w-full items-center gap-3 rounded-xl border px-3 py-3 text-left transition ${
+                  className={`hand relative flex w-full items-center rounded-xl px-3 py-2.5 text-left text-[13.5px] transition-colors ${
                     activeT
-                      ? "border-black/30 text-ink"
-                      : "border-transparent text-muted hover:border-line hover:text-ink"
+                      ? "bg-accent-soft/50 font-medium text-ink"
+                      : "text-muted hover:bg-page hover:text-ink"
                   }`}
                 >
-                  {/* No chip behind the icon — the doodle carries itself, and
-                      at this size a tinted square just boxes it in. Ink, not
-                      accent: eight red doodles down one edge fight the page,
-                      and red now means "needs a look" (the movement dot) and
-                      nothing else. */}
-                  <span className="relative shrink-0 text-ink">
-                    <StageIcon stageKey={t.key} size={26} />
+                  <span className={`relative shrink-0 ${activeT ? "text-accent-dark" : "text-muted"}`}>
+                    <StageIcon stageKey={t.key} size={17} />
                     <MovementDot kind={t.movement} className="absolute -right-1 -top-1 ring-2 ring-page" />
                   </span>
-                  <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{t.label}</span>
-                  <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${activeT ? "bg-ink/10 text-ink" : "text-muted"}`}>
+                  <span className="ml-3 min-w-0 flex-1 truncate">{t.label}</span>
+                  <span
+                    className={`ml-2 shrink-0 text-[11px] ${activeT ? "text-accent-dark" : "text-muted"}`}
+                  >
                     {t.deals.length}
                   </span>
-
                 </button>
               );
             };
@@ -967,7 +991,12 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
            Tasks moved here out of the header, and move-ins joined it. Both
            counts come from data already on the page, so the dock costs no
            extra fetch. */}
-      <div className="fixed bottom-4 right-4 z-40 flex items-center gap-2 print:hidden">
+      {/* LEFT, not right. The help character is fixed to the bottom-right at
+          z-190 and was sitting on top of these two — hers are z-40, so the
+          assistant won every time and covered the chip. Moving the dock is the
+          safer half of that fix: the character is on every screen in the OS and
+          these two buttons are on one. */}
+      <div className="fixed bottom-4 left-4 z-40 flex items-center gap-2 print:hidden">
         <button
           type="button"
           onClick={() => setMoveInsOpen(true)}
