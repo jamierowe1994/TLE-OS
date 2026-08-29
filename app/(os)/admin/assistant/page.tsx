@@ -153,8 +153,8 @@ export default function AssistantConsole() {
   return (
     <>
       <PageHeader
-        title="Assistant"
-        blurb="What people have asked him, and what he can answer for himself."
+        title="Steve"
+        blurb="What people have asked Steve, and what he can answer for himself."
       />
 
       <section className="fade-up mt-8 flex flex-wrap items-center gap-5 rounded-2xl border border-line/70 bg-panel p-5">
@@ -361,7 +361,7 @@ export default function AssistantConsole() {
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="text-[11.5px] text-muted">
-                    {l.role === "agent" ? l.userEmail : "Assistant"}
+                    {l.role === "agent" ? l.userEmail : "Steve"}
                     {l.kind !== "ask" ? ` · ${l.kind.replace("onboarding-", "intro: ")}` : ""}
                     {l.path ? ` · ${l.path}` : ""}
                   </span>

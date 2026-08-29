@@ -408,9 +408,9 @@ export default function AssistantCharacter({
       fill="none"
       role="img"
       aria-label={
-        mood === "thinking" ? "Assistant, thinking"
-        : mood === "asleep" ? "Assistant, idle"
-        : "Assistant"
+        mood === "thinking" ? "Steve, thinking"
+        : mood === "asleep" ? "Steve, idle"
+        : "Steve"
       }
       className={className}
       style={{ overflow: "visible" }}

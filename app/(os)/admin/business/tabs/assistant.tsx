@@ -75,7 +75,7 @@ export default function AssistantTab({ month }: { month: string }) {
         return [data.entry!, ...others];
       });
       startNew();
-      setNotice("Saved — the assistant knows it already.");
+      setNotice("Saved — Steve knows it already.");
     } catch (e) {
       setNotice(e instanceof Error ? e.message : "Couldn't save.");
     } finally {
@@ -84,7 +84,7 @@ export default function AssistantTab({ month }: { month: string }) {
   }
 
   async function remove(entry: KnowledgeEntry) {
-    if (!window.confirm(`Delete "${entry.title}"? The assistant will forget it immediately.`)) {
+    if (!window.confirm(`Delete "${entry.title}"? Steve will forget it immediately.`)) {
       return;
     }
     const res = await fetch(`/api/business/knowledge?id=${encodeURIComponent(entry.id)}`, {
@@ -114,9 +114,9 @@ export default function AssistantTab({ month }: { month: string }) {
   return (
     <div className="space-y-6">
       <div className="card p-5">
-        <h2 className="text-sm font-semibold">The assistant&rsquo;s briefing library</h2>
+        <h2 className="text-sm font-semibold">Steve&rsquo;s briefing library</h2>
         <p className="mt-1 max-w-2xl text-[13px] text-muted">
-          Everything saved here is handed to the TLE Assistant on the agents&rsquo;
+          Everything saved here is handed to Steve on the agents&rsquo;
           dashboard, alongside their live figures. Add fee structures, processes,
           policies, FAQs — anything you&rsquo;d want it to answer with. Changes take
           effect on the very next question.
@@ -151,7 +151,7 @@ export default function AssistantTab({ month }: { month: string }) {
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="The information itself — plain text. The assistant quotes and references this at will."
+            placeholder="The information itself — plain text. Steve quotes and references this at will."
             rows={12}
             className="mt-2 w-full resize-y rounded-lg border border-line bg-white px-3 py-2 text-[13px] leading-relaxed outline-none transition focus:border-black/25"
           />
@@ -200,7 +200,7 @@ export default function AssistantTab({ month }: { month: string }) {
             <p className="mt-3 text-[13px] text-red-600">{error}</p>
           ) : entries.length === 0 ? (
             <p className="mt-3 text-[13px] text-muted">
-              Nothing yet — the assistant currently only knows the agents&rsquo; figures.
+              Nothing yet — Steve currently only knows the agents&rsquo; figures.
               Add your first entry on the left.
             </p>
           ) : (

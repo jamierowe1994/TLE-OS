@@ -169,7 +169,7 @@ export default function HelpDock() {
 
     if (r && !r.onboarded) {
       setStage("onboarding-name");
-      setLines([...history, { role: "assistant", text: "Hello — I don't think we've met. What should I call you?" }]);
+      setLines([...history, { role: "assistant", text: "Hello — I'm Steve. I don't think we've met. What should I call you?" }]);
     } else {
       setStage("ask");
       setLines(
@@ -294,8 +294,8 @@ export default function HelpDock() {
       <button
         type="button"
         onClick={toggle}
-        title="Help and feedback"
-        aria-label="Help and feedback"
+        title="Steve — help and feedback"
+        aria-label="Steve — help and feedback"
         aria-expanded={open}
         data-hide-from-shot
         className="fixed bottom-2 right-3 z-[190] text-ink transition-transform hover:scale-105 active:scale-95"
@@ -384,7 +384,7 @@ export default function HelpDock() {
                           ? "Your name"
                           : stage === "onboarding-help"
                             ? "What you'd like a hand with"
-                            : "Ask me anything…"
+                            : "Ask Steve anything…"
                       }
                       className="min-w-0 flex-1 rounded-lg border border-line/80 bg-box px-2.5 py-2 text-[12.5px]"
                     />

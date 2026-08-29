@@ -91,7 +91,7 @@ const GROUPS: Array<{
       { href: "/admin/emails", label: "Emails", needs: "see:business" },
       /* Where James feeds the assistant. The agent-facing side of it lives in
          the help panel; this is the console behind it. */
-      { href: "/admin/assistant", label: "Assistant", needs: "see:reports" },
+      { href: "/admin/assistant", label: "Steve", needs: "see:reports" },
     ],
   },
 ];

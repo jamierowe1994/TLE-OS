@@ -383,7 +383,7 @@ export default function PreLaunch() {
         <h2 className="text-[15px]">What they&apos;ve found</h2>
         {d.bugs.length === 0 ? (
           <p className="mt-2 text-[12.5px] text-muted">
-            Nothing reported yet. The assistant sits in the bottom-right of every screen; feedback given through him lands here.
+            Nothing reported yet. Steve sits in the bottom-right of every screen; feedback given through him lands here.
           </p>
         ) : (
           <ul className="mt-3 space-y-2">
