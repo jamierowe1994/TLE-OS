@@ -25,10 +25,137 @@ export interface VerifyEmail {
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+/**
+ * Where the pictures live.
+ *
+ * Absolute, always. A relative src in an email resolves against the mail
+ * client's own origin and simply never loads — there is no page for it to be
+ * relative to.
+ */
+const ORIGIN = (process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/, "");
+
+/**
+ * The shell both account emails sit in.
+ *
+ * ── Why it looks like this ────────────────────────────────────────────────
+ *
+ * James, 29 Aug, pointing at Anthropic's own sign-in email: "very simple, very
+ * clean, and very to the point... I also quite enjoy the hierarchy." So:
+ * centred, one column, a wordmark, a picture, one big line, one small line,
+ * one button, and nothing else competing with it.
+ *
+ * ── Three things email cannot do, and what happens instead ────────────────
+ *
+ * 1. WEBFONTS. Gmail and Outlook strip @font-face, so the handwriting face
+ *    cannot be delivered. The wordmark asks for Shantell Sans and falls
+ *    through a stack of script faces that are actually installed — Bradley
+ *    Hand on Mac and iPhone, Segoe Script on Windows — then to cursive. It
+ *    will look right on Apple Mail and merely tidy elsewhere. The only way to
+ *    guarantee it everywhere is a PNG of the words, which is worth doing once
+ *    the wordmark is drawn properly.
+ * 2. ANIMATION. CSS keyframes do not run, and Outlook shows only the first
+ *    frame of a GIF. A still line drawing is the honest version of "a little
+ *    animation" here; anything else looks broken in the client that matters
+ *    most to a new starter opening it on a work laptop.
+ * 3. SVG. Outlook will not render it at all, so every image is a PNG.
+ *
+ * ── The dark-mode fixes are not decoration ────────────────────────────────
+ *
+ * MEASURED, on the first email this domain ever sent. James read it in Outlook
+ * dark mode and it came back half-inverted: a white band behind the heading, a
+ * brown block behind the bullets, dark text on dark in places.
+ *
+ * Outlook's dark mode does not ask permission. It rewrites colours on any
+ * element that has not claimed one, and the result is unpredictable rather
+ * than merely dark. Three things stop it, and all three are still needed:
+ *
+ *   1. `color-scheme` / `supported-color-schemes` meta.
+ *   2. A TABLE with a real `bgcolor` attribute, not a div. Outlook honours the
+ *      attribute where it ignores the CSS.
+ *   3. `background-color` stated on every block that has text in it. An
+ *      element with a colour but no background is exactly what gets inverted.
+ *
+ * This is the first thing a new starter sees. One that arrives looking broken
+ * is one nobody clicks.
+ */
+function shell(opts: {
+  heading: string;
+  intro: string;
+  button: string;
+  link: string;
+  /** The quiet paragraph under the button. */
+  footnote: string;
+}): string {
+  const safe = esc(opts.link);
+  return `
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<meta name="supported-color-schemes" content="light">
+</head>
+<body style="margin:0;padding:0;background-color:#f5f5f4">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f5f5f4" style="background-color:#f5f5f4;margin:0;padding:0">
+  <tr>
+    <td align="center" style="padding:40px 12px">
+      <table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff;width:520px;max-width:100%;border-radius:14px;border:1px solid #e7e5e4">
+        <tr>
+          <td align="center" style="padding:38px 34px 34px;background-color:#ffffff">
+
+            <!-- Wordmark. Script stack, because the real face cannot travel. -->
+            <p style="margin:0;font-family:'Shantell Sans','Bradley Hand','Segoe Script','Brush Script MT',cursive;font-size:27px;line-height:1.1;color:#1c1917;background-color:#ffffff">TLE&nbsp;OS</p>
+
+            <!-- The picture. PNG, because Outlook will not draw an SVG. -->
+            <img src="${ORIGIN}/illustrations/buildings-street.png" width="260" alt=""
+                 style="display:block;margin:26px auto 0;width:260px;max-width:80%;height:auto;border:0;outline:none;text-decoration:none">
+
+            <p style="margin:30px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:23px;line-height:1.25;font-weight:700;color:#1c1917;background-color:#ffffff">${esc(opts.heading)}</p>
+
+            <p style="margin:12px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14.5px;line-height:1.55;color:#57534e;background-color:#ffffff">${esc(opts.intro)}</p>
+
+            <!-- Black, not the brand red: it is the only thing to press. -->
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:26px auto 0">
+              <tr>
+                <td bgcolor="#000000" style="background-color:#000000;border-radius:9px">
+                  <a href="${safe}" style="display:inline-block;padding:13px 30px;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14.5px;font-weight:600;color:#ffffff;text-decoration:none;background-color:#000000;border-radius:9px">${esc(opts.button)}</a>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin:26px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.6;color:#78716c;background-color:#ffffff">${esc(opts.footnote)}</p>
+
+            <!-- The raw link. Kept because a button that does not survive a
+                 corporate mail rewriter leaves somebody with nothing. -->
+            <p style="margin:14px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.5;color:#a8a29e;background-color:#ffffff;word-break:break-all">${safe}</p>
+
+          </td>
+        </tr>
+      </table>
+
+      <!-- Footer, outside the card. -->
+      <table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" style="width:520px;max-width:100%">
+        <tr>
+          <td align="center" style="padding:22px 34px 0">
+            <p style="margin:0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:11.5px;letter-spacing:0.04em;color:#a8a29e">
+              Instagram &nbsp;·&nbsp; Facebook &nbsp;·&nbsp; LinkedIn
+            </p>
+            <p style="margin:12px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:12px;color:#78716c">The Lettings Experts</p>
+          </td>
+        </tr>
+      </table>
+
+    </td>
+  </tr>
+</table>
+</body>
+</html>`.trim();
+}
+
 export function verifyEmailFor(link: string): VerifyEmail {
-  const safe = esc(link);
   const text = [
-    "Setting up your TLE OS account",
+    "Set up your TLE OS account",
     "",
     "Open the link below to confirm this address and choose your password.",
     "",
@@ -40,80 +167,22 @@ export function verifyEmailFor(link: string): VerifyEmail {
     "If you weren't expecting this, ignore it — nothing happens until the link is opened.",
   ].join("\n");
 
-  /* ── Why this is a table, and why every colour is stated twice ───────────
-     MEASURED, on the first email this domain ever sent. James read it in
-     Outlook dark mode and it came back half-inverted: a white band behind the
-     heading, a brown block behind the bullets, dark text on dark in places.
-
-     Outlook's dark mode does not ask permission. It rewrites colours on any
-     element that has not claimed one, and the result is unpredictable rather
-     than merely dark. Three things stop it, and all three are needed:
-
-       1. `color-scheme` / `supported-color-schemes` meta — declares that this
-          message is designed for light and should be left alone.
-       2. A TABLE with a real `bgcolor` attribute, not a div. Outlook honours
-          the attribute where it ignores the CSS.
-       3. `background-color` stated on every block that has text in it. An
-          element with a colour but no background is exactly what gets
-          inverted, which is how you end up with #1c1917 on near-black.
-
-     This matters more than it sounds: the verification email is the first
-     thing a new starter sees, and one that arrives looking broken is one
-     nobody clicks. Susan should not have to squint at a link to decide
-     whether it is real. */
-  const html = `
-<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="color-scheme" content="light">
-<meta name="supported-color-schemes" content="light">
-</head>
-<body style="margin:0;padding:0;background-color:#f5f5f4">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f5f5f4" style="background-color:#f5f5f4;margin:0;padding:0">
-  <tr>
-    <td align="center" style="padding:24px 12px">
-      <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff;width:560px;max-width:100%;border-radius:12px;border:1px solid #e7e5e4">
-        <tr>
-          <td style="padding:28px 26px;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1c1917;background-color:#ffffff">
-            <p style="font-size:19px;margin:0 0 18px;color:#1c1917;background-color:#ffffff">Setting up your TLE OS account</p>
-            <p style="margin:0 0 18px;color:#1c1917;background-color:#ffffff">Open the link below to confirm this address and choose your password.</p>
-            <p style="margin:0 0 22px;background-color:#ffffff">
-              <a href="${safe}" style="display:inline-block;background-color:#7f1d1d;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600">Confirm and set a password</a>
-            </p>
-            <p style="margin:0 0 18px;font-size:13px;color:#57534e;background-color:#ffffff">
-              If the button doesn't work, paste this into your browser:<br>
-              <span style="word-break:break-all;color:#57534e">${safe}</span>
-            </p>
-            <p style="margin:0 0 18px;font-size:13px;color:#57534e;background-color:#ffffff">The link works once and lasts 24 hours.</p>
-            <hr style="border:none;border-top:1px solid #e7e5e4;margin:22px 0">
-            <p style="margin:0;font-size:12.5px;color:#57534e;background-color:#ffffff">
-              We'll never email you a password, and nobody here can see the one you choose.
-              If you weren't expecting this, ignore it &mdash; nothing happens until the link is opened.
-            </p>
-          </td>
-        </tr>
-      </table>
-      <p style="margin:14px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:11.5px;color:#78716c">The Letting Experts</p>
-    </td>
-  </tr>
-</table>
-</body>
-</html>`.trim();
-
-  return { subject: "Confirm your TLE OS account", html, text };
+  return {
+    subject: "Confirm your TLE OS account",
+    text,
+    html: shell({
+      heading: "Set up your account",
+      intro:
+        "Click the button below to confirm this address and choose your password. The link works once and lasts 24 hours.",
+      button: "Set your password",
+      link,
+      footnote:
+        "We'll never email you a password, and nobody here can see the one you choose. If you weren't expecting this, you can safely ignore it — nothing happens until the link is opened.",
+    }),
+  };
 }
 
-/**
- * The forgotten-password email.
- *
- * Same shell as the verification email — the dark-mode fixes are not optional
- * here either — but the words matter more. A reset email arriving unrequested
- * is the one that makes somebody think they have been hacked, so it says
- * plainly that nothing has changed yet and that ignoring it is enough.
- */
 export function resetEmailFor(link: string): VerifyEmail {
-  const safe = esc(link);
   const text = [
     "Setting a new TLE OS password",
     "",
@@ -127,45 +196,20 @@ export function resetEmailFor(link: string): VerifyEmail {
     "nothing happens until the link is opened.",
   ].join("\n");
 
-  const html = `
-<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="color-scheme" content="light">
-<meta name="supported-color-schemes" content="light">
-</head>
-<body style="margin:0;padding:0;background-color:#f5f5f4">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f5f5f4" style="background-color:#f5f5f4;margin:0;padding:0">
-  <tr>
-    <td align="center" style="padding:24px 12px">
-      <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff;width:560px;max-width:100%;border-radius:12px;border:1px solid #e7e5e4">
-        <tr>
-          <td style="padding:28px 26px;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55;color:#1c1917;background-color:#ffffff">
-            <p style="font-size:19px;margin:0 0 18px;color:#1c1917;background-color:#ffffff">Setting a new TLE OS password</p>
-            <p style="margin:0 0 18px;color:#1c1917;background-color:#ffffff">Open the link below to choose a new one.</p>
-            <p style="margin:0 0 22px;background-color:#ffffff">
-              <a href="${safe}" style="display:inline-block;background-color:#7f1d1d;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600">Choose a new password</a>
-            </p>
-            <p style="margin:0 0 18px;font-size:13px;color:#57534e;background-color:#ffffff">
-              If the button doesn't work, paste this into your browser:<br>
-              <span style="word-break:break-all;color:#57534e">${safe}</span>
-            </p>
-            <p style="margin:0 0 18px;font-size:13px;color:#57534e;background-color:#ffffff">The link works once and lasts an hour.</p>
-            <hr style="border:none;border-top:1px solid #e7e5e4;margin:22px 0">
-            <p style="margin:0;font-size:12.5px;color:#57534e;background-color:#ffffff">
-              If you didn't ask for this, ignore it. Your password has not changed, and
-              nothing happens until the link is opened.
-            </p>
-          </td>
-        </tr>
-      </table>
-      <p style="margin:14px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:11.5px;color:#78716c">The Letting Experts</p>
-    </td>
-  </tr>
-</table>
-</body>
-</html>`.trim();
-
-  return { subject: "Set a new TLE OS password", html, text };
+  return {
+    subject: "Set a new TLE OS password",
+    text,
+    /* Same shell, different words. A reset arriving unrequested is the one
+       that makes somebody think they have been hacked, so the quiet line says
+       plainly that nothing has changed yet and that ignoring it is enough. */
+    html: shell({
+      heading: "Set a new password",
+      intro:
+        "Click the button below to choose a new password. The link works once and lasts an hour.",
+      button: "Choose a new password",
+      link,
+      footnote:
+        "If you didn't ask for this, you can safely ignore it. Your password has not changed, and nothing happens until the link is opened.",
+    }),
+  };
 }
