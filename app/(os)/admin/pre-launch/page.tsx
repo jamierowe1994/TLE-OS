@@ -66,6 +66,13 @@ export default function PreLaunch() {
      and one shared dropdown would quietly apply the last choice to everybody. */
   const [roles, setRoles] = useState<Record<string, string>>({});
 
+  /* Somebody who is not a lettings agent. The candidate list is built from
+     REX, so marketing, ops and anyone at head office simply never appear in
+     it — and the first person we actually wanted to invite, Francesca in
+     marketing, could not be reached from this screen at all. The API already
+     accepted any address; only the UI insisted on a roster. */
+  const [manual, setManual] = useState({ name: "", email: "", role: "support" });
+
   const load = useCallback(() => {
     fetch("/api/admin/pilot")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("no"))))
@@ -87,6 +94,24 @@ export default function PreLaunch() {
     const j = (await r.json()) as { ok?: boolean; message?: string; error?: string };
     setBusy(null);
     setFlash(j.ok ? (j.message ?? "Done.") : (j.error ?? "That didn't work."));
+    load();
+  }
+
+  async function inviteManual(send: boolean) {
+    const email = manual.email.trim();
+    if (!email.includes("@")) return setFlash("That doesn't look like an email address.");
+    setBusy(email);
+    const r = await fetch("/api/admin/pilot", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        email, name: manual.name.trim(), role: manual.role, send,
+      }),
+    });
+    const j = (await r.json()) as { ok?: boolean; message?: string; error?: string };
+    setBusy(null);
+    setFlash(j.ok ? (j.message ?? "Done.") : (j.error ?? "That didn't work."));
+    if (j.ok) setManual({ name: "", email: "", role: "support" });
     load();
   }
 
@@ -202,6 +227,57 @@ export default function PreLaunch() {
             </div>
           </div>
         )}
+
+        {/* Anyone not in REX. Same endpoint, same role rules, same one-time
+            link — the roster is a convenience, not the gate. */}
+        <div className="mt-3.5 rounded-xl border border-dashed border-line/70 p-3.5">
+          <p className="text-[12px] font-semibold">Someone not on the roster</p>
+          <p className="mt-0.5 text-[11px] leading-relaxed text-muted">
+            The list above comes from REX, so it is lettings agents only. Marketing, ops and
+            head office are invited from here.
+          </p>
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            <input
+              value={manual.name}
+              onChange={(e) => setManual((m) => ({ ...m, name: e.target.value }))}
+              placeholder="Name"
+              className="min-w-[140px] flex-1 rounded-lg border border-line bg-card px-2.5 py-1.5 text-[12px] outline-none focus:border-accent"
+            />
+            <input
+              value={manual.email}
+              onChange={(e) => setManual((m) => ({ ...m, email: e.target.value }))}
+              placeholder="name@thelettingexperts.co.uk"
+              className="min-w-[220px] flex-[2] rounded-lg border border-line bg-card px-2.5 py-1.5 text-[12px] outline-none focus:border-accent"
+            />
+            <select
+              value={manual.role}
+              onChange={(e) => setManual((m) => ({ ...m, role: e.target.value }))}
+              className="rounded-lg border border-line bg-card px-2 py-1.5 text-[11.5px] outline-none focus:border-accent"
+            >
+              <option value="agent">Agent</option>
+              <option value="support">Support</option>
+              <option value="developer">Developer</option>
+              <option value="super_admin">Super admin</option>
+              <option value="owner">Owner</option>
+            </select>
+            <button
+              type="button"
+              disabled={busy !== null || !manual.email.trim()}
+              onClick={() => void inviteManual(false)}
+              className="rounded-lg border border-line/80 px-3 py-1.5 text-[11.5px] disabled:opacity-40"
+            >
+              Add
+            </button>
+            <button
+              type="button"
+              disabled={busy !== null || !manual.email.trim()}
+              onClick={() => void inviteManual(true)}
+              className="rounded-lg border border-accent-dark/50 px-3 py-1.5 text-[11.5px] font-semibold text-accent-dark disabled:opacity-40"
+            >
+              Add and send
+            </button>
+          </div>
+        </div>
 
         <ul className="mt-3.5 space-y-2">
           {d.candidates.map((c) => (

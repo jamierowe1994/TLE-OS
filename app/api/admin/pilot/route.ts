@@ -41,8 +41,28 @@ export async function GET(req: NextRequest) {
     })
   );
 
+  /* Anyone invited who is NOT on the REX roster — marketing, ops, head
+     office. Without this they vanish the moment they are added: the list is
+     built from lettings agents, so an off-roster invite would be recorded,
+     emailed, and then invisible on the screen that sent it. */
+  const rosterEmails = new Set(roster.map((r) => r.email.toLowerCase()));
+  const offRoster = await Promise.all(
+    invited
+      .filter((i) => !rosterEmails.has(i.email.toLowerCase()))
+      .map(async (i) => ({
+        rexId: "",
+        name: i.name || i.email.split("@")[0],
+        email: i.email,
+        invited: true,
+        sentAt: i.sentAt,
+        role: i.role,
+        hasAccount: Boolean(await findUserByEmail(i.email)),
+        lastSeenAt: null as string | null,
+      }))
+  );
+
   return NextResponse.json({
-    candidates,
+    candidates: [...candidates, ...offRoster],
     usage: await tabUsage(),
     bugs: (await bugs(50)).filter((b) => b.state === "open" || b.state === "ack"),
   });
