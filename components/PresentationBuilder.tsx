@@ -204,6 +204,105 @@ export default function PresentationBuilder({
   }
   const keyOf = (l: { address: string; rent: number | null }) => `${l.address}|${l.rent}`;
 
+  /**
+   * The same filters, as pills that float over the map.
+   *
+   * Not a second set of state — the same `filters` and the same applyFilters,
+   * so the row above the page and the pills on the map can never disagree
+   * about what is being shown. Two controls for one value is how a screen
+   * starts lying to itself.
+   *
+   * Radius first and widest, because it is the one whose effect is VISIBLE
+   * here: move it and the ring on the map moves with it, which is the whole
+   * reason for putting these on the map rather than above it.
+   */
+  const pill =
+    "rounded-full border border-line/70 bg-page/95 px-3 py-1.5 text-[11.5px] shadow-sm backdrop-blur transition-colors hover:border-ink";
+  const mapControls = (
+    <>
+      <label className={`${pill} flex items-center gap-2`}>
+        <span className="text-muted">Within</span>
+        <input
+          type="range"
+          min={0}
+          max={10}
+          step={0.5}
+          value={filters.radius}
+          onChange={(e) => applyFilters({ ...filters, radius: Number(e.target.value) })}
+          className="w-24 accent-[#e31f36]"
+          aria-label="Search radius in miles"
+        />
+        <span className="tnum font-semibold">
+          {filters.radius ? `${filters.radius} mi` : "sector"}
+        </span>
+      </label>
+
+      <select
+        value={filters.beds}
+        onChange={(e) => applyFilters({ ...filters, beds: Number(e.target.value) })}
+        aria-label="Bedrooms"
+        className={pill}
+      >
+        <option value={0}>Any beds</option>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <option key={n} value={n}>
+            {n} bed
+          </option>
+        ))}
+      </select>
+
+      <select
+        value={filters.type}
+        onChange={(e) => applyFilters({ ...filters, type: e.target.value as "" | "H" | "F" })}
+        aria-label="Property type"
+        className={pill}
+      >
+        <option value="">Any type</option>
+        <option value="H">Houses</option>
+        <option value="F">Flats</option>
+      </select>
+
+      <span className={`${pill} flex items-center gap-1.5`}>
+        <span className="text-muted">£</span>
+        <input
+          type="number"
+          placeholder="min"
+          aria-label="Minimum rent"
+          value={filters.minRent || ""}
+          onChange={(e) => setFilters({ ...filters, minRent: Number(e.target.value) })}
+          onBlur={() => applyFilters(filters)}
+          className="w-14 bg-transparent text-[11.5px] outline-none"
+        />
+        <span className="text-muted">&ndash;</span>
+        <input
+          type="number"
+          placeholder="max"
+          aria-label="Maximum rent"
+          value={filters.maxRent || ""}
+          onChange={(e) => setFilters({ ...filters, maxRent: Number(e.target.value) })}
+          onBlur={() => applyFilters(filters)}
+          className="w-14 bg-transparent text-[11.5px] outline-none"
+        />
+      </span>
+
+      {(filters.radius || filters.beds || filters.type || filters.minRent || filters.maxRent) ? (
+        <button
+          type="button"
+          onClick={() => applyFilters({ radius: 0, beds: 0, minRent: 0, maxRent: 0, type: "" })}
+          className={`${pill} text-muted`}
+        >
+          Clear
+        </button>
+      ) : null}
+
+      {/* Said out loud, because a filtered map that is still fetching looks
+          exactly like a filtered map that found nothing. */}
+      {refiltering && (
+        <span className={`${pill} text-muted`}>Looking&hellip;</span>
+      )}
+    </>
+  );
+
   const available = useMemo(() => (d?.comparables ?? []).filter((c) => !c.letAgreed), [d]);
   const let_ = useMemo(() => (d?.comparables ?? []).filter((c) => c.letAgreed), [d]);
 
@@ -278,6 +377,11 @@ export default function PresentationBuilder({
                   property is in it. */}
               <div className="mb-3 rounded-xl border border-line/70 bg-box p-3">
                 <div className="flex flex-wrap items-end gap-3">
+                  {/* With the map open these same controls are floating ON the
+                      map, so showing them here as well would be two knobs for
+                      one value. The circle stays — it is how you get back. */}
+                  {!mapOpen && (
+                  <>
                   <label className="text-[11px]">
                     <span className="block text-[9.5px] uppercase tracking-wide text-muted">
                       How far out — {filters.radius ? `${filters.radius} miles` : d.sector}
@@ -325,6 +429,8 @@ export default function PresentationBuilder({
                         className="w-20 rounded-lg border border-line/80 bg-panel px-2 py-1.5 text-[12px]" />
                     </span>
                   </label>
+                  </>
+                  )}
                   {/* A CIRCLE SHOWING A MAP, not a button saying "Map".
                       James, 29 Aug: "rather than having a map button... could
                       we just show a little tiny map in there."
@@ -364,7 +470,7 @@ export default function PresentationBuilder({
                       Map
                     </span>
                   </button>
-                  {(filters.radius || filters.beds || filters.type || filters.minRent || filters.maxRent) ? (
+                  {!mapOpen && (filters.radius || filters.beds || filters.type || filters.minRent || filters.maxRent) ? (
                     <button type="button"
                       onClick={() => applyFilters({ radius: 0, beds: 0, minRent: 0, maxRent: 0, type: "" })}
                       className="rounded-lg border border-line/80 px-2.5 py-1.5 text-[11.5px] text-muted">
@@ -553,6 +659,8 @@ export default function PresentationBuilder({
                         listings={nearby}
                         centre={d.subjectPoint}
                         selected={pickedNearby}
+                        radiusMiles={filters.radius}
+                        controls={mapControls}
                         /* Clicking a price brings that card to the top of the
                            list so it can be read — the half of the old
                            behaviour that was actually useful. */

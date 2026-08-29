@@ -69,6 +69,7 @@ export default function MarketMap({
   onSelect,
   onOpen,
   radiusMiles = 0,
+  controls,
 }: {
   listings: MarketListing[];
   centre: { lat: number; lon: number } | null;
@@ -79,6 +80,14 @@ export default function MarketMap({
   onOpen?: (key: string) => void;
   /** Miles, or 0 for "the postcode sector". Drawn as a ring around the subject. */
   radiusMiles?: number;
+  /**
+   * Filters, floated over the top-left of the map.
+   *
+   * Passed IN rather than built here, because the filter state and the fetch
+   * that answers it live with the screen. The map owns where they sit, not
+   * what they are — it is a surface, not a form.
+   */
+  controls?: React.ReactNode;
 }) {
   const holder = useRef<HTMLDivElement | null>(null);
   const map = useRef<google.maps.Map | null>(null);
@@ -269,6 +278,16 @@ export default function MarketMap({
                 />
               ))}
             </span>
+          </div>
+        )}
+
+        {/* Over the map, top left — clear of the zoom buttons on the right.
+            Changing the radius here means watching the ring move rather than
+            reading a number and imagining it, which is the entire argument for
+            putting them on the map instead of above the page. */}
+        {ready && controls && (
+          <div className="pointer-events-none absolute left-3 top-3 z-[5] max-w-[calc(100%-5rem)]">
+            <div className="pointer-events-auto flex flex-wrap items-center gap-1.5">{controls}</div>
           </div>
         )}
 
