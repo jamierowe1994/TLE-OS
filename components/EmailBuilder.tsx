@@ -208,6 +208,9 @@ export default function EmailBuilder({
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
+  /* Shut on a phone so the first thing on screen is the email. The lg: rules
+     above ignore this entirely, so the desktop rail is never hidden. */
+  const [railOpen, setRailOpen] = useState(false);
 
   /* The drag itself lives in a ref, not state: dragover fires continuously and
      re-rendering the canvas under a live drag drops the drop. Only the
@@ -428,8 +431,8 @@ export default function EmailBuilder({
   const sel = getAt(blocks, selected);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-3 backdrop-blur-sm">
-      <div className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-line bg-panel shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-0 backdrop-blur-sm sm:p-3">
+      <div className="flex h-full w-full flex-col overflow-hidden border-line bg-panel shadow-2xl sm:rounded-2xl sm:border">
         {/* ── top ── */}
         <div className="flex flex-wrap items-center gap-3 border-b border-line/70 px-4 py-3">
           <div className="min-w-0">
@@ -441,6 +444,13 @@ export default function EmailBuilder({
             </p>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setRailOpen((o) => !o)}
+              className="rounded-lg border border-line/70 px-2.5 py-1.5 text-[11.5px] hover:border-ink/30 lg:hidden"
+            >
+              {railOpen ? "Hide tools" : "Add & edit"}
+            </button>
             <button
               type="button"
               onClick={revert}
@@ -467,11 +477,20 @@ export default function EmailBuilder({
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1">
+        {/* ── Stacked on a phone, side by side from lg.
+            The EMAIL is first in the flow on a narrow screen, because that is
+            the thing being looked at; the rail follows as a drawer. Before
+            this the 232px rail sat beside the canvas at every width and
+            squeezed it to a sliver on a handset. ── */}
+        <div className="flex min-h-0 flex-1 flex-col-reverse lg:flex-row">
           {/* ── the rail: what can't be typed ── */}
-          <aside className="w-[232px] shrink-0 overflow-y-auto border-r border-line/70 p-3.5">
+          <aside
+            className={`shrink-0 overflow-y-auto border-line/70 p-3.5 lg:block lg:w-[232px] lg:max-h-none lg:border-r lg:border-t-0 ${
+              railOpen ? "max-h-[45vh] border-t" : "hidden"
+            }`}
+          >
             <p className="mb-2 text-[10.5px] uppercase tracking-wide text-muted">Drop in</p>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-2">
               {PALETTE.map((p) => (
                 <button
                   key={p.type}
@@ -526,7 +545,7 @@ export default function EmailBuilder({
           </aside>
 
           {/* ── the email ── */}
-          <div className="min-w-0 flex-1 overflow-y-auto bg-page p-6">
+          <div className="min-w-0 flex-1 overflow-y-auto bg-page p-3 sm:p-6">
             <div className="mx-auto max-w-[640px]">
               <label className="mb-1 block text-[10.5px] uppercase tracking-wide text-muted">
                 Subject
