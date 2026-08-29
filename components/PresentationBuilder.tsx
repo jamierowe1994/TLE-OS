@@ -295,14 +295,44 @@ export default function PresentationBuilder({
                         className="w-20 rounded-lg border border-line/80 bg-panel px-2 py-1.5 text-[12px]" />
                     </span>
                   </label>
+                  {/* A CIRCLE SHOWING A MAP, not a button saying "Map".
+                      James, 29 Aug: "rather than having a map button... could
+                      we just show a little tiny map in there."
+
+                      The picture is a real static map of this property, drawn
+                      by /api/map-thumb so the Google key stays on the server.
+                      No key means no picture and the circle falls back to the
+                      icon — the button still works, it just is not a map. */}
                   <button
                     type="button"
                     onClick={() => setMapOpen((m) => !m)}
-                    className={`rounded-lg border px-3 py-1.5 text-[11.5px] transition-colors ${
-                      mapOpen ? "border-accent-dark bg-accent-dark text-white" : "border-line/80"
+                    aria-pressed={mapOpen}
+                    aria-label={mapOpen ? "Hide the map" : "Show the map"}
+                    title={mapOpen ? "Hide the map" : "Show the map"}
+                    className={`relative h-11 w-11 shrink-0 overflow-hidden rounded-full border transition-all hover:scale-105 active:scale-95 ${
+                      mapOpen
+                        ? "border-accent-dark ring-2 ring-accent-dark/30"
+                        : "border-line/80"
                     }`}
                   >
-                    {mapOpen ? "Hide map" : "Map"}
+                    {d?.subjectPoint ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={`/api/map-thumb?lat=${d.subjectPoint.lat}&lon=${d.subjectPoint.lon}`}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    ) : null}
+                    <span
+                      className={`absolute inset-0 flex items-center justify-center text-[9px] font-bold uppercase tracking-wider transition-colors ${
+                        mapOpen ? "bg-accent-dark/70 text-white" : "bg-page/45 text-ink"
+                      }`}
+                    >
+                      Map
+                    </span>
                   </button>
                   {(filters.radius || filters.beds || filters.type || filters.minRent || filters.maxRent) ? (
                     <button type="button"
@@ -334,10 +364,20 @@ export default function PresentationBuilder({
                   that leaves the screen while you scroll the results is a map
                   you have to keep scrolling back to. */}
               <div className={mapOpen ? "mt-3 flex gap-4" : "mt-3"}>
+                {/* WITH THE MAP OPEN THE LIST IS THE ONLY THING THAT SCROLLS.
+                    James, 29 Aug: "if we scroll, it only scrolls the properties
+                    on the left. If we do scroll on the right, it just moves the
+                    map in and out."
+
+                    So the column takes the height of the screen and scrolls
+                    inside itself, and the map beside it never moves. The height
+                    is measured from the viewport rather than fixed in pixels,
+                    because this panel sits at different depths on a laptop and
+                    a large monitor and a hardcoded 560px is right on neither. */}
                 <ul
                   className={
                     mapOpen
-                      ? "grid max-h-[560px] flex-1 grid-cols-1 content-start gap-3 overflow-y-auto pr-1 xl:grid-cols-2"
+                      ? "grid h-[calc(100vh-260px)] flex-1 grid-cols-1 content-start gap-3 overflow-y-auto pr-1 xl:grid-cols-2"
                       : "grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
                   }
                 >
@@ -417,8 +457,11 @@ export default function PresentationBuilder({
                 })}
                 </ul>
 
+                {/* Three quarters of the width was asked for; 58% is what that
+                    means once the two-column card grid beside it still has to
+                    hold a photograph and a price without wrapping. */}
                 {mapOpen && (
-                  <div className="hidden w-[46%] shrink-0 lg:block">
+                  <div className="hidden w-[58%] shrink-0 lg:block">
                     <div className="sticky top-2">
                       <MarketMap
                         listings={nearby}

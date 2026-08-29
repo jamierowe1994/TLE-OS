@@ -109,7 +109,15 @@ export default function MarketMap({
          * is why it is here rather than Google Maps JS. If we ever want
          * Google's own tiles the key exists, but this gets the look for
          * nothing. */
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+        /* VOYAGER, not Positron.
+         *
+         * Positron is the grey one, and James read it exactly that way: "very
+         * grey and very dark... I like that greener, little bit brighter map."
+         * Voyager is CARTO's brighter sibling — green parks, blue water, soft
+         * road colours — and it is much closer to the reference than either
+         * Positron or raw OpenStreetMap. Still no key, still no billing, still
+         * one line. */
+        L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
           attribution: "&copy; OpenStreetMap &copy; CARTO",
           subdomains: "abcd",
           maxZoom: 20,
@@ -186,9 +194,14 @@ export default function MarketMap({
       map.current.invalidateSize();
 
       if (bounds.length) {
-        map.current.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+        /* Start further out. Fitting tightly to the pins put the map right on
+           top of the estate with no context around it — an agent could not see
+           which way the main road ran, and the first thing everybody did was
+           zoom out. More padding and a lower ceiling give the surroundings
+           room, which is most of what makes a comparables map readable. */
+        map.current.fitBounds(bounds, { padding: [70, 70], maxZoom: 13 });
       } else if (centre) {
-        map.current.setView([centre.lat, centre.lon], 14);
+        map.current.setView([centre.lat, centre.lon], 13);
       }
     })();
     return () => {
@@ -213,7 +226,11 @@ export default function MarketMap({
       <div className="relative">
         <div
           ref={holder}
-          className="h-[420px] w-full overflow-hidden rounded-xl border border-line/70"
+          /* Full height, and it does not move. The map runs to the bottom of
+             the screen beside a list that scrolls on its own — measured from
+             the viewport rather than set in pixels, so it fills a laptop and a
+             large monitor equally rather than being right on neither. */
+          className="h-[calc(100vh-260px)] w-full overflow-hidden rounded-2xl border border-line/70"
         />
 
         {/* The card, over the map, anchored to its house.
