@@ -71,6 +71,14 @@ function daysSince(iso: string | null | undefined, now: Date): number | null {
 
 /** How long PayProp gets to catch up before a missing deposit is a finding. */
 const DEPOSIT_GRACE_DAYS = 14;
+/** Rent is not late before anybody has moved in. First rent is due at move-in
+ *  and reconciliation lags, so it gets the same fortnight the deposit gets. */
+const RENT_GRACE_DAYS = 14;
+/** How far back the money reports actually reach: this month and last. Beyond
+ *  that a missing receipt means "outside the window we read", not "unpaid",
+ *  and reporting it as a finding would be claiming to have checked something
+ *  we never looked at. */
+const MONEY_WINDOW_DAYS = 62;
 
 function when(iso: string | null | undefined): string {
   if (!iso) return "";
@@ -222,10 +230,33 @@ export function stageEvidence(
       if (!moneyLoaded) {
         return { tone: "none", text: "PayProp's money reports have not loaded yet." };
       }
+      /* Rent is not missing before the tenant has the keys.
+         The first live run made this obvious: nineteen of twenty-two flagged
+         properties said "no rent received", which is not twenty-two problems,
+         it is a check firing on deals that have simply not started paying yet.
+         A monoculture like that is the tell — real faults spread across the
+         stages, one repeated line is a rule that is too eager.
+
+         Silent beyond the window too: the reports cover this month and last,
+         so an older move-in with no receipt means we did not look, not that
+         nobody paid. */
+      const rentSince = daysSince(d.startDate, now);
+      if (rentSince == null) {
+        return { tone: "none", text: "No rent received, and no move-in date to judge it by." };
+      }
+      if (rentSince < RENT_GRACE_DAYS) {
+        return { tone: "none", text: "No rent yet — it is not due long enough to chase." };
+      }
+      if (rentSince > MONEY_WINDOW_DAYS) {
+        return {
+          tone: "none",
+          text: "No rent in the two months read. Older than the reports reach.",
+        };
+      }
       return {
         tone: reached ? "warn" : "none",
         text: reached
-          ? "No rent received in PayProp this month or last."
+          ? `No rent received in PayProp, ${rentSince} days after move-in.`
           : "No rent received yet.",
       };
     }
@@ -236,6 +267,19 @@ export function stageEvidence(
       }
       if (!moneyLoaded) {
         return { tone: "none", text: "PayProp's move-in report has not loaded yet." };
+      }
+      /* Same two gates as rent. A move-in still ahead has no schedule yet and
+         should not; one older than the reports reach cannot be judged from
+         them at all. */
+      const moveSince = daysSince(d.startDate, now);
+      if (moveSince == null || moveSince < 0) {
+        return { tone: "none", text: "Move-in has not happened yet." };
+      }
+      if (moveSince > MONEY_WINDOW_DAYS) {
+        return {
+          tone: "none",
+          text: "Move-in is older than the two months of reports read.",
+        };
       }
       return {
         tone: reached ? "warn" : "none",

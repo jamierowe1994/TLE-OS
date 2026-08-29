@@ -91,10 +91,16 @@ export function dealAlerts(
   const out: DealAlert[] = [];
 
   for (const d of deals) {
-    /* A cancelled or archived deal is not being worked. Chasing a missing
-       deposit on a file nobody is progressing is noise with a person's name
-       on it. */
-    if (d.archived || d.statusKey === "cancelled") continue;
+    /* Not being worked, so not worth anybody's morning.
+       COMPLETE was missing from this list and it was the biggest fault in the
+       first live run: Propoly's `complete` maps to the final stage, so a
+       finished tenancy sits at move_day with every stage "reached" and every
+       check firing. The first dry run duly reported a deposit missing "575
+       days after move-in" — a tenancy that ended long ago, on a board that
+       exists for the run-up to one.
+       The route's own verification flags have always excluded complete. This
+       is the same definition of live, and it belongs in one place. */
+    if (d.archived || d.statusKey === "cancelled" || d.statusKey === "complete") continue;
 
     const currentIdx = stageIndex(d.effectiveStatusKey);
     if (currentIdx < 0) continue;
