@@ -12,6 +12,7 @@ import { effectivePortalStage, getOverlays } from "@/lib/business/deal-store";
 import { getPortfolioBook, propertyKey } from "@/lib/business/payprop-portfolio";
 import { getTenancyRegister } from "@/lib/business/payprop-tenancy";
 import { getTobRegister, type TobStatus } from "@/lib/business/rex-esign";
+import { getRentReceived, getMoveIns } from "@/lib/business/payprop-income";
 import { PORTAL_STAGES, portalStageOf } from "@/lib/business/propoly-stages";
 import type { DealPortalOverlay } from "@/lib/business/types";
 
@@ -75,6 +76,35 @@ export interface PreTenancyDeal {
   schemeSuggestion: { scheme: string; evidence: string } | null;
   /** A "Holding deposit" invoice PayProp holds for this property. */
   holdingInvoice: { amount: number; fromDate: string | null } | null;
+  /**
+   * Rent that actually ARRIVED, from PayProp's Owner rows.
+   *
+   * The single best piece of evidence on this board and it was not on it. The
+   * function has existed and worked for weeks — it is joined on the agent
+   * applications route — and nothing in the OS called it at all. Both halves
+   * were built; the wire was missing.
+   *
+   * `paidOut` false means reconciled in but the batch is not approved out,
+   * which on 1 Aug 2026 was 31% of the UK agency's payments and is exactly the
+   * gap Kirstie checks by hand.
+   *
+   * EVIDENCE, NEVER A TRIGGER. The address key behind it is deliberately loose
+   * (see propertyKey), so this sits beside a stage and never advances one. A
+   * wrong match here would move somebody's deal on the strength of another
+   * property's money.
+   *
+   * null = no receipt matched OR the money reports have not loaded yet. The two
+   * are told apart by `money.loaded` below, never by this field.
+   */
+  rentReceived: { amount: number; on: string; paidOut: boolean } | null;
+  /**
+   * A rent SCHEDULE starting in PayProp — a tenancy actually going live.
+   *
+   * The independent check on move day, which until now was Propoly's date and
+   * nothing else. Propoly saying somebody moved in and PayProp having no rent
+   * schedule for them is the disagreement worth seeing.
+   */
+  rentSchedule: { from: string; rent: number } | null;
 }
 
 export async function GET(req: NextRequest) {
@@ -97,6 +127,30 @@ export async function GET(req: NextRequest) {
   // and refresh behind. A null register costs badges, never the board.
   const registerWork = getTenancyRegister().catch(() => null);
   const tobWork = getTobRegister().catch(() => null);
+
+  /* The money, this month and last.
+     Two months rather than one because a deal that moved in on the 28th has
+     its first rent in the following month as often as not, and a board that
+     forgot last month would show "no rent yet" on a tenancy that has been
+     paying for a fortnight. Derived from now(), so it rolls over on its own —
+     a month literal here is the exact bug this codebase keeps being bitten by.
+
+     Both go through cachedAsync, which returns NULL on a cold key and computes
+     behind. So null means "not loaded", never "no rent", and it is treated that
+     way everywhere below. */
+  const now = new Date();
+  const thisMonth = now.toISOString().slice(0, 7);
+  const prevMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
+    .toISOString()
+    .slice(0, 7);
+  const rentWork = Promise.all([
+    getRentReceived(thisMonth).catch(() => null),
+    getRentReceived(prevMonth).catch(() => null),
+  ]).catch(() => [null, null] as const);
+  const moveInWork = Promise.all([
+    getMoveIns(thisMonth).catch(() => null),
+    getMoveIns(prevMonth).catch(() => null),
+  ]).catch(() => [null, null] as const);
 
   const [deals, forecast] = await Promise.all([
     getAllPropolyDeals().catch(() => null),
@@ -131,6 +185,37 @@ export async function GET(req: NextRequest) {
   const book = await bookWork;
   const register = await registerWork;
   const tob = await tobWork;
+
+  /* Two months folded into one lookup, EARLIEST receipt winning.
+     The question this answers is "has rent started", not "what came in last" —
+     so a tenancy paying since last month should show its first payment, not its
+     most recent. Same rule the agent board already uses.
+
+     Indexed by PayProp id AND by address key. The id is the reliable join and
+     is tried first everywhere below; the key is the fallback for a deal with no
+     id, and it is loose enough that it may only ever be evidence. */
+  const [rentThis, rentPrev] = await rentWork;
+  const [moveInsThis, moveInsPrev] = await moveInWork;
+  /** False when neither month loaded — lets the screen say "not loaded yet"
+   *  rather than showing an absence it has not actually checked. */
+  const moneyLoaded = Boolean(rentThis || rentPrev);
+
+  const rentById = new Map<string, { amount: number; on: string; paidOut: boolean }>();
+  const rentByKey = new Map<string, { amount: number; on: string; paidOut: boolean }>();
+  for (const r of [...(rentPrev?.receipts ?? []), ...(rentThis?.receipts ?? [])]) {
+    const hit = { amount: r.amount, on: r.receivedOn, paidOut: r.paidOut };
+    const older = (a: { on: string } | undefined) => !a || r.receivedOn < a.on;
+    if (r.propertyId && older(rentById.get(r.propertyId))) rentById.set(r.propertyId, hit);
+    if (r.propertyKey && older(rentByKey.get(r.propertyKey))) rentByKey.set(r.propertyKey, hit);
+  }
+
+  const schedById = new Map<string, { from: string; rent: number }>();
+  const schedByKey = new Map<string, { from: string; rent: number }>();
+  for (const p of [...(moveInsPrev?.properties ?? []), ...(moveInsThis?.properties ?? [])]) {
+    const hit = { from: p.from, rent: p.rent };
+    if (p.propertyId && !schedById.has(p.propertyId)) schedById.set(p.propertyId, hit);
+    if (p.propertyKey && !schedByKey.has(p.propertyKey)) schedByKey.set(p.propertyKey, hit);
+  }
 
   // Compliance needs the CONFIDENT listing ids, so resolve those first and do
   // one chunked read for the whole board rather than a call per deal.
@@ -205,6 +290,34 @@ export async function GET(req: NextRequest) {
       holdingDelta != null && holdingDelta >= -90 && holdingDelta <= 30
         ? holdingRaw
         : undefined;
+    /* Rent that arrived BEFORE this deal's move-in is the SITTING tenant's, not
+       this one's — the same trap the tenancy and holding joins already guard
+       against, and the one that would otherwise show a brand new deal as fully
+       paid on the strength of the outgoing tenancy. Seven days of slack because
+       a first month is routinely paid the week before the keys.
+
+       No move-in date means no judgement is possible, so nothing is attached.
+       An unqualified match here is exactly how the wrong property's money ends
+       up beside somebody's deal. */
+    const rentRaw = key ? rentByKey.get(key) : undefined;
+    const rentHit =
+      rentRaw && d.app.startDate != null &&
+      (new Date(rentRaw.on).getTime() - new Date(d.app.startDate).getTime()) / 86_400_000 >= -7
+        ? rentRaw
+        : undefined;
+
+    /* A rent schedule starting within 60 days of the claimed move-in — the
+       same window the tenancy join uses, for the same reason. This is the
+       independent check on move day, which has only ever had Propoly's word. */
+    const schedRaw = key ? schedByKey.get(key) : undefined;
+    const schedHit =
+      schedRaw && d.app.startDate != null &&
+      Math.abs(
+        (new Date(schedRaw.from).getTime() - new Date(d.app.startDate).getTime()) / 86_400_000
+      ) <= 60
+        ? schedRaw
+        : undefined;
+
     // ToB rides the CONFIDENT matcher, not the photo one — the photo match
     // deliberately falls back to "same postcode, best guess", which is fine
     // for a picture and wrong for a signing status (review find).
@@ -289,6 +402,8 @@ export async function GET(req: NextRequest) {
       // "no deposit to register" note was a contradiction on screen (review).
       schemeSuggestion: isFlatfair ? null : (schemeHit ?? null),
       holdingInvoice: holdingHit ?? null,
+      rentReceived: rentHit ?? null,
+      rentSchedule: schedHit ?? null,
       app: match
         ? { ...d.app, image: match.image, images: match.images, listingId: match.listingId }
         : d.app,
@@ -334,6 +449,20 @@ export async function GET(req: NextRequest) {
       total: active.length,
       bookLoaded: book != null,
       ambiguousKeys: book?.serviceLevelAmbiguous.length ?? null,
+    },
+    /* Measured, for the same reason as the line above — "the photo index looked
+       complete for months on exactly this kind of unmeasured join", and it has
+       since turned out it was empty the whole time.
+
+       `loaded` is the one that matters: without it, a board showing no rent
+       against anything is indistinguishable from a board whose money reports
+       have not warmed yet, and the second one is not a finding. */
+    moneyCoverage: {
+      loaded: moneyLoaded,
+      months: [prevMonth, thisMonth],
+      withRent: active.filter((d) => d.rentReceived != null).length,
+      withSchedule: active.filter((d) => d.rentSchedule != null).length,
+      total: active.length,
     },
   };
 

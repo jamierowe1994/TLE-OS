@@ -2367,6 +2367,10 @@ let businessListingsInflight: Promise<AgentListing[] | null> | null = null;
 // 1,506ms, no rate-limit errors at either width. Concurrency stays bounded at
 // 8 however far the book grows, so this cannot run away at REX.
 const PAGE_BATCH = 8;
+/* Matched to the compliance sweep's ceiling rather than the client default.
+   REX routinely takes ~15s for one call and these pages carry every listing's
+   images; 8s aborted them and the whole index came back empty. */
+const LISTINGS_PAGE_TIMEOUT_MS = 45_000;
 
 export async function getBusinessListings(): Promise<AgentListing[] | null> {
   if (!rexConfigured()) return null;
@@ -2406,7 +2410,30 @@ function startBusinessListingsRefresh(): Promise<AgentListing[] | null> {
         extra_options: { extra_fields: ["related.listing_images"] },
         limit: COUNT_LIMIT,
         offset: page * COUNT_LIMIT,
-      }).catch(() => null);
+      },
+        /* THE 8s CALL TIMEOUT IS LIFTED HERE TOO, for exactly the reason it was
+           lifted on the compliance sweep below — and this walk was left behind
+           when that one was fixed.
+
+           lib/business/rex.ts caps a call at 8s. lib/rex.ts caps it at 20s and
+           says why: "REX commonly takes ~15s for a single call", and firing
+           several at once made every one of them fail. This walk fires EIGHT
+           pages concurrently, each carrying related.listing_images, under the
+           8s ceiling.
+
+           When a page aborted, every layer swallowed it: the catch below turned
+           it into null, a null page set `done` and broke the walk, an empty
+           result returned BEFORE the cache write, and the index came back as an
+           empty Map rather than null — which is truthy, so the route could not
+           tell "never loaded" from "nothing matched". The board then rendered a
+           house doodle on every tile and hid the property card entirely, which
+           reads as a design decision rather than a failure.
+
+           So no photo has been appearing on Kirstie's board, permanently and
+           silently, and every subsequent request repeated the same failing walk
+           because nothing was ever cached to serve stale. */
+        { timeoutMs: LISTINGS_PAGE_TIMEOUT_MS }
+      ).catch(() => null);
 
     let done = false;
     let walked = 0;
