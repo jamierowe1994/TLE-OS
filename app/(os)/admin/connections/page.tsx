@@ -19,7 +19,7 @@ type Health = {
   emailPolicy: { internalDomains: string[]; note: string };
   /* Optional so an older deploy of the API doesn't blank the whole page. */
   launchPad?: { configured: boolean; base: string | null; keySet: boolean };
-  propoly?: { configured: boolean; keySet?: boolean; agentSet?: boolean };
+  propoly?: { configured: boolean; keySet?: boolean; agentSet?: boolean; seen?: string[] };
   payProp?: { configured: boolean };
   ghl?: { configured: boolean };
   tegHub?: { configured: boolean };
@@ -84,7 +84,11 @@ export default function AdminConnections() {
                 h.propoly.agentSet ? null : "no agent name (PROPOLY_AGENT_NAME or PROPOLY_USERNAME)",
               ]
                 .filter(Boolean)
-                .join(" and ")}. Kirstie's board stays empty until both are set.`
+                .join(" and ")}. ${
+                h.propoly.seen?.length
+                  ? `This container CAN see: ${h.propoly.seen.join(", ")} — so the names do not match what the code reads.`
+                  : "This container can see no Propoly variables at all, so they are on another service or another environment rather than misnamed."
+              }`
         : "This deploy of the API predates the check.",
     ],
     [

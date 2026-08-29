@@ -175,6 +175,22 @@ export async function GET() {
       agentSet: Boolean(
         (process.env.PROPOLY_AGENT_NAME ?? process.env.PROPOLY_USERNAME ?? "").trim()
       ),
+      /* The NAMES of every Propoly-ish variable this container can actually
+         see. Never a value — the file's rule is booleans and names, and a name
+         is not a secret.
+
+         Added because "no key and no agent name" is still three problems
+         wearing one coat: set on the wrong service, set on the wrong
+         environment, or set under a name that does not match. Only the last is
+         visible from in here, and it is invisible from Railway's UI because a
+         typo looks exactly like a correct variable. Case-insensitive on
+         purpose: env names are case-sensitive on Linux, so `propoly_username`
+         is a different variable from PROPOLY_USERNAME and reads as missing.
+         An empty list means the container has no Propoly variables at all,
+         which points at the service or the environment rather than the name. */
+      seen: Object.keys(process.env)
+        .filter((k) => /propoly/i.test(k))
+        .sort(),
     },
     payProp: { configured: payPropConfigured() },
     ghl: { configured: ghlConfigured() },
