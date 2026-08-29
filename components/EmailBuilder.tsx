@@ -208,8 +208,8 @@ export default function EmailBuilder({
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
-  /* Shut on a phone so the first thing on screen is the email. The lg: rules
-     above ignore this entirely, so the desktop rail is never hidden. */
+  /* Shut on a phone so the first thing on screen is the email. The md: rules
+     below ignore this entirely, so the desktop rail is never hidden. */
   const [railOpen, setRailOpen] = useState(false);
 
   /* The drag itself lives in a ref, not state: dragover fires continuously and
@@ -447,7 +447,7 @@ export default function EmailBuilder({
             <button
               type="button"
               onClick={() => setRailOpen((o) => !o)}
-              className="rounded-lg border border-line/70 px-2.5 py-1.5 text-[11.5px] hover:border-ink/30 lg:hidden"
+              className="rounded-lg border border-line/70 px-2.5 py-1.5 text-[11.5px] hover:border-ink/30 md:hidden"
             >
               {railOpen ? "Hide tools" : "Add & edit"}
             </button>
@@ -477,20 +477,20 @@ export default function EmailBuilder({
           </div>
         </div>
 
-        {/* ── Stacked on a phone, side by side from lg.
+        {/* ── Stacked on a phone, side by side from md (768px).
             The EMAIL is first in the flow on a narrow screen, because that is
             the thing being looked at; the rail follows as a drawer. Before
             this the 232px rail sat beside the canvas at every width and
             squeezed it to a sliver on a handset. ── */}
-        <div className="flex min-h-0 flex-1 flex-col-reverse lg:flex-row">
+        <div className="flex min-h-0 flex-1 flex-col-reverse md:flex-row">
           {/* ── the rail: what can't be typed ── */}
           <aside
-            className={`shrink-0 overflow-y-auto border-line/70 p-3.5 lg:block lg:w-[232px] lg:max-h-none lg:border-r lg:border-t-0 ${
+            className={`shrink-0 overflow-y-auto border-line/70 p-3.5 md:block md:w-[232px] md:max-h-none md:border-r md:border-t-0 ${
               railOpen ? "max-h-[45vh] border-t" : "hidden"
             }`}
           >
             <p className="mb-2 text-[10.5px] uppercase tracking-wide text-muted">Drop in</p>
-            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 lg:grid-cols-2">
+            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 md:grid-cols-2">
               {PALETTE.map((p) => (
                 <button
                   key={p.type}
