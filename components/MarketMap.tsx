@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import type { MarketListing } from "@/lib/ma-research";
 
 /**
@@ -34,17 +34,42 @@ export default function MarketMap({
   centre,
   selected,
   onSelect,
+  onOpen,
 }: {
   listings: MarketListing[];
   centre: { lat: number; lon: number } | null;
   /** Keys of the ticked comparables, so the map agrees with the grid. */
   selected: string[];
   onSelect?: (key: string) => void;
+  /** Called when a pill is clicked, so the grid can bring that card to the top. */
+  onOpen?: (key: string) => void;
 }) {
   const holder = useRef<HTMLDivElement | null>(null);
   const map = useRef<import("leaflet").Map | null>(null);
   const layer = useRef<import("leaflet").LayerGroup | null>(null);
   const resizeObs = useRef<ResizeObserver | null>(null);
+
+  /**
+   * The card that pops out of the map, and where on the map to draw it.
+   *
+   * Rendered in REACT over the map rather than as a Leaflet popup. A Leaflet
+   * popup takes an HTML string, which means building the markup by hand and
+   * wiring the tick with a DOM listener — in a codebase where every other card
+   * is a component with Tailwind on it. This way the popup is the same card as
+   * the grid, styled the same way, and the tick is an ordinary onClick.
+   *
+   * The position is recomputed on every map move, because the anchor is a
+   * LAT/LNG and the card is in screen pixels: pan the map and a card that does
+   * not follow is pointing at the wrong house.
+   */
+  const [open, setOpen] = useState<MarketListing | null>(null);
+  const [at, setAt] = useState<{ x: number; y: number } | null>(null);
+
+  const place = useCallback((l: MarketListing | null) => {
+    if (!l || l.lat == null || l.lon == null || !map.current) return setAt(null);
+    const p = map.current.latLngToContainerPoint([l.lat, l.lon]);
+    setAt({ x: p.x, y: p.y });
+  }, []);
 
   const points = listings.filter((l) => l.lat != null && l.lon != null);
   const keyOf = (l: MarketListing) => `${l.address}|${l.rent}`;
@@ -128,7 +153,19 @@ export default function MarketMap({
           `${l.address}<br>${[l.beds ? `${l.beds} bed` : null, l.type, l.agent].filter(Boolean).join(" · ")}`,
           { direction: "top", offset: [0, -14] }
         );
-        if (onSelect) m.on("click", () => onSelect(k));
+        /* Clicking a price OPENS it rather than ticking it.
+         *
+         * It used to do both at once. With a card on the map that is the wrong
+         * trade: the tick is now a button you can see, on a card showing the
+         * photo and the rent, so ticking becomes a decision made while looking
+         * at the property rather than a side effect of pointing at it. The
+         * "bring it to the top of the list" half is kept — that was the useful
+         * part — and happens through onOpen. */
+        m.on("click", () => {
+          setOpen(l);
+          place(l);
+          onOpen?.(k);
+        });
       }
 
       /* Leaflet measures its container once, at creation. This map is created
@@ -137,6 +174,11 @@ export default function MarketMap({
          width and renders tiles into a strip with grey either side. Observing
          the element covers the toggle, a window resize and the sidebar
          collapsing, none of which fire a Leaflet event. */
+      /* The card is anchored to a house, not to the screen. Every pan, zoom
+         and resize moves that house, so the card is repositioned with it —
+         otherwise it drifts and ends up labelling a neighbour. */
+      map.current.on("move zoom resize", () => setOpen((o) => (place(o), o)));
+
       const ro = new ResizeObserver(() => map.current?.invalidateSize());
       ro.observe(holder.current);
       resizeObs.current?.disconnect();
@@ -153,7 +195,7 @@ export default function MarketMap({
       cancelled = true;
       resizeObs.current?.disconnect();
     };
-  }, [points, centre, selected, onSelect]);
+  }, [points, centre, selected, onSelect, onOpen, place]);
 
   if (!centre && points.length === 0) {
     return (
@@ -163,15 +205,125 @@ export default function MarketMap({
     );
   }
 
+  const money = (n: number | null) =>
+    n == null ? "\u2014" : `\u00a3${Math.round(n).toLocaleString("en-GB")}`;
+
   return (
     <>
-      <div
-        ref={holder}
-        className="h-[420px] w-full overflow-hidden rounded-xl border border-line/70"
-      />
+      <div className="relative">
+        <div
+          ref={holder}
+          className="h-[420px] w-full overflow-hidden rounded-xl border border-line/70"
+        />
+
+        {/* The card, over the map, anchored to its house.
+            Sits ABOVE Leaflet's own panes (which top out around z-index 700)
+            and below the app's drawers, so it can never cover a dialog. */}
+        {open && at && (
+          <div
+            className="fade-up pointer-events-none absolute z-[800]"
+            style={{
+              left: at.x,
+              top: at.y,
+              /* Centred on the pin and lifted clear of it, so the card never
+                 sits on top of the price it came from. */
+              transform: "translate(-50%, calc(-100% - 18px))",
+            }}
+          >
+            <div className="pointer-events-auto w-[248px] overflow-hidden rounded-2xl border border-line/70 bg-page shadow-[0_18px_40px_-12px_rgba(0,0,0,0.35)]">
+              <div className="relative">
+                {open.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={open.image}
+                    alt=""
+                    className="h-[140px] w-full object-cover"
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="flex h-[140px] w-full items-center justify-center bg-line/20 text-[11px] text-muted">
+                    No photograph
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  aria-label="Close"
+                  onClick={() => setOpen(null)}
+                  className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-page/90 text-[12px] text-ink shadow-sm transition-transform hover:scale-105"
+                >
+                  ✕
+                </button>
+
+                {/* Ticking is now a decision made while looking at the
+                    property, rather than a side effect of clicking its price. */}
+                {onSelect && (
+                  <button
+                    type="button"
+                    aria-label={
+                      selected.includes(keyOf(open)) ? "Remove from the deck" : "Add to the deck"
+                    }
+                    onClick={() => onSelect(keyOf(open))}
+                    className={`absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded-full text-[12px] shadow-sm transition-transform hover:scale-105 ${
+                      selected.includes(keyOf(open))
+                        ? "bg-accent-dark text-white"
+                        : "bg-page/90 text-muted"
+                    }`}
+                  >
+                    ✓
+                  </button>
+                )}
+
+                {open.status === "let agreed" && (
+                  <span className="absolute bottom-2 left-2 rounded-full bg-page/95 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-accent-dark">
+                    Let agreed
+                  </span>
+                )}
+              </div>
+
+              <div className="p-3">
+                <p className="flex items-baseline justify-between gap-2">
+                  <span className="figures text-[14px]">
+                    {money(open.rent)}
+                    <span className="text-[10.5px] text-muted"> pcm</span>
+                  </span>
+                  {open.daysListed != null && (
+                    <span className="text-[10.5px] text-muted">{open.daysListed}d listed</span>
+                  )}
+                </p>
+                <p className="mt-0.5 truncate text-[12px]">{open.address}</p>
+                <p className="truncate text-[10.5px] text-muted">
+                  {[open.beds ? `${open.beds} bed` : null, open.type, open.postcode]
+                    .filter(Boolean)
+                    .join(" \u00b7 ")}
+                </p>
+                {open.agent && (
+                  <p className="truncate text-[10.5px] text-muted">{open.agent}</p>
+                )}
+
+                {/* Homesearch gives ONE photo per listing, so there is no
+                    gallery to page through. The advert is the honest way to
+                    see the rest of them, and every row carries a link. */}
+                {open.link && (
+                  <a
+                    href={open.link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-2 inline-block text-[10.5px] text-muted underline hover:text-ink"
+                  >
+                    See the full advert
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
         Rents rather than pins, so the shape of the local market reads in one look. Click a
-        price to tick it. {listings.length - points.length > 0
+        price to open it.{" "}
+        {listings.length - points.length > 0
           ? `${listings.length - points.length} without a location aren't plotted — they're still in the list below.`
           : ""}
       </p>

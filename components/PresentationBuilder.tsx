@@ -424,15 +424,20 @@ export default function PresentationBuilder({
                         listings={nearby}
                         centre={d.subjectPoint}
                         selected={pickedNearby}
-                        onSelect={(k) => {
-                          /* Clicking a price does TWO things: it brings that
-                             card to the top so you can read it, and it ticks
-                             it. James asked for both, and separating them
-                             would mean clicking a pin then hunting for the
-                             card you just pointed at. */
-                          setFocused(k);
-                          setPickedNearby((c) => (c.includes(k) ? c.filter((x) => x !== k) : [...c, k]));
-                        }}
+                        /* Clicking a price brings that card to the top of the
+                           list so it can be read — the half of the old
+                           behaviour that was actually useful. */
+                        onOpen={(k) => setFocused(k)}
+                        /* Ticking now happens on the card that pops out of the
+                           map, where the photo and the rent are visible. It
+                           used to fire on the same click as opening, which made
+                           adding a competitor's property to a landlord's deck a
+                           side effect of pointing at it. */
+                        onSelect={(k) =>
+                          setPickedNearby((c) =>
+                            c.includes(k) ? c.filter((x) => x !== k) : [...c, k]
+                          )
+                        }
                       />
                     </div>
                   </div>
