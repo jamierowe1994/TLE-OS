@@ -35,6 +35,7 @@ export default function MarketMap({
   selected,
   onSelect,
   onOpen,
+  radiusMiles = 0,
 }: {
   listings: MarketListing[];
   centre: { lat: number; lon: number } | null;
@@ -43,6 +44,8 @@ export default function MarketMap({
   onSelect?: (key: string) => void;
   /** Called when a pill is clicked, so the grid can bring that card to the top. */
   onOpen?: (key: string) => void;
+  /** Miles, or 0 for "the postcode sector". Drawn as a ring around the subject. */
+  radiusMiles?: number;
 }) {
   const holder = useRef<HTMLDivElement | null>(null);
   const map = useRef<import("leaflet").Map | null>(null);
@@ -114,25 +117,66 @@ export default function MarketMap({
          * is why it is here rather than Google Maps JS. If we ever want
          * Google's own tiles the key exists, but this gets the look for
          * nothing. */
-        /* VOYAGER, not Positron.
+        /* ── TILES, AND WHY THIS ONE ─────────────────────────────────────
          *
-         * Positron is the grey one, and James read it exactly that way: "very
-         * grey and very dark... I like that greener, little bit brighter map."
-         * Voyager is CARTO's brighter sibling — green parks, blue water, soft
-         * road colours — and it is much closer to the reference than either
-         * Positron or raw OpenStreetMap. Still no key, still no billing, still
-         * one line. */
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-          attribution: "&copy; OpenStreetMap &copy; CARTO",
-          subdomains: "abcd",
-          maxZoom: 20,
-        }).addTo(map.current);
+         * Three keyless map services were tried and all three FAILED BY
+         * DRAWING A PICTURE rather than returning an error, which is the trap
+         * worth recording here:
+         *
+         *   CARTO    HTTP 200, correct colours, and "API KEY REQUIRED"
+         *            watermarked across every tile. Their free basemaps now
+         *            need an account. A status check passes; a histogram of
+         *            the colours passes; only looking at the image fails.
+         *   OSM      HTTP 200 carrying a 403 "Access blocked" graphic. Their
+         *            volunteer servers refuse application traffic by policy.
+         *   Google   HTTP 200 carrying an apology when billing or the API is
+         *            not enabled, which is how the Static Maps thumbnail put
+         *            an error message on screen earlier.
+         *
+         * Esri's Light Gray Canvas is keyless, unwatermarked and permitted.
+         * It is also GREY, which is the one thing James said he did not want —
+         * so this is a stopgap that keeps the screen usable, not the answer.
+         *
+         * The answer is Google, whose tiles are what the reference screenshots
+         * actually show. That needs the key exposed as
+         * NEXT_PUBLIC_GOOGLE_MAPS_API_KEY, because the Maps JavaScript API
+         * runs in the browser and cannot read a server secret — which is
+         * exactly what HTTP referrer restrictions exist to make safe. */
+        L.tileLayer(
+          "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+          {
+            attribution: "&copy; Esri",
+            maxZoom: 16,
+          }
+        ).addTo(map.current);
         layer.current = L.layerGroup().addTo(map.current);
       }
 
       layer.current?.clearLayers();
 
       const bounds: Array<[number, number]> = [];
+
+      /* THE RADIUS, DRAWN.
+       *
+       * A number on a slider is an abstraction; a ring on the map is the
+       * answer to "how far is that, really" — and it is the thing that makes
+       * widening a search a considered act rather than a nudge. Faint, under
+       * the pins, because it is context and not content.
+       *
+       * Only when a radius is actually set: with the sector default there is
+       * no circle to draw, and inventing one would draw a boundary that is not
+       * the boundary being searched. */
+      if (centre && radiusMiles > 0) {
+        L.circle([centre.lat, centre.lon], {
+          radius: radiusMiles * 1609.34,
+          color: "#7f1d1d",
+          weight: 1,
+          opacity: 0.5,
+          fillColor: "#7f1d1d",
+          fillOpacity: 0.05,
+          interactive: false,
+        }).addTo(layer.current!);
+      }
 
       if (centre) {
         bounds.push([centre.lat, centre.lon]);
@@ -213,7 +257,7 @@ export default function MarketMap({
       cancelled = true;
       resizeObs.current?.disconnect();
     };
-  }, [points, centre, selected, onSelect, onOpen, place]);
+  }, [points, centre, selected, onSelect, onOpen, place, radiusMiles]);
 
   if (!centre && points.length === 0) {
     return (

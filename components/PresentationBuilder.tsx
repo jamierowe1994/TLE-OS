@@ -36,6 +36,36 @@ import type { MaResearch } from "@/lib/ma-research";
 
 const money = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
 
+/**
+ * One map tile, for the little circle on the Map button.
+ *
+ * ── Why not Google, given we have a key ───────────────────────────────────
+ *
+ * Because Google is what produced the thing on screen. Static Maps answers a
+ * key problem — billing not enabled, API not switched on — with HTTP 200 and
+ * an IMAGE THAT SAYS SO. Not an error status: a picture of an apology, which
+ * the proxy passed through and the circle displayed. Any check on the response
+ * code would have called that a success.
+ *
+ * The map beside it never needed a key. CARTO tiles are public URLs, which is
+ * why the main panel has worked all along. So the button uses the same tiles
+ * as the map it opens: one image, no key, no billing, nothing to enable, and
+ * it cannot fail by drawing words on the screen.
+ *
+ * The arithmetic is the standard slippy-map projection — longitude linear,
+ * latitude through Mercator. Zoom 14 puts a street or two in a 44px circle,
+ * which reads as "a map" without becoming a puzzle.
+ */
+function tileUrl(lat: number, lon: number, z = 14): string {
+  const n = 2 ** z;
+  const x = Math.floor(((lon + 180) / 360) * n);
+  const r = (lat * Math.PI) / 180;
+  const y = Math.floor(((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * n);
+  /* Same service as the map beside it — see the note in MarketMap for why
+     it is not CARTO, OSM or Google. */
+  return `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/${z}/${y}/${x}`;
+}
+
 export default function PresentationBuilder({
   address,
   postcode,
@@ -318,7 +348,7 @@ export default function PresentationBuilder({
                     {d?.subjectPoint ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={`/api/map-thumb?lat=${d.subjectPoint.lat}&lon=${d.subjectPoint.lon}`}
+                        src={tileUrl(d.subjectPoint.lat, d.subjectPoint.lon)}
                         alt=""
                         className="h-full w-full object-cover"
                         onError={(e) => {
