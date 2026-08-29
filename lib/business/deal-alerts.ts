@@ -70,6 +70,67 @@ export interface AlertDeal extends EvidenceDeal {
  *  absent: the stage checks below already say both, in more detail. */
 const REGISTER_GAP_FLAGS = new Set(["scheme-missing"]);
 
+/**
+ * A deal is STALE when the tenancy has plainly been running for months and the
+ * deal was never closed in Propoly.
+ *
+ * The first live run found three: 10 Burbage Road open 575 days, 16 Sturmer
+ * Close 478, 8 Lower Station Road 336 — every one of them with full rent
+ * arriving monthly. The address join was right; the deals were simply never
+ * closed, so they sit in the pre-tenancy pipeline while the tenancy runs.
+ *
+ * Reported as "no deposit registered", which is technically true and the wrong
+ * instruction: read literally it sends somebody to ring a landlord about a
+ * deposit on a tenancy that started early last year. The useful sentence is
+ * that the deal is open and should not be.
+ *
+ * Rent arriving is the proof, not the move-in date alone. A move-in long past
+ * with no rent is a different animal — a deal that stalled — and it should keep
+ * its own checks.
+ */
+const STALE_AFTER_DAYS = 90;
+
+/**
+ * Checks that stop meaning anything once a tenancy is a year old.
+ *
+ * All of them ask about the RUN-UP: was a holding fee invoiced, was referencing
+ * done, was the deposit registered, was the agreement signed, did the move-in
+ * happen. On a tenancy that has been paying for eighteen months every one of
+ * those is either long since moot or unanswerable, and asking is noise.
+ *
+ * PLC and rent are deliberately NOT here. Both are facts about the tenancy as
+ * it stands today: a property with no rent protection is a live exposure
+ * however old the deal is, and rent carries arrears, which is the most current
+ * thing on the board.
+ */
+const RUN_UP_STAGES = new Set([
+  "holding_fee",
+  "referencing",
+  "deposit",
+  "tenancy_agreement",
+  "move_day",
+]);
+
+/** Whole days since a date, or null when there is none. */
+function daysSince(iso: string | null | undefined, now: Date): number | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  return Math.floor((now.getTime() - t) / 86_400_000);
+}
+
+/** Money, roughly — this file only ever prints it. */
+const gbpish = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
+
+/** Same short date the stage checks print, so one line does not read as ISO
+ *  while the line under it reads as English. */
+const shortDate = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+};
+
 const stageIndex = (key: string) => PORTAL_STAGES.findIndex((s) => s.key === key);
 
 /**
@@ -84,9 +145,10 @@ const stageIndex = (key: string) => PORTAL_STAGES.findIndex((s) => s.key === key
  */
 export function dealAlerts(
   deals: AlertDeal[],
-  opts: { moneyLoaded: boolean }
+  opts: { moneyLoaded: boolean; now?: Date }
 ): DealAlert[] {
   if (!opts.moneyLoaded) return [];
+  const now = opts.now ?? new Date();
 
   const out: DealAlert[] = [];
 
@@ -108,11 +170,36 @@ export function dealAlerts(
     const address = d.app.propertyName;
     const agentName = d.agentName ?? null;
 
+    /* Open for months with rent arriving: the deal was never closed. One line
+       that says so, instead of a paperwork complaint about a tenancy that has
+       been running since last year. */
+    const openFor = daysSince(d.startDate, now);
+    const stale = Boolean(d.rentReceived) && openFor != null && openFor >= STALE_AFTER_DAYS;
+    if (stale) {
+      out.push({
+        dealId: d.app.id,
+        stageKey: "deal_started",
+        key: `${d.app.id}:stale-deal`,
+        tone: "attention",
+        address,
+        agentName,
+        text: `Open ${openFor} days and the tenancy is paying (${
+          d.rentReceived
+            ? `${gbpish(d.rentReceived.amount)} on ${shortDate(d.rentReceived.on)}`
+            : "rent arriving"
+        }). The deal was never closed in Propoly.`,
+      });
+    }
+
     /* Good news first, and only once: rent arriving is the strongest evidence
        a tenancy is real, and it is the check she would otherwise do by hand in
        PayProp. Told at the moment it lands, not every morning afterwards —
-       the sent-log sees to that. */
-    if (d.rentReceived) {
+       the sent-log sees to that.
+
+       Not on a stale deal: there the rent IS the evidence of staleness and is
+       already quoted in that line, so repeating it under "started paying" put
+       the same property in both halves of the digest. */
+    if (d.rentReceived && !stale) {
       out.push({
         dealId: d.app.id,
         stageKey: "rent_payment",
@@ -144,7 +231,11 @@ export function dealAlerts(
        the screen uses is the point — see the note at the top. */
     for (let i = 0; i <= currentIdx; i++) {
       const s = PORTAL_STAGES[i];
-      const ev = stageEvidence(s.key, d, { reached: true, moneyLoaded: true });
+      /* Run-up checks are dropped once a deal is stale — see RUN_UP_STAGES.
+         PLC and rent still stand, because both describe the tenancy as it is
+         today rather than how it was set up. */
+      if (stale && RUN_UP_STAGES.has(s.key)) continue;
+      const ev = stageEvidence(s.key, d, { reached: true, moneyLoaded: true, now });
       if (ev.tone !== "warn") continue;
       out.push({
         dealId: d.app.id,
