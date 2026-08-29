@@ -4,6 +4,10 @@ import { resendConfigured, resendSendUnlocked, fromAddress } from "@/lib/resend"
 import { docusealConfigured, docusealSendUnlocked } from "@/lib/docuseal";
 import { rexConfigured, rexWritesLocked } from "@/lib/rex";
 import { launchPadConfigured } from "@/lib/launchpad";
+import { propolyConfigured } from "@/lib/business/propoly";
+import { payPropConfigured } from "@/lib/payprop";
+import { ghlConfigured } from "@/lib/business/ghl";
+import { tegHubConfigured } from "@/lib/business/teg-hub";
 import { internalDomains, FOUNDING_OWNERS } from "@/lib/email-policy";
 import { findUserByEmail } from "@/lib/users";
 
@@ -134,5 +138,29 @@ export async function GET() {
       base: process.env.ADS_API_BASE ?? null,
       keySet: Boolean(process.env.ADS_API_KEY),
     },
+    /**
+     * The four that were missing, and the round trip that proves they matter.
+     *
+     * James, 29 Aug, looking at an empty pre-tenancy board: "that isn't being
+     * populated as it stands. It is saying Propoly isn't connected yet."
+     *
+     * Propoly is the source of truth for the entire deal pipeline, and this
+     * page — the one whose whole job is answering "what is actually switched
+     * on" — did not mention it. So the only way to learn it was unset was to
+     * open somebody else's screen and read a banner on it. That is precisely
+     * the round trip recorded at the top of this file, and precisely the one
+     * the Launch Pad block above was added to stop.
+     *
+     * Booleans only, same as everything else here. Which variable is missing is
+     * a question for the deploy, not for a page that must never echo a key:
+     *   Propoly    PROPOLY_API_KEY + PROPOLY_AGENT_NAME  (both required)
+     *   PayProp    per agency, OAuth
+     *   GHL        nurture campaigns
+     *   TEG Hub    the group's people register
+     */
+    propoly: { configured: propolyConfigured() },
+    payProp: { configured: payPropConfigured() },
+    ghl: { configured: ghlConfigured() },
+    tegHub: { configured: tegHubConfigured() },
   });
 }

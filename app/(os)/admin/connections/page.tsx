@@ -19,6 +19,10 @@ type Health = {
   emailPolicy: { internalDomains: string[]; note: string };
   /* Optional so an older deploy of the API doesn't blank the whole page. */
   launchPad?: { configured: boolean; base: string | null; keySet: boolean };
+  propoly?: { configured: boolean };
+  payProp?: { configured: boolean };
+  ghl?: { configured: boolean };
+  tegHub?: { configured: boolean };
 };
 
 export default function AdminConnections() {
@@ -53,6 +57,48 @@ export default function AdminConnections() {
             ]
               .filter(Boolean)
               .join(", ")}. Tools tells every partner it cannot check their licence.`
+        : "This deploy of the API predates the check.",
+    ],
+    /* Propoly first of the four, because it is the source of truth for the
+       whole deal pipeline and its absence is the loudest: with it unset the
+       pre-tenancy board is empty and says so, which is how this omission was
+       found — by reading a banner on Kirstie's screen rather than the page
+       whose job this is. The variable names are stated because both are
+       required and either one missing produces the identical empty board. */
+    [
+      "Propoly (deals)",
+      Boolean(h.propoly?.configured),
+      h.propoly
+        ? h.propoly.configured
+          ? "Connected · the pre-tenancy board has its deals"
+          : "Not connected — needs PROPOLY_API_KEY and PROPOLY_AGENT_NAME. Kirstie's board is empty until both are set."
+        : "This deploy of the API predates the check.",
+    ],
+    [
+      "PayProp (rent & arrears)",
+      Boolean(h.payProp?.configured),
+      h.payProp
+        ? h.payProp.configured
+          ? "Connected"
+          : "Not connected — money figures fall back or show an error state."
+        : "This deploy of the API predates the check.",
+    ],
+    [
+      "TEG Hub (people)",
+      Boolean(h.tegHub?.configured),
+      h.tegHub
+        ? h.tegHub.configured
+          ? "Connected · packages, bios and headshots pull through"
+          : "Not connected — partner packages and bios cannot be synced."
+        : "This deploy of the API predates the check.",
+    ],
+    [
+      "GHL (nurture)",
+      Boolean(h.ghl?.configured),
+      h.ghl
+        ? h.ghl.configured
+          ? "Connected"
+          : "Not connected — the nurture branch stays drawn but unwired."
         : "This deploy of the API predates the check.",
     ],
   ];
