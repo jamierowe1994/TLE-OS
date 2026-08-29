@@ -58,14 +58,36 @@ export default function MarketMap({
       if (!map.current) {
         map.current = L.map(holder.current, {
           zoomControl: true,
-          // A map that grabs the wheel makes a long page impossible to scroll
-          // past on a laptop. Ctrl-scroll still zooms; that is Leaflet's own
-          // affordance and it prints a hint when somebody tries.
+          /* The wheel stays OFF and the +/- buttons do the zooming.
+           *
+           * Airbnb can grab the wheel because its map is the page. Ours sits
+           * beside a scrolling column of cards, so a map that swallows the
+           * wheel makes the list impossible to get past on a laptop — you put
+           * the pointer in the wrong half and the page stops moving.
+           *
+           * Ctrl-scroll still zooms; that is Leaflet's own affordance and it
+           * prints a hint the first time somebody tries. Dragging works
+           * normally, which is the part James actually asked for. */
           scrollWheelZoom: false,
         });
-        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-          attribution: "&copy; OpenStreetMap",
-          maxZoom: 18,
+        /* A QUIET BASEMAP, which is most of the difference.
+         *
+         * Raw OpenStreetMap draws every shop, bus stop and footpath in full
+         * colour. Against a page of price pills that reads as noise, and the
+         * pills — the only thing anybody is here to look at — have to fight
+         * the map to be seen. James, 29 Aug, pointing at Airbnb: "I quite
+         * like their map is fairly neutral."
+         *
+         * CARTO Positron is that map: greys, muted greens, roads and names and
+         * little else. No API key, no billing account, no per-load cost, and
+         * it is a one-line swap because it is still Leaflet underneath — which
+         * is why it is here rather than Google Maps JS. If we ever want
+         * Google's own tiles the key exists, but this gets the look for
+         * nothing. */
+        L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+          attribution: "&copy; OpenStreetMap &copy; CARTO",
+          subdomains: "abcd",
+          maxZoom: 20,
         }).addTo(map.current);
         layer.current = L.layerGroup().addTo(map.current);
       }
