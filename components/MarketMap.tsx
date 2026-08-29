@@ -183,9 +183,14 @@ export default function MarketMap({
         L.marker([centre.lat, centre.lon], {
           icon: L.divIcon({
             className: "",
-            html: `<div style="background:#1c1917;color:#fff;border-radius:999px;padding:3px 9px;font:600 11px/1.4 system-ui;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3)">This one</div>`,
+            /* A DOT, not a label. The subject is the one property on this
+               map nobody needs telling about — it is the reason the map is
+               open. A pill saying "This one" spent the width of three rents
+               to say so, and sat over the neighbours it was meant to be
+               compared against. */
+            html: `<div style="width:14px;height:14px;border-radius:999px;background:#2563eb;border:2.5px solid #fff;box-shadow:0 1px 6px rgba(0,0,0,.35)"></div>`,
             iconSize: [0, 0],
-            iconAnchor: [30, 12],
+            iconAnchor: [7, 7],
           }),
           // Above the rent pins — the subject must never be hidden behind a
           // neighbour's price.
@@ -196,15 +201,23 @@ export default function MarketMap({
       for (const l of points) {
         const k = keyOf(l);
         const on = selected.includes(k);
+        /* THREE STATES, not two. Open and ticked are different things and the
+           map used to conflate them: the one you are reading and the ones you
+           have chosen for the deck looked identical. Dark is "this is the card
+           on screen", red is "this is going in the presentation". */
+        const isOpen = open != null && keyOf(open) === k;
         bounds.push([l.lat!, l.lon!]);
         const label = l.rent ? `£${Math.round(l.rent).toLocaleString("en-GB")}` : "—";
         const m = L.marker([l.lat!, l.lon!], {
           icon: L.divIcon({
             className: "",
-            html: `<div style="background:${on ? "#7f1d1d" : "#fff"};color:${on ? "#fff" : "#1c1917"};border:1px solid ${on ? "#7f1d1d" : "#cdc9c0"};border-radius:999px;padding:2px 8px;font:600 11px/1.4 system-ui;white-space:nowrap;box-shadow:0 1px 6px rgba(0,0,0,.18);cursor:pointer">${label}</div>`,
+            html: `<div style="background:${isOpen ? "#1c1917" : on ? "#7f1d1d" : "#fff"};color:${isOpen || on ? "#fff" : "#1c1917"};border:1px solid ${isOpen ? "#1c1917" : on ? "#7f1d1d" : "#cdc9c0"};border-radius:999px;padding:2px 8px;font:600 11px/1.4 system-ui;white-space:nowrap;box-shadow:0 1px 6px rgba(0,0,0,.18);cursor:pointer">${label}</div>`,
             iconSize: [0, 0],
             iconAnchor: [24, 11],
           }),
+          /* The open one rides above its neighbours, so the card never points
+             at a pin that something else is covering. */
+          zIndexOffset: isOpen ? 900 : 0,
         }).addTo(layer.current!);
         m.bindTooltip(
           `${l.address}<br>${[l.beds ? `${l.beds} bed` : null, l.type, l.agent].filter(Boolean).join(" · ")}`,
@@ -257,7 +270,7 @@ export default function MarketMap({
       cancelled = true;
       resizeObs.current?.disconnect();
     };
-  }, [points, centre, selected, onSelect, onOpen, place, radiusMiles]);
+  }, [points, centre, selected, onSelect, onOpen, place, radiusMiles, open]);
 
   if (!centre && points.length === 0) {
     return (
