@@ -53,6 +53,11 @@ export default function PreLaunch() {
   const [denied, setDenied] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
+  /* The generated link lives ONLY here, in the browser of the owner who asked
+     for it. It is a credential for an hour, so it is never put in the flash
+     message, the URL or anywhere it could be shoulder-read off a shared
+     screen without being asked for. */
+  const [magic, setMagic] = useState<{ email: string; url: string } | null>(null);
 
   const load = useCallback(() => {
     fetch("/api/admin/pilot")
@@ -72,6 +77,36 @@ export default function PreLaunch() {
     const j = (await r.json()) as { ok?: boolean; message?: string; error?: string };
     setBusy(null);
     setFlash(j.ok ? (j.message ?? "Done.") : (j.error ?? "That didn't work."));
+    load();
+  }
+
+  /**
+   * A link to hand over, because our email is not arriving.
+   *
+   * Same one-time token the invite email would have carried. Copied to the
+   * clipboard immediately, because the whole point is to paste it somewhere
+   * that DOES reach them.
+   */
+  async function makeLink(c: Candidate) {
+    setBusy(c.email);
+    setMagic(null);
+    const r = await fetch("/api/admin/pilot", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: c.email, name: c.name, rexUserId: c.rexId, link: true }),
+    });
+    const j = (await r.json()) as { ok?: boolean; url?: string; error?: string };
+    setBusy(null);
+    if (!j.ok || !j.url) return setFlash(j.error ?? "Couldn't make a link.");
+    setMagic({ email: c.email, url: j.url });
+    try {
+      await navigator.clipboard.writeText(j.url);
+      setFlash(`Link copied. It works once and lasts an hour.`);
+    } catch {
+      // Clipboard refused (Safari without a user gesture, an insecure origin).
+      // The link is on screen either way, so this is a nudge and not a failure.
+      setFlash("Link ready below - copy it by hand.");
+    }
     load();
   }
 
@@ -127,6 +162,34 @@ export default function PreLaunch() {
         <p className="mt-1 text-[11.5px] text-muted">
           Adding somebody doesn&apos;t email them. Send the invite when you&apos;re ready.
         </p>
+        {magic && (
+          <div className="mt-3.5 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3.5">
+            <p className="text-[12px]">
+              <span className="font-semibold">Link for {magic.email}</span> - works once,
+              expires in an hour. Send it however actually reaches them.
+            </p>
+            <p className="mt-2 break-all rounded-lg border border-line/70 bg-card px-3 py-2 font-mono text-[11px]">
+              {magic.url}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => navigator.clipboard?.writeText(magic.url)}
+                className="rounded-lg border border-line/80 px-3 py-1.5 text-[11.5px]"
+              >
+                Copy again
+              </button>
+              <button
+                type="button"
+                onClick={() => setMagic(null)}
+                className="text-[11px] font-semibold text-muted hover:text-ink"
+              >
+                Hide it
+              </button>
+            </div>
+          </div>
+        )}
+
         <ul className="mt-3.5 space-y-2">
           {d.candidates.map((c) => (
             <li
@@ -153,6 +216,16 @@ export default function PreLaunch() {
                     className="rounded-lg border border-line/80 px-3 py-1.5 text-[11.5px] disabled:opacity-40"
                   >
                     {c.invited ? "Send invite" : "Add to pilot"}
+                  </button>
+                )}
+                {!c.hasAccount && (
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => makeLink(c)}
+                    className="rounded-lg border border-accent-dark/50 px-3 py-1.5 text-[11.5px] font-semibold text-accent-dark disabled:opacity-40"
+                  >
+                    Copy link
                   </button>
                 )}
               </span>

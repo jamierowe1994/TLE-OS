@@ -47,12 +47,45 @@ export async function POST(req: NextRequest) {
   const owner = await requireOwner(req);
   if (!owner) return new NextResponse(null, { status: 404 });
 
-  const { email, name, rexUserId, send } = (await req.json().catch(() => ({}))) as {
-    email?: string; name?: string; rexUserId?: string; send?: boolean;
+  const { email, name, rexUserId, send, link } = (await req.json().catch(() => ({}))) as {
+    email?: string; name?: string; rexUserId?: string; send?: boolean; link?: boolean;
   };
   if (!email) return NextResponse.json({ ok: false, error: "Which person?" }, { status: 400 });
 
   await addInvite({ email, name, rexUserId, by: owner.email });
+
+  /* ── The link, without the email ──────────────────────────────────────────
+     Our own mail is landing in Microsoft quarantine, so the invite arrives
+     nowhere and the person cannot be told why. This mints exactly the same
+     one-time token the email would have carried and hands it back to be
+     delivered by whatever DOES reach them - a text, a WhatsApp, a phone call
+     reading it out.
+
+     Deliberately NOT marked as sent: nothing was sent. The roster's "sent"
+     column means the OS emailed somebody, and a hand-delivered link that
+     never arrives would otherwise look identical to one that did.
+
+     The URL is a CREDENTIAL for one hour. It is returned to the owner who
+     asked for it and never logged, never emailed and never stored anywhere
+     but the browser that requested it. */
+  if (link) {
+    try {
+      const { token } = await startVerification(email, "join");
+      const origin = process.env.OS_ORIGIN?.replace(/\/+$/, "") || req.nextUrl.origin;
+      await record({
+        kind: "password_reset",
+        actorId: owner.id, actorEmail: owner.email, subjectEmail: email,
+        detail: "magic link generated, to be delivered by hand",
+      });
+      return NextResponse.json({
+        ok: true,
+        url: `${origin}/join?token=${encodeURIComponent(token)}`,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      });
+    } catch (e) {
+      return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 400 });
+    }
+  }
 
   if (!send) return NextResponse.json({ ok: true, message: `${email} added to the pilot.` });
 
