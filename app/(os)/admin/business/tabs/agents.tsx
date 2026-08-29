@@ -99,7 +99,24 @@ function extractForecastRows(payload: unknown): AdminForecastRow[] {
   return [];
 }
 
-/* ------------------------- user management row ------------------------- */
+/* ------------------------- user management row -------------------------
+ *
+ * This panel edits a PORTAL account, not an OS one — the two products share a
+ * database and each keeps its own accounts table. What it may change is only
+ * the mapping from a person to their book: roster slug, REX id, Meta campaign.
+ *
+ * It could not change even those until 29 Aug 2026. All three fields went
+ * through `updateUser`, which writes every column including `password_hash`,
+ * and the shared-database guard refuses any write to the portal's `users` —
+ * so Save answered "Couldn't save changes." to every click since the port,
+ * and Find in REX called a route that had never been written. Both now go
+ * through `linkUser`, which names the five columns it may touch.
+ *
+ * Password reset is gone rather than fixed, and deliberately. It set a
+ * password on a portal account, which is exactly the thing the guard exists
+ * to prevent — and the OS has its own reset on People that emails a link
+ * instead of reading a temporary password down the phone.
+ */
 
 function UserRow({
   user,
@@ -113,8 +130,6 @@ function UserRow({
   const [metaCampaignId, setMetaCampaignId] = useState(user.metaCampaignId ?? "");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [tempPassword, setTempPassword] = useState<string | null>(null);
-  const [resetting, setResetting] = useState(false);
   const [linking, setLinking] = useState(false);
 
   // One click: probe REX for this agent's email, and assign the id we find.
@@ -185,36 +200,6 @@ function UserRow({
       setMessage("Couldn't save changes.");
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function resetPassword() {
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm(
-        `Reset ${user.name}'s password? Their current password stops working immediately.`
-      )
-    ) {
-      return;
-    }
-    setResetting(true);
-    setMessage(null);
-    try {
-      const res = await fetch("/api/business/reset-password", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id }),
-      });
-      const data = (await res.json()) as { tempPassword?: string; error?: string };
-      if (!res.ok || !data.tempPassword) {
-        setMessage(data.error ?? "Couldn't reset the password.");
-      } else {
-        setTempPassword(data.tempPassword);
-      }
-    } catch {
-      setMessage("Couldn't reset the password.");
-    } finally {
-      setResetting(false);
     }
   }
 
@@ -301,25 +286,17 @@ function UserRow({
         >
           {saving ? "Saving…" : "Save"}
         </button>
-        <button
-          type="button"
-          onClick={() => void resetPassword()}
-          disabled={resetting}
-          className="btn-press rounded-lg border border-line bg-card px-3.5 py-1.5 text-[13px] font-medium disabled:opacity-40"
+        {/* Password reset lives on People, not here. See the note above the
+            component: this panel edits a portal account, and the OS neither
+            can nor should set a password on one. */}
+        <a
+          href="/admin/people"
+          className="btn-press rounded-lg border border-line bg-card px-3.5 py-1.5 text-[13px] font-medium text-muted transition hover:text-ink"
         >
-          {resetting ? "Resetting…" : "Reset password"}
-        </button>
+          Reset a password on People
+        </a>
         {message ? <span className="text-xs text-muted">{message}</span> : null}
       </div>
-
-      {tempPassword ? (
-        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-800">
-          Temporary password:{" "}
-          <code className="tnum font-semibold">{tempPassword}</code> — shown
-          once, pass it to {user.name} and ask them to change it in their
-          profile.
-        </div>
-      ) : null}
     </div>
   );
 }

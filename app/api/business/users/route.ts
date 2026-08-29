@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
-import { findById, listUsers, updateUser, toAdmin } from "@/lib/business/users-store";
-import type { StoredUser } from "@/lib/business/users-store";
+import { findById, listUsers, linkUser, toAdmin } from "@/lib/business/users-store";
+import type { UserLinks } from "@/lib/business/users-store";
 import type { AdminNote } from "@/lib/business/types";
 import { ROSTER } from "@/lib/business/seed-data";
 
@@ -65,7 +65,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "User not found." }, { status: 404 });
   }
 
-  const patch: Partial<StoredUser> = {};
+  const patch: UserLinks = {};
 
   if ("agentKey" in body) {
     const agentKey = asNullableString(body.agentKey);
@@ -87,7 +87,7 @@ export async function PATCH(req: NextRequest) {
     patch.adminNotes = [...(existing.adminNotes ?? []), note];
   }
 
-  const updated = await updateUser(userId!, patch);
+  const updated = await linkUser(userId!, patch);
   if (!updated) {
     return NextResponse.json({ error: "User not found." }, { status: 404 });
   }

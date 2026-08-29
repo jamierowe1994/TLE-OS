@@ -28,17 +28,41 @@ import { hasDb, q as osQuery, qShared } from "@/lib/db";
  * file is deleted.
  *
  * MEASURED, not assumed: this is the complete set of tables the ported code
- * writes to, taken by grepping every INSERT/UPDATE/DELETE in lib/business.
+ * writes to. Re-measure with
+ *
+ *   grep -rhoiE "(insert into|update|delete from)[[:space:]]+\"?[a-z_][a-z0-9_]*" lib/business/
+ *
+ * and reconcile against this list. That matters more than it looks: a table
+ * missing here does not fail at build, at boot, or on any read. It fails the
+ * first time a real person tries to save something, and the guard's message
+ * says the table "belongs to the portal" — which reads like a design decision
+ * rather than an oversight, so it gets believed instead of fixed.
+ *
+ * That is exactly what happened. The first pass of this list was taken by eye
+ * and missed five tables, and the four with live callers had been dead since
+ * the port: every deal note, task and status change on Kirstie's pre-tenancy
+ * screen, and every attempt to connect a mailbox, threw on write.
+ * (`property_notes` was the fifth and is deliberately still absent — its store
+ * has no API route and its component is mounted nowhere, so widening the lock
+ * for it would buy nothing. Add it when something calls it.)
  */
 const OWNED = new Set([
   "actual_overrides",
   "arrears_snapshots",
   "assistant_knowledge",
+  /* The pre-tenancy deal file: Kirstie's notes, her task list, and the
+     portal-side stage/checklist overlay on a read-only Propoly deal. */
+  "deal_meta",
+  "deal_notes",
+  "deal_tasks",
   "forecasts",
   "gci_months",
   "history_funnels",
   "integration_cache",
   "propoly_cache",
+  /* The agent's own connected mailbox. Credentials, encrypted at rest — which
+     is precisely why it is named here rather than reached for by wildcard. */
+  "user_mailboxes",
   /* payprop_tokens — and this one is not optional, it is load-bearing.
    *
    * PayProp UK is OAuth-only. Its refresh token ROTATES: every refresh returns
