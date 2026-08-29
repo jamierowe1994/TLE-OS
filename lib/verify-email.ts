@@ -104,8 +104,22 @@ function shell(opts: {
         <tr>
           <td align="center" style="padding:38px 34px 34px;background-color:#ffffff">
 
-            <!-- Wordmark. Script stack, because the real face cannot travel. -->
-            <p style="margin:0;font-family:'Shantell Sans','Bradley Hand','Segoe Script','Brush Script MT',cursive;font-size:27px;line-height:1.1;color:#1c1917;background-color:#ffffff">TLE&nbsp;OS</p>
+            <!-- Wordmark, drawn as a PNG so the handwriting face arrives
+                 everywhere rather than only on Apple Mail. Rendered from
+                 Shantell Sans at 3x for retina.
+
+                 On WHITE, not transparent, and that is the point: Outlook's
+                 dark mode can invert the cell behind an image but never the
+                 image itself, and dark ink on a transparent ground over an
+                 inverted cell is simply invisible. A white plate matches the
+                 card exactly in light mode and stays readable if the card
+                 flips.
+
+                 The alt text carries real weight — Outlook blocks images by
+                 default until somebody presses "download pictures", so a good
+                 number of people will only ever see these two words. -->
+            <img src="${ORIGIN}/brand/tle-os-wordmark.png" width="160" alt="TLE OS"
+                 style="display:block;margin:0 auto;width:160px;max-width:60%;height:auto;border:0;outline:none;text-decoration:none;font-family:'Bradley Hand','Segoe Script',cursive;font-size:26px;color:#1c1917">
 
             <!-- The picture. PNG, because Outlook will not draw an SVG. -->
             <img src="${ORIGIN}/illustrations/buildings-street.png" width="260" alt=""
