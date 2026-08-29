@@ -96,11 +96,11 @@ function shell(opts: {
 <meta name="color-scheme" content="light">
 <meta name="supported-color-schemes" content="light">
 </head>
-<body style="margin:0;padding:0;background-color:#f5f5f4">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f5f5f4" style="background-color:#f5f5f4;margin:0;padding:0">
+<body style="margin:0;padding:0;background-color:#ffffff">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff;margin:0;padding:0">
   <tr>
     <td align="center" style="padding:40px 12px">
-      <table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff;width:520px;max-width:100%;border-radius:14px;border:1px solid #e7e5e4">
+      <table role="presentation" width="520" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff;width:520px;max-width:100%">
         <tr>
           <td align="center" style="padding:38px 34px 34px;background-color:#ffffff">
 
