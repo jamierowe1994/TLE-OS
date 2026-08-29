@@ -5,7 +5,7 @@ import { addInvite, invites, markInviteSent, removeInvite, tabUsage, bugs } from
 import { lettingsAgents } from "@/lib/rex-agents";
 import { findUserByEmail } from "@/lib/users";
 import { startVerification } from "@/lib/verification";
-import { verifyEmailFor } from "@/lib/verify-email";
+import { pilotInviteEmail } from "@/lib/email/pilot-email";
 import { sendEmail } from "@/lib/resend";
 import { record } from "@/lib/audit";
 
@@ -109,7 +109,19 @@ export async function POST(req: NextRequest) {
   try {
     const { token } = await startVerification(email, "join");
     const origin = process.env.OS_ORIGIN?.replace(/\/+$/, "") || req.nextUrl.origin;
-    const mail = verifyEmailFor(`${origin}/join?token=${encodeURIComponent(token)}`);
+    /* The PILOT invitation, not the account-verification email.
+     
+       This screen has always minted a join token and then sent the generic
+       "Set up your TLE OS account" — so the email actually written for the
+       pilot, the one that says "You're in", had never been sent by anything.
+       Its own catalogue entry admitted it: "NOT WIRED YET".
+     
+       Same token, same link, same one-time 24 hours. Only the words and the
+       picture differ, and they are the ones written for this moment. */
+    const mail = pilotInviteEmail(
+      `${origin}/join?token=${encodeURIComponent(token)}`,
+      (name ?? "").trim().split(/\s+/)[0] || undefined
+    );
     await sendEmail({ to: email, subject: mail.subject, html: mail.html, text: mail.text });
     await markInviteSent(email);
     await record({

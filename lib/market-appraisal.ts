@@ -144,5 +144,5 @@ export const SAMPLE_APPRAISALS: MarketAppraisal[] = [
    * If 12 is the wrong number, change it here: every other house on the close
    * resolves too, so the record moves with one edit.
    */
-  { id: "ma4", leadId: null, landlord: "James Rowe", address: "12 Dover Close", postcode: "NN5 4WJ", agent: "Rhiannon Dodge", appointmentAt: "2026-08-31T10:30:00+01:00", stage: "booked", valuation: null, presentToken: null, createdAt: "2026-08-27" },
+  { id: "ma4", leadId: null, landlord: "Marcus Ellery", address: "12 Dover Close", postcode: "NN5 4WJ", agent: "Rhiannon Dodge", appointmentAt: "2026-08-31T10:30:00+01:00", stage: "booked", valuation: null, presentToken: null, createdAt: "2026-08-27" },
 ];
