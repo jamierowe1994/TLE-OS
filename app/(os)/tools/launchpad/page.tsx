@@ -26,7 +26,8 @@ export default function LaunchPadPage() {
     <>
       <PageHeader
         title="Launch Pad"
-        blurb="Leads from your ads, and where each one has got to. Open a lead to work it."
+        blurb="Leads from your ads, and where each one has got to. Open one to read it, write on it, and set when to ring back."
+        illustration="/illustrations/notioly/paper-airplane.png"
       />
       <p className="mt-2 text-[11.5px] text-muted">
         <Link href="/tools" className="underline">

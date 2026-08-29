@@ -133,6 +133,89 @@ export async function getLaunchPadAccess(
   }
 }
 
+export interface LeadDetail {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  source: string;
+  stage: string;
+  note: string;
+  receivedAt: string;
+  followUpAt: string | null;
+  appointmentAt: string | null;
+  adName: string | null;
+  address: string | null;
+  postcode: string | null;
+  notes: { at: string; text: string }[];
+  history: { stage: string; at: string; label?: string }[];
+  deepLink: string;
+}
+
+/**
+ * One lead in full, and the two things an agent can change from here.
+ *
+ * ── Shared, not synced ────────────────────────────────────────────────────
+ *
+ * There is one copy of a note and it lives in Launch Pad. Writing goes
+ * straight there and reading comes straight back, so a note left in either
+ * window shows in both without anything being copied, reconciled or
+ * de-duplicated. The sync nobody has to maintain is the one never built.
+ *
+ * Every call returns the UPDATED lead, so the panel redraws from what was
+ * actually saved rather than from what it hoped it saved. If the write half
+ * succeeded and the read half did not, the panel shows the old state and the
+ * agent writes it again — annoying, and honest. The reverse, showing a note
+ * that never landed, is the one that loses work.
+ */
+async function leadCall(
+  path: string,
+  init: RequestInit & { timeoutMs?: number } = {}
+): Promise<LeadDetail | null> {
+  if (!launchPadConfigured()) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), init.timeoutMs ?? 10_000);
+  try {
+    const res = await fetch(`${base()}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${process.env.ADS_API_KEY}`,
+        ...(init.body ? { "content-type": "application/json" } : {}),
+        ...(init.headers ?? {}),
+      },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const j = (await res.json()) as { lead?: LeadDetail };
+    return j.lead ?? null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export function fetchLead(email: string, id: string): Promise<LeadDetail | null> {
+  return leadCall(
+    `/api/partner/lead?email=${encodeURIComponent(email)}&id=${encodeURIComponent(id)}`
+  );
+}
+
+export function addLeadNote(email: string, id: string, text: string) {
+  return leadCall("/api/partner/lead", {
+    method: "POST",
+    body: JSON.stringify({ email, id, action: "note", text }),
+  });
+}
+
+export function setLeadFollowUp(email: string, id: string, at: string | null) {
+  return leadCall("/api/partner/lead", {
+    method: "POST",
+    body: JSON.stringify({ email, id, action: "follow-up", at }),
+  });
+}
+
 /** Where a lead sits today. Decided by Launch Pad, never re-derived here. */
 export type LeadBucket = "uncontacted" | "follow-up" | "resting" | "won" | "closed";
 
