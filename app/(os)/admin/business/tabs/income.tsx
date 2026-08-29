@@ -390,12 +390,68 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
       new Date(`${m}-01T00:00:00Z`)
         .toLocaleString("en-GB", { month: "short", timeZone: "UTC" })
         .toLowerCase();
+
+    /* Which months PayProp actually ANSWERED, by MM. `filled` is the
+       authority here, not whether a given cell happens to be non-null: the
+       route nulls a genuine zero (`... || null`), so an account that billed
+       nothing in March is indistinguishable from March never having loaded.
+       Asking "did this month land?" once, at the month level, avoids reading
+       that ambiguity as a gap. */
+    const filled = liveMonths?.filled ?? [];
+    const filledMM = new Set(filled.map((m) => m.slice(5)));
+    const nothingOutstanding = Boolean(liveMonths) && (liveMonths?.pending?.length ?? 1) === 0;
+
+    /**
+     * A total, or null — never a partial sum.
+     *
+     * Two separate reasons to decline, and both matter:
+     *
+     *  · a month in the span hasn't landed. Adding up what HAS landed gives a
+     *    quarter that is simply too small, with nothing on its face to say so.
+     *    That is the same failure as the part-month August column, and it is
+     *    the shape of every discrepancy this dashboard has been caught by.
+     *  · the metric has no source at all. Licence, pro and joining fees never
+     *    come from PayProp, so every cell is null and the sum is 0 — which
+     *    would state that TLE earned nothing in licence fees, a confident and
+     *    false claim where a dash says the true thing.
+     *
+     * Past those two, a null cell inside a month that DID land is a real zero,
+     * so it adds as zero.
+     */
+    const total = (
+      row: Record<string, unknown>,
+      keys: string[],
+      complete: boolean
+    ): number | null => {
+      if (!complete) return null;
+      const values = keys.map((k) => row[k]);
+      if (!values.some((v) => typeof v === "number")) return null;
+      return values.reduce<number>(
+        (t, v) => t + (typeof v === "number" ? v : 0),
+        0
+      );
+    };
+
     return METRIC_ROWS.map((metric) => {
       const row: Record<string, unknown> = { metric };
       const live = liveMonths?.rows[metric];
       if (live) {
         for (const [month, value] of Object.entries(live)) row[short(month)] = value;
       }
+
+      /* The quarter and YTD columns have been rendered since the port and
+         assigned by nobody, so they have shown a dash in every row on every
+         load. The columns were derived from the calendar; the figures behind
+         them were never derived from anything. */
+      for (const q of QUARTERS) {
+        row[q.key] = total(
+          row,
+          q.months.map((mm) => short(`2000-${mm}`)),
+          q.months.every((mm) => filledMM.has(mm))
+        );
+      }
+      row.ytd = total(row, filled.map(short), nothingOutstanding);
+
       return row as MonthlyRow;
     });
   }, [liveMonths]);
@@ -411,7 +467,14 @@ export default function IncomeTab({ month, seed }: { month: string; seed: SeedDa
         pendingMonths.length
           ? ` Still fetching ${pendingMonths.map((m) => monthLabel(m)).join(", ")}.`
           : ""
-      } Licence, pro and joining fees are blank throughout — they don't run through PayProp, and joining fees go through a separate account we can't read.`
+      } Licence, pro and joining fees are blank throughout — they don't run through PayProp, and joining fees go through a separate account we can't read.${
+        /* Without this sentence a dashed quarter reads as a fault rather than
+           a refusal to guess, and the natural next move is to go looking for
+           the figure somewhere less careful. */
+        pendingMonths.length
+          ? " A quarter or YTD total only appears once every month inside it has landed, so some are dashed until the rest arrive."
+          : ""
+      }`
     : null;
 
   const gciRow = monthlyRows.find((r) => r.metric === "Combined GCI (exc VAT)");
