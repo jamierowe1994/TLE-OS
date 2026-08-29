@@ -48,7 +48,7 @@ export default function HelpDock() {
   const path = usePathname();
   const [signedIn, setSignedIn] = useState(false);
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"help" | "feedback">("help");
+  const [tab, setTab] = useState<"help" | "guides" | "feedback">("help");
 
   const [lines, setLines] = useState<Line[]>([]);
   const [stage, setStage] = useState<"ask" | "onboarding-name" | "onboarding-help">("ask");
@@ -60,6 +60,8 @@ export default function HelpDock() {
      — see the allowlist note in AssistantSays. */
   const [screens, setScreens] = useState<Screen[]>([]);
 
+  /** Brief acknowledgement on the button, so the press is visibly received. */
+  const [cleared, setCleared] = useState(false);
   const [kind, setKind] = useState("bug");
   const [fb, setFb] = useState("");
   const [sent, setSent] = useState(false);
@@ -205,6 +207,42 @@ export default function HelpDock() {
     setStage(stage === "onboarding-name" ? "onboarding-help" : "ask");
   }
 
+  /**
+   * Wipe the screen, keep the record.
+   *
+   * The line is drawn server-side before the screen changes, not after. Doing
+   * it the other way round gives an agent an empty panel and, if the request
+   * failed, the whole thread back again on the next open — which reads as the
+   * clear button not working rather than as a failed request, and gets pressed
+   * again and again.
+   *
+   * He greets you afterwards rather than leaving a blank box, because an empty
+   * panel with a cursor in it looks broken. No re-introduction though: being
+   * onboarded is counted across all time, so clearing does not make him ask
+   * your name again like you had never met.
+   */
+  async function clear() {
+    if (busy) return;
+    setBusy(true);
+    const ok = await fetch("/api/assistant/ask", { method: "DELETE" })
+      .then((r) => r.ok)
+      .catch(() => false);
+    setBusy(false);
+    if (!ok) {
+      setLines((l) => [
+        ...l,
+        { role: "assistant", text: "I couldn't clear that just now. Try again in a moment." },
+      ]);
+      return;
+    }
+    setLines([{ role: "assistant", text: "Cleared. What can I help you with?" }]);
+    setStage("ask");
+    /* So the next scroll is a jump rather than a crawl down a list of one. */
+    landed.current = false;
+    setCleared(true);
+    setTimeout(() => setCleared(false), 1600);
+  }
+
   async function sendFeedback() {
     setBusy(true);
     setMood("thinking");
@@ -265,13 +303,32 @@ export default function HelpDock() {
             <span className="absolute -bottom-[1px] right-9 h-4 w-4 rotate-45 bg-panel" />
 
             <div className="relative">
-              <div className="flex gap-1.5">
+              {/* Wraps, because three pills and Clear do not fit across a
+                  340px bubble on a phone. */}
+              <div className="flex flex-wrap items-center gap-1.5">
                 <button type="button" onClick={() => setTab("help")} className={pill(tab === "help")}>
                   Need help?
+                </button>
+                <button type="button" onClick={() => setTab("guides")} className={pill(tab === "guides")}>
+                  Guides
                 </button>
                 <button type="button" onClick={() => setTab("feedback")} className={pill(tab === "feedback")}>
                   Give feedback
                 </button>
+                {/* Only once there is something to clear, and never mid-answer.
+                    Set apart from the tab pills rather than dressed as another
+                    one: those switch what you are looking at, this changes
+                    something. */}
+                {tab === "help" && lines.length > 0 && !busy && (
+                  <button
+                    type="button"
+                    onClick={clear}
+                    title="Start this conversation again. Your questions are still kept."
+                    className="ml-auto text-[11px] text-muted underline decoration-line underline-offset-2 transition-colors hover:text-ink"
+                  >
+                    {cleared ? "Cleared" : "Clear"}
+                  </button>
+                )}
               </div>
 
               {tab === "help" ? (
@@ -334,6 +391,36 @@ export default function HelpDock() {
                       : "I can't answer on my own just now — everything you ask goes to James, and the answers become the help centre."}
                   </p>
                 </>
+              ) : tab === "guides" ? (
+                /**
+                 * The shelf, before there is anything on it.
+                 *
+                 * James asked for the tab now and the guides later. An empty tab
+                 * is a promise, so it says what it is for and what to do in the
+                 * meantime rather than showing a spinner or a blank panel that
+                 * reads as broken. It deliberately does not invent categories or
+                 * dummy titles: a list of guides that do not open is worse than
+                 * an honest empty shelf, and this whole assistant is built on
+                 * not implying something works when it does not.
+                 */
+                <div className="mt-3">
+                  <p className="text-[13.5px]">Guides are on their way</p>
+                  <p className="mt-1.5 text-[12px] leading-relaxed text-muted">
+                    Written walkthroughs and training you can read at your own pace, rather
+                    than having to ask. Nothing is filed here yet.
+                  </p>
+                  <p className="mt-2.5 text-[12px] leading-relaxed text-muted">
+                    Until then, ask me under{" "}
+                    <button
+                      type="button"
+                      onClick={() => setTab("help")}
+                      className="underline decoration-line underline-offset-2 hover:text-ink"
+                    >
+                      Need help?
+                    </button>{" "}
+                    - and what people ask is what gets written first, so it is worth asking.
+                  </p>
+                </div>
               ) : sent ? (
                 <p className="py-5 text-center text-[13px]">Thanks — that&apos;s logged.</p>
               ) : (

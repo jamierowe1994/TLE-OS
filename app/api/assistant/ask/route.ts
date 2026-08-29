@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
-import { logLine, myHistory, isOnboarded, type LogKind } from "@/lib/assistant-log";
+import {
+  logLine,
+  myHistory,
+  isOnboarded,
+  clearChat,
+  type LogKind,
+} from "@/lib/assistant-log";
 import { ask, budget, assistantConfigured } from "@/lib/assistant-brain";
 import { AGENT_NAV } from "@/lib/nav";
 
@@ -63,6 +69,27 @@ export async function GET(req: NextRequest) {
        Admin is excluded upstream in AGENT_NAV. */
     screens: AGENT_NAV.map((n) => ({ href: n.href, label: n.label })),
   });
+}
+
+/**
+ * Start the screen again.
+ *
+ * DELETE, because from where the agent is standing this removes their
+ * conversation — the verb should match what they think they are doing. Nothing
+ * is actually deleted; see clearChat.
+ *
+ * Takes no id and clears only the caller's own thread, for the same reason GET
+ * takes no user parameter: an endpoint that accepts somebody else's id is one
+ * missing check away from letting any agent wipe another's screen.
+ */
+export async function DELETE(req: NextRequest) {
+  const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
+  if (!userId) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+  const me = await findUserById(userId);
+  if (!me) return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+
+  await clearChat(userId, me.email);
+  return NextResponse.json({ ok: true });
 }
 
 export async function POST(req: NextRequest) {
