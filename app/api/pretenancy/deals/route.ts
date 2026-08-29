@@ -5,7 +5,7 @@ import {
   getBusinessPhotoIndex,
   matchListingConfident,
   matchListingPhoto,
-  getComplianceForListings,
+  getComplianceForProperties,
   type DealCompliance,
 } from "@/lib/business/rex-stats";
 import { effectivePortalStage, getOverlays } from "@/lib/business/deal-store";
@@ -227,15 +227,23 @@ export async function GET(req: NextRequest) {
   //
   // Deadlined like the photos. ComplianceEntries is the slowest thing REX does,
   // and Kirstie's board must render without it rather than hang.
+  /* Keyed by PROPERTY id, not listing id. REX hangs compliance entries off the
+     property, and asking with a listing id matched nothing — while the call
+     itself succeeded, so every property came back "checked" with no entries and
+     the required-set filler reported a missing EPC, gas certificate and EICR
+     against all of them. A false alarm on every deal on the board.
+
+     Empty property ids are dropped rather than sent: a malformed REX row would
+     otherwise put "" into an `in` criteria and quietly widen the query. */
   const confidentByDeal = new Map<string, string>();
   if (photos) {
     for (const d of deals) {
       const m = matchListingConfident(photos, d.app.propertyName, d.app.locality);
-      if (m?.listingId) confidentByDeal.set(d.app.id, String(m.listingId));
+      if (m?.propertyId) confidentByDeal.set(d.app.id, String(m.propertyId));
     }
   }
   const compliance = await Promise.race([
-    getComplianceForListings([...confidentByDeal.values()]).catch(
+    getComplianceForProperties([...confidentByDeal.values()]).catch(
       () => new Map<string, DealCompliance>()
     ),
     new Promise<Map<string, DealCompliance>>((r) =>
@@ -393,9 +401,14 @@ export async function GET(req: NextRequest) {
       tenancy: tenancyHit
         ? { startDate: tenancyHit.startDate, depositId: tenancyHit.depositId }
         : null,
+      /* ToB stays on the LISTING id — REX's e-sign register really is keyed
+         that way. Compliance moves to the PROPERTY id, because that is what
+         ComplianceEntries hangs off. The two ids living on the same match
+         object is exactly how they got confused in the first place, so they
+         are named at every use from here on. */
       tobStatus: (confident?.listingId && tob?.[confident.listingId]) || null,
-      compliance: confident?.listingId
-        ? (compliance.get(String(confident.listingId)) ?? null)
+      compliance: confident?.propertyId
+        ? (compliance.get(String(confident.propertyId)) ?? null)
         : null,
       flags,
       // A Flatfair deal has no cash deposit — suggesting a scheme under the

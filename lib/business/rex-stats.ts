@@ -1495,23 +1495,39 @@ export interface DealCompliance {
 }
 
 /**
- * Compliance for an arbitrary set of REX listings, keyed by listing id.
+ * Compliance for an arbitrary set of REX PROPERTIES, keyed by property id.
  *
  * Kirstie's board is business-wide and Propoly-sourced, so the agent-scoped
  * getAgentCompliance can't serve it, and getBusinessCompliance is aggregate
- * only. This sits between them: a chunked read for exactly the listings on
+ * only. This sits between them: a chunked read for exactly the properties on
  * screen.
+ *
+ * ── It was called getComplianceForListings, and the name was the bug ──────
+ *
+ * It never took listing ids. It passes whatever it is given straight to
+ * ComplianceEntries as `parent_object_id`, and in REX that parent is the
+ * PROPERTY (see AgentListing.propertyId). The pre-tenancy board took the name
+ * at its word and handed over listing ids.
+ *
+ * Nothing failed. REX matched nothing, the call SUCCEEDED, so every property
+ * counted as checked with an empty entry list — and the required-set pass below
+ * then reported a missing EPC, gas certificate and EICR against all of them.
+ * Not a silent gap: a false alarm on every deal on the board, on the one
+ * question where being wrong is worst.
+ *
+ * Renamed rather than documented. A comment would have sat next to a signature
+ * that still said the opposite.
  *
  * Applies the same required-set pass as everywhere else, so a property missing
  * a gas certificate reads as outstanding here too — the board is the last place
  * anyone looks before a tenancy starts, which makes it the most important
  * place for a gap to be visible.
  */
-export async function getComplianceForListings(
-  listingIds: string[]
+export async function getComplianceForProperties(
+  propertyIds: string[]
 ): Promise<Map<string, DealCompliance>> {
   const out = new Map<string, DealCompliance>();
-  const ids = [...new Set(listingIds.filter(Boolean).map(String))];
+  const ids = [...new Set(propertyIds.filter(Boolean).map(String))];
   if (!rexConfigured() || ids.length === 0) return out;
 
   const { byParent, unchecked } = await fetchComplianceByParent(ids);
@@ -2307,6 +2323,21 @@ function tokensOf(name: string): { numbers: Set<string>; words: Set<string> } {
 
 export interface ListingPhotoMatch {
   listingId: string;
+  /**
+   * REX's PROPERTY id, which is a different thing from the listing id and the
+   * one compliance entries actually hang off (see AgentListing.propertyId).
+   *
+   * It was not carried here, and the consequence was not a missing feature but
+   * a wrong answer: the pre-tenancy board looked compliance up by LISTING id,
+   * REX matched nothing, the call succeeded so the result counted as "checked",
+   * and the baseline filler then reported a missing EPC, gas certificate and
+   * EICR against every property on the board. A false alarm on all of them, on
+   * the one question — can this legally be let — where being wrong is worst.
+   *
+   * Empty string when REX gave no property, which is possible on a malformed
+   * row and must not be sent to REX as an id.
+   */
+  propertyId: string;
   image: string | null;
   images: string[];
 }
@@ -2511,7 +2542,14 @@ export async function getBusinessPhotoIndex(deadlineMs?: number): Promise<PhotoI
     if (!pc || !l.image) continue;
     const { numbers, words } = tokensOf(l.name);
     const bucket = index.get(pc) ?? [];
-    bucket.push({ listingId: l.id, image: l.image, images: l.images, numbers, words });
+    bucket.push({
+      listingId: l.id,
+      propertyId: l.propertyId,
+      image: l.image,
+      images: l.images,
+      numbers,
+      words,
+    });
     index.set(pc, bucket);
   }
   // Richest listing first. A postcode often holds the same property more than
@@ -2536,6 +2574,7 @@ export async function getAgentPhotoIndex(rexUserId: string): Promise<PhotoIndex>
     name: string,
     locality: string,
     listingId: string,
+    propertyId: string,
     image: string | null,
     images: string[]
   ) => {
@@ -2543,12 +2582,12 @@ export async function getAgentPhotoIndex(rexUserId: string): Promise<PhotoIndex>
     if (!pc || !image) return;
     const { numbers, words } = tokensOf(name);
     const bucket = index.get(pc) ?? [];
-    bucket.push({ listingId, image, images, numbers, words });
+    bucket.push({ listingId, propertyId, image, images, numbers, words });
     index.set(pc, bucket);
   };
 
-  for (const l of listings ?? []) add(l.name, l.locality, l.id, l.image, l.images);
-  for (const p of portfolio ?? []) add(p.name, p.locality, p.listingId, p.image, p.images);
+  for (const l of listings ?? []) add(l.name, l.locality, l.id, l.propertyId, l.image, l.images);
+  for (const p of portfolio ?? []) add(p.name, p.locality, p.listingId, p.propertyId, p.image, p.images);
   return index;
 }
 
