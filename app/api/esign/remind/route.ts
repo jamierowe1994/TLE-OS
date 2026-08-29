@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
+import { sendMerge } from "@/lib/rex-mailmerge";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { rexTokenFor } from "@/lib/rex-user";
@@ -113,23 +114,22 @@ export async function POST(req: NextRequest) {
   try {
     const mail = renderPlain(mailText.subject, mailText.text);
     const actor = await rexTokenFor(userId);
-    const res = await rexCall(
-      "MailMerge",
-      "createAndSend",
-      {
-        subject: mail.subject,
-        body: mail.html,
-        // By RECORD where we have one — that is what puts the send on the
-        // landlord's REX timeline. A bare address still sends but lands
-        // nowhere anyone will look.
-        ...(body.contactId
-          ? { recipient_records: [{ service_name: "Contacts", record_id: Number(body.contactId) }] }
-          : { recipient_addresses: [to] }),
-      },
+    // By RECORD — that is what puts the send on the landlord's REX timeline.
+    // Without a contact id there is no record to hang it on.
+    if (!body.contactId) {
+      return NextResponse.json(
+        { ok: false, error: `No REX contact record for ${to}, so a chaser would land nowhere. Open them in REX first.` },
+        { status: 400 }
+      );
+    }
+    const sent = await sendMerge(
+      { contactId: String(body.contactId) },
+      { subject: mail.subject, body: mail.html },
       actor
     );
 
-    if (!res.ok) {
+    if (!sent.ok) {
+      const res = { ok: false as const, status: 502, result: null, error: sent.error };
       if (actor && isExpiredToken(res)) {
         return NextResponse.json(
           { ok: false, error: "Your REX sign-in has lapsed — reconnect it in your profile.", reconnect: true },
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
           ok: false,
           locked: true,
           error:
-            'Chasing is locked here. Set REX_ALLOW_WRITES="MailMerge/createAndSend" to unlock it — and send the first one to a colleague, not a landlord.',
+            'Chasing is locked here. Set REX_ALLOW_WRITES="MailMerge/queueMergeUsingObjects" to unlock it — and send the first one to a colleague, not a landlord.',
         },
         { status: 423 }
       );

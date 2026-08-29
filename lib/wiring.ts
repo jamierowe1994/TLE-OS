@@ -264,7 +264,14 @@ export const WIRING: WiringRow[] = [
     area: "Getting messages out",
     item: "Sending real email — through REX itself",
     state: "untested",
-    note: "Found 9 Aug, and it changes the plan: REX exposes MailMerge/createAndSend ('create a mail merge and send it instantly'), and the account already has a working sender configured ('Default Email Provider for Rex'). So no SMTP account, no Resend bill, no new sending domain — and every send lands on the contact's REX timeline, which a separate mailer would never do. Needs one supervised test send to a colleague.",
+    note: "The account already has a working sender ('Default Email Provider for Rex'), so no SMTP account, no Resend bill, no new sending domain — and every send lands on the contact's REX timeline, which a separate mailer never would. The PAYLOAD is now proven rather than assumed: MailMerge has no subject, body or recipients field; recipients are merge_objects of record ids and free text goes in per-object custom as { subject, body }, sent via queueMergeUsingObjects. Confirmed 29 Aug by rendering a real merge against a real landlord with getMergedStringSet, which is read-only and needs no unlock. Until 29 Aug all four send call sites in the OS passed a shape REX does not have; none had ever run, so none had ever failed. Still needs one supervised send to a colleague, and REX_ALLOW_WRITES=\"MailMerge/queueMergeUsingObjects\".",
+  },
+  {
+    system: "sends",
+    area: "Getting messages out",
+    item: "Previewing an email exactly as REX will send it",
+    state: "live",
+    note: "MailMerge/getMergedStringSet renders a merge without sending it — real contact, real property, merge tags resolved — and because its name begins with 'get' it passes the read-only allowlist untouched. So a full preview costs nothing and needs no permission. Steve refuses to send anything whose merge tags came back empty, which is how 'Dear ,' reaches a landlord.",
   },
   {
     system: "sends",

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 import { timingSafeEqual } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
-import { rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
+import { rexConfigured, RexWriteBlocked } from "@/lib/rex";
+import { sendMerge } from "@/lib/rex-mailmerge";
 import { renderPlain } from "@/lib/campaign-mail";
 
 /**
@@ -95,17 +96,18 @@ export async function POST(req: NextRequest) {
   for (const row of due) {
     try {
       const mail = renderPlain(row.subject, row.body);
-      const res = await rexCall("MailMerge", "createAndSend", {
-        subject: mail.subject,
-        body: mail.html,
-        // By RECORD where we have one — that is what puts the send on the
-        // landlord's REX timeline rather than nowhere anyone will look.
-        ...(row.contact_id
-          ? { recipient_records: [{ service_name: "Contacts", record_id: Number(row.contact_id) }] }
-          : { recipient_addresses: [row.to_email] }),
-      });
-
-      if (!res.ok) throw new Error(res.error ?? `REX refused it (${res.status}).`);
+      // By RECORD — that is what puts the send on the landlord's REX timeline
+      // rather than nowhere anyone will look. A queued send with no contact id
+      // cannot be delivered that way, so it fails loudly instead of quietly
+      // going somewhere nobody checks.
+      if (!row.contact_id) {
+        throw new Error(`No REX contact on this queued send (${row.to_email}), so it would land nowhere.`);
+      }
+      const merged = await sendMerge(
+        { contactId: row.contact_id },
+        { subject: mail.subject, body: mail.html }
+      );
+      if (!merged.ok) throw new Error(merged.error);
 
       await q(
         `UPDATE os_scheduled_sends SET state = 'sent', sent_at = NOW(), error = NULL WHERE id = $1`,
@@ -119,7 +121,7 @@ export async function POST(req: NextRequest) {
          failed rather than retrying at somebody's landlord forever. */
       const locked = e instanceof RexWriteBlocked;
       const message = locked
-        ? 'Sending is locked. Set REX_ALLOW_WRITES="MailMerge/createAndSend" to unlock it.'
+        ? 'Sending is locked. Set REX_ALLOW_WRITES="MailMerge/queueMergeUsingObjects" to unlock it.'
         : e instanceof Error
           ? e.message
           : "Send failed.";

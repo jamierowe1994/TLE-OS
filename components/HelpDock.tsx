@@ -79,13 +79,13 @@ const CARD_TITLE: Record<Proposal["kind"], string> = {
   note: "Note, ready to save",
   reminder: "Reminder, ready to set",
   "write-up": "New advert, ready to publish",
-  email: "Email, ready to copy",
+  email: "Email, ready to send",
 };
 const CARD_BUTTON: Record<Proposal["kind"], string> = {
   note: "Save note",
   reminder: "Set reminder",
   "write-up": "Publish it",
-  email: "Copy it",
+  email: "Send it",
 };
 /* The consequence, spelled out. Somebody pressing a button in a chat bubble
    deserves to know it reaches Rightmove. */
@@ -93,7 +93,7 @@ const CARD_EFFECT: Record<Proposal["kind"], string> = {
   note: "Saves to the property file in the OS. Not sent to REX.",
   reminder: "Goes in the OS diary only - not REX, not your 365 calendar.",
   "write-up": "Writes to REX and goes live on Rightmove, Zoopla and OnTheMarket in about five to ten minutes.",
-  email: "Nothing is sent. Steve can't send yet - this is the finished message and the right address, to copy out.",
+  email: "Sends through REX, so it lands on their timeline. The address is looked up again when you press - it always goes to the person on the record.",
 };
 
 export default function HelpDock() {
@@ -242,25 +242,6 @@ export default function HelpDock() {
   async function confirm(at: number) {
     const line = lines[at];
     if (!line?.sealed || line.settled) return;
-
-    /* Email is the one card with nothing to execute. Steve cannot send, so the
-       card already IS the deliverable — the finished message and the right
-       address. Posting it to the server would only come back to say so, and a
-       button that returns "didn't go" reads as a failure when nothing failed.
-       So it copies, and says it copied. */
-    if (line.card?.kind === "email") {
-      const text = `To: ${line.card.toName} <${line.card.toEmail}>\nSubject: ${line.card.subject ?? ""}\n\n${line.card.body ?? ""}`;
-      try {
-        await navigator.clipboard.writeText(text);
-        setLines((l) => l.map((x, i) => (i === at ? { ...x, settled: "done" } : x)));
-      } catch {
-        setLines((l) => [
-          ...l,
-          { role: "assistant", text: "Your browser wouldn't let me reach the clipboard — select the message above and copy it." },
-        ]);
-      }
-      return;
-    }
 
     setLines((l) => l.map((x, i) => (i === at ? { ...x, settled: "…" } : x)));
     setBusy(true);
@@ -536,7 +517,7 @@ export default function HelpDock() {
                                 >
                                   {l.settled === "done"
                                     ? l.card.kind === "email"
-                                      ? "Copied"
+                                      ? "Sent"
                                       : "Done"
                                     : l.settled === "failed"
                                       ? "Didn't go"

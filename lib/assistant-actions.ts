@@ -4,6 +4,7 @@ import { bookFor, invalidateListingBook } from "@/lib/listings-cache";
 import { getListingContacts } from "@/lib/business/rex-stats";
 import { addPropertyNote } from "@/lib/business/property-notes-store";
 import { isExpiredToken, rexCall, RexWriteBlocked } from "@/lib/rex";
+import { MERGE_WRITE, previewMerge, sendMerge } from "@/lib/rex-mailmerge";
 import { rexTokenFor } from "@/lib/rex-user";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
@@ -112,18 +113,21 @@ async function listingInScope(
 async function resolveRecipient(
   listingId: string,
   role: "landlord" | "tenant"
-): Promise<{ name: string; email: string } | { error: string }> {
+): Promise<{ name: string; email: string; contactId: string } | { error: string }> {
   const people = await getListingContacts(listingId);
   if (!people.length) {
     return { error: "REX didn't return any contacts for that property, so I can't tell who to send it to. Worth checking the record directly." };
   }
-  const want = role === "landlord" ? /landlord|owner|vendor/i : /tenant/i;
+  /* REX's own words, which are not ours: a landlord is "Listing Owner" and a
+     tenant is "Purchaser / Tenant" (reln_type ids `owner` and `purchtenant`).
+     Matching on "Landlord" alone would find nobody, ever. */
+  const want = role === "landlord" ? /owner|landlord|vendor/i : /tenant|purchtenant/i;
   const match = people.find((c) => c.role && want.test(c.role) && c.email);
   if (!match) {
-    const roles = people.map((c) => c.role ?? "no role").join(", ");
+    const roles = people.map((c) => `${c.name} (${c.role ?? "no role"})`).join(", ");
     return { error: `Nobody on that property is recorded as a ${role} with an email address. REX has: ${roles}.` };
   }
-  return { name: match.name, email: match.email as string };
+  return { name: match.name, email: match.email as string, contactId: match.id };
 }
 
 /* ==========================================================================
@@ -190,33 +194,71 @@ async function doWriteUp(
 }
 
 /**
- * Email. Composed, addressed, and deliberately not sent.
+ * Email — now the real thing.
  *
- * REX's own MailMerge is the right pipe — it puts the message on the contact's
- * timeline, which a side-channel never would. But its model, read from
- * MailMerge/describeModel on 29 Aug 2026, has no subject, no body and no
- * recipients field: a merge carries `merge_objects` of contact ids, and its
- * content as a pre-created `custom_content_uri` or a `template_id`.
+ * The shape was settled on 29 Aug by reading MailMerge itself rather than
+ * guessing a fifth time: recipients are merge_objects of record ids, and free
+ * text goes in per-object `custom` as { subject, body }. See lib/rex-mailmerge.
  *
- * All three MailMerge call sites already in this repo pass shapes that model
- * does not have — `recipients`, `recipient_addresses`, a bare `merge_objects`
- * at the top level. None has ever executed, so none has ever been found to be
- * wrong. Wiring a fourth guess would have been the worst of both: an action
- * that looks live, fails at the moment somebody needs it, and takes a real
- * landlord email down with it.
+ * Two things happen here that don't happen anywhere else in the OS:
  *
- * So this composes and hands over. The person gets the finished message and
- * the right address; sending is theirs until the merge shape is proven the
- * same way the write-up was — one supervised test, on a real record, watched.
+ *   • The recipient is resolved AGAIN, at the moment of sending, from REX. The
+ *     model never supplies an address — it names a listing and a role, and who
+ *     that is gets looked up now. Talk Steve into any address you like; this
+ *     still goes to the landlord on the record.
+ *   • The send is refused if REX cannot render the message. getMergedStringSet
+ *     is read-only and costs nothing, so there is no excuse for discovering a
+ *     broken merge tag by posting "Dear ," to a landlord.
  */
-async function doEmail(p: Extract<ActionProposal, { kind: "email" }>): Promise<ActionOutcome> {
+async function doEmail(
+  p: Extract<ActionProposal, { kind: "email" }>,
+  actorToken: string | null
+): Promise<ActionOutcome> {
   const who = await resolveRecipient(p.listingId, p.to);
   if ("error" in who) return { ok: false, message: who.error };
-  return {
-    ok: false,
-    blocked: true,
-    message: `I can't send it yet — REX's mail merge needs one supervised test before anything of ours sends through it, and the send code in the OS is written against the wrong shape. Here it is ready to go to ${who.name} at ${who.email}. Copy it into REX or your mailbox and it's done.`,
-  };
+
+  const target = { contactId: who.contactId, listingId: p.listingId };
+  const content = { subject: p.subject, body: toHtml(p.body) };
+
+  /* Render it first. A merge tag that resolves to nothing is the difference
+     between a professional email and one that opens "Dear ,". */
+  const preview = await previewMerge(target, content, actorToken);
+  if ("error" in preview) {
+    return { ok: false, message: `REX couldn't put that email together: ${preview.error}` };
+  }
+  if (preview.emptyTags.length) {
+    return {
+      ok: false,
+      message: `Not sending that — ${preview.emptyTags.join(", ")} came out blank, so ${who.name} would get an email with a gap in it. Say it a different way and I'll rebuild it.`,
+    };
+  }
+
+  try {
+    const sent = await sendMerge(target, content, actorToken);
+    if (!sent.ok) return { ok: false, message: sent.error };
+    return {
+      ok: true,
+      message: `Sent to ${who.name} at ${who.email}. It's on their REX timeline, so whoever picks them up next can see it.`,
+    };
+  } catch (e) {
+    if (e instanceof RexWriteBlocked) {
+      return {
+        ok: false,
+        blocked: true,
+        message: `Sending is locked on this environment. Set REX_ALLOW_WRITES="${MERGE_WRITE}" to unlock it — and send the first one to a colleague, not a landlord.`,
+      };
+    }
+    return { ok: false, message: e instanceof Error ? e.message : "That send failed." };
+  }
+}
+
+/** Plain text as REX wants it: HTML, with the line breaks preserved. */
+function toHtml(text: string): string {
+  return text
+    .trim()
+    .split(/\n{2,}/)
+    .map((para) => `<p>${para.replace(/\n/g, "<br>").replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>`)
+    .join("\n");
 }
 
 /**
@@ -246,6 +288,6 @@ export async function perform(
     case "write-up":
       return doWriteUp(proposal, await rexTokenFor(actor.osUserId));
     case "email":
-      return doEmail(proposal);
+      return doEmail(proposal, await rexTokenFor(actor.osUserId));
   }
 }

@@ -4,6 +4,7 @@ import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked } from "@/lib/r
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { rexTokenFor } from "@/lib/rex-user";
 import { renderPlain } from "@/lib/campaign-mail";
+import { sendMerge } from "@/lib/rex-mailmerge";
 
 /**
  * Send the pre-appraisal confirmation through REX's own mailer.
@@ -62,24 +63,28 @@ export async function POST(req: NextRequest) {
     // their name — the person the landlord will ring back.
     const actor = await rexTokenFor(verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value));
 
-    const res = await rexCall("MailMerge", "createAndSend", {
-      subject: mail.subject,
-      body: mail.html,
-      // REX addresses a merge by RECORD, not by string, which is what puts the
-      // send on the timeline. Falling back to a bare address still sends, but
-      // lands nowhere anyone will see it.
-      ...(body.contactId
-        ? { merge_objects: [{ service_name: "Contacts", record_id: Number(body.contactId) }] }
-        : { recipients: [to] }),
-    }, actor);
-    if (!res.ok) {
-      if (actor && isExpiredToken(res)) {
+    // REX addresses a merge by RECORD, never by string — that is what puts the
+    // send on the landlord's timeline. Without a contact id there is no record
+    // to hang it on, and a bare address would land nowhere anyone will look.
+    if (!body.contactId) {
+      return NextResponse.json(
+        { error: "That landlord has no REX contact record, so the email would land nowhere. Open them in REX first." },
+        { status: 400 }
+      );
+    }
+    const sent = await sendMerge(
+      { contactId: String(body.contactId) },
+      { subject: mail.subject, body: mail.html },
+      actor
+    );
+    if (!sent.ok) {
+      if (actor && isExpiredToken({ ok: false, status: 502, result: null, error: sent.error })) {
         return NextResponse.json(
           { error: "Your REX sign-in has lapsed — reconnect it in your profile and try again.", reconnect: true },
           { status: 401 }
         );
       }
-      const msg = res.error ?? `REX refused the send (${res.status}).`;
+      const msg = sent.error;
       // Its own cryptic one, translated — confirmed cause is a contact with no
       // valid email on the REX record.
       return NextResponse.json(
@@ -97,7 +102,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            'Sending is locked on this environment. Set REX_ALLOW_WRITES="MailMerge/createAndSend" to unlock it — and send the first one to a colleague, not a landlord.',
+            'Sending is locked on this environment. Set REX_ALLOW_WRITES="MailMerge/queueMergeUsingObjects" to unlock it — and send the first one to a colleague, not a landlord.',
           locked: true,
         },
         { status: 423 }

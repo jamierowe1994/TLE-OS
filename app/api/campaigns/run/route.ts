@@ -7,6 +7,7 @@ import { CAMPAIGNS, type Campaign } from "@/lib/campaigns";
 import { dispositionOf, nextDue, type StepPlan } from "@/lib/scheduler";
 import { renderStep, type StepCopy } from "@/lib/campaign-mail";
 import { rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
+import { sendMerge } from "@/lib/rex-mailmerge";
 import { switchOn } from "@/lib/switches";
 
 /**
@@ -285,22 +286,23 @@ export async function POST(req: NextRequest) {
 
     try {
       if (!rexConfigured()) throw new Error("REX isn't connected on this environment.");
-      const res = await rexCall("MailMerge", "createAndSend", {
-        subject: mail.subject,
-        body: mail.html,
-        // By record, so the send lands on the landlord's REX timeline and the
-        // next person to open them can see it. record_id is the REX contact.
-        ...(/^\d+$/.test(row.record_id)
-          ? { merge_objects: [{ service_name: "Contacts", record_id: Number(row.record_id) }] }
-          : { recipients: [row.email] }),
-      });
-      if (!res.ok) throw new Error(res.error ?? `REX refused the send (${res.status}).`);
+      // By record, so the send lands on the landlord's REX timeline and the
+      // next person to open them can see it. record_id is the REX contact; no
+      // record means no timeline, and an email nobody can later find.
+      if (!/^\d+$/.test(row.record_id)) {
+        throw new Error("No REX contact record for this enrolment, so the send would land nowhere.");
+      }
+      const sent = await sendMerge(
+        { contactId: row.record_id },
+        { subject: mail.subject, body: mail.html }
+      );
+      if (!sent.ok) throw new Error(sent.error);
       await advance(row.id, plan.index, true);
       done.push({ ...base, outcome: "sent", overtaken: plan.overtaken.length || undefined });
     } catch (e) {
       const detail =
         e instanceof RexWriteBlocked
-          ? 'REX writes are locked — set REX_ALLOW_WRITES="MailMerge/createAndSend".'
+          ? 'REX writes are locked — set REX_ALLOW_WRITES="MailMerge/queueMergeUsingObjects".'
           : e instanceof Error
             ? e.message
             : "Send failed.";
