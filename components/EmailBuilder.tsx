@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { CampaignStep } from "@/lib/campaigns";
 import { blocksFor, tleBrand, type StepCopy } from "@/lib/campaign-mail";
 // The ported TMKE renderer — the same module that sends, drawing the canvas.
@@ -68,6 +68,122 @@ const nid = () => `eb_${Date.now().toString(36)}_${(seq++).toString(36)}`;
    differently from one the renderer expects. */
 const fresh = (type: string): Block => makeBlock(type) as Block;
 
+/* ── Paths ──────────────────────────────────────────────────────────────────
+   A block used to be addressed by its id alone, which stopped working the
+   moment content could live INSIDE a column: the same operations (patch,
+   move, delete) now have to reach two depths. A path is a string so it can be
+   compared with === and held in state without re-render churn:
+
+     "b_7"           a top-level block
+     "b_7/1/b_9"     block b_9, in column index 1, of the layout block b_7
+
+   Two segments is the whole story — the renderer draws no deeper than that
+   and nested column tables break in Outlook, so a path is never longer. */
+type Path = string;
+
+const childPath = (parent: string, col: number, id: string) => `${parent}/${col}/${id}`;
+const isChildPath = (p: Path) => p.split("/").length === 3;
+
+const layoutOf = (block: Block) =>
+  (COLUMN_LAYOUTS as { key: string; label: string; cols: number; w: number[] }[]).find(
+    (l) => l.key === block.layout
+  ) || (COLUMN_LAYOUTS as { key: string; cols: number; w: number[] }[])[1];
+
+/** The `cols` array, normalised to the column count the chosen layout wants.
+    Overflow is folded into the LAST remaining column rather than dropped —
+    silently losing somebody's paragraph because they tried a narrower layout
+    is unforgivable, and undo is a save away. */
+function ensureCols(block: Block): Block[][] {
+  const want = layoutOf(block).cols;
+  const cur = (Array.isArray(block.cols) ? (block.cols as Block[][]) : []).map((c) =>
+    Array.isArray(c) ? c : []
+  );
+  const out: Block[][] = [];
+  for (let i = 0; i < want; i += 1) out.push(cur[i] ? [...cur[i]] : []);
+  for (let i = want; i < cur.length; i += 1) out[want - 1].push(...cur[i]);
+  return out;
+}
+
+function getAt(blocks: Block[], path: Path): Block | null {
+  if (!path) return null;
+  const [pid, ci, cid] = path.split("/");
+  const top = blocks.find((b) => b.id === pid);
+  if (!top) return null;
+  if (cid === undefined) return top;
+  return ensureCols(top)[Number(ci)]?.find((b) => b.id === cid) ?? null;
+}
+
+/** Rewrite the block at `path`. Returning null removes it — one traversal
+    covers patch, delete and replace at both depths. */
+function editAt(blocks: Block[], path: Path, fn: (b: Block) => Block | null): Block[] {
+  if (!path) return blocks;
+  const [pid, ci, cid] = path.split("/");
+  if (cid === undefined) {
+    const out: Block[] = [];
+    for (const b of blocks) {
+      if (b.id !== pid) {
+        out.push(b);
+        continue;
+      }
+      const n = fn(b);
+      if (n) out.push(n);
+    }
+    return out;
+  }
+  return blocks.map((b) => {
+    if (b.id !== pid) return b;
+    const cols = ensureCols(b).map((col, i) => {
+      if (i !== Number(ci)) return col;
+      const out: Block[] = [];
+      for (const c of col) {
+        if (c.id !== cid) {
+          out.push(c);
+          continue;
+        }
+        const n = fn(c);
+        if (n) out.push(n);
+      }
+      return out;
+    });
+    return { ...b, cols };
+  });
+}
+
+/** Where a drop would land. `parent === null` means the top level. */
+type Drop = { parent: string | null; col: number; index: number };
+const sameDrop = (a: Drop | null, b: Drop | null) =>
+  !!a && !!b && a.parent === b.parent && a.col === b.col && a.index === b.index;
+
+function insertAt(blocks: Block[], drop: Drop, block: Block): Block[] {
+  if (!drop.parent) {
+    const next = [...blocks];
+    next.splice(Math.max(0, Math.min(drop.index, next.length)), 0, block);
+    return next;
+  }
+  return blocks.map((b) => {
+    if (b.id !== drop.parent) return b;
+    const cols = ensureCols(b).map((col, i) => {
+      if (i !== drop.col) return col;
+      const next = [...col];
+      next.splice(Math.max(0, Math.min(drop.index, next.length)), 0, block);
+      return next;
+    });
+    return { ...b, cols };
+  });
+}
+
+/** The list a path sits in, for index arithmetic. */
+function listFor(blocks: Block[], path: Path): Block[] {
+  if (!isChildPath(path)) return blocks;
+  const [pid, ci] = path.split("/");
+  const parent = blocks.find((b) => b.id === pid);
+  return parent ? ensureCols(parent)[Number(ci)] ?? [] : [];
+}
+
+/** What is being dragged. The type travels with it because the guard against
+    layouts-inside-layouts has to run during dragover, when dataTransfer is
+    deliberately unreadable. */
+type Drag = { kind: "new"; type: string } | { kind: "move"; type: string; path: Path };
 
 export default function EmailBuilder({
   campaignId,
@@ -88,10 +204,17 @@ export default function EmailBuilder({
   const [blocks, setBlocks] = useState<Block[]>(() =>
     initial?.blocks?.length ? (initial.blocks as Block[]) : (blocksFor(step) as Block[])
   );
-  const [selected, setSelected] = useState<string>("");
+  const [selected, setSelected] = useState<Path>("");
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
+
+  /* The drag itself lives in a ref, not state: dragover fires continuously and
+     re-rendering the canvas under a live drag drops the drop. Only the
+     INDICATOR position is state, because that's the one thing that must
+     repaint. */
+  const dragging = useRef<Drag | null>(null);
+  const [dropAt, setDropAt] = useState<Drop | null>(null);
 
   const brand = useMemo(() => tleBrand(), []);
   const ctx = useMemo(
@@ -108,23 +231,146 @@ export default function EmailBuilder({
     setDirty(true);
     setNote("");
   };
-  const patch = (id: string, field: string, value: unknown) =>
-    change(blocks.map((b) => (b.id === id ? { ...b, [field]: value } : b)));
-  const move = (id: string, by: number) => {
-    const i = blocks.findIndex((b) => b.id === id);
-    const j = i + by;
-    if (i < 0 || j < 0 || j >= blocks.length) return;
-    const next = [...blocks];
-    [next[i], next[j]] = [next[j], next[i]];
-    change(next);
+
+  /* Ids are unique across the whole tree, so the inspector can keep saying
+     "this id, this field" and the path is worked out here. That's what keeps
+     the big Fields switch untouched by nesting. */
+  const pathOf = (id: string): Path => {
+    if (blocks.some((b) => b.id === id)) return id;
+    for (const b of blocks) {
+      if (b.type !== "columns") continue;
+      const cols = ensureCols(b);
+      for (let i = 0; i < cols.length; i += 1) {
+        if (cols[i].some((c) => c.id === id)) return childPath(b.id, i, id);
+      }
+    }
+    return "";
   };
+
+  const patch = (id: string, field: string, value: unknown) => {
+    const path = pathOf(id);
+    if (!path) return;
+    change(
+      editAt(blocks, path, (b) =>
+        // Changing the layout changes how many cells exist; growing or
+        // shrinking `cols` to match is part of the same edit, never a
+        // separate one the renderer has to survive in between.
+        field === "layout" && b.type === "columns"
+          ? { ...b, layout: value, cols: ensureCols({ ...b, layout: value } as Block) }
+          : { ...b, [field]: value }
+      )
+    );
+  };
+
+  const move = (path: Path, by: number) => {
+    const list = listFor(blocks, path);
+    const id = isChildPath(path) ? path.split("/")[2] : path;
+    const i = list.findIndex((b) => b.id === id);
+    const j = i + by;
+    if (i < 0 || j < 0 || j >= list.length) return;
+    const reordered = [...list];
+    [reordered[i], reordered[j]] = [reordered[j], reordered[i]];
+    if (!isChildPath(path)) {
+      change(reordered);
+      return;
+    }
+    const [pid, ci] = path.split("/");
+    change(
+      blocks.map((b) =>
+        b.id === pid
+          ? { ...b, cols: ensureCols(b).map((c, k) => (k === Number(ci) ? reordered : c)) }
+          : b
+      )
+    );
+  };
+
+  const remove = (path: Path) => {
+    change(editAt(blocks, path, () => null));
+    setSelected("");
+  };
+
+  /* Clicking a palette button still adds after whatever is selected — including
+     inside a cell, so the keyboard-only route reaches the same places the
+     mouse does. */
   const addBlock = (type: string) => {
     const b = fresh(type);
-    const at = blocks.findIndex((x) => x.id === selected);
+    if (selected && isChildPath(selected) && type !== "columns") {
+      const [pid, ci, cid] = selected.split("/");
+      const list = listFor(blocks, selected);
+      const at = list.findIndex((x) => x.id === cid);
+      const drop: Drop = { parent: pid, col: Number(ci), index: at < 0 ? list.length : at + 1 };
+      change(insertAt(blocks, drop, b));
+      setSelected(childPath(pid, Number(ci), b.id));
+      return;
+    }
+    const topId = selected ? selected.split("/")[0] : "";
+    const at = blocks.findIndex((x) => x.id === topId);
     const next = [...blocks];
     next.splice(at < 0 ? blocks.length : at + 1, 0, b);
     change(next);
     setSelected(b.id);
+  };
+
+  /* ── Drag and drop ────────────────────────────────────────────────────────
+     Native HTML5 DnD, no library: the tree is small, the drop targets are
+     explicit strips rather than computed geometry, and a dependency here
+     would have to be kept email-safe forever. */
+  const dnd = {
+    at: dropAt,
+    begin(d: Drag) {
+      dragging.current = d;
+    },
+    end() {
+      dragging.current = null;
+      setDropAt(null);
+    },
+    over(d: Drop) {
+      setDropAt((prev) => (sameDrop(prev, d) ? prev : d));
+    },
+    // A layout inside a layout produces nested tables, which Outlook breaks
+    // and the renderer doesn't read anyway. Refused before it lands, not after.
+    allows(parent: string | null) {
+      const d = dragging.current;
+      if (!d) return false;
+      return parent === null || d.type !== "columns";
+    },
+    drop(target: Drop) {
+      const d = dragging.current;
+      dragging.current = null;
+      setDropAt(null);
+      if (!d) return;
+      // Same guard as `allows`, re-checked here because the drop is the last
+      // moment it can be refused.
+      if (target.parent !== null && d.type === "columns") return;
+
+      if (d.kind === "new") {
+        const b = fresh(d.type);
+        change(insertAt(blocks, target, b));
+        setSelected(target.parent ? childPath(target.parent, target.col, b.id) : b.id);
+        return;
+      }
+
+      const src = getAt(blocks, d.path);
+      if (!src) return;
+
+      // Moving within one list: taking the block out first shifts everything
+      // after it up by one, so the target index has to come down to match or
+      // the block lands one place too far along.
+      const srcChild = isChildPath(d.path);
+      const [spid, sci] = d.path.split("/");
+      const sameList = srcChild
+        ? target.parent === spid && target.col === Number(sci)
+        : target.parent === null;
+      let index = target.index;
+      if (sameList) {
+        const from = listFor(blocks, d.path).findIndex((b) => b.id === src.id);
+        if (from > -1 && from < index) index -= 1;
+      }
+
+      const next = insertAt(editAt(blocks, d.path, () => null), { ...target, index }, src);
+      change(next);
+      setSelected(target.parent ? childPath(target.parent, target.col, src.id) : src.id);
+    },
   };
 
   async function save() {
@@ -160,6 +406,7 @@ export default function EmailBuilder({
       if (j.saved) {
         setBlocks(blocksFor(step) as Block[]);
         setSubject(step.subject);
+        setSelected("");
         setDirty(false);
         setNote("Back to what the campaign says in code.");
         onSaved(null);
@@ -178,7 +425,7 @@ export default function EmailBuilder({
     return () => window.removeEventListener("keydown", onKey);
   }, [dirty, onClose]);
 
-  const sel = blocks.find((b) => b.id === selected);
+  const sel = getAt(blocks, selected);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-3 backdrop-blur-sm">
@@ -229,31 +476,37 @@ export default function EmailBuilder({
                 <button
                   key={p.type}
                   type="button"
+                  draggable
+                  onDragStart={(e) => {
+                    dnd.begin({ kind: "new", type: p.type });
+                    e.dataTransfer.effectAllowed = "copy";
+                    // Firefox refuses to start a drag with an empty payload.
+                    e.dataTransfer.setData("text/plain", p.type);
+                  }}
+                  onDragEnd={() => dnd.end()}
                   onClick={() => addBlock(p.type)}
-                  className="rounded-lg border border-line/70 px-2 py-2 text-[11.5px] hover:border-ink/30"
+                  className="cursor-grab rounded-lg border border-line/70 px-2 py-2 text-[11.5px] hover:border-ink/30 active:cursor-grabbing"
                 >
                   {p.label}
                 </button>
               ))}
             </div>
+            <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
+              Drag one onto the email, or click to drop it in under whatever is selected.
+            </p>
 
             <div className="mt-5 border-t border-line/60 pt-4">
               {sel ? (
                 <>
                   <div className="mb-2 flex items-center gap-2">
-                    <p className="text-[10.5px] uppercase tracking-wide text-muted">{sel.type}</p>
+                    <p className="text-[10.5px] uppercase tracking-wide text-muted">
+                      {sel.type}
+                      {isChildPath(selected) ? " · in a column" : ""}
+                    </p>
                     <div className="ml-auto flex gap-1">
-                      <Mini onClick={() => move(sel.id, -1)} label="Move up">↑</Mini>
-                      <Mini onClick={() => move(sel.id, 1)} label="Move down">↓</Mini>
-                      <Mini
-                        onClick={() => {
-                          change(blocks.filter((b) => b.id !== sel.id));
-                          setSelected("");
-                        }}
-                        label="Delete"
-                      >
-                        ×
-                      </Mini>
+                      <Mini onClick={() => move(selected, -1)} label="Move up">↑</Mini>
+                      <Mini onClick={() => move(selected, 1)} label="Move down">↓</Mini>
+                      <Mini onClick={() => remove(selected)} label="Delete">×</Mini>
                     </div>
                   </div>
                   <Fields block={sel} patch={patch} />
@@ -292,20 +545,25 @@ export default function EmailBuilder({
                 className="rounded-2xl border border-line/60 bg-white p-5"
                 style={{ backgroundColor: brand.cardColor }}
               >
-                {blocks.map((b) => (
-                  <Canvas
-                    key={b.id}
-                    block={b}
-                    brand={brand}
-                    ctx={ctx}
-                    selected={b.id === selected}
-                    onSelect={() => setSelected(b.id)}
-                    onText={(text) => patch(b.id, "text", text)}
-                  />
+                {blocks.map((b, i) => (
+                  <Fragment key={b.id}>
+                    <DropStrip drop={{ parent: null, col: 0, index: i }} dnd={dnd} />
+                    <Canvas
+                      block={b}
+                      path={b.id}
+                      brand={brand}
+                      ctx={ctx}
+                      selected={selected}
+                      onSelect={setSelected}
+                      onText={(id, text) => patch(id, "text", text)}
+                      dnd={dnd}
+                    />
+                  </Fragment>
                 ))}
+                <DropStrip drop={{ parent: null, col: 0, index: blocks.length }} dnd={dnd} />
                 {!blocks.length && (
                   <p className="py-10 text-center text-[12px] text-muted">
-                    Nothing here yet — drop a block in from the left.
+                    Nothing here yet — drag a block in from the left.
                   </p>
                 )}
               </div>
@@ -328,6 +586,15 @@ export default function EmailBuilder({
     </div>
   );
 }
+
+type Dnd = {
+  at: Drop | null;
+  begin: (d: Drag) => void;
+  end: () => void;
+  over: (d: Drop) => void;
+  allows: (parent: string | null) => boolean;
+  drop: (d: Drop) => void;
+};
 
 function Mini({
   children,
@@ -352,6 +619,50 @@ function Mini({
 }
 
 /**
+ * The gap between two blocks, as a drop target.
+ *
+ * Explicit strips rather than working out from the pointer whether it's in the
+ * top or bottom half of a block: the halves version fights contenteditable,
+ * which swallows drag events over the words themselves.
+ */
+function DropStrip({
+  drop,
+  dnd,
+  tall,
+}: {
+  drop: Drop;
+  dnd: Dnd;
+  tall?: boolean;
+}) {
+  const active = sameDrop(dnd.at, drop);
+  return (
+    <div
+      onDragOver={(e) => {
+        if (!dnd.allows(drop.parent)) return;
+        // Without preventDefault the browser refuses the drop outright.
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = "move";
+        dnd.over(drop);
+      }}
+      onDrop={(e) => {
+        if (!dnd.allows(drop.parent)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        dnd.drop(drop);
+      }}
+      className={`relative ${tall ? "h-4" : "-my-1 h-3"}`}
+    >
+      <div
+        className={`absolute inset-x-0 top-1/2 h-[2px] -translate-y-1/2 rounded-full transition-colors ${
+          active ? "bg-accent-dark" : "bg-transparent"
+        }`}
+      />
+    </div>
+  );
+}
+
+/**
  * One block, drawn by the real renderer.
  *
  * The words are edited in place with contenteditable, and committed on BLUR
@@ -361,21 +672,26 @@ function Mini({
  */
 function Canvas({
   block,
+  path,
   brand,
   ctx,
   selected,
   onSelect,
   onText,
+  dnd,
 }: {
   block: Block;
+  path: Path;
   brand: Record<string, unknown>;
   ctx: Record<string, unknown>;
-  selected: boolean;
-  onSelect: () => void;
-  onText: (text: string) => void;
+  selected: Path;
+  onSelect: (p: Path) => void;
+  onText: (id: string, text: string) => void;
+  dnd: Dnd;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const editable = TYPEABLE.has(block.type);
+  const isSelected = selected === path;
 
   /* Rendered from the block, but NOT re-rendered while it's being typed into:
      the html memo is keyed on the committed value, and the commit happens on
@@ -393,14 +709,97 @@ function Canvas({
   // exactly the thing the writer is trying to judge.
   const m = resolveMargin(block) as { t: number; r: number; b: number; l: number };
 
+  const shell = `group relative rounded-lg transition-colors ${
+    isSelected ? "outline outline-2 outline-offset-2 outline-accent-dark/60" : "hover:bg-accent-soft/20"
+  }`;
+
+  /* The grip, not the block, starts the drag. Making the whole wrapper
+     draggable steals the mouse from contenteditable, and you can no longer
+     select a word to retype it. */
+  const grip = (
+    <span
+      draggable
+      onDragStart={(e) => {
+        dnd.begin({ kind: "move", type: block.type, path });
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", block.id);
+        e.stopPropagation();
+      }}
+      onDragEnd={() => dnd.end()}
+      title="Drag to move"
+      // Sat on the corner rather than beside the first line: inside a quarter
+      // column there is no margin to hang it in, and it would land on top of
+      // the first word.
+      className="absolute -left-2 -top-2.5 z-10 cursor-grab select-none rounded-md border border-line/70 bg-panel px-1 text-[11px] leading-[16px] text-muted opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+    >
+      ⠿
+    </span>
+  );
+
+  /* A layout block is drawn as real cells in the editor rather than handed to
+     the renderer whole. The renderer's <table> is correct for sending but has
+     nothing you can click into, and an empty cell comes out as a non-breaking
+     space — which is precisely what made columns feel broken. */
+  if (block.type === "columns") {
+    const layout = layoutOf(block);
+    const cols = ensureCols(block);
+    return (
+      <div
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect(path);
+        }}
+        style={{ marginTop: m.t, marginBottom: m.b, marginLeft: m.l, marginRight: m.r }}
+        className={shell}
+      >
+        {grip}
+        <div className="flex gap-2">
+          {cols.map((children, i) => (
+            <div
+              key={i}
+              style={{ width: `${layout.w[i]}%` }}
+              className="min-w-0 rounded-lg border border-dashed border-line/70 p-1.5"
+            >
+              {children.map((c, j) => (
+                <Fragment key={c.id}>
+                  <DropStrip drop={{ parent: block.id, col: i, index: j }} dnd={dnd} />
+                  <Canvas
+                    block={c}
+                    path={childPath(block.id, i, c.id)}
+                    brand={brand}
+                    ctx={ctx}
+                    selected={selected}
+                    onSelect={onSelect}
+                    onText={onText}
+                    dnd={dnd}
+                  />
+                </Fragment>
+              ))}
+              {children.length ? (
+                <DropStrip
+                  drop={{ parent: block.id, col: i, index: children.length }}
+                  dnd={dnd}
+                />
+              ) : (
+                <EmptyCell drop={{ parent: block.id, col: i, index: 0 }} dnd={dnd} />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      onClick={onSelect}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect(path);
+      }}
       style={{ marginTop: m.t, marginBottom: m.b, marginLeft: m.l, marginRight: m.r }}
-      className={`relative rounded-lg transition-colors ${
-        selected ? "outline outline-2 outline-offset-2 outline-accent-dark/60" : "hover:bg-accent-soft/20"
-      }`}
+      className={shell}
     >
+      {grip}
       <div
         ref={ref}
         // Typing goes straight onto the email. The renderer's own inline
@@ -410,11 +809,38 @@ function Canvas({
         onBlur={() => {
           if (!editable) return;
           const text = ref.current?.innerText ?? "";
-          if (text !== block.text) onText(text.replace(/\n{3,}/g, "\n\n").trimEnd());
+          if (text !== block.text) onText(block.id, text.replace(/\n{3,}/g, "\n\n").trimEnd());
         }}
         dangerouslySetInnerHTML={{ __html: html }}
         className={editable ? "outline-none" : "pointer-events-none"}
       />
+    </div>
+  );
+}
+
+/** An empty column has to LOOK like somewhere you can put something. */
+function EmptyCell({ drop, dnd }: { drop: Drop; dnd: Dnd }) {
+  const active = sameDrop(dnd.at, drop);
+  return (
+    <div
+      onDragOver={(e) => {
+        if (!dnd.allows(drop.parent)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = "move";
+        dnd.over(drop);
+      }}
+      onDrop={(e) => {
+        if (!dnd.allows(drop.parent)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        dnd.drop(drop);
+      }}
+      className={`flex min-h-[64px] items-center justify-center rounded-md border border-dashed px-2 text-center text-[10.5px] leading-tight transition-colors ${
+        active ? "border-accent-dark bg-accent-soft/30 text-ink" : "border-line/70 text-muted"
+      }`}
+    >
+      Drop something here
     </div>
   );
 }
@@ -606,9 +1032,8 @@ function Fields({
             Stack into one column on a phone
           </label>
           <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
-            The columns render, but dropping content INTO them is not built
-            yet. Use one layout block per row and put the pictures in from the
-            code side for now.
+            Drag anything from the left into a column. Fewer columns keeps
+            whatever was in the ones that went, moved into the last column.
           </p>
         </>
       );
