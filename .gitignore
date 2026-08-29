@@ -5,3 +5,10 @@ node_modules
 tsconfig.tsbuildinfo
 next-env.d.ts
 .next-check
+.next-emails
+
+# DATA_DIR's default. The JSON fallback the stores use when DATABASE_URL is
+# unset writes real records here — appraisals booked on a laptop with no
+# Postgres. That is runtime state, not source, and committing it would put one
+# machine's bookings in everybody's checkout.
+data

@@ -8,6 +8,7 @@ import {
 } from "@/lib/journey";
 import { MA_STAGES } from "@/lib/market-appraisal";
 import { PORTAL_STAGES } from "@/lib/business/propoly-stages";
+import { screensSection } from "@/lib/screens";
 import { rexConfigured } from "@/lib/rex";
 import { payPropConfigured } from "@/lib/payprop";
 import { propolyConfigured } from "@/lib/business/propoly";
@@ -60,8 +61,24 @@ import { tegHubConfigured } from "@/lib/business/teg-hub";
  *  a running server, so rebuilding it per question is pure waste. */
 let cached: string | null = null;
 
+/**
+ * A track, with the button that moves each step on.
+ *
+ * `cta` is the literal label rendered on the next-action button in the lead
+ * drawer, so quoting it here is the difference between "move it to the next
+ * stage" and "press Book the appraisal". It is derived like everything else:
+ * change the wording in lib/journey.ts and the assistant says the new words.
+ *
+ * Steps whose action is "none" are ticks — something an agent did off-system
+ * and is recording — so their button is a confirmation and not worth quoting.
+ */
 const steps = (track: JourneyStep[]) =>
-  track.map((s, i) => `   ${i + 1}. ${s.label} — ${s.detail ?? s.title}`).join("\n");
+  track
+    .map((s, i) => {
+      const how = s.action === "none" ? "" : ` Button: "${s.cta}".`;
+      return `   ${i + 1}. ${s.label} — ${s.detail ?? s.title}${how}`;
+    })
+    .join("\n");
 
 export function systemMap(): string {
   if (cached) return cached;
@@ -85,11 +102,27 @@ This is generated from the system itself, so it is current. It describes where
 things live and what happens in what order. It does NOT contain any figures —
 if someone asks for a number, tell them which screen shows it.
 
-## What an agent has
+## Answer with the process FIRST, then what the OS does today
 
-Dashboard, Leads (tenant and landlord), Market Appraisals, Listings, Viewings,
-Applications, Compliance, Emails, Portfolio and Finances. Admin is separate and
-only owners and Susan see it.
+These are two different things and you must not run them together.
+
+TLE's PROCESS is real — it is how the business actually works, whether or not
+the software does that bit yet. Teach it. It is the section below.
+
+What the OS currently DOES is narrower, because this is a system being built
+towards a launch in October. Some screens are complete, some have named buttons
+that are not connected, and a couple are still wireframes. That is recorded per
+screen further down, and it is not a failure to mention — an agent who is told
+plainly to do this one in REX for now gets on with their day. An agent who is
+sent to press a button that does nothing loses ten minutes and stops trusting
+you about anything.
+
+So the shape of a good answer to "how do I do X" is: here is how it works, here
+is the screen, and here is the part you still do by hand. Never leave the last
+one out, and never invent it either — if the screen notes below do not mention
+a limitation, do not warn about one.
+
+${screensSection()}
 
 ## The order things happen in
 
@@ -136,9 +169,10 @@ ${off.length ? `Not connected at the moment, so do not send anyone down these ro
 
 ## What you cannot do
 
-You answer questions. You cannot open a page, change a record, send anything,
-or look up a specific property, tenant or figure. If someone needs that, say
-which screen does it.`;
+You answer questions, and you can send somebody to a screen by naming it as a
+link. You cannot change a record, send anything, or look up a specific
+property, tenant or figure. If someone needs that, say which screen does it and
+link them to it.`;
 
   return cached;
 }

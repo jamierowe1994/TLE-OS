@@ -10,6 +10,7 @@ import {
   effectiveStage,
   needsValuation,
   SAMPLE_APPRAISALS,
+  type MarketAppraisal,
 } from "@/lib/market-appraisal";
 import type { MaResearch } from "@/lib/ma-research";
 
@@ -49,7 +50,33 @@ const gbp = (n: number) => `£${n.toLocaleString("en-GB")}`;
 
 export default function AppraisalFile({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const ma = SAMPLE_APPRAISALS.find((m) => m.id === id);
+  const sample = SAMPLE_APPRAISALS.find((m) => m.id === id);
+
+  /* An appraisal booked through the OS is not in the samples, so the file has
+     to be able to come from the store too. `undefined` means we have not
+     looked yet and `null` means we looked and it is not there — the two must
+     stay separate, or the page flashes "No such appraisal" at somebody who has
+     just this second booked one. */
+  const [booked, setBooked] = useState<MarketAppraisal | null | undefined>(undefined);
+  const ma = sample ?? booked ?? null;
+
+  useEffect(() => {
+    if (sample) return; // a sample resolves without asking anyone
+    let gone = false;
+    fetch(`/api/appraisals`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (gone) return;
+        const list: MarketAppraisal[] = Array.isArray(j?.appraisals) ? j.appraisals : [];
+        setBooked(list.find((m) => m.id === id) ?? null);
+      })
+      .catch(() => {
+        if (!gone) setBooked(null);
+      });
+    return () => {
+      gone = true;
+    };
+  }, [id, sample]);
 
   const [research, setResearch] = useState<MaResearch | null>(null);
   const [failed, setFailed] = useState(false);
@@ -69,6 +96,14 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
       live = false;
     };
   }, [ma]);
+
+  if (!sample && booked === undefined) {
+    return (
+      <div className="mx-auto max-w-2xl py-16 text-center">
+        <p className="text-[12.5px] text-muted">Fetching the appraisal…</p>
+      </div>
+    );
+  }
 
   if (!ma) {
     return (

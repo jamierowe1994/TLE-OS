@@ -48,6 +48,18 @@ function getPool(): Pool {
  *
  * Written CREATE-IF-NOT-EXISTS and additive-only, so deploying is never a
  * migration event — the same statements run harmlessly on every boot.
+ *
+ * ⚠️ NO BACKTICKS ANYWHERE BELOW, INCLUDING IN COMMENTS.
+ *
+ * This is one long template literal, so the first backtick inside it ENDS the
+ * string. The rest of the file then parses as nonsense and the failure is
+ * reported far from the cause: `npm run build` says "Expected a semicolon" at
+ * whatever line happens to follow. It has bitten twice, both times in a
+ * `-- comment` where somebody quoted a column or a value out of habit.
+ *
+ * Use plain quotes or angle brackets instead: "awaiting valuation",
+ * lead-<leadId>. Several people append tables here at once; this is the one
+ * rule that breaks everybody's build rather than just your own.
  */
 const SCHEMA = `
 -- The people who work here. password_hash is scrypt salt:hash, never a password.
@@ -257,6 +269,39 @@ CREATE TABLE IF NOT EXISTS os_case_state (
   updated_by     TEXT NOT NULL DEFAULT '',
   PRIMARY KEY (kind, record_id)
 );
+
+-- Market appraisals the OS has actually booked.
+--
+-- Its own table rather than a case on the lead, because an appraisal outlives
+-- the lead's questions: it is looked up by ITS id from the file page and the
+-- presentation builder, listed on its own screen, and filtered by stage. A
+-- jsonb blob hanging off a lead answers none of those without reading every
+-- lead.
+--
+-- The id is derived from the lead (lead-<leadId>) rather than random, which
+-- makes booking IDEMPOTENT: an agent who books, goes back and books again
+-- moves the appointment rather than growing a second appraisal for the same
+-- property. The handover URL is stable for the same reason.
+--
+-- The stage is stored, unlike "awaiting valuation" which stays derived. A
+-- stage is somewhere a record SITS and only a person can move it; the flag is
+-- a fact about the clock, so computing it on read means nothing can forget it.
+CREATE TABLE IF NOT EXISTS os_market_appraisals (
+  id             TEXT PRIMARY KEY,
+  lead_id        TEXT,
+  landlord       TEXT NOT NULL,
+  address        TEXT NOT NULL,
+  postcode       TEXT NOT NULL DEFAULT '',
+  agent          TEXT,
+  appointment_at TIMESTAMPTZ,
+  stage          TEXT NOT NULL DEFAULT 'booked',
+  valuation      INTEGER,
+  present_token  TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_market_appraisals_stage_idx
+  ON os_market_appraisals (stage, appointment_at);
 
 -- Who is on which campaign.
 --

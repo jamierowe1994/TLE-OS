@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import AssistantCharacter, { type Mood } from "@/components/AssistantCharacter";
+import AssistantSays, { type Screen } from "@/components/AssistantSays";
 
 /**
  * The character in the corner, and what he says.
@@ -54,6 +55,10 @@ export default function HelpDock() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [live, setLive] = useState(false);
+  /* The screens he is allowed to send anyone to. Comes from the server rather
+     than a copy kept here, so a screen added to the rail needs no second edit
+     — see the allowlist note in AssistantSays. */
+  const [screens, setScreens] = useState<Screen[]>([]);
 
   const [kind, setKind] = useState("bug");
   const [fb, setFb] = useState("");
@@ -121,6 +126,7 @@ export default function HelpDock() {
       .then((x) => (x.ok ? x.json() : null))
       .catch(() => null);
     setLive(Boolean(r?.live));
+    setScreens(Array.isArray(r?.screens) ? r.screens : []);
     const history: Line[] = (r?.history ?? []).map((h: Line) => ({ role: h.role, text: h.text }));
 
     if (r && !r.onboarded) {
@@ -239,18 +245,26 @@ export default function HelpDock() {
                     ref={scroller}
                     className="mt-3 max-h-[42vh] space-y-2 overflow-y-auto pr-0.5"
                   >
-                    {lines.map((l, i) => (
-                      <p
-                        key={i}
-                        className={
-                          l.role === "agent"
-                            ? "ml-8 rounded-2xl rounded-br-md bg-accent-soft px-3 py-2 text-[12.5px] text-accent-dark"
-                            : "mr-6 rounded-2xl rounded-bl-md bg-box px-3 py-2 text-[12.5px] leading-relaxed"
-                        }
-                      >
-                        {l.text}
-                      </p>
-                    ))}
+                    {lines.map((l, i) =>
+                      l.role === "agent" ? (
+                        <p
+                          key={i}
+                          className="ml-8 rounded-2xl rounded-br-md bg-accent-soft px-3 py-2 text-[12.5px] text-accent-dark"
+                        >
+                          {l.text}
+                        </p>
+                      ) : (
+                        <AssistantSays
+                          key={i}
+                          text={l.text}
+                          screens={screens}
+                          /* Taking somebody somewhere and leaving the bubble
+                             open would cover the screen they just asked to be
+                             shown. He gets out of the way. */
+                          onNavigate={() => setOpen(false)}
+                        />
+                      )
+                    )}
                     {busy && (
                       <p className="mr-6 rounded-2xl rounded-bl-md bg-box px-3 py-2 text-[12.5px] text-muted">
                         …

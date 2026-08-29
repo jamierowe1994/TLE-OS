@@ -3,6 +3,7 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { logLine, myHistory, isOnboarded, type LogKind } from "@/lib/assistant-log";
 import { ask, budget, assistantConfigured } from "@/lib/assistant-brain";
+import { AGENT_NAV } from "@/lib/nav";
 
 /**
  * Talking to the assistant.
@@ -57,6 +58,10 @@ export async function GET(req: NextRequest) {
     onboarded,
     /* So the panel can say what he is rather than guess. */
     live: assistantConfigured() && b.left > 0,
+    /* The screens a "take me there" button is allowed to point at. Sent from
+       here rather than hardcoded in the dock so the rail stays the one list;
+       Admin is excluded upstream in AGENT_NAV. */
+    screens: AGENT_NAV.map((n) => ({ href: n.href, label: n.label })),
   });
 }
 

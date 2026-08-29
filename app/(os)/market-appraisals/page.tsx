@@ -34,37 +34,68 @@ const gbp = (n: number) => `£${n.toLocaleString("en-GB")}`;
 
 export default function MarketAppraisals() {
   const [filter, setFilter] = useState<MaStage | "open">("open");
+  /* The appraisals actually booked through the OS. Null while we are still
+     asking, so the screen can say "loading" rather than flashing "none yet" at
+     somebody who has just booked one. */
+  const [live, setLive] = useState<MarketAppraisal[] | null>(null);
   const router = useRouter();
 
+  useEffect(() => {
+    let gone = false;
+    fetch("/api/appraisals", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!gone) setLive(Array.isArray(j?.appraisals) ? j.appraisals : []);
+      })
+      .catch(() => {
+        if (!gone) setLive([]);
+      });
+    return () => {
+      gone = true;
+    };
+  }, []);
+
+  /* Real bookings first, then the samples. Two lists rather than one because
+     they are not the same kind of thing: one is this agent's actual work and
+     the other is furniture. Concatenating them and sorting by urgency would
+     bury a real appraisal among stand-ins. */
+  const all = useMemo(() => [...(live ?? []), ...SAMPLE], [live]);
+
   const rows = useMemo(() => {
-    const withStage = SAMPLE.map((m) => ({ ...m, live: effectiveStage(m) }));
+    const withStage = all.map((m) => ({ ...m, live: effectiveStage(m) }));
     const open = withStage.filter((m) => m.live !== "won" && m.live !== "lost");
     return (filter === "open" ? open : withStage.filter((m) => m.live === filter)).sort(
       (a, b) => urgencyOf(a) - urgencyOf(b)
     );
-  }, [filter]);
+  }, [filter, all]);
 
   /* Arriving from Leads: booking an appraisal sends the agent here with
-     ?open=<id>. That used to pop a drawer; now it forwards to the file, so the
-     old links from Leads and from the builder keep working. */
+     ?open=<id>, and we forward to that appraisal's file.
+
+     This waits for the live book. It used to test `?open=` against the four
+     samples alone, so a real booking — whose id is always `lead-<something>` —
+     never matched, and the handover dropped the agent on an undifferentiated
+     list with no sign anything had been recorded. Nothing is forwarded until
+     we know what actually exists. */
   useEffect(() => {
+    if (live === null) return;
     const id = new URLSearchParams(window.location.search).get("open");
-    if (id && SAMPLE.some((m) => m.id === id)) router.replace(`/market-appraisals/${id}`);
-  }, [router]);
+    if (id && all.some((m) => m.id === id)) router.replace(`/market-appraisals/${id}`);
+  }, [router, live, all]);
 
   const openCount = useMemo(
-    () => SAMPLE.filter((m) => { const k = effectiveStage(m); return k !== "won" && k !== "lost"; }).length,
-    []
+    () => all.filter((m) => { const k = effectiveStage(m); return k !== "won" && k !== "lost"; }).length,
+    [all]
   );
 
   const counts = useMemo(() => {
     const m = new Map<MaStage, number>();
-    for (const s of SAMPLE) {
+    for (const s of all) {
       const k = effectiveStage(s);
       m.set(k, (m.get(k) ?? 0) + 1);
     }
     return m;
-  }, []);
+  }, [all]);
 
   return (
     <>
@@ -77,10 +108,34 @@ export default function MarketAppraisals() {
         <FlowTag from="Leads" to="Listings" />
       </div>
 
+      {/* The banner has to follow the book. Once a real appraisal is on this
+          screen, "sample rows, not live" is itself a false statement — and it
+          is the sentence an agent uses to decide whether to trust the row in
+          front of them. So it says which rows are stand-ins rather than
+          condemning the whole page. */}
       <p className="fade-up mt-4 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12px] leading-relaxed">
-        <span className="font-semibold">Sample rows, not live.</span> The diary join
-        isn&apos;t wired yet, so these are stand-ins to shape the screen — don&apos;t quote
-        them. The stage rail, the ordering and the handover from Leads are real.
+        {live === null ? (
+          /* Loading is its own sentence. Falling through to "nothing has been
+             booked" while the answer is still in flight states something false
+             — briefly, confidently, and to the one person most likely to have
+             just booked something. */
+          <span className="text-muted">Checking what&apos;s been booked…</span>
+        ) : live.length > 0 ? (
+          <>
+            <span className="font-semibold">
+              {live.length} booked here, and {SAMPLE.length} stand-ins.
+            </span>{" "}
+            Appraisals booked from Leads are real and are marked as such. The four
+            unmarked rows are samples that shape the screen - don&apos;t quote them.
+          </>
+        ) : (
+          <>
+            <span className="font-semibold">Sample rows, not live.</span> Nothing has been
+            booked through the OS yet, so these are stand-ins to shape the screen -
+            don&apos;t quote them. Book one from a landlord lead on Leads and it appears
+            here for real.
+          </>
+        )}
       </p>
 
       {/* The spine, as a strip of tabs.
@@ -144,11 +199,21 @@ export default function MarketAppraisals() {
                         its own; as a flag it can shout from whichever stage
                         the file is actually sitting on. */}
                     {needsValuation(m) && <Pill tone="accent">No figure yet</Pill>}
+                    {/* Which rows are real. Marking the four samples would be
+                        the wrong way round: the stand-ins are temporary and the
+                        booked ones are the point, so the badge goes on the
+                        thing worth trusting and disappears when the samples
+                        finally go. */}
+                    {!SAMPLE.some((s) => s.id === m.id) && <Pill tone="accent">Booked here</Pill>}
                     <Pill tone="neutral">{MA_STAGES.find((s) => s.id === m.live)?.label}</Pill>
                   </span>
                 </div>
                 <p className="mt-1 text-[11.5px] text-muted">
-                  {m.landlord} · {m.postcode}
+                  {/* A lead has no postcode, so an appraisal booked from one
+                      starts without it — and the separator has to go with it,
+                      or the line reads "Beatrice Okonkwo · · no agent". */}
+                  {m.landlord}
+                  {m.postcode ? ` · ${m.postcode}` : ""}
                   {m.agent ? ` · with ${m.agent}` : " · no agent recorded"}
                   {m.appointmentAt
                     ? ` · ${new Date(m.appointmentAt).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`
@@ -166,8 +231,10 @@ export default function MarketAppraisals() {
       <ul className="mt-4 space-y-1.5 text-[11px] leading-relaxed text-muted">
         <li>
           <span className="font-semibold">Leads ends where this begins.</span> Booking an
-          appraisal closes the lead drawer and reopens the record here at Pre-appraisal —
-          the lead isn&apos;t deleted, it&apos;s handed on, and the link is kept both ways.
+          appraisal closes the lead drawer and opens the new record here at Booked - the
+          lead isn&apos;t deleted, it&apos;s handed on, and the link is kept both ways.
+          Booking the same lead again moves the appointment rather than making a second
+          appraisal.
         </li>
         <li>
           <span className="font-semibold">&ldquo;Awaiting valuation&rdquo; is derived, not

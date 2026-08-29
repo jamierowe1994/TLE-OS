@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
 import { readTheme, type ThemeChoice } from "@/lib/theme";
+import { FRONT, BACK, ADMIN, type NavItem } from "@/lib/nav";
 
 /**
  * The OS chrome. The rail is its own encapsulated card — a thin outline the
@@ -12,51 +13,10 @@ import { readTheme, type ThemeChoice } from "@/lib/theme";
  * on the « button. FRONT OF HOUSE is the tenancy being made, BACK OFFICE is
  * the book being run. The profile foots the rail with sign-out and the
  * palette picker.
- */
-const FRONT: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
-  // Tenant-side and landlord-side are different jobs — same inbox, different
-  // questions — so Leads opens rather than just navigating.
-  {
-    href: "/leads",
-    label: "Leads",
-    icon: "target",
-    children: [
-      { href: "/leads?side=tenant", label: "Tenant" },
-      { href: "/leads?side=landlord", label: "Landlord" },
-    ],
-  },
-  /* Straight after Leads, because that is the order the landlord side runs
-     in: a landlord lead becomes an appraisal BEFORE there is anything to list.
-     It sat after Viewings, which is the tenant side's order and made the rail
-     read as one queue when it is two. */
-  { href: "/market-appraisals", label: "Market Appraisals", icon: "trend-up" },
-  { href: "/listings", label: "Listings", icon: "home" },
-  { href: "/viewings", label: "Viewings", icon: "calendar" },
-  { href: "/applications", label: "Applications", icon: "checklist" },
-];
-const BACK: NavItem[] = [
-  { href: "/compliance", label: "Compliance", icon: "shield" },
-  /* Back office rather than Marketing: this is the audit of what already goes
-     out under our name, not a place to write anything new. */
-  { href: "/emails", label: "Emails", icon: "mail" },
-  { href: "/portfolio", label: "Portfolio", icon: "folder" },
-  { href: "/finances", label: "Finances", icon: "wallet" },
-  /* Marketing is deliberately NOT here. It's a different workspace for a
-     different person, reached from the door — a nav that lists everything
-     everyone might do is how an OS starts to feel like a filing cabinet. */
-];
-
-/**
- * Owner only, and rendered only once /api/auth/me says so.
  *
- * A separate group rather than an entry in BACK OFFICE: the back-office rail
- * is an agent's working day, and an environment switch does not belong one
- * slip away from Compliance. Admin has its own sub-rail once you are inside.
+ * The three groups live in lib/nav.ts rather than here, because the assistant
+ * has to be able to read the same list in order to send anyone to a screen.
  */
-const ADMIN: NavItem[] = [
-  { href: "/admin", label: "Admin", icon: "shield" },
-];
 
 /** Clay is the house default; the attribute only exists for the others. */
 const ACCENTS = [
@@ -64,13 +24,6 @@ const ACCENTS = [
   { id: "blush", label: "Blush", dot: "#f0b3bb" },
   { id: "red", label: "Classic Red", dot: "#e31f36" },
 ];
-
-type NavItem = {
-  href: string;
-  label: string;
-  icon: string;
-  children?: { href: string; label: string }[];
-};
 
 function applyAccent(id: string) {
   if (id) document.documentElement.dataset.accent = id;

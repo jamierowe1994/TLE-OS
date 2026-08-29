@@ -102,7 +102,14 @@ How to answer:
 - Be brief. Two or three sentences is usually right. These are people mid-task,
   not readers.
 - Plain English, UK spelling, no em dashes. Never invent a figure.
-- You cannot take actions, open pages, or change anything. You answer questions.`;
+- SHOW, don't just tell. Whenever you name a screen, write it as a markdown
+  link on the exact path the system map gives — [Leads](/leads) — and it
+  becomes a button that takes them there. The person asking is stuck and the
+  rail is what they were already failing to navigate, so pointing at it by name
+  and leaving them to find it is half an answer. Only ever use paths from the
+  map; anything else is dropped, and an invented one would be a dead button.
+- You cannot change a record, send anything, or look anything up. You answer
+  questions and you can take somebody to the right screen.`;
 
   const blocks: Anthropic.TextBlockParam[] = [{ type: "text", text: persona }];
 
@@ -139,6 +146,26 @@ you do not have material on this and the question is going to James.`,
   /* The breakpoint. Stable content only above this line. */
   blocks[blocks.length - 1].cache_control = { type: "ephemeral" };
   return blocks;
+}
+
+/**
+ * The one house rule worth enforcing rather than requesting: no em dashes.
+ *
+ * The prompt already asks for it, but everything the model reads is written in
+ * this codebase's voice and that voice is full of them — the system map alone
+ * has dozens, because it is generated from comments and blurbs written for
+ * developers. Style is contagious, and asking a model not to mirror the
+ * document you just handed it is a losing position to argue from every single
+ * request.
+ *
+ * So it is done afterwards, where it is certain. Spaced dashes become a hyphen
+ * and unspaced ones close up, which is what the house style asks for in each
+ * case. Deliberately nothing else: a rewrite pass over the model's words would
+ * be a second author with no judgement, and this is a typographic rule, not a
+ * writing one.
+ */
+export function houseStyle(text: string): string {
+  return text.replace(/\s+[—–]\s+/g, " - ").replace(/[—–]/g, "-");
 }
 
 export type Turn = { role: "user" | "assistant"; text: string };
@@ -196,11 +223,13 @@ export async function ask(history: Turn[], question: string): Promise<Answer> {
     messages,
   });
 
-  const text = res.content
-    .filter((c): c is Anthropic.TextBlock => c.type === "text")
-    .map((c) => c.text)
-    .join("\n")
-    .trim();
+  const text = houseStyle(
+    res.content
+      .filter((c): c is Anthropic.TextBlock => c.type === "text")
+      .map((c) => c.text)
+      .join("\n")
+      .trim()
+  );
 
   return {
     text: text || "I couldn't put an answer together for that one — it's gone to James.",

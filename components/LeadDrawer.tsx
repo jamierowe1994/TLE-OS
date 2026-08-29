@@ -1435,7 +1435,7 @@ export default function LeadDrawer({
         }}
         properties={shortlist.length ? shortlist : LISTINGS.slice(0, 4)}
         agent={lead.agent === "Unassigned" ? "Kirstie" : lead.agent}
-        onBooked={(v) => {
+        onBooked={async (v) => {
           setBooked((cur) => [
             {
               id: `vw${cur.length + 1}${v.when}`,
@@ -1469,10 +1469,55 @@ export default function LeadDrawer({
              It does not advance the lead spine — the lead's work is finished
              at "booked", and everything after it is a different job on a
              different screen. So we close this drawer and reopen the record on
-             Market Appraisals at Pre-appraisal, rather than leaving the agent
-             on the Leads page wondering what just changed. See
-             lib/market-appraisal handoverTarget. */
+             Market Appraisals, rather than leaving the agent on the Leads page
+             wondering what just changed. See lib/market-appraisal
+             handoverTarget.
+
+             The appraisal is WRITTEN before we navigate. It used to only
+             navigate, to a screen that could open nothing but its four
+             samples — so the handover pushed the agent to an empty list and
+             the appointment they had just agreed on the phone existed
+             nowhere. The record has to exist for the destination to have
+             anything to show.
+
+             AWAITED, and it has to be. The first version fired this off and
+             navigated immediately, on the reasoning that the destination
+             fetches the book on arrival anyway. It does — but it fetches on
+             MOUNT, which happens before a POST sent moments earlier comes
+             back. Driving it showed exactly what that costs: the record was
+             written correctly, and the agent still landed on a page reading
+             "nothing has been booked through the OS yet", with no forward to
+             the file. That is the same dead end this change exists to remove,
+             just arriving a second later.
+
+             A failure still hands over. Losing the appointment AND the
+             navigation would leave the agent staring at a lead drawer with no
+             idea whether anything happened; landing on Market Appraisals with
+             the row missing is at least a visible, reportable problem. */
           if (here.action === "appraise") {
+            await fetch("/api/appraisals", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                leadId: lead.id,
+                landlord: lead.name,
+                /* The lead's area is what the booker used as the address, so
+                   the appraisal states the same place the landlord was just
+                   told about. "—" is the list's empty marker and must never
+                   reach a record. */
+                address:
+                  contact.area && contact.area !== "—"
+                    ? contact.area
+                    : lead.preferred || lead.area,
+                /* A lead has no postcode field — it is an enquiry, not a
+                   property yet. The appraisal carries an empty one until the
+                   take-on fills it in, rather than inventing one from the
+                   area. */
+                postcode: "",
+                agent: lead.agent === "Unassigned" ? null : lead.agent,
+                appointmentAt: v.startsAt,
+              }),
+            }).catch(() => {});
             onClose();
             router.push(handoverTarget(`lead-${lead.id}`));
           }
