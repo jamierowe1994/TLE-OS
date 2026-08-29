@@ -121,19 +121,29 @@ function shell(opts: {
             <img src="${ORIGIN}/brand/tle-os-wordmark.png" width="160" alt="TLE OS"
                  style="display:block;margin:0 auto;width:160px;max-width:60%;height:auto;border:0;outline:none;text-decoration:none;font-family:'Bradley Hand','Segoe Script',cursive;font-size:26px;color:#1c1917">
 
-            <!-- A key turning in a lock: the action, and the trade, in one
-                 drawing. An animated GIF, which IS the one moving format email
-                 supports — Gmail, Apple Mail, iOS and most webmail play it.
+            <!-- James's line drawing, from his Sign-in Loop. An animated GIF,
+                 which IS the one moving format email supports — Gmail, Apple
+                 Mail, iOS and most webmail play it.
 
-                 Outlook on Windows renders only the FIRST frame, because it
-                 draws HTML with Word's engine. So frame one is not a title
-                 card or a blank: it is the key already in the lock, a complete
-                 picture that says the same thing standing still. Everything
-                 after it is a bonus for the clients that can show it.
+                 RE-TIMED, not redrawn. The source loop starts blank, draws
+                 itself in, and erases back to blank. Both of those ends are
+                 wrong here for the same reason:
+
+                   · Outlook on Windows renders only the FIRST frame, because
+                     it draws HTML with Word's engine. A blank first frame is
+                     an empty space where the picture should be, for everyone
+                     on a Windows laptop — which is most of a working day.
+                   · An animation that erases itself has no resting state, so
+                     in a list of unread mail it is caught mid-stroke, looking
+                     half-finished rather than deliberate.
+
+                 So it leads on the completed drawing, draws in, and comes to
+                 rest on the completed drawing again. Outlook shows a finished
+                 picture; everyone else watches it arrive.
 
                  Not SVG (Outlook draws none) and not CSS (stripped). -->
-            <img src="${ORIGIN}/illustrations/unlock.gif" width="230" alt=""
-                 style="display:block;margin:24px auto 0;width:230px;max-width:70%;height:auto;border:0;outline:none;text-decoration:none">
+            <img src="${ORIGIN}/illustrations/sign-in.gif" width="260" alt=""
+                 style="display:block;margin:24px auto 0;width:260px;max-width:78%;height:auto;border:0;outline:none;text-decoration:none">
 
             <p style="margin:30px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:23px;line-height:1.25;font-weight:700;color:#1c1917;background-color:#ffffff">${esc(opts.heading)}</p>
 
