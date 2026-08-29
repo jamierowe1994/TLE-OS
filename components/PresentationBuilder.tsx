@@ -56,14 +56,19 @@ const money = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
  * latitude through Mercator. Zoom 14 puts a street or two in a 44px circle,
  * which reads as "a map" without becoming a puzzle.
  */
-function tileUrl(lat: number, lon: number, z = 14): string {
+function tileUrl(lat: number, lon: number, z = 15): string {
   const n = 2 ** z;
   const x = Math.floor(((lon + 180) / 360) * n);
   const r = (lat * Math.PI) / 180;
   const y = Math.floor(((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * n);
-  /* Same service as the map beside it — see the note in MarketMap for why
-     it is not CARTO, OSM or Google. */
-  return `https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/${z}/${y}/${x}`;
+  /* STREET, not the grey canvas. At 36px across, a light-grey basemap is a
+     grey disc — you cannot tell it from a placeholder, and the whole point of
+     this button is that it LOOKS like a map before you press it. The street
+     tile carries road colour and green space, which reads as a map at any size.
+
+     Same family as the map beside it — see the note in MarketMap for why it is
+     not CARTO or OSM, and why the Google key never leaves the server. */
+  return `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${z}/${y}/${x}`;
 }
 
 export default function PresentationBuilder({
@@ -178,6 +183,22 @@ export default function PresentationBuilder({
      cards, and a map that is always there costs half the width for a question
      they have not asked yet. */
   const [mapOpen, setMapOpen] = useState(false);
+  /* The map is kept MOUNTED for the length of its own exit, so it can slide
+     back into the corner it came from instead of vanishing. `mapIn` drives the
+     classes; `mapMounted` decides whether it exists at all. Two flags rather
+     than one because a thing cannot animate out after it has been unmounted. */
+  const [mapMounted, setMapMounted] = useState(false);
+  const [mapIn, setMapIn] = useState(false);
+  useEffect(() => {
+    if (mapOpen) {
+      setMapMounted(true);
+      const f = requestAnimationFrame(() => setMapIn(true));
+      return () => cancelAnimationFrame(f);
+    }
+    setMapIn(false);
+    const t = setTimeout(() => setMapMounted(false), 320);
+    return () => clearTimeout(t);
+  }, [mapOpen]);
   /* The last pin clicked. That property jumps to the top of the list so the
      agent can see what they just pointed at without hunting for it — which is
      the whole reason for putting the two side by side. */
@@ -205,106 +226,121 @@ export default function PresentationBuilder({
   const keyOf = (l: { address: string; rent: number | null }) => `${l.address}|${l.rent}`;
 
   /**
-   * The same filters, as pills that float over the map.
+   * ONE SET OF CONTROLS, RENDERED IN ONE OF TWO PLACES.
    *
-   * Not a second set of state — the same `filters` and the same applyFilters,
-   * so the row above the page and the pills on the map can never disagree
-   * about what is being shown. Two controls for one value is how a screen
+   * With the map open they float over it; with the map shut they sit on the
+   * line above the cards. Never both — the same `filters` and the same
+   * applyFilters either way, because two knobs for one value is how a screen
    * starts lying to itself.
    *
-   * Radius first and widest, because it is the one whose effect is VISIBLE
-   * here: move it and the ring on the map moves with it, which is the whole
-   * reason for putting these on the map rather than above it.
+   * Every control is the SAME height and the same shape. They were a slider, a
+   * bare select and two naked number boxes at four different sizes, which read
+   * as four unrelated things rather than one filter bar.
    */
-  const pill =
-    "rounded-full border border-line/70 bg-page/95 px-3 py-1.5 text-[11.5px] shadow-sm backdrop-blur transition-colors hover:border-ink";
-  const mapControls = (
-    <>
-      <label className={`${pill} flex items-center gap-2`}>
-        <span className="text-muted">Within</span>
-        <input
-          type="range"
-          min={0}
-          max={10}
-          step={0.5}
-          value={filters.radius}
-          onChange={(e) => applyFilters({ ...filters, radius: Number(e.target.value) })}
-          className="w-24 accent-[#e31f36]"
-          aria-label="Search radius in miles"
-        />
-        <span className="tnum font-semibold">
-          {filters.radius ? `${filters.radius} mi` : "sector"}
+  function controlsFor(onMap: boolean) {
+    const skin = onMap
+      ? "border-line/60 bg-page/95 shadow-md backdrop-blur"
+      : "border-line/70 bg-panel shadow-sm";
+    const ctl = `inline-flex h-9 shrink-0 items-center gap-2 rounded-full border px-3.5 text-[12px] transition-colors hover:border-ink/40 ${skin}`;
+    const sel = "appearance-none bg-transparent pr-4 text-[12px] outline-none";
+    const caret = (
+      <span className="pointer-events-none -ml-3.5 text-[9px] text-muted">&#9662;</span>
+    );
+    return (
+      <>
+        {/* Radius first and widest, because it is the one whose effect you can
+            SEE: drag it and the ring on the map moves with it. That is the
+            whole argument for putting these on the map rather than above it. */}
+        <label className={ctl} title="How far out to search">
+          <span className="text-muted">Within</span>
+          <input
+            type="range"
+            min={0}
+            max={10}
+            step={0.5}
+            value={filters.radius}
+            onChange={(e) => applyFilters({ ...filters, radius: Number(e.target.value) })}
+            className="w-24 accent-[#e31f36]"
+            aria-label="Search radius in miles"
+          />
+          <span className="figures w-[52px] shrink-0 text-[11.5px]">
+            {filters.radius ? `${filters.radius} mi` : d?.sector ?? "sector"}
+          </span>
+        </label>
+
+        <span className={ctl}>
+          <select
+            value={filters.beds}
+            onChange={(e) => applyFilters({ ...filters, beds: Number(e.target.value) })}
+            aria-label="Bedrooms"
+            className={sel}
+          >
+            <option value={0}>Any beds</option>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <option key={n} value={n}>
+                {n} bed
+              </option>
+            ))}
+          </select>
+          {caret}
         </span>
-      </label>
 
-      <select
-        value={filters.beds}
-        onChange={(e) => applyFilters({ ...filters, beds: Number(e.target.value) })}
-        aria-label="Bedrooms"
-        className={pill}
-      >
-        <option value={0}>Any beds</option>
-        {[1, 2, 3, 4, 5].map((n) => (
-          <option key={n} value={n}>
-            {n} bed
-          </option>
-        ))}
-      </select>
+        <span className={ctl}>
+          <select
+            value={filters.type}
+            onChange={(e) => applyFilters({ ...filters, type: e.target.value as "" | "H" | "F" })}
+            aria-label="Property type"
+            className={sel}
+          >
+            <option value="">Any type</option>
+            <option value="H">Houses</option>
+            <option value="F">Flats</option>
+          </select>
+          {caret}
+        </span>
 
-      <select
-        value={filters.type}
-        onChange={(e) => applyFilters({ ...filters, type: e.target.value as "" | "H" | "F" })}
-        aria-label="Property type"
-        className={pill}
-      >
-        <option value="">Any type</option>
-        <option value="H">Houses</option>
-        <option value="F">Flats</option>
-      </select>
+        <span className={ctl} title="Rent per month">
+          <span className="text-muted">&pound;</span>
+          <input
+            type="number"
+            placeholder="min"
+            aria-label="Minimum rent"
+            value={filters.minRent || ""}
+            onChange={(e) => setFilters({ ...filters, minRent: Number(e.target.value) })}
+            onBlur={() => applyFilters(filters)}
+            className="w-12 bg-transparent text-[12px] outline-none"
+          />
+          <span className="text-muted">&ndash;</span>
+          <input
+            type="number"
+            placeholder="max"
+            aria-label="Maximum rent"
+            value={filters.maxRent || ""}
+            onChange={(e) => setFilters({ ...filters, maxRent: Number(e.target.value) })}
+            onBlur={() => applyFilters(filters)}
+            className="w-12 bg-transparent text-[12px] outline-none"
+          />
+        </span>
 
-      <span className={`${pill} flex items-center gap-1.5`}>
-        <span className="text-muted">£</span>
-        <input
-          type="number"
-          placeholder="min"
-          aria-label="Minimum rent"
-          value={filters.minRent || ""}
-          onChange={(e) => setFilters({ ...filters, minRent: Number(e.target.value) })}
-          onBlur={() => applyFilters(filters)}
-          className="w-14 bg-transparent text-[11.5px] outline-none"
-        />
-        <span className="text-muted">&ndash;</span>
-        <input
-          type="number"
-          placeholder="max"
-          aria-label="Maximum rent"
-          value={filters.maxRent || ""}
-          onChange={(e) => setFilters({ ...filters, maxRent: Number(e.target.value) })}
-          onBlur={() => applyFilters(filters)}
-          className="w-14 bg-transparent text-[11.5px] outline-none"
-        />
-      </span>
+        {(filters.radius || filters.beds || filters.type || filters.minRent || filters.maxRent) ? (
+          <button
+            type="button"
+            onClick={() => applyFilters({ radius: 0, beds: 0, minRent: 0, maxRent: 0, type: "" })}
+            className={`${ctl} text-muted`}
+          >
+            Clear
+          </button>
+        ) : null}
 
-      {(filters.radius || filters.beds || filters.type || filters.minRent || filters.maxRent) ? (
-        <button
-          type="button"
-          onClick={() => applyFilters({ radius: 0, beds: 0, minRent: 0, maxRent: 0, type: "" })}
-          className={`${pill} text-muted`}
-        >
-          Clear
-        </button>
-      ) : null}
-
-      {/* Said out loud, because a filtered map that is still fetching looks
-          exactly like a filtered map that found nothing. */}
-      {refiltering && (
-        <span className={`${pill} text-muted`}>Looking&hellip;</span>
-      )}
-    </>
-  );
+        {/* Said out loud, because a filtered map that is still fetching looks
+            exactly like a filtered map that found nothing. */}
+        {refiltering && <span className={`${ctl} text-muted`}>Looking&hellip;</span>}
+      </>
+    );
+  }
+  const mapControls = controlsFor(true);
 
   const available = useMemo(() => (d?.comparables ?? []).filter((c) => !c.letAgreed), [d]);
-  const let_ = useMemo(() => (d?.comparables ?? []).filter((c) => c.letAgreed), [d]);
 
   const toggle = (id: string) =>
     setChosen((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
@@ -312,9 +348,58 @@ export default function PresentationBuilder({
   const here = BUILD_STEPS[step].id as BuildStepId;
   const pages = pagesIn(plan);
 
+  /**
+   * A CIRCLE SHOWING A MAP — and it stays a map when you press it.
+   *
+   * James, 29 Aug: "the map icon should clearly look like a map, and as we
+   * click on it, it shouldn't turn into a different colour. It should still
+   * show us a map." So the old accent wash and the word "Map" printed across
+   * it are gone: on is a ring, off is no ring, and the picture never changes.
+   *
+   * It lives on the step line, hard right, in line with Review. That is the
+   * only row on this screen that is always there, and it buys back the entire
+   * filter box the button used to sit in.
+   *
+   * The picture is a real static map of this property, drawn by /api/map-thumb
+   * so the Google key stays on the server. No key means no picture and the
+   * circle falls back to the pin — the button still works, it just is not a map.
+   */
+  const mapToggle = here === "available" && nearby.length > 0 ? (
+    <button
+      type="button"
+      onClick={() => setMapOpen((m) => !m)}
+      aria-pressed={mapOpen}
+      aria-label={mapOpen ? "Hide the map" : "Show the map"}
+      title={mapOpen ? "Hide the map" : "Show the map"}
+      className={`relative ml-auto hidden h-9 w-9 shrink-0 overflow-hidden rounded-full border transition-all hover:scale-105 active:scale-95 lg:block ${
+        mapOpen
+          ? "border-accent-dark ring-2 ring-accent-dark/35"
+          : "border-line/80 hover:border-ink/40"
+      }`}
+    >
+      {/* No geocode means no tile, and the button falls back to a plain
+          circle. It still opens the map — losing the picture must not lose
+          the feature. */}
+      {d?.subjectPoint ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={tileUrl(d.subjectPoint.lat, d.subjectPoint.lon)}
+          alt=""
+          className="h-full w-full object-cover"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = "none";
+          }}
+        />
+      ) : null}
+      {/* The property, in the middle of its own map. Without it the circle is
+          a picture of a town; with it, it is a picture of THIS one. */}
+      <span className="pointer-events-none absolute left-1/2 top-1/2 h-[7px] w-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-dark ring-2 ring-white/90" />
+    </button>
+  ) : null;
+
   const body = (
     <>
-        <div className="flex shrink-0 items-center justify-between gap-3 px-0 py-4">
+        <div className="flex shrink-0 items-center justify-between gap-3 px-0 py-3">
           <div className="min-w-0">
             <p className="hand text-[17px] leading-tight">Build the presentation</p>
             <p className="truncate text-[11.5px] text-muted">
@@ -330,7 +415,7 @@ export default function PresentationBuilder({
 
         {/* The five steps, clickable — an agent who wants to change one thing
             shouldn't have to walk the whole wizard again. */}
-        <nav className="flex shrink-0 flex-wrap gap-1.5 border-b border-line/70 px-5 py-3">
+        <nav className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-line/70 px-0 py-2.5">
           {BUILD_STEPS.map((s, i) => (
             <button
               key={s.id}
@@ -345,9 +430,10 @@ export default function PresentationBuilder({
               {s.label}
             </button>
           ))}
+          {mapToggle}
         </nav>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto px-0 py-3">
           {error && <p className="text-[12.5px] text-accent-dark">{error}</p>}
           {!d && !error && <p className="text-[12.5px] text-muted">Pulling the research…</p>}
 
@@ -373,123 +459,32 @@ export default function PresentationBuilder({
 
           {d && here === "available" && nearby.length > 0 && (
             <div className="mb-5">
-              {/* Say what the list was ASKED for, so nobody has to guess why a
-                  property is in it. */}
-              <div className="mb-3 rounded-xl border border-line/70 bg-box p-3">
-                <div className="flex flex-wrap items-end gap-3">
-                  {/* With the map open these same controls are floating ON the
-                      map, so showing them here as well would be two knobs for
-                      one value. The circle stays — it is how you get back. */}
-                  {!mapOpen && (
-                  <>
-                  <label className="text-[11px]">
-                    <span className="block text-[9.5px] uppercase tracking-wide text-muted">
-                      How far out — {filters.radius ? `${filters.radius} miles` : d.sector}
-                    </span>
-                    <input
-                      type="range" min={0} max={10} step={0.5}
-                      value={filters.radius}
-                      onChange={(e) => applyFilters({ ...filters, radius: Number(e.target.value) })}
-                      className="mt-1.5 w-44 accent-[#e31f36]"
-                    />
-                  </label>
-                  <label className="text-[11px]">
-                    <span className="block text-[9.5px] uppercase tracking-wide text-muted">Beds</span>
-                    <select
-                      value={filters.beds}
-                      onChange={(e) => applyFilters({ ...filters, beds: Number(e.target.value) })}
-                      className="mt-1 rounded-lg border border-line/80 bg-panel px-2 py-1.5 text-[12px]"
-                    >
-                      <option value={0}>Any</option>
-                      {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
-                    </select>
-                  </label>
-                  <label className="text-[11px]">
-                    <span className="block text-[9.5px] uppercase tracking-wide text-muted">Type</span>
-                    <select
-                      value={filters.type}
-                      onChange={(e) => applyFilters({ ...filters, type: e.target.value as "" | "H" | "F" })}
-                      className="mt-1 rounded-lg border border-line/80 bg-panel px-2 py-1.5 text-[12px]"
-                    >
-                      <option value="">Any</option>
-                      <option value="H">Houses</option>
-                      <option value="F">Flats</option>
-                    </select>
-                  </label>
-                  <label className="text-[11px]">
-                    <span className="block text-[9.5px] uppercase tracking-wide text-muted">Rent £</span>
-                    <span className="mt-1 flex items-center gap-1">
-                      <input type="number" placeholder="min" value={filters.minRent || ""}
-                        onChange={(e) => setFilters({ ...filters, minRent: Number(e.target.value) })}
-                        onBlur={() => applyFilters(filters)}
-                        className="w-20 rounded-lg border border-line/80 bg-panel px-2 py-1.5 text-[12px]" />
-                      <input type="number" placeholder="max" value={filters.maxRent || ""}
-                        onChange={(e) => setFilters({ ...filters, maxRent: Number(e.target.value) })}
-                        onBlur={() => applyFilters(filters)}
-                        className="w-20 rounded-lg border border-line/80 bg-panel px-2 py-1.5 text-[12px]" />
-                    </span>
-                  </label>
-                  </>
-                  )}
-                  {/* A CIRCLE SHOWING A MAP, not a button saying "Map".
-                      James, 29 Aug: "rather than having a map button... could
-                      we just show a little tiny map in there."
+              {/* NO BOX. The filter row is the row — a bordered, tinted panel
+                  around four controls was a container drawn for its own sake,
+                  and it cost the screen the vertical space that made the map
+                  and the cards not fit together.
 
-                      The picture is a real static map of this property, drawn
-                      by /api/map-thumb so the Google key stays on the server.
-                      No key means no picture and the circle falls back to the
-                      icon — the button still works, it just is not a map. */}
-                  <button
-                    type="button"
-                    onClick={() => setMapOpen((m) => !m)}
-                    aria-pressed={mapOpen}
-                    aria-label={mapOpen ? "Hide the map" : "Show the map"}
-                    title={mapOpen ? "Hide the map" : "Show the map"}
-                    className={`relative h-11 w-11 shrink-0 overflow-hidden rounded-full border transition-all hover:scale-105 active:scale-95 ${
-                      mapOpen
-                        ? "border-accent-dark ring-2 ring-accent-dark/30"
-                        : "border-line/80"
-                    }`}
-                  >
-                    {d?.subjectPoint ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={tileUrl(d.subjectPoint.lat, d.subjectPoint.lon)}
-                        alt=""
-                        className="h-full w-full object-cover"
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).style.display = "none";
-                        }}
-                      />
-                    ) : null}
-                    <span
-                      className={`absolute inset-0 flex items-center justify-center text-[9px] font-bold uppercase tracking-wider transition-colors ${
-                        mapOpen ? "bg-accent-dark/70 text-white" : "bg-page/45 text-ink"
-                      }`}
-                    >
-                      Map
-                    </span>
-                  </button>
-                  {!mapOpen && (filters.radius || filters.beds || filters.type || filters.minRent || filters.maxRent) ? (
-                    <button type="button"
-                      onClick={() => applyFilters({ radius: 0, beds: 0, minRent: 0, maxRent: 0, type: "" })}
-                      className="rounded-lg border border-line/80 px-2.5 py-1.5 text-[11.5px] text-muted">
-                      Reset
-                    </button>
-                  ) : null}
-                </div>
-                <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
-                  {refiltering ? "Searching…" : d.marketFilters?.appliedRadius
-                    ? `Within ${filters.radius} miles of ${postcode} — a box, because Homesearch has no radius; the width is narrowed by latitude so it stays circular-ish.`
-                    : `Sector ${d.sector} only. Drag the slider to reach further out.`}
+                  With the map open the same controls are floating ON it, so
+                  this row folds away rather than duplicating them. It COLLAPSES
+                  rather than disappears, so the cards rise into the space
+                  instead of jumping. */}
+              <div
+                className={`overflow-hidden transition-[max-height,opacity,margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                  mapOpen ? "mb-0 max-h-0 opacity-0" : "mb-3 max-h-24 opacity-100"
+                }`}
+              >
+                <div className="flex flex-wrap items-center gap-2">{controlsFor(false)}</div>
+                {/* How far out, said in words. The slider's own number says
+                    "3 mi"; this says three miles OF WHERE, which is the bit an
+                    agent is actually being asked to defend. */}
+                <p className="mt-2 text-[11px] leading-relaxed text-muted">
+                  {refiltering
+                    ? "Searching\u2026"
+                    : filters.radius
+                      ? `${nearby.length} on the market within ${filters.radius} ${filters.radius === 1 ? "mile" : "miles"} of ${postcode} \u2014 every agent's stock, not just ours.`
+                      : `${nearby.length} on the market in ${d.sector} only \u2014 every agent's stock, not just ours. Drag the slider to reach further out.`}
                 </p>
               </div>
-
-              <p className="text-[12.5px] leading-relaxed text-muted">
-                {nearby.length} on the market — every agent&apos;s stock, not just ours.
-                This is what a tenant is choosing between.
-                {mapOpen && focused ? " Clicking a price brings it to the top." : ""}
-              </p>
 
               {/* SPLIT VIEW. Cards left, map right, both scrolling in their own
                   right — the Airbnb shape, and it works for the same reason:
@@ -499,7 +494,7 @@ export default function PresentationBuilder({
                   The map is STICKY rather than scrolling with the list. A map
                   that leaves the screen while you scroll the results is a map
                   you have to keep scrolling back to. */}
-              <div className={mapOpen ? "mt-3 flex gap-4" : "mt-3"}>
+              <div className={mapMounted ? "mt-3 flex gap-4" : "mt-3"}>
                 {/* WITH THE MAP OPEN THE LIST IS THE ONLY THING THAT SCROLLS.
                     James, 29 Aug: "if we scroll, it only scrolls the properties
                     on the left. If we do scroll on the right, it just moves the
@@ -512,12 +507,12 @@ export default function PresentationBuilder({
                     a large monitor and a hardcoded 560px is right on neither. */}
                 <ul
                   className={
-                    mapOpen
+                    mapMounted
                       /* Wider gaps than a boxed grid needs. With no border
                          the whitespace IS the separation — tight gaps make two
                          properties read as one, because nothing else says
                          where the first one stops. */
-                      ? "grid h-[calc(100vh-260px)] flex-1 grid-cols-1 content-start gap-x-4 gap-y-6 overflow-y-auto pr-1 xl:grid-cols-2"
+                      ? "grid h-[calc(100dvh-200px)] flex-1 grid-cols-1 content-start gap-x-4 gap-y-6 overflow-y-auto pr-1 xl:grid-cols-2"
                       : "grid gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
                   }
                 >
@@ -651,10 +646,20 @@ export default function PresentationBuilder({
 
                 {/* Three quarters of the width was asked for; 58% is what that
                     means once the two-column card grid beside it still has to
-                    hold a photograph and a price without wrapping. */}
-                {mapOpen && (
-                  <div className="hidden w-[58%] shrink-0 lg:block">
-                    <div className="sticky top-2">
+                    hold a photograph and a price without wrapping.
+
+                    IT SLIDES OUT OF THE CORNER IT WAS SUMMONED FROM. The width
+                    animates, so the cards reflow with it rather than snapping;
+                    `min-w` on the inner panel keeps the map its own size while
+                    the column narrows, so it slides behind the edge instead of
+                    being squashed into it. */}
+                {mapMounted && (
+                  <div
+                    className={`hidden shrink-0 overflow-hidden transition-[width,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] lg:block ${
+                      mapIn ? "w-[58%] opacity-100" : "w-0 opacity-0"
+                    }`}
+                  >
+                    <div className="sticky top-2 min-w-[440px]">
                       <MarketMap
                         listings={nearby}
                         centre={d.subjectPoint}
@@ -684,55 +689,6 @@ export default function PresentationBuilder({
               <p className="mt-3 border-b border-line/70 pb-4 text-[11px] leading-relaxed text-muted">
                 Nothing here starts ticked — it is somebody else&apos;s stock, and putting a
                 competitor&apos;s property into our deck should be a decision, not a default.
-              </p>
-            </div>
-          )}
-
-          {d && here === "available" && (
-            <div className="space-y-3">
-              <p className="text-[12.5px] leading-relaxed text-muted">
-                {here === "available"
-                  ? "From our own book — the ones we are letting and can speak to."
-                  : BUILD_STEPS[2].blurb}
-              </p>
-              {(here === "available" ? available : let_).length === 0 ? (
-                <p className="rounded-xl border border-line/70 p-4 text-[12.5px] text-muted">
-                  Nothing here for this postcode. That is a real answer, not a failure — carry
-                  on, and this section simply won&apos;t appear in the deck.
-                </p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {(here === "available" ? available : let_).map((c) => (
-                    <li key={c.id}>
-                      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-line/70 p-3 text-[12.5px]">
-                        <input
-                          type="checkbox"
-                          checked={chosen.includes(c.id)}
-                          onChange={() => toggle(c.id)}
-                          className="h-4 w-4 accent-[#e31f36]"
-                        />
-                        <span className="min-w-0 flex-1 truncate">
-                          {c.name}
-                          <span className="ml-1.5 text-[10.5px] text-muted">{c.locality}</span>
-                        </span>
-                        {c.daysOnMarket != null && (
-                          <span className="shrink-0 text-[10.5px] text-muted">
-                            {c.letAgreed ? `let in ${c.daysOnMarket}d` : `${c.daysOnMarket}d`}
-                          </span>
-                        )}
-                        <Pill tone={c.nearness === "sector" ? "accent" : "neutral"}>
-                          {c.nearness === "sector" ? "same sector" : c.nearness === "district" ? "same district" : "wider area"}
-                        </Pill>
-                        <span className="figures shrink-0">{c.rentDisplay}</span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <p className="text-[11px] leading-relaxed text-muted">
-                Only same-sector properties start ticked. A pre-ticked box is a
-                recommendation, and recommending one from the other side of the city is how
-                you end up defending a property you have never seen.
               </p>
             </div>
           )}
@@ -772,6 +728,59 @@ export default function PresentationBuilder({
                   ))}
                 </ul>
               )}
+              {/* MOVED HERE FROM "On the market". James, 29 Aug.
+
+                  That step is the whole market — every agent's stock, with a
+                  map. Our own book sitting underneath it was a second list
+                  answering a different question on a screen already full of
+                  the first one. Here it belongs: this step is the only one
+                  that is about US, so "what we let" and "what we are letting"
+                  now sit together and the market step is just the market. */}
+              <p className="mt-6 border-t border-line/70 pt-5 text-[12.5px] leading-relaxed text-muted">
+                And from our own book right now &mdash; the ones we are letting and can
+                speak to.
+              </p>
+              <div className="space-y-3">
+              {available.length === 0 ? (
+                <p className="rounded-xl border border-line/70 p-4 text-[12.5px] text-muted">
+                  Nothing here for this postcode. That is a real answer, not a failure — carry
+                  on, and this section simply won&apos;t appear in the deck.
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {available.map((c) => (
+                    <li key={c.id}>
+                      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-line/70 p-3 text-[12.5px]">
+                        <input
+                          type="checkbox"
+                          checked={chosen.includes(c.id)}
+                          onChange={() => toggle(c.id)}
+                          className="h-4 w-4 accent-[#e31f36]"
+                        />
+                        <span className="min-w-0 flex-1 truncate">
+                          {c.name}
+                          <span className="ml-1.5 text-[10.5px] text-muted">{c.locality}</span>
+                        </span>
+                        {c.daysOnMarket != null && (
+                          <span className="shrink-0 text-[10.5px] text-muted">
+                            {c.letAgreed ? `let in ${c.daysOnMarket}d` : `${c.daysOnMarket}d`}
+                          </span>
+                        )}
+                        <Pill tone={c.nearness === "sector" ? "accent" : "neutral"}>
+                          {c.nearness === "sector" ? "same sector" : c.nearness === "district" ? "same district" : "wider area"}
+                        </Pill>
+                        <span className="figures shrink-0">{c.rentDisplay}</span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="text-[11px] leading-relaxed text-muted">
+                Only same-sector properties start ticked. A pre-ticked box is a
+                recommendation, and recommending one from the other side of the city is how
+                you end up defending a property you have never seen.
+              </p>
+              </div>
             </div>
           )}
 
@@ -919,9 +928,19 @@ export default function PresentationBuilder({
      portalled and capped. Same content either way — only the frame differs. */
   if (fullPage) {
     return (
-      <div className="flex min-h-[calc(100dvh-2rem)] flex-col">
+      /* FULL BLEED. The negative margins cancel the Shell's own page padding
+         (px-5 / lg:px-10 / 2xl:px-14, py-8) and a slimmer gutter is put back,
+         so this screen gets the window rather than the content column.
+
+         It is worth the trick because of what this page has to hold at once:
+         a step line, a filter row, a two-up card grid and a map beside it. In
+         the padded column that stack ran off the bottom, and an agent stood in
+         a landlord's hallway scrolling to find the map. `overflow-hidden` and
+         a fixed viewport height mean the page itself never scrolls — only the
+         card column inside it does. */
+      <div className="-mx-5 -my-8 flex h-[100dvh] flex-col overflow-hidden px-5 lg:-mx-10 lg:px-8 2xl:-mx-14 2xl:px-8">
         {backHref && (
-          <Link href={backHref} className="mb-3 inline-block text-[12px] text-muted underline">
+          <Link href={backHref} className="mt-4 inline-block shrink-0 text-[12px] text-muted underline">
             ← Back to the appraisal
           </Link>
         )}

@@ -246,7 +246,7 @@ export default function MarketMap({
 
   if (!KEY || failed) {
     return (
-      <div className="flex h-[calc(100vh-260px)] w-full items-center justify-center rounded-2xl border border-dashed border-line/70 p-6 text-center">
+      <div className="flex h-[calc(100dvh-200px)] w-full items-center justify-center rounded-2xl border border-dashed border-line/70 p-6 text-center">
         <p className="text-[12.5px] leading-relaxed text-muted">
           The map needs <span className="font-semibold">NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</span> on
           this environment.
@@ -262,7 +262,7 @@ export default function MarketMap({
       <div className="relative">
         <div
           ref={holder}
-          className="h-[calc(100vh-260px)] w-full overflow-hidden rounded-2xl border border-line/70 bg-line/10"
+          className="h-[calc(100dvh-200px)] w-full overflow-hidden rounded-2xl border border-line/70 bg-line/10"
         />
 
         {/* Three dots while Google is still arriving. An empty grey rectangle
