@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import WorkspaceRail from "@/components/WorkspaceRail";
 import { can, type Capability } from "@/lib/roles";
 
 /**
@@ -200,94 +201,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       `}</style>
 
       <div className="flex gap-5">
-        <aside
-          data-admin-rail
-          className="sticky top-3 mb-3 hidden h-[calc(100vh-24px)] w-60 shrink-0 flex-col overflow-hidden rounded-3xl border border-line/80 bg-panel px-4 py-5 md:flex"
-        >
-          <div className="flex items-center px-1">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/house.png" alt="" className="art h-7 w-7" />
-            <span className="hand ml-2 text-[17px] leading-none">TLE OS</span>
-          </div>
-          <p className="mt-1 px-1 text-[9px] font-bold uppercase tracking-[0.16em] text-accent-dark">
-            Admin
-          </p>
-
-          {/* The line around the outside is the panel's border; this is the one
-              under the mark, exactly as the agent rail has it. */}
-          <div className="mb-1 mt-3 border-t border-line/70 pt-3" />
-
-          <nav aria-label="Admin" className="min-h-0 flex-1 overflow-y-auto">
-            {groups.map((g) => (
-              <div
-                key={g.title ?? "top"}
-                className={
-                  g.rule
-                    ? "mt-5 border-t border-line/70 pt-4"
-                    : g.title
-                      ? "mt-3"
-                      : ""
-                }
-              >
-                {g.title && (
-                  <p className="mb-1.5 px-3 text-[9px] font-bold uppercase tracking-[0.14em] text-muted/70">
-                    {g.title}
-                  </p>
-                )}
-                <ul className="space-y-0.5">
-                  {g.items.map((t) => {
-                    const on = t.exact ? path === t.href : path.startsWith(t.href);
-                    return (
-                      <li key={t.href}>
-                        <Link
-                          href={t.href}
-                          className={`block rounded-lg px-3 py-2 text-[12.5px] transition-colors ${
-                            on
-                              ? "bg-accent-soft font-semibold text-accent-dark"
-                              : "text-muted hover:text-ink"
-                          }`}
-                        >
-                          {t.label}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
-          </nav>
-
-          <button
-            type="button"
-            onClick={() => router.push("/dashboard")}
-            className="mt-auto rounded-lg border border-line/80 px-3 py-2 text-[12px] text-muted transition-colors hover:border-ink"
-          >
-            ← Leave admin
-          </button>
-        </aside>
-
-        {/* On a phone the rail becomes a scrolling strip — a 240px column beside
-            content on a 375px screen leaves neither of them usable. */}
-        <nav
-          data-admin-rail
-          aria-label="Admin"
-          className="mb-4 flex gap-1.5 overflow-x-auto pb-1 md:hidden"
-        >
-          {groups.flatMap((g) => g.items).map((t) => {
-            const on = t.exact ? path === t.href : path.startsWith(t.href);
-            return (
-              <Link
-                key={t.href}
-                href={t.href}
-                className={`shrink-0 rounded-full border px-3.5 py-1.5 text-[12px] ${
-                  on ? "border-accent-dark bg-accent-dark text-white" : "border-line/80"
-                }`}
-              >
-                {t.label}
-              </Link>
-            );
-          })}
-        </nav>
+        <WorkspaceRail
+          label="Admin"
+          groups={groups}
+          footer={
+            <button
+              type="button"
+              onClick={() => router.push("/dashboard")}
+              className="w-full rounded-lg border border-line/80 px-3 py-2 text-[12px] text-muted transition-colors hover:border-ink"
+            >
+              ← Leave admin
+            </button>
+          }
+        />
 
         <div className="min-w-0 flex-1 py-3">{children}</div>
       </div>
