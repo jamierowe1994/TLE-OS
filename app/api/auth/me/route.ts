@@ -28,12 +28,25 @@ export async function GET(req: NextRequest) {
   /* A view-as can target somebody with no OS account, so the banner's name
      comes off the token rather than out of os_users. */
   const va = readViewAs(req.cookies.get(VIEW_AS_COOKIE)?.value);
-  const impersonating = Boolean(actor?.role === "owner" && va && va.ownerId === actor.id);
+  /* Only claim it when there is genuinely somebody to be. This used to be
+     driven by the cookie alone, so the red banner announced "viewing as
+     Kayleigh Wright" while whoIs had quietly fallen back to the owner and
+     every figure on the page was his own. A banner that can be wrong about
+     whose screen you are looking at is worse than no banner. */
+  const impersonating = Boolean(
+    actor?.role === "owner" && va && va.ownerId === actor.id && subject
+  );
   return NextResponse.json({
     ok: true,
-    user: subject,
+    /* Never null while somebody is signed in. A subject that cannot be
+       resolved (REX unreachable, and they have no account) must not read as
+       "signed out" and bounce an owner to the sign-in page. They see their own
+       screen, as themselves, with no banner claiming otherwise. */
+    user: subject ?? actor,
     actor: actor ? { id: actor.id, name: actor.name, email: actor.email, role: actor.role } : null,
-    viewingAs: viewingAs || impersonating,
+    /* Both halves require a resolved subject, so this can never be true while
+       the page is showing the owner's own data. */
+    viewingAs: Boolean(subject) && (viewingAs || impersonating),
     subject: impersonating
       ? { name: va!.label || subject?.name || "", email: subject?.email ?? "" }
       : viewingAs && subject

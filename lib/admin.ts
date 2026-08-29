@@ -2,6 +2,7 @@ import "server-only";
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById, type OsUser } from "@/lib/users";
+import { allAgents } from "@/lib/rex-agents";
 import { readViewAs, VIEW_AS_COOKIE } from "@/lib/view-as";
 import { can, type Capability } from "@/lib/roles";
 
@@ -25,6 +26,55 @@ export interface Who {
   viewingAs: boolean;
 }
 
+/**
+ * A subject built from REX rather than from os_users.
+ *
+ * ── The half of view-as that was never wired ──────────────────────────────
+ *
+ * `lib/view-as.ts` carries a REX id alongside the account id, and says why:
+ * "the people worth testing as — Rhiannon, Kayleigh — have NO OS account."
+ * The token was designed for it. `whoIs` simply never read it: it looked up
+ * `subjectId` (which is the literal "-" for those people), found nothing, and
+ * fell through to `subject: actor`.
+ *
+ * Nothing said so. The banner takes its name from the token, so it kept
+ * announcing "You are viewing as Kayleigh Wright" while every figure on the
+ * page was James's own. During a pilot where most partners have no account
+ * yet, that is the ordinary case rather than an edge one — and it is worse
+ * than a plain failure, because the screen is confidently mislabelled.
+ *
+ * ── Why a stand-in cannot escalate anything ───────────────────────────────
+ *
+ * The role is hardcoded to "agent" and never read from REX. Permission is
+ * decided on the ACTOR everywhere in the OS (see requireCapability below), so
+ * a subject grants nothing on its own; this only ever narrows what is shown.
+ *
+ * The id is deliberately `rex:<id>` — not a real os_users id, not blank, and
+ * obviously synthetic in any log or row it reaches. Writing is already refused
+ * while viewing as somebody (`assertNotViewingAs`), and `isStandIn` is here so
+ * a write path can be certain rather than trusting that guard alone.
+ */
+function standIn(agent: { id: string; name: string; email: string; photo: string | null }, label: string): OsUser {
+  return {
+    id: `rex:${agent.id}`,
+    email: agent.email,
+    name: agent.name || label,
+    /* Never from REX. A stand-in is an agent, whatever the person's real
+       standing, because this exists to see an agent's screen. */
+    role: "agent",
+    photo: agent.photo,
+    /* They have no account, so there is no date it was made. Empty rather
+       than today's date, which would be a fact we invented. */
+    createdAt: "",
+    rexUserId: agent.id,
+  };
+}
+
+/** Is this subject a REX stand-in rather than a real account? */
+export function isStandIn(user: OsUser | null | undefined): boolean {
+  return Boolean(user?.id.startsWith("rex:"));
+}
+
 export async function whoIs(req: NextRequest): Promise<Who> {
   const actorId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
   const actor = actorId ? await findUserById(actorId) : null;
@@ -37,6 +87,19 @@ export async function whoIs(req: NextRequest): Promise<Who> {
   if (va && actor.role === "owner" && va.ownerId === actor.id) {
     const subject = await findUserById(va.subjectId);
     if (subject) return { actor, subject, viewingAs: true };
+    /* No OS account — the case the token was built for. Scope by their REX id
+       instead. allAgents() is cached for 30 minutes in-process, so this is not
+       a REX round trip per request, and it only runs on this branch. */
+    if (va.rexUserId) {
+      const agent = await allAgents()
+        .then((rows) => rows.find((a) => a.id === va.rexUserId) ?? null)
+        .catch(() => null);
+      if (agent) return { actor, subject: standIn(agent, va.label), viewingAs: true };
+    }
+    /* Neither an account nor a REX record. Falling through would show the
+       owner their own data under somebody else's name, so the caller is told
+       plainly that there is no subject and can say so. */
+    return { actor, subject: null, viewingAs: true };
   }
   return { actor, subject: actor, viewingAs: false };
 }
