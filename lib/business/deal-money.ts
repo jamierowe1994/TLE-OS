@@ -28,9 +28,20 @@ import { propertyKey } from "@/lib/business/payprop-portfolio";
  * invoiced BEFORE a move-in, so the window reaches back much further than it
  * reaches forward. A previous let's holding fee must not render on this deal.
  *
- * RENT RECEIVED, from 7 days before move-in. Rent that arrived before this
- * deal's move-in belongs to the outgoing tenant. Seven days of slack because a
- * first month is routinely paid the week before the keys.
+ * RENT RECEIVED, from 7 days before move-in AND only while the deal can still
+ * plausibly own the tenancy. The 7 days keeps out the OUTGOING tenant's rent.
+ * The second half keeps out the INCOMING one's, and was missing.
+ *
+ * Susan, 29 Aug, on three deals the digest flagged as "open 575 days and the
+ * tenancy is paying": they are deals that FELL THROUGH and were never closed.
+ * So the property was let again later, and the rent arriving is the NEXT
+ * tenant's — attached to a dead deal because the only test was "not before
+ * move-in", which anything in the last two months passes when move-in was a
+ * year and a half ago.
+ *
+ * Rent now attaches only when the move-in is recent enough for the reports to
+ * be about this tenancy, or when PayProp holds a tenancy matching this deal's
+ * move-in — which is the proof that this deal is the live one.
  *
  * RENT SCHEDULE, ±60 days. Same as the tenancy, for the same reason.
  *
@@ -68,6 +79,15 @@ export interface MoneyContext {
 
 const DAY = 86_400_000;
 const days = (a: string, b: string) => (new Date(a).getTime() - new Date(b).getTime()) / DAY;
+
+/**
+ * How old a move-in may be before a receipt needs corroborating.
+ *
+ * Inside this, rent in the reports is plausibly this tenancy's. Beyond it, the
+ * property may well have been let again, and a matching PayProp tenancy is
+ * required before any money is attributed to this deal.
+ */
+const RENT_ATTACH_MAX_AGE_DAYS = 90;
 
 /**
  * Fetch and index everything. Started in parallel by the caller where possible;
@@ -150,7 +170,8 @@ export async function loadMoneyContext(now = new Date()): Promise<MoneyContext> 
 export function moneyForDeal(
   ctx: MoneyContext,
   propertyName: string,
-  startDate: string | null
+  startDate: string | null,
+  now = new Date()
 ): MoneyForDeal {
   const key = propertyKey(propertyName);
   const reg = ctx.register;
@@ -172,9 +193,17 @@ export function moneyForDeal(
       ? { amount: holdingRaw!.amount, fromDate: holdingRaw!.fromDate }
       : null;
 
+  /* Two tests, not one. "Not before move-in" alone let a later tenant's rent
+     land on a deal that fell through eighteen months ago. */
+  const moveInAge =
+    startDate != null ? days(now.toISOString().slice(0, 10), startDate) : null;
+  const couldStillBeThisTenancy =
+    moveInAge != null && (moveInAge <= RENT_ATTACH_MAX_AGE_DAYS || tenancy != null);
   const rentRaw = key ? ctx.rentByKey.get(key) : undefined;
   const rentReceived =
-    rentRaw && startDate != null && days(rentRaw.on, startDate) >= -7 ? rentRaw : null;
+    rentRaw && startDate != null && couldStillBeThisTenancy && days(rentRaw.on, startDate) >= -7
+      ? rentRaw
+      : null;
 
   const schedRaw = key ? ctx.schedByKey.get(key) : undefined;
   const rentSchedule =

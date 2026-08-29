@@ -71,37 +71,45 @@ export interface AlertDeal extends EvidenceDeal {
 const REGISTER_GAP_FLAGS = new Set(["scheme-missing"]);
 
 /**
- * A deal is STALE when the tenancy has plainly been running for months and the
- * deal was never closed in Propoly.
+ * A deal whose move-in is long past and which PayProp has no tenancy for.
  *
- * The first live run found three: 10 Burbage Road open 575 days, 16 Sturmer
- * Close 478, 8 Lower Station Road 336 — every one of them with full rent
- * arriving monthly. The address join was right; the deals were simply never
- * closed, so they sit in the pre-tenancy pipeline while the tenancy runs.
+ * SUSAN NAMED THIS ONE, and she was right where I was not. The first live run
+ * flagged 10 Burbage Road at 575 days, 16 Sturmer Close at 478, 8 Lower Station
+ * Road at 336, and I read them as lets that completed and were never closed —
+ * "the tenancy is paying". Susan: they are deals that FELL THROUGH and were
+ * never closed.
  *
- * Reported as "no deposit registered", which is technically true and the wrong
- * instruction: read literally it sends somebody to ring a landlord about a
- * deposit on a tenancy that started early last year. The useful sentence is
- * that the deal is open and should not be.
+ * That is a different fact with a different consequence. If the deal fell
+ * through, the property was let again later and the rent arriving belongs to
+ * the NEXT tenant. Quoting it as this deal's was attributing a stranger's money
+ * to a dead file — which is exactly the false-match failure this whole board is
+ * built to avoid, arrived at from an angle I had not considered.
  *
- * Rent arriving is the proof, not the move-in date alone. A move-in long past
- * with no rent is a different animal — a deal that stalled — and it should keep
- * its own checks.
+ * So the test is no longer "rent is arriving". It is: the move-in is long past
+ * and PayProp holds NO tenancy matching it. A deal that really completed has a
+ * tenancy within sixty days of its move-in; one that fell through does not.
+ * The rent join was tightened in deal-money to match, so the money no longer
+ * attaches here at all.
+ *
+ * The instruction is the same either way — close the deal — but the sentence
+ * has to be true, and Kirstie will read it next to a property she may know
+ * something about.
  */
 const STALE_AFTER_DAYS = 90;
 
 /**
- * Checks that stop meaning anything once a tenancy is a year old.
+ * Checks that stop meaning anything on a deal that fell through.
  *
  * All of them ask about the RUN-UP: was a holding fee invoiced, was referencing
  * done, was the deposit registered, was the agreement signed, did the move-in
- * happen. On a tenancy that has been paying for eighteen months every one of
- * those is either long since moot or unanswerable, and asking is noise.
+ * happen. On a let that never completed, every one is moot — there was no
+ * deposit to register and no move-in to check, so reporting them as gaps is
+ * describing a tenancy that does not exist.
  *
- * PLC and rent are deliberately NOT here. Both are facts about the tenancy as
- * it stands today: a property with no rent protection is a live exposure
- * however old the deal is, and rent carries arrears, which is the most current
- * thing on the board.
+ * PLC is deliberately NOT here. Rent protection is recorded against the
+ * PROPERTY in PayProp, so "without RLP" stays true whoever is living there and
+ * is a live exposure regardless of this deal's fate. Rent stays for the same
+ * reason: it carries arrears, and arrears belong to whoever is actually there.
  */
 const RUN_UP_STAGES = new Set([
   "holding_fee",
@@ -170,11 +178,11 @@ export function dealAlerts(
     const address = d.app.propertyName;
     const agentName = d.agentName ?? null;
 
-    /* Open for months with rent arriving: the deal was never closed. One line
-       that says so, instead of a paperwork complaint about a tenancy that has
-       been running since last year. */
+    /* Move-in long past and PayProp has no tenancy for it: the deal did not
+       complete, and nobody closed it. One line saying that, rather than a
+       paperwork complaint about a let that never happened. */
     const openFor = daysSince(d.startDate, now);
-    const stale = Boolean(d.rentReceived) && openFor != null && openFor >= STALE_AFTER_DAYS;
+    const stale = openFor != null && openFor >= STALE_AFTER_DAYS && d.tenancy == null;
     if (stale) {
       out.push({
         dealId: d.app.id,
@@ -183,11 +191,7 @@ export function dealAlerts(
         tone: "attention",
         address,
         agentName,
-        text: `Open ${openFor} days and the tenancy is paying (${
-          d.rentReceived
-            ? `${gbpish(d.rentReceived.amount)} on ${shortDate(d.rentReceived.on)}`
-            : "rent arriving"
-        }). The deal was never closed in Propoly.`,
+        text: `Move-in was ${openFor} days ago and PayProp has no tenancy for it. Looks like it fell through and was never closed.`,
       });
     }
 
