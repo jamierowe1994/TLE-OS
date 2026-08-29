@@ -32,13 +32,16 @@ export function pilotInviteEmail(link: string, firstName?: string): VerifyEmail 
   const text = [
     "You're in.",
     "",
-    "TLE OS is nearly here, and you're first through the door.",
+    "Welcome to TLE OS. We're building it now, and you're one of the first",
+    "through the door — what you tell us over the next few weeks is what",
+    "shapes it for everybody else.",
     "",
     "Open the link below to confirm your address and choose a password.",
     "",
     link,
     "",
-    "The link works once and lasts 24 hours.",
+    "Nothing to prepare. Have a look around when it suits you, and say so when",
+    "something feels wrong. The link works once and lasts 24 hours.",
   ].join("\n");
 
   return {
@@ -49,10 +52,17 @@ export function pilotInviteEmail(link: string, firstName?: string): VerifyEmail 
     text,
     html: emailShell({
       heading: name ? `You're in, ${name}.` : "You're in.",
-      intro: "TLE OS is nearly here, and you're first through the door.",
+      /* Enough to say why they should care, and no more. It was one line and
+         read as shy for something that is meant to feel like an opening; the
+         version before that was six paragraphs and read as a manual. This is
+         the middle: welcome, we are building it, and you are part of that. */
+      intro:
+        "Welcome to TLE OS. We're building it now, and you're one of the first through the door — what you tell us over the next few weeks is what shapes it for everybody else.",
       button: "Set up your account",
       link,
       image: "illustrations/door-open.gif",
+      footnote:
+        "Nothing to prepare. Have a look around when it suits you, and say so when something feels wrong.",
     }),
   };
 }

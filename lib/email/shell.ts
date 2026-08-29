@@ -63,7 +63,7 @@ const ORIGIN = (process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/,
  * verified live byte-for-byte, and the old one was still in the inbox. Every
  * check on our side passed. The only wrong thing was in somebody else's cache.
  */
-export const ASSET_V = "3";
+export const ASSET_V = "4";
 
 export interface ShellOpts {
   heading: string;
