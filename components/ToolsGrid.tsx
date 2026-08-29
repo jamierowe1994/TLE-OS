@@ -37,6 +37,9 @@ interface Access {
   entitled: boolean;
   reason: Reason;
   hasAccount: boolean;
+  /** Owner-only, absent for agents. The address the answer is about. */
+  askedAbout?: string | null;
+  triedAddresses?: string[];
 }
 
 /** What the card says about access, in an agent's words. */
@@ -98,6 +101,15 @@ function ToolCard({ tool, access }: { tool: Tool; access: Access | null }) {
           }`}
         >
           {line.text}
+        </p>
+      ) : null}
+      {/* Owner-only, and only when the answer is no. The address the licence
+          was checked against is the single thing that explains a partner who
+          is plainly Pro on the People screen being refused here. The server
+          omits these fields entirely for agents. */}
+      {access && !access.entitled && access.triedAddresses?.length ? (
+        <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
+          Checked against {access.triedAddresses.join(", ")}
         </p>
       ) : null}
       {tool.status !== "live" && tool.note ? (

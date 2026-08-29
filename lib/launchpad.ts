@@ -59,6 +59,15 @@ export interface LaunchPadAccess {
    *  an invitation to send, not a door to close. */
   hasAccount: boolean;
   partnerPackage: string | null;
+  /**
+   * The address this answer is about, and every address we tried.
+   *
+   * Shown to owners on the card. Without it, "not part of your licence" for
+   * somebody who is plainly Pro on the People screen is an afternoon of
+   * guessing — which is exactly what Kayleigh Wright cost on 29 Aug.
+   */
+  askedAbout: string | null;
+  triedAddresses: string[];
 }
 
 function base(): string | null {
@@ -77,6 +86,8 @@ const UNAVAILABLE: LaunchPadAccess = {
   sourceOfTruth: null,
   hasAccount: false,
   partnerPackage: null,
+  askedAbout: null,
+  triedAddresses: [],
 };
 
 /**
@@ -112,10 +123,76 @@ export async function getLaunchPadAccess(
       sourceOfTruth: j.sourceOfTruth ?? null,
       hasAccount: Boolean(j.hasAccount),
       partnerPackage: j.partnerPackage ?? null,
+      askedAbout: email.trim().toLowerCase(),
+      triedAddresses: [email.trim().toLowerCase()],
     };
   } catch {
     return UNAVAILABLE;
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * The same question, asked about every address we hold for one person.
+ *
+ * ── Why one address is not enough ─────────────────────────────────────────
+ *
+ * Kayleigh Wright is on Susan's launch list AND marked Pro in the Hub, and the
+ * card still told her the tool was not part of her licence. REX, Team Hub and
+ * the launch list all agree on `Kayleigh.Wright@TheLettingExperts.co.uk`; the
+ * only address that does not have to match any of them is the one she signs
+ * into the OS with, and that is the one we were asking about.
+ *
+ * A person is not an email. Launch Pad's own list already carries the evidence:
+ * Kirstie appears as both Mulholland and Wallington after a name change, and
+ * three of Susan's thirteen are dual-brand partners whose mailboxes are on TPE
+ * and Prestige domains. Asking about one mailbox and concluding something about
+ * the human is the bug.
+ *
+ * ── Why this cannot over-admit ────────────────────────────────────────────
+ *
+ * Every address tried is one the OS already holds AGAINST THAT RECORD: their
+ * own sign-in address, the email on their own REX AccountUser, and the Team Hub
+ * record found by their own REX id. Nothing is guessed, nothing is derived from
+ * a name, and no address belonging to anybody else can enter the list. The REX
+ * id is the strong key throughout — the same one the People screen uses to show
+ * the licence tier, which is why that screen said Pro while this one said no.
+ *
+ * First "yes" wins and stops. If nobody says yes, the answer for their PRIMARY
+ * address is returned, so the wording an agent sees is about them rather than
+ * about whichever alias happened to be asked last.
+ */
+export async function getLaunchPadAccessForPerson(opts: {
+  email: string;
+  name?: string | null;
+  /** Their REX AccountUser id, from os_users. The strong key. */
+  rexUserId?: string | null;
+  /** Other addresses the OS holds for this same person. */
+  alsoTry?: Array<string | null | undefined>;
+}): Promise<LaunchPadAccess> {
+  const primary = opts.email.trim().toLowerCase();
+  const seen = new Set<string>();
+  const addresses: string[] = [];
+  for (const a of [primary, ...(opts.alsoTry ?? [])]) {
+    const clean = (a ?? "").trim().toLowerCase();
+    if (clean && clean.includes("@") && !seen.has(clean)) {
+      seen.add(clean);
+      addresses.push(clean);
+    }
+  }
+  if (addresses.length === 0) return UNAVAILABLE;
+
+  let fallback: LaunchPadAccess | null = null;
+  for (const address of addresses) {
+    const res = await getLaunchPadAccess(address, opts.name);
+    if (res.entitled) return { ...res, askedAbout: address, triedAddresses: addresses };
+    /* Keep the FIRST real answer as the fallback. An "unavailable" from a later
+       address must not overwrite a definite "not-pro" from their own — that
+       would turn a clear answer into a shrug. */
+    if (!fallback || (fallback.reason === "unavailable" && res.reason !== "unavailable")) {
+      fallback = res;
+    }
+  }
+  return { ...(fallback ?? UNAVAILABLE), askedAbout: primary, triedAddresses: addresses };
 }
