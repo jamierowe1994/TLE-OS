@@ -363,16 +363,41 @@ export interface RecentLet {
   beds: number | null;
   rent: number | null;
   /**
-   * NOT POPULATED, and deliberately.
+   * Days from going LIVE to going leased. The number an agent actually wants.
    *
-   * The obvious pair — authority_date_start to state_date — gave 608 and 573
-   * days on real NN5 lets. That is not time to let; it is the length of the
-   * instruction, and REX moves the state when the AUTHORITY ends rather than
-   * when a tenant moved in. Shown to a landlord as "let in 608 days" it would
-   * be both absurd and quotable.
+   * ── The earlier diagnosis was right to refuse, and wrong about why ────────
    *
-   * Left null until the right field is found. A blank an agent can ask about
-   * beats a confident number that is measuring something else.
+   * The obvious pair, `authority_date_start` to `state_date`, gave 608 and 573
+   * days on real lets, and this was read as REX moving the state when the
+   * AUTHORITY ends rather than when a tenant moved in. So the field was left
+   * null rather than quote something absurd — the right call on the evidence.
+   *
+   * The evidence was misread, at the wrong end. Measured 29 Aug over the 100
+   * most recent leased rentals:
+   *
+   *   · `state_date` NEVER coincides with `authority_date_expires` (0 of the 5
+   *     rows carrying an expiry). It is not the authority end.
+   *   · that same pair has a MEDIAN of 39 days, p25 23, p75 69. If it were
+   *     measuring instructions it would sit near twelve months, not six weeks.
+   *   · the long ones are old instructions, not slow lets. The 709-day row was
+   *     instructed in Aug 2024, published on 4 Aug 2026 and let on the 8th.
+   *     Four days on the market, reported as two years.
+   *
+   * So `state_date` was fine all along; `authority_date_start` was the culprit,
+   * because holding an instruction is not the same as marketing a property.
+   *
+   * ── What is measured instead ─────────────────────────────────────────────
+   *
+   * `system_publication_time` (live on the portals) to `state_change_timestamp`
+   * (moved to leased). Present on 94 of 100 against 69 for the authority date,
+   * it means something defensible said out loud — "it was advertised for N
+   * days" — and it agrees with the authority-start pair to the day at the
+   * median, which is two independent fields telling the same story.
+   *
+   * Anything outside 0–365 days stays null. Those are republished records where
+   * the publication stamp belongs to an earlier marketing run, and "let in 701
+   * days" is exactly the absurd, quotable number the original note refused to
+   * print. Declining to quote one row is not the same as inventing one.
    */
   daysToLet: number | null;
   letOn: string | null;
@@ -384,6 +409,9 @@ interface RexLeased {
   attr_bedrooms?: number;
   state_date?: string;
   authority_date_start?: string;
+  /** Unix seconds. Live on the portals, and moved to leased — see daysToLet. */
+  system_publication_time?: number | null;
+  state_change_timestamp?: number | null;
   property?: {
     adr_street_number?: string; adr_street_name?: string;
     adr_suburb_or_town?: string; adr_postcode?: string;
@@ -437,8 +465,15 @@ async function recentlyLet(postcode: string, limit = 12): Promise<RecentLet[]> {
          14 of which 2 were BS1. On the one slide whose whole job is "here is
          what we let near you", almost every row was somewhere else. */
       if (districtOf(pc) !== dist) continue;
-      const started = r.authority_date_start ? new Date(r.authority_date_start) : null;
-      const let_ = r.state_date ? new Date(r.state_date) : null;
+      /* Advertised for how long. Both stamps or nothing — and a span outside a
+         year is a republished record rather than a slow let, so it goes back to
+         null instead of being quoted. See RecentLet.daysToLet. */
+      const live = r.system_publication_time ?? null;
+      const leased = r.state_change_timestamp ?? null;
+      const span =
+        live && leased ? Math.round((leased - live) / 86_400) : null;
+      const daysToLet = span != null && span >= 0 && span <= 365 ? span : null;
+
       const addr = [r.property?.adr_street_number, r.property?.adr_street_name]
         .filter(Boolean).join(" ") || "Address not recorded";
       /* REX carries a row per tenancy, so the same address appears once per
@@ -451,7 +486,7 @@ async function recentlyLet(postcode: string, limit = 12): Promise<RecentLet[]> {
         postcode: pc,
         beds: typeof r.attr_bedrooms === "number" ? r.attr_bedrooms : null,
         rent: typeof r.price_rent === "number" ? r.price_rent : null,
-        daysToLet: null,
+        daysToLet,
         letOn: r.state_date ?? null,
       });
       if (out.length >= limit) break;

@@ -497,14 +497,15 @@ export default function PresentationBuilder({
 
           {d && here === "let" && (
             <div className="mb-5">
-              {/* The blurb used to promise "how long each took" and quote "let
-                  in nine days". `daysToLet` is deliberately null on every row
-                  until the right REX field is found, so that sentence promised
-                  a figure the panel has never once shown. */}
+              {/* "Advertised Nd", not "let in Nd". The span is publication to
+                  leased, so it is time on the market — which is the honest
+                  reading and still the persuasive one. A row whose stamps do
+                  not give a trustworthy span shows no number at all rather
+                  than a rounded guess. */}
               <p className="text-[12.5px] leading-relaxed text-muted">
                 What <span className="font-semibold">we</span> have let in {d.postcode.split(" ")[0]},
-                most recent first. This is ours rather than the whole market&apos;s, which is
-                what makes it worth showing.
+                most recent first, and how long each was advertised. This is ours rather than
+                the whole market&apos;s, which is what makes it worth showing.
               </p>
               {d.recentlyLet.length === 0 ? (
                 <p className="mt-3 rounded-xl border border-dashed border-line p-4 text-[12.5px] leading-relaxed text-muted">
@@ -523,7 +524,7 @@ export default function PresentationBuilder({
                       </span>
                       <span className="shrink-0 text-muted">
                         {l.rent ? <span className="figures text-ink">{money(l.rent)}</span> : "\u2014"}
-                        {l.daysToLet != null ? ` \u00b7 let in ${l.daysToLet}d` : ""}
+                        {l.daysToLet != null ? ` \u00b7 advertised ${l.daysToLet}d` : ""}
                       </span>
                     </li>
                   ))}
