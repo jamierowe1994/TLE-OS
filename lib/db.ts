@@ -390,6 +390,33 @@ CREATE TABLE IF NOT EXISTS os_deal_alerts_sent (
 );
 CREATE INDEX IF NOT EXISTS os_deal_alerts_sent_deal ON os_deal_alerts_sent (deal_id);
 
+-- WHICH CERTIFICATE CHASES HAVE ALREADY GONE OUT.
+--
+-- Keyed on the queue's own key, propertyId:cert:band, which is stable by
+-- construction (see lib/compliance-tracker buildQueue). One row per band means
+-- a certificate is chased once at 30 days, once at 14, once at 7 — and never
+-- twice for the same band however often the runner is called.
+--
+-- Chasing BY BAND rather than by exact day is the tracker's design and this
+-- table is what makes it safe: a certificate with 22 days left sits in the
+-- 30-day band and stays there, so a run that is missed for a week does not
+-- mean that chase never happens. Without a sent-log the same band would then
+-- be sent every single morning until it crossed into the next one.
+--
+-- No cleared_at. A band is crossed once and never re-entered: days remaining
+-- only ever falls. A renewed certificate gets a NEW expiry date and therefore
+-- new keys, so the history stays readable rather than being reset.
+CREATE TABLE IF NOT EXISTS os_compliance_chases_sent (
+  chase_key      TEXT PRIMARY KEY,
+  property_id    TEXT NOT NULL,
+  cert           TEXT NOT NULL,
+  band           INTEGER NOT NULL,
+  sent_to        TEXT NOT NULL DEFAULT '',
+  sent_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_compliance_chases_property
+  ON os_compliance_chases_sent (property_id);
+
 -- Who is on which campaign.
 --
 -- Its own table, not a field on the case, because the questions are asked

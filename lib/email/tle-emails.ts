@@ -302,3 +302,40 @@ The Letting Experts`
 ];
 
 export const EMAIL_GROUPS = ["Pre-launch", "Market appraisals", "Compliance", "Terms of business", "Accounts"];
+
+/**
+ * The agent's certificate chase, filled with a real book.
+ *
+ * Separate from the catalogue entry above, and deliberately so. That one exists
+ * to be LOOKED AT — it substitutes a stand-in property so the preview shows
+ * something readable. This one is what actually goes out, and takes the rows
+ * the tracker produced.
+ *
+ * Same document either way, so editing the wording in the builder changes both
+ * the preview and the real thing. A preview rendered from a different source
+ * than the send is a preview that can lie.
+ */
+export function renderComplianceAgentChase(input: {
+  firstName: string;
+  /** Already sorted worst-first by the caller — the order is a judgement about
+   *  the book, not about typography, so it is not made here. */
+  lines: string[];
+}): { subject: string; html: string } {
+  const fill = (t: string) =>
+    t
+      .replace(/\{\{firstName\}\}/g, input.firstName)
+      .replace(/\{\{count\}\}/g, String(input.lines.length))
+      .replace(/\{\{rows\}\}/g, input.lines.join("<br>"));
+
+  const doc = {
+    ...COMPLIANCE_CHASE_AGENT,
+    subject: fill(COMPLIANCE_CHASE_AGENT.subject),
+    blocks: COMPLIANCE_CHASE_AGENT.blocks.map((b) => {
+      const rec = b as unknown as Record<string, unknown>;
+      return (
+        typeof rec.text === "string" ? { ...rec, text: fill(rec.text) } : rec
+      ) as unknown as (typeof COMPLIANCE_CHASE_AGENT.blocks)[number];
+    }),
+  };
+  return blocks(doc as unknown as EmailDoc)();
+}
