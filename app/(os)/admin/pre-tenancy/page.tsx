@@ -569,45 +569,35 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
 
   return (
     <main className="type-admin flex min-h-screen flex-col bg-page">
-      {/* ---- header ---- */}
-      {/* ---- header ----
-          The Lettings Experts mark and the "Pre-Tenancy" caption have gone.
-          James, 29 Aug: "we don't need the Lettings Experts logo at the top
-          with pretenancy. It's fairly obvious that this is hers." Quite — she
-          signs into one product, on her own screen, all day. A logo telling her
-          whose software she is using is a landing page's job, not a workspace's,
-          and the rail already carries the wordmark.
+      {/* THERE IS NO HEADER ANY MORE, and that is the point.
 
-          The switcher it sat in went with it, which also removes a dead end: it
-          linked to /pretenancy, a route that does not exist in this app, so the
-          one control in the header 404'd.
+          There used to be a full-width sticky bar across the top carrying the
+          Lettings Experts mark, a workspace switcher and her profile. The mark
+          and the switcher went first — she signs into one product, on her own
+          screen, all day, and the switcher linked to /pretenancy, a route this
+          app does not have. The bar itself has now gone too, because a
+          full-width strip is exactly the thing that stops a left rail reaching
+          the top of the window.
 
-          What is left is her profile, and only on the right. The empty flex div
-          that used to hold the task chips went too. */}
-      <header className="sticky top-0 z-30 border-b border-line bg-page/90 backdrop-blur">
-        <div className="flex items-center gap-3 px-5 py-3 sm:px-8">
-          <div className="ml-auto flex items-center gap-3">
-            <ProfileMenu
-              user={user}
-              onOpenMailbox={() => setMailboxOpen(true)}
-              onSignOut={onSignOut}
-            />
-          </div>
-        </div>
-      </header>
+          What is left of it — her profile, and the two standing questions that
+          used to float in a corner — lives at the head of the column on the
+          right, beside the rail rather than above it.
 
-      {/* Left padding is 12px so the rail sits exactly where the home page's
-          does — Shell pins that one with `ml-3`, and "nearly the same margin"
-          is the thing that makes a screen feel like a different product. The
-          right stays roomy: only the rail has to line up with anything. */}
-      <div className="flex min-h-0 flex-1 flex-col pl-3 pr-5 pt-4 sm:pr-8">
-        {!configured ? (
-          <div className="card p-6 text-sm text-muted">
-            Propoly isn&apos;t connected yet — the deal board appears as soon as the
-            integration keys are in place.
-          </div>
-        ) : null}
-        {error ? <div className="card p-6 text-sm text-muted">{error}</div> : null}
+          Left padding is 12px so the rail sits exactly where the home page's
+          does: Shell pins that one with `ml-3`, and "nearly the same margin" is
+          the thing that makes a screen feel like a different product. The right
+          stays roomy; only the rail has to line up with anything. */}
+      {/* ONE row, the full height of the window. James: "can we make sure the
+          navigation bar goes all the way from the top to the bottom." It could
+          not before, because a full-width header sat above this and the rail
+          could only start underneath it. So the header stopped being full-width
+          and moved into the column on the right, which is the only structural
+          change that lets the rail own the whole left edge.
+
+          Three nested wrappers became this one. They were a column inside a
+          column inside a column, each adding padding to a layout that wanted to
+          be a single row. */}
+      <div className="flex min-h-screen gap-6 py-3 pl-3 pr-5 sm:pr-8">
 
         {/* ---- the stage rail down the left, the board beside it ----
              The title and the filters now sit OVER the deals rather than over
@@ -616,8 +606,6 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
              filters went with them: the header already draws a full-width
              line, and a second one stopping short of the edge reads as a
              mistake rather than a divider. */}
-        <div className="flex min-h-0 flex-1 flex-col pt-4">
-          <div className="flex min-h-0 flex-1 gap-6">
         {/* ---- stage rail: the 8 stages stacked; Slipped/All/Cancelled
              tucked behind a three-dot menu at the foot ---- */}
         {deals && view === "tiles" ? (
@@ -708,7 +696,7 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
                * different product.
                */
               <section
-                className="enter enter-up sticky top-4 flex max-h-[calc(100vh-120px)] w-60 shrink-0 flex-col gap-1 self-start overflow-y-auto rounded-3xl border border-line/80 bg-panel p-3"
+                className="enter enter-up sticky top-3 flex h-[calc(100vh-24px)] w-60 shrink-0 flex-col gap-1 self-start overflow-y-auto rounded-3xl border border-line/80 bg-panel p-3"
                 style={enterAt(80)}
               >
                 {/* The title lives over the deals now, not here — the rail is
@@ -846,6 +834,81 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
              toggle vanished the moment you switched to kanban, leaving no way
              back. */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {/* The top bar, in the column rather than across the page — and with
+              no rule under it. James: "we should be able to get rid of the line
+              that goes across the top." The rail's own border is the only edge
+              this layout needs, and a second one stopping at the rail read as a
+              mistake anyway.
+
+              Her two standing questions came up here from a floating dock.
+              James offered the rail's foot or "next to the name"; next to the
+              name wins, because the rail is only drawn in tile view and chips
+              that vanish when she flicks to kanban are worse than chips in a
+              slightly duller place. They also stop fighting the assistant in
+              the bottom-right corner for good. */}
+          <div className="mb-4 flex shrink-0 flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMoveInsOpen(true)}
+              className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30"
+            >
+              <span className="text-accent">
+                <DoodleIcon name="calendar" size={15} />
+              </span>
+              Moving soon
+              {upcomingMoveIns.length ? (
+                <span className="rounded-full bg-ink/10 px-1.5 py-0.5 text-[11px]">
+                  {upcomingMoveIns.length}
+                </span>
+              ) : null}
+            </button>
+            {/* Only exists when something needs checking — an always-there
+                "Checks: 0" chip would train her to stop seeing it. */}
+            {flaggedDeals.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => setChecksOpen(true)}
+                className="btn-press flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-[12.5px] font-semibold text-amber-800 transition hover:border-amber-400"
+              >
+                <DoodleIcon name="search" size={15} />
+                Checks
+                <span className="rounded-full bg-amber-200 px-1.5 py-0.5 text-[11px]">
+                  {flaggedDeals.length}
+                </span>
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setTasksTodayOpen(true)}
+              className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30"
+            >
+              <span className="text-accent">
+                <DoodleIcon name="checklist" size={15} />
+              </span>
+              Tasks
+              {todayCount ? (
+                <span className="rounded-full bg-accent px-1.5 py-0.5 text-[11px] text-white">
+                  {todayCount}
+                </span>
+              ) : null}
+            </button>
+            <div className="ml-auto">
+              <ProfileMenu
+                user={user}
+                onOpenMailbox={() => setMailboxOpen(true)}
+                onSignOut={onSignOut}
+              />
+            </div>
+          </div>
+
+          {!configured ? (
+            <div className="card mb-4 p-6 text-sm text-muted">
+              Propoly isn&apos;t connected yet — the deal board appears as soon as the
+              integration keys are in place.
+            </div>
+          ) : null}
+          {error ? <div className="card mb-4 p-6 text-sm text-muted">{error}</div> : null}
+
           <div className="mb-5 flex shrink-0 flex-wrap items-center justify-between gap-x-8 gap-y-4">
             <h1 className="written shrink-0 text-[27px] leading-none text-ink">
               Pre-tenancy pipeline
@@ -971,8 +1034,6 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
           </section>
         )}
         </div>
-          </div>
-        </div>
       </div>
 
       {open ? (
@@ -986,63 +1047,6 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
           onOpenMailbox={() => setMailboxOpen(true)}
         />
       ) : null}
-
-      {/* ---- the dock: her two standing questions, always one click away ----
-           Tasks moved here out of the header, and move-ins joined it. Both
-           counts come from data already on the page, so the dock costs no
-           extra fetch. */}
-      {/* LEFT, not right. The help character is fixed to the bottom-right at
-          z-190 and was sitting on top of these two — hers are z-40, so the
-          assistant won every time and covered the chip. Moving the dock is the
-          safer half of that fix: the character is on every screen in the OS and
-          these two buttons are on one. */}
-      <div className="fixed bottom-4 left-4 z-40 flex items-center gap-2 print:hidden">
-        <button
-          type="button"
-          onClick={() => setMoveInsOpen(true)}
-          className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-4 py-2.5 text-[13px] font-semibold text-ink shadow-lg transition hover:border-black/30"
-        >
-          <span className="text-accent">
-            <DoodleIcon name="calendar" size={17} />
-          </span>
-          Moving soon
-          {upcomingMoveIns.length ? (
-            <span className="rounded-full bg-ink/10 px-1.5 py-0.5 text-[11px]">
-              {upcomingMoveIns.length}
-            </span>
-          ) : null}
-        </button>
-        {/* Only exists when something needs checking — an always-there
-            "Checks: 0" chip would train her to stop seeing it. */}
-        {flaggedDeals.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => setChecksOpen(true)}
-            className="btn-press flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-4 py-2.5 text-[13px] font-semibold text-amber-800 shadow-lg transition hover:border-amber-400"
-          >
-            <DoodleIcon name="search" size={17} />
-            Checks
-            <span className="rounded-full bg-amber-200 px-1.5 py-0.5 text-[11px]">
-              {flaggedDeals.length}
-            </span>
-          </button>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => setTasksTodayOpen(true)}
-          className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-4 py-2.5 text-[13px] font-semibold text-ink shadow-lg transition hover:border-black/30"
-        >
-          <span className="text-accent">
-            <DoodleIcon name="checklist" size={17} />
-          </span>
-          Tasks
-          {todayCount ? (
-            <span className="rounded-full bg-accent px-1.5 py-0.5 text-[11px] text-white">
-              {todayCount}
-            </span>
-          ) : null}
-        </button>
-      </div>
 
       {checksOpen ? (
         <ChecksModal
