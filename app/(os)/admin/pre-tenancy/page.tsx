@@ -40,6 +40,7 @@ import type {
 } from "@/lib/business/types";
 import type { AgentApplication } from "@/lib/business/rex-stats";
 import { rexListingUrl } from "@/lib/business/rex-links";
+import { stageEvidence } from "@/lib/business/stage-evidence";
 
 /* ------------------------------- data shapes ------------------------------- */
 
@@ -74,9 +75,18 @@ interface BoardDeal {
   schemeSuggestion?: { scheme: string; evidence: string } | null;
   /** "Holding deposit" invoice in PayProp for this property. */
   holdingInvoice?: { amount: number; fromDate: string | null } | null;
+  /** Rent that actually arrived, from PayProp's Owner rows. Evidence beside a
+   *  stage, never a trigger for one — the address join is loose. */
+  rentReceived?: { amount: number; on: string; paidOut: boolean } | null;
+  /** A PayProp rent schedule starting — the independent check on move day. */
+  rentSchedule?: { from: string; rent: number } | null;
 }
 
 interface BoardSummary {
+  /** Whether PayProp's money reports loaded at all. Without this, "no rent
+   *  anywhere" and "not looked yet" render identically, and only one of them
+   *  means anything. */
+  moneyCoverage?: { loaded: boolean; months: string[]; withRent: number; withSchedule: number; total: number };
   pipelineTotal: number;
   byStage: { key: string; label: string; count: number }[];
   overdue: number;
@@ -1045,6 +1055,7 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
           }}
           onPatched={(patch) => patchDeal(open.app.id, patch)}
           onOpenMailbox={() => setMailboxOpen(true)}
+          moneyLoaded={summary?.moneyCoverage?.loaded ?? false}
         />
       ) : null}
 
@@ -1164,11 +1175,16 @@ function DealWorkspace({
   onClose,
   onPatched,
   onOpenMailbox,
+  moneyLoaded,
 }: {
   deal: BoardDeal;
   onClose: () => void;
   onPatched: (patch: Partial<BoardDeal>) => void;
   onOpenMailbox: () => void;
+  /* Passed down rather than inferred. "No rent against anything" is a finding
+     when the reports loaded and noise when they did not, and the panel has no
+     way to tell the difference on its own. */
+  moneyLoaded: boolean;
 }) {
   const [notes, setNotes] = useState<DealNote[] | null>(null);
   const [privateNotes, setPrivateNotes] = useState<DealNote[] | null>(null);
@@ -1950,6 +1966,45 @@ function DealWorkspace({
                         {state === "current" ? (
                           <p className="mt-0.5 text-[12px] text-muted">{s.blurb}</p>
                         ) : null}
+                        {/* WHAT AN OUTSIDE SYSTEM SAYS about this stage, under
+                            the stage itself rather than in a panel of its own.
+                            The pipeline records what somebody claims; this line
+                            records what PayProp, REX or DocuSign can show, and
+                            the two disagreeing is the thing worth seeing.
+
+                            Amber only once the pipeline has PASSED the stage —
+                            a deal at Holding fee has no deposit registered and
+                            should not, and eight warnings on every new deal
+                            would train her to stop reading them.
+
+                            Not drawn on a cancelled deal: a dead file does not
+                            need chasing, and the checks would all read as
+                            failures. */}
+                        {!cancelled ? (() => {
+                          const ev = stageEvidence(s.key, deal, {
+                            reached: i <= currentIdx,
+                            moneyLoaded,
+                          });
+                          return (
+                            <p
+                              className={`mt-1 flex items-start gap-1.5 text-[11.5px] leading-relaxed ${
+                                ev.tone === "warn" ? "text-amber-700" : "text-muted"
+                              }`}
+                            >
+                              <span
+                                aria-hidden
+                                className={`mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full ${
+                                  ev.tone === "ok"
+                                    ? "bg-green-500"
+                                    : ev.tone === "warn"
+                                      ? "bg-amber-500"
+                                      : "bg-gray-300"
+                                }`}
+                              />
+                              <span className="min-w-0">{ev.text}</span>
+                            </p>
+                          );
+                        })() : null}
                       </div>
                     </li>
                   );
