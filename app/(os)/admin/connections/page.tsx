@@ -17,6 +17,8 @@ type Health = {
   rex: { configured: boolean; writesLocked: boolean };
   docuseal: { configured: boolean; canSend: boolean };
   emailPolicy: { internalDomains: string[]; note: string };
+  /* Optional so an older deploy of the API doesn't blank the whole page. */
+  launchPad?: { configured: boolean; base: string | null; keySet: boolean };
 };
 
 export default function AdminConnections() {
@@ -34,6 +36,25 @@ export default function AdminConnections() {
     ["Resend (email)", h.resend.configured && h.resend.canSend, h.resend.verdict],
     ["REX", h.rex.configured, h.rex.writesLocked ? "Connected · writes LOCKED" : "Connected · writes unlocked"],
     ["DocuSeal", h.docuseal.configured, h.docuseal.configured ? (h.docuseal.canSend ? "Connected and unlocked" : "Connected, sending locked") : "Not connected"],
+    /* Named separately rather than as one "off", because the two halves fail
+       independently and the fix is different: a missing base URL is a typo in
+       Railway, a missing key is a value nobody pasted. Reported as "no answer
+       about who may open Launch Pad" because that is the visible symptom on
+       the Tools page — every partner is told we cannot check their licence. */
+    [
+      "Launch Pad (entitlement)",
+      Boolean(h.launchPad?.configured),
+      h.launchPad
+        ? h.launchPad.configured
+          ? `Connected · ${h.launchPad.base}`
+          : `Not connected — ${[
+              h.launchPad.base ? null : "ADS_API_BASE missing",
+              h.launchPad.keySet ? null : "ADS_API_KEY missing",
+            ]
+              .filter(Boolean)
+              .join(", ")}. Tools tells every partner it cannot check their licence.`
+        : "This deploy of the API predates the check.",
+    ],
   ];
 
   return (

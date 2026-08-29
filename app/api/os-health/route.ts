@@ -3,6 +3,7 @@ import { hasDb, q } from "@/lib/db";
 import { resendConfigured, resendSendUnlocked, fromAddress } from "@/lib/resend";
 import { docusealConfigured, docusealSendUnlocked } from "@/lib/docuseal";
 import { rexConfigured, rexWritesLocked } from "@/lib/rex";
+import { launchPadConfigured } from "@/lib/launchpad";
 import { internalDomains, FOUNDING_OWNERS } from "@/lib/email-policy";
 import { findUserByEmail } from "@/lib/users";
 
@@ -116,5 +117,22 @@ export async function GET() {
     },
     rex: { configured: rexConfigured(), writesLocked: rexWritesLocked() },
     docuseal: { configured: docusealConfigured(), canSend: docusealSendUnlocked() },
+    /* Launch Pad, which now decides who may open a PAID tool.
+     *
+     * Added because this page could not answer the question it exists for.
+     * The entitlement endpoint went live on Launch Pad and the only way to
+     * tell whether TLE OS could actually reach it was to sign in as a partner
+     * and read the wording on a card — and both failure modes, no key and a
+     * wrong key, produce the same sentence. That is the identical round trip
+     * that put this file here.
+     *
+     * The base URL is a hostname, which is public by definition and the single
+     * most likely thing to be wrong. The key is reported as a boolean and
+     * never echoed, not even masked. */
+    launchPad: {
+      configured: launchPadConfigured(),
+      base: process.env.ADS_API_BASE ?? null,
+      keySet: Boolean(process.env.ADS_API_KEY),
+    },
   });
 }
