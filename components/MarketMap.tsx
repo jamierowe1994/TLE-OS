@@ -122,7 +122,14 @@ export default function MarketMap({
         .filter((l) => l.lat != null && l.lon != null)
         .map((l) => {
           const q = p.fromLatLngToContainerPixel(new google.maps.LatLng(l.lat!, l.lon!));
-          return { key: `${l.address}|${l.rent}`, x: q?.x ?? -9999, y: q?.y ?? -9999, l };
+          /* listingKey, NOT a second copy of the old formula. This line was
+             the last place still building `address|rent` by hand after the key
+             moved to the listing id, and because a pin's key no longer matched
+             anything: the popup never found its anchor and stopped appearing
+             at all, a ticked property stopped going red on the map, and
+             clicking a pin stopped bringing its card to the top. Three
+             behaviours, one string, no error anywhere. */
+          return { key: listingKey(l), x: q?.x ?? -9999, y: q?.y ?? -9999, l };
         })
     );
     if (centre) {
