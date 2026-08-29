@@ -48,13 +48,13 @@ export default function MarketingView() {
     <>
       <PageHeader
         title="Francesca's view"
-        blurb="Marketing — nurture campaigns, the file store, and the assistant that isn't built yet."
+        blurb="Marketing — nurture campaigns, the file store, and the assistant."
       />
 
       <p className="fade-up mt-8 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12px] leading-relaxed">
-        <span className="font-semibold">Yours to shape before she sees it.</span> Two of
-        these three are live already; the assistant is named honestly as missing rather than
-        stubbed, so nothing here demos better than it works.
+        <span className="font-semibold">Yours to shape before she sees it.</span> Campaigns
+        and the file store are live. The assistant takes questions but cannot answer them
+        yet, and says so on every screen — nothing here demos better than it works.
       </p>
 
       <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
@@ -96,18 +96,24 @@ export default function MarketingView() {
       <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-[15px]">The assistant</h2>
-          <Pill tone="neutral">Not built</Pill>
+          <Pill tone="accent">Part built</Pill>
         </div>
         <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
-          Somewhere Francesca fires information and documents, held so it can be served to
-          the front end later. Three real pieces: taking it in, storing it so it can be
-          searched, and answering from it.
+          He exists. The character in the corner takes questions on any screen, and every
+          one lands in his console — that list is the writing order for the help centre,
+          because each entry is something somebody needed and could not find.
         </p>
-        <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
-          Deliberately not stubbed. A text box that accepts her work and drops it is worse
-          than a page that says the feature is coming — she&apos;d find out a fortnight later,
-          having relied on it.
+        <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
+          What is missing is the answering. There is no model behind him yet — no key, no
+          call — so he collects questions rather than replying to them. Feeding him
+          Francesca&apos;s documents is the step after that.
         </p>
+        <Link
+          href="/admin/assistant"
+          className="mt-3 inline-block rounded-lg border border-line/80 px-3.5 py-2 text-[12px]"
+        >
+          Open his console
+        </Link>
       </section>
     </>
   );
