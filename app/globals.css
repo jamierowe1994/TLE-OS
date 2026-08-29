@@ -738,3 +738,19 @@ h1, h2, h3, h4, h5 {
   border-radius: 14px;
   background: var(--panel, var(--card, #fff));
 }
+
+/* The pre-tenancy board's loading illustration.
+   A slow bob rather than a spin or a pulse: this wait runs to several seconds
+   and occasionally much longer, and anything fast enough to read as "busy"
+   becomes irritating across that long. Six seconds is roughly breathing pace —
+   present without demanding anything. Off entirely under reduced motion, where
+   a still illustration and honest text do the whole job anyway. */
+@keyframes board-loading-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+.board-loading-art { animation: board-loading-bob 6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .board-loading-art { animation: none; }
+}

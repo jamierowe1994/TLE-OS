@@ -41,6 +41,7 @@ import type {
 import type { AgentApplication } from "@/lib/business/rex-stats";
 import { rexListingUrl } from "@/lib/business/rex-links";
 import { stageEvidence } from "@/lib/business/stage-evidence";
+import BoardLoading from "@/components/business/BoardLoading";
 
 /* ------------------------------- data shapes ------------------------------- */
 
@@ -992,11 +993,7 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
         {view === "tiles" ? (
           <section className="enter enter-up min-h-0 min-w-0 flex-1 overflow-y-auto pb-8 pl-1" style={enterAt(120)}>
             {deals == null && !error ? (
-              <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                {Array.from({ length: 10 }).map((_, i) => (
-                  <div key={i} className="h-[130px] animate-pulse rounded-2xl bg-white/70" />
-                ))}
-              </div>
+              <BoardLoading />
             ) : activeTab.deals.length === 0 ? (
               <div className="card card-flat p-12 text-center text-[13px] text-muted">
                 Nothing in {activeTab.label.toLowerCase()} right now.
