@@ -77,8 +77,15 @@ export async function budget(): Promise<Budget> {
  * the last one — the whole thing is stable, so the whole thing caches.
  */
 async function systemBlocks(): Promise<Anthropic.TextBlockParam[]> {
+  /* A failed read and an empty table are different facts and he is told which.
+     Swallowing the error into [] made a broken database indistinguishable from
+     a business that had written nothing down. */
+  let knowledgeFailed = false;
   const [entries, brief] = await Promise.all([
-    listKnowledge().catch(() => []),
+    listKnowledge().catch(() => {
+      knowledgeFailed = true;
+      return [];
+    }),
     getBrief().catch(() => ({ body: "", updatedBy: "", updatedAt: null })),
   ]);
   const knowledge = entries
@@ -90,15 +97,28 @@ The Lettings Experts' partner agents. You appear as a small character in the
 corner of every screen and people ask you short, practical questions while they
 are in the middle of something else.
 
+You are given TWO different kinds of material and they must not be confused:
+
+1. THE SYSTEM MAP — how the OS itself works. Generated from the system on every
+   boot, so it is always present and always current. How to do a thing, which
+   screen does it, what order things happen in, what is wired and what is not:
+   you know all of that properly. Answer it fully and confidently.
+2. THE KNOWLEDGE BASE — TLE's own written guidance on fees, policies and how
+   this office prefers to work. Curated by hand, so it may be thin or empty.
+
+An empty knowledge base does NOT mean you know nothing. It means you cannot
+speak to policy. You can always explain the platform.
+
 How to answer:
 - Answer from the material below. It is the only thing you actually know about
   how this business works.
-- The system map explains where things live and what order they happen in. It
-  deliberately contains NO figures — if somebody wants a number, tell them which
-  screen shows it rather than guessing at it.
+- The system map deliberately contains NO figures — if somebody wants a number,
+  tell them which screen shows it rather than guessing at it.
 - If the material does not cover it, say so in one sentence and say the question
   has been passed to James. Do not guess at a process, a figure, or a policy —
   a confident wrong answer about a landlord or a deal is worse than no answer.
+- Never refuse a tour of the system, and never call your own description of it
+  guesswork. Showing somebody round is the thing you are best at.
 - Be brief. Two or three sentences is usually right. These are people mid-task,
   not readers.
 - Plain English, UK spelling, no em dashes. Never invent a figure.
@@ -130,16 +150,48 @@ guidance above:\n\n${brief.body.trim()}`,
      authoritative than James's instructions. */
   blocks.push({ type: "text", text: systemMap() });
 
+  /* ── The two kinds of material are NOT interchangeable ──────────────────
+   *
+   * This block used to say, whenever the knowledge base was empty, "nothing has
+   * been written down yet, say plainly you do not have material on this". That
+   * was true when the knowledge base was the only thing he had. It stopped
+   * being true the moment the system map went in above it, and because it is
+   * the LAST thing he reads it quietly cancelled the map: asked for a tour of
+   * the platform he said any tour would be "pure fiction", while holding a full
+   * description of every screen.
+   *
+   * So the absence is now scoped to what is actually absent. An empty knowledge
+   * base means nobody has written up TLE's own guidance — fees, policies, how
+   * this office does a thing. It says nothing about the platform, which is
+   * generated from the code on every boot and is always there.
+   *
+   * A read FAILURE is called out separately. Under the old catch it looked
+   * identical to an empty table, so a broken database read would have had him
+   * confidently telling agents the business had written nothing down. */
   if (knowledge) {
     blocks.push({
       type: "text",
-      text: `Everything the business has written down:\n\n${knowledge}`,
+      text: `TLE's own written guidance, from the knowledge base:\n\n${knowledge}`,
     });
   } else {
     blocks.push({
       type: "text",
-      text: `Nothing has been written into the knowledge base yet. Say plainly that
-you do not have material on this and the question is going to James.`,
+      text: knowledgeFailed
+        ? `The knowledge base could not be read just now, so TLE's own written
+guidance is missing from this conversation. The system map above is still
+correct and complete — answer platform questions from it as normal. For a
+question about fees, policy or how this office does something, say the
+guidance is temporarily unavailable rather than guessing, and that it has
+gone to James.`
+        : `Nobody has written TLE's own guidance into the knowledge base yet — so
+you have no material on fees, policies, or how this office prefers to do a
+thing. Say so plainly when you are asked one of those, and that the question
+goes to James.
+
+This does NOT apply to the platform. The system map above is generated from the
+system itself and is current, so how the OS works, what each screen does, what
+is wired and what is not are all things you know properly. Answer those fully
+and link the screens. Never tell somebody you cannot show them round.`,
     });
   }
 
@@ -166,6 +218,31 @@ you do not have material on this and the question is going to James.`,
  */
 export function houseStyle(text: string): string {
   return text.replace(/\s+[—–]\s+/g, " - ").replace(/[—–]/g, "-");
+}
+
+/**
+ * Exactly what he is told, as one readable document, for the admin console.
+ *
+ * This exists because of a bug it would have made obvious in seconds. The
+ * console showed the system map and nothing else, so it looked complete — while
+ * the block AFTER the map, the one covering an empty knowledge base, was
+ * telling him he had no material and to say so. He then refused to describe a
+ * platform he had a full description of, and the screen meant for diagnosing
+ * exactly that was showing the wrong half of the prompt.
+ *
+ * So the whole assembly is returned, in order, with the blocks labelled. If he
+ * says something strange again, the reason is on this page.
+ */
+export async function systemPromptPreview(): Promise<{
+  text: string;
+  blocks: number;
+  chars: number;
+}> {
+  const blocks = await systemBlocks();
+  const text = blocks
+    .map((b, i) => `───── block ${i + 1} of ${blocks.length} ─────\n\n${b.text}`)
+    .join("\n\n");
+  return { text, blocks: blocks.length, chars: text.length };
 }
 
 export type Turn = { role: "user" | "assistant"; text: string };

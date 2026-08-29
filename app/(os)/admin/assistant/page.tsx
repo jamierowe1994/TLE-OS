@@ -72,7 +72,16 @@ function when(iso: string | null) {
 
 export default function AssistantConsole() {
   const [lines, setLines] = useState<Line[] | null>(null);
-  const [brain, setBrain] = useState<{ live: boolean; spent: number; cap: number; map?: string } | null>(null);
+  const [brain, setBrain] = useState<{
+    live: boolean;
+    spent: number;
+    cap: number;
+    map?: string;
+    prompt?: string;
+    promptBlocks?: number;
+    knowledgeCount?: number;
+    knowledgeReadable?: boolean;
+  } | null>(null);
   const [brief, setBrief] = useState<string | null>(null);
   const [briefBy, setBriefBy] = useState<string>("");
   const [savingBrief, setSavingBrief] = useState(false);
@@ -90,7 +99,16 @@ export default function AssistantConsole() {
       .catch(() => setBrief(""));
     fetch("/api/admin/assistant-brain")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { live: boolean; spent: number; cap: number; map?: string } | null) => setBrain(d))
+      .then((d: {
+    live: boolean;
+    spent: number;
+    cap: number;
+    map?: string;
+    prompt?: string;
+    promptBlocks?: number;
+    knowledgeCount?: number;
+    knowledgeReadable?: boolean;
+  } | null) => setBrain(d))
       .catch(() => setBrain(null));
     fetch("/api/admin/assistant-log")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("no"))))
@@ -221,12 +239,48 @@ export default function AssistantConsole() {
           context is stale the moment it&rsquo;s written, so he points at the screen that
           shows it instead.
         </p>
+        {/* The knowledge base's state, said out loud. Empty and unreadable look
+            the same from the outside and mean completely different things. */}
+        {brain && (
+          <p className="mt-3 text-[12px] leading-relaxed text-muted">
+            {brain.knowledgeReadable === false ? (
+              <>
+                <span className="font-semibold text-ink">
+                  The knowledge base could not be read.
+                </span>{" "}
+                He still explains the platform from the map, but he has no guidance on fees
+                or policy until this is fixed.
+              </>
+            ) : brain.knowledgeCount ? (
+              <>
+                <span className="font-semibold text-ink">
+                  {brain.knowledgeCount} guidance{" "}
+                  {brain.knowledgeCount === 1 ? "entry" : "entries"} loaded
+                </span>{" "}
+                alongside the map.
+              </>
+            ) : (
+              <>
+                <span className="font-semibold text-ink">No guidance written yet.</span> He
+                explains the platform fully from the map, and says a policy or fee question
+                has gone to you. Writing entries below is what widens that.
+              </>
+            )}
+          </p>
+        )}
+
+        {/* THE WHOLE PROMPT, in order. This used to show the map alone, which
+            read as if it were everything — and hid the block underneath it that
+            was telling him he had no material and to say so. He then refused to
+            describe a system he could describe perfectly, and the page for
+            diagnosing that was showing the wrong half. */}
         <details className="mt-3 rounded-xl border border-line/70 bg-panel p-4">
           <summary className="cursor-pointer text-[12.5px] text-muted hover:text-ink">
             Read it as he reads it
+            {brain?.promptBlocks ? ` — all ${brain.promptBlocks} blocks` : ""}
           </summary>
           <pre className="mt-3 max-h-[50vh] overflow-auto whitespace-pre-wrap text-[11.5px] leading-relaxed text-muted">
-            {brain?.map ?? "Loading…"}
+            {brain?.prompt ?? brain?.map ?? "Loading…"}
           </pre>
         </details>
       </section>
