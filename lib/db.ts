@@ -314,6 +314,29 @@ CREATE TABLE IF NOT EXISTS os_market_appraisals (
 CREATE INDEX IF NOT EXISTS os_market_appraisals_stage_idx
   ON os_market_appraisals (stage, appointment_at);
 
+-- WHAT KIRSTIE HAS ALREADY BEEN TOLD.
+--
+-- One row per (deal, stage) alert that has actually been sent. Without it the
+-- digest is a machine that mails the same twelve problems every morning until
+-- somebody builds a filter for it, which is the same as not having it.
+--
+-- Keyed on the alert key rather than a surrogate id, so recording a send is an
+-- upsert and a re-run of the same day cannot double-send. The key is stable by
+-- construction: deal id + stage key, decided in lib/business/deal-alerts.
+--
+-- cleared_at rather than a delete. A deposit that goes missing, gets registered
+-- and goes missing again is two separate things worth being told about, and the
+-- history of which is which is worth more than the row it saves.
+CREATE TABLE IF NOT EXISTS os_deal_alerts_sent (
+  alert_key      TEXT PRIMARY KEY,
+  deal_id        TEXT NOT NULL,
+  stage_key      TEXT NOT NULL,
+  tone           TEXT NOT NULL DEFAULT 'attention',
+  sent_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  cleared_at     TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS os_deal_alerts_sent_deal ON os_deal_alerts_sent (deal_id);
+
 -- Who is on which campaign.
 --
 -- Its own table, not a field on the case, because the questions are asked
