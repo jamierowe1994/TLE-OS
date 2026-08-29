@@ -497,16 +497,19 @@ export default function PresentationBuilder({
 
           {d && here === "let" && (
             <div className="mb-5">
+              {/* The blurb used to promise "how long each took" and quote "let
+                  in nine days". `daysToLet` is deliberately null on every row
+                  until the right REX field is found, so that sentence promised
+                  a figure the panel has never once shown. */}
               <p className="text-[12.5px] leading-relaxed text-muted">
                 What <span className="font-semibold">we</span> have let in {d.postcode.split(" ")[0]},
-                most recent first, and how long each took. This is ours rather than the whole
-                market&apos;s — and &ldquo;let in nine days&rdquo; is the most persuasive number an
-                agent has.
+                most recent first. This is ours rather than the whole market&apos;s, which is
+                what makes it worth showing.
               </p>
               {d.recentlyLet.length === 0 ? (
                 <p className="mt-3 rounded-xl border border-dashed border-line p-4 text-[12.5px] leading-relaxed text-muted">
                   Nothing let in this district yet. That is our book being thin here rather than
-                  a fault — better said plainly than papered over with something from further away.
+                  a fault, and better said plainly than papered over with something from further away.
                 </p>
               ) : (
                 <ul className="mt-3 space-y-1">

@@ -406,21 +406,37 @@ async function recentlyLet(postcode: string, limit = 12): Promise<RecentLet[]> {
            is refused by name. */
         { name: "property.adr_postcode", type: "like", value: `${dist}%` },
       ],
-      limit: 40,
+      /* Wide, because a string prefix cannot say "district" and most of what
+         comes back is thrown away below. Asking BS1 also returns every BS14
+         and BS16 let, so a 40-row window sorted by date can fill entirely with
+         neighbours and leave the real ones outside it — an empty panel caused
+         by the cap rather than by the book. */
+      limit: 100,
       order_by: { state_date: "desc" },
     });
     if (!res.ok) return [];
     const rows = ((res.result as { rows?: RexLeased[] } | undefined)?.rows ?? []) as RexLeased[];
 
-    const want = normPc(dist);
     const out: RecentLet[] = [];
     for (const r of rows) {
       const pc = (r.property?.adr_postcode ?? "").toUpperCase();
-      /* Same postcode DISTRICT. Sector alone returns almost nothing outside a
-         dense patch, and the wider area produced Luton comparables for a
-         Liverpool flat — the bug this file has already been bitten by once. */
-      // REX has already narrowed to the district; this catches NN1 matching NN10.
-      if (!pc || !normPc(pc).startsWith(want)) continue;
+      /* Same postcode DISTRICT, compared as a district rather than as text.
+         Sector alone returns almost nothing outside a dense patch, and the
+         wider area produced Luton comparables for a Liverpool flat — the bug
+         this file has already been bitten by once.
+
+         It was bitten by it a second time here, and the old line carried a
+         comment claiming to prevent the very thing it caused: `normPc(pc)
+         .startsWith("BS1")` is TRUE of "BS16 7JT". REX's `like` prefilter has
+         the same flaw — it must, it is a string prefix — so this check is the
+         only thing standing between a landlord and somebody else's town.
+
+         Measured 29 Aug against live REX, asking for the city-centre district:
+         LE1 returned 9 lets and none of them were in LE1 (Wigston, Hinckley,
+         Loughborough); EH1 returned 4, none in EH1 (Bonnyrigg); BS1 returned
+         14 of which 2 were BS1. On the one slide whose whole job is "here is
+         what we let near you", almost every row was somewhere else. */
+      if (districtOf(pc) !== dist) continue;
       const started = r.authority_date_start ? new Date(r.authority_date_start) : null;
       const let_ = r.state_date ? new Date(r.state_date) : null;
       const addr = [r.property?.adr_street_number, r.property?.adr_street_name]
