@@ -72,6 +72,13 @@ export interface Tool {
   group: ToolGroupKey;
   /** Shown when it isn't live: what is missing, plainly. */
   note?: string;
+  /**
+   * Entitlement is decided per person by another system, so the card has to ask
+   * before it can say anything true. Today only Launch Pad, whose answer comes
+   * from Launch Pad itself — see lib/launchpad.ts for why it is asked rather
+   * than worked out from the licence tier.
+   */
+  gate?: "launchpad";
 }
 
 export const TOOLS: Tool[] = [
@@ -85,6 +92,7 @@ export const TOOLS: Tool[] = [
     status: "building",
     access: "paid",
     group: "prospecting",
+    gate: "launchpad",
     note: "Being rebuilt into the OS so it stops being a second place to sign in to.",
   },
 ];
