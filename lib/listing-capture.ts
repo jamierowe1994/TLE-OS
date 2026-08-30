@@ -162,6 +162,8 @@ export interface SweepResult {
   newlyLetAgreed: number;
   goneNow: number;
   skipped?: string;
+  /** Set when the feed returned the page cap and there may be more behind it. */
+  truncated?: boolean;
 }
 
 /**
@@ -179,6 +181,11 @@ export async function sweepSector(
   fetchRows: (sector: string) => Promise<Array<Record<string, unknown>>>
 ): Promise<SweepResult> {
   const rows = (await fetchRows(sector)) as unknown as HsRow[];
+  /* 300 is the feed's page cap. Fourteen sectors hit it exactly on the first
+     real run — B16 9, BS7 0, EH3 9, NG1 1, SW8 1 and the rest — which means
+     their books were cut off and the tail would then have been marked gone.
+     hsLetRows pages now; this flag catches the day it stops being enough. */
+  const truncatedAt = rows.length > 0 && rows.length % 300 === 0;
   if (rows.length === 0) {
     return {
       sector,
@@ -205,15 +212,26 @@ export async function sweepSector(
     const status = String(r.status ?? "").trim().toLowerCase();
     const isLetAgreed = status === "let agreed";
 
-    /* let_agreed_at is set ONCE, on the first run that sees the flip, and
-       never moved afterwards — COALESCE keeps the original. A property that
-       falls through and re-lets keeps the date of the first acceptance, which
-       is the honest reading of "when did this let". */
+    /* WE ONLY KNOW A LET DATE IF WE SAW IT CHANGE.
+    
+       The first cut stamped let_agreed_at on insert whenever a row arrived
+       already let agreed. Run one then reported 1,985 properties as having let
+       agreed that day — every one of them a date we invented, because they went
+       let agreed at unknown times before we ever looked. Tomorrow's "let in the
+       last 24 hours" would have read 1,985 forever.
+    
+       So: NEVER on insert. Only on an UPDATE where the status we held was not
+       let agreed and the status we just saw is. That is an observation.
+    
+       A row that is let agreed with let_agreed_at NULL is therefore meaningful
+       and must stay readable: "already taken when we found it, date unknown".
+       It is not the same as "not let", and a report that treats it as such is
+       the same fabrication in a different direction. */
     const res = await q<{ inserted: boolean }>(
       `INSERT INTO os_listing_capture
          (listing_key, sector, postcode, address, beds, property_type, rent,
           agent, lat, lon, status, listed_on, let_agreed_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, CASE WHEN $13 THEN NOW() ELSE NULL END)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, NULL)
        ON CONFLICT (listing_key) DO UPDATE SET
          status        = EXCLUDED.status,
          rent          = EXCLUDED.rent,
@@ -222,8 +240,11 @@ export async function sweepSector(
          address       = EXCLUDED.address,
          last_seen     = NOW(),
          gone_at       = NULL,
-         let_agreed_at = COALESCE(os_listing_capture.let_agreed_at,
-                                  CASE WHEN $13 THEN NOW() ELSE NULL END)
+         /* The transition, and only the transition. Held once set. */
+         let_agreed_at = COALESCE(
+           os_listing_capture.let_agreed_at,
+           CASE WHEN $13 AND os_listing_capture.status <> 'let agreed'
+                THEN NOW() ELSE NULL END)
        RETURNING (xmax = 0) AS inserted`,
       [
         key,
@@ -272,7 +293,43 @@ export async function sweepSector(
     [sector, rows.length]
   );
 
-  return { sector, seen: rows.length, newRows, newlyLetAgreed, goneNow: gone.length };
+  return {
+    sector,
+    seen: rows.length,
+    newRows,
+    newlyLetAgreed,
+    goneNow: gone.length,
+    /* A run that stopped at the cap has NOT seen the sector, and the gone_at
+       sweep above would then mark the unseen tail as vanished. Reported so a
+       silent truncation cannot read as full coverage. */
+    ...(truncatedAt ? { truncated: true } : {}),
+  };
+}
+
+/**
+ * Null out let dates that were stamped at INSERT rather than observed.
+ *
+ * The first real sweep wrote 1,985 of them: every property that was already
+ * let agreed when we first looked got NOW(). Those are inventions — the
+ * properties let at unknown times before we existed — and left alone they
+ * would be indistinguishable from the real observations that follow.
+ *
+ * The test is the timestamps: a stamped-at-insert date equals first_seen, an
+ * observed one comes on a later run and is strictly greater. One second of
+ * slack for the write itself.
+ *
+ * Idempotent, so running it twice is harmless.
+ */
+export async function repairFabricatedLetDates(): Promise<number> {
+  if (!hasDb()) return 0;
+  const rows = await q<{ listing_key: string }>(
+    `UPDATE os_listing_capture
+        SET let_agreed_at = NULL
+      WHERE let_agreed_at IS NOT NULL
+        AND let_agreed_at <= first_seen + INTERVAL '1 second'
+      RETURNING listing_key`
+  );
+  return rows.length;
 }
 
 /**

@@ -4,6 +4,7 @@ import { hasDb } from "@/lib/db";
 import { hsLetRows } from "@/lib/ma-research";
 import {
   addSectors,
+  repairFabricatedLetDates,
   seedSectorsFromAppraisals,
   seedSectorsFromBook,
   sweepSector,
@@ -96,6 +97,14 @@ export async function POST(req: NextRequest) {
   const addParam = req.nextUrl.searchParams.get("add");
   const addedByHand = addParam ? await addSectors(addParam, "cron") : [];
 
+  /* ?repair=1 — one-off, for the 1,985 let dates the first sweep invented by
+     stamping NOW() on properties that were already let agreed when we met them.
+     Idempotent, and worth leaving in place: the same mistake in a future change
+     would be repairable the same way. */
+  const repaired = req.nextUrl.searchParams.get("repair")
+    ? await repairFabricatedLetDates()
+    : null;
+
   const sectors = await watchedSectors();
   if (sectors.length === 0) {
     return NextResponse.json({
@@ -103,6 +112,7 @@ export async function POST(req: NextRequest) {
       swept: 0,
       seeded,
       addedByHand,
+      ...(repaired != null ? { repairedLetDates: repaired } : {}),
       note:
         "Nothing to watch. ?seed=1 found no sectors — check REX is configured and has current rentals — or pass ?add=NN5 4 to name one by hand.",
     });
@@ -133,11 +143,13 @@ export async function POST(req: NextRequest) {
     ok: true,
     seeded,
     addedByHand,
+    ...(repaired != null ? { repairedLetDates: repaired } : {}),
     swept: results.length - skipped.length,
     /* Said out loud. A sector that was skipped contributed nothing, and a
        summary that only counts successes reads as full coverage. */
     skipped: skipped.length,
     skippedDetail: skipped,
+    truncated: results.filter((r) => r.truncated).map((r) => r.sector),
     seen: results.reduce((n, r) => n + r.seen, 0),
     newRows: results.reduce((n, r) => n + r.newRows, 0),
     newlyLetAgreed: results.reduce((n, r) => n + r.newlyLetAgreed, 0),

@@ -455,14 +455,27 @@ export async function listingAdvert(id: number): Promise<string | null> {
  * we had not thought of yet.
  */
 export async function hsLetRows(sector: string): Promise<Array<Record<string, unknown>>> {
-  const parts = [
-    `sectors%5B%5D=${encodeURIComponent(sector)}`,
-    "date_listed_from=1900-01-01",
-    "sort%5B%5D=-listed_on",
-    "limit=300",
-  ];
-  const raw = await hsJson<unknown>(`current_listings_crm/search/let/?${parts.join("&")}`);
-  return hsRows<Record<string, unknown>>(raw);
+  /* PAGED. 300 is the feed's cap, and on the first real sweep fourteen sectors
+     returned exactly 300 — Birmingham, Bristol, Edinburgh, Nottingham, Sheffield,
+     three London ones. Their books were cut off at the cap, and because the
+     capture marks anything it did not see as gone, the unseen tail of a busy
+     sector would have been recorded as vanished the moment it scrolled past
+     row 300. A cap that silently truncates is worse here than a slow job. */
+  const out: Array<Record<string, unknown>> = [];
+  for (let page = 0; page < 8; page++) {
+    const parts = [
+      `sectors%5B%5D=${encodeURIComponent(sector)}`,
+      "date_listed_from=1900-01-01",
+      "sort%5B%5D=-listed_on",
+      "limit=300",
+      `offset=${page * 300}`,
+    ];
+    const raw = await hsJson<unknown>(`current_listings_crm/search/let/?${parts.join("&")}`);
+    const batch = hsRows<Record<string, unknown>>(raw);
+    out.push(...batch);
+    if (batch.length < 300) break;
+  }
+  return out;
 }
 
 async function onMarketNearby(
