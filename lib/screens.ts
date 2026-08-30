@@ -100,7 +100,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     does: [
       "Switch between Tenant and Landlord from the rail.",
       "Press + New lead to add one by hand. It saves in the OS immediately; whether it also reaches REX depends on the Create contacts in REX switch.",
-      "Anything saved here that REX has not got yet is listed above the table, with a Push to REX button and the reason it is waiting.",
+      "Everyone added in the OS is listed above the table under Added here, whether or not REX has them - the ones waiting carry a Push to REX button and the reason they are waiting, the ones that made it carry their REX id.",
       "Search, and filter by source, agent or stage.",
       "Click a lead to open its drawer, then step through the record with Previous and Next.",
       "In the drawer, the single next-action button does that step's work — booking a viewing, booking the appraisal, sending the email, recording the offer.",
