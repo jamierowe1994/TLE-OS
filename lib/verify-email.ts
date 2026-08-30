@@ -35,7 +35,7 @@ export function verifyEmailFor(link: string): VerifyEmail {
     "The link works once and lasts 24 hours.",
     "",
     "We'll never email you a password, and nobody here can see the one you choose.",
-    "If you weren't expecting this, ignore it — nothing happens until the link is opened.",
+    "If you weren't expecting this, ignore it - nothing happens until the link is opened.",
   ].join("\n");
 
   return {
@@ -49,7 +49,7 @@ export function verifyEmailFor(link: string): VerifyEmail {
       link,
       image: "illustrations/sign-in.gif",
       footnote:
-        "We'll never email you a password, and nobody here can see the one you choose. If you weren't expecting this, you can safely ignore it — nothing happens until the link is opened.",
+        "We'll never email you a password, and nobody here can see the one you choose. If you weren't expecting this, you can safely ignore it - nothing happens until the link is opened.",
     }),
   };
 }

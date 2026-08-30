@@ -285,7 +285,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
       "A nudge, not a resend. REX exposes no resend and no signing URL, so this points at the DocuSign email already in their inbox and offers to send it again.",
     render: () =>
       renderPlain(
-        "Your terms of business — 12 Chorlton Road, Manchester M15 4AZ",
+        "Your terms of business - 12 Chorlton Road, Manchester M15 4AZ",
         `Hi Helen,
 
 Just a quick note - the terms of business for 12 Chorlton Road, Manchester M15 4AZ are still waiting on your signature.

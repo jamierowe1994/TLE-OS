@@ -34,7 +34,11 @@ export type AuditKind =
   /* An edit made in the OS and mirrored into REX. Recorded with the field names
      that changed, because "who edited this, and to what" is the question after
      a record turns out wrong — and REX's own log will only say the OS did it. */
-  | "rex_contact_updated";
+  | "rex_contact_updated"
+  /* A catalogue email sent to the person who asked for it, from Admin ->
+     Emails. Recorded because it is the one button in the product that renders
+     an arbitrary template and puts it in a real inbox. */
+  | "email_test_sent";
 
 export interface AuditRow {
   id: string;

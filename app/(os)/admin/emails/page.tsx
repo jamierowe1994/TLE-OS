@@ -132,6 +132,30 @@ function Reader({ row, onClose }: { row: Row; onClose: () => void }) {
   const [index, setIndex] = useState<number>(-1);
   const [edited, setEdited] = useState(false);
   const [building, setBuilding] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function sendToMe() {
+    setSending(true);
+    setSent(null);
+    try {
+      const r = await fetch("/api/admin/emails/test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: row.id }),
+      });
+      const j = (await r.json()) as { ok?: boolean; to?: string; error?: string };
+      setSent(
+        j.ok
+          ? { ok: true, text: `Sent to ${j.to}. It arrives with [Test] on the front.` }
+          : { ok: false, text: j.error ?? "That didn't send." }
+      );
+    } catch {
+      setSent({ ok: false, text: "That didn't send — the connection dropped." });
+    } finally {
+      setSending(false);
+    }
+  }
 
   const load = useCallback(() => {
     fetch(`/api/admin/emails?id=${encodeURIComponent(row.id)}`)
@@ -179,10 +203,21 @@ function Reader({ row, onClose }: { row: Row; onClose: () => void }) {
             Edit
           </button>
         )}
+        {/* Sends THIS version — including anything edited in the builder — to
+            the person pressing it. The address comes from the session and is
+            not a field, so this button cannot reach a landlord. */}
+        <button
+          type="button"
+          disabled={sending}
+          onClick={sendToMe}
+          className={`${row.editable && doc ? "" : "ml-auto "}rounded-full border border-line/70 px-3.5 py-1.5 text-[11.5px] hover:border-ink/40 disabled:opacity-40`}
+        >
+          {sending ? "Sending…" : "Send it to me"}
+        </button>
         <button
           type="button"
           onClick={() => setFacts((f) => !f)}
-          className={`${row.editable && doc ? "" : "ml-auto "}rounded-full border border-line/70 px-3.5 py-1.5 text-[11.5px] hover:border-ink/40`}
+          className="rounded-full border border-line/70 px-3.5 py-1.5 text-[11.5px] hover:border-ink/40"
         >
           {facts ? "Hide details" : "Details"}
         </button>
@@ -194,6 +229,18 @@ function Reader({ row, onClose }: { row: Row; onClose: () => void }) {
           Close
         </button>
       </div>
+
+      {/* Said in full rather than as a tick. When a send is refused the reason
+          IS the useful part — which lock stopped it, and where to go. */}
+      {sent && (
+        <p
+          className={`border-b border-line/70 px-5 py-3 text-[11.5px] leading-relaxed ${
+            sent.ok ? "bg-panel text-muted" : "bg-accent-soft/50 text-accent-dark"
+          }`}
+        >
+          {sent.text}
+        </p>
+      )}
 
       {facts && (
         <dl className="grid gap-x-6 gap-y-2 border-b border-line/70 bg-panel px-5 py-4 text-[11.5px] sm:grid-cols-2">

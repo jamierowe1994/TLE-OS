@@ -33,7 +33,7 @@ export function pilotInviteEmail(link: string, firstName?: string): VerifyEmail 
     "You're in.",
     "",
     "Welcome to TLE OS. We're building it now, and you're one of the first",
-    "through the door — what you tell us over the next few weeks is what",
+    "through the door - what you tell us over the next few weeks is what",
     "shapes it for everybody else.",
     "",
     "Open the link below to confirm your address and choose a password.",
@@ -57,7 +57,7 @@ export function pilotInviteEmail(link: string, firstName?: string): VerifyEmail 
          version before that was six paragraphs and read as a manual. This is
          the middle: welcome, we are building it, and you are part of that. */
       intro:
-        "Welcome to TLE OS. We're building it now, and you're one of the first through the door — what you tell us over the next few weeks is what shapes it for everybody else.",
+        "Welcome to TLE OS. We're building it now, and you're one of the first through the door - what you tell us over the next few weeks is what shapes it for everybody else.",
       button: "Set up your account",
       link,
       image: "illustrations/door-open.gif",

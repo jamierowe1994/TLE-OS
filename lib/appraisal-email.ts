@@ -33,7 +33,7 @@ export type AppraisalInvite = {
 const first = (name: string) => (name || "there").trim().split(/\s+/)[0];
 
 export function subjectFor(i: AppraisalInvite): string {
-  return `Your market appraisal — ${i.address}${i.whenPretty ? `, ${i.whenPretty}` : ""}`;
+  return `Your market appraisal - ${i.address}${i.whenPretty ? `, ${i.whenPretty}` : ""}`;
 }
 
 export function bodyFor(i: AppraisalInvite): string {
@@ -48,7 +48,7 @@ export function bodyFor(i: AppraisalInvite): string {
    * and a lone URL on a line survives both that and a plain-text client.
    */
   const deck = i.presentationUrl
-    ? `\nBefore we meet, I've put a short page together for you — who's coming, what happens on the day, and how long it takes. Two minutes:\n\n${i.presentationUrl}\n`
+    ? `\nBefore we meet, I've put a short page together for you - who's coming, what happens on the day, and how long it takes. Two minutes:\n\n${i.presentationUrl}\n`
     : "";
 
   return `Hi ${first(i.landlordName)},
@@ -57,7 +57,7 @@ Thanks for your time on the phone. I'm looking forward to seeing ${i.address}${
     i.whenPretty ? ` on ${i.whenPretty}` : ""
   }.
 ${deck}
-It usually takes about ${i.minutes} minutes. I'll walk round the property, take a few notes, and we'll talk through what it should let for, how quickly, and what — if anything — is worth doing first.
+It usually takes about ${i.minutes} minutes. I'll walk round the property, take a few notes, and we'll talk through what it should let for, how quickly, and what - if anything - is worth doing first.
 
 To make the most of it, it helps to have to hand:
 
@@ -66,7 +66,7 @@ To make the most of it, it helps to have to hand:
   • rough dates for when you'd want it available
   • anything you already know needs doing
 
-None of it is essential — if you haven't got it, we'll sort it afterwards.
+None of it is essential - if you haven't got it, we'll sort it afterwards.
 
 If the time no longer works, just reply to this email or ring me on ${i.agentPhone} and we'll move it.
 
@@ -111,7 +111,7 @@ export function icsFor(i: AppraisalInvite, stampAt?: string | null): string | nu
     `DTSTAMP:${stamp(stampAt ? new Date(stampAt) : new Date())}`,
     `DTSTART:${stamp(start)}`,
     `DTEND:${stamp(end)}`,
-    fold(`SUMMARY:Market appraisal — ${i.address}`),
+    fold(`SUMMARY:Market appraisal - ${i.address}`),
     fold(`DESCRIPTION:With ${i.agentName}, The Letting Experts. Any problems, ring ${i.agentPhone}.`),
     fold(`LOCATION:${i.address}`),
     "END:VEVENT",
@@ -139,7 +139,7 @@ export type AppraisalOutcomeFacts = {
 const pcm = (n: number | null) => (n == null ? null : `£${n.toLocaleString("en-GB")} pcm`);
 
 export function postSubjectFor(i: AppraisalInvite): string {
-  return `Your appraisal — ${i.address}`;
+  return `Your appraisal - ${i.address}`;
 }
 
 export function postBodyFor(i: AppraisalInvite, f: AppraisalOutcomeFacts): string {
@@ -155,11 +155,11 @@ export function postBodyFor(i: AppraisalInvite, f: AppraisalOutcomeFacts): strin
   if (figure) {
     lines.push(
       asked && asked !== figure
-        ? `In writing, as promised: I'd put it on the market at ${figure}. You mentioned you were hoping for ${asked} — that's not far off, and it's worth a conversation about what would close the gap.`
+        ? `In writing, as promised: I'd put it on the market at ${figure}. You mentioned you were hoping for ${asked} - that's not far off, and it's worth a conversation about what would close the gap.`
         : `In writing, as promised: I'd put it on the market at ${figure}.`
     );
   } else {
-    lines.push("In writing, as promised — here's where we got to.");
+    lines.push("In writing, as promised - here's where we got to.");
   }
   lines.push("");
 
@@ -177,7 +177,7 @@ export function postBodyFor(i: AppraisalInvite, f: AppraisalOutcomeFacts): strin
   }
 
   lines.push(
-    "If you'd like to go ahead, I'll send the terms over and we can get the photos booked. If you're still weighing it up, that's completely fine — tell me what would help and I'll get it to you.",
+    "If you'd like to go ahead, I'll send the terms over and we can get the photos booked. If you're still weighing it up, that's completely fine - tell me what would help and I'll get it to you.",
     "",
     `Either way, ring me on ${i.agentPhone} if anything's easier said than written.`,
     "",
@@ -202,7 +202,7 @@ export function postBodyFor(i: AppraisalInvite, f: AppraisalOutcomeFacts): strin
  * .ics that arrives two days before the visit has missed most of its job.
  */
 export function confirmSubjectFor(i: AppraisalInvite): string {
-  return `Confirmed — your market appraisal${i.whenPretty ? `, ${i.whenPretty}` : ""}`;
+  return `Confirmed - your market appraisal${i.whenPretty ? `, ${i.whenPretty}` : ""}`;
 }
 
 export function confirmBodyFor(i: AppraisalInvite): string {
@@ -216,7 +216,7 @@ Thanks for your time on the phone just now. Putting it in writing so you have it
 
 I've attached a calendar invite so it lands in your diary.
 
-Nothing to prepare at this stage. I'll send you a bit more detail nearer the time — what happens on the day and the handful of documents worth digging out.
+Nothing to prepare at this stage. I'll send you a bit more detail nearer the time - what happens on the day and the handful of documents worth digging out.
 
 If that time stops working, just reply or ring me on ${i.agentPhone} and we'll move it.
 
