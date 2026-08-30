@@ -1,241 +1,260 @@
 /**
- * PLC — pre-let compliance, brought in-house.
+ * The PLC handover: agent → compliance → back to agent.
  *
- * Today an agent fills in a JotForm, a Power Automate flow fans it out, and
- * Kirstie or Mike reads every document by hand. This is the model that
- * replaces it: an agent submits, an AI reads the documents, and **a person
- * gives the pass or the fail.**
+ * When an application is accepted the file stops being the agent's and becomes
+ * a submission. Somebody has to assemble the documents, somebody else has to
+ * check them, and the property cannot be let until they say so. Today that
+ * happens in email, which is why nobody can answer "where is 41 Harewood up
+ * to" without asking Kirstie.
  *
- * The shape is lifted from Fine & Country's compliance review, which has been
- * running against real AML documents for months. Four of its decisions are
- * worth stating plainly, because each one is the difference between a tool
- * people trust and a tool people route around.
+ * ── The one rule that shapes everything here ────────────────────────────────
  *
- * ── 1. THE MODEL DOES NOT PRODUCE THE VERDICT ─────────────────────────────
+ * THE SCAN DOES NOT DECIDE. It reads documents and reports what it found -
+ * a date, a name, a missing page. Whether a file is compliant is a legal
+ * judgement with a person's name against it, and that person is Kirstie. So
+ * the model produces FINDINGS, never a verdict, and the case cannot leave
+ * review without a human pressing something.
  *
- * The AI extracts FACTS and flags CONCERNS. `deriveStatus()` below is ordinary
- * code, and it is the only thing that decides. A model that both reads the
- * evidence and returns the answer gives you a verdict nobody can audit and
- * that changes when the prompt changes.
+ * That is not caution for its own sake. If the scan could approve, then the
+ * day it misreads an expiry we have let a property with an out-of-date gas
+ * certificate and the audit trail says a computer decided. The scan exists to
+ * make Kirstie faster, not to replace her.
  *
- * ── 2. ITS OUTPUT IS CLAMPED BEFORE IT IS USED ────────────────────────────
+ * ── Checks ──────────────────────────────────────────────────────────────────
  *
- * Measured on their live system: the model invents check names that were never
- * in the schema, and rates a MISSING or IRRELEVANT document as high fraud
- * risk. Both are wrong in the same expensive direction. So unknown checks are
- * dropped, and only checks that can actually evidence tampering may push the
- * risk up. A document in the wrong name is "please clarify", never "forgery".
- *
- * ── 3. RECORDS ARE CHAINED, NEVER EDITED ──────────────────────────────────
- *
- * A re-run or an amendment creates a NEW review pointing at the old one. This
- * is a compliance artefact — the audit trail is the product, and overwriting
- * it destroys the only thing that makes a pass defensible later.
- *
- * ── 4. A FAILED DOCUMENT IS RECORDED, NOT SKIPPED ─────────────────────────
- *
- * If a document cannot be read, that is stored on the review with the reason.
- * Silently skipping it produces a clean-looking pass over evidence nobody
- * actually checked, which is the worst outcome available.
+ * Taken from what Legal for Landlords actually cover for us (James, 29 Aug),
+ * so the OS asks for the same pack we already send them rather than inventing
+ * its own list. Two properties matter per check: what document proves it, and
+ * whether a machine can say anything useful about it at all.
  */
 
-/* ── what PLC requires ────────────────────────────────────────────────────── */
+/* ───────────────────────────── the checks ───────────────────────────────── */
 
-export const PLC_ITEMS = [
-  { id: "right_to_rent", label: "Right to Rent", who: "tenant", statutory: true },
-  { id: "gas", label: "Gas safety (CP12)", who: "property", statutory: true },
-  { id: "eicr", label: "EICR", who: "property", statutory: true },
-  { id: "epc", label: "EPC", who: "property", statutory: true },
-  { id: "licence", label: "Licence (HMO/selective)", who: "property", statutory: false },
-  { id: "deposit_scheme", label: "Deposit registered", who: "tenancy", statutory: true },
-  { id: "tenancy_agreement", label: "Tenancy agreement signed", who: "tenancy", statutory: false },
-  { id: "id_check", label: "Tenant ID", who: "tenant", statutory: true },
-] as const;
+export type CheckId =
+  | "landlord-id-aml"
+  | "tenant-checks"
+  | "guarantor-checks"
+  | "gas-safety"
+  | "epc"
+  | "eicr"
+  | "licensing"
+  | "tenancy-agreement"
+  | "right-to-rent";
 
-export type PlcItemId = (typeof PLC_ITEMS)[number]["id"];
+export type Check = {
+  id: CheckId;
+  label: string;
+  /** What the agent has to attach for this to be checkable at all. */
+  needs: string;
+  /**
+   * What the scan can genuinely say.
+   *
+   * `dates`    — it can read an expiry and compare it to the move-in date.
+   * `presence` — it can say a document is there and looks like what it claims.
+   * `reading`  — it can pull named fields out and flag disagreements.
+   * `none`     — a human judgement the model should not be asked to make.
+   *
+   * Recorded per check so the UI can be honest about which lines the scan
+   * actually looked at, rather than implying it understood all nine.
+   */
+  scan: "dates" | "presence" | "reading" | "none";
+  /** Why it is on the list, in the words somebody would use out loud. */
+  why: string;
+};
 
-/* ── what the model is allowed to say ─────────────────────────────────────── */
-
-/**
- * The ONLY authenticity checks that exist.
- *
- * Anything the model returns outside this list is discarded. It does invent
- * names — "name_mismatch", "document_relevance" — and each invented check is
- * an unreviewable claim about a real person's paperwork.
- */
-export const CANONICAL_CHECKS = [
-  "metadata",
-  "arithmetic",
-  "date_sequence",
-  "font_layout",
-  "redaction",
-  "scan_artefact",
-] as const;
-export type CheckName = (typeof CANONICAL_CHECKS)[number];
-
-/**
- * Checks that can, on their own, justify HIGH risk.
- *
- * Metadata and date sequence are circumstantial — a scan can have odd metadata
- * for a dozen innocent reasons. Arithmetic that doesn't add up, a font that
- * changes mid-line, a redaction, a splice: those are tampering signals.
- */
-export const HIGH_CAPABLE_CHECKS: CheckName[] = [
-  "arithmetic",
-  "font_layout",
-  "redaction",
-  "scan_artefact",
+export const PLC_CHECKS: Check[] = [
+  {
+    id: "landlord-id-aml",
+    label: "Landlord ID & AML",
+    needs: "Photo ID and proof of address for every named owner",
+    scan: "reading",
+    why: "Money laundering checks are on the agent, not the landlord, and the fine lands here.",
+  },
+  {
+    id: "tenant-checks",
+    label: "Tenant checks",
+    needs: "Referencing outcome for each tenant",
+    scan: "reading",
+    why: "Affordability and history, per person on the tenancy rather than per household.",
+  },
+  {
+    id: "guarantor-checks",
+    label: "Guarantor checks",
+    needs: "Referencing outcome and signed guarantee, where one is required",
+    scan: "reading",
+    why: "A guarantor who was never referenced is a guarantee nobody can enforce.",
+  },
+  {
+    id: "gas-safety",
+    label: "Gas safety",
+    needs: "Current CP12, dated within 12 months",
+    scan: "dates",
+    why: "Must be in date ON the move-in date, not on the day it was uploaded.",
+  },
+  {
+    id: "epc",
+    label: "EPC",
+    needs: "Certificate rated E or above",
+    scan: "dates",
+    why: "Below E cannot be let without an exemption, and the exemption is its own document.",
+  },
+  {
+    id: "eicr",
+    label: "EICR",
+    needs: "Satisfactory report, dated within 5 years",
+    scan: "dates",
+    why: "An 'unsatisfactory' report with remedial work outstanding is not a pass.",
+  },
+  {
+    id: "licensing",
+    label: "Licensing",
+    needs: "Selective or HMO licence, where the council requires one",
+    scan: "presence",
+    why: "Council-by-council and changes without notice, so absence is a question rather than a fail.",
+  },
+  {
+    id: "tenancy-agreement",
+    label: "Tenancy agreement",
+    needs: "The agreement as it will be signed",
+    scan: "reading",
+    why: "Names, dates, rent and deposit have to match the rest of the pack.",
+  },
+  {
+    id: "right-to-rent",
+    label: "Right to Rent",
+    needs: "Share code or original document check for each adult occupier",
+    scan: "none",
+    why: "A statutory check with a manual step. The model must not be asked to certify it.",
+  },
 ];
 
-export type Risk = "low" | "medium" | "high";
-export type Concern = { check: CheckName; risk: Risk; note: string };
+export const checkById = (id: CheckId) => PLC_CHECKS.find((c) => c.id === id) ?? null;
 
-export interface DocumentRead {
-  itemId: PlcItemId;
-  filename: string;
-  /** Null when the document could not be read at all. */
-  extracted: {
-    documentType: string | null;
-    issuedOn: string | null;
-    expiresOn: string | null;
-    subjectName: string | null;
-  } | null;
-  concerns: Concern[];
-  /** Set when reading failed. The document is still listed — never dropped. */
-  error: string | null;
-}
+/* ───────────────────────────── the states ──────────────────────────────── */
 
-/**
- * Clamp what the model returned before anything reads it.
- *
- * Three rules, each from a real failure:
- *   • unknown check names are dropped — they are unauditable
- *   • a check that cannot evidence tampering is capped at medium
- *   • no surviving concerns means low, not "unknown" — an empty list is an
- *     answer, and leaving it undefined made callers invent one
- */
-export function clampConcerns(raw: unknown): Concern[] {
-  if (!Array.isArray(raw)) return [];
-  const out: Concern[] = [];
-  for (const c of raw) {
-    if (!c || typeof c !== "object") continue;
-    const check = (c as { check?: unknown }).check;
-    if (typeof check !== "string") continue;
-    if (!CANONICAL_CHECKS.includes(check as CheckName)) continue; // invented
-    const name = check as CheckName;
-    let risk = (c as { risk?: unknown }).risk;
-    if (risk !== "low" && risk !== "medium" && risk !== "high") risk = "low";
-    // Circumstantial checks cannot reach high on their own.
-    if (risk === "high" && !HIGH_CAPABLE_CHECKS.includes(name)) risk = "medium";
-    out.push({
-      check: name,
-      risk: risk as Risk,
-      note: String((c as { note?: unknown }).note ?? "").slice(0, 400),
-    });
-  }
-  return out;
-}
+export type PlcState =
+  /** The agent is still putting the pack together. Nobody is waiting on us. */
+  | "assembling"
+  /** Handed to compliance. The agent can no longer change it. */
+  | "submitted"
+  /** The model is reading the documents. */
+  | "scanning"
+  /** Findings are in and Kirstie has not looked yet. */
+  | "reviewing"
+  | "approved"
+  /** Something is missing or wrong; it goes back to the agent to fix. */
+  | "deferred"
+  | "declined";
 
-/* ── the verdict, decided in code ─────────────────────────────────────────── */
-
-export type PlcStatus = "clear" | "needs_review" | "high_risk";
-
-export interface ItemState {
-  itemId: PlcItemId;
-  label: string;
-  statutory: boolean;
-  present: boolean;
-  /** Days until expiry at the tenancy start. Negative = expired by then. */
-  daysAtStart: number | null;
-  readError: string | null;
-  concerns: Concern[];
-}
+export const PLC_STATES: { id: PlcState; label: string; who: string; blurb: string }[] = [
+  { id: "assembling", label: "Assembling", who: "Agent",
+    blurb: "Attaching the pack. Nothing has gone to compliance." },
+  { id: "submitted", label: "Submitted", who: "Compliance",
+    blurb: "With the PLC team. Locked to the agent from here." },
+  { id: "scanning", label: "Scanning", who: "The OS",
+    blurb: "Reading the documents for dates and details." },
+  { id: "reviewing", label: "Ready to review", who: "Kirstie",
+    blurb: "Findings are in. A person decides from here, not the scan." },
+  { id: "approved", label: "Approved", who: "Agent",
+    blurb: "Cleared. The property can be let." },
+  { id: "deferred", label: "Deferred", who: "Agent",
+    blurb: "Something is missing. Back to the agent, with the reason." },
+  { id: "declined", label: "Declined", who: "Agent",
+    blurb: "Not proceeding on this pack." },
+];
 
 /**
- * The verdict. Ordinary code, deliberately — see the header.
+ * What may follow what.
  *
- * `high_risk` requires a genuine tampering signal. A missing document is
- * `needs_review`: it is an incomplete file, not a suspected fraud, and
- * conflating the two teaches people to ignore the flag.
+ * Written as data rather than as ifs scattered through routes, because the
+ * expensive mistakes here are ordering ones: a pack approved before it was
+ * scanned, or an agent editing documents after submission. A transition that
+ * is not in this table cannot happen.
+ *
+ * `deferred` returns to `assembling` on purpose. A deferral is not an ending,
+ * it is the agent's turn again, and giving it its own dead-end state would
+ * leave real cases stranded with nowhere to go.
  */
-export function deriveStatus(items: ItemState[]): PlcStatus {
-  const anyHigh = items.some((i) => i.concerns.some((c) => c.risk === "high"));
-  if (anyHigh) return "high_risk";
+export const PLC_TRANSITIONS: Record<PlcState, PlcState[]> = {
+  assembling: ["submitted"],
+  submitted: ["scanning", "reviewing"], // scanning is skippable when there is no key
+  scanning: ["reviewing"],
+  reviewing: ["approved", "deferred", "declined"],
+  approved: [],
+  deferred: ["assembling"],
+  declined: [],
+};
 
-  const missingStatutory = items.some((i) => i.statutory && !i.present);
-  const expiredAtStart = items.some((i) => i.daysAtStart != null && i.daysAtStart < 0);
-  const unread = items.some((i) => i.readError);
-  const anyMedium = items.some((i) => i.concerns.some((c) => c.risk === "medium"));
+export const canMove = (from: PlcState, to: PlcState) =>
+  PLC_TRANSITIONS[from]?.includes(to) ?? false;
 
-  if (missingStatutory || expiredAtStart || unread || anyMedium) return "needs_review";
-  return "clear";
-}
+/** Who is being waited on. The question every board exists to answer. */
+export const waitingOn = (s: PlcState) => PLC_STATES.find((x) => x.id === s)?.who ?? "—";
 
-/** Why, in the words a person would use. Shown beside the status so nobody
- *  has to guess what the machine objected to. */
-export function explainStatus(items: ItemState[]): string[] {
-  const out: string[] = [];
-  for (const i of items) {
-    if (i.readError) out.push(`${i.label}: could not be read — ${i.readError}`);
-    else if (i.statutory && !i.present) out.push(`${i.label}: missing, and it is required.`);
-    else if (i.daysAtStart != null && i.daysAtStart < 0) {
-      out.push(`${i.label}: expires before the tenancy starts.`);
-    }
-    for (const c of i.concerns) {
-      if (c.risk !== "low") out.push(`${i.label}: ${c.check} — ${c.note}`);
-    }
-  }
-  return out;
-}
+/* ──────────────────────────── the findings ─────────────────────────────── */
 
-/* ── the human decision ───────────────────────────────────────────────────── */
+export type FindingLevel = "blocker" | "query" | "ok";
 
-export type Decision = "passed" | "more_evidence" | "refused";
+export type Finding = {
+  checkId: CheckId;
+  level: FindingLevel;
+  /** One sentence a person can act on. Never "see attached". */
+  message: string;
+  /** What the model read it from, so Kirstie can go and look at the same page. */
+  documentName?: string;
+  /** The date it found, where the check is a date check. ISO. */
+  foundDate?: string | null;
+};
 
-export interface SignOff {
-  decision: Decision;
-  reviewer: string;
-  /** Mandatory. A pass with no reasoning is not a review. */
-  rationale: string;
-  at: string;
-}
-
-export interface PlcReview {
+export type PlcCase = {
   id: string;
-  applicationId: string;
-  propertyId: string | null;
-  tenancyStart: string | null;
-  submittedBy: string;
-  submittedAt: string;
-  documents: DocumentRead[];
-  items: ItemState[];
-  aiStatus: PlcStatus;
-  aiExplains: string[];
-  /** Set only by a person. Until then this review is pending. */
-  signOff: SignOff | null;
-  /** Once signed off, the record is closed. An amendment chains a new one. */
-  locked: boolean;
-  /** The review this supersedes, if any. The audit trail is the product. */
-  previousReviewId: string | null;
+  /** The application this came from. */
+  applicationRef: string;
+  address: string;
+  agentName: string;
+  agentEmail: string;
+  state: PlcState;
+  submittedAt: string | null;
+  /** Documents attached at handover, by check. */
+  documents: { checkId: CheckId; name: string; url: string; addedAt: string }[];
+  scannedAt: string | null;
+  findings: Finding[];
+  /** Kirstie's decision, her words, and her name against it. */
+  decidedAt: string | null;
+  decidedBy: string | null;
+  decisionNote: string;
+};
+
+/**
+ * Is the pack even worth submitting?
+ *
+ * Checked in the OS before it goes anywhere, because a submission that is
+ * obviously short wastes a round trip through a person. Right to Rent is
+ * excluded: it is a manual check whose evidence may legitimately live
+ * elsewhere, and blocking on it would stop every genuine submission.
+ */
+export function missingDocuments(c: Pick<PlcCase, "documents">): Check[] {
+  const have = new Set(c.documents.map((d) => d.checkId));
+  return PLC_CHECKS.filter((k) => k.id !== "right-to-rent" && !have.has(k.id));
+}
+
+/** Blockers first, then queries. What Kirstie should read in order. */
+export function sortFindings(f: Finding[]): Finding[] {
+  const rank: Record<FindingLevel, number> = { blocker: 0, query: 1, ok: 2 };
+  return [...f].sort((a, b) => rank[a.level] - rank[b.level]);
 }
 
 /**
- * Can this be signed off, and by whom.
+ * A one-line summary of the scan, for the board.
  *
- * The AI verdict is fully overridable — a reviewer may pass a `high_risk` file
- * if they know something the documents don't say. What they may NOT do is pass
- * it silently: a rationale is required, and a pass over an AI high-risk flag
- * should read differently in the audit trail from an ordinary one.
+ * Deliberately never says "passed". The scan does not pass anything - it
+ * reports what it saw, and the sentence has to keep that true even when
+ * everything looks fine.
  */
-export function signOffProblems(review: PlcReview, s: Omit<SignOff, "at">): string[] {
-  const errs: string[] = [];
-  if (review.locked) errs.push("This review is already signed off. Re-run it to amend.");
-  if (!s.reviewer.trim()) errs.push("Reviewer name is required.");
-  if (!s.rationale.trim()) errs.push("A rationale is required — a pass with no reasoning is not a review.");
-  if (s.decision === "passed" && review.aiStatus === "high_risk" && s.rationale.trim().length < 40) {
-    errs.push(
-      "Passing a file flagged high risk needs more than a line — say what you checked that the documents don't show."
-    );
-  }
-  return errs;
+export function scanSummary(f: Finding[]): string {
+  const blockers = f.filter((x) => x.level === "blocker").length;
+  const queries = f.filter((x) => x.level === "query").length;
+  if (blockers) return `${blockers} thing${blockers === 1 ? "" : "s"} to fix before this can be let`;
+  if (queries) return `${queries} thing${queries === 1 ? "" : "s"} worth a look`;
+  return "Nothing flagged. Still needs your eyes.";
 }
