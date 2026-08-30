@@ -30,6 +30,9 @@ export default function InlineAddress({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const [options, setOptions] = useState<Suggestion[]>([]);
+  /* Shown floating, never in flow — this lives in a 42px row that must not
+     change height. Silent failure is still worse than a cramped explanation. */
+  const [problem, setProblem] = useState<string | null>(null);
   const ref = useRef<HTMLInputElement>(null);
   const box = useRef<HTMLDivElement>(null);
 
@@ -50,8 +53,10 @@ export default function InlineAddress({
         const r = await fetch(`/api/address?q=${encodeURIComponent(draft)}`, { cache: "no-store" });
         const j = await r.json();
         setOptions(j.suggestions ?? []);
+        setProblem(j.problem?.says ?? null);
       } catch {
         setOptions([]);
+        setProblem("Address lookup didn't answer. If you've been idle a while, sign in again.");
       }
     }, 320);
     return () => window.clearTimeout(id);
@@ -111,6 +116,11 @@ export default function InlineAddress({
         }}
         className={`-mx-1 w-full border-b-[1.5px] border-accent-dark bg-transparent px-1 outline-none ${className}`}
       />
+      {problem && options.length === 0 && (
+        <p className="fade-up absolute left-0 top-full z-30 mt-1 w-[320px] rounded-lg border border-line/80 bg-card px-2.5 py-1.5 text-[10.5px] leading-relaxed text-accent-dark shadow-[0_12px_32px_-12px_rgba(16,16,20,0.3)]">
+          {problem} What you type still saves.
+        </p>
+      )}
       {options.length > 0 && (
         <ul className="fade-up absolute left-0 top-full z-30 mt-1 max-h-52 w-[320px] overflow-y-auto rounded-xl border border-line/80 bg-card py-1 shadow-[0_12px_32px_-12px_rgba(16,16,20,0.3)]">
           {options.map((o) => (

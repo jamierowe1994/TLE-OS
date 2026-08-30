@@ -29,7 +29,12 @@ export default function AddressField({
   onResolved?: (a: ResolvedAddress) => void;
 }) {
   const [suggestions, setSuggestions] = useState<{ id: string; label: string }[]>([]);
-  const [configured, setConfigured] = useState<boolean | null>(null);
+  /* Why the lookup came back with nothing. Without this an outage, a blocked
+     key and an address that genuinely isn't on the Royal Mail file all render
+     as the same empty dropdown, and the field looks unhelpful rather than
+     broken. */
+  const [problem, setProblem] = useState<string | null>(null);
+  const [searched, setSearched] = useState(false);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pin, setPin] = useState<ResolvedAddress | null>(null);
@@ -43,11 +48,16 @@ export default function AddressField({
       try {
         const r = await fetch(`/api/address?q=${encodeURIComponent(value)}`, { cache: "no-store" });
         const j = await r.json();
-        setConfigured(j.configured);
+        setProblem(j.problem?.says ?? null);
         setSuggestions(j.suggestions ?? []);
+        setSearched(true);
         setOpen((j.suggestions ?? []).length > 0);
       } catch {
-        setConfigured(false);
+        /* A 307 to /sign-in lands here as an HTML body that won't parse. That
+           is an expired session, not a missing key — saying "add a key in
+           Railway" would send someone to the wrong place entirely. */
+        setSearched(true);
+        setProblem("Address lookup didn't answer. If you've been idle a while, sign in again.");
       } finally {
         setBusy(false);
       }
@@ -77,9 +87,18 @@ export default function AddressField({
           lat: j.lat ?? null,
           lng: j.lng ?? null,
         };
+        setProblem(null);
         setPin(resolved);
         onChange(resolved.address);
         onResolved?.(resolved);
+      } else {
+        /* Suggestions appeared and picking one did nothing — the failure mode
+           that looks least like a failure. Say so, because the label is kept
+           and the form carries on as though it had worked. */
+        setProblem(
+          j.problem?.says ??
+            "That suggestion could not be resolved to a full address, so no postcode or coordinates were attached."
+        );
       }
     } catch {
       /* keep whatever they typed */
@@ -136,10 +155,17 @@ export default function AddressField({
         </p>
       )}
 
-      {configured === false && !pin && (
+      {/* Three different silences, told apart. A blocked key is not the same
+          fact as an unknown address, and both used to show as nothing at all. */}
+      {problem && !pin && (
+        <p className="mt-1.5 text-[10.5px] leading-relaxed text-accent-dark">
+          {problem} Whatever you type is still saved as-is.
+        </p>
+      )}
+
+      {!problem && searched && !busy && suggestions.length === 0 && !pin && value.trim().length >= 3 && (
         <p className="mt-1.5 text-[10.5px] text-muted">
-          Typed addresses are saved as-is — add IDEAL_POSTCODES_API_KEY (UK) or
-          GOOGLE_MAPS_API_KEY in Railway to switch lookup on.
+          No match on the address file — carry on typing it in full, it saves as-is.
         </p>
       )}
     </div>
