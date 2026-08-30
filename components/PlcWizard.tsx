@@ -272,7 +272,7 @@ function DocumentStep({
 
   return (
     <div>
-      <p className="text-sm text-neutral-500">{group.blurb}</p>
+      <p className="text-sm text-muted">{group.blurb}</p>
 
       <div
         role="button"
@@ -281,19 +281,19 @@ function DocumentStep({
         onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && input.current?.click()}
         className={`relative mt-5 flex min-h-[15rem] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-10 text-center transition ${
           over
-            ? "border-neutral-900 bg-neutral-50 dark:border-white dark:bg-neutral-900"
-            : "border-neutral-300 hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900"
+            ? "border-ink bg-box"
+            : "border-line hover:bg-box"
         }`}
       >
         <DoodleIcon
           name={illustration}
           size={104}
-          className="pointer-events-none absolute text-neutral-900 opacity-[0.06] dark:text-white"
+          className="pointer-events-none absolute text-ink opacity-[0.06]"
         />
-        <p className="relative text-base text-neutral-900 dark:text-neutral-100">
+        <p className="relative text-base text-ink">
           {over ? "Let go" : "Drop the documents here"}
         </p>
-        <p className="relative mt-1 text-sm text-neutral-500">
+        <p className="relative mt-1 text-sm text-muted">
           Anywhere on the page works. Or click to choose them.
         </p>
         <input
@@ -310,7 +310,7 @@ function DocumentStep({
       </div>
 
       {unsure.length > 0 && (
-        <p className="mt-4 text-sm text-amber-700 dark:text-amber-300">
+        <p className="mt-4 text-sm text-amber-700">
           {unsure.length === 1 ? "One file" : `${unsure.length} files`} we could not place. Pick the
           check each one belongs to.
         </p>
@@ -321,7 +321,7 @@ function DocumentStep({
           {pending.map((p) => (
             <li
               key={p.id}
-              className="flex flex-wrap items-center gap-3 rounded-lg border border-neutral-200 px-3 py-2 text-sm dark:border-neutral-800"
+              className="flex flex-wrap items-center gap-3 rounded-lg border border-line px-3 py-2 text-sm"
             >
               <span className="min-w-0 flex-1 truncate">{p.file.name}</span>
               {p.state === "waiting" && (
@@ -334,7 +334,7 @@ function DocumentStep({
                       )
                     )
                   }
-                  className="rounded-lg border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700"
+                  className="rounded-lg border border-line bg-transparent px-2 py-1 text-sm"
                 >
                   <option value="">Which check?</option>
                   {checks.map((c) => (
@@ -344,14 +344,14 @@ function DocumentStep({
                   ))}
                 </select>
               )}
-              {p.state === "sending" && <span className="text-neutral-500">Filing…</span>}
+              {p.state === "sending" && <span className="text-muted">Filing…</span>}
               {p.state === "done" && (
-                <span className="text-emerald-700 dark:text-emerald-300">
+                <span className="text-emerald-700">
                   {p.placeholder ? "Recorded by name only" : "Filed"}
                 </span>
               )}
               {p.state === "failed" && (
-                <span className="text-rose-700 dark:text-rose-300">{p.error}</span>
+                <span className="text-rose-700">{p.error}</span>
               )}
             </li>
           ))}
@@ -365,11 +365,11 @@ function DocumentStep({
             <li key={c.id} className="flex items-baseline gap-2 text-sm">
               <span
                 className={`mt-1 h-2 w-2 shrink-0 rounded-full ${
-                  filed.length ? "bg-emerald-500" : "bg-neutral-300 dark:bg-neutral-700"
+                  filed.length ? "bg-emerald-500" : "bg-neutral-300"
                 }`}
               />
-              <span className={filed.length ? "" : "text-neutral-500"}>{c.label}</span>
-              <span className="min-w-0 truncate text-xs text-neutral-400">
+              <span className={filed.length ? "" : "text-muted"}>{c.label}</span>
+              <span className="min-w-0 truncate text-xs text-muted">
                 {filed.length ? filed.map((f) => f.name).join(", ") : c.needs}
               </span>
             </li>
@@ -512,7 +512,7 @@ export default function PlcWizard({
             <span
               key={s}
               className={`h-1 flex-1 rounded-full transition-colors ${
-                i <= stepNumber - 1 ? "bg-neutral-900 dark:bg-white" : "bg-neutral-200 dark:bg-neutral-800"
+                i <= stepNumber - 1 ? "bg-ink" : "bg-neutral-200"
               }`}
             />
           ))}
@@ -525,13 +525,13 @@ export default function PlcWizard({
             <DoodleIcon
               name="search"
               size={56}
-              className="mx-auto text-neutral-900 opacity-70 dark:text-white"
+              className="mx-auto text-ink opacity-70"
             />
-            <h1 className="mt-6 text-2xl tracking-normal text-neutral-900 dark:text-neutral-100">
+            <h1 className="mt-6 text-2xl tracking-normal text-ink">
               Getting all the details ready
               <Ellipsis />
             </h1>
-            <p className="mx-auto mt-3 max-w-md text-sm text-neutral-500">
+            <p className="mx-auto mt-3 max-w-md text-sm text-muted">
               Reading the application so you do not have to type any of it again.
             </p>
           </div>
@@ -539,30 +539,30 @@ export default function PlcWizard({
 
         {step === "details" && (
           <div>
-            <h1 className="text-2xl tracking-normal text-neutral-900 dark:text-neutral-100">
+            <h1 className="text-2xl tracking-normal text-ink">
               Check These Over
             </h1>
-            <p className="mt-2 text-sm text-neutral-500">
+            <p className="mt-2 text-sm text-muted">
               Pulled through from the application. If any of it is wrong, fix it on the file first.
             </p>
 
             {error && (
-              <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200">
+              <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
                 {error}
               </p>
             )}
 
             {prefill && (
               <>
-                <dl className="mt-6 divide-y divide-neutral-100 rounded-xl border border-neutral-200 dark:divide-neutral-900 dark:border-neutral-800">
+                <dl className="mt-6 divide-y divide-neutral-100 rounded-xl border border-line">
                   <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-3">
-                    <dt className="w-32 shrink-0 text-xs uppercase tracking-wide text-neutral-500">
+                    <dt className="w-32 shrink-0 text-xs uppercase tracking-wide text-muted">
                       Property
                     </dt>
                     <dd className="min-w-0 flex-1 text-sm">{prefill.address}</dd>
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-3">
-                    <dt className="w-32 shrink-0 text-xs uppercase tracking-wide text-neutral-500">
+                    <dt className="w-32 shrink-0 text-xs uppercase tracking-wide text-muted">
                       {prefill.tenants.length > 1 ? "Tenants" : "Tenant"}
                     </dt>
                     <dd className="min-w-0 flex-1 text-sm">
@@ -572,7 +572,7 @@ export default function PlcWizard({
                     </dd>
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 px-4 py-3">
-                    <dt className="w-32 shrink-0 text-xs uppercase tracking-wide text-neutral-500">
+                    <dt className="w-32 shrink-0 text-xs uppercase tracking-wide text-muted">
                       Move-in date
                     </dt>
                     <dd className="min-w-0 flex-1 text-sm">
@@ -580,10 +580,10 @@ export default function PlcWizard({
                         type="date"
                         value={moveIn}
                         onChange={(e) => setMoveIn(e.target.value)}
-                        className="rounded-lg border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700"
+                        className="rounded-lg border border-line bg-transparent px-2 py-1 text-sm"
                       />
                       {!prefill.moveInDate && (
-                        <span className="ml-2 text-xs text-amber-700 dark:text-amber-300">
+                        <span className="ml-2 text-xs text-amber-700">
                           not on the application
                         </span>
                       )}
@@ -594,7 +594,7 @@ export default function PlcWizard({
                 {prefill.warnings.length > 0 && (
                   <ul className="mt-4 space-y-1.5">
                     {prefill.warnings.map((w) => (
-                      <li key={w} className="text-sm text-amber-700 dark:text-amber-300">
+                      <li key={w} className="text-sm text-amber-700">
                         {w}
                       </li>
                     ))}
@@ -602,11 +602,11 @@ export default function PlcWizard({
                 )}
 
                 {fixing ? (
-                  <div className="mt-6 rounded-xl border border-neutral-200 p-4 text-sm dark:border-neutral-800">
-                    <p className="text-neutral-900 dark:text-neutral-100">
+                  <div className="mt-6 rounded-xl border border-line p-4 text-sm">
+                    <p className="text-ink">
                       Fix it on the application, then come back
                     </p>
-                    <p className="mt-1 text-neutral-500">
+                    <p className="mt-1 text-muted">
                       The property, the people and the dates all live on the application record.
                       Changing them here would only change them here, and compliance would get the
                       old ones.
@@ -615,14 +615,14 @@ export default function PlcWizard({
                       <button
                         type="button"
                         onClick={() => router.push(`/applications?open=${prefill.applicationId}`)}
-                        className="rounded-lg border border-neutral-900 bg-neutral-900 px-3.5 py-2 text-sm text-white dark:border-white dark:bg-white dark:text-neutral-900"
+                        className="rounded-lg border border-ink bg-ink px-3.5 py-2 text-sm text-white"
                       >
                         Open the application
                       </button>
                       <button
                         type="button"
                         onClick={() => setFixing(false)}
-                        className="rounded-lg border border-neutral-300 px-3.5 py-2 text-sm dark:border-neutral-700"
+                        className="rounded-lg border border-line px-3.5 py-2 text-sm"
                       >
                         Never mind, it is fine
                       </button>
@@ -634,14 +634,14 @@ export default function PlcWizard({
                       type="button"
                       onClick={startAndContinue}
                       disabled={busy}
-                      className="rounded-lg border border-neutral-900 bg-neutral-900 px-4 py-2.5 text-sm text-white transition hover:bg-neutral-800 disabled:opacity-40 dark:border-white dark:bg-white dark:text-neutral-900"
+                      className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white transition hover:bg-box disabled:opacity-40"
                     >
                       {busy ? "One moment…" : "Continue"}
                     </button>
                     <button
                       type="button"
                       onClick={() => setFixing(true)}
-                      className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm transition hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900"
+                      className="rounded-lg border border-line px-4 py-2.5 text-sm transition hover:bg-box"
                     >
                       Something is not right
                     </button>
@@ -654,7 +654,7 @@ export default function PlcWizard({
 
         {(step === "landlord" || step === "tenant") && kase && (
           <div>
-            <h1 className="text-2xl tracking-normal text-neutral-900 dark:text-neutral-100">
+            <h1 className="text-2xl tracking-normal text-ink">
               {step === "landlord" ? "Landlord Submission Documents" : "Tenant and Tenancy"}
             </h1>
             <DocumentStep
@@ -668,11 +668,11 @@ export default function PlcWizard({
               <button
                 type="button"
                 onClick={() => go(step === "landlord" ? "tenant" : "review")}
-                className="rounded-lg border border-neutral-900 bg-neutral-900 px-4 py-2.5 text-sm text-white transition hover:bg-neutral-800 dark:border-white dark:bg-white dark:text-neutral-900"
+                className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white transition hover:bg-box"
               >
                 Next
               </button>
-              <span className="text-xs text-neutral-500">
+              <span className="text-xs text-muted">
                 You can send what you have and add the rest later.
               </span>
             </div>
@@ -681,20 +681,20 @@ export default function PlcWizard({
 
         {step === "review" && kase && (
           <div>
-            <h1 className="text-2xl tracking-normal text-neutral-900 dark:text-neutral-100">
+            <h1 className="text-2xl tracking-normal text-ink">
               Ready to Send
             </h1>
-            <p className="mt-2 text-sm text-neutral-500">
+            <p className="mt-2 text-sm text-muted">
               {kase.address} · moving in {prettyDate(kase.moveInDate) ?? "date not set"}
             </p>
 
             {error && (
-              <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200">
+              <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
                 {error}
               </p>
             )}
 
-            <ul className="mt-6 divide-y divide-neutral-100 rounded-xl border border-neutral-200 dark:divide-neutral-900 dark:border-neutral-800">
+            <ul className="mt-6 divide-y divide-neutral-100 rounded-xl border border-line">
               {PLC_CHECKS.map((c) => {
                 const has = filedFor(c.id);
                 return (
@@ -702,7 +702,7 @@ export default function PlcWizard({
                     {has ? (
                       <svg
                         viewBox="0 0 16 16"
-                        className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400"
+                        className="h-4 w-4 shrink-0 text-emerald-600"
                         aria-hidden
                       >
                         <path
@@ -715,10 +715,10 @@ export default function PlcWizard({
                         />
                       </svg>
                     ) : (
-                      <span className="h-4 w-4 shrink-0 rounded-full border border-neutral-300 dark:border-neutral-700" />
+                      <span className="h-4 w-4 shrink-0 rounded-full border border-line" />
                     )}
-                    <span className={has ? "" : "text-neutral-500"}>{c.label}</span>
-                    <span className="ml-auto text-xs text-neutral-400">
+                    <span className={has ? "" : "text-muted"}>{c.label}</span>
+                    <span className="ml-auto text-xs text-muted">
                       {has
                         ? documents.filter((d) => d.checkId === c.id).length === 1
                           ? "1 file"
@@ -731,7 +731,7 @@ export default function PlcWizard({
             </ul>
 
             {documents.some((d) => d.placeholder) && (
-              <p className="mt-3 text-xs text-amber-700 dark:text-amber-300">
+              <p className="mt-3 text-xs text-amber-700">
                 Some of these were recorded by name only, because file storage is not connected on
                 this machine. Compliance will see that too.
               </p>
@@ -741,14 +741,14 @@ export default function PlcWizard({
               <button
                 type="button"
                 onClick={submit}
-                className="rounded-lg border border-neutral-900 bg-neutral-900 px-4 py-2.5 text-sm text-white transition hover:bg-neutral-800 dark:border-white dark:bg-white dark:text-neutral-900"
+                className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white transition hover:bg-box"
               >
                 Send to the compliance team
               </button>
               <button
                 type="button"
                 onClick={() => go("landlord")}
-                className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm transition hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900"
+                className="rounded-lg border border-line px-4 py-2.5 text-sm transition hover:bg-box"
               >
                 Add something else
               </button>
@@ -758,8 +758,8 @@ export default function PlcWizard({
 
         {step === "sending" && (
           <div className="py-20 text-center">
-            <span className="plc-spinner mx-auto block h-12 w-12 rounded-full border-2 border-neutral-200 border-t-neutral-900 dark:border-neutral-800 dark:border-t-white" />
-            <p className="mt-6 text-lg text-neutral-900 dark:text-neutral-100">
+            <span className="plc-spinner mx-auto block h-12 w-12 rounded-full border-2 border-line border-t-neutral-900" />
+            <p className="mt-6 text-lg text-ink">
               Sending it over
               <Ellipsis />
             </p>
@@ -771,10 +771,10 @@ export default function PlcWizard({
             <div className="flex justify-center">
               <DoneTick size={72} />
             </div>
-            <h1 className="mt-6 text-2xl tracking-normal text-neutral-900 dark:text-neutral-100">
+            <h1 className="mt-6 text-2xl tracking-normal text-ink">
               That Is With the Compliance Team
             </h1>
-            <p className="mx-auto mt-3 max-w-md text-sm text-neutral-500">
+            <p className="mx-auto mt-3 max-w-md text-sm text-muted">
               They usually come back within 48 hours. You will get it back with a decision, and if
               anything is missing they will say exactly what.
             </p>
@@ -782,14 +782,14 @@ export default function PlcWizard({
               <button
                 type="button"
                 onClick={() => router.push("/applications")}
-                className="rounded-lg border border-neutral-900 bg-neutral-900 px-4 py-2.5 text-sm text-white dark:border-white dark:bg-white dark:text-neutral-900"
+                className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white"
               >
                 Back to applications
               </button>
               <button
                 type="button"
                 onClick={() => router.push(`/plc?case=${kase.id}`)}
-                className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm dark:border-neutral-700"
+                className="rounded-lg border border-line px-4 py-2.5 text-sm"
               >
                 See where it is up to
               </button>

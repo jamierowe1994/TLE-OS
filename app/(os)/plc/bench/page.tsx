@@ -99,52 +99,52 @@ export default function ScanBench() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-      <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">Bench</p>
-      <h1 className="mt-1 text-2xl tracking-normal text-neutral-900 dark:text-neutral-100">
+      <p className="text-xs uppercase tracking-[0.18em] text-muted">Bench</p>
+      <h1 className="mt-1 text-2xl tracking-normal text-ink">
         Try the Scan on a Real Document
       </h1>
-      <p className="mt-2 max-w-2xl text-sm text-neutral-500">
+      <p className="mt-2 max-w-2xl text-sm text-muted">
         The same prompt, model and rules the compliance team will see. Nothing here is stored: no
         file goes to the bucket, no handover is created, nothing reaches REX. The document is read
         out of the upload and gone when the answer comes back.
       </p>
 
       {available && !available.available && (
-        <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950 dark:text-rose-200">
+        <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
           The bench does not run on the live system. Use it locally or on a preview.
         </p>
       )}
       {available && available.available && !available.scanConfigured && (
-        <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+        <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
           ANTHROPIC_API_KEY is not set here, so there is nothing to test yet.
         </p>
       )}
 
-      <section className="mt-6 rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
+      <section className="mt-6 rounded-xl border border-line p-4">
         <h2 className="text-base tracking-normal">What the Scan Is Told</h2>
-        <p className="mt-1 text-sm text-neutral-500">
+        <p className="mt-1 text-sm text-muted">
           Every date check is measured against the move-in date, not against today. Leave it blank
           and you are testing something the real scan never does.
         </p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <label className="block">
-            <span className="text-xs uppercase tracking-wide text-neutral-500">
+            <span className="text-xs uppercase tracking-wide text-muted">
               Property address
             </span>
             <input
               value={address}
               onChange={(e) => setAddress(e.target.value)}
               placeholder="As it should read on the certificate"
-              className="mt-1 w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+              className="mt-1 w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm"
             />
           </label>
           <label className="block">
-            <span className="text-xs uppercase tracking-wide text-neutral-500">Move-in date</span>
+            <span className="text-xs uppercase tracking-wide text-muted">Move-in date</span>
             <input
               type="date"
               value={moveIn}
               onChange={(e) => setMoveIn(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-neutral-300 bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+              className="mt-1 w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm"
             />
           </label>
         </div>
@@ -160,10 +160,10 @@ export default function ScanBench() {
           e.preventDefault();
           add(Array.from(e.dataTransfer.files ?? []));
         }}
-        className="mt-6 flex min-h-[10rem] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-neutral-300 px-6 py-8 text-center transition hover:bg-neutral-50 dark:border-neutral-700 dark:hover:bg-neutral-900"
+        className="mt-6 flex min-h-[10rem] cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-line px-6 py-8 text-center transition hover:bg-box"
       >
-        <p className="text-base text-neutral-900 dark:text-neutral-100">Drop a certificate here</p>
-        <p className="mt-1 text-sm text-neutral-500">
+        <p className="text-base text-ink">Drop a certificate here</p>
+        <p className="mt-1 text-sm text-muted">
           PDF or a photograph. Try a good one and a wrong one.
         </p>
         <input
@@ -181,8 +181,8 @@ export default function ScanBench() {
 
       <ul className="mt-6 space-y-4">
         {rows.map((row) => (
-          <li key={row.id} className="rounded-xl border border-neutral-200 dark:border-neutral-800">
-            <div className="flex flex-wrap items-center gap-3 border-b border-neutral-100 px-4 py-3 dark:border-neutral-900">
+          <li key={row.id} className="rounded-xl border border-line">
+            <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
               <span className="min-w-0 flex-1 truncate text-sm">{row.name}</span>
               <select
                 value={row.checkId}
@@ -194,7 +194,7 @@ export default function ScanBench() {
                     )
                   )
                 }
-                className="rounded-lg border border-neutral-300 bg-transparent px-2 py-1 text-sm dark:border-neutral-700"
+                className="rounded-lg border border-line bg-transparent px-2 py-1 text-sm"
               >
                 {READABLE.map((c) => (
                   <option key={c.id} value={c.id}>
@@ -206,19 +206,19 @@ export default function ScanBench() {
                 type="button"
                 onClick={() => run(row)}
                 disabled={row.state === "reading" || !available?.available || !available?.scanConfigured}
-                className="rounded-lg border border-neutral-900 bg-neutral-900 px-3.5 py-1.5 text-sm text-white disabled:opacity-40 dark:border-white dark:bg-white dark:text-neutral-900"
+                className="rounded-lg border border-ink bg-ink px-3.5 py-1.5 text-sm text-page disabled:opacity-40"
               >
                 {row.state === "reading" ? "Reading…" : row.state === "done" ? "Read it again" : "Read it"}
               </button>
             </div>
 
             {row.state === "failed" && (
-              <p className="px-4 py-3 text-sm text-rose-700 dark:text-rose-300">{row.error}</p>
+              <p className="px-4 py-3 text-sm text-rose-700">{row.error}</p>
             )}
 
             {row.result && (
               <div>
-                <p className="px-4 pt-3 text-xs text-neutral-500">
+                <p className="px-4 pt-3 text-xs text-muted">
                   Read against {row.result.asked.check} at {row.result.asked.address}, moving in{" "}
                   {row.result.asked.moveInDate ?? "— no date given"} · {(row.result.ms / 1000).toFixed(1)}s
                 </p>
@@ -229,7 +229,7 @@ export default function ScanBench() {
                     recommending, and the person reading is about to put their
                     name to a legal judgement. "Passed" invites them to agree;
                     "looks fine" invites them to check. */}
-                <div className="mx-4 mt-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+                <div className="mx-4 mt-2 rounded-lg border border-line p-3">
                   <div className="flex items-start gap-2">
                     <span
                       className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
@@ -240,7 +240,7 @@ export default function ScanBench() {
                             : "bg-emerald-500"
                       }`}
                     />
-                    <p className="text-sm text-neutral-900 dark:text-neutral-100">
+                    <p className="text-sm text-ink">
                       {row.result.summary.line}
                     </p>
                   </div>
@@ -248,20 +248,20 @@ export default function ScanBench() {
                   {row.result.summary.concerns.length > 0 && (
                     <ul className="mt-2 space-y-1 pl-4">
                       {row.result.summary.concerns.slice(1).map((r, i) => (
-                        <li key={i} className="text-xs text-neutral-500">
+                        <li key={i} className="text-xs text-muted">
                           {r.rule} — {r.because}
                         </li>
                       ))}
                     </ul>
                   )}
 
-                  <p className="mt-2 text-xs text-neutral-400">
+                  <p className="mt-2 text-xs text-muted">
                     A recommendation from the rules. The decision is a person&apos;s.
                   </p>
                 </div>
 
                 {row.result.findings.length === 0 ? (
-                  <p className="px-4 py-3 text-sm text-neutral-500">
+                  <p className="px-4 py-3 text-sm text-muted">
                     It reported nothing. That is not a pass, it is an empty answer, and worth a look
                     at the document.
                   </p>
@@ -273,7 +273,7 @@ export default function ScanBench() {
                         <span className="text-sm">
                           {f.message}
                           {f.foundDate && (
-                            <span className="ml-2 text-xs text-neutral-400">{f.foundDate}</span>
+                            <span className="ml-2 text-xs text-muted">{f.foundDate}</span>
                           )}
                         </span>
                       </li>
@@ -287,7 +287,7 @@ export default function ScanBench() {
       </ul>
 
       {rows.length > 0 && (
-        <p className="mt-6 text-xs text-neutral-500">
+        <p className="mt-6 text-xs text-muted">
           Nothing on this page has been saved. Close it and it is gone.
         </p>
       )}

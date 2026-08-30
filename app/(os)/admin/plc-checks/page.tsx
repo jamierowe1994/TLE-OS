@@ -43,9 +43,9 @@ const prettyMonth = (m: string) => {
 
 function Panel({ title, blurb, children }: { title: string; blurb?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
-      <h2 className="text-base tracking-normal text-neutral-900 dark:text-neutral-100">{title}</h2>
-      {blurb && <p className="mt-1 text-sm text-neutral-500">{blurb}</p>}
+    <section className="rounded-xl border border-line p-4">
+      <h2 className="text-base tracking-normal text-ink">{title}</h2>
+      {blurb && <p className="mt-1 text-sm text-muted">{blurb}</p>}
       <div className="mt-3">{children}</div>
     </section>
   );
@@ -66,18 +66,18 @@ function Big({
 }) {
   const colour =
     tone === "bad"
-      ? "text-rose-600 dark:text-rose-400"
+      ? "text-rose-600"
       : tone === "good"
-        ? "text-emerald-600 dark:text-emerald-400"
-        : "text-neutral-900 dark:text-neutral-100";
+        ? "text-emerald-600"
+        : "text-ink";
   return (
-    <div className="rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
+    <div className="rounded-xl border border-line p-4">
       <p className={`text-3xl ${colour}`}>
         {value}
-        {of && <span className="ml-2 text-sm text-neutral-400">{of}</span>}
+        {of && <span className="ml-2 text-sm text-muted">{of}</span>}
       </p>
-      <p className="mt-1 text-sm text-neutral-900 dark:text-neutral-100">{label}</p>
-      <p className="mt-1 text-xs text-neutral-500">{blurb}</p>
+      <p className="mt-1 text-sm text-ink">{label}</p>
+      <p className="mt-1 text-xs text-muted">{blurb}</p>
     </div>
   );
 }
@@ -95,21 +95,21 @@ export default function PlcChecksAdmin() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">Admin</p>
-      <h1 className="mt-1 text-2xl tracking-normal text-neutral-900 dark:text-neutral-100">
+      <p className="text-xs uppercase tracking-[0.18em] text-muted">Admin</p>
+      <h1 className="mt-1 text-2xl tracking-normal text-ink">
         PLC Checks
       </h1>
-      <p className="mt-2 max-w-2xl text-sm text-neutral-500">
+      <p className="mt-2 max-w-2xl text-sm text-muted">
         What the scan recommended on every pack, recorded before anybody saw it, against what the
         compliance team actually decided. Nothing here changes a decision.
       </p>
 
-      {error && <p className="mt-4 text-sm text-rose-700 dark:text-rose-300">{error}</p>}
-      {!s && !error && <p className="mt-6 text-sm text-neutral-500">Reading the log…</p>}
+      {error && <p className="mt-4 text-sm text-rose-700">{error}</p>}
+      {!s && !error && <p className="mt-6 text-sm text-muted">Reading the log…</p>}
 
       {s && (
         <div className="mt-6 space-y-6">
-          <p className="rounded-xl border border-neutral-200 p-4 text-base dark:border-neutral-800">
+          <p className="rounded-xl border border-line p-4 text-base">
             {s.verdict}
           </p>
 
@@ -132,7 +132,7 @@ export default function PlcChecksAdmin() {
                 blurb={`${s.overFlagged} were approved anyway. Cheap on its own, but too many and people stop reading the flags.`}
               />
             </div>
-            <p className="mt-3 text-xs text-neutral-500">
+            <p className="mt-3 text-xs text-muted">
               {s.deferredToHuman} pack{s.deferredToHuman === 1 ? "" : "s"} the rules explicitly sent to
               a person. Counted in neither figure — the rules never claimed to answer those, so
               including them would flatter both.
@@ -159,7 +159,7 @@ export default function PlcChecksAdmin() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-neutral-200 text-left text-xs uppercase tracking-wide text-neutral-500 dark:border-neutral-800">
+                    <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
                       <th className="py-2 pr-4 font-normal">Month</th>
                       <th className="py-2 pr-4 font-normal">Decided</th>
                       <th className="py-2 pr-4 font-normal">Median turnaround</th>
@@ -168,11 +168,11 @@ export default function PlcChecksAdmin() {
                   </thead>
                   <tbody>
                     {s.byMonth.map((m) => (
-                      <tr key={m.month} className="border-b border-neutral-100 last:border-0 dark:border-neutral-900">
+                      <tr key={m.month} className="border-b border-line last:border-0">
                         <td className="py-2 pr-4">{prettyMonth(m.month)}</td>
                         <td className="py-2 pr-4">{m.decided}</td>
                         <td className="py-2 pr-4">{hrs(m.medianHours)}</td>
-                        <td className={`py-2 ${m.missed ? "text-rose-600 dark:text-rose-400" : ""}`}>
+                        <td className={`py-2 ${m.missed ? "text-rose-600" : ""}`}>
                           {m.missed}
                         </td>
                       </tr>
@@ -184,10 +184,10 @@ export default function PlcChecksAdmin() {
           )}
 
           {s.misses.length > 0 && (
-            <section className="rounded-xl border border-rose-200 dark:border-rose-900">
-              <div className="border-b border-rose-200 px-4 py-3 dark:border-rose-900">
+            <section className="rounded-xl border border-rose-200">
+              <div className="border-b border-rose-200 px-4 py-3">
                 <h2 className="text-base tracking-normal">Where It Was Wrong</h2>
-                <p className="mt-0.5 text-sm text-neutral-500">
+                <p className="mt-0.5 text-sm text-muted">
                   The rules called these fine and a person stopped them. Their note is the reason,
                   and next to it is what the scan thought at the time. Each pair is a rule that does
                   not exist yet.
@@ -197,33 +197,33 @@ export default function PlcChecksAdmin() {
                 {s.misses.map((m) => (
                   <li
                     key={m.caseId}
-                    className="border-b border-rose-100 px-4 py-4 last:border-0 dark:border-rose-950"
+                    className="border-b border-rose-100 px-4 py-4 last:border-0"
                   >
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <p className="text-sm text-neutral-900 dark:text-neutral-100">{m.address}</p>
-                      <p className="text-xs text-neutral-400">
+                      <p className="text-sm text-ink">{m.address}</p>
+                      <p className="text-xs text-muted">
                         {m.decidedBy} · {hrs(m.hoursToDecide)} to decide
                       </p>
                     </div>
 
                     <div className="mt-2 grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-                        <p className="text-xs uppercase tracking-wide text-neutral-500">
+                      <div className="rounded-lg border border-line p-3">
+                        <p className="text-xs uppercase tracking-wide text-muted">
                           What the scan said
                         </p>
                         <p className="mt-1 text-sm">{m.headline}</p>
                         {m.perCheck.length > 0 && (
                           <ul className="mt-2 space-y-0.5">
                             {m.perCheck.map((c) => (
-                              <li key={c.checkId} className="text-xs text-neutral-500">
+                              <li key={c.checkId} className="text-xs text-muted">
                                 {c.line}
                               </li>
                             ))}
                           </ul>
                         )}
                       </div>
-                      <div className="rounded-lg border border-rose-200 p-3 dark:border-rose-900">
-                        <p className="text-xs uppercase tracking-wide text-neutral-500">
+                      <div className="rounded-lg border border-rose-200 p-3">
+                        <p className="text-xs uppercase tracking-wide text-muted">
                           Why it was {m.decision}
                         </p>
                         <p className="mt-1 text-sm">{m.decisionNote || "No note was left."}</p>
@@ -235,7 +235,7 @@ export default function PlcChecksAdmin() {
             </section>
           )}
 
-          <p className="text-xs text-neutral-500">
+          <p className="text-xs text-muted">
             {s.compared === 0
               ? "No pack has been both scanned and decided yet, so there is nothing to compare."
               : `${s.compared} pack${s.compared === 1 ? "" : "s"} scanned and decided.`}
