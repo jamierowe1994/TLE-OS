@@ -5,6 +5,8 @@ import path from "path";
 import { hasDb, q } from "@/lib/db";
 import { DATA_DIR } from "@/lib/business/data-dir";
 import type { MarketAppraisal, MaStage } from "@/lib/market-appraisal";
+import { mergeAddress } from "@/lib/appraisal-address";
+import { postcodeIn } from "@/lib/postcode";
 
 /**
  * The appraisals the OS has actually booked.
@@ -40,35 +42,6 @@ import type { MarketAppraisal, MaStage } from "@/lib/market-appraisal";
 
 const FILE = path.join(DATA_DIR, "market-appraisals.json");
 
-/**
- * The postcode already in the address, if there is one.
- *
- * A lead has no postcode field, so booking an appraisal from one sends
- * `postcode: ""` — see LeadDrawer. The reasoning there is right: do not INVENT
- * a postcode from a vague area. But the address a booker types is very often a
- * full one, and "W Balsdon Cottages, Whitstone, Holsworthy EX22 6LE, UK"
- * carries its postcode in plain sight. Declining to read it is not caution, it
- * is throwing away something we were given.
- *
- * The cost of not reading it is the whole feature: /api/ma-research answers
- * `address and postcode are required` with a 400, so the appraisal file shows
- * "the property details couldn't be pulled" and the presentation builder
- * cannot start. Measured on James's own appraisal, 30 Aug.
- *
- * Anchored to the END, because an address can contain other things that look
- * postcode-ish — a house name, a flat number — and the postcode is last in
- * every UK format. Optional trailing ", UK" is allowed for, since that is what
- * Google's formatted address returns.
- *
- * If there is genuinely no postcode in there, this returns "" and the empty
- * state is correct: we still do not invent one.
- */
-export function postcodeIn(address: string): string {
-  const m = /\b([A-Z]{1,2}\d{1,2}[A-Z]?)\s*(\d[A-Z]{2})\b(?=[,\s]*(?:UK|United Kingdom)?[\s,.]*$)/i.exec(
-    (address ?? "").trim()
-  );
-  return m ? `${m[1].toUpperCase()} ${m[2].toUpperCase()}` : "";
-}
 
 export interface NewAppraisal {
   leadId: string | null;
@@ -136,6 +109,51 @@ export function appraisalIdForLead(leadId: string): string {
 }
 
 /** Every appraisal the OS holds, newest first. */
+/**
+ * THE LEAD OWNS THE ADDRESS. The appraisal keeps a copy, not the truth.
+ *
+ * Booking writes the lead's address onto the appraisal, and from that moment
+ * the two could disagree. James corrected his own address in Leads and the
+ * open appraisal carried on showing the old one, because nothing ever went
+ * back for it. A record that was right when it was written and silently wrong
+ * afterwards is the same failure this project keeps hitting from a different
+ * direction.
+ *
+ * Fixed by DERIVING rather than syncing. A write-through on save would need to
+ * find every appraisal, succeed every time, and never be skipped by an edit
+ * made anywhere else; this cannot drift because there is only ever one answer
+ * and it is fetched when asked for.
+ *
+ * Only for appraisals booked from an OS lead — those carry `os-<contactId>`.
+ * An appraisal created directly has no lead behind it, so its own copy IS the
+ * truth and is left alone.
+ *
+ * The stored copy stays as the fallback. If the contact has been deleted, or
+ * has no address on it, the appraisal keeps what it was booked with rather
+ * than blanking a property out from under an agent.
+ */
+async function withLiveAddress(rows: MarketAppraisal[]): Promise<MarketAppraisal[]> {
+  const { isOsLead, osContactIdFrom } = await import("@/lib/contacts-as-leads");
+  const linked = rows.filter((r) => r.leadId && isOsLead(r.leadId));
+  if (!linked.length) return rows;
+
+  const { getContact } = await import("@/lib/contacts-store");
+  const live = new Map<string, { address: string; postcode: string }>();
+  await Promise.all(
+    [...new Set(linked.map((r) => r.leadId!))].map(async (leadId) => {
+      try {
+        const c = await getContact(osContactIdFrom(leadId));
+        if (c) live.set(leadId, { address: c.address ?? "", postcode: c.postcode ?? "" });
+      } catch {
+        /* One unreachable contact must not blank a whole list of appraisals. */
+      }
+    })
+  );
+
+  /* The rule itself is in lib/appraisal-address, pure and tested. */
+  return rows.map((r) => mergeAddress(r, r.leadId ? live.get(r.leadId) : null));
+}
+
 export async function listAppraisals(): Promise<MarketAppraisal[]> {
   if (hasDb()) {
     const rows = await q<Row>(
@@ -144,10 +162,12 @@ export async function listAppraisals(): Promise<MarketAppraisal[]> {
          FROM os_market_appraisals
         ORDER BY created_at DESC`
     );
-    return rows.map(rowTo);
+    return withLiveAddress(rows.map(rowTo));
   }
   const rows = await readFile();
-  return rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  /* Both backends, or the pilot laptops behave differently from Railway and
+     the difference only shows up in front of a landlord. */
+  return withLiveAddress(rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
 }
 
 export async function getAppraisal(id: string): Promise<MarketAppraisal | null> {
@@ -158,9 +178,10 @@ export async function getAppraisal(id: string): Promise<MarketAppraisal | null> 
          FROM os_market_appraisals WHERE id = $1`,
       [id]
     );
-    return rows[0] ? rowTo(rows[0]) : null;
+    return rows[0] ? (await withLiveAddress([rowTo(rows[0])]))[0] : null;
   }
-  return (await readFile()).find((r) => r.id === id) ?? null;
+  const one = (await readFile()).find((r) => r.id === id);
+  return one ? (await withLiveAddress([one]))[0] : null;
 }
 
 /**
