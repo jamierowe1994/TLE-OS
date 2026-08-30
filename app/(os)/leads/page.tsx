@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
 import AddedHere from "@/components/AddedHere";
+import { contactToLead, type ContactRow } from "@/lib/contacts-as-leads";
 import LeadDrawer from "@/components/LeadDrawer";
 import NewLeadPanel from "@/components/NewLeadPanel";
 import PageHeader from "@/components/PageHeader";
@@ -118,6 +119,26 @@ export default function Leads() {
         the page never renders empty; `live` says which you're looking at. ── */
   const [source, setSource] = useState<LeadSource>({ leads: LEADS, live: false, loading: true });
 
+  /* ── People added in the OS ────────────────────────────────────────────
+     Their own fetch rather than a field on /api/leads, because the two answer
+     different questions and fail separately: REX being slow must not delay a
+     record somebody typed in ten seconds ago, and REX being down must not hide
+     it. They arrive whenever they arrive and merge into the book below. */
+  const [ours, setOurs] = useState<Lead[]>([]);
+  useEffect(() => {
+    let gone = false;
+    fetch("/api/contacts", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("no"))))
+      .then((j: { contacts: ContactRow[] }) => {
+        if (!gone) setOurs((j.contacts ?? []).map(contactToLead));
+      })
+      .catch(() => {
+        /* Nobody added by hand is simply nobody added by hand — the REX book
+           still renders. A failure here must never empty the page. */
+      });
+    return () => { gone = true; };
+  }, [addedTick]);
+
   useEffect(() => {
     let gone = false;
     fetch("/api/leads")
@@ -144,7 +165,10 @@ export default function Leads() {
     return () => { gone = true; };
   }, []);
 
-  const ALL = source.leads;
+  /* Ours first, newest at the top. Somebody who has just typed a record in
+     expects to see it, and burying it below three hundred portal enquiries is
+     the same as not showing it at all. */
+  const ALL = useMemo(() => [...ours, ...source.leads], [ours, source.leads]);
 
   // The dropdowns offer what the book actually contains — no imagined values.
   const sources = useMemo(() => [...new Set(ALL.map((l) => l.source))].sort(), [ALL]);
@@ -160,8 +184,17 @@ export default function Leads() {
       if (fSource && l.source !== fSource) return false;
       if (fAgent && l.agent !== fAgent) return false;
       if (fStage && l.stage !== fStage) return false;
-      if (needle && !`${l.name} ${l.email} ${l.area} ${l.preferred}`.toLowerCase().includes(needle))
-        return false;
+      /* Phone and address are in the needle too. Somebody looking a landlord up
+         mid-call has the number in front of them far more often than the town,
+         and a search that silently ignores what you typed reads as "not in the
+         system". Punctuation is stripped from both sides so 07876 703066 finds
+         07876703066. */
+      if (needle) {
+        const hay = `${l.name} ${l.email} ${l.area} ${l.preferred} ${l.phone} ${l.address ?? ""}`.toLowerCase();
+        const digits = needle.replace(/\D/g, "");
+        const phoneHit = digits.length >= 5 && l.phone.replace(/\D/g, "").includes(digits);
+        if (!hay.includes(needle) && !phoneHit) return false;
+      }
       return true;
     });
   }, [ALL, side, fSource, fAgent, fStage, q]);

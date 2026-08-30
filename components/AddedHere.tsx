@@ -15,18 +15,22 @@ import { Pill } from "@/components/Wire";
  * would be invisible the moment the panel closed, which is barely better than
  * the Save button that saved nothing.
  *
- * ── The bug this had, and the lesson ──────────────────────────────────────
+ * ── It is an EXCEPTION list, and that was not always safe ─────────────────
  *
- * The first version filtered out anything that had reached REX, on the
- * reasoning that "it is in the book below and does not need saying twice".
- * That was simply wrong: the book below is leads, not contacts, so a contact
- * that pushed SUCCESSFULLY vanished from the OS entirely. James pushed his
- * first record to REX and then could not find it anywhere.
+ * The first version filtered out anything that had reached REX, reasoning that
+ * it was "in the book below and does not need saying twice". That was wrong at
+ * the time: the book below is REX's LEAD book, a contact is not a lead, so a
+ * contact that pushed successfully vanished from the OS entirely. James pushed
+ * his first record and then could not find it anywhere.
  *
- * A strip built to stop work disappearing was making the successful work
- * disappear. So it now shows everything added here whatever became of it, and
- * the state is a label rather than a filter. Nothing added in this product
- * should ever have to be taken on trust.
+ * The same filter is correct NOW, and only because the thing that made it wrong
+ * has been fixed: people added in the OS are mapped into the lead book itself
+ * (lib/contacts-as-leads), so a successful one is on screen, in the table, and
+ * opens like any other file. This strip is left holding the only records the
+ * table cannot explain — the ones that did not sync.
+ *
+ * If that mapping is ever removed, this filter becomes a bug again. The two
+ * belong together.
  */
 
 type Contact = {
@@ -61,7 +65,10 @@ export default function AddedHere({ refreshKey }: { refreshKey?: number }) {
     fetch("/api/contacts", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("no"))))
       .then((j: { contacts: Contact[]; rexBlocked: { detail: string } | null }) => {
-        setRows(j.contacts);
+        /* Only the ones that did NOT sync. The rest are in the table below,
+           opening like any other file — see the note at the top of this file
+           for why that was not always true. */
+        setRows(j.contacts.filter((c) => c.rexState !== "sent" && c.rexState !== "linked"));
         setBlocked(j.rexBlocked);
       })
       .catch(() => setRows([]));
@@ -94,16 +101,14 @@ export default function AddedHere({ refreshKey }: { refreshKey?: number }) {
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="flex items-center gap-2.5 text-[14px]">
           <DoodleIcon name="user" size={16} className="text-accent-dark" />
-          Added here
+          Not backed up yet
         </h3>
-        <span className="text-[11.5px] text-muted">
-          {rows.length} added{waiting ? ` · ${waiting} not in REX yet` : ""}
-        </span>
+        <span className="text-[11.5px] text-muted">{rows.length} waiting</span>
       </div>
 
       <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted">
-        People added in the OS. The table below is REX&apos;s lead book, which is a different
-        thing — these live here whether or not REX has them.
+        These are saved and safe, and they are in the list below like everyone else. They
+        just have not reached the backup store yet.
       </p>
 
       {blocked && waiting > 0 && (
