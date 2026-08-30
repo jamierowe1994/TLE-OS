@@ -1,0 +1,73 @@
+# The daily lettings market sweep.
+#
+# WHY THIS FILE EXISTS: Homesearch has no completed-let source and no let date,
+# so the only way to learn when something let is to look every day and notice
+# the change. Miss a day and that day's transitions are unknowable forever —
+# the feed does not backfill. See lib/listing-capture.ts.
+#
+# WHY GITHUB ACTIONS AND NOT RAILWAY: Railway's cron runs a service's start
+# command on a schedule, which is the wrong shape for calling an HTTP endpoint
+# on a service that is already running. This is version-controlled, free, and
+# visible in the repo rather than in a dashboard setting nobody remembers.
+#
+# ONLY THIS JOB IS SCHEDULED. There are three other cron routes in this repo —
+# compliance reminders, pre-tenancy alerts and campaigns — and all three SEND
+# EMAIL to real landlords and tenants. Turning those on is a decision for
+# James, not a side effect of wiring up a read-only sweep.
+#
+# SETUP, once: GitHub → repo → Settings → Secrets and variables → Actions →
+# New repository secret → name CRON_SECRET, value the same as the Railway
+# variable. Without it the run fails loudly rather than silently doing nothing.
+
+name: Lettings capture
+
+on:
+  schedule:
+    # 06:12 UTC daily. Early enough that "let agreed today" lines up with the
+    # working day, and off the hour because everybody schedules on the hour and
+    # GitHub delays busy slots.
+    - cron: "12 6 * * *"
+  # So it can be run by hand from the Actions tab without waiting for tomorrow.
+  workflow_dispatch:
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sweep every watched sector
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "CRON_SECRET is not set on this repository — nothing was swept."
+            exit 1
+          fi
+
+          # -f so a 4xx/5xx fails the job. A scheduler that treats every
+          # response as success is how this project once ran a cron against a
+          # login page for weeks and reported green.
+          BODY=$(curl -sS -f -X POST \
+            -H "x-cron-key: ${CRON_SECRET}" \
+            --max-time 600 \
+            "https://tle-os.co.uk/api/lettings-capture/run")
+
+          echo "$BODY" | python3 -m json.tool
+
+          # Surface the numbers that matter in the run summary, so a failure
+          # that returns 200 — sectors skipped, books truncated — is visible
+          # without opening the log.
+          python3 - "$BODY" <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, sys
+          d = json.loads(sys.argv[1])
+          print("## Lettings capture\n")
+          print(f"- swept **{d.get('swept', 0)}** sectors")
+          print(f"- **{d.get('seen', 0)}** listings seen, **{d.get('newRows', 0)}** new")
+          print(f"- **{d.get('newlyLetAgreed', 0)}** newly let agreed — observed, not inferred")
+          print(f"- **{d.get('goneNow', 0)}** gone from the feed")
+          if d.get("skipped"):
+              print(f"- :warning: **{d['skipped']}** sectors skipped (nothing written for them)")
+          if d.get("truncated"):
+              print(f"- :warning: truncated at the page cap: {', '.join(d['truncated'])}")
+          PY
