@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { saveContact, listContacts, markRex, type NewContact, type RexState } from "@/lib/contacts-store";
-import { pushContactToRex, pushBlockedBecause } from "@/lib/rex-contact-create";
+import { pushContactToRex, pushBlockedBecause } from "@/lib/rex-contacts";
 import { record } from "@/lib/audit";
 
 /**

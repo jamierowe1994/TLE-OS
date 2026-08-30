@@ -83,8 +83,12 @@ export default function InlineAddress({
       <button
         type="button"
         onClick={() => setEditing(true)}
-        title="Click to edit"
-        className={`-mx-1 truncate rounded px-1 text-left transition-colors hover:bg-accent-soft/40 ${className}`}
+        /* The full address on hover. `truncate` only bites once the element is
+           actually bounded — as an inline-block sized to its content it grew
+           past the column and ran under the property list beside it, taking the
+           copy button with it. max-w-full is what bounds it. */
+        title={value ? `${value}\n\nClick to edit` : "Click to edit"}
+        className={`-mx-1 inline-block max-w-full truncate align-bottom rounded px-1 text-left transition-colors hover:bg-accent-soft/40 ${className}`}
       >
         {value || <span className="text-muted">{placeholder}</span>}
       </button>

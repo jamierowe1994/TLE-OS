@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { getContact, markRex } from "@/lib/contacts-store";
-import { pushContactToRex } from "@/lib/rex-contact-create";
+import { pushContactToRex } from "@/lib/rex-contacts";
 import { record } from "@/lib/audit";
 
 /**

@@ -16,6 +16,8 @@ import SignaturePanel, { type Signer } from "@/components/SignaturePanel";
 import ViewingBooker from "@/components/ViewingBooker";
 import { Pill } from "@/components/Wire";
 import { leadSide } from "@/lib/leads-sample";
+import { isOsLead, osContactIdFrom } from "@/lib/contacts-as-leads";
+import { InlineField } from "@/components/Bits";
 import {
   DOC_TAGS,
   leadDetail,
@@ -501,6 +503,10 @@ export default function LeadDrawer({
   const [draft, setDraft] = useState("");
   const [renaming, setRenaming] = useState<string | null>(null);
   const [contact, setContact] = useState({ phone: "", email: "", area: "" });
+  /** The name, editable for people the OS owns. */
+  const [personName, setPersonName] = useState("");
+  /** What happened to the last edit — saved, saved-but-not-mirrored, or failed. */
+  const [sync, setSync] = useState<{ busy: boolean; text: string; bad?: boolean } | null>(null);
   // Properties attached in-session, plus the tick that confirms one landed.
   const [added, setAdded] = useState<string[]>([]);
   const [justAdded, setJustAdded] = useState(false);
@@ -558,7 +564,45 @@ export default function LeadDrawer({
   useEffect(() => {
     if (!lead) return;
     setContact({ phone: lead.phone, email: lead.email, area: lead.preferred });
+    setPersonName(lead.name);
+    setSync(null);
   }, [lead]);
+
+  /* ── Saving an edit, for people the OS owns ───────────────────────────────
+     These fields have always been editable and have never been saved: the
+     values lived in component state and died when the drawer closed. That is
+     fine for a REX lead, which the OS cannot write to anyway, and wrong for
+     somebody added here.
+     So for an `os-` record every commit is persisted and mirrored into REX.
+     `ours` is the gate: a REX lead keeps the old behaviour rather than
+     pretending to save into a system it has no write path to. */
+  const ours = lead ? isOsLead(lead.id) : false;
+
+  async function saveField(patch: Record<string, string>) {
+    if (!lead || !ours) return;
+    setSync({ busy: true, text: "Saving…" });
+    try {
+      const r = await fetch(`/api/contacts/${osContactIdFrom(lead.id)}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const j = (await r.json()) as { error?: string; sync?: { ok?: boolean; detail?: string } };
+      if (!r.ok) {
+        setSync({ busy: false, text: j.error ?? "That didn't save.", bad: true });
+        return;
+      }
+      /* Saved here is the fact that matters; the mirror is reported after it,
+         and a mirror that failed must not read as a failed save. */
+      setSync(
+        j.sync?.ok
+          ? { busy: false, text: "Saved" }
+          : { busy: false, text: `Saved here. ${j.sync?.detail ?? "Not backed up."}`, bad: true }
+      );
+    } catch {
+      setSync({ busy: false, text: "That didn't save — the connection dropped.", bad: true });
+    }
+  }
 
   // Mount, then flip to shown on the next frame — a transform that starts and
   // ends in the same paint doesn't animate.
@@ -768,8 +812,34 @@ export default function LeadDrawer({
               is a photo-shaped apology. ── */}
           <div className="relative rounded-3xl border border-line/80 bg-panel p-5">
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="text-[26px] leading-tight">{lead.name}</h2>
+              {/* Editable only for people the OS owns. A REX lead's name is
+                  REX's to change, and an input that silently discards what you
+                  type is worse than plain text. */}
+              {ours ? (
+                <h2 className="text-[26px] leading-tight">
+                  <InlineField
+                    value={personName}
+                    onChange={(v) => {
+                      const next = v.trim();
+                      if (!next || next === personName) return;
+                      setPersonName(next);
+                      void saveField({ name: next });
+                    }}
+                    className="text-[26px] leading-tight"
+                  />
+                </h2>
+              ) : (
+                <h2 className="text-[26px] leading-tight">{lead.name}</h2>
+              )}
               <Pill tone={STAGE_TONE[lead.stage]}>{lead.stage}</Pill>
+              {sync && (
+                <span
+                  className={`text-[11px] ${sync.bad ? "text-accent-dark" : "text-muted"}`}
+                  title={sync.text}
+                >
+                  {sync.text}
+                </span>
+              )}
             </div>
 
             {tab === null ? (
@@ -796,14 +866,20 @@ export default function LeadDrawer({
                         label="mobile"
                         value={contact.phone}
                         copyable
-                        onChange={(v) => setContact((c) => ({ ...c, phone: v }))}
+                        onChange={(v) => {
+                          setContact((c) => ({ ...c, phone: v }));
+                          void saveField({ mobile: v });
+                        }}
                       />
                       <DetailRow
                         icon="mail"
                         label="email"
                         value={contact.email}
                         copyable
-                        onChange={(v) => setContact((c) => ({ ...c, email: v }))}
+                        onChange={(v) => {
+                          setContact((c) => ({ ...c, email: v }));
+                          void saveField({ email: v });
+                        }}
                       />
                       {/* Landlords give a property address; tenants give an
                           area. Both look up as they type — the pick commits
@@ -814,7 +890,20 @@ export default function LeadDrawer({
                         icon="home"
                         label={isTenant ? "area" : "address"}
                         value={contact.area}
-                        onChange={(v) => setContact((c) => ({ ...c, area: v }))}
+                        /* Copyable like the mobile and the email. It is the
+                           field most likely to be pasted into a portal or a
+                           certificate request, and it was the one you could
+                           not copy — the button was being pushed off the row
+                           by the untruncated value. */
+                        copyable
+                        onChange={(v) => {
+                          setContact((c) => ({ ...c, area: v }));
+                          /* The postcode rides along when the lookup resolved
+                             one, so the dossier and the take-on weather have
+                             something to hang off after an address change. */
+                          const pc = v.match(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i)?.[0];
+                          void saveField({ address: v, ...(pc ? { postcode: pc.toUpperCase() } : {}) });
+                        }}
                         address
                       />
                       <DetailRow

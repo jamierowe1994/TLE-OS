@@ -30,7 +30,11 @@ export type AuditKind =
      share and there is no undo, so the first question after a bad record is
      "who made it, when, and from where" — and REX's own log will say the OS,
      which is not an answer. */
-  | "rex_contact_created";
+  | "rex_contact_created"
+  /* An edit made in the OS and mirrored into REX. Recorded with the field names
+     that changed, because "who edited this, and to what" is the question after
+     a record turns out wrong — and REX's own log will only say the OS did it. */
+  | "rex_contact_updated";
 
 export interface AuditRow {
   id: string;

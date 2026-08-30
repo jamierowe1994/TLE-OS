@@ -107,8 +107,11 @@ export function InlineField({
       <button
         type="button"
         onClick={() => setEditing(true)}
-        title="Click to edit"
-        className={`-mx-1 rounded px-1 text-left transition-colors hover:bg-accent-soft/40 ${className}`}
+        /* Same bounding problem as InlineAddress: without max-w-full an
+           inline-block sizes to its content and overruns the column. The full
+           value rides on the tooltip so nothing is hidden, only shortened. */
+        title={value ? `${value}\n\nClick to edit` : "Click to edit"}
+        className={`-mx-1 inline-block max-w-full truncate align-bottom rounded px-1 text-left transition-colors hover:bg-accent-soft/40 ${className}`}
       >
         {value || <span className="text-muted">{placeholder}</span>}
       </button>
@@ -164,7 +167,10 @@ export function DetailRow({
        until one side's content wraps. h-[42px] is the shared ruler. */
     <div className="group/row flex h-[42px] items-center gap-3">
       <DoodleIcon name={icon} size={15} className="shrink-0 text-muted" />
-      <span className="min-w-0 flex-1 text-[13.5px]">
+      {/* min-w-0 lets this shrink below its content, and overflow-hidden stops
+          anything inside escaping into the column beside it. A flex item's
+          default min-width:auto is why a long address ran under "Bathrooms". */}
+      <span className="min-w-0 flex-1 overflow-hidden text-[13.5px]">
         {onChange && address ? (
           <InlineAddress
             value={value}

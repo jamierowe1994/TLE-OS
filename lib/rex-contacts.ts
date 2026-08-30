@@ -186,3 +186,138 @@ export async function pushContactToRex(
     return { ok: false, reason: "refused", detail: e instanceof Error ? e.message : "The REX call failed." };
   }
 }
+
+/* ==========================================================================
+   MIRRORING AN EDIT
+
+   An edit in the OS should land on the same REX record, not beside it. That
+   makes updates harder than creates in one specific way: emails and phones are
+   nested sub-records with their own ids, and REX's update takes the same
+   `related` shape as create.
+
+   Send `related.contact_emails: [{email_address: "new@x.co"}]` with no id and
+   REX ADDS a second email rather than changing the first. The book already has
+   contacts carrying the same address twice from exactly this - see the sample
+   read during the build, where molly-mac@hotmail.co.uk appears under two
+   different sub-record ids.
+
+   So this READS the record first, finds the id of each sub-record it is about
+   to change, and sends the id back with the new value. Two calls per edit, and
+   worth it: a duplicate phone number on a live contact is not something the
+   agent who typed it will ever notice or be able to undo.
+   ========================================================================== */
+
+interface SubRecord { id?: string | number; email_address?: string; phone_number?: string; email_primary?: boolean; phone_primary?: boolean }
+
+/** The sub-record we should amend: the primary one, else the first. */
+function pick(rows: SubRecord[] | undefined, primaryKey: "email_primary" | "phone_primary"): SubRecord | null {
+  if (!rows?.length) return null;
+  return rows.find((r) => r[primaryKey] === true) ?? rows[0];
+}
+
+export async function pushContactUpdateToRex(
+  contact: OsContact,
+  userId: string | null
+): Promise<PushOutcome> {
+  if (!contact.rexId) {
+    return { ok: false, reason: "refused", detail: "This person is not in REX yet, so there is nothing to update." };
+  }
+
+  const blocked = await pushBlockedBecause();
+  if (blocked) return { ok: false, ...blocked };
+  if (rexWritesLocked("Contacts", "update")) {
+    return {
+      ok: false,
+      reason: "write_locked",
+      detail:
+        "The REX write lock does not name Contacts/update. Add it to REX_ALLOW_WRITES in Railway " +
+        "alongside whatever is already there.",
+    };
+  }
+
+  const token = await rexTokenFor(userId).catch(() => null);
+  if (!token) {
+    return {
+      ok: false,
+      reason: "no_rex_session",
+      detail:
+        "You have no REX sign-in held, so the change would be recorded under the office account " +
+        "rather than your name. Link your REX account on Profile and try again.",
+    };
+  }
+
+  try {
+    /* Read first — see the note above on why. A failure here stops the write:
+       updating blind is how you end up with two of somebody's phone number. */
+    const current = await rexCall(
+      "Contacts",
+      "read",
+      { id: Number(contact.rexId), extra_fields: ["related.contact_emails", "related.contact_phones", "related.contact_names"] },
+      token
+    );
+    if (isExpiredToken(current)) {
+      return { ok: false, reason: "rex_session_expired", detail: "Your REX sign-in has lapsed. Sign in again and save once more." };
+    }
+    if (!current.ok) {
+      return { ok: false, reason: "refused", detail: `Could not read the REX record first: ${current.error ?? current.status}` };
+    }
+
+    const rel = (current.result as { related?: { contact_emails?: SubRecord[]; contact_phones?: SubRecord[]; contact_names?: SubRecord[] } } | null)?.related ?? {};
+    const related: Record<string, unknown> = {};
+
+    const nameRow = rel.contact_names?.[0];
+    related.contact_names = [
+      {
+        ...(nameRow?.id ? { id: nameRow.id } : {}),
+        name_first: contact.nameFirst || contact.name,
+        name_last: contact.nameLast || "",
+      },
+    ];
+
+    if (contact.email) {
+      const row = pick(rel.contact_emails, "email_primary");
+      related.contact_emails = [
+        { ...(row?.id ? { id: row.id } : { email_desc: "Default", email_primary: true }), email_address: contact.email },
+      ];
+    }
+    if (contact.mobile) {
+      const row = pick(rel.contact_phones, "phone_primary");
+      related.contact_phones = [
+        {
+          ...(row?.id
+            ? { id: row.id }
+            : { phone_type: "Mob", phone_primary: true, phone_primary_sms: true }),
+          phone_number: contact.mobile,
+        },
+      ];
+    }
+
+    const res = await rexCall(
+      "Contacts",
+      "update",
+      {
+        data: {
+          id: Number(contact.rexId),
+          name_first: contact.nameFirst || contact.name,
+          name_last: contact.nameLast || "",
+          ...(contact.email ? { email_address: contact.email } : {}),
+          ...(contact.mobile ? { phone_number: contact.mobile } : {}),
+          ...(contact.address ? { address_postal: contact.address } : {}),
+          ...(contact.postcode ? { marketing_postcode: contact.postcode } : {}),
+          related,
+        },
+      },
+      token
+    );
+    if (isExpiredToken(res)) {
+      return { ok: false, reason: "rex_session_expired", detail: "Your REX sign-in has lapsed. Sign in again and save once more." };
+    }
+    if (!res.ok) {
+      return { ok: false, reason: "refused", detail: res.error ?? `REX answered ${res.status}.` };
+    }
+    return { ok: true, rexId: contact.rexId, detail: `Change mirrored to REX contact ${contact.rexId}.` };
+  } catch (e) {
+    if (e instanceof RexWriteBlocked) return { ok: false, reason: "write_locked", detail: e.message };
+    return { ok: false, reason: "refused", detail: e instanceof Error ? e.message : "The REX call failed." };
+  }
+}

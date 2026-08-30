@@ -163,6 +163,52 @@ export async function markRex(
   );
 }
 
+/**
+ * Change a person's details.
+ *
+ * Only the fields actually passed are touched, and the SQL is built from those
+ * — not a full-row write of an object the caller happened to be holding. That
+ * distinction has already cost this codebase once: `setDepositScheme` in the
+ * pre-tenancy overlay had to be rewritten as a targeted upsert after a stale
+ * in-memory copy silently reverted a field somebody else had just changed.
+ * Two people on the same record is the ordinary case in a lettings office.
+ */
+export async function updateContact(
+  id: string,
+  patch: Partial<Pick<NewContact, "name" | "email" | "mobile" | "address" | "postcode" | "source" | "notes" | "kind">>
+): Promise<OsContact | null> {
+  if (!hasDb()) throw new Error("No database is connected, so this cannot be saved.");
+
+  const sets: string[] = [];
+  const vals: unknown[] = [id];
+  const put = (col: string, value: unknown) => {
+    vals.push(value);
+    sets.push(`${col} = $${vals.length}`);
+  };
+
+  if (patch.name !== undefined) {
+    const { first, last } = splitName(patch.name);
+    put("name", patch.name.trim());
+    put("name_first", first);
+    put("name_last", last);
+  }
+  if (patch.email !== undefined) put("email", patch.email.trim());
+  if (patch.mobile !== undefined) put("mobile", patch.mobile.trim());
+  if (patch.address !== undefined) put("address", patch.address.trim());
+  if (patch.postcode !== undefined) put("postcode", patch.postcode.trim());
+  if (patch.source !== undefined) put("source", patch.source.trim());
+  if (patch.notes !== undefined) put("notes", patch.notes.trim());
+  if (patch.kind !== undefined) put("kind", patch.kind);
+
+  if (sets.length === 0) return getContact(id);
+
+  const rows = await q<Row>(
+    `UPDATE os_contacts SET ${sets.join(", ")} WHERE id = $1 RETURNING ${COLUMNS}`,
+    vals
+  );
+  return rows[0] ? toContact(rows[0]) : null;
+}
+
 export async function getContact(id: string): Promise<OsContact | null> {
   if (!hasDb()) return null;
   const rows = await q<Row>(`SELECT ${COLUMNS} FROM os_contacts WHERE id = $1`, [id]);
