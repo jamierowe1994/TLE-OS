@@ -6,7 +6,8 @@
     "dev": "next dev -p 3200",
     "build": "next build",
     "start": "next start",
-    "check": "NEXT_DIST_DIR=.next-check next build"
+    "check": "NEXT_DIST_DIR=.next-check next build",
+    "dev:alt": "NEXT_DIST_DIR=.next-alt next dev -p 3220"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.122.0",

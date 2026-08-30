@@ -12,3 +12,4 @@ next-env.d.ts
 # Postgres. That is runtime state, not source, and committing it would put one
 # machine's bookings in everybody's checkout.
 data
+.next-alt
