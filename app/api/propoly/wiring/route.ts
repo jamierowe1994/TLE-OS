@@ -229,16 +229,63 @@ export async function GET() {
       return { path, status: r.status, keys, docLike, nested };
     };
 
+    /* LIST vs DETAIL. The list endpoints return a summary — a property is ten
+       fields and an address — and associations like
+       property_gas_safety_attachment would hang off the DETAIL record if they
+       are exposed at all. Concluding "no certificates" from a list response
+       would be the same mistake as reading the pagination envelope. So: take a
+       real uuid from the list, then ask for that one record. */
+    const firstUuid = async (listPath: string, key: string) => {
+      const r = await propolyGet(listPath);
+      const rows = (r.body as Record<string, unknown> | null)?.[key];
+      const head = Array.isArray(rows) ? (rows[0] as Record<string, unknown>) : null;
+      return typeof head?.uuid === "string" ? head.uuid : null;
+    };
+
+    const propUuid = await firstUuid("/api/v1/properties", "properties");
+    const dealUuid = await firstUuid("/api/v1/deals", "deals");
+
     const shapes = await Promise.all([
       shapeOf("/api/v1/properties"),
       shapeOf("/api/v1/deals"),
+      ...(propUuid ? [shapeOf(`/api/v1/properties/${propUuid}`)] : []),
+      ...(dealUuid ? [shapeOf(`/api/v1/deals/${dealUuid}`)] : []),
+      /* Rails commonly gates associations behind an include. Cheap to ask. */
+      ...(propUuid ? [shapeOf(`/api/v1/properties/${propUuid}?include=attachments,documents`)] : []),
     ]);
+
+    /* WHAT DOCUMENT TYPES PROPOLY EVEN HAS. This endpoint answers 200 and we
+       already call it. If it names gas safety and EICR then the certificates
+       are first-class in their model and the only question is which route
+       serves the file — which is a very different conversation with them than
+       "does this exist". Configuration only; no personal data. */
+    const typesRes = await propolyGet("/api/v1/configuration/document_types");
+    const typesBody = typesRes.body as Record<string, unknown> | null;
+    const typeList = (() => {
+      if (!typesBody) return [];
+      for (const v of Object.values(typesBody)) {
+        if (Array.isArray(v)) {
+          return v
+            .map((x) =>
+              typeof x === "string"
+                ? x
+                : ((x as Record<string, unknown>)?.name ??
+                   (x as Record<string, unknown>)?.title ??
+                   (x as Record<string, unknown>)?.slug ??
+                   JSON.stringify(x).slice(0, 60))
+            )
+            .slice(0, 60);
+        }
+      }
+      return [];
+    })();
 
     return NextResponse.json({
       configured: true,
       specRead: false,
       attempts,
       documents: shapes,
+      documentTypes: { status: typesRes.status, count: typeList.length, types: typeList },
       note:
         "Propoly does not expose its API document to our credential — /api-docs, /api-docs.json and " +
         "/swagger.json all answer 403 authenticated. So capability below is measured by asking the " +
