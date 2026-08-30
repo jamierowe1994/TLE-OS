@@ -17,6 +17,7 @@ import {
   type DeckPlan,
 } from "@/lib/presentation-builder";
 import type { MaResearch, MarketListing } from "@/lib/ma-research";
+import { knownCompliance, OUTSTANDING_AT_APPRAISAL } from "@/lib/appraisal-compliance";
 import { listingKey } from "@/lib/listing-key";
 
 /**
@@ -1008,6 +1009,90 @@ export default function PresentationBuilder({
                   panel repeats property type. James spotted the duplication:
                   "you've got them in the boxes above". One or the other. */}
               <MaterialInfoPanel material={d.material} warning={d.addressWarning} hideVerbose />
+            </div>
+          )}
+
+          {/* COMPLIANCE, AT APPRAISAL TIME.
+
+              James, 30 Aug: capture the EPC and put it on file, show what we
+              can get at and what is outstanding.
+
+              Everything in the top half is DERIVED from the EPC register via
+              Homesearch — nothing is invented, and a missing input renders as
+              "unknown" rather than a guess. The arithmetic is worth the trouble:
+              an EPC lasts ten years, and 12 Dover Close was assessed on
+              10 August 2015, so it expired over a year ago. That is a real
+              finding on a real property from inputs we already held.
+
+              The bottom half is deliberately NOT drawn as failures. The
+              property is not on our book, so the landlord may well hold every
+              one of them. A red cross against "gas safety" would be telling a
+              landlord they are non-compliant on the strength of us not having
+              looked. */}
+          {d && here === "property" && (
+            <div className="mt-5 border-t border-line/70 pt-5">
+              <p className="hand text-[15px] leading-tight">Compliance</p>
+              {(() => {
+                const items = knownCompliance(d.material ?? null);
+                const tone = (st: string) =>
+                  st === "fail"
+                    ? "border-accent-dark/50 bg-accent-soft/40"
+                    : st === "warn"
+                      ? "border-line bg-box/70"
+                      : "border-line/70";
+                const dot = (st: string) =>
+                  st === "fail"
+                    ? "bg-accent-dark"
+                    : st === "warn"
+                      ? "bg-ink/45"
+                      : st === "ok"
+                        ? "bg-ink/20"
+                        : "bg-line";
+                return (
+                  <>
+                    {items.length === 0 ? (
+                      <p className="mt-2 rounded-xl border border-dashed border-line p-4 text-[12px] leading-relaxed text-muted">
+                        Nothing on the EPC register for this address yet. That may be a genuine
+                        gap or it may be the address not matching &mdash; check before telling a
+                        landlord they have no certificate.
+                      </p>
+                    ) : (
+                      <ul className="mt-3 space-y-2">
+                        {items.map((it) => (
+                          <li
+                            key={it.label}
+                            className={`flex gap-3 rounded-xl border p-3 ${tone(it.state)}`}
+                          >
+                            <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot(it.state)}`} />
+                            <span className="min-w-0">
+                              <span className="text-[12.5px] font-semibold">{it.label}</span>
+                              <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
+                                {it.detail}
+                              </p>
+                              <p className="mt-1 text-[10px] uppercase tracking-wide text-muted/80">
+                                {it.source}
+                              </p>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    <p className="mt-5 text-[12.5px] leading-relaxed text-muted">
+                      And what we will need from the landlord. None of these is on any public
+                      register, so this is a list to ask for &mdash; not a list of failures.
+                    </p>
+                    <ul className="mt-2 grid gap-x-4 gap-y-2 sm:grid-cols-2">
+                      {OUTSTANDING_AT_APPRAISAL.map((o) => (
+                        <li key={o.label} className="rounded-xl border border-dashed border-line/80 p-3">
+                          <span className="text-[12px] font-semibold">{o.label}</span>
+                          <p className="mt-0.5 text-[11px] leading-relaxed text-muted">{o.why}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                );
+              })()}
             </div>
           )}
 

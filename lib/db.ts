@@ -380,6 +380,62 @@ CREATE INDEX IF NOT EXISTS os_market_appraisals_stage_idx
 -- cleared_at rather than a delete. A deposit that goes missing, gets registered
 -- and goes missing again is two separate things worth being told about, and the
 -- history of which is which is worth more than the row it saves.
+-- THE MARKET, WATCHED DAILY, BECAUSE NOBODY SELLS THE ANSWER.
+--
+-- Homesearch has no completed-let source and no let date. Measured 30 Aug 2026:
+-- NN5 let 2,570 properties in twelve months while the listings feed holds 214
+-- rows for the whole district, because a finished let LEAVES the feed. Every
+-- comparable-lets endpoint 404s. So the only way to know WHEN something let is
+-- to look every day and notice it change.
+--
+-- One row per listing per sector we watch. status is the latest seen; the two
+-- timestamps are the ones worth having:
+--   let_agreed_at - first day we saw it flip to let agreed. A real date.
+--   gone_at       - first day it was absent from a run that otherwise worked.
+--
+-- gone_at is deliberately NOT set from an empty or failed sweep: a sector that
+-- returns nothing because Homesearch 429d would otherwise mark its entire book
+-- as vanished, and the history would be permanently wrong with no way to tell.
+-- See the run route - it writes nothing at all on a sector that comes back empty.
+--
+-- days_advertised is left to be computed on read from first_seen, not stored,
+-- because a stored derived column drifts the day the inputs are corrected.
+CREATE TABLE IF NOT EXISTS os_listing_capture (
+  listing_key    TEXT PRIMARY KEY,
+  sector         TEXT NOT NULL,
+  postcode       TEXT NOT NULL DEFAULT '',
+  address        TEXT NOT NULL DEFAULT '',
+  beds           INTEGER,
+  property_type  TEXT,
+  rent           INTEGER,
+  agent          TEXT,
+  lat            DOUBLE PRECISION,
+  lon            DOUBLE PRECISION,
+  status         TEXT NOT NULL DEFAULT '',
+  listed_on      DATE,
+  first_seen     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  let_agreed_at  TIMESTAMPTZ,
+  gone_at        TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS os_listing_capture_sector_idx
+  ON os_listing_capture (sector, status);
+CREATE INDEX IF NOT EXISTS os_listing_capture_letagreed_idx
+  ON os_listing_capture (let_agreed_at);
+
+-- WHICH SECTORS WE WATCH.
+--
+-- Explicit rather than derived, because the sweep costs Homesearch calls and a
+-- rule like <every sector we have ever appraised in> grows without anybody
+-- deciding to. Seeded from appraisal postcodes, then edited by hand.
+CREATE TABLE IF NOT EXISTS os_capture_sectors (
+  sector      TEXT PRIMARY KEY,
+  added_by    TEXT NOT NULL DEFAULT '',
+  added_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_run_at TIMESTAMPTZ,
+  last_seen_n INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS os_deal_alerts_sent (
   alert_key      TEXT PRIMARY KEY,
   deal_id        TEXT NOT NULL,

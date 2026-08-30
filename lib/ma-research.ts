@@ -446,6 +446,25 @@ export async function listingAdvert(id: number): Promise<string | null> {
   return u && u.startsWith("http") ? u : null;
 }
 
+/**
+ * Every let listing in one sector, raw, for the daily capture sweep.
+ *
+ * Deliberately UNFILTERED — withdrawn and fallen-through rows come back too,
+ * because the capture is a record of what the feed said, not a view of the
+ * market. Filtering here would mean the history could never answer a question
+ * we had not thought of yet.
+ */
+export async function hsLetRows(sector: string): Promise<Array<Record<string, unknown>>> {
+  const parts = [
+    `sectors%5B%5D=${encodeURIComponent(sector)}`,
+    "date_listed_from=1900-01-01",
+    "sort%5B%5D=-listed_on",
+    "limit=300",
+  ];
+  const raw = await hsJson<unknown>(`current_listings_crm/search/let/?${parts.join("&")}`);
+  return hsRows<Record<string, unknown>>(raw);
+}
+
 async function onMarketNearby(
   sector: string,
   postcode?: string,

@@ -129,6 +129,7 @@ const MACHINE_ROUTES = [
   "/api/scheduled-sends/run",         // queued email
   "/api/pretenancy/alerts/run",       // the pre-tenancy digest
   "/api/compliance/reminders/run",    // the 30/14/7 certificate chase
+  "/api/lettings-capture/run",        // the daily market sweep
 ];
 
 export async function middleware(req: NextRequest) {

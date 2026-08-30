@@ -144,6 +144,26 @@ export interface MaterialInfo {
   /** Straight through for a map pin, when we have it. */
   lat: number | null;
   lon: number | null;
+  /**
+   * The handful of raw fields the COMPLIANCE panel has to reason about rather
+   * than merely print.
+   *
+   * The groups above are formatted for display — "B (83)", "10 August 2015" —
+   * which is right for a panel and useless for arithmetic. Working out that an
+   * EPC expired needs the date as a date and the rating as a letter, so those
+   * few survive the shaping instead of being re-parsed out of a label. See
+   * lib/appraisal-compliance.
+   */
+  compliance: {
+    epcRating: string | null;
+    epcScore: number | null;
+    epcAssessedOn: string | null;
+    potentialRating: string | null;
+    potentialScore: number | null;
+    floodRisk: string | null;
+    conservationArea: string | null;
+    leaseYearsRemaining: number | null;
+  };
 }
 
 const SQFT_PER_SQM = 10.7639;
@@ -292,7 +312,27 @@ export function shapeMaterialInfo(
     });
   }
 
-  return { hsId, groups, known, possible, valuation, lat: m.lat ?? null, lon: m.lon ?? null };
+  return {
+    hsId,
+    groups,
+    known,
+    possible,
+    valuation,
+    lat: m.lat ?? null,
+    lon: m.lon ?? null,
+    compliance: {
+      epcRating: m.energy_rating ?? null,
+      epcScore: typeof m.energy_score === "number" ? m.energy_score : null,
+      epcAssessedOn: m.energy_epc_date ?? null,
+      potentialRating: m.potential_energy_rating ?? null,
+      potentialScore:
+        typeof m.potential_energy_score === "number" ? m.potential_energy_score : null,
+      floodRisk: m.flood_risk ?? null,
+      conservationArea: m.conservation_area ?? null,
+      leaseYearsRemaining:
+        typeof m.remaining_lease_in_years === "number" ? m.remaining_lease_in_years : null,
+    },
+  };
 }
 
 /** Format the AVM for display. Sale value — never let a rent figure borrow it. */
