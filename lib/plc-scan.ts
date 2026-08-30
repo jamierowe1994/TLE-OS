@@ -11,6 +11,7 @@ import {
   type PlcCase,
   type PlcDocument,
 } from "@/lib/plc";
+import { judge, reasonsAsFindings, type DocFacts, type RuleResult } from "@/lib/plc-rules";
 
 /**
  * Reading the pack.
@@ -44,6 +45,20 @@ import {
  * sentence about it, and a confident sentence about a statutory immigration
  * check is exactly the thing that must not appear on this screen.
  */
+
+/**
+ * What one document read produces.
+ *
+ * Three parts, and the separation is the point. `observations` are prose for a
+ * person. `facts` are values a rule can act on. `result` is what the rules in
+ * lib/plc-rules decided from those facts - never what the model decided.
+ */
+export type DocRead = {
+  facts: DocFacts;
+  result: RuleResult;
+  observations: Finding[];
+  documentName: string;
+};
 
 const MODEL = "claude-opus-4-8";
 
@@ -153,8 +168,73 @@ const REPORT_TOOL: Anthropic.Tool = {
           required: ["level", "message"],
         },
       },
+
+      /* ── The half the rules run on ────────────────────────────────────────
+
+         Findings above are prose for a person to read. These are FACTS for
+         lib/plc-rules to decide on, and they are asked for separately on
+         purpose: a fact the model has to state as a bare date or an enum is
+         far harder to be vague about than the same fact buried in a sentence.
+
+         Nothing here asks for a verdict. There is deliberately no "compliant"
+         field, because the moment one exists somebody downstream will read it
+         instead of running the rules. */
+      facts: {
+        type: "object",
+        description:
+          "The specific values you read off the document. Leave a field out if it is not visible - never guess. These are checked by rules, so a wrong value here is worse than a missing one.",
+        properties: {
+          documentType: { type: "string", description: "What the document calls itself." },
+          isExpectedType: {
+            type: "string",
+            enum: ["yes", "no", "unclear"],
+            description: "Is this the certificate type the check asked for?",
+          },
+          issueDate: { type: "string", description: "ISO YYYY-MM-DD, as printed." },
+          expiryDate: {
+            type: "string",
+            description:
+              "The expiry or next-due date as PRINTED, ISO YYYY-MM-DD. Do not calculate one.",
+          },
+          expiryWasDerived: {
+            type: "boolean",
+            description:
+              "True if no expiry was printed and you worked it out from the issue date. Be honest: this downgrades the result rather than failing it.",
+          },
+          addressOnDocument: { type: "string", description: "The property address as printed." },
+          addressMatches: {
+            type: "string",
+            enum: ["yes", "no", "unclear"],
+            description:
+              "Does it match the property given? A spelling difference or a missing postcode is still yes; a different street is no.",
+          },
+          outcome: {
+            type: "string",
+            enum: ["satisfactory", "unsatisfactory", "not stated", "other"],
+            description: "The overall result printed on the certificate.",
+          },
+          ratingLetter: { type: "string", description: "EPC only: the band letter, A to G." },
+          outstandingDefects: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "Anything the certificate flags as needing work or being at risk - C1, C2 or FI on an EICR, 'at risk' or 'immediately dangerous' on a CP12, a reading outside the normal range. One short phrase each. Empty if none.",
+          },
+          signed: {
+            type: "string",
+            enum: ["yes", "no", "unclear"],
+            description: "Signed and dated by whoever issued it.",
+          },
+          peopleNamed: {
+            type: "array",
+            items: { type: "string" },
+            description: "Every person named on the document, for the people-based checks.",
+          },
+        },
+        required: ["isExpectedType", "addressMatches", "outcome", "signed"],
+      },
     },
-    required: ["findings"],
+    required: ["findings", "facts"],
   },
 };
 
@@ -219,7 +299,7 @@ export async function readDocument(
   client: Anthropic,
   file: { name: string; media: string; base64: string },
   context: { checkId: CheckId; address: string; moveInDate: string | null }
-): Promise<Finding[]> {
+): Promise<DocRead> {
   const asDoc: PlcDocument = {
     checkId: context.checkId,
     name: file.name,
@@ -253,9 +333,9 @@ export async function readDocument(
   const call = res.content.find(
     (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "report_findings"
   );
-  const raw = (call?.input as { findings?: unknown[] } | undefined)?.findings ?? [];
+  const input = (call?.input ?? {}) as { findings?: unknown[]; facts?: Record<string, unknown> };
 
-  return raw.flatMap((r): Finding[] => {
+  const observations = (input.findings ?? []).flatMap((r): Finding[] => {
     const f = r as { level?: string; message?: string; foundDate?: string };
     const message = (f.message ?? "").trim();
     if (!message) return [];
@@ -271,9 +351,57 @@ export async function readDocument(
       },
     ];
   });
+
+  const facts = readFacts(input.facts);
+  const result = judge(context.checkId, facts, context.moveInDate);
+
+  return { facts, result, observations, documentName: file.name };
+}
+
+/**
+ * The model's facts, coerced into the shape the rules expect.
+ *
+ * Every field is validated rather than cast. A date that is not a date becomes
+ * null, and null means REVIEW - so a malformed answer degrades into "a person
+ * should look" instead of into a rule silently not firing.
+ */
+function readFacts(raw: unknown): DocFacts {
+  const f = (raw ?? {}) as Record<string, unknown>;
+  const str = (k: string) => (typeof f[k] === "string" && f[k] ? (f[k] as string) : null);
+  const date = (k: string) => {
+    const v = str(k);
+    return v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+  };
+  const oneOf = <T extends string>(k: string, allowed: readonly T[], fallback: T): T => {
+    const v = str(k);
+    return v && (allowed as readonly string[]).includes(v) ? (v as T) : fallback;
+  };
+  const list = (k: string) =>
+    Array.isArray(f[k]) ? (f[k] as unknown[]).filter((x): x is string => typeof x === "string" && !!x.trim()) : [];
+
+  return {
+    documentType: str("documentType"),
+    isExpectedType: oneOf("isExpectedType", ["yes", "no", "unclear"] as const, "unclear"),
+    issueDate: date("issueDate"),
+    expiryDate: date("expiryDate"),
+    expiryWasDerived: f.expiryWasDerived === true,
+    addressOnDocument: str("addressOnDocument"),
+    addressMatches: oneOf("addressMatches", ["yes", "no", "unclear"] as const, "unclear"),
+    outcome: oneOf(
+      "outcome",
+      ["satisfactory", "unsatisfactory", "not stated", "other"] as const,
+      "not stated"
+    ),
+    ratingLetter: str("ratingLetter"),
+    outstandingDefects: list("outstandingDefects"),
+    signed: oneOf("signed", ["yes", "no", "unclear"] as const, "unclear"),
+    peopleNamed: list("peopleNamed"),
+  };
 }
 
 async function scanOne(client: Anthropic, doc: PlcDocument, c: PlcCase): Promise<Finding[]> {
+  /* Rule reasons first, then the model's prose. Kirstie should meet the
+     decision before the commentary. */
   let fetched: Fetched;
   try {
     fetched = await fetchDocument(doc);
@@ -293,11 +421,12 @@ async function scanOne(client: Anthropic, doc: PlcDocument, c: PlcCase): Promise
     ];
   }
 
-  return readDocument(
+  const read = await readDocument(
     client,
     { name: doc.name, media: fetched.media, base64: fetched.base64 },
     { checkId: doc.checkId, address: c.address, moveInDate: c.moveInDate }
   );
+  return [...reasonsAsFindings(doc.checkId, read.result, doc.name), ...read.observations];
 }
 
 /**

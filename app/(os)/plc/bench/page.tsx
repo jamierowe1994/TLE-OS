@@ -16,7 +16,11 @@ import { PLC_CHECKS, type CheckId, type Finding } from "@/lib/plc";
  * concluding the scan works would be worse than not testing at all.
  */
 
+type Reason = { verdict: "pass" | "fail" | "review"; rule: string; because: string };
+
 type Result = {
+  verdict: "pass" | "fail" | "review";
+  reasons: Reason[];
   findings: Finding[];
   asked: { check: string; address: string; moveInDate: string | null };
   ms: number;
@@ -217,6 +221,54 @@ export default function ScanBench() {
                   Read against {row.result.asked.check} at {row.result.asked.address}, moving in{" "}
                   {row.result.asked.moveInDate ?? "— no date given"} · {(row.result.ms / 1000).toFixed(1)}s
                 </p>
+                {/* The recommendation, and every rule that produced it. The
+                    wording is deliberately not "PASS" on its own - a rule
+                    result is a recommendation and the screen has to keep
+                    saying so, because nothing in the product lets it decide. */}
+                <div className="mx-4 mt-2 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+                  <p className="text-sm">
+                    <span
+                      className={`mr-2 rounded px-2 py-0.5 text-xs uppercase tracking-wide ${
+                        row.result.verdict === "fail"
+                          ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200"
+                          : row.result.verdict === "review"
+                            ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200"
+                            : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+                      }`}
+                    >
+                      {row.result.verdict === "fail"
+                        ? "Would fail"
+                        : row.result.verdict === "review"
+                          ? "Needs a person"
+                          : "Rules passed"}
+                    </span>
+                    <span className="text-neutral-500">
+                      {row.result.verdict === "pass"
+                        ? "Every rule passed. Still a recommendation, not a decision."
+                        : "Decided by the rules, not by the model."}
+                    </span>
+                  </p>
+                  <ul className="mt-2 space-y-1">
+                    {row.result.reasons.map((r, i) => (
+                      <li key={i} className="flex gap-2 text-xs">
+                        <span
+                          className={`mt-1 h-1.5 w-1.5 shrink-0 rounded-full ${
+                            r.verdict === "fail"
+                              ? "bg-rose-500"
+                              : r.verdict === "review"
+                                ? "bg-amber-500"
+                                : "bg-emerald-500"
+                          }`}
+                        />
+                        <span>
+                          <span className="text-neutral-900 dark:text-neutral-100">{r.rule}</span>
+                          <span className="text-neutral-500"> — {r.because}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
                 {row.result.findings.length === 0 ? (
                   <p className="px-4 py-3 text-sm text-neutral-500">
                     It reported nothing. That is not a pass, it is an empty answer, and worth a look

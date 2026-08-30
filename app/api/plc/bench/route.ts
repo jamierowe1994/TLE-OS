@@ -121,14 +121,20 @@ export async function POST(req: NextRequest) {
   const started = Date.now();
   try {
     const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
-    const findings = await readDocument(
+    const read = await readDocument(
       new Anthropic(),
       { name: file.name, media: file.type, base64 },
       { checkId, address: address || "the property", moveInDate }
     );
     return NextResponse.json({
       ok: true,
-      findings,
+      /* The rule verdict and the reasons that produced it, separately from the
+         model's prose. Seeing which rule fired is the whole reason to run the
+         bench twice on the same document with a different move-in date. */
+      verdict: read.result.verdict,
+      reasons: read.result.reasons,
+      facts: read.facts,
+      findings: read.observations,
       /* Stated back so the bench cannot mislead about what it was told. The
          date checks are all "in date ON the move-in date", and a run with no
          move-in date answers a different question from the real scan. */
