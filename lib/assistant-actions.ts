@@ -4,7 +4,8 @@ import { bookFor, invalidateListingBook } from "@/lib/listings-cache";
 import { getListingContacts } from "@/lib/business/rex-stats";
 import { addPropertyNote } from "@/lib/business/property-notes-store";
 import { isExpiredToken, rexCall, RexWriteBlocked } from "@/lib/rex";
-import { MERGE_WRITE, NoSenderIdentity, previewMerge, sendMerge } from "@/lib/rex-mailmerge";
+import { previewMerge } from "@/lib/rex-mailmerge";
+import { MailboxNotConnected, msSendMail } from "@/lib/microsoft";
 import { rexTokenFor } from "@/lib/rex-user";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
@@ -194,39 +195,41 @@ async function doWriteUp(
 }
 
 /**
- * Email — now the real thing.
+ * Email — from their own mailbox, BCC'd onto the REX timeline.
  *
- * The shape was settled on 29 Aug by reading MailMerge itself rather than
- * guessing a fifth time: recipients are merge_objects of record ids, and free
- * text goes in per-object `custom` as { subject, body }. See lib/rex-mailmerge.
+ * Moved off REX's mail merge on 30 Aug for one reason: REX sends WITH their
+ * address on it but never THROUGH their mailbox, so the sent copy is not in
+ * their Sent Items and the landlord's reply has nothing to thread onto. Half
+ * the conversation would live in REX and half in Outlook, permanently — which
+ * is the outcome the request was trying to prevent.
  *
- * Two things happen here that don't happen anywhere else in the OS:
+ * Graph sends from the mailbox itself. The BCC to their REX dropbox keeps the
+ * timeline, so nothing is given up by the move.
  *
- *   • The recipient is resolved AGAIN, at the moment of sending, from REX. The
- *     model never supplies an address — it names a listing and a role, and who
- *     that is gets looked up now. Talk Steve into any address you like; this
- *     still goes to the landlord on the record.
- *   • The send is refused if REX cannot render the message. getMergedStringSet
- *     is read-only and costs nothing, so there is no excuse for discovering a
- *     broken merge tag by posting "Dear ," to a landlord.
+ * The recipient is still resolved from REX at the moment of sending, and the
+ * message is still rendered by REX first so a merge tag that came out blank is
+ * caught before a landlord reads "Dear ,". Both of those are worth keeping
+ * even though the send itself has moved.
  */
 async function doEmail(
   p: Extract<ActionProposal, { kind: "email" }>,
-  actorToken: string | null
+  actor: { id: string; osUserId: string | null },
+  actorToken: string | null,
+  rexUserId: string | null
 ): Promise<ActionOutcome> {
   const who = await resolveRecipient(p.listingId, p.to);
   if ("error" in who) return { ok: false, message: who.error };
 
-  const target = { contactId: who.contactId, listingId: p.listingId };
-  const content = { subject: p.subject, body: toHtml(p.body) };
+  const html = toHtml(p.body);
 
-  /* Render it first. A merge tag that resolves to nothing is the difference
-     between a professional email and one that opens "Dear ,". */
-  const preview = await previewMerge(target, content, actorToken);
-  if ("error" in preview) {
-    return { ok: false, message: `REX couldn't put that email together: ${preview.error}` };
-  }
-  if (preview.emptyTags.length) {
+  /* Render through REX first. It costs nothing (getMergedStringSet is
+     read-only) and it is the only thing that catches an empty merge tag. */
+  const preview = await previewMerge(
+    { contactId: who.contactId, listingId: p.listingId },
+    { subject: p.subject, body: html },
+    actorToken
+  );
+  if (!("error" in preview) && preview.emptyTags.length) {
     return {
       ok: false,
       message: `Not sending that — ${preview.emptyTags.join(", ")} came out blank, so ${who.name} would get an email with a gap in it. Say it a different way and I'll rebuild it.`,
@@ -234,23 +237,24 @@ async function doEmail(
   }
 
   try {
-    const sent = await sendMerge(target, content, actorToken);
-    if (!sent.ok) return { ok: false, message: sent.error };
+    const { bccd } = await msSendMail(actor.id, {
+      to: { name: who.name, email: who.email },
+      subject: p.subject,
+      body: html,
+      rexUserId,
+    });
     return {
       ok: true,
-      message: `Sent to ${who.name} at ${who.email}. It's on their REX timeline, so whoever picks them up next can see it.`,
+      message: bccd
+        ? `Sent to ${who.name} at ${who.email}, from your own mailbox. It's in your Sent Items, and copied onto their REX timeline.`
+        : `Sent to ${who.name} at ${who.email}, from your own mailbox. It is NOT on their REX timeline — your REX link is missing, so a colleague opening that landlord won't see it.`,
     };
   } catch (e) {
-    if (e instanceof NoSenderIdentity) {
-      /* Not a failure of the email. They are not linked, so it would have gone
-         out from the office account instead of from them. */
-      return { ok: false, blocked: true, message: e.message };
-    }
-    if (e instanceof RexWriteBlocked) {
+    if (e instanceof MailboxNotConnected) {
       return {
         ok: false,
         blocked: true,
-        message: `Sending is locked on this environment. Set REX_ALLOW_WRITES="${MERGE_WRITE}" to unlock it — and send the first one to a colleague, not a landlord.`,
+        message: "Your Microsoft mailbox isn't connected, so I can't send as you — and I won't send as anybody else. Connect it on the pre-launch screen and I'll send this straight away.",
       };
     }
     return { ok: false, message: e instanceof Error ? e.message : "That send failed." };
@@ -293,6 +297,11 @@ export async function perform(
     case "write-up":
       return doWriteUp(proposal, await rexTokenFor(actor.osUserId));
     case "email":
-      return doEmail(proposal, await rexTokenFor(actor.osUserId));
+      return doEmail(
+        proposal,
+        actor,
+        await rexTokenFor(actor.osUserId),
+        scope.rexUserId
+      );
   }
 }

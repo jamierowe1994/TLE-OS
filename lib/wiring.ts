@@ -269,6 +269,13 @@ export const WIRING: WiringRow[] = [
   {
     system: "sends",
     area: "Getting messages out",
+    item: "Email to a landlord, from the agent's own Microsoft mailbox",
+    state: "untested",
+    note: "Decided 30 Aug, and it overrides the row above for anything landlord-facing. REX sends WITH an agent's address on it but never THROUGH their mailbox: the sent copy is not in their Sent Items, so the landlord's reply has nothing to thread onto and half the conversation ends up in each system. Microsoft Graph sends from the mailbox itself, and the message is BCC'd to that agent's own REX email dropbox (3517.<rexUserId>@emaildrop.uk.rexsoftware.com, asked for rather than constructed) so the timeline is kept. Ported from the working integration in TEG-Paid-Ads-platform — same Azure app, same tenant, delegated only, with Mail.Read added so the thread can be read back. Needs the TLE OS redirect URI and Mail.Read adding to that app registration, then each person connects their own mailbox from Admin → Pre-launch → Emails. Nothing sends as somebody who has not connected.",
+  },
+  {
+    system: "sends",
+    area: "Getting messages out",
     item: "Previewing an email exactly as REX will send it",
     state: "live",
     note: "MailMerge/getMergedStringSet renders a merge without sending it — real contact, real property, merge tags resolved — and because its name begins with 'get' it passes the read-only allowlist untouched. So a full preview costs nothing and needs no permission. Steve refuses to send anything whose merge tags came back empty, which is how 'Dear ,' reaches a landlord.",

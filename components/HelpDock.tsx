@@ -93,7 +93,7 @@ const CARD_EFFECT: Record<Proposal["kind"], string> = {
   note: "Saves to the property file in the OS. Not sent to REX.",
   reminder: "Goes in the OS diary only - not REX, not your 365 calendar.",
   "write-up": "Writes to REX and goes live on Rightmove, Zoopla and OnTheMarket in about five to ten minutes.",
-  email: "Sends through REX, so it lands on their timeline. The address is looked up again when you press - it always goes to the person on the record.",
+  email: "Sends from YOUR Microsoft mailbox, so it is in your Sent Items and their reply threads onto it. BCC'd to REX so it shows on their timeline. The address is looked up again when you press - it always goes to the person on the record.",
 };
 
 export default function HelpDock() {

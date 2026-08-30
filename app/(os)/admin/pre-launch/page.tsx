@@ -30,6 +30,18 @@ type Candidate = {
   role: string | null;
 };
 type Usage = { path: string; label: string; views: number; people: number; lastAt: string | null };
+type Mailbox = {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  connected: boolean;
+  /** The mailbox they actually connected, which may not be their OS email. */
+  mailbox: string | null;
+  connectedAt: string | null;
+  /** The other half of being able to send: without it there is no timeline. */
+  rexLinked: boolean;
+};
 type Bug = {
   id: string;
   reporterEmail: string;
@@ -77,6 +89,10 @@ export default function PreLaunch() {
      on demand: every report carries a JPEG and pulling them all to draw a list
      of sentences would be most of a megabyte to read a paragraph. */
   const [shots, setShots] = useState<Record<string, string | null>>({});
+  /* Mailboxes load separately from the pilot board: it is a different question
+     with a different permission, and a slow Graph-backed list should not hold
+     up the page that tells James who has found a bug. */
+  const [mail, setMail] = useState<{ configured: boolean; people: Mailbox[] } | null>(null);
 
   async function loadShot(id: string) {
     if (id in shots) return;
@@ -85,6 +101,33 @@ export default function PreLaunch() {
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null);
     setShots((m) => ({ ...m, [id]: j?.shot ?? null }));
+  }
+
+  const loadMail = useCallback(() => {
+    fetch("/api/admin/mailboxes", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setMail(j?.ok ? { configured: j.configured, people: j.people } : null))
+      .catch(() => {});
+  }, []);
+  useEffect(loadMail, [loadMail]);
+
+  /* Connecting is a full-page trip to Microsoft and back — it cannot be an
+     XHR, because consent is theirs to give in their own browser. */
+  function connectMailbox() {
+    window.location.href = "/api/auth/microsoft/start";
+  }
+
+  async function disconnectMailbox(userId: string, name: string) {
+    if (!window.confirm(`Disconnect ${name}'s mailbox? Nothing will be able to send as them until they connect again.`)) return;
+    setBusy(userId);
+    const r = await fetch("/api/auth/microsoft/disconnect", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ userId }),
+    }).then((x) => x.json()).catch(() => null);
+    setBusy(null);
+    setFlash(r?.message ?? r?.error ?? "That didn't work.");
+    loadMail();
   }
 
   const load = useCallback(() => {
@@ -354,6 +397,78 @@ export default function PreLaunch() {
             </li>
           ))}
         </ul>
+      </section>
+
+      {/* ── EMAILS ─────────────────────────────────────────────────────────
+          James, 30 Aug: show whether each person is connected, with a slider,
+          so people can be walked through it one at a time.
+
+          Two states are shown, not one. A connected mailbox says an email can
+          LEAVE as them; the REX link says it will also land on the landlord's
+          timeline where a colleague can see it. Showing only the first would
+          read as ready when half the job is missing. */}
+      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
+        <h2 className="text-[15px]">Emails</h2>
+        <p className="mt-1 max-w-[70ch] text-[11.5px] leading-relaxed text-muted">
+          An email to a landlord goes from the agent&rsquo;s own Microsoft mailbox, so it sits in
+          their Sent Items and the reply threads onto it. It is BCC&rsquo;d to their REX dropbox, so
+          it still shows on the contact&rsquo;s timeline. Nothing sends as somebody who is not
+          connected.
+        </p>
+
+        {mail && !mail.configured && (
+          <p className="mt-3 rounded-lg bg-accent-soft/60 px-3 py-2 text-[11.5px] text-accent-dark">
+            Microsoft isn&rsquo;t configured on this environment yet — AZURE_CLIENT_ID,
+            AZURE_TENANT_ID and AZURE_CLIENT_SECRET are all needed before anyone can connect.
+          </p>
+        )}
+
+        <ul className="mt-3.5 space-y-1">
+          {(mail?.people ?? []).map((p) => (
+            <li
+              key={p.userId}
+              className="flex items-center justify-between gap-3 border-b border-line/40 py-2 text-[12px]"
+            >
+              <span className="min-w-0">
+                <span className="block truncate">{p.name}</span>
+                <span className="block truncate text-[11px] text-muted">
+                  {p.connected ? p.mailbox : p.email}
+                  {p.connected && !p.rexLinked && " · no REX link, so it would not reach the timeline"}
+                  {!p.connected && " · not connected"}
+                </span>
+              </span>
+              <button
+                type="button"
+                onClick={() => (p.connected ? disconnectMailbox(p.userId, p.name) : connectMailbox())}
+                disabled={busy === p.userId || (mail ? !mail.configured : true)}
+                title={
+                  p.connected
+                    ? "Disconnect this mailbox"
+                    : "Only they can connect their own mailbox — this signs YOU in"
+                }
+                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-40 ${
+                  p.connected ? "bg-accent-dark" : "bg-line"
+                }`}
+                aria-pressed={p.connected}
+                aria-label={p.connected ? `Disconnect ${p.name}` : `Connect ${p.name}`}
+              >
+                <span
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-page transition-all ${
+                    p.connected ? "left-[22px]" : "left-0.5"
+                  }`}
+                />
+              </button>
+            </li>
+          ))}
+          {mail && mail.people.length === 0 && (
+            <li className="py-2 text-[12px] text-muted">Nobody has an account yet.</li>
+          )}
+        </ul>
+        <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
+          Connecting is personal: the slider signs YOU in to Microsoft. To set somebody else up,
+          sit with them and have them press it on their own account. Turning it off only stops us
+          sending as them — the permission stays on their Microsoft account until they remove it.
+        </p>
       </section>
 
       <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">

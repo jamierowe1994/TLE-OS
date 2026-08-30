@@ -533,6 +533,25 @@ CREATE TABLE IF NOT EXISTS os_rex_tokens (
   expires_at  TIMESTAMPTZ NOT NULL
 );
 
+-- The agent's Microsoft 365 mailbox, so an email to a landlord comes from
+-- them and the reply threads onto it in their own Outlook.
+--
+-- A REFRESH token, not an access token, and no expiry column: Microsoft's
+-- refresh tokens rotate on use and last as long as they keep being used, so
+-- there is no weekly prompt to schedule. The row existing IS the connection;
+-- deleting it is how somebody disconnects.
+--
+-- Sealed with AES-GCM under a key derived from AUTH_SECRET, same as the REX
+-- token above but a different salt so one cannot open the other. This is a
+-- bearer credential for a person's MAILBOX, which is a worse thing to leak
+-- than a CRM session, and it must never sit in a backup in plain text.
+CREATE TABLE IF NOT EXISTS os_ms_tokens (
+  user_id      TEXT PRIMARY KEY,
+  ms_email     TEXT NOT NULL,
+  refresh_enc  TEXT NOT NULL,
+  connected_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Campaigns marketing built here, alongside the ones that ship in code.
 --
 -- The built-in set stays in lib/campaigns.ts: it is the house's own thinking
