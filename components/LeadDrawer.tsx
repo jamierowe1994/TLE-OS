@@ -8,6 +8,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DetailRow, DoneTick, PressButton, SectionHead } from "@/components/Bits";
 import Compose from "@/components/Compose";
+import { agentName, firstNameOf, properName } from "@/lib/names";
 import EmailProperties from "@/components/EmailProperties";
 import PhotoBox from "@/components/PhotoBox";
 import ProcessTimeline from "@/components/ProcessTimeline";
@@ -1523,11 +1524,16 @@ export default function LeadDrawer({
         onClose={() => setComposing(false)}
         to={contact.email || lead.email}
         audience={isTenant ? "tenant" : "landlord"}
+        /* Cased, not passed through. A lead arrives from a portal or a form
+           with whatever casing the sender used, and "Hi james," is not a
+           thing anybody sends. And `agent` sometimes holds an EMAIL — the
+           first preview signed a landlord email off as
+           james@therecruitmentexperts.co.uk, which nobody would do. */
         merge={{
-          name: lead.name,
-          firstName: (lead.name ?? "").trim().split(/\s+/)[0],
+          name: properName(lead.name),
+          firstName: firstNameOf(lead.name),
           address: contact.area || lead.preferred || lead.area,
-          agent: lead.agent === "Unassigned" ? "" : lead.agent,
+          agent: lead.agent === "Unassigned" ? "" : agentName(lead.agent),
         }}
       />
 

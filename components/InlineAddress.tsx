@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * The record-row version of the address lookup.
@@ -33,6 +34,26 @@ export default function InlineAddress({
   /* Shown floating, never in flow — this lives in a 42px row that must not
      change height. Silent failure is still worse than a cramped explanation. */
   const [problem, setProblem] = useState<string | null>(null);
+  /**
+   * WHERE TO DRAW THE DROPDOWN, IN VIEWPORT COORDINATES.
+   *
+   * It used to be `absolute top-full` inside the field. That is correct
+   * everywhere except the one place this component is actually used: DetailRow
+   * wraps it in `overflow-hidden` — deliberately, to stop a long address
+   * running under the property column beside it — and an absolutely positioned
+   * child drawn BELOW a 42px row is entirely outside that box, so it was
+   * clipped out of existence.
+   *
+   * Nothing appeared: not the suggestions, not the error message, which is why
+   * a broken lookup and a working one looked identical. James spotted it by
+   * noticing New Lead works, and New Lead's field has no clipping ancestor.
+   *
+   * So it is portalled to the body and positioned from the input's own rect.
+   * That is immune to this ancestor and to any future one, which matters more
+   * than it sounds: the next person to add `overflow-hidden` for a layout
+   * reason would otherwise break this again and never know.
+   */
+  const [rect, setRect] = useState<{ left: number; top: number; width: number } | null>(null);
   const ref = useRef<HTMLInputElement>(null);
   const box = useRef<HTMLDivElement>(null);
 
@@ -40,6 +61,27 @@ export default function InlineAddress({
   useEffect(() => {
     if (editing) ref.current?.focus();
   }, [editing]);
+
+  /* Measured while open, and re-measured on scroll and resize — a panel fixed
+     to the viewport must follow the field it belongs to, or it detaches and
+     floats over the page as the drawer scrolls underneath it. */
+  useEffect(() => {
+    if (!editing) {
+      setRect(null);
+      return;
+    }
+    const measure = () => {
+      const r = ref.current?.getBoundingClientRect();
+      if (r) setRect({ left: r.left, top: r.bottom + 4, width: Math.max(r.width, 320) });
+    };
+    measure();
+    window.addEventListener("scroll", measure, true);
+    window.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("scroll", measure, true);
+      window.removeEventListener("resize", measure);
+    };
+  }, [editing, options.length, problem]);
 
   // Debounced lookup while typing — same 320ms as the big field, because a
   // lookup per keystroke is a lookup you pay for per keystroke.
@@ -137,30 +179,47 @@ export default function InlineAddress({
         }}
         className={`-mx-1 w-full border-b-[1.5px] border-accent-dark bg-transparent px-1 outline-none ${className}`}
       />
-      {problem && options.length === 0 && (
-        <p className="fade-up absolute left-0 top-full z-30 mt-1 w-[320px] rounded-lg border border-line/80 bg-card px-2.5 py-1.5 text-[10.5px] leading-relaxed text-accent-dark shadow-[0_12px_32px_-12px_rgba(16,16,20,0.3)]">
-          {problem} What you type still saves.
-        </p>
-      )}
-      {options.length > 0 && (
-        <ul className="fade-up absolute left-0 top-full z-30 mt-1 max-h-52 w-[320px] overflow-y-auto rounded-xl border border-line/80 bg-card py-1 shadow-[0_12px_32px_-12px_rgba(16,16,20,0.3)]">
-          {options.map((o) => (
-            <li key={o.id}>
-              <button
-                type="button"
-                // mousedown, not click: it fires before the input's blur.
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  void choose(o);
-                }}
-                className="block w-full px-3 py-1.5 text-left text-[12px] transition-colors hover:bg-page"
-              >
-                {o.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      {/* PORTALLED, so no ancestor's overflow can hide it. z-[200] clears the
+          lead drawer, which is z-[150]. */}
+      {rect &&
+        typeof document !== "undefined" &&
+        problem &&
+        options.length === 0 &&
+        createPortal(
+          <p
+            style={{ left: rect.left, top: rect.top, width: rect.width }}
+            className="fade-up fixed z-[200] rounded-lg border border-line/80 bg-card px-2.5 py-1.5 text-[10.5px] leading-relaxed text-accent-dark shadow-[0_12px_32px_-12px_rgba(16,16,20,0.3)]"
+          >
+            {problem} What you type still saves.
+          </p>,
+          document.body
+        )}
+      {rect &&
+        typeof document !== "undefined" &&
+        options.length > 0 &&
+        createPortal(
+          <ul
+            style={{ left: rect.left, top: rect.top, width: rect.width }}
+            className="fade-up fixed z-[200] max-h-52 overflow-y-auto rounded-xl border border-line/80 bg-card py-1 shadow-[0_12px_32px_-12px_rgba(16,16,20,0.3)]"
+          >
+            {options.map((o) => (
+              <li key={o.id}>
+                <button
+                  type="button"
+                  // mousedown, not click: it fires before the input's blur.
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    void choose(o);
+                  }}
+                  className="block w-full px-3 py-1.5 text-left text-[12px] transition-colors hover:bg-page"
+                >
+                  {o.label}
+                </button>
+              </li>
+            ))}
+          </ul>,
+          document.body
+        )}
     </div>
   );
 }
