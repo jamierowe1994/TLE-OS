@@ -12,6 +12,7 @@
 // locked card unless PRETENANCY_EMAILS (or admin — Susan can look in).
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { createPortal } from "react-dom";
 import BrandMark from "@/components/business/BrandMark";
 import PasswordInput from "@/components/business/PasswordInput";
@@ -937,6 +938,24 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
                 </span>
               ) : null}
             </button>
+            {/* The PLC queue is a SECOND inbox, not a stage of this board.
+                This board follows Propoly deals through their pipeline; a PLC
+                pack is an agent waiting on an answer from Kirstie, with its own
+                clock and its own ordering (longest wait first, always). Folding
+                it in as another stage tab would have meant either sorting it
+                wrongly or sorting the whole board wrongly. */}
+            <Link
+              href="/admin/pre-tenancy/plc"
+              className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30"
+            >
+              <span className="text-accent">
+                {/* checklist, not a made-up name. DoodleIcon takes a plain
+                    string and renders nothing at all for one it does not have,
+                    so an invented name fails silently and looks like a CSS bug. */}
+                <DoodleIcon name="checklist" size={15} />
+              </span>
+              PLC queue
+            </Link>
             <div className="ml-auto">
               <ProfileMenu
                 user={user}
