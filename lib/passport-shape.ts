@@ -182,8 +182,8 @@ export const SECTIONS: {
   },
   {
     key: "history",
-    title: "Where you've rented",
-    blurb: "Whether you have rented before, and whether the rent was paid on time.",
+    title: "Current rental",
+    blurb: "Where you are now, and whether the rent has been paid on time.",
     stamp: "HISTORY",
     done: (d) => Boolean(d.currentAddress.trim()) && d.rentedLast12Months !== null,
   },
@@ -199,4 +199,34 @@ export const SECTIONS: {
 export function completeness(d: PassportData): { done: number; total: number; pct: number } {
   const done = SECTIONS.filter((s) => s.done(d)).length;
   return { done, total: SECTIONS.length, pct: Math.round((done / SECTIONS.length) * 100) };
+}
+
+/**
+ * The bar at the top, measured in ANSWERS rather than sections.
+ *
+ * James wanted it to start part-filled so somebody arrives already underway
+ * rather than at zero. Counting answers does that honestly, without inventing
+ * credit: the invitation seeds their name and email, so the bar genuinely
+ * begins around a fifth of the way along because a fifth of page one is
+ * genuinely already filled in.
+ *
+ * That distinction matters. A bar with a hardcoded floor is a bar that lies at
+ * exactly the moment somebody is deciding whether this is worth their time, and
+ * it stops moving for their first few answers - which reads as broken.
+ *
+ * Conditionals are excluded: a share code is only asked of people who need one,
+ * and a credit note only of people who said yes. Counting them would mean a
+ * British passport holder with clean credit could never reach 100%.
+ */
+export function answered(d: PassportData): { done: number; total: number; pct: number } {
+  const optional = new Set<keyof PassportData>([
+    "knownAs", "shareCode", "savings", "coOccupantIncomes", "previousAddress",
+    "adverseCreditNote", "petsNote", "rentOnTime", "landlordRef", "numChildren",
+  ]);
+  const keys = (Object.keys(EMPTY_PASSPORT) as (keyof PassportData)[]).filter((k) => !optional.has(k));
+  const filled = keys.filter((k) => {
+    const v = d[k];
+    return typeof v === "boolean" ? true : typeof v === "string" && v.trim() !== "";
+  }).length;
+  return { done: filled, total: keys.length, pct: Math.round((filled / keys.length) * 100) };
 }

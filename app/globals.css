@@ -781,3 +781,18 @@ h1, h2, h3, h4, h5 {
 @media (prefers-reduced-motion: reduce) {
   .board-loading-art { animation: none; }
 }
+
+/* One passport block sliding in as the last slides out. The direction comes
+   from --from, set inline, so Back reads as going backwards rather than as
+   another step forwards - the animation is the only thing telling you which
+   way you moved. */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(var(--from, 28px)); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  @keyframes slideIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+}

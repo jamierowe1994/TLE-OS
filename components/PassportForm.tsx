@@ -6,6 +6,7 @@ import {
   APPLICANT_TYPES,
   EMPTY_PASSPORT,
   SECTIONS,
+  answered,
   completeness,
   householdIncome,
   money,
@@ -18,36 +19,41 @@ import {
  * ── It saves as they type, and says so ────────────────────────────────────
  *
  * Nobody finishes this in one sitting - it asks for a share code and a
- * landlord's address, which are in other places. So there is no Save button to
+ * landlord's address, which live in other places. So there is no Save button to
  * miss: every change is written after a pause, and the state is shown. A form
  * this long with a single Save at the bottom loses somebody's twenty minutes
  * the first time a phone rings.
  *
- * ── The passport is the progress bar ──────────────────────────────────────
+ * ── One block at a time ───────────────────────────────────────────────────
  *
- * There is no separate percentage. The book fills in beside them and each
- * finished section earns a stamp, which is the same information with a reason
- * to carry on. Stamps come from SECTIONS.done, the same function the server
- * uses, so the picture cannot disagree with the record.
+ * Six questions on screen is a form; thirty is a wall, and people bounce off a
+ * wall. So each section is its own step and the next slides in as the last
+ * slides out. The cost is real - you cannot see the whole thing at once - so
+ * the steps are named across the top, any of them can be jumped to, and nothing
+ * is ever gated behind finishing the one before it. Somebody who cannot find
+ * their share code must be able to carry on and come back.
+ *
+ * ── The bar starts part-filled, honestly ──────────────────────────────────
+ *
+ * It counts ANSWERS, not sections, so the name and email seeded from the
+ * invitation genuinely put somebody about a fifth of the way along before they
+ * type anything. A hardcoded floor would have done the same job and lied at
+ * exactly the moment somebody is deciding whether this is worth their time -
+ * and it would then sit still for their first few answers, which reads as
+ * broken.
  */
 
-const input =
-  "w-full rounded-xl border border-line/80 bg-transparent px-3.5 py-2.5 text-[14px] outline-none transition-colors focus:border-ink";
+const RED = "#e31f36";
 
-function Field({
-  label,
-  hint,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  children: React.ReactNode;
-}) {
+const input =
+  "w-full rounded-xl border border-line/80 bg-transparent px-4 py-3 text-[15px] outline-none transition-colors focus:border-ink";
+
+function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-[13px] font-semibold">{label}</span>
-      {hint && <span className="mt-0.5 block text-[11.5px] leading-relaxed text-muted">{hint}</span>}
-      <div className="mt-1.5">{children}</div>
+      <span className="text-[14px] font-semibold">{label}</span>
+      {hint && <span className="mt-0.5 block text-[12.5px] leading-relaxed text-muted">{hint}</span>}
+      <div className="mt-2">{children}</div>
     </label>
   );
 }
@@ -67,9 +73,9 @@ function YesNo({
 }) {
   return (
     <div>
-      <span className="text-[13px] font-semibold">{label}</span>
-      {hint && <span className="mt-0.5 block text-[11.5px] leading-relaxed text-muted">{hint}</span>}
-      <div className="mt-1.5 flex gap-2">
+      <span className="text-[14px] font-semibold">{label}</span>
+      {hint && <span className="mt-0.5 block text-[12.5px] leading-relaxed text-muted">{hint}</span>}
+      <div className="mt-2 flex gap-2.5">
         {[
           [true, "Yes"],
           [false, "No"],
@@ -78,10 +84,8 @@ function YesNo({
             key={String(v)}
             type="button"
             onClick={() => onChange(v as boolean)}
-            className={`rounded-full border px-5 py-1.5 text-[13px] transition-colors ${
-              value === v
-                ? "border-ink bg-ink text-page"
-                : "border-line/80 hover:border-ink/40"
+            className={`min-w-[92px] rounded-full border px-6 py-2 text-[14px] transition-colors ${
+              value === v ? "border-ink bg-ink text-page" : "border-line/80 hover:border-ink/40"
             }`}
           >
             {text}
@@ -89,39 +93,6 @@ function YesNo({
         ))}
       </div>
     </div>
-  );
-}
-
-function Card({
-  index,
-  title,
-  blurb,
-  done,
-  children,
-}: {
-  index: number;
-  title: string;
-  blurb: string;
-  done: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-2xl border border-line/80 bg-panel p-5">
-      <div className="flex items-baseline gap-3">
-        <span
-          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold transition-colors ${
-            done ? "bg-ink text-page" : "border border-line/80 text-muted"
-          }`}
-        >
-          {done ? "✓" : index}
-        </span>
-        <div className="min-w-0">
-          <h2 className="text-[16px] leading-tight">{title}</h2>
-          <p className="mt-0.5 text-[12px] leading-relaxed text-muted">{blurb}</p>
-        </div>
-      </div>
-      <div className="mt-4 space-y-4">{children}</div>
-    </section>
   );
 }
 
@@ -137,15 +108,17 @@ export default function PassportForm({
   const [d, setD] = useState<PassportData>({ ...EMPTY_PASSPORT, ...initial });
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [submitted, setSubmitted] = useState(Boolean(submittedAt));
+  const [step, setStep] = useState(0);
+  /** Which way the next panel comes in from, so Back reads as going back. */
+  const [dir, setDir] = useState<1 | -1>(1);
   const first = useRef(true);
 
   const set = <K extends keyof PassportData>(k: K, v: PassportData[K]) =>
     setD((cur) => ({ ...cur, [k]: v }));
 
   /* Debounced autosave. The guard on the first render matters: without it the
-     page saves the moment it loads, which overwrites a record with what was
-     just read from it - harmless here, and the habit that corrupts one
-     elsewhere. */
+     page saves the moment it loads, writing back what it just read - harmless
+     here, and the habit that corrupts a record elsewhere. */
   const save = useCallback(
     async (next: PassportData) => {
       setState("saving");
@@ -173,8 +146,16 @@ export default function PassportForm({
   }, [d, save]);
 
   const { done, total } = completeness(d);
+  const bar = answered(d);
   const household = householdIncome(d);
   const allDone = done === total;
+  const last = step === SECTIONS.length - 1;
+
+  function go(to: number) {
+    setDir(to > step ? 1 : -1);
+    setStep(Math.max(0, Math.min(SECTIONS.length - 1, to)));
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   async function finish() {
     await save(d);
@@ -184,264 +165,284 @@ export default function PassportForm({
     setSubmitted(true);
   }
 
+  const panels = [
+    <>
+      <Field label="Full legal name" hint="As it appears on your passport or driving licence, so referencing matches first time.">
+        <input className={input} value={d.legalName} onChange={(e) => set("legalName", e.target.value)} />
+      </Field>
+      <Field label="Known as" hint="Optional, if you go by something else.">
+        <input className={input} value={d.knownAs} onChange={(e) => set("knownAs", e.target.value)} />
+      </Field>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="Date of birth">
+          <input type="date" className={input} value={d.dob} onChange={(e) => set("dob", e.target.value)} />
+        </Field>
+        <Field label="Nationality">
+          <input className={input} value={d.nationality} onChange={(e) => set("nationality", e.target.value)} />
+        </Field>
+      </div>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="Email">
+          <input type="email" className={input} value={d.email} onChange={(e) => set("email", e.target.value)} />
+        </Field>
+        <Field label="Mobile">
+          <input type="tel" className={input} value={d.mobile} onChange={(e) => set("mobile", e.target.value)} />
+        </Field>
+      </div>
+    </>,
+
+    <>
+      <YesNo
+        label="Do you have a British or Irish passport?"
+        hint="Every landlord in England has to check this by law. This one question decides how."
+        value={d.hasBritishPassport}
+        onChange={(v) => set("hasBritishPassport", v)}
+      />
+      {d.hasBritishPassport === false && (
+        <Field
+          label="Your share code"
+          hint="Free from gov.uk/prove-right-to-rent. It takes about two minutes and lasts 90 days. With this we can do the whole check online, today."
+        >
+          <input
+            className={input}
+            value={d.shareCode}
+            placeholder="e.g. W12 A34 B56"
+            onChange={(e) => set("shareCode", e.target.value)}
+          />
+        </Field>
+      )}
+      {d.hasBritishPassport === true && (
+        <p className="rounded-xl border border-line/70 bg-card p-4 text-[13px] leading-relaxed text-muted">
+          That settles it, and there is nothing to upload. The law says the passport has to be seen
+          in person, so your agent will check it when you meet - it takes a moment.
+        </p>
+      )}
+    </>,
+
+    <>
+      <Field label="What best describes you?">
+        <select className={input} value={d.applicantType} onChange={(e) => set("applicantType", e.target.value)}>
+          <option value="">Choose…</option>
+          {APPLICANT_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="Annual income, before tax">
+          <input className={input} value={d.annualIncome} placeholder="32,000" onChange={(e) => set("annualIncome", e.target.value)} />
+        </Field>
+        <Field label="Savings" hint="Optional, and it is what rescues a borderline application.">
+          <input className={input} value={d.savings} placeholder="4,000" onChange={(e) => set("savings", e.target.value)} />
+        </Field>
+      </div>
+    </>,
+
+    <>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Field label="Adults, including you">
+          <input type="number" min={1} className={input} value={d.numAdults} onChange={(e) => set("numAdults", e.target.value)} />
+        </Field>
+        <Field label="Children">
+          <input type="number" min={0} className={input} value={d.numChildren} onChange={(e) => set("numChildren", e.target.value)} />
+        </Field>
+      </div>
+      <Field label="What the other adults earn" hint="One per line, with a name if you like. Their income counts towards the total.">
+        <textarea
+          rows={3}
+          className={`${input} resize-none leading-relaxed`}
+          value={d.coOccupantIncomes}
+          placeholder={"Sam - 24,000\nAlex - 19,500"}
+          onChange={(e) => set("coOccupantIncomes", e.target.value)}
+        />
+      </Field>
+      {household.total !== null && (
+        <p className="rounded-xl border border-line/70 bg-card p-4 text-[13px] leading-relaxed">
+          <strong>Household income: £{household.total.toLocaleString("en-GB")}</strong>
+          <span className="text-muted">
+            {" "}
+            from {household.from} {household.from === 1 ? "figure" : "figures"}. If that looks wrong,
+            check the lines above - we only count what looks like an amount.
+          </span>
+        </p>
+      )}
+    </>,
+
+    <>
+      <Field label="Your current address">
+        <input className={input} value={d.currentAddress} onChange={(e) => set("currentAddress", e.target.value)} />
+      </Field>
+      <YesNo
+        label="Have you rented in the last 12 months?"
+        value={d.rentedLast12Months}
+        onChange={(v) => set("rentedLast12Months", v)}
+      />
+      {d.rentedLast12Months && (
+        <>
+          <YesNo
+            label="Was the rent always paid on time?"
+            hint="If not, say so. It is far better coming from you than from a reference."
+            value={d.rentOnTime}
+            onChange={(v) => set("rentOnTime", v)}
+          />
+          <YesNo
+            label="Can your landlord give a reference?"
+            value={d.landlordRef}
+            onChange={(v) => set("landlordRef", v)}
+          />
+        </>
+      )}
+      <Field label="Previous address" hint="Optional, if you have moved in the last three years.">
+        <input className={input} value={d.previousAddress} onChange={(e) => set("previousAddress", e.target.value)} />
+      </Field>
+    </>,
+
+    <>
+      <YesNo
+        label="Any adverse credit? CCJs, defaults or bankruptcy."
+        value={d.adverseCredit}
+        onChange={(v) => set("adverseCredit", v)}
+      />
+      {d.adverseCredit && (
+        <Field label="Tell us about it" hint="A couple of sentences. Context helps, and it is rarely a no on its own.">
+          <textarea
+            rows={3}
+            className={`${input} resize-none leading-relaxed`}
+            value={d.adverseCreditNote}
+            onChange={(e) => set("adverseCreditNote", e.target.value)}
+          />
+        </Field>
+      )}
+      <YesNo label="Could you provide a guarantor if one were needed?" value={d.guarantor} onChange={(v) => set("guarantor", v)} />
+      <YesNo label="Any pets?" value={d.pets} onChange={(v) => set("pets", v)} />
+      {d.pets && (
+        <Field label="What kind?">
+          <input className={input} value={d.petsNote} onChange={(e) => set("petsNote", e.target.value)} />
+        </Field>
+      )}
+      <YesNo label="Does anyone moving in smoke?" value={d.smoker} onChange={(v) => set("smoker", v)} />
+    </>,
+  ];
+
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:py-12">
-      <header className="mb-7">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
-          The Letting Experts
-        </p>
-        <h1 className="hand mt-1 text-[30px] leading-tight sm:text-[36px]">Your tenant passport</h1>
-        <p className="mt-2 max-w-xl text-[13.5px] leading-relaxed text-muted">
-          Fill this in once and it is ready for every property you apply for with us. It saves as
-          you go, so you can stop and come back to it. Nothing here is shared with a landlord
-          unless you apply for their property.
-        </p>
-      </header>
+    <div className="mx-auto w-full max-w-[1500px] px-5 py-8 sm:px-8 lg:px-12 lg:py-10">
+      {/* ── The bar, across the whole width ── */}
+      <div className="mb-8">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+            The Letting Experts · Tenant Passport
+          </p>
+          <p className="text-[12.5px] text-muted">
+            {state === "saving" ? "Saving…" : state === "error" ? "Not saved - check your connection" : `${bar.pct}% complete`}
+          </p>
+        </div>
+        <div className="mt-2 h-[6px] w-full overflow-hidden rounded-full bg-line/50">
+          <div
+            className="h-full rounded-full transition-[width] duration-500 ease-out"
+            style={{ width: `${Math.max(bar.pct, 3)}%`, background: RED }}
+          />
+        </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="order-2 space-y-4 lg:order-1">
-          <Card index={1} title={SECTIONS[0].title} blurb={SECTIONS[0].blurb} done={SECTIONS[0].done(d)}>
-            <Field label="Full legal name" hint="As it appears on your passport or driving licence.">
-              <input className={input} value={d.legalName} onChange={(e) => set("legalName", e.target.value)} />
-            </Field>
-            <Field label="Known as" hint="Optional, if you go by something else.">
-              <input className={input} value={d.knownAs} onChange={(e) => set("knownAs", e.target.value)} />
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Date of birth">
-                <input type="date" className={input} value={d.dob} onChange={(e) => set("dob", e.target.value)} />
-              </Field>
-              <Field label="Nationality">
-                <input className={input} value={d.nationality} onChange={(e) => set("nationality", e.target.value)} />
-              </Field>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Email">
-                <input type="email" className={input} value={d.email} onChange={(e) => set("email", e.target.value)} />
-              </Field>
-              <Field label="Mobile">
-                <input type="tel" className={input} value={d.mobile} onChange={(e) => set("mobile", e.target.value)} />
-              </Field>
-            </div>
-          </Card>
-
-          <Card index={2} title={SECTIONS[1].title} blurb={SECTIONS[1].blurb} done={SECTIONS[1].done(d)}>
-            <YesNo
-              label="Do you have a British or Irish passport?"
-              value={d.hasBritishPassport}
-              onChange={(v) => set("hasBritishPassport", v)}
-            />
-            {d.hasBritishPassport === false && (
-              <Field
-                label="Your share code"
-                hint="Get one free at gov.uk/prove-right-to-rent. It takes about two minutes and lasts 90 days."
+        {/* The steps, nameable and jumpable. Nothing is gated: somebody who
+            cannot find their share code has to be able to carry on. */}
+        <nav className="mt-4 flex flex-wrap gap-x-1.5 gap-y-2">
+          {SECTIONS.map((s, i) => {
+            const isDone = s.done(d);
+            const here = i === step;
+            return (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => go(i)}
+                className={`flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[12.5px] transition-colors ${
+                  here ? "border-ink bg-ink text-page" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
+                }`}
               >
-                <input
-                  className={input}
-                  value={d.shareCode}
-                  placeholder="e.g. W12 A34 B56"
-                  onChange={(e) => set("shareCode", e.target.value)}
-                />
-              </Field>
-            )}
-            {d.hasBritishPassport === true && (
-              <p className="rounded-xl border border-line/70 bg-card p-3 text-[12px] leading-relaxed text-muted">
-                That settles it. We will check the passport itself when we meet you.
-              </p>
-            )}
-          </Card>
-
-          <Card index={3} title={SECTIONS[2].title} blurb={SECTIONS[2].blurb} done={SECTIONS[2].done(d)}>
-            <Field label="What best describes you?">
-              <select
-                className={input}
-                value={d.applicantType}
-                onChange={(e) => set("applicantType", e.target.value)}
-              >
-                <option value="">Choose…</option>
-                {APPLICANT_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Annual income, before tax">
-                <input
-                  className={input}
-                  value={d.annualIncome}
-                  placeholder="32,000"
-                  onChange={(e) => set("annualIncome", e.target.value)}
-                />
-              </Field>
-              <Field label="Savings" hint="Optional, and it helps a borderline application.">
-                <input
-                  className={input}
-                  value={d.savings}
-                  placeholder="4,000"
-                  onChange={(e) => set("savings", e.target.value)}
-                />
-              </Field>
-            </div>
-          </Card>
-
-          <Card index={4} title={SECTIONS[3].title} blurb={SECTIONS[3].blurb} done={SECTIONS[3].done(d)}>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Adults, including you">
-                <input
-                  type="number"
-                  min={1}
-                  className={input}
-                  value={d.numAdults}
-                  onChange={(e) => set("numAdults", e.target.value)}
-                />
-              </Field>
-              <Field label="Children">
-                <input
-                  type="number"
-                  min={0}
-                  className={input}
-                  value={d.numChildren}
-                  onChange={(e) => set("numChildren", e.target.value)}
-                />
-              </Field>
-            </div>
-            <Field
-              label="What the other adults earn"
-              hint="One per line, with a name if you like. Their income counts towards the total."
-            >
-              <textarea
-                rows={3}
-                className={`${input} resize-none leading-relaxed`}
-                value={d.coOccupantIncomes}
-                placeholder={"Sam - 24,000\nAlex - 19,500"}
-                onChange={(e) => set("coOccupantIncomes", e.target.value)}
-              />
-            </Field>
-            {household.total !== null && (
-              <p className="rounded-xl border border-line/70 bg-card p-3 text-[12px] leading-relaxed">
-                <strong>
-                  Household income: £{household.total.toLocaleString("en-GB")}
-                </strong>
-                <span className="text-muted">
-                  {" "}
-                  from {household.from} {household.from === 1 ? "figure" : "figures"}. If that looks
-                  wrong, check the lines above - we only count what looks like an amount.
+                <span
+                  className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${
+                    isDone ? "text-page" : here ? "bg-page/25 text-page" : "bg-line/60 text-muted"
+                  }`}
+                  style={isDone ? { background: RED } : undefined}
+                >
+                  {isDone ? "✓" : i + 1}
                 </span>
-              </p>
-            )}
-          </Card>
+                {s.title}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
 
-          <Card index={5} title={SECTIONS[4].title} blurb={SECTIONS[4].blurb} done={SECTIONS[4].done(d)}>
-            <Field label="Your current address">
-              <input
-                className={input}
-                value={d.currentAddress}
-                onChange={(e) => set("currentAddress", e.target.value)}
-              />
-            </Field>
-            <YesNo
-              label="Have you rented in the last 12 months?"
-              value={d.rentedLast12Months}
-              onChange={(v) => set("rentedLast12Months", v)}
-            />
-            {d.rentedLast12Months && (
-              <>
-                <YesNo
-                  label="Was the rent always paid on time?"
-                  hint="If not, say so. It is far better coming from you than from a reference."
-                  value={d.rentOnTime}
-                  onChange={(v) => set("rentOnTime", v)}
-                />
-                <YesNo
-                  label="Can your landlord give a reference?"
-                  value={d.landlordRef}
-                  onChange={(v) => set("landlordRef", v)}
-                />
-              </>
-            )}
-            <Field label="Previous address" hint="Optional, if you have moved in the last three years.">
-              <input
-                className={input}
-                value={d.previousAddress}
-                onChange={(e) => set("previousAddress", e.target.value)}
-              />
-            </Field>
-          </Card>
+      {/* ── Copy hard left, passport hard right ── */}
+      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_440px] lg:gap-14">
+        <div className="order-2 min-w-0 lg:order-1">
+          {/* key on the step so React remounts and the animation replays. */}
+          <div
+            key={step}
+            style={{
+              animation: "slideIn 340ms cubic-bezier(0.22,1,0.36,1) both",
+              ["--from" as string]: `${dir * 28}px`,
+            }}
+          >
+            <h1 className="hand text-[34px] leading-tight sm:text-[42px]">{SECTIONS[step].title}</h1>
+            <p className="mt-2 max-w-2xl text-[14.5px] leading-relaxed text-muted">
+              {SECTIONS[step].blurb}
+            </p>
+            <div className="mt-7 max-w-2xl space-y-6">{panels[step]}</div>
+          </div>
 
-          <Card index={6} title={SECTIONS[5].title} blurb={SECTIONS[5].blurb} done={SECTIONS[5].done(d)}>
-            <YesNo
-              label="Any adverse credit? CCJs, defaults or bankruptcy."
-              value={d.adverseCredit}
-              onChange={(v) => set("adverseCredit", v)}
-            />
-            {d.adverseCredit && (
-              <Field label="Tell us about it" hint="A couple of sentences. Context helps, and it is rarely a no on its own.">
-                <textarea
-                  rows={3}
-                  className={`${input} resize-none leading-relaxed`}
-                  value={d.adverseCreditNote}
-                  onChange={(e) => set("adverseCreditNote", e.target.value)}
-                />
-              </Field>
+          <div className="mt-9 flex max-w-2xl flex-wrap items-center gap-3">
+            {step > 0 && (
+              <button
+                type="button"
+                onClick={() => go(step - 1)}
+                className="rounded-xl border border-line/80 px-6 py-3 text-[14px] transition-colors hover:border-ink"
+              >
+                Back
+              </button>
             )}
-            <YesNo
-              label="Could you provide a guarantor if one were needed?"
-              value={d.guarantor}
-              onChange={(v) => set("guarantor", v)}
-            />
-            <YesNo label="Any pets?" value={d.pets} onChange={(v) => set("pets", v)} />
-            {d.pets && (
-              <Field label="What kind?">
-                <input className={input} value={d.petsNote} onChange={(e) => set("petsNote", e.target.value)} />
-              </Field>
-            )}
-            <YesNo label="Does anyone moving in smoke?" value={d.smoker} onChange={(v) => set("smoker", v)} />
-          </Card>
-
-          <div className="rounded-2xl border border-line/80 bg-panel p-5">
-            {submitted ? (
-              <p className="text-[13.5px] leading-relaxed">
-                <strong>Your passport is with us.</strong> You can still change anything above and it
-                updates straight away - come back to this link any time.
+            {!last ? (
+              <button
+                type="button"
+                onClick={() => go(step + 1)}
+                className="rounded-xl bg-ink px-8 py-3 text-[14px] font-semibold text-page"
+              >
+                Next
+              </button>
+            ) : submitted ? (
+              <p className="text-[14px] leading-relaxed">
+                <strong>Your passport is with us.</strong> Change anything you like - it updates
+                straight away, and this link keeps working.
               </p>
             ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={finish}
-                  disabled={!allDone}
-                  className={`w-full rounded-xl py-3.5 text-[14px] font-semibold transition-opacity ${
-                    allDone ? "bg-ink text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
-                  }`}
-                >
-                  {allDone ? "That's my passport done" : `${total - done} to go`}
-                </button>
-                <p className="mt-2 text-center text-[11.5px] leading-relaxed text-muted">
-                  Everything is already saved. This just tells us you have finished.
-                </p>
-              </>
+              <button
+                type="button"
+                onClick={finish}
+                disabled={!allDone}
+                className={`rounded-xl px-8 py-3 text-[14px] font-semibold transition-opacity ${
+                  allDone ? "bg-ink text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
+                }`}
+              >
+                {allDone ? "That's my passport done" : `${total - done} section${total - done === 1 ? "" : "s"} to go`}
+              </button>
             )}
+            <span className="text-[12.5px] text-muted">Everything saves as you go.</span>
           </div>
         </div>
 
-        {/* The book. Sticky on a wide screen so it fills in beside them; above
-            the form on a phone, where a sticky panel would eat the keyboard. */}
         <div className="order-1 lg:order-2">
           <div className="lg:sticky lg:top-8">
             <PassportBook data={d} />
-            <p className="mt-3 text-center text-[11.5px] text-muted">
-              {state === "saving"
-                ? "Saving…"
-                : state === "error"
-                  ? "Not saved - check your connection."
-                  : `${done} of ${total} stamps`}
+            <p className="mt-4 text-center text-[12px] leading-relaxed text-muted">
+              {done} of {total} stamps. Nothing here is shared with a landlord unless you apply for
+              their property.
             </p>
             {money(d.annualIncome) !== null && (
-              <p className="mt-1 text-center text-[11px] leading-relaxed text-muted">
-                Affordability is worked out per property when you apply, so this passport does not
-                rule anything in or out on its own.
+              <p className="mt-1.5 text-center text-[11.5px] leading-relaxed text-muted">
+                Affordability is worked out per property when you apply, so this does not rule
+                anything in or out on its own.
               </p>
             )}
           </div>
