@@ -12,6 +12,7 @@ import {
 import { missingDocuments, PLC_CHECKS, scanSummary, sortFindings } from "@/lib/plc";
 import { scanCase, scanConfigured } from "@/lib/plc-scan";
 import { actorName } from "@/lib/plc-actor";
+import { recordDecision, recordRecommendation } from "@/lib/plc-shadow";
 
 /**
  * GET   /api/plc/<id>  → the case, its findings in reading order, what's short
@@ -106,20 +107,38 @@ export async function POST(req: NextRequest, ctx: Ctx) {
            still lands in reviewing below rather than sticking on scanning
            forever: an unscannable pack is Kirstie's to read, not a dead end. */
         const busy = await markScanning(id);
-        let findings;
+        let outcome;
         try {
-          findings = await scanCase(busy);
+          outcome = await scanCase(busy);
         } catch (e) {
-          findings = [
-            {
-              checkId: "tenancy-agreement" as const,
-              level: "query" as const,
-              message: `The scan didn't finish — ${e instanceof Error ? e.message : "unknown error"}. Nothing below has been read automatically.`,
-              foundDate: null,
-            },
-          ];
+          outcome = {
+            findings: [
+              {
+                checkId: "tenancy-agreement" as const,
+                level: "query" as const,
+                message: `The scan didn't finish — ${e instanceof Error ? e.message : "unknown error"}. Nothing below has been read automatically.`,
+                foundDate: null,
+              },
+            ],
+            recommendation: null,
+          };
         }
-        const scanned = await recordScan(id, findings);
+        const scanned = await recordScan(id, outcome.findings);
+        /* The shadow log, written the moment the recommendation exists and
+           BEFORE anybody has seen it. That ordering is the measurement: a
+           prediction recorded after the decision is not a prediction.
+
+           A scan that threw records nothing rather than recording a guess -
+           there was no recommendation to be right or wrong about. */
+        if (outcome.recommendation) {
+          await recordRecommendation({
+            caseId: id,
+            address: scanned.address,
+            verdict: outcome.recommendation.verdict,
+            headline: outcome.recommendation.headline,
+            perCheck: outcome.recommendation.perCheck,
+          });
+        }
         return NextResponse.json({ ok: true, ...payload(scanned) });
       }
 
@@ -141,6 +160,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         }
         const by = await actorName(req, "Compliance");
         const decided = await decideCase(id, decision, by, body.note ?? "");
+        /* After the decision lands, never before. Recording cannot throw, so a
+           log failure can never cost Kirstie an approval. */
+        await recordDecision({ caseId: id, decision, decidedBy: by, note: body.note ?? "" });
         return NextResponse.json({ ok: true, ...payload(decided) });
       }
 

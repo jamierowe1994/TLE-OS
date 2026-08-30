@@ -979,6 +979,35 @@ CREATE TABLE IF NOT EXISTS os_plc_cases (
 -- state and the submission time that get indexed rather than the address.
 CREATE INDEX IF NOT EXISTS os_plc_cases_state ON os_plc_cases (state, submitted_at);
 CREATE INDEX IF NOT EXISTS os_plc_cases_agent ON os_plc_cases (lower(agent_email), created_at DESC);
+
+-- The shadow log: what the rules recommended, and what the person decided.
+--
+-- One row per case, written twice -- once when the scan finishes, once when
+-- somebody decides. Separate from os_plc_cases on purpose: a case is a live
+-- record that gets reopened, re-scanned and edited, while this is a measurement
+-- that must survive all of that unchanged. Keeping the prediction on the case
+-- would mean the thing being measured could overwrite its own score.
+--
+-- agreement is computed and stored rather than derived on read, so a later
+-- change to the comparison rules cannot silently rewrite history.
+--
+-- No CHECK constraints and no foreign key. Recording must never be able to
+-- fail a decision -- see lib/plc-shadow, which swallows its own errors for the
+-- same reason the audit trail does.
+CREATE TABLE IF NOT EXISTS os_plc_shadow (
+  case_id       TEXT PRIMARY KEY,
+  address       TEXT NOT NULL DEFAULT '',
+  recommended   TEXT,
+  headline      TEXT NOT NULL DEFAULT '',
+  per_check     JSONB NOT NULL DEFAULT '[]'::jsonb,
+  scanned_at    TIMESTAMPTZ,
+  decision      TEXT,
+  decided_by    TEXT,
+  decided_at    TIMESTAMPTZ,
+  decision_note TEXT NOT NULL DEFAULT '',
+  agreement     TEXT
+);
+CREATE INDEX IF NOT EXISTS os_plc_shadow_agreement ON os_plc_shadow (agreement, decided_at DESC);
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

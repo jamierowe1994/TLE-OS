@@ -11,7 +11,15 @@ import {
   type PlcCase,
   type PlcDocument,
 } from "@/lib/plc";
-import { judge, reasonsAsFindings, type DocFacts, type RuleResult } from "@/lib/plc-rules";
+import {
+  judge,
+  reasonsAsFindings,
+  recommend,
+  summarise,
+  type DocFacts,
+  type RuleResult,
+  type Verdict,
+} from "@/lib/plc-rules";
 
 /**
  * Reading the pack.
@@ -399,7 +407,11 @@ function readFacts(raw: unknown): DocFacts {
   };
 }
 
-async function scanOne(client: Anthropic, doc: PlcDocument, c: PlcCase): Promise<Finding[]> {
+async function scanOne(
+  client: Anthropic,
+  doc: PlcDocument,
+  c: PlcCase
+): Promise<{ findings: Finding[]; result: RuleResult }> {
   /* Rule reasons first, then the model's prose. Kirstie should meet the
      decision before the commentary. */
   let fetched: Fetched;
@@ -410,15 +422,19 @@ async function scanOne(client: Anthropic, doc: PlcDocument, c: PlcCase): Promise
        rather than a blocker: the file may be perfectly good and the fault
        ours. Silently dropping it would leave a check looking unexamined with
        no explanation. */
-    return [
-      {
-        checkId: doc.checkId,
-        level: "query",
-        message: `Couldn't read ${doc.name} — ${e instanceof Error ? e.message : "it wouldn't open"}. Worth opening by hand.`,
-        documentName: doc.name,
-        foundDate: null,
-      },
-    ];
+    const because = `it could not be opened — ${e instanceof Error ? e.message : "it would not read"}.`;
+    return {
+      findings: [
+        {
+          checkId: doc.checkId,
+          level: "query",
+          message: `Couldn't read ${doc.name} — ${e instanceof Error ? e.message : "it wouldn't open"}. Worth opening by hand.`,
+          documentName: doc.name,
+          foundDate: null,
+        },
+      ],
+      result: { verdict: "review", reasons: [{ verdict: "review", rule: "Could not be read", because }] },
+    };
   }
 
   const read = await readDocument(
@@ -426,7 +442,10 @@ async function scanOne(client: Anthropic, doc: PlcDocument, c: PlcCase): Promise
     { name: doc.name, media: fetched.media, base64: fetched.base64 },
     { checkId: doc.checkId, address: c.address, moveInDate: c.moveInDate }
   );
-  return [...reasonsAsFindings(doc.checkId, read.result, doc.name), ...read.observations];
+  return {
+    findings: [...reasonsAsFindings(doc.checkId, read.result, doc.name), ...read.observations],
+    result: read.result,
+  };
 }
 
 /**
@@ -438,8 +457,26 @@ async function scanOne(client: Anthropic, doc: PlcDocument, c: PlcCase): Promise
  * by the UI and a gap noticed by the scan should not look like different
  * kinds of thing.
  */
-export async function scanCase(c: PlcCase): Promise<Finding[]> {
+export type ScanOutcome = {
+  findings: Finding[];
+  /**
+   * What the rules would have said, per check and overall.
+   *
+   * Returned alongside the findings rather than derived from them, because the
+   * shadow log needs the recommendation as a VALUE it can compare against a
+   * human decision months later. Re-deriving it from prose findings would mean
+   * the log measures a parser rather than the rules.
+   */
+  recommendation: {
+    verdict: Verdict;
+    headline: string;
+    perCheck: { checkId: CheckId; verdict: Verdict; line: string }[];
+  };
+};
+
+export async function scanCase(c: PlcCase): Promise<ScanOutcome> {
   const findings: Finding[] = [];
+  const results: { checkId: CheckId; result: RuleResult }[] = [];
 
   for (const check of PLC_CHECKS) {
     if (check.scan === "none") continue;
@@ -454,6 +491,23 @@ export async function scanCase(c: PlcCase): Promise<Finding[]> {
       message: `Nothing filed for ${check.label}. ${check.needs}.`,
       foundDate: null,
     });
+    /* A missing document is a rule result too, so it reaches the shadow log
+       the same way an expired certificate does. A pack recommended as fine
+       because a check was simply absent is exactly the failure the log has to
+       be able to see. */
+    results.push({
+      checkId: check.id,
+      result: {
+        verdict: check.scan === "presence" ? "review" : "fail",
+        reasons: [
+          {
+            verdict: check.scan === "presence" ? "review" : "fail",
+            rule: "Nothing filed",
+            because: `nothing was filed for it. ${check.needs}.`,
+          },
+        ],
+      },
+    });
   }
 
   if (!scanConfigured()) {
@@ -464,7 +518,7 @@ export async function scanCase(c: PlcCase): Promise<Finding[]> {
         "The document reader isn't switched on in this environment, so nothing was read. Every document below needs checking by hand.",
       foundDate: null,
     });
-    return findings;
+    return { findings, recommendation: summariseAll(results) };
   }
 
   const client = new Anthropic();
@@ -475,7 +529,9 @@ export async function scanCase(c: PlcCase): Promise<Finding[]> {
      fail the whole scan rather than one document. */
   for (const doc of readable) {
     try {
-      findings.push(...(await scanOne(client, doc, c)));
+      const read = await scanOne(client, doc, c);
+      findings.push(...read.findings);
+      results.push({ checkId: doc.checkId, result: read.result });
     } catch (e) {
       findings.push({
         checkId: doc.checkId,
@@ -484,10 +540,35 @@ export async function scanCase(c: PlcCase): Promise<Finding[]> {
         documentName: doc.name,
         foundDate: null,
       });
+      /* A read that threw is a review, never a pass. Dropping it would let a
+         document nobody managed to open vanish from the recommendation. */
+      results.push({
+        checkId: doc.checkId,
+        result: {
+          verdict: "review",
+          reasons: [
+            { verdict: "review", rule: "Could not be read", because: `the reader failed on ${doc.name}.` },
+          ],
+        },
+      });
     }
   }
 
-  return findings;
+  return { findings, recommendation: summariseAll(results) };
+}
+
+/** Per-check one-liners plus the pack headline, in one place. */
+function summariseAll(results: { checkId: CheckId; result: RuleResult }[]): ScanOutcome["recommendation"] {
+  const overall = recommend(results);
+  return {
+    verdict: overall.verdict,
+    headline: overall.headline,
+    perCheck: results.map((r) => {
+      const label = checkById(r.checkId)?.label ?? r.checkId;
+      const s = summarise(label, r.result);
+      return { checkId: r.checkId, verdict: s.verdict, line: s.line };
+    }),
+  };
 }
 
 /** Which checks the scan genuinely looked at, for the screen to say so. */
