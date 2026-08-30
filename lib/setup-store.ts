@@ -167,14 +167,31 @@ export function useSetup(forceDemo = false): SetupStore {
     setView((v) => ({ ...v, state: applied }));
 
     if (current.db) {
-      try {
-        await fetch("/api/setup", {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(change),
-        });
-      } catch {
-        /* Kept on screen; the next load re-reads the server's opinion. */
+      /**
+       * Tried twice, and that is not belt-and-braces for its own sake.
+       *
+       * `finished: true` is the stamp the gate reads forever after. If it is
+       * lost to one flaky request, the person is walked through the whole
+       * new-starter wizard again on their next sign-in - which is the exact
+       * thing this write exists to prevent. A single retry turns the common
+       * transient failure into a non-event.
+       *
+       * Still best-effort by design: a step that genuinely fails to save is
+       * recoverable by walking it again, and blocking the screen on a spinner
+       * would make five questions feel like ten.
+       */
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const r = await fetch("/api/setup", {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(change),
+          });
+          if (r.ok) break;
+        } catch {
+          /* fall through to the retry */
+        }
+        if (attempt === 0) await new Promise((r) => setTimeout(r, 400));
       }
     } else if (change.reset) {
       clearDemo();

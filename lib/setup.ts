@@ -175,12 +175,41 @@ export function firstUnfinished(view: SetupView): SetupStepId | null {
 }
 
 /**
- * May this person into the OS?
+ * Has this person EVER finished setting up? The gate's question, and a
+ * one-way door.
  *
- * Only the REQUIRED steps count. Email being skipped is a complete answer to
- * the email question — "not yet" is a decision, and holding the door shut on
- * somebody whose 365 account isn't provisioned would strand them on day one.
+ * There used to be a `setupComplete` beside this that asked whether every
+ * required step was satisfied right now. It has been deleted rather than left
+ * unused, because it is exactly the function somebody would reach for when
+ * adding the next gate, and it is the wrong one. If you want "is this account
+ * currently in good order" - for a nudge, a banner, an admin column - build it
+ * out of `isStepDone` at the call site and be explicit that it is a live
+ * question. Do not resurrect a general-purpose one for a gate to grab.
+ *
+ * ── Why this is not `setupComplete` ───────────────────────────────────────
+ *
+ * The gate used to ask whether every required step was currently satisfied,
+ * and that was a bug with a fuse on it. `isStepDone("rex")` reads the live
+ * token table, and a REX session lasts fourteen days (lib/rex-user.ts). So an
+ * agent who took a fortnight off, or whose token simply aged out, would sign
+ * in and be redirected into the new-starter wizard - asked to choose an
+ * accent again, read the pre-launch explanation again, and generally told the
+ * product had forgotten them. James caught it the first time he signed in:
+ * "as soon as they've done the setup once, that will never happen again. Make
+ * that a hard rule."
+ *
+ * So it is a stamp, not a calculation. `finishedAt` is written once, when
+ * somebody presses the last button, and nothing re-derives it afterwards.
+ *
+ * ── What we give up, and why it is fine ───────────────────────────────────
+ *
+ * A lapsed REX connection no longer drags anybody back here. That is the
+ * point, but it does mean the disconnection has to be surfaced somewhere
+ * else - it shows on the profile's Connections tab, and an expiring session
+ * renews itself silently while somebody works. Onboarding is the wrong tool
+ * for "your sign-in expired": it is the tool for "you have never been here
+ * before", and that is true exactly once.
  */
-export function setupComplete(view: SetupView): boolean {
-  return STEP_ORDER.filter((id) => REQUIRED.has(id)).every((id) => isStepDone(id, view));
+export function setupFinished(view: SetupView): boolean {
+  return Boolean(view.state.finishedAt);
 }

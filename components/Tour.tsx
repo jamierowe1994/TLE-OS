@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { useSearchParams } from "next/navigation";
 import { stepsFor, type TourId, type TourStep } from "@/lib/tour";
 import { useSetup } from "@/lib/setup-store";
-import { setupComplete } from "@/lib/setup";
+import { setupFinished } from "@/lib/setup";
 
 /**
  * Showing a new agent round.
@@ -139,7 +139,11 @@ export default function Tour({
 
   useEffect(() => {
     if (!ready || tour || offered.current) return;
-    if (preview || asked || (setupComplete(view) && !view.state.tour)) {
+    /* Answered once, never asked again - `state.tour` records a skip as much
+       as a choice. Keyed off setupFinished for the same reason the gate is:
+       a lapsed REX sign-in is not a reason to start somebody's first day
+       over. */
+    if (preview || asked || (setupFinished(view) && !view.state.tour)) {
       offered.current = true;
       setChoosing(true);
     }

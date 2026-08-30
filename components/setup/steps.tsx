@@ -130,8 +130,13 @@ export function StepRex({
         this is connected there is nothing for it to show you.
       </Blurb>
 
-      <div className="my-7 flex justify-center text-ink">
+      {/* The running gag, and it only works because the next screen pays it
+          off. Set in the handwriting face and sized like a pencil note under a
+          drawing, so it reads as the artist signing it rather than as a caption
+          the product wrote about itself. */}
+      <div className="my-7 flex flex-col items-center gap-2.5 text-ink">
         <RexDino size={230} />
+        <p className="hand text-[11.5px] text-muted">This is the one James drew.</p>
       </div>
 
       {error && <Problem>{error}</Problem>}
@@ -212,13 +217,18 @@ export function StepEmail({
         and lands in your own Sent items.
       </Blurb>
 
-      <div className="my-7 flex justify-center">
+      {/* The payoff. Do not remove one of these without removing the other -
+          on its own, either line is a non-sequitur. */}
+      <div className="my-7 flex flex-col items-center gap-2.5">
         <img
           src="/illustrations/notioly/paper-airplane.png"
           alt=""
           aria-hidden
           className="art-figure h-44 w-auto object-contain"
         />
+        <p className="hand text-[11.5px] text-muted">
+          James did not draw this one, though.
+        </p>
       </div>
 
       {problem && <Problem>{problem}</Problem>}

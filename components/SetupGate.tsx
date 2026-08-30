@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSetup } from "@/lib/setup-store";
-import { setupComplete } from "@/lib/setup";
+import { setupFinished } from "@/lib/setup";
 
 /**
  * Nobody reaches the OS with an account that is not finished being set up.
@@ -37,7 +37,10 @@ export default function SetupGate() {
   useEffect(() => {
     if (!ready || sent.current) return;
     if (!view.db || !view.signedIn) return;
-    if (setupComplete(view)) return;
+    /* Ever finished, not currently-all-green. A REX session lasts a fortnight,
+       and asking the live question here meant anybody who aged one out got
+       marched back through the new-starter wizard. Once is once. */
+    if (setupFinished(view)) return;
     sent.current = true;
     router.replace("/setup");
   }, [ready, view, router]);
