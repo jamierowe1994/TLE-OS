@@ -67,6 +67,69 @@ export async function watchedSectors(): Promise<string[]> {
 }
 
 /**
+ * Seed from OUR OWN BOOK — the sectors we actually let in.
+ *
+ * The first seeder asked os_market_appraisals and got nothing, because the
+ * appraisals on screen come from SAMPLE_APPRAISALS in code and the table is
+ * empty. A seeder whose source is empty returns [] and looks like it worked,
+ * which is why the run reports what it added rather than that it ran.
+ *
+ * REX is the right source anyway: the patch worth watching is where we already
+ * have stock, not where a sample record happens to point. Current residential
+ * rentals only — the category filter is load-bearing, without it the pages come
+ * back as sales stock.
+ */
+export async function seedSectorsFromBook(by: string): Promise<string[]> {
+  if (!hasDb()) return [];
+  const { rexCall, rexRows } = await import("@/lib/rex");
+  const seen = new Set<string>();
+  for (let page = 0; page < 4; page++) {
+    const res = await rexCall("Listings", "search", {
+      criteria: [
+        { name: "system_listing_state", value: "current" },
+        { name: "listing_category_id", value: "residential_rental" },
+      ],
+      limit: 100,
+      offset: page * 100,
+    });
+    if (!res.ok) break;
+    const rows = rexRows(res.result) as Array<{ property?: { adr_postcode?: string } }>;
+    for (const r of rows) {
+      const sec = sectorOf(r.property?.adr_postcode ?? "");
+      if (sec) seen.add(sec);
+    }
+    if (rows.length < 100) break;
+  }
+  const added: string[] = [];
+  for (const sec of [...seen].sort()) {
+    const res = await q<{ sector: string }>(
+      `INSERT INTO os_capture_sectors (sector, added_by) VALUES ($1, $2)
+       ON CONFLICT (sector) DO NOTHING RETURNING sector`,
+      [sec, by]
+    );
+    if (res.length) added.push(sec);
+  }
+  return added;
+}
+
+/** Add sectors by hand — "NN5 4,NN5 5". Normalised, deduped, additive. */
+export async function addSectors(raw: string, by: string): Promise<string[]> {
+  if (!hasDb()) return [];
+  const added: string[] = [];
+  for (const part of raw.split(",")) {
+    const sec = sectorOf(part.trim()) ?? sectorOf(part.trim() + " 0AA");
+    if (!sec) continue;
+    const res = await q<{ sector: string }>(
+      `INSERT INTO os_capture_sectors (sector, added_by) VALUES ($1, $2)
+       ON CONFLICT (sector) DO NOTHING RETURNING sector`,
+      [sec, by]
+    );
+    if (res.length) added.push(sec);
+  }
+  return added;
+}
+
+/**
  * Seed the watch list from every appraisal postcode we hold.
  *
  * Additive only — it never removes a sector somebody added by hand, because

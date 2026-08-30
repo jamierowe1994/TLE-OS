@@ -13,7 +13,6 @@ import {
   urgencyOf,
   type MarketAppraisal,
   type MaStage,
-  SAMPLE_APPRAISALS as SAMPLE,
 } from "@/lib/market-appraisal";
 
 /**
@@ -23,9 +22,10 @@ import {
  * separate screens because they are separate jobs: winning a conversation, then
  * winning an instruction.
  *
- * Sample rows until the diary join is wired. They are flagged as such on the
- * page rather than passed off as live — a screen that quietly shows invented
- * appraisals is worse than an empty one.
+ * Every row is real. Four hardcoded stand-ins used to be merged in and badged
+ * as such — honest, but they were also the only reason this screen ever had
+ * anything on it, so an empty store could never be noticed. It was not: the
+ * capture job asked os_market_appraisals for postcodes and found none.
  */
 
 
@@ -59,7 +59,7 @@ export default function MarketAppraisals() {
      they are not the same kind of thing: one is this agent's actual work and
      the other is furniture. Concatenating them and sorting by urgency would
      bury a real appraisal among stand-ins. */
-  const all = useMemo(() => [...(live ?? []), ...SAMPLE], [live]);
+  const all = useMemo(() => live ?? [], [live]);
 
   const rows = useMemo(() => {
     const withStage = all.map((m) => ({ ...m, live: effectiveStage(m) }));
@@ -123,7 +123,7 @@ export default function MarketAppraisals() {
         ) : live.length > 0 ? (
           <>
             <span className="font-semibold">
-              {live.length} booked here, and {SAMPLE.length} stand-ins.
+              {live.length} booked here.
             </span>{" "}
             Appraisals booked from Leads are real and are marked as such. The four
             unmarked rows are samples that shape the screen - don&apos;t quote them.
@@ -204,7 +204,7 @@ export default function MarketAppraisals() {
                         booked ones are the point, so the badge goes on the
                         thing worth trusting and disappears when the samples
                         finally go. */}
-                    {!SAMPLE.some((s) => s.id === m.id) && <Pill tone="accent">Booked here</Pill>}
+
                     <Pill tone="neutral">{MA_STAGES.find((s) => s.id === m.live)?.label}</Pill>
                   </span>
                 </div>

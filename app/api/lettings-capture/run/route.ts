@@ -3,7 +3,9 @@ import { timingSafeEqual } from "node:crypto";
 import { hasDb } from "@/lib/db";
 import { hsLetRows } from "@/lib/ma-research";
 import {
+  addSectors,
   seedSectorsFromAppraisals,
+  seedSectorsFromBook,
   sweepSector,
   watchedSectors,
   type SweepResult,
@@ -17,7 +19,8 @@ import {
  * POST → the real sweep. Cron key only.
  *
  *   curl -X POST -H "x-cron-key: $CRON_SECRET" https://<host>/api/lettings-capture/run
- *   curl -X POST -H "x-cron-key: $CRON_SECRET" ".../run?seed=1"   # add appraisal sectors first
+ *   curl -X POST -H "x-cron-key: $CRON_SECRET" ".../run?seed=1"        # seed from our REX book
+ *   curl -X POST -H "x-cron-key: $CRON_SECRET" ".../run?add=NN5%204"   # name a sector by hand
  *
  * WHY THIS EXISTS: Homesearch has no completed-let source and no let date —
  * see the note at the top of lib/ma-research. Looking every day is the only
@@ -64,7 +67,7 @@ export async function GET() {
     sectors,
     note:
       sectors.length === 0
-        ? "Nothing is being watched yet. POST with ?seed=1 to add every sector we have appraised in."
+        ? "Nothing is being watched yet. POST with ?seed=1 to seed from our REX book, or ?add=NN5 4 to name one by hand."
         : "POST with the cron key to sweep these.",
   });
 }
@@ -77,9 +80,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "no database" }, { status: 503 });
   }
 
+  /* ?seed=1  — our own REX book AND any appraisal postcodes.
+     ?add=NN5 4,NN5 5 — by hand, for a patch we have no stock in yet.
+
+     Both are additive and both REPORT what they added. The first version only
+     asked os_market_appraisals, which is empty because the appraisals on screen
+     are sample records in code — it returned [] and read as a successful run
+     that had simply found nothing to do. */
   const seeded = req.nextUrl.searchParams.get("seed")
-    ? await seedSectorsFromAppraisals("cron")
+    ? [
+        ...(await seedSectorsFromBook("cron")),
+        ...(await seedSectorsFromAppraisals("cron")),
+      ]
     : [];
+  const addParam = req.nextUrl.searchParams.get("add");
+  const addedByHand = addParam ? await addSectors(addParam, "cron") : [];
 
   const sectors = await watchedSectors();
   if (sectors.length === 0) {
@@ -87,7 +102,9 @@ export async function POST(req: NextRequest) {
       ok: true,
       swept: 0,
       seeded,
-      note: "Nothing to watch. Run once with ?seed=1, or add sectors to os_capture_sectors.",
+      addedByHand,
+      note:
+        "Nothing to watch. ?seed=1 found no sectors — check REX is configured and has current rentals — or pass ?add=NN5 4 to name one by hand.",
     });
   }
 
@@ -115,6 +132,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     ok: true,
     seeded,
+    addedByHand,
     swept: results.length - skipped.length,
     /* Said out loud. A sector that was skipped contributed nothing, and a
        summary that only counts successes reads as full coverage. */

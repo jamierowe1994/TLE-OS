@@ -114,35 +114,17 @@ export function handoverTarget(appraisalId: string): string {
 }
 
 
-/* REAL addresses from the live REX book, deliberately.
-   Invented ones ("18 Ashworth Rise") produce an empty research panel and a
-   Homesearch mis-match, which demos the feature as broken when it isn't. The
-   landlord names are still stand-ins — the point is that the comparables and
-   the guide underneath are genuine. */
-export const SAMPLE_APPRAISALS: MarketAppraisal[] = [
-  { id: "ma1", leadId: "l-carol", landlord: "Carol Whitfield", address: "11 Station Road", postcode: "L34 5SN", agent: "Kayleigh Wright", appointmentAt: "2026-08-25T14:00:00+01:00", stage: "booked", valuation: null, presentToken: null, createdAt: "2026-08-21" },
-  { id: "ma2", leadId: null, landlord: "Peter Nsofor", address: "4 Hermosa Road", postcode: "TQ14 9LA", agent: "Rhiannon Dodge", appointmentAt: "2026-08-20T11:00:00+01:00", stage: "appraisal", valuation: null, presentToken: null, createdAt: "2026-08-14" },
-  { id: "ma3", leadId: null, landlord: "Yvonne Clarke", address: "1 Worlds End Close", postcode: "B32 1JX", agent: "Rhiannon Dodge", appointmentAt: "2026-08-18T16:30:00+01:00", stage: "post_appraisal", valuation: 1450, presentToken: "sample", createdAt: "2026-08-11" },
-  /**
-   * THE TEST RECORD — James's, chosen because he used to rent on this street
-   * and can therefore judge whether what we pull back is actually true. Every
-   * other sample row can only be checked for plausibility; this one can be
-   * checked for accuracy, which is a different and much more useful thing.
-   *
-   * Dictated as "NN54 WJ". The real postcode is **NN5 4WJ** (Northampton,
-   * West Northamptonshire) — Homesearch 422s on the unspaced form and 200s on
-   * the spaced one, so the space is load-bearing, not cosmetic.
-   *
-   * Verified live before seeding, rather than hoped for:
-   *   26 addresses on the close · 12 Dover Close matches hs_id 18580372
-   *   Detached House · 3 bed · 94 sqm · Band D · Freehold · EPC B · 2009-2016
-   *   24 on the market in NN5 4, ALL 24 carrying photographs
-   *
-   * Sat at `booked` with the appointment ahead of it so the whole sequence —
-   * pre-appraisal deck, visit, valuation, terms — can be driven from the top.
-   *
-   * If 12 is the wrong number, change it here: every other house on the close
-   * resolves too, so the record moves with one edit.
-   */
-  { id: "ma4", leadId: null, landlord: "Marcus Ellery", address: "12 Dover Close", postcode: "NN5 4WJ", agent: "Rhiannon Dodge", appointmentAt: "2026-08-31T10:30:00+01:00", stage: "booked", valuation: null, presentToken: null, createdAt: "2026-08-27" },
-];
+/* NO SAMPLE APPRAISALS. James, 30 Aug: "remove that seed data and add in the
+   actual world data."
+
+   Four hardcoded records used to be merged into every appraisal screen and
+   badged as stand-ins. Honest, but they were also the only reason those pages
+   ever had anything on them, which meant the real store could stay empty
+   without anybody noticing — and it did: the capture job's first seeder asked
+   os_market_appraisals for postcodes and got none, because every appraisal on
+   screen was a literal in this file.
+
+   Every screen now reads /api/appraisals, and an empty list renders as empty.
+   See the project rule: if a source has nothing, say so; never draw something
+   that looks live and is not. */
+

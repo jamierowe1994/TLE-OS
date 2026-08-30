@@ -1,9 +1,9 @@
 "use client";
 
-import { use } from "react";
+import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import PresentationBuilder from "@/components/PresentationBuilder";
-import { SAMPLE_APPRAISALS } from "@/lib/market-appraisal";
+import type { MarketAppraisal } from "@/lib/market-appraisal";
 
 /**
  * Building a presentation is a FULL PAGE, not a modal.
@@ -23,7 +23,38 @@ import { SAMPLE_APPRAISALS } from "@/lib/market-appraisal";
  */
 export default function BuildPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const ma = SAMPLE_APPRAISALS.find((m) => m.id === id);
+
+  /* THE RECORD IS FETCHED, NOT LOOKED UP IN AN ARRAY. The four hardcoded
+     appraisals are gone — see lib/market-appraisal — so this page asks the
+     store like every other appraisal screen.
+
+     `undefined` while asking, `null` once we have looked and found nothing.
+     Collapsing the two would flash "No such appraisal" at an agent whose
+     record is a round-trip away, which is the worst possible first frame on
+     the screen they open in a landlord's hallway. */
+  const [ma, setMa] = useState<MarketAppraisal | null | undefined>(undefined);
+  useEffect(() => {
+    let gone = false;
+    fetch("/api/appraisals", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (gone) return;
+        const list: MarketAppraisal[] = Array.isArray(j?.appraisals) ? j.appraisals : [];
+        setMa(list.find((m) => m.id === id) ?? null);
+      })
+      .catch(() => !gone && setMa(null));
+    return () => {
+      gone = true;
+    };
+  }, [id]);
+
+  if (ma === undefined) {
+    return (
+      <div className="mx-auto max-w-2xl py-16 text-center">
+        <p className="text-[12.5px] text-muted">Finding the appraisal&hellip;</p>
+      </div>
+    );
+  }
 
   if (!ma) {
     return (
