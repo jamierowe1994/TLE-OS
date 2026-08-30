@@ -206,6 +206,73 @@ function contentBlock(f: Fetched): Anthropic.ContentBlockParam {
 
 /* ──────────────────────────────── the scan ─────────────────────────────── */
 
+/**
+ * One document, already in memory, read against one check.
+ *
+ * Split out from scanOne so the bench at /plc/bench can run THE SAME prompt,
+ * the same tool schema and the same model as the real scan. A test harness
+ * with its own prompt tests the harness. If this function is changed, both
+ * change together, which is the only arrangement in which trying it on a real
+ * certificate proves anything about what compliance will see.
+ */
+export async function readDocument(
+  client: Anthropic,
+  file: { name: string; media: string; base64: string },
+  context: { checkId: CheckId; address: string; moveInDate: string | null }
+): Promise<Finding[]> {
+  const asDoc: PlcDocument = {
+    checkId: context.checkId,
+    name: file.name,
+    key: "",
+    url: "",
+    addedAt: "",
+    addedBy: "",
+  };
+  const asCase = {
+    address: context.address,
+    moveInDate: context.moveInDate,
+  } as PlcCase;
+
+  const res = await client.messages.create({
+    model: MODEL,
+    max_tokens: MAX_TOKENS,
+    system: SYSTEM,
+    tools: [REPORT_TOOL],
+    tool_choice: { type: "tool", name: "report_findings" },
+    messages: [
+      {
+        role: "user",
+        content: [
+          contentBlock({ media: file.media, base64: file.base64 }),
+          { type: "text", text: askFor(asDoc, asCase) },
+        ],
+      },
+    ],
+  });
+
+  const call = res.content.find(
+    (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "report_findings"
+  );
+  const raw = (call?.input as { findings?: unknown[] } | undefined)?.findings ?? [];
+
+  return raw.flatMap((r): Finding[] => {
+    const f = r as { level?: string; message?: string; foundDate?: string };
+    const message = (f.message ?? "").trim();
+    if (!message) return [];
+    const level: FindingLevel =
+      f.level === "blocker" || f.level === "query" || f.level === "ok" ? f.level : "query";
+    return [
+      {
+        checkId: context.checkId,
+        level,
+        message,
+        documentName: file.name,
+        foundDate: /^\d{4}-\d{2}-\d{2}$/.test(f.foundDate ?? "") ? f.foundDate! : null,
+      },
+    ];
+  });
+}
+
 async function scanOne(client: Anthropic, doc: PlcDocument, c: PlcCase): Promise<Finding[]> {
   let fetched: Fetched;
   try {
@@ -226,41 +293,11 @@ async function scanOne(client: Anthropic, doc: PlcDocument, c: PlcCase): Promise
     ];
   }
 
-  const res = await client.messages.create({
-    model: MODEL,
-    max_tokens: MAX_TOKENS,
-    system: SYSTEM,
-    tools: [REPORT_TOOL],
-    tool_choice: { type: "tool", name: "report_findings" },
-    messages: [
-      {
-        role: "user",
-        content: [contentBlock(fetched), { type: "text", text: askFor(doc, c) }],
-      },
-    ],
-  });
-
-  const call = res.content.find(
-    (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "report_findings"
+  return readDocument(
+    client,
+    { name: doc.name, media: fetched.media, base64: fetched.base64 },
+    { checkId: doc.checkId, address: c.address, moveInDate: c.moveInDate }
   );
-  const raw = (call?.input as { findings?: unknown[] } | undefined)?.findings ?? [];
-
-  return raw.flatMap((r): Finding[] => {
-    const f = r as { level?: string; message?: string; foundDate?: string };
-    const message = (f.message ?? "").trim();
-    if (!message) return [];
-    const level: FindingLevel =
-      f.level === "blocker" || f.level === "query" || f.level === "ok" ? f.level : "query";
-    return [
-      {
-        checkId: doc.checkId,
-        level,
-        message,
-        documentName: doc.name,
-        foundDate: /^\d{4}-\d{2}-\d{2}$/.test(f.foundDate ?? "") ? f.foundDate! : null,
-      },
-    ];
-  });
 }
 
 /**

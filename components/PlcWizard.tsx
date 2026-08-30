@@ -82,38 +82,6 @@ function Ellipsis() {
   );
 }
 
-/**
- * Monochrome confetti, drifting rather than firing.
- *
- * Bits.tsx already has a burst, which throws upward and is right for a small
- * inline celebration. This is a whole screen, so it falls from above the fold
- * and takes its time. Deterministic from the index - no Math.random, so a
- * re-render never reshuffles it mid-fall.
- */
-function ConfettiDrift({ bits = 40 }: { bits?: number }) {
-  return (
-    <span aria-hidden className="pointer-events-none fixed inset-0 z-10 overflow-hidden">
-      {Array.from({ length: bits }, (_, i) => (
-        <span
-          key={i}
-          className="plc-flake absolute top-0 rounded-[1px]"
-          style={{
-            left: `${(i * 37) % 100}%`,
-            width: i % 3 === 0 ? 6 : 4,
-            height: i % 4 === 0 ? 4 : 9,
-            opacity: 0.18 + ((i * 17) % 5) * 0.12,
-            background: "var(--ink)",
-            ["--drift" as string]: `${((i * 29) % 2 ? 1 : -1) * (20 + ((i * 13) % 60))}px`,
-            ["--spin" as string]: `${((i * 41) % 2 ? 1 : -1) * (240 + ((i * 31) % 300))}deg`,
-            ["--fall" as string]: `${5.5 + ((i * 23) % 40) / 10}s`,
-            ["--delay" as string]: `${((i * 19) % 45) / 10}s`,
-          }}
-        />
-      ))}
-    </span>
-  );
-}
-
 /** The animations, kept local so globals.css stays out of this. */
 function WizardStyles() {
   return (
@@ -128,19 +96,13 @@ function WizardStyles() {
       .plc-dots span:nth-child(2) { animation-delay: .45s; }
       .plc-dots span:nth-child(3) { animation-delay: .9s; }
 
-      @keyframes plc-fall {
-        from { transform: translate3d(0,-8vh,0) rotate(0); }
-        to   { transform: translate3d(var(--drift),108vh,0) rotate(var(--spin)); }
-      }
-      .plc-flake { animation: plc-fall var(--fall) linear var(--delay) forwards; }
-
       @keyframes plc-spin { to { transform: rotate(360deg); } }
       .plc-spinner { animation: plc-spin .9s linear infinite; }
 
       /* Somebody who has asked not to be moved gets the same screens without
          the motion. The information is in the words, not the animation. */
       @media (prefers-reduced-motion: reduce) {
-        .plc-panel-in, .plc-panel-out, .plc-flake, .plc-dots span, .plc-spinner { animation: none; }
+        .plc-panel-in, .plc-panel-out, .plc-dots span, .plc-spinner { animation: none; }
         .plc-panel-out { opacity: 0; }
       }
     `}</style>
@@ -806,18 +768,17 @@ export default function PlcWizard({
 
         {step === "done" && kase && (
           <div className="py-16 text-center">
-            <ConfettiDrift />
-            <div className="relative z-20 flex justify-center">
+            <div className="flex justify-center">
               <DoneTick size={72} />
             </div>
-            <h1 className="relative z-20 mt-6 text-2xl tracking-normal text-neutral-900 dark:text-neutral-100">
+            <h1 className="mt-6 text-2xl tracking-normal text-neutral-900 dark:text-neutral-100">
               That Is With the Compliance Team
             </h1>
-            <p className="relative z-20 mx-auto mt-3 max-w-md text-sm text-neutral-500">
+            <p className="mx-auto mt-3 max-w-md text-sm text-neutral-500">
               They usually come back within 48 hours. You will get it back with a decision, and if
               anything is missing they will say exactly what.
             </p>
-            <div className="relative z-20 mt-8 flex flex-wrap justify-center gap-3">
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
               <button
                 type="button"
                 onClick={() => router.push("/applications")}
