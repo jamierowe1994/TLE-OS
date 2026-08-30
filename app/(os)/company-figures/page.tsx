@@ -17,18 +17,18 @@ import type { SeedData } from "@/lib/business/seed-data"; // type-only — erase
 import { currentMonth, monthLabel, monthProgressLabel, recentMonths } from "@/lib/business/format";
 import Freshness from "@/components/business/Freshness";
 
-import Overview from "@/app/(os)/admin/business/tabs/overview";
-import PaidLeads from "@/app/(os)/admin/business/tabs/paid-leads";
-import MoveIns from "@/app/(os)/admin/business/tabs/move-ins";
-import Income from "@/app/(os)/admin/business/tabs/income";
-import Pnl from "@/app/(os)/admin/business/tabs/pnl";
-import Forecast from "@/app/(os)/admin/business/tabs/forecast";
-import Agents from "@/app/(os)/admin/business/tabs/agents";
-import Portfolio from "@/app/(os)/admin/business/tabs/portfolio";
-import Arrears from "@/app/(os)/admin/business/tabs/arrears";
-import Compliance from "@/app/(os)/admin/business/tabs/compliance";
-import AssistantTab from "@/app/(os)/admin/business/tabs/assistant";
-import Diagnostics from "@/app/(os)/admin/business/tabs/diagnostics";
+import Overview from "@/app/(os)/company-figures/tabs/overview";
+import PaidLeads from "@/app/(os)/company-figures/tabs/paid-leads";
+import MoveIns from "@/app/(os)/company-figures/tabs/move-ins";
+import Income from "@/app/(os)/company-figures/tabs/income";
+import Pnl from "@/app/(os)/company-figures/tabs/pnl";
+import Forecast from "@/app/(os)/company-figures/tabs/forecast";
+import Agents from "@/app/(os)/company-figures/tabs/agents";
+import Portfolio from "@/app/(os)/company-figures/tabs/portfolio";
+import Arrears from "@/app/(os)/company-figures/tabs/arrears";
+import Compliance from "@/app/(os)/company-figures/tabs/compliance";
+import AssistantTab from "@/app/(os)/company-figures/tabs/assistant";
+import Diagnostics from "@/app/(os)/company-figures/tabs/diagnostics";
 
 /* ------------------------------- tabs ------------------------------- */
 
