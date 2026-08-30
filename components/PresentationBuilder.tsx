@@ -178,7 +178,21 @@ export default function PresentationBuilder({
   /* Homesearch's live market — the whole sector including other agents'
      stock, and the only source that carries photographs. Picked separately
      from our own book because they are different evidence. */
-  const nearby = d?.onMarketNearby ?? [];
+  const all = d?.onMarketNearby ?? [];
+  /**
+   * TWO DIFFERENT QUESTIONS, SO TWO LISTS.
+   *
+   * "On the market" is what a tenant can take today. "Let agreed" is what has
+   * already gone — somebody accepted a figure — which makes it evidence of
+   * what the market PAYS rather than what it asks, and it belongs on the
+   * Recently let step beside our own lets.
+   *
+   * They used to sit in one grid with a badge, which made the on-market count
+   * an overstatement of a landlord's competition: NN5 4 reads as 21 available
+   * when 11 of them are already taken.
+   */
+  const nearby = useMemo(() => all.filter((l) => l.status === "on market"), [all]);
+  const letAgreed = useMemo(() => all.filter((l) => l.status === "let agreed"), [all]);
   const [pickedNearby, setPickedNearby] = useState<string[]>([]);
   /* THE FILTER BAR. Radius defaults to 0 — the sector — because widening
      should be something an agent chooses, not something that happened to them.
@@ -1139,6 +1153,95 @@ export default function PresentationBuilder({
                   ))}
                 </ul>
               )}
+              {/* WHAT THE WHOLE MARKET HAS LET, not just us.
+                  
+                  Our own book is thin almost everywhere — measured 30 Aug, the
+                  entire NN5 district returned ONE let from REX and eleven
+                  let-agreed from Homesearch in the NN5 4 sector alone. A step
+                  called "Recently let" that shows a landlord one property is
+                  not evidence, it is an apology.
+                  
+                  THESE CARRY NO LET DATE, and that is stated rather than
+                  papered over. Homesearch's detail payload holds exactly one
+                  date, `listed_on` — there is no let_agreed_on and no
+                  status_changed_on on our key, so "how long it took" is
+                  unanswerable for anybody's stock but our own. Ours has a real
+                  one, from REX, which is what makes the section above worth
+                  more than this one despite being a tenth the size. */}
+              {letAgreed.length > 0 && (
+                <>
+                  <p className="mt-6 border-t border-line/70 pt-5 text-[12.5px] leading-relaxed text-muted">
+                    And {letAgreed.length} let agreed nearby across every agent &mdash; somebody
+                    has accepted these figures, which makes them evidence of what the market
+                    pays rather than what it asks. Homesearch does not record WHEN each one let,
+                    so there is no time-to-let here; the figures above are ours and do.
+                  </p>
+                  <ul className="mt-3 grid gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {letAgreed.map((l) => {
+                      const k = keyOf(l);
+                      const shots = l.photos?.length
+                        ? [l.image, ...l.photos.filter((u) => u !== l.image)].filter(
+                            (u): u is string => Boolean(u)
+                          )
+                        : l.image
+                          ? [l.image]
+                          : [];
+                      const at =
+                        shots.length
+                          ? (((slide[k] ?? 0) % shots.length) + shots.length) % shots.length
+                          : 0;
+                      return (
+                        <li key={k}>
+                          <div className="group relative">
+                            {shots.length ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={shots[at]}
+                                alt=""
+                                loading="lazy"
+                                className="aspect-[4/3] w-full rounded-2xl bg-line/30 object-cover"
+                              />
+                            ) : (
+                              <div className="flex aspect-[4/3] w-full items-center justify-center rounded-2xl bg-line/20 text-[11px] text-muted">
+                                No photograph
+                              </div>
+                            )}
+                            <span className="absolute left-2 top-2 rounded-full bg-page/95 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-accent-dark shadow-sm">
+                              Let agreed
+                            </span>
+                            {shots.length > 1 && (
+                              <button
+                                type="button"
+                                aria-label="Next photograph"
+                                onClick={() => setSlide((m) => ({ ...m, [k]: (m[k] ?? 0) + 1 }))}
+                                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-page/90 text-[14px] opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
+                              >
+                                &rsaquo;
+                              </button>
+                            )}
+                          </div>
+                          <div className="mt-2">
+                            <span className="figures text-[13.5px]">
+                              {l.rent ? money(l.rent) : "\u2014"}
+                              <span className="text-[10.5px] text-muted"> pcm</span>
+                            </span>
+                            <p className="mt-0.5 truncate text-[12px]">{l.address}</p>
+                            <p className="truncate text-[10.5px] text-muted">
+                              {[l.beds ? `${l.beds} bed` : null, l.type, l.postcode]
+                                .filter(Boolean)
+                                .join(" \u00b7 ")}
+                            </p>
+                            {l.agent && (
+                              <p className="truncate text-[10.5px] text-muted">{l.agent}</p>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </>
+              )}
+
               {/* MOVED HERE FROM "On the market". James, 29 Aug.
 
                   That step is the whole market — every agent's stock, with a
@@ -1198,6 +1301,114 @@ export default function PresentationBuilder({
           {d && here === "market" && (
             <div className="space-y-3">
               <p className="text-[12.5px] leading-relaxed text-muted">{BUILD_STEPS[3].blurb}</p>
+
+              {/* THE MARKET AT THREE SCOPES.
+              
+                  There is no lettings version of this screen anywhere to copy.
+                  F&C's Market Insights has seven panels and five of them are
+                  switched off in lettings mode — competition, market balance,
+                  the Land Registry slice, price bands and the neighbourhood
+                  profile are all sales-only. So this is built rather than
+                  borrowed.
+              
+                  All three scopes are shown, and the reason is a measurement:
+                  on 30 Aug the NN5 district asked an average of £1,006 while
+                  the NN5 4 sector asked £725. Quote the district figure at a
+                  NN5 4 landlord and you have overpriced their house by 39%.
+                  The closest scope is highlighted; the wider ones are context,
+                  not the answer.
+              
+                  A scope Homesearch holds nothing for is DROPPED upstream
+                  rather than drawn as a row of zeroes — see marketScopes. */}
+              {d.marketScopes.length > 0 && (
+                <div className="overflow-hidden rounded-xl border border-line/70">
+                  <table className="w-full text-[12.5px]">
+                    <thead>
+                      <tr className="border-b border-line/70 bg-box/60 text-[10px] uppercase tracking-wide text-muted">
+                        <th className="px-3 py-2 text-left font-semibold">Area</th>
+                        <th className="px-3 py-2 text-right font-semibold">Average asking rent</th>
+                        <th className="px-3 py-2 text-right font-semibold">Advertised now</th>
+                        <th className="px-3 py-2 text-right font-semibold">Let in 12 months</th>
+                        <th className="px-3 py-2 text-right font-semibold">Months of supply</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {d.marketScopes.map((sc, i) => {
+                        const closest = i === d.marketScopes.length - 1;
+                        return (
+                          <tr
+                            key={`${sc.level}-${sc.area}`}
+                            className={`border-b border-line/40 last:border-0 ${closest ? "bg-accent-soft/25" : ""}`}
+                          >
+                            <td className="px-3 py-2">
+                              <span className={closest ? "font-semibold" : ""}>{sc.area}</span>
+                              <span className="ml-1.5 text-[10px] text-muted">{sc.level}</span>
+                            </td>
+                            {/* Every cell is an em dash when the figure is
+                                absent. A blank reads as zero and a zero is a
+                                claim we cannot make. */}
+                            <td className="figures px-3 py-2 text-right">
+                              {sc.avgRent ? `${money(sc.avgRent)}` : <span className="text-muted">&mdash;</span>}
+                            </td>
+                            <td className="figures px-3 py-2 text-right">
+                              {sc.toLetNow != null ? sc.toLetNow.toLocaleString("en-GB") : <span className="text-muted">&mdash;</span>}
+                            </td>
+                            <td className="figures px-3 py-2 text-right">
+                              {sc.letLast12m != null ? sc.letLast12m.toLocaleString("en-GB") : <span className="text-muted">&mdash;</span>}
+                            </td>
+                            <td className="figures px-3 py-2 text-right">
+                              {sc.monthsOfSupply != null ? (
+                                <span className={sc.monthsOfSupply < 1 ? "font-semibold text-accent-dark" : ""}>
+                                  {sc.monthsOfSupply}
+                                </span>
+                              ) : (
+                                <span className="text-muted">&mdash;</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Months of supply is the number worth saying out loud, so it
+                  gets said in words as well as in a column. Under one month
+                  means the area lets its entire available stock faster than it
+                  replaces it — which is the argument for pricing confidently,
+                  and it is a measurement rather than an opinion. */}
+              {(() => {
+                const closest = d.marketScopes[d.marketScopes.length - 1];
+                if (!closest) return null;
+                const size = d.scopeBeds ? `${d.scopeBeds}-bed` : "all sizes";
+                return (
+                  <p className="text-[12px] leading-relaxed text-muted">
+                    {closest.monthsOfSupply != null ? (
+                      <>
+                        {closest.area} has <span className="figures text-ink">{closest.toLetNow}</span>{" "}
+                        advertised now against{" "}
+                        <span className="figures text-ink">{closest.letLast12m?.toLocaleString("en-GB")}</span> let over twelve
+                        months &mdash; about{" "}
+                        <span className="figures text-ink">{closest.monthsOfSupply}</span> month
+                        {closest.monthsOfSupply === 1 ? "" : "s"} of supply.{" "}
+                        {closest.monthsOfSupply < 1
+                          ? "The area lets its stock faster than it replaces it."
+                          : closest.monthsOfSupply > 3
+                            ? "That is a lot of choice for a tenant — price to be taken, not to be admired."
+                            : "Broadly balanced."}
+                      </>
+                    ) : (
+                      <>Homesearch has no letting volume for {closest.area}, so months of supply cannot be worked out.</>
+                    )}{" "}
+                    Figures cover <span className="font-semibold">{size}</span>
+                    {d.scopeBeds ? "" : " — set a bed count on the market step to narrow them"}.{" "}
+                    &ldquo;Advertised&rdquo; counts let-agreed stock as well as available, so
+                    supply reads a little high.
+                  </p>
+                );
+              })()}
+
               {d.guide ? (
                 <div className="rounded-xl border border-line/70 p-4">
                   <p className="figures text-[22px] leading-none">{money(d.guide.mid)} pcm</p>
@@ -1214,11 +1425,13 @@ export default function PresentationBuilder({
                   No guide — nothing in our book near this postcode.
                 </p>
               )}
-              <p className="text-[12px] text-muted">
-                {d.areaAverage
-                  ? `Homesearch: average ${d.areaAverage.beds}-bed asking rent in ${d.sector} is ${money(d.areaAverage.avgRent)} pcm.`
-                  : "Homesearch has no average for this sector and bed count, so the market section will be left out."}
-              </p>
+              {/* The old single-sector, fixed-2-bed average lived here and it
+                  CONTRADICTED the table above it: the scopes query asks about
+                  all sizes and got £725 for NN5 4, while this line asked about
+                  2-beds only, got null, and printed "Homesearch has no average
+                  for this sector" directly underneath the £725. Two figures
+                  from one source disagreeing on one screen is the exact bug
+                  this project keeps being bitten by. The table supersedes it. */}
             </div>
           )}
 

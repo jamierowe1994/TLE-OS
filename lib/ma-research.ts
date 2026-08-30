@@ -121,6 +121,108 @@ export function areaOf(postcode: string): string | null {
  */
 const AREA_STATS = ["avg_price_on_market", "on_market_count", "off_market_count"] as const;
 
+/**
+ * THE LETTINGS MARKET AT THREE SCOPES.
+ *
+ * F&C's Market Insights tab shows five panels in sales mode and only two in
+ * lettings — competition, market balance, price bands and the neighbourhood
+ * profile are all `!isLet`. So there is no lettings version of this screen to
+ * copy; this is it.
+ *
+ * Measured 30 Aug 2026 on NN5, and the numbers are why all three scopes are
+ * shown rather than one: the district asks an average of £1,006 while the
+ * sector asks £725. Quote the district figure at a NN5 4 landlord and you have
+ * overpriced their house by 39%.
+ *
+ * NULL IS NOT ZERO, and this endpoint hands back both. NN5 4WJ — a single
+ * postcode unit — returns `avg_price: null` with `count: 0` twice. Three
+ * zeroes on a tile would read as "nothing lets round here", which is a claim.
+ * It is an absence. A scope with no average and no stock at all is dropped.
+ */
+export interface MarketScope {
+  /** "NN5", "NN5 4", "NN5 4WJ" */
+  area: string;
+  level: "district" | "sector" | "postcode";
+  /** Average ASKING rent pcm. Null means Homesearch holds none. */
+  avgRent: number | null;
+  /**
+   * ADVERTISED now — not "available" now.
+   *
+   * MEASURED 30 Aug 2026: `on_market_count` for NN5 4 returned 21, and the
+   * listings feed for the same sector returned exactly 10 "on market" plus 11
+   * "let agreed". The count includes stock somebody has already taken. Calling
+   * it "available" would overstate a landlord's competition by half, so it is
+   * labelled for what it is everywhere it appears.
+   */
+  toLetNow: number | null;
+  /** Let in the last 12 months. */
+  letLast12m: number | null;
+  /**
+   * How many months of supply the advertised stock represents, at the rate the
+   * area has been letting. Under one month is a landlord's market and is the
+   * single most persuasive number on the page. Null unless both sides are real.
+   *
+   * Reads slightly HIGH, because the numerator counts let-agreed stock too
+   * (see toLetNow). Directionally sound; not a figure to quote to two decimals.
+   */
+  monthsOfSupply: number | null;
+}
+
+async function scopeStats(
+  area: string,
+  level: MarketScope["level"],
+  beds: number | null
+): Promise<MarketScope | null> {
+  const key = level === "district" ? "districts" : level === "sector" ? "sectors" : "postcodes";
+  const q =
+    `${key}%5B%5D=${encodeURIComponent(area)}` + (beds ? `&beds%5B%5D=${beds}` : "");
+  const [avg, on, off] = await Promise.all(
+    AREA_STATS.map((m) =>
+      hsJson<{ avg_price?: number | null; count?: number | null }>(
+        `area_statistics/lettings/${m}?${q}`
+      )
+    )
+  );
+  const avgRent = typeof avg?.avg_price === "number" && avg.avg_price > 0 ? avg.avg_price : null;
+  const toLetNow = typeof on?.count === "number" ? on.count : null;
+  const letLast12m = typeof off?.count === "number" ? off.count : null;
+
+  /* Nothing at all known about this scope. Dropped rather than drawn as a row
+     of zeroes — see the note above. */
+  if (avgRent == null && !toLetNow && !letLast12m) return null;
+
+  const perMonth = letLast12m != null && letLast12m > 0 ? letLast12m / 12 : null;
+  return {
+    area,
+    level,
+    avgRent,
+    toLetNow,
+    letLast12m,
+    monthsOfSupply:
+      perMonth && toLetNow != null ? Math.round((toLetNow / perMonth) * 10) / 10 : null,
+  };
+}
+
+/**
+ * District, sector and postcode, in that order, closest last.
+ *
+ * Three scopes × three metrics is nine calls, all parallel. F&C fire twelve on
+ * the equivalent screen, so this is within what the account tolerates.
+ */
+async function marketScopes(postcode: string, beds: number | null): Promise<MarketScope[]> {
+  const dist = districtOf(postcode);
+  const sect = sectorOf(postcode);
+  const unit = /^[A-Z]{1,2}\d{1,2}[A-Z]?\s\d[A-Z]{2}$/i.test(postcode.trim())
+    ? postcode.trim().toUpperCase()
+    : null;
+  const asked: Array<[string, MarketScope["level"]]> = [];
+  if (dist) asked.push([dist, "district"]);
+  if (sect) asked.push([sect, "sector"]);
+  if (unit) asked.push([unit, "postcode"]);
+  const out = await Promise.all(asked.map(([a, l]) => scopeStats(a, l, beds)));
+  return out.filter((s): s is MarketScope => s != null);
+}
+
 async function marketFor(sector: string, beds: number) {
   const q = `sectors%5B%5D=${encodeURIComponent(sector)}&beds%5B%5D=${beds}`;
   const [avg, on, off] = await Promise.all(
@@ -659,6 +761,14 @@ export interface MaResearch {
   addressWarning: string | null;
   /** Homesearch average asking rent for this sector and bed count. */
   areaAverage: { beds: number; avgRent: number } | null;
+  /**
+   * The lettings market at district, sector and postcode — see marketScopes.
+   * Ordered widest first, so the LAST entry is the closest one Homesearch
+   * actually holds anything for.
+   */
+  marketScopes: MarketScope[];
+  /** Which bed count the scope figures were asked about, or null for all sizes. */
+  scopeBeds: number | null;
   /** The area picture. See MARKET_STATS below for why there are only three. */
   market: {
     onMarket: number | null;
@@ -792,8 +902,9 @@ export async function getResearch(
   let areaAverage: MaResearch["areaAverage"] = null;
   let market: MaResearch["market"] = null;
   let nearby: MarketListing[] = [];
-  const [stats, listings, material] = await Promise.all([
+  const [stats, scopes, listings, material] = await Promise.all([
     sector ? marketFor(sector, beds) : Promise.resolve(null),
+    marketScopes(postcode, filters.beds ?? null),
     sector ? onMarketNearby(sector, postcode, filters) : Promise.resolve([]),
     // Gated on the trusted match, not merely on having an hs_id — see the
     // `material` field comment on MaResearch.
@@ -894,6 +1005,8 @@ export async function getResearch(
     subject,
     addressWarning,
     areaAverage,
+    marketScopes: scopes,
+    scopeBeds: filters.beds ?? null,
     market,
     onMarketNearby: nearby,
     recentlyLet: await recentlyLet(postcode),
