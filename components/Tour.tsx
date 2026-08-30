@@ -102,9 +102,21 @@ function place(box: Box | null, cardH: number): { top: number; left: number } {
   return centre;
 }
 
-export default function Tour() {
+export default function Tour({
+  /**
+   * Offer it immediately and remember nothing.
+   *
+   * The public preview, where there is no account to record an answer against
+   * and no ?tour=choose to arrive with. It also means Susan can run the tour,
+   * close it, reload, and run it again - which is what somebody being shown a
+   * thing in a meeting actually does.
+   */
+  preview = false,
+}: {
+  preview?: boolean;
+} = {}) {
   const params = useSearchParams();
-  const { view, ready, save } = useSetup();
+  const { view, ready, save } = useSetup(preview);
 
   const [tour, setTour] = useState<TourId | null>(null);
   const [at, setAt] = useState(0);
@@ -118,10 +130,20 @@ export default function Tour() {
   /* Offer it once: either we were sent here by the end of setup, or setup is
      finished and this person has never answered the question. Skipping is an
      answer and is recorded, so it is not asked twice. */
+  /* Offered at most once per visit. Without this the effect re-fires the
+     moment a tour ends - `tour` goes back to null, the condition is true
+     again, and the chooser reopens on top of somebody who just closed it.
+     In the signed-in case the saved answer would eventually settle it, but
+     only after the write lands, so there is a window where it flickers. */
+  const offered = useRef(false);
+
   useEffect(() => {
-    if (!ready || tour) return;
-    if (asked || (setupComplete(view) && !view.state.tour)) setChoosing(true);
-  }, [ready, asked, view, tour]);
+    if (!ready || tour || offered.current) return;
+    if (preview || asked || (setupComplete(view) && !view.state.tour)) {
+      offered.current = true;
+      setChoosing(true);
+    }
+  }, [ready, asked, view, tour, preview]);
 
   /** Re-run from Steve's Guides shelf. */
   useEffect(() => {
@@ -193,13 +215,16 @@ export default function Tour() {
   const finish = useCallback(
     async (how: TourId | "skipped") => {
       setTour(null);
-      setChoosing(false);
       setAt(0);
       window.dispatchEvent(new CustomEvent("os-help-dock", { detail: { open: false } }));
       window.dispatchEvent(new CustomEvent("os-shell", { detail: { profile: false } }));
-      await save({ tour: how === "skipped" ? "skipped" : how });
+      setChoosing(false);
+      /* Nothing recorded in the preview - there is no account to record it
+         against, and it must stay re-runnable. The preview page keeps a
+         "Show me round again" button, which dispatches os-tour. */
+      if (!preview) await save({ tour: how === "skipped" ? "skipped" : how });
     },
-    [save]
+    [save, preview]
   );
 
   /* Escape leaves. A full-screen overlay with no way out on the keyboard is

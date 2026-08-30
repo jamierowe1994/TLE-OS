@@ -395,13 +395,17 @@ export function StepLook({
    about what "chose an accent" means. Exported because the page owns the
    state and the step only reports clicks. */
 
-export function chooseAccent(id: string) {
+/* `persist` is false in the public preview. The colour still changes on
+   screen, because seeing it is the entire point of the step - but a page
+   shared with somebody outside the company does not call our API. */
+export function chooseAccent(id: string, persist = true) {
   applyAccent(id);
   try {
     localStorage.setItem(ACCENT_KEY, id);
   } catch {
     /* private browsing; the account copy below still carries it */
   }
+  if (!persist) return;
   void fetch("/api/prefs", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -409,7 +413,11 @@ export function chooseAccent(id: string) {
   }).catch(() => {});
 }
 
-export function chooseTheme(choice: ThemeChoice, origin?: { x: number; y: number }) {
+export function chooseTheme(
+  choice: ThemeChoice,
+  origin?: { x: number; y: number },
+  persist = true
+) {
   writeTheme(choice);
   try {
     /* The first-run chooser in ThemeGate keys off this. Setting it here means
@@ -429,6 +437,7 @@ export function chooseTheme(choice: ThemeChoice, origin?: { x: number; y: number
     );
   }
   applyTheme(choice);
+  if (!persist) return;
   void fetch("/api/prefs", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },

@@ -61,6 +61,10 @@ const GROUPS: Array<{
       { href: "/admin/people", label: "People", needs: "see:people" },
       { href: "/admin/permissions", label: "Permissions", needs: "manage:roles" },
       { href: "/admin/pre-launch", label: "Pre-launch", needs: "see:reports" },
+      /* Beside Pre-launch rather than down in System: both are about getting
+         people onto the product, and this is where James goes looking for the
+         link to send somebody before a presentation. */
+      { href: "/admin/onboarding", label: "Onboarding", needs: "see:reports" },
     ],
   },
   {

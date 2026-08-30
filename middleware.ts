@@ -177,6 +177,12 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!(?:sign-in|join|reset|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|api/tenant/passport|brand|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$).*)",
+    /* `preview` is the onboarding demonstration, and it is exempt because the
+       whole point of it is a link James can send to somebody with no account.
+       It is safe to exempt because the route itself refuses without a valid
+       share token, and because everything under it is self-contained: mock
+       rail, sample figures, no fetches, no writes, no session. See
+       lib/preview-token.ts - that token must never gate anything real. */
+    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|api/tenant/passport|brand|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$).*)",
   ],
 };

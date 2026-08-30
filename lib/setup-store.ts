@@ -107,7 +107,17 @@ export type SetupStore = {
   refresh: () => Promise<void>;
 };
 
-export function useSetup(): SetupStore {
+/**
+ * @param forceDemo Never contact the server at all.
+ *
+ * For the public onboarding preview, where there is no session and must be no
+ * writes. Without it the preview would still call /api/setup on load - it
+ * would answer "signed out" harmlessly, but a page shared with somebody
+ * outside the company should not be reaching for our API at all. Belt as well
+ * as braces: the route is exempt from middleware, so the only thing standing
+ * between it and the rest of the OS is that it does not ask.
+ */
+export function useSetup(forceDemo = false): SetupStore {
   const [view, setView] = useState<SetupView>(BLANK);
   const [ready, setReady] = useState(false);
   /* The latest view, readable without being a dependency.
@@ -120,11 +130,15 @@ export function useSetup(): SetupStore {
 
   const load = useCallback(async () => {
     let server: SetupView;
-    try {
-      const r = await fetch("/api/setup", { cache: "no-store" });
-      server = (await r.json()) as SetupView;
-    } catch {
+    if (forceDemo) {
       server = { ...BLANK };
+    } else {
+      try {
+        const r = await fetch("/api/setup", { cache: "no-store" });
+        server = (await r.json()) as SetupView;
+      } catch {
+        server = { ...BLANK };
+      }
     }
 
     if (server.db) {
@@ -138,7 +152,7 @@ export function useSetup(): SetupStore {
       setView({ ...server, db: false, state: readDemo() });
     }
     setReady(true);
-  }, []);
+  }, [forceDemo]);
 
   useEffect(() => {
     void load();
