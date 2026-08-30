@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import AssistantCharacter, { type Mood } from "@/components/AssistantCharacter";
 import { captureScreen } from "@/lib/screenshot";
 import AssistantSays, { type Screen } from "@/components/AssistantSays";
-import { getOpenListing } from "@/lib/open-record";
+import { getOpenListing, getOpenSurfaces } from "@/lib/open-record";
 
 /**
  * The character in the corner, and what he says.
@@ -280,6 +280,11 @@ export default function HelpDock() {
           thread: thread.current,
           path,
           openListingId: getOpenListing(),
+          /* Everything layered on screen, furthest back first. Read HERE and
+             not held in state for the same reason as the listing id above:
+             the only moment it needs to be true is the instant Send is
+             pressed. */
+          surfaces: getOpenSurfaces(),
         }),
     })
       .then((x) => (x.ok ? x.json() : null))

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { registerOpen } from "@/lib/open-record";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { handoverTarget } from "@/lib/market-appraisal";
@@ -547,6 +548,32 @@ export default function LeadDrawer({
   // Terms out for signature: the record WAITS here rather than advancing —
   // it moves itself on when the signed copy comes back.
   const [termsOut, setTermsOut] = useState(false);
+
+  /* ── Tell Steve what is open ──────────────────────────────────────────────
+
+     Registered from the drawer rather than from the board, because the board
+     knows which row is highlighted and the drawer knows what is actually on
+     screen — and it is what is on screen that somebody means by "this lead".
+
+     The notes go with it. They are the context nobody can reconstruct from an
+     API: "wants a 2-bed, call after 6" is what the agent typed, and an email
+     drafted without it is a worse email than the agent would have written. */
+  useEffect(() => {
+    if (!lead) return;
+    return registerOpen({
+      kind: "lead",
+      id: lead.id,
+      label: lead.name || "this lead",
+      fields: [
+        { label: "Email", value: contact.email || "none on file" },
+        { label: "Phone", value: contact.phone || "none on file" },
+        { label: "Area", value: contact.area || "not set" },
+        { label: "Source", value: lead.source ?? "unknown" },
+        { label: "Tags", value: tags.join(", ") || "none" },
+      ],
+      notes: notes.map((n) => `${n.author}: ${n.text}`),
+    });
+  }, [lead, contact.email, contact.phone, contact.area, tags, notes]);
 
   useEffect(() => {
     if (!detail) return;

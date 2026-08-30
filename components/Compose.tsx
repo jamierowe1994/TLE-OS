@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { PressButton } from "@/components/Bits";
 import DoodleIcon from "@/components/DoodleIcon";
+import { registerOpen } from "@/lib/open-record";
 
 /**
  * Writing one email to one person.
@@ -61,6 +62,35 @@ export default function Compose({
   } | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+
+  /* ── Tell Steve the composer is open, and to whom ─────────────────────────
+
+     This is the surface he was blindest to, and the one it hurt most on:
+     asked to "draft an email to this landlord" with the composer open, he
+     asked WHICH landlord — with the address printed at the top of the panel
+     he was sitting on.
+
+     The subject and body go too, live. Half a draft is a strong signal about
+     what is wanted, and "finish this" is a reasonable thing to say to
+     something in the corner of the screen. They are capped because a long
+     draft would otherwise crowd out the record underneath it in the prompt. */
+  useEffect(() => {
+    if (!open) return;
+    return registerOpen({
+      kind: "compose",
+      id: null,
+      label: `email to ${to || "nobody yet"}`,
+      fields: [
+        { label: "To", value: to || "not set" },
+        { label: "Audience", value: audience },
+        { label: "Subject so far", value: subject || "empty" },
+        { label: "Body so far", value: body.slice(0, 400) || "empty" },
+        ...Object.entries(merge)
+          .filter(([, v]) => v)
+          .map(([k, v]) => ({ label: k, value: String(v) })),
+      ],
+    });
+  }, [open, to, audience, subject, body, merge]);
 
   useEffect(() => {
     if (!open) return;

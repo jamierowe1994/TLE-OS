@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { OpenSurface } from "@/lib/open-record";
 import { sealPayload, SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { scopeFor } from "@/lib/scope";
 import { findUserById } from "@/lib/users";
@@ -105,6 +106,7 @@ export async function POST(req: NextRequest) {
     thread?: string;
     path?: string;
     openListingId?: string;
+    surfaces?: unknown;
   };
   const text = (b.text ?? "").trim();
   if (!text) return NextResponse.json({ error: "Say something first." }, { status: 400 });
@@ -116,6 +118,11 @@ export async function POST(req: NextRequest) {
   /* The record open in front of them. It is what turns "how many bedrooms is
      this one" from an unanswerable question into a lookup. */
   const openListingId = (b.openListingId ?? "").slice(0, 40) || null;
+  /* Everything layered on screen. Capped and coerced HERE rather than trusted:
+     it arrives from the browser and goes straight into a prompt, so a hostile
+     or simply enormous payload must not be able to fill the context window or
+     smuggle instructions in as a field label. */
+  const surfaces = readSurfaces(b.surfaces);
   const common = { userId, userEmail: me.email, thread, path };
 
   await logLine({ ...common, role: "agent", text: text.slice(0, 4000), kind });
@@ -140,7 +147,7 @@ export async function POST(req: NextRequest) {
 
   let answer;
   try {
-    answer = await ask(history, text, { scope, path, openListingId });
+    answer = await ask(history, text, { scope, path, openListingId, surfaces });
   } catch (e) {
     /* A model outage must not lose the question — it is still logged above,
        and it is still a guide somebody needed. */
@@ -176,5 +183,41 @@ export async function POST(req: NextRequest) {
     ...(answer.proposal
       ? { proposal: answer.proposal, sealed: sealPayload(answer.proposal) }
       : {}),
+  });
+}
+
+/**
+ * The open-surface stack, sanitised.
+ *
+ * Everything here came from the browser and is about to be pasted into a
+ * prompt, so it is rebuilt field by field rather than passed through: unknown
+ * kinds are dropped, strings are cut to length, and the number of surfaces,
+ * fields and notes is capped. The caps are generous enough for a drawer with a
+ * composer on top and mean enough that nothing can crowd out the instructions.
+ */
+function readSurfaces(raw: unknown): OpenSurface[] {
+  if (!Array.isArray(raw)) return [];
+  const kinds = ["listing", "lead", "contact", "compose", "case", "record"];
+  const str = (v: unknown, n: number) => (typeof v === "string" ? v.slice(0, n) : "");
+  return raw.slice(-4).flatMap((r): OpenSurface[] => {
+    const s = r as Record<string, unknown>;
+    const kind = String(s.kind ?? "");
+    if (!kinds.includes(kind)) return [];
+    return [
+      {
+        kind: kind as OpenSurface["kind"],
+        id: str(s.id, 60) || null,
+        label: str(s.label, 120),
+        fields: Array.isArray(s.fields)
+          ? s.fields.slice(0, 12).map((f) => {
+              const x = f as Record<string, unknown>;
+              return { label: str(x.label, 40), value: str(x.value, 400) };
+            })
+          : [],
+        notes: Array.isArray(s.notes)
+          ? s.notes.slice(-8).map((n) => str(n, 400)).filter(Boolean)
+          : [],
+      },
+    ];
   });
 }
