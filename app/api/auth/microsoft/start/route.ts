@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
-import { msAuthUrl, msConfigured, MS_STATE_COOKIE } from "@/lib/microsoft";
+import {
+  msAuthUrl,
+  msConfigured,
+  msReturnName,
+  MS_RETURN_COOKIE,
+  MS_STATE_COOKIE,
+} from "@/lib/microsoft";
 import { randomBytes } from "node:crypto";
 
 /**
@@ -32,12 +38,19 @@ export async function GET(req: NextRequest) {
      connection if they shared a browser profile. */
   const state = `${userId}.${randomBytes(16).toString("base64url")}`;
   const res = NextResponse.redirect(msAuthUrl(state));
-  res.cookies.set(MS_STATE_COOKIE, state, {
+  const cookie = {
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "lax" as const,
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: 600,
-  });
+  };
+  res.cookies.set(MS_STATE_COOKIE, state, cookie);
+
+  /* Where to come back to. A NAME from the allowlist, never the path itself —
+     an OAuth callback that will redirect to whatever the query string said is
+     an open redirect, and this is the first place anybody would try one. */
+  const from = msReturnName(req.nextUrl.searchParams.get("from"));
+  if (from) res.cookies.set(MS_RETURN_COOKIE, from, cookie);
   return res;
 }

@@ -252,6 +252,34 @@ export default function PreLaunch() {
         ))}
       </div>
 
+      {/* Seeing what a new starter sees, without spending a magic link.
+          Every invite is single use, so the only way to review the joining
+          flow used to be to burn one - or to make a throwaway account, which
+          then sits in the roster forever. These two links replay the same
+          screens against your own account. */}
+      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
+        <h2 className="text-[15px]">What a new starter sees</h2>
+        <p className="mt-1 text-[11.5px] text-muted">
+          Replays the joining screens against your own account. Setting up again
+          will not undo your REX or email connection, and running the walkthrough
+          changes nothing at all.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a
+            href="/setup?replay=1"
+            className="rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] transition-colors hover:border-ink/40"
+          >
+            Set up an account
+          </a>
+          <a
+            href="/dashboard?tour=choose"
+            className="rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] transition-colors hover:border-ink/40"
+          >
+            Show me round
+          </a>
+        </div>
+      </section>
+
       <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
         <h2 className="text-[15px]">Who&apos;s on it</h2>
         <p className="mt-1 text-[11.5px] text-muted">

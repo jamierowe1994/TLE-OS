@@ -119,6 +119,10 @@ export default function HelpDock() {
   const [sent, setSent] = useState(false);
 
   const [mood, setMood] = useState<Mood>("idle");
+  /* Mid-performance for the new-starter tour: the gesture loops instead of
+     playing once, because he is the only thing on an otherwise blurred screen
+     and a two-second wave leaves him standing still while somebody reads. */
+  const [performing, setPerforming] = useState(false);
   const timers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const thread = useRef(String(Date.now()));
   const scroller = useRef<HTMLDivElement | null>(null);
@@ -128,7 +132,18 @@ export default function HelpDock() {
   useEffect(() => {
     fetch("/api/auth/me")
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: { user?: unknown } | null) => setSignedIn(Boolean(j?.user)))
+      .then((j: { user?: unknown; hasDb?: boolean } | null) =>
+        /* Signed in, OR there is no database at all - which on this codebase
+           means a developer's laptop and nothing else. `hasDb()` is false only
+           when DATABASE_URL is unset, and it is always set in production, so
+           this cannot show Steve to a stranger on the live site.
+
+           Without it the assistant simply does not exist locally, and the last
+           three steps of the new-starter tour - the ones that teach somebody
+           how to report a fault, which is the whole point of a pre-launch -
+           could not be looked at before they shipped. */
+        setSignedIn(Boolean(j?.user) || j?.hasDb === false)
+      )
       .catch(() => {});
   }, []);
 
@@ -192,6 +207,77 @@ export default function HelpDock() {
     });
     return () => cancelAnimationFrame(id);
   }, [lines, busy, open, tab]);
+
+  /**
+   * The new-starter tour driving the dock.
+   *
+   * The tour's whole job on its last step is to point at Steve and at the
+   * feedback form, and the feedback form lives INSIDE this bubble - there is
+   * nothing to point at until somebody has opened him. Rather than teach the
+   * tour to synthesise clicks on a button it does not own, the dock takes an
+   * instruction, the same way Shell and ThemeGate already do.
+   *
+   * Declared before the `!signedIn` early return below, because a hook that
+   * only sometimes runs is a hook that crashes on the render where it stops.
+   */
+  useEffect(() => {
+    /* Timers belonging to the tour's performance, cleared whenever it is
+       re-commanded or the dock unmounts. Kept out of `timers` (the ref the
+       rest of the dock uses) so cancelling one cannot cancel the other. */
+    let show: number[] = [];
+    const stop = () => {
+      show.forEach(clearTimeout);
+      show = [];
+    };
+
+    const onCommand = (e: Event) => {
+      const d = (e as CustomEvent).detail as {
+        open?: boolean;
+        tab?: "help" | "guides" | "feedback";
+        perform?: boolean;
+      };
+      if (d?.tab) setTab(d.tab);
+      if (d?.open !== undefined) setOpen(d.open);
+
+      stop();
+      if (!d?.perform) {
+        setPerforming(false);
+        if (d?.open === false) setMood("idle");
+        return;
+      }
+
+      /**
+       * The tour is pointing at him, so he does something about it.
+       *
+       * James, 30 Aug: keep waving while he is being shown off, then flex,
+       * then let him drift off if somebody leaves the screen open. The
+       * ordinary idle timers cannot do this - they are disabled while the
+       * bubble is open (see the effect below), which is correct everywhere
+       * except here, where the bubble being open is the whole point.
+       *
+       * The waving repeats rather than playing once: `nib-lean` runs three
+       * times over about two seconds, and a single pass was over before
+       * anybody had finished reading the first line about him.
+       */
+      setPerforming(true);
+      setMood("wave");
+      show.push(window.setTimeout(() => setMood("flex"), 4200));
+      show.push(window.setTimeout(() => {
+        setPerforming(false);
+        setMood("idle");
+      }, 8600));
+      /* Long enough that it only happens to somebody who has genuinely
+         stopped reading, rather than to somebody who is thinking. */
+      show.push(window.setTimeout(() => setMood("texting"), 26000));
+      show.push(window.setTimeout(() => setMood("asleep"), 44000));
+    };
+
+    window.addEventListener("os-help-dock", onCommand);
+    return () => {
+      stop();
+      window.removeEventListener("os-help-dock", onCommand);
+    };
+  }, []);
 
   if (!signedIn) return null;
 
@@ -401,9 +487,10 @@ export default function HelpDock() {
         aria-label="Steve — help and feedback"
         aria-expanded={open}
         data-hide-from-shot
+        data-os-steve
         className="fixed bottom-2 right-3 z-[190] text-ink transition-transform hover:scale-105 active:scale-95"
       >
-        <AssistantCharacter mood={mood} size={76} />
+        <AssistantCharacter mood={mood} size={76} loop={performing} />
       </button>
 
       {open && (
@@ -411,6 +498,7 @@ export default function HelpDock() {
           /* Shifted left of the character so the tail lands on his head rather
              than beside it, and so the bubble does not sit directly over him. */
           data-hide-from-shot
+          data-os-steve-bubble
           className="fade-up fixed bottom-[104px] right-[68px] z-[190] w-[min(340px,calc(100vw-2.5rem))]"
         >
           <div className="relative rounded-[22px] border border-line/80 bg-panel p-4 shadow-[0_20px_50px_-16px_rgba(0,0,0,0.4)]">
@@ -430,7 +518,12 @@ export default function HelpDock() {
                 <button type="button" onClick={() => setTab("guides")} className={pill(tab === "guides")}>
                   Guides
                 </button>
-                <button type="button" onClick={() => setTab("feedback")} className={pill(tab === "feedback")}>
+                <button
+                  type="button"
+                  onClick={() => setTab("feedback")}
+                  data-os-feedback
+                  className={pill(tab === "feedback")}
+                >
                   Give feedback
                 </button>
                 {/* Only once there is something to clear, and never mid-answer.
@@ -623,6 +716,26 @@ export default function HelpDock() {
                     </button>{" "}
                     - and what people ask is what gets written first, so it is worth asking.
                   </p>
+
+                  {/* The one thing genuinely on the shelf. The tour tells people
+                      they can pick it up again from here, so it has to be here:
+                      a promise made during onboarding and not kept is the first
+                      thing somebody learns about the product. */}
+                  <div className="mt-4 border-t border-line/70 pt-3">
+                    <p className="text-[12px] font-semibold">Showing you round</p>
+                    <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
+                      The walkthrough you were offered when you first signed in.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        window.dispatchEvent(new CustomEvent("os-tour"))
+                      }
+                      className="mt-2.5 rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] transition-colors hover:border-ink/40"
+                    >
+                      Run it again
+                    </button>
+                  </div>
                 </div>
               ) : sent ? (
                 <p className="py-5 text-center text-[13px]">Thanks — that&apos;s logged.</p>

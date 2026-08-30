@@ -49,6 +49,11 @@ function NavLink({
       <Link
         href={item.href}
         title={collapsed ? item.label : undefined}
+        /* The handle the new-starter tour hangs its spotlight on. The href is
+           already unique per item, so this carries no new source of truth -
+           it just means the tour is not matching on `a[href="..."]`, which
+           would also match any link to the same screen inside a page. */
+        data-nav={item.href}
         // Soft-tint active state: highlight by reducing contrast, not adding it.
         // The icon NEVER moves on collapse — padding stays constant and only
         // the label folds away, which is what makes the animation read as one
@@ -126,6 +131,30 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     applyAccent(saved);
     setCollapsed(localStorage.getItem("os-nav-collapsed") === "1");
     setTheme(readTheme() ?? "auto");
+  }, []);
+
+  /**
+   * The new-starter tour asking the rail to show it something.
+   *
+   * Same shape as the `os-set-theme` event just below: a window event rather
+   * than lifted state, so the tour does not have to be mounted inside Shell
+   * to drive it. It needs two things - the rail open, because a spotlight on
+   * a 72px icon column explains nothing, and the profile panel open, because
+   * that is where "Your profile" actually lives.
+   *
+   * Deliberately NOT persisted. Collapsing the rail is somebody's own habit,
+   * and a tour that quietly rewrites a setting on its way past is a tour that
+   * gets blamed for it later. This holds for the visit; their stored answer
+   * comes back on the next load.
+   */
+  useEffect(() => {
+    const onShell = (e: Event) => {
+      const d = (e as CustomEvent).detail as { expand?: boolean; profile?: boolean };
+      if (d?.expand) setCollapsed(false);
+      if (d?.profile !== undefined) setProfileOpen(d.profile);
+    };
+    window.addEventListener("os-shell", onShell);
+    return () => window.removeEventListener("os-shell", onShell);
   }, []);
 
   /** ThemeGate owns the paint transition; the click point seeds it. */
@@ -298,6 +327,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           )}
           <button
             type="button"
+            data-os-profile
             // Collapsed, there's no room for the panel — the tap reopens the rail.
             onClick={() => (collapsed ? toggleCollapsed() : setProfileOpen((o) => !o))}
             className={`flex w-full items-center gap-3 rounded-xl py-2.5 text-left transition-colors hover:bg-page ${

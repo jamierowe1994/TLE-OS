@@ -59,6 +59,7 @@ export type Mood =
   | "sorry"
   | "surprised"
   | "texting"
+  | "flex"
   | "asleep";
 
 /* ------------------------------------------------------------- geometry -- */
@@ -125,6 +126,12 @@ const POSE: Record<Mood, { ls: number; le: number; rs: number; re: number }> = {
   talking: { ls: 18, le: -16, rs: -18, re: 16 },
   /* Brought round to the front and drawn OVER the body — see `front` below. */
   texting: { ls: -46, le: -58, rs: 46, re: 58 },
+  /* The double bicep. Upper arms roughly level and out, forearms swung hard up
+     and in - the elbow angle is doing all the work, which is what makes it read
+     as a flex rather than as a shrug or a cheer.
+     Shown while the new-starter tour is pointing at him: James wanted him
+     visibly pleased with himself rather than standing there being described. */
+  flex: { ls: 24, le: 88, rs: -24, re: -88 },
 };
 
 /**
@@ -238,7 +245,9 @@ function Eyes({ mood, blink, dx, dy }: { mood: Mood; blink: boolean; dx: number;
       </g>
     );
   }
-  if (mood === "happy") {
+  /* Flex borrows the happy arch: eyes squeezed shut with the effort, which is
+     the difference between showing off and simply standing with arms raised. */
+  if (mood === "happy" || mood === "flex") {
     return (
       <g stroke={w} strokeWidth="2.2" strokeLinecap="round" fill="none">
         <path d={`M${lx - 3.6} ${y + 1} q3.6 -5 7.2 0`} />
@@ -294,7 +303,8 @@ function Mouth({ mood, still }: { mood: Mood; still: boolean }) {
   /* Small and gentle at rest. An earlier pass had a long sweeping grin, but the
      references keep it modest — on a shape this big a wide smile tips from
      friendly into manic, and he has to be looked at all day. */
-  if (mood === "happy") return <path d="M53.5 60.5C56 66.5 64 66.5 66.5 60.5" {...c} />;
+  if (mood === "happy" || mood === "flex")
+    return <path d="M53.5 60.5C56 66.5 64 66.5 66.5 60.5" {...c} />;
   return <path d="M55.5 60.8C57.4 64.6 62.6 64.6 64.5 60.8" {...c} />;
 }
 
@@ -303,11 +313,23 @@ export default function AssistantCharacter({
   size = 64,
   track = true,
   className = "",
+  loop = false,
 }: {
   mood?: Mood;
   size?: number;
   track?: boolean;
   className?: string;
+  /**
+   * Keep the mood's gesture running instead of playing it once.
+   *
+   * Wave and flex are one-shots everywhere else, which is right: a character
+   * who waves at you forever is a character you stop seeing. The exception is
+   * the new-starter tour, where the screen is dimmed, everything else is
+   * blurred, and he is the only thing being looked at - there a gesture that
+   * finishes after two seconds leaves him standing still while somebody is
+   * still reading the sentence about him.
+   */
+  loop?: boolean;
 }) {
   /* Filter and mask ids must be unique per instance, or a second character on
      the page silently steals the first one's. */
@@ -389,7 +411,10 @@ export default function AssistantCharacter({
   const bodyAnim =
     mood === "happy" ? "nib-hop"
     : mood === "surprised" ? "nib-startle"
-    : mood === "wave" ? "nib-lean"
+    /* Two short pumps rather than a hop: a flex is a held pose that tightens,
+       and bouncing him would read as another celebration. */
+    : mood === "flex" ? (loop ? "nib-flex-loop" : "nib-flex")
+    : mood === "wave" ? (loop ? "nib-lean-loop" : "nib-lean")
     : mood === "talking" ? "nib-hover-fast"
     : mood === "asleep" ? "nib-sleep"
     : "nib-hover";
@@ -634,6 +659,20 @@ export default function AssistantCharacter({
           70%  { transform: translateY(0) scale(1.07, 0.93); }
           100% { transform: translateY(0) scale(1, 1); }
         }
+        /* The flex: two short squeezes, held. He squashes very slightly wider
+           and shorter on each pump rather than leaving the ground - a hop would
+           read as another celebration, and this needs to read as effort. */
+        .nib-flex { animation: nib-flex 1.15s cubic-bezier(.34,1.4,.5,1) 2; }
+        .nib-flex-loop { animation: nib-flex 1.15s cubic-bezier(.34,1.4,.5,1) infinite; }
+        .nib-lean-loop { animation: nib-lean 0.62s ease-in-out infinite; }
+        @keyframes nib-flex {
+          0%   { transform: scale(1, 1) translateY(0); }
+          18%  { transform: scale(1.06, 0.95) translateY(1px); }
+          34%  { transform: scale(0.99, 1.02) translateY(-2px); }
+          52%  { transform: scale(1.05, 0.96) translateY(1px); }
+          72%  { transform: scale(1, 1) translateY(0); }
+          100% { transform: scale(1, 1) translateY(0); }
+        }
         .nib-lean { animation: nib-lean 0.62s ease-in-out 3; }
         @keyframes nib-lean {
           0%, 100% { transform: rotate(0deg) translateY(0); }
@@ -721,6 +760,7 @@ export default function AssistantCharacter({
         }
         @media (prefers-reduced-motion: reduce) {
           .nib-hover, .nib-hover-fast, .nib-hop, .nib-lean, .nib-startle, .nib-sleep,
+          .nib-flex, .nib-flex-loop, .nib-lean-loop,
           .nib-shadow, .nib-shadow-fast, .nib-shadow-hop, .nib-shadow-sleep,
           .nib-wave, .nib-talk, .nib-sparkle, .nib-ticks, .nib-dots,
           .nib-jelly-l, .nib-jelly-r, .nib-jelly-f, .nib-scroll { animation: none; }

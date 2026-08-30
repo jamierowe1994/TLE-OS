@@ -27,10 +27,6 @@ export type NavItem = {
 /** FRONT OF HOUSE — the tenancy being made. */
 export const FRONT: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard" },
-  /* Before Leads, and that ordering is the whole argument for it. Everything
-     below assumes somebody already put their hand up; Tools is where the doors
-     nobody has knocked on yet are worked. Its first group is Prospecting. */
-  { href: "/tools", label: "Tools", icon: "rocket" },
   // Tenant-side and landlord-side are different jobs — same inbox, different
   // questions — so Leads opens rather than just navigating.
   {
@@ -60,6 +56,22 @@ export const BACK: NavItem[] = [
   { href: "/emails", label: "Emails", icon: "mail" },
   { href: "/portfolio", label: "Portfolio", icon: "folder" },
   { href: "/finances", label: "Finances", icon: "wallet" },
+  /* Tools used to sit second in FRONT, above Leads, and the argument for it
+     was good: everything in FRONT assumes somebody already put their hand up,
+     and Tools is where the doors nobody has knocked on yet are worked.
+
+     James moved it here on 30 Aug while writing the new-starter tour, and the
+     reason overrides that argument rather than disagreeing with it. FRONT is
+     what an agent opens every morning in the order the day runs; prospecting
+     is a thing you go and do deliberately, not a thing waiting for you. Second
+     in the rail gave it the weight of a daily queue it does not have, and it
+     is the one screen in the rail still marked `shell` in lib/screens.ts —
+     a new agent met an empty room two clicks into their first tour.
+
+     Last in the back office, not first: Compliance → Emails → Portfolio →
+     Finances is the running of the book, and Tools is what you reach for once
+     that book needs feeding. */
+  { href: "/tools", label: "Tools", icon: "rocket" },
   /* Marketing is deliberately NOT here. It's a different workspace for a
      different person, reached from the door — a nav that lists everything
      everyone might do is how an OS starts to feel like a filing cabinet. */
@@ -100,7 +112,6 @@ export const AGENT_NAV: NavItem[] = [...FRONT, ...BACK];
  */
 export const AGENT_ROUTES = [
   "/dashboard",
-  "/tools",
   "/leads",
   "/market-appraisals",
   "/listings",
@@ -110,6 +121,7 @@ export const AGENT_ROUTES = [
   "/emails",
   "/portfolio",
   "/finances",
+  "/tools",
 ] as const;
 
 export type AgentRoute = (typeof AGENT_ROUTES)[number];

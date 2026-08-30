@@ -46,6 +46,37 @@ const GRAPH = "https://graph.microsoft.com/v1.0";
 export const MS_STATE_COOKIE = "os_ms_state";
 
 /**
+ * Where to send somebody once Microsoft has finished with them.
+ *
+ * The callback used to be hardcoded to /admin/pre-launch, which was right when
+ * the only person connecting a mailbox was an owner standing on that board. A
+ * new agent connecting theirs during setup is not an owner, so that redirect
+ * landed them on a screen they cannot open, on their first morning, having
+ * just done as they were asked.
+ *
+ * An ALLOWLIST of names, never a URL off the query string. A redirect target
+ * taken from the wire is an open redirect, and an OAuth callback is exactly
+ * where somebody would go looking for one.
+ */
+export const MS_RETURN_COOKIE = "os_ms_return";
+
+const MS_RETURNS: Record<string, string> = {
+  setup: "/setup",
+  profile: "/profile",
+  admin: "/admin/pre-launch",
+};
+
+/** The name a caller may ask for, or null if it is not one we offer. */
+export function msReturnName(raw: string | null | undefined): string | null {
+  return raw && Object.prototype.hasOwnProperty.call(MS_RETURNS, raw) ? raw : null;
+}
+
+/** The path for a name. Anything unrecognised goes back to the old default. */
+export function msReturnPath(name: string | null | undefined): string {
+  return (name && MS_RETURNS[name]) || "/admin/pre-launch";
+}
+
+/**
  * THIS STRING AND THE AZURE APP MUST AGREE.
  *
  * Changing it re-prompts every already-connected agent for consent, and asking

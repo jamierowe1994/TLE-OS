@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
-import { msExchangeCode, msGetMe, msStore, MS_STATE_COOKIE } from "@/lib/microsoft";
+import {
+  msExchangeCode,
+  msGetMe,
+  msStore,
+  msReturnPath,
+  MS_RETURN_COOKIE,
+  MS_STATE_COOKIE,
+} from "@/lib/microsoft";
 
 /**
  * "Connect your email" — step two. Microsoft sends them back here.
@@ -23,11 +30,22 @@ import { msExchangeCode, msGetMe, msStore, MS_STATE_COOKIE } from "@/lib/microso
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+/**
+ * Back where they came from, carrying the outcome in the query string.
+ *
+ * The destination comes from a cookie the start route set, mapped through an
+ * allowlist — so an agent who connected their mailbox during setup returns to
+ * setup rather than to the admin board, which they cannot open. Every failure
+ * path uses this too: being bounced somewhere you have no business being is
+ * worst precisely when something has already gone wrong.
+ */
 function back(req: NextRequest, params: Record<string, string>) {
-  const url = new URL("/admin/pre-launch", req.nextUrl.origin);
+  const dest = msReturnPath(req.cookies.get(MS_RETURN_COOKIE)?.value);
+  const url = new URL(dest, req.nextUrl.origin);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   const res = NextResponse.redirect(url);
   res.cookies.delete(MS_STATE_COOKIE);
+  res.cookies.delete(MS_RETURN_COOKIE);
   return res;
 }
 

@@ -155,7 +155,13 @@ function ChoosePassword({ token }: { token: string }) {
         body: JSON.stringify({ token, name, password }),
       });
       const j = (await r.json()) as { ok?: boolean; error?: string };
-      if (j.ok) router.push("/profile");
+      /* Straight into setting the account up, not to the profile.
+         The profile was a reasonable landing while this was the only screen
+         that asked for anything, but it is a page of fields with no order and
+         no end to it: an agent who lands there has no way of knowing that
+         connecting REX is the one thing that decides whether the OS has
+         anything to show them. /setup asks in order and says why. */
+      if (j.ok) router.push("/setup");
       else setError(j.error ?? "That didn't work.");
     } catch (err) {
       setError((err as Error).message);
@@ -167,8 +173,11 @@ function ChoosePassword({ token }: { token: string }) {
   return (
     <Panel>
       <h1 className="hand text-[22px] leading-tight">Choose your password</h1>
+      {/* "Two things and you're in" was true when this was the last screen.
+          It is now the first of five, and a promise that turns out to be four
+          screens short is worse than no promise. */}
       <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
-        Address confirmed. Two things and you&apos;re in.
+        Address confirmed. Set a password, then we will get you set up.
       </p>
 
       {error && (
