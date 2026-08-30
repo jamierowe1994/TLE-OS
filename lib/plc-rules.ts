@@ -121,13 +121,13 @@ function universal(f: DocFacts, moveInDate: string | null): RuleResult["reasons"
     out.push({
       verdict: "fail",
       rule: "Wrong document",
-      because: `This looks like ${f.documentType ?? "something else"}, not what this check asks for.`,
+      because: `this looks like ${f.documentType ?? "something else"}, not what this check asks for.`,
     });
   } else if (f.isExpectedType === "unclear") {
     out.push({
       verdict: "review",
       rule: "Document type unclear",
-      because: "The reader could not tell what this is, so somebody should open it.",
+      because: "I could not tell what this document is.",
     });
   }
 
@@ -135,13 +135,13 @@ function universal(f: DocFacts, moveInDate: string | null): RuleResult["reasons"
     out.push({
       verdict: "fail",
       rule: "Wrong property",
-      because: `The document is for ${f.addressOnDocument ?? "a different address"}.`,
+      because: `it is for ${f.addressOnDocument ?? "a different address"}, not this property.`,
     });
   } else if (f.addressMatches === "unclear") {
     out.push({
       verdict: "review",
       rule: "Address not confirmed",
-      because: "The address on the document could not be matched to the property.",
+      because: "I could not match the address on it to the property.",
     });
   }
 
@@ -149,7 +149,7 @@ function universal(f: DocFacts, moveInDate: string | null): RuleResult["reasons"
     out.push({
       verdict: "fail",
       rule: "Not signed",
-      because: "An unsigned certificate is not a certificate.",
+      because: "it is not signed, and an unsigned certificate is not a certificate.",
     });
   }
 
@@ -161,7 +161,7 @@ function universal(f: DocFacts, moveInDate: string | null): RuleResult["reasons"
     out.push({
       verdict: "review",
       rule: "Expiry not printed",
-      because: "The expiry was worked out from the issue date, not read off the document.",
+      because: "the expiry was not printed, so I worked it out — which is not good enough to rely on.",
     });
   }
 
@@ -169,7 +169,7 @@ function universal(f: DocFacts, moveInDate: string | null): RuleResult["reasons"
     out.push({
       verdict: "review",
       rule: "No move-in date",
-      because: "Without it, nothing can be checked for being in date on the right day.",
+      because: "without a move-in date, nothing can be checked for being in date on the right day.",
     });
   }
 
@@ -183,7 +183,7 @@ function dateRules(f: DocFacts, moveInDate: string | null): RuleResult["reasons"
       {
         verdict: "review",
         rule: "No expiry found",
-        because: "No expiry or next-due date could be read, so it cannot be checked.",
+        because: "no expiry or next-due date could be read off it.",
       },
     ];
   }
@@ -195,7 +195,7 @@ function dateRules(f: DocFacts, moveInDate: string | null): RuleResult["reasons"
       {
         verdict: "fail",
         rule: "Out of date on the move-in date",
-        because: `It expires ${f.expiryDate}, which is ${Math.abs(days)} days before the tenancy starts.`,
+        because: `it expires ${f.expiryDate}, which is ${Math.abs(days)} days before the tenancy starts.`,
       },
     ];
   }
@@ -204,7 +204,7 @@ function dateRules(f: DocFacts, moveInDate: string | null): RuleResult["reasons"
       {
         verdict: "review",
         rule: "Expires soon after move-in",
-        because: `Valid on the day, but only for ${days} more days. Worth booking the renewal now.`,
+        because: `it is valid on the day, but only for ${days} more days. Worth booking the renewal now.`,
       },
     ];
   }
@@ -224,7 +224,7 @@ function outcomeRules(f: DocFacts, label: string): RuleResult["reasons"] {
     out.push({
       verdict: "fail",
       rule: "Unsatisfactory result",
-      because: `The ${label} records an unsatisfactory result.`,
+      because: `the ${label} records an unsatisfactory result.`,
     });
   }
   if (f.outstandingDefects.length) {
@@ -241,7 +241,7 @@ function outcomeRules(f: DocFacts, label: string): RuleResult["reasons"] {
     out.push({
       verdict: "review",
       rule: "No result stated",
-      because: `No overall result could be read off the ${label}.`,
+      because: `no overall result could be read off the ${label}.`,
     });
   }
   return out;
@@ -271,7 +271,7 @@ const CHECK_RULES: Partial<Record<CheckId, (f: DocFacts, moveIn: string | null) 
       out.push({
         verdict: "review",
         rule: "No rating read",
-        because: "The energy rating band could not be read off the certificate.",
+        because: "the energy rating band could not be read off it.",
       });
     } else if (band > "E") {
       /* F and G. Lettable only with a registered exemption, which is its own
@@ -279,7 +279,7 @@ const CHECK_RULES: Partial<Record<CheckId, (f: DocFacts, moveIn: string | null) 
       out.push({
         verdict: "fail",
         rule: "Below band E",
-        because: `Rated ${band}. It cannot be let without a registered exemption, and that is a separate document.`,
+        because: `it is rated ${band}, which cannot be let without a registered exemption — and that is a separate document.`,
       });
     } else {
       out.push({
@@ -304,13 +304,13 @@ const CHECK_RULES: Partial<Record<CheckId, (f: DocFacts, moveIn: string | null) 
       out.push({
         verdict: "review",
         rule: "Nobody named",
-        because: "No person could be read off the document, so it cannot be matched to an owner.",
+        because: "no person could be read off it, so it cannot be matched to an owner.",
       });
     } else {
       out.push({
         verdict: "review",
         rule: "Names read, not verified",
-        because: `Names ${f.peopleNamed.join(", ")}. Whether they are the owners is not something the reader can know.`,
+        because: `it names ${f.peopleNamed.join(", ")}, and whether they are the owners is not something I can know.`,
       });
     }
     return out;
@@ -321,7 +321,7 @@ const CHECK_RULES: Partial<Record<CheckId, (f: DocFacts, moveIn: string | null) 
     {
       verdict: "review",
       rule: "Affordability is a judgement",
-      because: `Names ${f.peopleNamed.join(", ") || "nobody the reader could read"}. Whether the outcome is good enough is yours.`,
+      because: `whether the outcome is good enough is a judgement, not a rule.`,
     },
   ],
 
@@ -330,7 +330,7 @@ const CHECK_RULES: Partial<Record<CheckId, (f: DocFacts, moveIn: string | null) 
     {
       verdict: "review",
       rule: "Enforceability is a judgement",
-      because: "Whether this guarantee is worth anything is a legal question, not a readable fact.",
+      because: "whether this guarantee is enforceable is a legal question, not a readable fact.",
     },
   ],
 
@@ -342,7 +342,7 @@ const CHECK_RULES: Partial<Record<CheckId, (f: DocFacts, moveIn: string | null) 
     out.push({
       verdict: "review",
       rule: "Terms are a judgement",
-      because: "Names and dates were read, but whether the terms are right is not a rule.",
+      because: "the names and dates read cleanly, but whether the terms are right is not a rule.",
     });
     return out;
   },
@@ -387,6 +387,60 @@ export function judge(
   return { verdict: worst(reasons), reasons };
 }
 
+/* ────────────────────────────── saying it out loud ─────────────────────── */
+
+/**
+ * One line per check, in the words somebody would use.
+ *
+ * ── Why this exists at all ─────────────────────────────────────────────────
+ *
+ * The rules produce a verdict and a list of reasons, and it is tempting to put
+ * that straight on the screen. Nine checks times four reasons each is thirty-
+ * six rows of yes and no, and a screen like that does not get read - it gets
+ * scrolled past, which is worse than not having it, because everybody assumes
+ * somebody looked.
+ *
+ * So: "Gas safety looks fine." One line. The detail is still there underneath
+ * for the checks that need it, and only for those.
+ *
+ * ── The wording rule ───────────────────────────────────────────────────────
+ *
+ * "Looks fine" and not "passed". The scan is recommending, and the sentence
+ * has to carry that even when everything is clean, because the person reading
+ * it is about to put their name to a legal judgement. "Passed" invites them to
+ * agree; "looks fine" invites them to check.
+ */
+export function summarise(
+  checkLabel: string,
+  result: RuleResult
+): { line: string; verdict: Verdict; concerns: RuleResult["reasons"] } {
+  /* Only the things worth raising. A pass reason ("valid until 2026-03-12")
+     is the evidence for the line, not a separate thing to read. */
+  const concerns = result.reasons.filter((r) => r.verdict !== "pass");
+
+  if (result.verdict === "fail") {
+    const first = concerns.find((r) => r.verdict === "fail");
+    return {
+      /* The harm, in the line itself. Somebody scanning the summary should
+         learn WHAT is wrong without opening anything. */
+      line: `${checkLabel} — ${first?.because ?? "something here would stop the let."}`,
+      verdict: "fail",
+      concerns,
+    };
+  }
+
+  if (result.verdict === "review") {
+    const first = concerns[0];
+    return {
+      line: `${checkLabel} needs your eyes — ${first?.because ?? "the reader could not settle it."}`,
+      verdict: "review",
+      concerns,
+    };
+  }
+
+  return { line: `${checkLabel} looks fine.`, verdict: "pass", concerns: [] };
+}
+
 /**
  * The recommendation for a whole pack.
  *
@@ -402,21 +456,31 @@ export function recommend(perCheck: { checkId: CheckId; result: RuleResult }[]):
   const fails = perCheck.filter((p) => p.result.verdict === "fail").length;
   const reviews = perCheck.filter((p) => p.result.verdict === "review").length;
 
+  /* Every headline is phrased as a recommendation and none of them tells the
+     reader what to do. "Not ready to let" would be the OS reaching a legal
+     conclusion; "I would not let this yet" is the scan saying what it thinks,
+     which is all it is entitled to say. */
   if (fails) {
     return {
       verdict: "fail",
-      headline: `${fails} check${fails === 1 ? "" : "s"} would fail. This is not ready to let.`,
+      headline:
+        fails === 1
+          ? "One thing here would stop the let. I would send this back."
+          : `${fails} things here would stop the let. I would send this back.`,
     };
   }
   if (reviews) {
     return {
       verdict: "review",
-      headline: `Nothing failed, but ${reviews} check${reviews === 1 ? " needs" : "s need"} a person.`,
+      headline:
+        reviews === 1
+          ? "Nothing obviously wrong, but one check needs your eyes."
+          : `Nothing obviously wrong, but ${reviews} checks need your eyes.`,
     };
   }
   return {
     verdict: "pass",
-    headline: "Every rule passed. Still your call.",
+    headline: "Everything I can check looks fine. The decision is still yours.",
   };
 }
 

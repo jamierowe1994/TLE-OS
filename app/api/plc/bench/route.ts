@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { checkById, type CheckId } from "@/lib/plc";
 import { readDocument, scanConfigured } from "@/lib/plc-scan";
+import { summarise } from "@/lib/plc-rules";
 
 /**
  * The scan bench: try a real certificate without touching anything.
@@ -132,6 +133,9 @@ export async function POST(req: NextRequest) {
          model's prose. Seeing which rule fired is the whole reason to run the
          bench twice on the same document with a different move-in date. */
       verdict: read.result.verdict,
+      /* The one-liner first. A screen that leads with thirty rows of yes and no
+         gets scrolled past, and everybody assumes somebody read it. */
+      summary: summarise(check.label, read.result),
       reasons: read.result.reasons,
       facts: read.facts,
       findings: read.observations,
