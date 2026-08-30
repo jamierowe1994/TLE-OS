@@ -18,7 +18,7 @@
 
 export type WiringState = "live" | "proven" | "untested" | "blocked" | "manual";
 
-export type SystemKey = "rex" | "payprop" | "storage" | "sends" | "foundations";
+export type SystemKey = "rex" | "propoly" | "payprop" | "storage" | "sends" | "foundations";
 
 export interface WiringRow {
   system: SystemKey;
@@ -49,6 +49,17 @@ export const SYSTEMS: {
     label: "REX",
     blurb: "The CRM — listings, leads, compliance records, diary.",
     endpoint: "/api/rex/wiring",
+  },
+  {
+    /* Absent from this sheet until 30 Aug 2026, which is the strangest gap in
+       it: Propoly is the declared source of truth for deals and it generates
+       the contracts. The sheet listed the CRM and the money and left out the
+       system both of them describe. */
+    key: "propoly",
+    label: "Propoly",
+    blurb:
+      "The source of truth — deals, tenancy progression, the contracts themselves. Read-only for us today; the sheet shows what its own API document says we could write.",
+    endpoint: "/api/propoly/wiring",
   },
   {
     key: "payprop",
