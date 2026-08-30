@@ -1,0 +1,164 @@
+import { NextRequest, NextResponse } from "next/server";
+import {
+  decideCase,
+  getCase,
+  markScanning,
+  PlcRefused,
+  recordScan,
+  reopenCase,
+  submitCase,
+  updateDetails,
+} from "@/lib/plc-store";
+import { missingDocuments, PLC_CHECKS, scanSummary, sortFindings } from "@/lib/plc";
+import { scanCase, scanConfigured } from "@/lib/plc-scan";
+import { actorName } from "@/lib/plc-actor";
+
+/**
+ * GET   /api/plc/<id>  → the case, its findings in reading order, what's short
+ * PATCH /api/plc/<id>  → move-in date and the agent's note, while it's theirs
+ * POST  /api/plc/<id>  → one of the moves: submit, scan, decide, reopen
+ *
+ * The moves are one route with an `action` rather than four sibling files,
+ * because they are all the same shape -- ask the store, catch a refusal,
+ * answer with the case. Splitting them would put four copies of the same
+ * error handling in four places, and the refusal text is the part that
+ * matters here.
+ *
+ * Every one of them is a POST to the STORE, never a write of `state` from
+ * here. lib/plc-store is the only thing that consults PLC_TRANSITIONS, so a
+ * route cannot skip a step even by accident.
+ */
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+/* The scan is one API call per document, sequentially. A nine-document pack
+   can sit well past the default. */
+export const maxDuration = 300;
+
+type Ctx = { params: Promise<{ id: string }> };
+
+function payload(c: Awaited<ReturnType<typeof getCase>>) {
+  if (!c) return null;
+  return {
+    case: { ...c, findings: sortFindings(c.findings) },
+    checks: PLC_CHECKS,
+    missing: missingDocuments(c).map((m) => m.id),
+    summary: c.scannedAt ? scanSummary(c.findings) : null,
+    scanConfigured: scanConfigured(),
+  };
+}
+
+export async function GET(_req: NextRequest, ctx: Ctx) {
+  const { id } = await ctx.params;
+  const found = await getCase(id);
+  if (!found) {
+    return NextResponse.json({ ok: false, error: "No handover with that reference." }, { status: 404 });
+  }
+  return NextResponse.json({ ok: true, ...payload(found) });
+}
+
+export async function PATCH(req: NextRequest, ctx: Ctx) {
+  const { id } = await ctx.params;
+  let body: { moveInDate?: string | null; agentNote?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ ok: false, error: "Expected JSON." }, { status: 400 });
+  }
+  try {
+    const updated = await updateDetails(id, body);
+    return NextResponse.json({ ok: true, ...payload(updated) });
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function POST(req: NextRequest, ctx: Ctx) {
+  const { id } = await ctx.params;
+  let body: {
+    action?: string;
+    force?: boolean;
+    decision?: "approved" | "deferred" | "declined";
+    note?: string;
+  };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ ok: false, error: "Expected JSON." }, { status: 400 });
+  }
+
+  try {
+    switch (body.action) {
+      case "submit": {
+        const submitted = await submitCase(id, { force: Boolean(body.force) });
+        return NextResponse.json({ ok: true, ...payload(submitted) });
+      }
+
+      case "reopen": {
+        const reopened = await reopenCase(id);
+        return NextResponse.json({ ok: true, ...payload(reopened) });
+      }
+
+      case "scan": {
+        /* Marked scanning FIRST so the queue shows it as busy while it runs -
+           a nine-document pack takes long enough that a second person would
+           otherwise start the same scan. If the read then throws, the case
+           still lands in reviewing below rather than sticking on scanning
+           forever: an unscannable pack is Kirstie's to read, not a dead end. */
+        const busy = await markScanning(id);
+        let findings;
+        try {
+          findings = await scanCase(busy);
+        } catch (e) {
+          findings = [
+            {
+              checkId: "tenancy-agreement" as const,
+              level: "query" as const,
+              message: `The scan didn't finish — ${e instanceof Error ? e.message : "unknown error"}. Nothing below has been read automatically.`,
+              foundDate: null,
+            },
+          ];
+        }
+        const scanned = await recordScan(id, findings);
+        return NextResponse.json({ ok: true, ...payload(scanned) });
+      }
+
+      case "skip-scan": {
+        /* Straight to review with no findings. The transition table allows
+           submitted → reviewing precisely for this: no API key, or a pack
+           Kirstie would rather just read. */
+        const skipped = await recordScan(id, []);
+        return NextResponse.json({ ok: true, ...payload(skipped) });
+      }
+
+      case "decide": {
+        const decision = body.decision;
+        if (decision !== "approved" && decision !== "deferred" && decision !== "declined") {
+          return NextResponse.json(
+            { ok: false, error: "A decision has to be approve, defer or decline." },
+            { status: 400 }
+          );
+        }
+        const by = await actorName(req, "Compliance");
+        const decided = await decideCase(id, decision, by, body.note ?? "");
+        return NextResponse.json({ ok: true, ...payload(decided) });
+      }
+
+      default:
+        return NextResponse.json({ ok: false, error: "Unknown action." }, { status: 400 });
+    }
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** A refusal is a 409 with a sentence; anything else is ours and is a 500. */
+function fail(e: unknown) {
+  if (e instanceof PlcRefused) {
+    return NextResponse.json({ ok: false, error: e.message }, { status: 409 });
+  }
+  return NextResponse.json(
+    { ok: false, error: e instanceof Error ? e.message : "That didn't work." },
+    { status: 500 }
+  );
+}

@@ -909,6 +909,48 @@ CREATE TABLE IF NOT EXISTS os_teg_people (
   synced_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS os_teg_people_rex_id ON os_teg_people (rex_id);
+
+-- The PLC handover: an accepted application on its way through compliance.
+--
+-- One row per submission, not per document and not per check. The pack is the
+-- unit people talk about -- "where is 41 Harewood up to" -- and splitting it
+-- across three tables would make the one question anybody asks a join.
+--
+-- documents and findings are JSONB rather than child tables on purpose. Both
+-- are written whole, read whole, and never queried across cases; the shapes
+-- live in lib/plc.ts where the checks themselves are defined, so a new check
+-- is one entry in a list rather than a migration.
+--
+-- state is TEXT with no CHECK constraint. The legal orderings live in
+-- PLC_TRANSITIONS and are enforced in the store, where the refusal can say
+-- WHY -- a database constraint here would give an agent a 500 and no sentence.
+--
+-- decided_by holds a name, not a user id. The row is the audit record of a
+-- legal judgement, and it has to stay readable after somebody leaves and their
+-- account is gone.
+CREATE TABLE IF NOT EXISTS os_plc_cases (
+  id              TEXT PRIMARY KEY,
+  application_ref TEXT NOT NULL,
+  address         TEXT NOT NULL,
+  agent_name      TEXT NOT NULL,
+  agent_email     TEXT NOT NULL DEFAULT '',
+  state           TEXT NOT NULL DEFAULT 'assembling',
+  move_in_date    DATE,
+  agent_note      TEXT NOT NULL DEFAULT '',
+  documents       JSONB NOT NULL DEFAULT '[]'::jsonb,
+  findings        JSONB NOT NULL DEFAULT '[]'::jsonb,
+  submitted_at    TIMESTAMPTZ,
+  scanned_at      TIMESTAMPTZ,
+  decided_at      TIMESTAMPTZ,
+  decided_by      TEXT,
+  decision_note   TEXT NOT NULL DEFAULT '',
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+-- Kirstie's queue is "everything not finished, oldest first", so it is the
+-- state and the submission time that get indexed rather than the address.
+CREATE INDEX IF NOT EXISTS os_plc_cases_state ON os_plc_cases (state, submitted_at);
+CREATE INDEX IF NOT EXISTS os_plc_cases_agent ON os_plc_cases (lower(agent_email), created_at DESC);
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

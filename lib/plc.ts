@@ -206,6 +206,25 @@ export type Finding = {
   foundDate?: string | null;
 };
 
+/**
+ * A document in the pack.
+ *
+ * `key` is the R2 object key and `url` is the authenticated route that serves
+ * it. Both are kept because they answer different questions: the scan needs
+ * the key to fetch the bytes server-side, and the screen needs the URL to put
+ * it behind a link. Deriving one from the other at the point of use is how a
+ * raw bucket path ends up in page HTML.
+ */
+export type PlcDocument = {
+  checkId: CheckId;
+  name: string;
+  key: string;
+  url: string;
+  addedAt: string;
+  /** Who attached it. A pack is evidence, and evidence has a chain. */
+  addedBy: string;
+};
+
 export type PlcCase = {
   id: string;
   /** The application this came from. */
@@ -216,13 +235,18 @@ export type PlcCase = {
   state: PlcState;
   submittedAt: string | null;
   /** Documents attached at handover, by check. */
-  documents: { checkId: CheckId; name: string; url: string; addedAt: string }[];
+  documents: PlcDocument[];
+  /** The date the tenancy starts. Every date check is measured against it. */
+  moveInDate: string | null;
+  /** What the agent wanted compliance to know. Free text, not a field. */
+  agentNote: string;
   scannedAt: string | null;
   findings: Finding[];
   /** Kirstie's decision, her words, and her name against it. */
   decidedAt: string | null;
   decidedBy: string | null;
   decisionNote: string;
+  createdAt: string;
 };
 
 /**
