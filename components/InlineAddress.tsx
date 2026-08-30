@@ -52,8 +52,25 @@ export default function InlineAddress({
       try {
         const r = await fetch(`/api/address?q=${encodeURIComponent(draft)}`, { cache: "no-store" });
         const j = await r.json();
-        setOptions(j.suggestions ?? []);
-        setProblem(j.problem?.says ?? null);
+        const got = j.suggestions ?? [];
+        setOptions(got);
+        /* THE THIRD STATE, WHICH USED TO RENDER AS NOTHING AT ALL.
+        
+           There are three outcomes and the field only ever spoke about two:
+           suggestions (dropdown), a failed lookup (red note), and a lookup
+           that worked and matched nothing — which showed neither, so a
+           correctly-functioning empty result was indistinguishable from a
+           field that had not fired.
+        
+           James, 30 Aug, editing a real address and seeing no dropdown: from
+           the outside there was no way to tell whether the lookup was broken,
+           idle, or simply had no answer. Now it says which. */
+        setProblem(
+          j.problem?.says ??
+            (got.length === 0
+              ? "No match for that yet. Keep typing, or leave it as you have written it."
+              : null)
+        );
       } catch {
         setOptions([]);
         setProblem("Address lookup didn't answer. If you've been idle a while, sign in again.");
