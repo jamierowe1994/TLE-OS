@@ -42,6 +42,8 @@ import {
   LAUNCH_ANNOUNCEMENT,
   COMPLIANCE_CHASE_AGENT,
   COMPLIANCE_CHASE_LANDLORD,
+  TENANT_PASSPORT_INVITE,
+  LANDLORD_DECK_INVITE,
   SITE,
   type EmailDoc,
 } from "@/lib/email/tle-documents";
@@ -52,7 +54,7 @@ export type CatalogEntry = {
   id: string;
   group: string;
   name: string;
-  audience: "partner" | "landlord" | "internal";
+  audience: "partner" | "landlord" | "tenant" | "internal";
   trigger: string;
   /** Where it is actually sent from, so a reader can go and check. */
   fires: string;
@@ -103,6 +105,11 @@ const COMPLIANCE_SAMPLE: Record<string, string> = {
   whenPretty: "12 September",
   daysLeft: "14",
   agentName: "Michael Healy",
+  firstName: "Helen",
+  /* The two doorway emails carry a link. It has to be a real destination in
+     the preview: a button reading {{link}} is the one part of a template a
+     reviewer cannot check by eye, and a dead one is only found by a customer. */
+  link: `${SITE}/tenant/welcome`,
   rows: [
     "<strong>41 Harewood Road</strong> — Gas safety, expires in 12 days",
     "<strong>8 Lower Station Road</strong> — EICR, expires in 26 days",
@@ -113,9 +120,10 @@ const COMPLIANCE_SAMPLE: Record<string, string> = {
 };
 
 /** Fill a document's placeholders with the worked example above. */
-const withSample = (doc: EmailDoc): EmailDoc => {
+const withSample = (doc: EmailDoc, extra?: Record<string, string>): EmailDoc => {
+  const values = { ...COMPLIANCE_SAMPLE, ...(extra ?? {}) };
   const fill = (t: string) =>
-    t.replace(/\{\{(\w+)\}\}/g, (m, k: string) => COMPLIANCE_SAMPLE[k] ?? m);
+    t.replace(/\{\{(\w+)\}\}/g, (m, k: string) => values[k] ?? m);
   return {
     ...doc,
     subject: fill(doc.subject),
@@ -123,6 +131,11 @@ const withSample = (doc: EmailDoc): EmailDoc => {
       const anyB = b as unknown as Record<string, unknown>;
       const next: Record<string, unknown> = { ...anyB };
       if (typeof anyB.text === "string") next.text = fill(anyB.text);
+      /* A button's placeholder is in its URL, not its label. Filling only the
+         text left every preview with a button pointing at the literal
+         "{{link}}" - which renders as a button that looks right and goes
+         nowhere, the one defect a reviewer cannot see by reading. */
+      if (typeof anyB.url === "string") next.url = fill(anyB.url);
       return next as unknown as (typeof doc.blocks)[number];
     }),
   };
@@ -298,6 +311,61 @@ Kind regards,
 Rhiannon Dodge
 The Letting Experts`
       ),
+  },
+
+  /* ── The two doorways: an appointment becomes an account ──────────────────
+     Both fire on a BOOKING, which is the moment the person is definitely
+     thinking about us. Neither is wired to anything yet, and neither can be
+     until the public Lettings Experts sending domain exists - lib/email-policy
+     refuses every non-internal address, so as things stand these can only be
+     sent to a colleague from Admin -> Emails. That is exactly what they are
+     for today: reading the words, and deciding what the screens behind them
+     have to deliver. ── */
+  {
+    id: "tenant-passport-invite",
+    group: "Doorways",
+    name: "Viewing Booked - Start Your Passport",
+    audience: "tenant",
+    trigger: "A viewing is booked for a tenant",
+    fires: "NOT WIRED YET - no send path, and the passport screen does not exist",
+    to: "The tenant who booked the viewing",
+    draft: true,
+    summary:
+      "Turns a booked viewing into a started passport. Leads on the payoff to THEM - fill it in once and it answers every application - rather than on us needing documents. Says plainly, in the body rather than a footnote, that nothing is shared with a landlord until they apply: referencing and right-to-rent are intrusive to hand over, and somebody who thinks a landlord can already see it will not fill it in.",
+    doc: TENANT_PASSPORT_INVITE,
+    render: (o) =>
+      blocks(
+        withSample(o ?? TENANT_PASSPORT_INVITE, {
+          firstName: "Sophie",
+          address: "Flat 2, Mercer Street, Manchester M4 1SL",
+          whenPretty: "Thursday 4 September at 5:30pm",
+          agentName: "Rhiannon Dodge",
+          link: `${SITE}/tenant/welcome`,
+        })
+      )(),
+  },
+  {
+    id: "landlord-deck-invite",
+    group: "Doorways",
+    name: "Appraisal Booked - Open Your Property File",
+    audience: "landlord",
+    trigger: "A market appraisal is booked for a landlord",
+    fires: "NOT WIRED YET - no send path, and the landlord file is a wireframe",
+    to: "The landlord who booked the appraisal",
+    draft: true,
+    summary:
+      "Turns a booked appraisal into an account. The pitch is not 'make an account' but 'we have already gathered what is on record for your property, correct it before we arrive' - which is worth more to them than to us, and is true. Also sets up the file as the place the valuation, terms and certificates will live afterwards.",
+    doc: LANDLORD_DECK_INVITE,
+    render: (o) =>
+      blocks(
+        withSample(o ?? LANDLORD_DECK_INVITE, {
+          firstName: "Helen",
+          address: "12 Chorlton Road, Manchester M15 4AZ",
+          whenPretty: "Tuesday 20 October at 2:00pm",
+          agentName: "Rhiannon Dodge",
+          link: `${SITE}/landlord/welcome`,
+        })
+      )(),
   },
 ];
 

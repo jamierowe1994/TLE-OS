@@ -51,7 +51,18 @@ const FOOT = (id: string, note: string): Block => ({
   type: "footer", id, note, address: "The Letting Experts", showSocial: true, unsubscribe: false,
 });
 
-export const SITE = "https://tle-os-production.up.railway.app";
+/**
+ * Where the links in these emails point.
+ *
+ * The custom domain, not the Railway one. A landlord receiving a link to
+ * tle-os-production.up.railway.app reads it as either a mistake or a phishing
+ * attempt, and neither is recoverable by explaining afterwards. Both hostnames
+ * serve the same app; only one of them looks like us.
+ *
+ * OS_PUBLIC_URL overrides it, so a staging environment can point at itself
+ * without editing the words.
+ */
+export const SITE = (process.env.OS_PUBLIC_URL || "https://tle-os.co.uk").replace(/\/+$/, "");
 
 /* ──────────────────────── the two big ones ──────────────────────── */
 
@@ -285,6 +296,107 @@ export const COMPLIANCE_CHASE_LANDLORD = {
     SP("cl10", 8),
     T("cl11", "The Letting Experts"),
     FOOT("cl12", "You're getting this because you let a property through The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/* ──────────────────── the two doorways ────────────────────
+   Both are sent the moment something is BOOKED, and both exist to turn an
+   appointment into an account. That timing is the whole idea: it is the one
+   moment the person is definitely thinking about us, and the gap between
+   "someone is coming round" and "I should get my paperwork together" is
+   exactly where the work would otherwise fall to an agent chasing.
+
+   Neither asks for anything the reader would not have to produce anyway. The
+   argument for filling it in early is that it is less work later, and that is
+   stated plainly rather than dressed up as an offer.                       */
+
+/**
+ * Tenant: a viewing is booked, so start the passport.
+ *
+ * The passport is the one thing a tenant fills in that pays off more than once
+ * - the same details answer every application they make with us - so the email
+ * leads on that rather than on us needing the documents.
+ *
+ * WHAT IT DELIBERATELY DOES NOT DO is imply anyone else can see it yet.
+ * Referencing and right-to-rent are intrusive to hand over, and somebody who
+ * thinks their passport is visible to a landlord before they have even decided
+ * to apply will not fill it in. So the email says when it is shared, in the
+ * body, not in a footnote.
+ */
+export const TENANT_PASSPORT_INVITE = {
+  subject: "Your viewing is booked. Next, your tenant passport",
+  preheader: "Fill it in once and it is ready for every property you apply for.",
+  mode: "blocks",
+  blocks: [
+    H("tp1", "You're booked in"),
+    T(
+      "tp2",
+      "Hi {{firstName}},<br><br>Your viewing at <strong>{{address}}</strong> is confirmed for <strong>{{whenPretty}}</strong>. {{agentName}} will meet you there."
+    ),
+    SP("tp3", 8),
+    DIV("tp4"),
+    H2("tp5", "While you're waiting: your tenant passport"),
+    T(
+      "tp6",
+      "If you decide to apply, the same details get asked for every time - who you are, where you've lived, what you do, and your right to rent in the UK. Your passport is where you put them once."
+    ),
+    T(
+      "tp7",
+      "It takes about ten minutes, you can stop and come back to it, and it stays yours. <strong>Nothing in it is shared with a landlord unless you apply for their property.</strong>"
+    ),
+    SP("tp8", 8),
+    BTN("tp9", "Start your passport", "{{link}}"),
+    SP("tp10", 8),
+    T(
+      "tp11",
+      "Doing it now means that if this is the one, your application goes in the same day rather than waiting on documents. Good properties move quickly, and the completed applications go first."
+    ),
+    SP("tp12", 8),
+    T("tp13", "The Letting Experts"),
+    FOOT("tp14", "You're getting this because you booked a viewing with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/**
+ * Landlord: an appraisal is booked, so open the property file.
+ *
+ * The pitch is not "make an account". It is that we have already gathered what
+ * is publicly known about their property, and they can correct it before we
+ * turn up - which is worth more to them than it is to us, and is true.
+ */
+export const LANDLORD_DECK_INVITE = {
+  subject: "Your appraisal is booked. Here is your property file",
+  preheader: "See what we already know about the property, and correct it before we visit.",
+  mode: "blocks",
+  blocks: [
+    H("ld1", "You're booked in"),
+    T(
+      "ld2",
+      "Hi {{firstName}},<br><br>{{agentName}} is visiting <strong>{{address}}</strong> on <strong>{{whenPretty}}</strong> to value it for letting."
+    ),
+    SP("ld3", 8),
+    DIV("ld4"),
+    H2("ld5", "Your property file"),
+    T(
+      "ld6",
+      "We've already pulled together what is on record for the property: its size, its EPC, what it and its neighbours have let for, and how long they took. It is all in one place for you to look through before we come."
+    ),
+    T(
+      "ld7",
+      "Some of it will be out of date, and some of it we simply cannot see from the outside - what you've had done, how the heating is, whether it is furnished. Putting that right in the file means the figure we give you on the day is based on the real property rather than the one on paper."
+    ),
+    SP("ld8", 8),
+    BTN("ld9", "Open your property file", "{{link}}"),
+    SP("ld10", 8),
+    T(
+      "ld11",
+      "It is also where your valuation, your terms and your certificates will live afterwards, so there is one place to look rather than a thread of emails."
+    ),
+    SP("ld12", 8),
+    T("ld13", "The Letting Experts"),
+    FOOT("ld14", "You're getting this because you booked a market appraisal with The Letting Experts."),
   ],
   branding: { showSignoff: false },
 } as const;
