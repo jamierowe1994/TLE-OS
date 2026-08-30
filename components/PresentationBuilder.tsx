@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import MaterialInfoPanel from "@/components/MaterialInfoPanel";
@@ -16,7 +16,7 @@ import {
   type BuildStepId,
   type DeckPlan,
 } from "@/lib/presentation-builder";
-import type { MaResearch } from "@/lib/ma-research";
+import type { MaResearch, MarketListing } from "@/lib/ma-research";
 import { listingKey } from "@/lib/listing-key";
 
 /**
@@ -212,6 +212,80 @@ export default function PresentationBuilder({
      agent can see what they just pointed at without hunting for it — which is
      the whole reason for putting the two side by side. */
   const [focused, setFocused] = useState<string | null>(null);
+
+  /**
+   * PICKING A PROPERTY MOVES IT. It does not just get a tick.
+   *
+   * A ticked card used to sit in the list looking almost exactly like an
+   * unticked one, so "what is going in the deck" had to be counted by eye
+   * across a grid of twenty. Now the deck is a rail at the top and the list is
+   * what is still under consideration — two places, two meanings, nothing in
+   * both.
+   *
+   * `leaving` is the half-second in between. The card has been picked but is
+   * still on screen playing its exit, and it must stay rendered for that or
+   * there is nothing to animate.
+   */
+  const [leaving, setLeaving] = useState<string[]>([]);
+  const listRef = useRef<HTMLUListElement>(null);
+  const rects = useRef<Map<string, DOMRect>>(new Map());
+  const flipping = useRef(false);
+
+  /** Where every card is, right now — the F and L of FLIP. */
+  const measure = useCallback(() => {
+    const m = new Map<string, DOMRect>();
+    listRef.current?.querySelectorAll<HTMLElement>("[data-card]").forEach((el) => {
+      if (el.dataset.card) m.set(el.dataset.card, el.getBoundingClientRect());
+    });
+    rects.current = m;
+    flipping.current = true;
+  }, []);
+
+  /* Grid position is layout, and layout does not transition — remove one card
+     from a four-up grid and the rest TELEPORT into the gap. So each survivor is
+     measured before and after, put back where it was with a transform, and
+     then released. The browser animates the transform; the layout never moved. */
+  useLayoutEffect(() => {
+    if (!flipping.current) return;
+    flipping.current = false;
+    const before = rects.current;
+    if (!before.size) return;
+    listRef.current?.querySelectorAll<HTMLElement>("[data-card]").forEach((el) => {
+      const was = el.dataset.card ? before.get(el.dataset.card) : undefined;
+      if (!was) return;
+      const now = el.getBoundingClientRect();
+      const dx = was.left - now.left;
+      const dy = was.top - now.top;
+      if (!dx && !dy) return;
+      el.animate(
+        [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "translate(0,0)" }],
+        { duration: 460, easing: "cubic-bezier(0.34, 1.3, 0.5, 1)" }
+      );
+    });
+    rects.current = new Map();
+  });
+
+  /**
+   * Tick, or untick.
+   *
+   * Adding is deliberately slow: the card plays its exit BEFORE it joins the
+   * rail, so the eye follows one object from the grid to the top rather than
+   * seeing one thing disappear and a different thing appear. Removing is
+   * instant, because undoing a mistake should never make you wait.
+   */
+  function pick(k: string) {
+    if (pickedNearby.includes(k)) {
+      measure();
+      setPickedNearby((c) => c.filter((x) => x !== k));
+      return;
+    }
+    setLeaving((l) => (l.includes(k) ? l : [...l, k]));
+    window.setTimeout(() => {
+      measure();
+      setPickedNearby((c) => (c.includes(k) ? c : [...c, k]));
+      setLeaving((l) => l.filter((x) => x !== k));
+    }, 380);
+  }
   /**
    * WHICH PHOTOGRAPH EACH CARD IS SHOWING.
    *
@@ -450,6 +524,128 @@ export default function PresentationBuilder({
    * so the Google key stays on the server. No key means no picture and the
    * circle falls back to the pin — the button still works, it just is not a map.
    */
+  /**
+   * THE DECK, AS A ROW OF FACES.
+   *
+   * James, 30 Aug: "when we select a property, pop that property on map view
+   * at the top in line with the review button... circle icons the same size as
+   * the map... as we hover they turn back into squares and enlarge, giving us
+   * the choice to remove them, or see the photo again."
+   *
+   * It answers the question the grid could not: what is actually going in this
+   * landlord's presentation, without counting ticks across twenty cards. The
+   * order is PICK order, not the list's — the rail is a record of what the
+   * agent chose and when, and re-sorting it would lose that.
+   *
+   * The hover panel grows downward from the circle rather than in place, so
+   * nothing on the step line ever moves. Circles that shove their neighbours
+   * aside on hover make a row of them unusable.
+   */
+  const picks = pickedNearby
+    .map((k) => nearby.find((l) => keyOf(l) === k))
+    .filter((l): l is MarketListing => Boolean(l));
+
+  const deckRail = here === "available" && picks.length > 0 ? (
+    <div className="flex items-center gap-1.5">
+      {picks.map((l) => {
+        const k = keyOf(l);
+        /* The same shots and the same slide index the card uses, so paging
+           here and paging there are the same act — not two galleries of the
+           same house disagreeing about which picture is showing. */
+        const shots = l.photos?.length
+          ? [l.image, ...l.photos.filter((u) => u !== l.image)].filter(
+              (u): u is string => Boolean(u)
+            )
+          : l.image
+            ? [l.image]
+            : [];
+        const at = shots.length
+          ? (((slide[k] ?? 0) % shots.length) + shots.length) % shots.length
+          : 0;
+        const shot = shots[at] ?? null;
+        return (
+          <div key={k} className="group relative">
+            <button
+              type="button"
+              onClick={() => setFocused(k)}
+              title={l.address}
+              aria-label={l.address}
+              className="deck-land relative block h-10 w-10 overflow-hidden rounded-full border border-accent-dark/50 shadow-sm ring-2 ring-accent-dark/25 transition-transform duration-200 group-hover:scale-105"
+            >
+              {shot ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={shot} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center bg-line/30 text-[9px] text-muted">
+                  {l.beds ?? "?"}b
+                </span>
+              )}
+            </button>
+
+            {/* The circle, grown into a square. Same origin, same photograph,
+                so it reads as one object opening rather than a tooltip. */}
+            <div className="pointer-events-none absolute left-1/2 top-0 z-40 w-[190px] origin-top -translate-x-1/2 scale-[0.2] rounded-2xl border border-line/70 bg-page opacity-0 shadow-[0_20px_44px_-14px_rgba(0,0,0,0.4)] transition-all duration-200 ease-[cubic-bezier(0.34,1.4,0.64,1)] group-hover:pointer-events-auto group-hover:scale-100 group-hover:opacity-100">
+              <div className="relative">
+                {shot ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={shot} alt="" className="h-[124px] w-full rounded-t-2xl object-cover" />
+                ) : (
+                  <div className="flex h-[124px] w-full items-center justify-center rounded-t-2xl bg-line/20 text-[11px] text-muted">
+                    No photograph
+                  </div>
+                )}
+                {shots.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Previous photograph"
+                      onClick={() => setSlide((m) => ({ ...m, [k]: (m[k] ?? 0) - 1 }))}
+                      className="absolute left-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-page/90 text-[12px] shadow-sm transition-transform hover:scale-110"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Next photograph"
+                      onClick={() => setSlide((m) => ({ ...m, [k]: (m[k] ?? 0) + 1 }))}
+                      className="absolute right-1.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full bg-page/90 text-[12px] shadow-sm transition-transform hover:scale-110"
+                    >
+                      ›
+                    </button>
+                    <span className="absolute bottom-1.5 left-1/2 -translate-x-1/2 rounded-full bg-ink/55 px-1.5 py-0.5 text-[9px] font-semibold text-white">
+                      {at + 1}/{shots.length}
+                    </span>
+                  </>
+                )}
+              </div>
+              <div className="px-3 py-2">
+                <p className="figures text-[13px] leading-none">
+                  {l.rent ? money(l.rent) : "\u2014"}
+                  <span className="text-[10px] text-muted"> pcm</span>
+                </p>
+                <p className="mt-1 truncate text-[11.5px]">{l.address}</p>
+                <p className="truncate text-[10.5px] text-muted">
+                  {[l.beds ? `${l.beds} bed` : null, l.type, l.postcode].filter(Boolean).join(" \u00b7 ")}
+                </p>
+                {/* Remove, and nothing else. There is no public advert URL in
+                    this feed — see MarketListing.listingId — so the second
+                    action is the photographs, and they are on the picture
+                    where you would reach for them. */}
+                <button
+                  type="button"
+                  onClick={() => pick(k)}
+                  className="mt-2 w-full rounded-full border border-line/80 px-2 py-1 text-[11px] text-muted transition-colors hover:border-accent-dark hover:text-accent-dark"
+                >
+                  Remove from the deck
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  ) : null;
+
   const mapToggle = here === "available" && nearby.length > 0 ? (
     <button
       type="button"
@@ -457,7 +653,7 @@ export default function PresentationBuilder({
       aria-pressed={mapOpen}
       aria-label={mapOpen ? "Hide the map" : "Show the map"}
       title={mapOpen ? "Hide the map" : "Show the map"}
-      className={`relative ml-auto hidden h-9 w-9 shrink-0 overflow-hidden rounded-full border transition-all hover:scale-105 active:scale-95 lg:block ${
+      className={`relative hidden h-10 w-10 shrink-0 overflow-hidden rounded-full border transition-all hover:scale-105 active:scale-95 lg:block ${
         mapOpen
           ? "border-accent-dark ring-2 ring-accent-dark/35"
           : "border-line/80 hover:border-ink/40"
@@ -557,7 +753,13 @@ export default function PresentationBuilder({
               {s.label}
             </button>
           ))}
-          {mapToggle}
+          {(deckRail || mapToggle) && (
+            <div className="ml-auto flex items-center gap-2 pl-3">
+              {deckRail}
+              {deckRail && mapToggle && <span className="h-5 w-px bg-line/70" />}
+              {mapToggle}
+            </div>
+          )}
         </nav>
 
         {/* WHEREVER THE PAGE ENDS IS WHERE THE MAP ENDS. James, 29 Aug.
@@ -646,6 +848,7 @@ export default function PresentationBuilder({
                     because this panel sits at different depths on a laptop and
                     a large monitor and a hardcoded 560px is right on neither. */}
                 <ul
+                  ref={listRef}
                   className={
                     mapMounted
                       /* Wider gaps than a boxed grid needs. With no border
@@ -657,6 +860,11 @@ export default function PresentationBuilder({
                   }
                 >
                 {[...nearby]
+                  /* Picked properties leave the list — they are in the rail at
+                     the top now, and a thing in two places at once is a thing
+                     you have to reconcile. One exception: the card still
+                     playing its exit, which is picked but not yet gone. */
+                  .filter((l) => !pickedNearby.includes(keyOf(l)) || leaving.includes(keyOf(l)))
                   .sort((a, b) => {
                     /* Only the clicked one moves. A full re-sort on every click
                        would shuffle the list under the agent's cursor, which is
@@ -684,7 +892,7 @@ export default function PresentationBuilder({
                     setSlide((m) => ({ ...m, [k]: (m[k] ?? 0) + by }));
                   };
                   return (
-                    <li key={k}>
+                    <li key={k} data-card={k} className={leaving.includes(k) ? "deck-leave" : undefined}>
                       {/* NO BOX. James, 29 Aug: "I like the fact that they
                           don't have white boxes underneath like we do. We've
                           got the photo, and then we've got our connecting line
@@ -737,9 +945,7 @@ export default function PresentationBuilder({
                             aria-label={on ? "Remove from the deck" : "Add to the deck"}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setPickedNearby((c) =>
-                                on ? c.filter((x) => x !== k) : [...c, k]
-                              );
+                              pick(k);
                             }}
                             className={`absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full text-[13px] shadow-sm transition-transform hover:scale-110 ${
                               on ? "bg-accent-dark text-white" : "bg-page/85 text-muted"
@@ -888,11 +1094,7 @@ export default function PresentationBuilder({
                            used to fire on the same click as opening, which made
                            adding a competitor's property to a landlord's deck a
                            side effect of pointing at it. */
-                        onSelect={(k) =>
-                          setPickedNearby((c) =>
-                            c.includes(k) ? c.filter((x) => x !== k) : [...c, k]
-                          )
-                        }
+                        onSelect={(k) => pick(k)}
                       />
                     </div>
                   </div>
