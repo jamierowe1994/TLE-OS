@@ -132,13 +132,29 @@ export async function GET() {
       "/api/v1/webhooks",
       "/api/v1/configuration",
     ];
+    /* THE CONTROL. Every candidate came back 403 rather than 404, which makes
+       "403 means it exists" an assumption rather than a finding — if a path
+       that certainly does not exist ALSO answers 403, the census proves
+       nothing. So one deliberately absent path is asked alongside the rest and
+       reported, and the census is only readable against it. */
+    const controlRes = await propolyGet("/api/v1/definitely_not_a_real_endpoint_xyz");
+    const control = {
+      path: "/api/v1/definitely_not_a_real_endpoint_xyz",
+      status: controlRes.status,
+      meaning:
+        controlRes.status === 404
+          ? "404 for an absent path — so a 403 below really does mean the route exists and we are not permitted."
+          : `${controlRes.status} for a path that cannot exist — so the census below proves NOTHING about existence, only that we are refused.`,
+    };
+
     const census = await Promise.all(
       CANDIDATES.map(async (p) => {
         const r = await propolyGet(p);
         return {
           path: p,
           status: r.status,
-          exists: r.status !== 404,
+          /* Only meaningful if the control 404s — see `control`. */
+          exists: controlRes.status === 404 ? r.status !== 404 : null,
         };
       })
     );
@@ -164,11 +180,27 @@ export async function GET() {
     const shapeOf = async (path: string) => {
       const r = await propolyGet(path);
       const body = r.body as Record<string, unknown> | null;
-      const first = Array.isArray(body)
-        ? (body[0] as Record<string, unknown> | undefined)
-        : Array.isArray((body as { data?: unknown[] } | null)?.data)
-          ? ((body as { data: unknown[] }).data[0] as Record<string, unknown> | undefined)
-          : (body ?? undefined);
+      /* FIND THE FIRST ARRAY ANYWHERE, rather than guessing its name.
+      
+         The first cut looked for `data` and fell back to the whole body, so
+         against /api/v1/properties it reported the keys of the PAGINATION
+         ENVELOPE — properties, total_entries, per_page — and concluded there
+         were no document fields. That is a false negative produced by looking
+         at the wrong object, which is worse than no answer at all: it reads as
+         "Propoly does not return certificates". */
+      const findFirstRecord = (v: unknown, depth = 0): Record<string, unknown> | undefined => {
+        if (depth > 3 || v == null || typeof v !== "object") return undefined;
+        if (Array.isArray(v)) {
+          const head = v[0];
+          return head && typeof head === "object" ? (head as Record<string, unknown>) : undefined;
+        }
+        for (const val of Object.values(v as Record<string, unknown>)) {
+          const hit = findFirstRecord(val, depth + 1);
+          if (hit) return hit;
+        }
+        return undefined;
+      };
+      const first = findFirstRecord(body);
       if (!first || typeof first !== "object") {
         return { path, status: r.status, keys: [], docLike: [] };
       }
@@ -180,7 +212,21 @@ export async function GET() {
         const v = first[k];
         return typeof v === "string" && /s3\.|X-Amz-Signature|\.pdf/i.test(v);
       });
-      return { path, status: r.status, keys, docLike };
+      /* Nested objects matter — an attachment is rarely a top-level string. */
+      const nested: string[] = [];
+      for (const [k, v] of Object.entries(first)) {
+        if (v && typeof v === "object") {
+          const inner = Array.isArray(v) ? v[0] : v;
+          if (inner && typeof inner === "object") {
+            for (const ik of Object.keys(inner as Record<string, unknown>)) {
+              if (/attach|document|certificate|file|url|expir|gas|electric|epc/i.test(ik)) {
+                nested.push(`${k}.${ik}`);
+              }
+            }
+          }
+        }
+      }
+      return { path, status: r.status, keys, docLike, nested };
     };
 
     const shapes = await Promise.all([
@@ -199,7 +245,16 @@ export async function GET() {
         "server directly: OPTIONS for allowed methods, and a GET census for whether a path exists. " +
         "Nothing was created, updated or deleted.",
       methods,
+      control,
       census,
+      /* Every path answered "OPTIONS, GET, POST" — including deposit schemes
+         and branches, which nobody creates. An identical Allow header on every
+         route is the signature of a framework default, not ten writable
+         endpoints, so this is reported as unproven rather than as capability. */
+      methodsCaveat:
+        "Allow was identical on every path, including configuration endpoints nobody would POST to. " +
+        "That pattern is a framework default rather than evidence of a writable route. Treat POST as " +
+        "UNPROVEN until Propoly confirms it — and confirm it by asking them, not by sending one.",
       exercised: [...EXERCISED],
     });
   }
