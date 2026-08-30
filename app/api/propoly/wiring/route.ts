@@ -188,21 +188,35 @@ export async function GET() {
          were no document fields. That is a false negative produced by looking
          at the wrong object, which is worse than no answer at all: it reads as
          "Propoly does not return certificates". */
-      const findFirstRecord = (v: unknown, depth = 0): Record<string, unknown> | undefined => {
-        if (depth > 3 || v == null || typeof v !== "object") return undefined;
+      /* REPORT BOTH, GUESS NEITHER.
+      
+         The walker went wrong twice. It recursed depth-first and returned the
+         first array it found, so /deals/{uuid} reported uuid, name, email,
+         phone — a PERSON out of a nested association, not the deal. And it
+         never returned a plain top-level object, so /properties/{uuid} came
+         back with no keys at all against a 200.
+      
+         Both are the same mistake: deciding which object is "the record" and
+         being wrong silently. So now the top-level keys are reported as they
+         are, AND the first nested collection separately. Nothing is chosen on
+         the caller's behalf. */
+      const topLevel =
+        body && typeof body === "object" && !Array.isArray(body) ? Object.keys(body) : [];
+      const firstArray = (v: unknown, depth = 0): Record<string, unknown> | undefined => {
+        if (depth > 2 || v == null || typeof v !== "object") return undefined;
         if (Array.isArray(v)) {
           const head = v[0];
           return head && typeof head === "object" ? (head as Record<string, unknown>) : undefined;
         }
         for (const val of Object.values(v as Record<string, unknown>)) {
-          const hit = findFirstRecord(val, depth + 1);
+          const hit = firstArray(val, depth + 1);
           if (hit) return hit;
         }
         return undefined;
       };
-      const first = findFirstRecord(body);
+      const first = (Array.isArray(body) ? (body[0] as Record<string, unknown>) : body) ?? firstArray(body);
       if (!first || typeof first !== "object") {
-        return { path, status: r.status, keys: [], docLike: [] };
+        return { path, status: r.status, topLevel, keys: [], docLike: [], nested: [] };
       }
       const keys = Object.keys(first);
       /* Anything named like an attachment, or holding something that smells
@@ -226,7 +240,7 @@ export async function GET() {
           }
         }
       }
-      return { path, status: r.status, keys, docLike, nested };
+      return { path, status: r.status, topLevel, keys, docLike, nested };
     };
 
     /* LIST vs DETAIL. The list endpoints return a summary — a property is ten
@@ -253,6 +267,35 @@ export async function GET() {
       /* Rails commonly gates associations behind an include. Cheap to ask. */
       ...(propUuid ? [shapeOf(`/api/v1/properties/${propUuid}?include=attachments,documents`)] : []),
     ]);
+
+    /* THE DOCUMENT ROUTES, ASKED DIRECTLY.
+    
+       Propoly names 17 document types including Gas Safety Certificate and
+       EICR, so the certificates are first-class. What is missing is the route
+       that serves one. A 403 proves nothing here — the control established
+       that — but a 200 proves everything, so these are worth asking even
+       though most will refuse. */
+    const docRoutes = propUuid
+      ? await Promise.all(
+          [
+            `/api/v1/properties/${propUuid}/documents`,
+            `/api/v1/properties/${propUuid}/attachments`,
+            `/api/v1/properties/${propUuid}/compliance`,
+            `/api/v1/properties/${propUuid}/certificates`,
+            `/api/v1/documents?property_uuid=${propUuid}`,
+            ...(dealUuid ? [`/api/v1/deals/${dealUuid}/documents`] : []),
+          ].map(async (path) => {
+            const r = await propolyGet(path);
+            return {
+              path: path.replace(propUuid, "{uuid}").replace(dealUuid ?? "~", "{deal}"),
+              status: r.status,
+              /* Only a 200 means anything. Said explicitly so nobody reads a
+                 wall of 403s as "we tried everything and it is not there". */
+              informative: r.status === 200,
+            };
+          })
+        )
+      : [];
 
     /* WHAT DOCUMENT TYPES PROPOLY EVEN HAS. This endpoint answers 200 and we
        already call it. If it names gas safety and EICR then the certificates
@@ -286,6 +329,7 @@ export async function GET() {
       attempts,
       documents: shapes,
       documentTypes: { status: typesRes.status, count: typeList.length, types: typeList },
+      docRoutes,
       note:
         "Propoly does not expose its API document to our credential — /api-docs, /api-docs.json and " +
         "/swagger.json all answer 403 authenticated. So capability below is measured by asking the " +
