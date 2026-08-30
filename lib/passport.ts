@@ -1,0 +1,131 @@
+import "server-only";
+import { randomBytes } from "node:crypto";
+import { hasDb, q } from "@/lib/db";
+import { EMPTY_PASSPORT, type PassportData } from "@/lib/passport-shape";
+
+/**
+ * The tenant passport.
+ *
+ * ── Why a passport and not a form ─────────────────────────────────────────
+ *
+ * The same questions get asked on every application a tenant makes: who they
+ * are, where they have lived, what they do, and their right to rent. Today they
+ * answer them again per property, which is why /tenant/apply is long and why
+ * the documents arrive days after the decision. The passport is those answers
+ * held once, by them, and reused.
+ *
+ * ── The field list is not invented ────────────────────────────────────────
+ *
+ * It is what REX's TenancyApplications already carries, read off
+ * lib/applications.ts and app/tenant/apply. Anything asked here that REX has
+ * nowhere to put is a question we cannot act on, and anything REX needs that
+ * is missing here is a question somebody still has to ask by phone. So the two
+ * are kept deliberately in step, minus the per-property parts (the offer, the
+ * start date, the term) which belong to an application and not to a person.
+ *
+ * MEASURED, and the reason the employment list looks odd: REX collapses
+ * Student, Benefits and Pension into "unemployed", and 265 applicants have no
+ * recorded right to rent because joint applicants were never written. Both are
+ * defects we are working around rather than reproducing.
+ */
+
+export interface PassportRecord {
+  token: string;
+  contactId: string | null;
+  name: string;
+  email: string;
+  data: PassportData;
+  createdAt: string;
+  updatedAt: string;
+  submittedAt: string | null;
+}
+
+type Row = {
+  token: string; contact_id: string | null; name: string; email: string;
+  data: Partial<PassportData>; created_at: string; updated_at: string; submitted_at: string | null;
+};
+
+const toRecord = (r: Row): PassportRecord => ({
+  token: r.token,
+  contactId: r.contact_id,
+  name: r.name,
+  email: r.email,
+  /* Stored data spread OVER the empty shape, never under it. A passport saved
+     before a question existed must not come back with that field undefined and
+     crash an input that expects a string. */
+  data: { ...EMPTY_PASSPORT, ...(r.data ?? {}) },
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+  submittedAt: r.submitted_at,
+});
+
+const COLS = `token, contact_id, name, email, data,
+  created_at::text AS created_at, updated_at::text AS updated_at,
+  submitted_at::text AS submitted_at`;
+
+/** 32 bytes of randomness. This link is the only credential, so it is not
+ *  guessable and it is not derived from anything about the person. */
+export const newToken = () => randomBytes(24).toString("base64url");
+
+export async function createPassport(opts: {
+  name?: string;
+  email?: string;
+  contactId?: string | null;
+}): Promise<PassportRecord> {
+  if (!hasDb()) throw new Error("No database is connected, so a passport cannot be started.");
+  const token = newToken();
+  const seed: Partial<PassportData> = {};
+  if (opts.name) seed.legalName = opts.name;
+  if (opts.email) seed.email = opts.email;
+  const rows = await q<Row>(
+    `INSERT INTO os_tenant_passports (token, contact_id, name, email, data)
+     VALUES ($1,$2,$3,$4,$5::jsonb) RETURNING ${COLS}`,
+    [token, opts.contactId ?? null, opts.name ?? "", opts.email ?? "", JSON.stringify(seed)]
+  );
+  return toRecord(rows[0]);
+}
+
+export async function getPassport(token: string): Promise<PassportRecord | null> {
+  if (!hasDb() || !token) return null;
+  const rows = await q<Row>(`SELECT ${COLS} FROM os_tenant_passports WHERE token = $1`, [token]);
+  return rows[0] ? toRecord(rows[0]) : null;
+}
+
+/**
+ * Save what they have typed so far.
+ *
+ * The whole object every time, deliberately: this is one person editing their
+ * own record in one tab, so the concurrent-write hazard that made the deal
+ * overlay use targeted upserts does not apply, and a partial patch would make
+ * clearing a field indistinguishable from not sending it.
+ */
+export async function savePassport(token: string, data: PassportData): Promise<PassportRecord | null> {
+  if (!hasDb()) throw new Error("No database is connected, so this cannot be saved.");
+  const clean: PassportData = { ...EMPTY_PASSPORT, ...data };
+  const rows = await q<Row>(
+    `UPDATE os_tenant_passports
+        SET data = $2::jsonb,
+            name = COALESCE(NULLIF($3,''), name),
+            email = COALESCE(NULLIF($4,''), email),
+            updated_at = NOW()
+      WHERE token = $1
+      RETURNING ${COLS}`,
+    [token, JSON.stringify(clean), clean.legalName.trim(), clean.email.trim()]
+  );
+  return rows[0] ? toRecord(rows[0]) : null;
+}
+
+/** They pressed the final button. Kept separate from saving so that "finished"
+ *  is a deliberate act rather than a side effect of typing the last field. */
+export async function submitPassport(token: string): Promise<PassportRecord | null> {
+  if (!hasDb()) return null;
+  const rows = await q<Row>(
+    `UPDATE os_tenant_passports SET submitted_at = NOW(), updated_at = NOW()
+      WHERE token = $1 RETURNING ${COLS}`,
+    [token]
+  );
+  return rows[0] ? toRecord(rows[0]) : null;
+}
+
+export { EMPTY_PASSPORT, SECTIONS, completeness } from "@/lib/passport-shape";
+export type { PassportData } from "@/lib/passport-shape";

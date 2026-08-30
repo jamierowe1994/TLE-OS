@@ -543,6 +543,34 @@ CREATE TABLE IF NOT EXISTS os_contacts (
 );
 CREATE INDEX IF NOT EXISTS os_contacts_state ON os_contacts (rex_state, created_at DESC);
 
+-- The tenant passport: their details, filled in once.
+--
+-- Keyed on a TOKEN, not on an account, because there is no tenant sign-in yet
+-- (os_portal_accounts is declared above and used by nothing). The link in the
+-- email is the credential, exactly as the pre-appraisal deck at
+-- /present/<token> already works. That means a tenant can start their passport
+-- the moment they get the email rather than after inventing a password, which
+-- is the whole reason the drop-off happens where it does.
+--
+-- Consequence, stated plainly: anyone holding the link can read and write it.
+-- That is acceptable for a form somebody fills in about themselves and would
+-- not be for anything they can spend or cancel. When accounts arrive this
+-- gains a contact_id and the token becomes one way in rather than the only one.
+--
+-- data is JSONB because the questions are still moving. What must NOT drift is
+-- the token: it is the identity, and it is in an email that cannot be recalled.
+CREATE TABLE IF NOT EXISTS os_tenant_passports (
+  token          TEXT PRIMARY KEY,
+  contact_id     TEXT,
+  name           TEXT NOT NULL DEFAULT '',
+  email          TEXT NOT NULL DEFAULT '',
+  data           JSONB NOT NULL DEFAULT '{}',
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  submitted_at   TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS os_tenant_passports_contact ON os_tenant_passports (contact_id);
+
 -- Who is on which campaign.
 --
 -- Its own table, not a field on the case, because the questions are asked

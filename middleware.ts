@@ -35,6 +35,15 @@ import { NextRequest, NextResponse } from "next/server";
  * landlords and tenants, who have no account and never will. Their own random
  * token is the credential.
  *
+ * `api/tenant/passport` is named in full rather than as `api/tenant`, and the
+ * distinction is the whole lesson of this file: the page at /tenant/passport
+ * is already exempt, so leaving its API behind the door would have given a
+ * tenant a form that renders and then silently fails to load or save - a 307
+ * to /sign-in that arrives as unparseable HTML. But exempting `api/tenant`
+ * wholesale would exempt every future route under it, written by somebody who
+ * never read this comment. The route itself still authenticates the one
+ * privileged thing it does: minting a link needs a signed-in member of staff.
+ *
  * /brand is exempt because a logo in an email is fetched by the recipient's
  * mail client, which has no cookie and never will. Behind the door, every
  * email would arrive with a broken image.
@@ -168,6 +177,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!(?:sign-in|join|reset|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|brand|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$).*)",
+    "/((?!(?:sign-in|join|reset|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|api/tenant/passport|brand|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$).*)",
   ],
 };
