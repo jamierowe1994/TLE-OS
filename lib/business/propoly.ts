@@ -126,6 +126,43 @@ export interface PropolyResult {
  * Returns status + parsed body rather than throwing on non-2xx, so the
  * probe can show exactly what the API said.
  */
+/**
+ * ASK WHAT A PATH ALLOWS, WITHOUT DOING IT.
+ *
+ * Propoly will not show us its API document — /api-docs, /api-docs.json and
+ * /swagger.json all answer 403 to our agent credential, authenticated or not
+ * (measured 30 Aug 2026). So capability has to be established some other way,
+ * and the honest way is OPTIONS: the request asks the server which methods a
+ * path accepts and the `Allow` header answers, without invoking any of them.
+ *
+ * This matters because Propoly generates the contracts. Discovering that a
+ * POST works by sending one would mean creating a real record in the system a
+ * tenancy is built from. OPTIONS finds out for free.
+ *
+ * Returns the raw Allow header, unparsed — a server that does not implement
+ * OPTIONS says so with a 405 or an empty header, and that is a different
+ * answer from "this path is read-only". Never collapse the two.
+ */
+export async function propolyOptions(
+  path: string
+): Promise<{ status: number; allow: string | null }> {
+  const keyHeaders = { "x-api-key": apiKey(), "agent-name": agentName() };
+  const token = await getToken();
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      method: "OPTIONS",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...keyHeaders },
+      cache: "no-store",
+    });
+    return {
+      status: res.status,
+      allow: res.headers.get("allow") ?? res.headers.get("access-control-allow-methods"),
+    };
+  } catch {
+    return { status: 0, allow: null };
+  }
+}
+
 export async function propolyGet(path: string): Promise<PropolyResult> {
   const keyHeaders = { "x-api-key": apiKey(), "agent-name": agentName() };
   let token = await getToken();

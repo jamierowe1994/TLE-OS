@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { propolyConfigured, propolyGet } from "@/lib/business/propoly";
+import { propolyConfigured, propolyGet, propolyOptions } from "@/lib/business/propoly";
 import { diagnosticsBlocked } from "@/lib/diagnostics";
 
 /**
@@ -18,13 +18,23 @@ import { diagnosticsBlocked } from "@/lib/diagnostics";
  * "just tries" a POST to see what happens would be writing into the record a
  * tenancy is built from. Existence is proven from the spec, not by poking it.
  *
- * ── Why the spec and not a guess ──────────────────────────────────────────
+ * ── The spec is not available to us, measured ─────────────────────────────
  *
- * api.propoly.com/api-docs answers 403 to an anonymous request and 200 to an
- * authenticated one, which means the document is scoped to the caller. That
- * makes it the only honest source for "what can WE do" as opposed to "what
- * does the product do" — and the difference between those two is the entire
- * question being asked.
+ * I first assumed /api-docs was 403 anonymously and 200 authenticated, and
+ * wrote that here as if it were established. It is not: /api-docs,
+ * /api-docs.json and /swagger.json all answer 403 with our agent credential
+ * too (30 Aug 2026). Propoly simply does not expose its document to us.
+ *
+ * So capability is established two other ways, both read-only:
+ *
+ *   1. OPTIONS on each known path. The Allow header names the methods the
+ *      server accepts without invoking any of them — which is how you learn a
+ *      POST exists without creating a record in the system that generates the
+ *      contracts.
+ *   2. A GET census over candidate paths. 404 means it is not there; 200, 401
+ *      or 403 all mean it IS there and tell us something about reachability.
+ *      "Referencing" is the one Howard could not start, so it is asked about
+ *      by name rather than assumed absent.
  */
 
 export const dynamic = "force-dynamic";
@@ -89,14 +99,61 @@ export async function GET() {
   }
 
   if (!spec?.paths) {
+    /* No document, so ask the server itself. Both sweeps are read-only. */
+    const known = [...EXERCISED].filter((p) => !p.includes("{"));
+    const methods = await Promise.all(
+      known.map(async (p) => {
+        const o = await propolyOptions(p);
+        return {
+          path: p,
+          status: o.status,
+          allow: o.allow,
+          /* A 405 or a missing header is "the server did not answer the
+             question", NOT "read-only". Saying otherwise would invent a
+             restriction, which is the same class of error as inventing a
+             permission. */
+          writable:
+            o.allow == null ? null : /POST|PUT|PATCH|DELETE/i.test(o.allow),
+        };
+      })
+    );
+
+    /* Does the thing Howard could not start even exist? Asked by name. */
+    const CANDIDATES = [
+      "/api/v1/references",
+      "/api/v1/referencing",
+      "/api/v1/reference_requests",
+      "/api/v1/checks",
+      "/api/v1/tenancies",
+      "/api/v1/documents",
+      "/api/v1/contracts",
+      "/api/v1/notes",
+      "/api/v1/tasks",
+      "/api/v1/webhooks",
+      "/api/v1/configuration",
+    ];
+    const census = await Promise.all(
+      CANDIDATES.map(async (p) => {
+        const r = await propolyGet(p);
+        return {
+          path: p,
+          status: r.status,
+          exists: r.status !== 404,
+        };
+      })
+    );
+
     return NextResponse.json({
       configured: true,
       specRead: false,
       attempts,
       note:
-        "Authenticated, but Propoly's API document could not be read on this credential. " +
-        "That is a question for Propoly, not a defect here — ask them to expose /api-docs to our agent, " +
-        "or to send the spec. Until then the capability list below is only what we have exercised.",
+        "Propoly does not expose its API document to our credential — /api-docs, /api-docs.json and " +
+        "/swagger.json all answer 403 authenticated. So capability below is measured by asking the " +
+        "server directly: OPTIONS for allowed methods, and a GET census for whether a path exists. " +
+        "Nothing was created, updated or deleted.",
+      methods,
+      census,
       exercised: [...EXERCISED],
     });
   }
