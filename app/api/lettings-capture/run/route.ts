@@ -64,6 +64,11 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     dryRun: true,
+    /* Bumped by hand when this route's behaviour changes, so "has it deployed
+       yet" is answerable without a write. Railway gives no build id we can read
+       from inside the app, and polling for a behaviour change is how you end up
+       running maintenance against the old code. */
+    capability: ["paged-fetch", "observed-let-dates", "repair"],
     watching: sectors.length,
     sectors,
     note:
@@ -101,9 +106,18 @@ export async function POST(req: NextRequest) {
      stamping NOW() on properties that were already let agreed when we met them.
      Idempotent, and worth leaving in place: the same mistake in a future change
      would be repairable the same way. */
-  const repaired = req.nextUrl.searchParams.get("repair")
-    ? await repairFabricatedLetDates()
-    : null;
+  if (req.nextUrl.searchParams.get("repair")) {
+    /* REPAIR SHORT-CIRCUITS. It is maintenance, not a sweep, and pairing the
+       two would mean waiting out 179 paged sectors to find out whether a
+       single UPDATE worked — with a real chance of hitting maxDuration and
+       returning nothing at all, leaving it unclear whether the repair had
+       committed. It runs alone and answers immediately. */
+    return NextResponse.json({
+      ok: true,
+      repairedLetDates: await repairFabricatedLetDates(),
+      note: "Fabricated let dates cleared. Run again with no query string to sweep.",
+    });
+  }
 
   const sectors = await watchedSectors();
   if (sectors.length === 0) {
@@ -112,8 +126,7 @@ export async function POST(req: NextRequest) {
       swept: 0,
       seeded,
       addedByHand,
-      ...(repaired != null ? { repairedLetDates: repaired } : {}),
-      note:
+        note:
         "Nothing to watch. ?seed=1 found no sectors — check REX is configured and has current rentals — or pass ?add=NN5 4 to name one by hand.",
     });
   }
@@ -143,7 +156,6 @@ export async function POST(req: NextRequest) {
     ok: true,
     seeded,
     addedByHand,
-    ...(repaired != null ? { repairedLetDates: repaired } : {}),
     swept: results.length - skipped.length,
     /* Said out loud. A sector that was skipped contributed nothing, and a
        summary that only counts successes reads as full coverage. */
