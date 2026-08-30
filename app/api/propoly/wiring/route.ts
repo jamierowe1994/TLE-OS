@@ -143,10 +143,56 @@ export async function GET() {
       })
     );
 
+    /* DO THE DOCUMENTS COME BACK IN THE PAYLOAD?
+    
+       Propoly serves compliance certificates from its own S3 bucket as
+       presigned URLs — measured 30 Aug 2026 from the browser:
+    
+         propoly-prod.s3.eu-west-1.amazonaws.com/uploads/tle/
+           property_gas_safety_attachment/attached/22375/GSC.pdf?X-Amz-…
+           property_electrical_installation_attachment/attached/39702/EICR…
+    
+       with X-Amz-Expires=604800 — seven days. If those URLs (or the
+       attachment ids behind them) appear in the API payload we already read,
+       then gas certificates and EICRs are reachable properly, and the
+       compliance tab stops being EPC-only.
+    
+       FIELD NAMES ONLY. This walks the shape of one property and one deal and
+       reports which keys exist and whether any value LOOKS like an S3 link —
+       never the value itself. A diagnostics route should not print a landlord's
+       address or a signed URL that works for a week for anyone holding it. */
+    const shapeOf = async (path: string) => {
+      const r = await propolyGet(path);
+      const body = r.body as Record<string, unknown> | null;
+      const first = Array.isArray(body)
+        ? (body[0] as Record<string, unknown> | undefined)
+        : Array.isArray((body as { data?: unknown[] } | null)?.data)
+          ? ((body as { data: unknown[] }).data[0] as Record<string, unknown> | undefined)
+          : (body ?? undefined);
+      if (!first || typeof first !== "object") {
+        return { path, status: r.status, keys: [], docLike: [] };
+      }
+      const keys = Object.keys(first);
+      /* Anything named like an attachment, or holding something that smells
+         like a presigned S3 link. Presence, not content. */
+      const docLike = keys.filter((k) => {
+        if (/attach|document|certificate|file|upload|gas|electric|epc/i.test(k)) return true;
+        const v = first[k];
+        return typeof v === "string" && /s3\.|X-Amz-Signature|\.pdf/i.test(v);
+      });
+      return { path, status: r.status, keys, docLike };
+    };
+
+    const shapes = await Promise.all([
+      shapeOf("/api/v1/properties"),
+      shapeOf("/api/v1/deals"),
+    ]);
+
     return NextResponse.json({
       configured: true,
       specRead: false,
       attempts,
+      documents: shapes,
       note:
         "Propoly does not expose its API document to our credential — /api-docs, /api-docs.json and " +
         "/swagger.json all answer 403 authenticated. So capability below is measured by asking the " +
