@@ -40,6 +40,36 @@ import type { MarketAppraisal, MaStage } from "@/lib/market-appraisal";
 
 const FILE = path.join(DATA_DIR, "market-appraisals.json");
 
+/**
+ * The postcode already in the address, if there is one.
+ *
+ * A lead has no postcode field, so booking an appraisal from one sends
+ * `postcode: ""` — see LeadDrawer. The reasoning there is right: do not INVENT
+ * a postcode from a vague area. But the address a booker types is very often a
+ * full one, and "W Balsdon Cottages, Whitstone, Holsworthy EX22 6LE, UK"
+ * carries its postcode in plain sight. Declining to read it is not caution, it
+ * is throwing away something we were given.
+ *
+ * The cost of not reading it is the whole feature: /api/ma-research answers
+ * `address and postcode are required` with a 400, so the appraisal file shows
+ * "the property details couldn't be pulled" and the presentation builder
+ * cannot start. Measured on James's own appraisal, 30 Aug.
+ *
+ * Anchored to the END, because an address can contain other things that look
+ * postcode-ish — a house name, a flat number — and the postcode is last in
+ * every UK format. Optional trailing ", UK" is allowed for, since that is what
+ * Google's formatted address returns.
+ *
+ * If there is genuinely no postcode in there, this returns "" and the empty
+ * state is correct: we still do not invent one.
+ */
+export function postcodeIn(address: string): string {
+  const m = /\b([A-Z]{1,2}\d{1,2}[A-Z]?)\s*(\d[A-Z]{2})\b(?=[,\s]*(?:UK|United Kingdom)?[\s,.]*$)/i.exec(
+    (address ?? "").trim()
+  );
+  return m ? `${m[1].toUpperCase()} ${m[2].toUpperCase()}` : "";
+}
+
 export interface NewAppraisal {
   leadId: string | null;
   landlord: string;
@@ -70,7 +100,11 @@ function rowTo(r: Row): MarketAppraisal {
     leadId: r.lead_id,
     landlord: r.landlord,
     address: r.address,
-    postcode: r.postcode,
+    /* Rows written before this healed themselves have an empty postcode and a
+       full address. Reading it here means the fix applies backwards without a
+       migration, and a migration that rewrites live rows to fix a display bug
+       is a bigger risk than the bug. */
+    postcode: r.postcode || postcodeIn(r.address ?? ""),
     agent: r.agent,
     appointmentAt: r.appointment_at ? new Date(r.appointment_at).toISOString() : null,
     stage: r.stage as MaStage,
@@ -150,7 +184,8 @@ export async function createAppraisal(input: NewAppraisal): Promise<MarketApprai
     leadId: input.leadId,
     landlord,
     address,
-    postcode: (input.postcode ?? "").trim(),
+    /* Given one, trust it. Given none, read the address rather than shrug. */
+    postcode: (input.postcode ?? "").trim() || postcodeIn(input.address ?? ""),
     agent: input.agent?.trim() || null,
     appointmentAt: input.appointmentAt ?? null,
     /* Booked, not pre-appraisal. The record IS just booked — the research and
