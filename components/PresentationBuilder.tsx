@@ -514,6 +514,204 @@ export default function PresentationBuilder({
   }
   const mapControls = controlsFor(true);
 
+  /**
+   * ONE CARD, TWO GRIDS.
+   *
+   * "On the market" and "Recently let" show the same object — a property from
+   * the Homesearch feed with photographs, a rent and an agent. They were about
+   * to be two hand-written cards, which is how two views of one thing start
+   * disagreeing about what a tick means or which photo is showing. This is the
+   * card; the grids differ only in what they filter.
+   */
+  function propertyCard(l: MarketListing) {
+    const k = keyOf(l);
+    const on = pickedNearby.includes(k);
+    /* The lead photograph FIRST, then the gallery. The two
+       sources overlap — `image` is usually also in `images` —
+       so the lead one is deduped out rather than shown twice. */
+    const shots = l.photos?.length
+      ? [l.image, ...l.photos.filter((u) => u !== l.image)].filter(
+          (u): u is string => Boolean(u)
+        )
+      : l.image
+        ? [l.image]
+        : [];
+    const at = shots.length ? ((slide[k] ?? 0) % shots.length + shots.length) % shots.length : 0;
+    const step = (e: React.MouseEvent, by: number) => {
+      e.stopPropagation();
+      setSlide((m) => ({ ...m, [k]: (m[k] ?? 0) + by }));
+    };
+    return (
+      <li key={k} data-card={k} className={leaving.includes(k) ? "deck-leave" : undefined}>
+        {/* NO BOX. James, 29 Aug: "I like the fact that they
+            don't have white boxes underneath like we do. We've
+            got the photo, and then we've got our connecting line
+            to make it into a tile."
+
+            He is right, and the reason is that the border was
+            doing no work. It drew a container around a
+            photograph that is already a rectangle, and the line
+            under the picture split one property into two halves.
+            The photo has a shape of its own; the words belong to
+            it by sitting underneath, not by being fenced in with
+            it. Selection is shown on the tick and a ring on the
+            PHOTO instead — the border was carrying that meaning
+            and losing it in the process. */}
+        <div className="group cursor-pointer" onClick={() => setFocused(k)}>
+          <div className="relative">
+            {/* Plain img, not next/image: these are third-party
+                S3 URLs, and a remote-image allowlist for a feed
+                whose host may change is config that breaks
+                silently the day it does. */}
+            {shots.length ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={shots[at]}
+                alt=""
+                loading="lazy"
+                /* 4:3 keeps a terrace whole. h-32 cropped these
+                   to a letterbox and cut the roofline off every
+                   one — a property photo with no property in it. */
+                className={`aspect-[4/3] w-full rounded-2xl bg-line/30 object-cover transition-all ${
+                  on ? "ring-2 ring-accent-dark ring-offset-2 ring-offset-page" : ""
+                }`}
+              />
+            ) : (
+              <div
+                className={`flex aspect-[4/3] w-full items-center justify-center rounded-2xl bg-line/20 text-[11px] text-muted ${
+                  on ? "ring-2 ring-accent-dark ring-offset-2 ring-offset-page" : ""
+                }`}
+              >
+                No photograph
+              </div>
+            )}
+
+            {/* The tick sits ON the photo, like the heart in the
+                reference. It was a checkbox in the row of text,
+                which put the one deliberate action on the card
+                in the least deliberate place. */}
+            <button
+              type="button"
+              aria-label={on ? "Remove from the deck" : "Add to the deck"}
+              onClick={(e) => {
+                e.stopPropagation();
+                pick(k);
+              }}
+              className={`absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full text-[13px] shadow-sm transition-transform hover:scale-110 ${
+                on ? "bg-accent-dark text-white" : "bg-page/85 text-muted"
+              }`}
+            >
+              &#10003;
+            </button>
+
+            {l.status === "let agreed" && (
+              <span className="absolute left-2 top-2 rounded-full bg-page/95 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-accent-dark shadow-sm">
+                Let agreed
+              </span>
+            )}
+
+            {/* THE REAL ADVERT, bottom right and out of the
+                gallery arrows' way. This existed before and
+                pointed at Homesearch's bearer-token API URL — a
+                401 in front of a landlord. `current_listings/
+                <id>/url` resolves the actual Rightmove or
+                OnTheMarket page; 19 of 21 rows have one, and the
+                arrow is simply absent on the two that do not. */}
+            {l.advert && (
+              <a
+                href={l.advert}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                aria-label="Open the advert"
+                title="Open the advert"
+                className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-page/90 text-[13px] text-ink opacity-0 shadow-sm transition-all hover:scale-110 group-hover:opacity-100"
+              >
+                &#8599;
+              </a>
+            )}
+
+            {/* PAGE THE PHOTOGRAPHS WITHOUT LEAVING THE LIST.
+                James, 29 Aug: "as we hover over to see the
+                photos, the arrow should pop up in the middle of
+                the right-hand side... every time we click the
+                button it will then show us a different photo."
+
+                This arrow used to open "the advert", which was
+                really Homesearch's bearer-token API URL — a 401
+                in front of a landlord. Now it does the thing it
+                always looked like it did.
+
+                Only when there IS more than one: an arrow that
+                returns you to the same picture is worse than no
+                arrow, because you press it twice to find out. */}
+            {shots.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => step(e, -1)}
+                  aria-label="Previous photograph"
+                  className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-page/90 text-[13px] text-ink opacity-0 shadow-sm transition-all hover:scale-110 group-hover:opacity-100"
+                >
+                  &#8249;
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => step(e, 1)}
+                  aria-label="Next photograph"
+                  className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-page/90 text-[13px] text-ink opacity-0 shadow-sm transition-all hover:scale-110 group-hover:opacity-100"
+                >
+                  &#8250;
+                </button>
+
+                {/* How many, and where you are in them. Without
+                    this the arrows are a loop with no end and no
+                    sense of how much there is left to see. */}
+                <span className="pointer-events-none absolute inset-x-0 bottom-2 flex items-center justify-center gap-1">
+                  {shots.slice(0, 6).map((_, i) => (
+                    <span
+                      key={i}
+                      className={`h-1.5 w-1.5 rounded-full transition-all ${
+                        i === Math.min(at, 5) ? "bg-white" : "bg-white/55"
+                      }`}
+                    />
+                  ))}
+                  {shots.length > 6 && (
+                    <span className="ml-0.5 text-[9px] font-semibold text-white/90">
+                      {at + 1}/{shots.length}
+                    </span>
+                  )}
+                </span>
+              </>
+            )}
+          </div>
+
+          {/* Floating underneath, on the page. No panel, no line. */}
+          <div className="px-0.5 pt-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="figures text-[13.5px]">
+                {l.rent ? money(l.rent) : "\u2014"}
+                <span className="text-[10.5px] text-muted"> pcm</span>
+              </span>
+              {l.daysListed != null && (
+                <span className="text-[10.5px] text-muted">{l.daysListed}d listed</span>
+              )}
+            </div>
+            <p className="mt-0.5 truncate text-[12px]">{l.address}</p>
+            <p className="truncate text-[10.5px] text-muted">
+              {[l.beds ? `${l.beds} bed` : null, l.type, l.postcode]
+                .filter(Boolean)
+                .join(" \u00b7 ")}
+            </p>
+            {l.agent && (
+              <p className="truncate text-[10.5px] text-muted">{l.agent}</p>
+            )}
+          </div>
+        </div>
+      </li>
+    );
+  }
+
   const available = useMemo(() => (d?.comparables ?? []).filter((c) => !c.letAgreed), [d]);
 
   const toggle = (id: string) =>
@@ -887,194 +1085,7 @@ export default function PresentationBuilder({
                     if (focused === keyOf(b)) return 1;
                     return 0;
                   })
-                  .map((l) => {
-                  const k = keyOf(l);
-                  const on = pickedNearby.includes(k);
-                  /* The lead photograph FIRST, then the gallery. The two
-                     sources overlap — `image` is usually also in `images` —
-                     so the lead one is deduped out rather than shown twice. */
-                  const shots = l.photos?.length
-                    ? [l.image, ...l.photos.filter((u) => u !== l.image)].filter(
-                        (u): u is string => Boolean(u)
-                      )
-                    : l.image
-                      ? [l.image]
-                      : [];
-                  const at = shots.length ? ((slide[k] ?? 0) % shots.length + shots.length) % shots.length : 0;
-                  const step = (e: React.MouseEvent, by: number) => {
-                    e.stopPropagation();
-                    setSlide((m) => ({ ...m, [k]: (m[k] ?? 0) + by }));
-                  };
-                  return (
-                    <li key={k} data-card={k} className={leaving.includes(k) ? "deck-leave" : undefined}>
-                      {/* NO BOX. James, 29 Aug: "I like the fact that they
-                          don't have white boxes underneath like we do. We've
-                          got the photo, and then we've got our connecting line
-                          to make it into a tile."
-
-                          He is right, and the reason is that the border was
-                          doing no work. It drew a container around a
-                          photograph that is already a rectangle, and the line
-                          under the picture split one property into two halves.
-                          The photo has a shape of its own; the words belong to
-                          it by sitting underneath, not by being fenced in with
-                          it. Selection is shown on the tick and a ring on the
-                          PHOTO instead — the border was carrying that meaning
-                          and losing it in the process. */}
-                      <div className="group cursor-pointer" onClick={() => setFocused(k)}>
-                        <div className="relative">
-                          {/* Plain img, not next/image: these are third-party
-                              S3 URLs, and a remote-image allowlist for a feed
-                              whose host may change is config that breaks
-                              silently the day it does. */}
-                          {shots.length ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={shots[at]}
-                              alt=""
-                              loading="lazy"
-                              /* 4:3 keeps a terrace whole. h-32 cropped these
-                                 to a letterbox and cut the roofline off every
-                                 one — a property photo with no property in it. */
-                              className={`aspect-[4/3] w-full rounded-2xl bg-line/30 object-cover transition-all ${
-                                on ? "ring-2 ring-accent-dark ring-offset-2 ring-offset-page" : ""
-                              }`}
-                            />
-                          ) : (
-                            <div
-                              className={`flex aspect-[4/3] w-full items-center justify-center rounded-2xl bg-line/20 text-[11px] text-muted ${
-                                on ? "ring-2 ring-accent-dark ring-offset-2 ring-offset-page" : ""
-                              }`}
-                            >
-                              No photograph
-                            </div>
-                          )}
-
-                          {/* The tick sits ON the photo, like the heart in the
-                              reference. It was a checkbox in the row of text,
-                              which put the one deliberate action on the card
-                              in the least deliberate place. */}
-                          <button
-                            type="button"
-                            aria-label={on ? "Remove from the deck" : "Add to the deck"}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              pick(k);
-                            }}
-                            className={`absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full text-[13px] shadow-sm transition-transform hover:scale-110 ${
-                              on ? "bg-accent-dark text-white" : "bg-page/85 text-muted"
-                            }`}
-                          >
-                            &#10003;
-                          </button>
-
-                          {l.status === "let agreed" && (
-                            <span className="absolute left-2 top-2 rounded-full bg-page/95 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-accent-dark shadow-sm">
-                              Let agreed
-                            </span>
-                          )}
-
-                          {/* THE REAL ADVERT, bottom right and out of the
-                              gallery arrows' way. This existed before and
-                              pointed at Homesearch's bearer-token API URL — a
-                              401 in front of a landlord. `current_listings/
-                              <id>/url` resolves the actual Rightmove or
-                              OnTheMarket page; 19 of 21 rows have one, and the
-                              arrow is simply absent on the two that do not. */}
-                          {l.advert && (
-                            <a
-                              href={l.advert}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              aria-label="Open the advert"
-                              title="Open the advert"
-                              className="absolute bottom-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-page/90 text-[13px] text-ink opacity-0 shadow-sm transition-all hover:scale-110 group-hover:opacity-100"
-                            >
-                              &#8599;
-                            </a>
-                          )}
-
-                          {/* PAGE THE PHOTOGRAPHS WITHOUT LEAVING THE LIST.
-                              James, 29 Aug: "as we hover over to see the
-                              photos, the arrow should pop up in the middle of
-                              the right-hand side... every time we click the
-                              button it will then show us a different photo."
-
-                              This arrow used to open "the advert", which was
-                              really Homesearch's bearer-token API URL — a 401
-                              in front of a landlord. Now it does the thing it
-                              always looked like it did.
-
-                              Only when there IS more than one: an arrow that
-                              returns you to the same picture is worse than no
-                              arrow, because you press it twice to find out. */}
-                          {shots.length > 1 && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={(e) => step(e, -1)}
-                                aria-label="Previous photograph"
-                                className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-page/90 text-[13px] text-ink opacity-0 shadow-sm transition-all hover:scale-110 group-hover:opacity-100"
-                              >
-                                &#8249;
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => step(e, 1)}
-                                aria-label="Next photograph"
-                                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-page/90 text-[13px] text-ink opacity-0 shadow-sm transition-all hover:scale-110 group-hover:opacity-100"
-                              >
-                                &#8250;
-                              </button>
-
-                              {/* How many, and where you are in them. Without
-                                  this the arrows are a loop with no end and no
-                                  sense of how much there is left to see. */}
-                              <span className="pointer-events-none absolute inset-x-0 bottom-2 flex items-center justify-center gap-1">
-                                {shots.slice(0, 6).map((_, i) => (
-                                  <span
-                                    key={i}
-                                    className={`h-1.5 w-1.5 rounded-full transition-all ${
-                                      i === Math.min(at, 5) ? "bg-white" : "bg-white/55"
-                                    }`}
-                                  />
-                                ))}
-                                {shots.length > 6 && (
-                                  <span className="ml-0.5 text-[9px] font-semibold text-white/90">
-                                    {at + 1}/{shots.length}
-                                  </span>
-                                )}
-                              </span>
-                            </>
-                          )}
-                        </div>
-
-                        {/* Floating underneath, on the page. No panel, no line. */}
-                        <div className="px-0.5 pt-2">
-                          <div className="flex items-baseline justify-between gap-2">
-                            <span className="figures text-[13.5px]">
-                              {l.rent ? money(l.rent) : "\u2014"}
-                              <span className="text-[10.5px] text-muted"> pcm</span>
-                            </span>
-                            {l.daysListed != null && (
-                              <span className="text-[10.5px] text-muted">{l.daysListed}d listed</span>
-                            )}
-                          </div>
-                          <p className="mt-0.5 truncate text-[12px]">{l.address}</p>
-                          <p className="truncate text-[10.5px] text-muted">
-                            {[l.beds ? `${l.beds} bed` : null, l.type, l.postcode]
-                              .filter(Boolean)
-                              .join(" \u00b7 ")}
-                          </p>
-                          {l.agent && (
-                            <p className="truncate text-[10.5px] text-muted">{l.agent}</p>
-                          )}
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
+                  .map((l) => propertyCard(l))}
                 </ul>
 
                 {/* Three quarters of the width was asked for; 58% is what that
@@ -1154,93 +1165,51 @@ export default function PresentationBuilder({
                 </ul>
               )}
               {/* WHAT THE WHOLE MARKET HAS LET, not just us.
-                  
+
                   Our own book is thin almost everywhere — measured 30 Aug, the
-                  entire NN5 district returned ONE let from REX and eleven
-                  let-agreed from Homesearch in the NN5 4 sector alone. A step
-                  called "Recently let" that shows a landlord one property is
-                  not evidence, it is an apology.
-                  
+                  entire NN5 district returned ONE let from REX and thirty-six
+                  let agreed from Homesearch. A step called "Recently let" that
+                  shows a landlord one property is not evidence, it is an
+                  apology.
+
+                  SAME CARDS, SAME FILTERS, NO MAP. James, 30 Aug. The filter
+                  row is the one from the market step and it is not a copy —
+                  `applyFilters` refetches the whole feed, and let-agreed rows
+                  come back through the same call, so radius, beds, type and
+                  rent narrow both lists from one control. The map is dropped
+                  because there is far less here and it does not need dividing
+                  in two.
+
                   THESE CARRY NO LET DATE, and that is stated rather than
-                  papered over. Homesearch's detail payload holds exactly one
-                  date, `listed_on` — there is no let_agreed_on and no
-                  status_changed_on on our key, so "how long it took" is
-                  unanswerable for anybody's stock but our own. Ours has a real
-                  one, from REX, which is what makes the section above worth
-                  more than this one despite being a tenth the size. */}
-              {letAgreed.length > 0 && (
-                <>
-                  <p className="mt-6 border-t border-line/70 pt-5 text-[12.5px] leading-relaxed text-muted">
-                    And {letAgreed.length} let agreed nearby across every agent &mdash; somebody
-                    has accepted these figures, which makes them evidence of what the market
-                    pays rather than what it asks. Homesearch does not record WHEN each one let,
-                    so there is no time-to-let here; the figures above are ours and do.
-                  </p>
+                  papered over. See the note at the top of lib/ma-research on
+                  why no completed-let source exists at all. */}
+              <div className="mt-6 border-t border-line/70 pt-5">
+                <div className="mb-3 flex flex-wrap items-center gap-2">{controlsFor(false)}</div>
+                <p className="text-[12.5px] leading-relaxed text-muted">
+                  {letAgreed.length > 0 ? (
+                    <>
+                      <span className="figures text-ink">{letAgreed.length}</span> let agreed
+                      nearby across every agent &mdash; somebody has accepted these figures, which
+                      makes them evidence of what the market pays rather than what it asks.
+                      Homesearch does not record WHEN each one let, so there is no time-to-let
+                      here; the figures above are ours and do.
+                    </>
+                  ) : (
+                    <>
+                      Nothing let agreed nearby on these filters. Widen the radius or clear the
+                      bed and rent filters &mdash; there is far less let-agreed stock than there
+                      is on the market, so a narrow search empties this quickly.
+                    </>
+                  )}
+                </p>
+                {letAgreed.length > 0 && (
                   <ul className="mt-3 grid gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {letAgreed.map((l) => {
-                      const k = keyOf(l);
-                      const shots = l.photos?.length
-                        ? [l.image, ...l.photos.filter((u) => u !== l.image)].filter(
-                            (u): u is string => Boolean(u)
-                          )
-                        : l.image
-                          ? [l.image]
-                          : [];
-                      const at =
-                        shots.length
-                          ? (((slide[k] ?? 0) % shots.length) + shots.length) % shots.length
-                          : 0;
-                      return (
-                        <li key={k}>
-                          <div className="group relative">
-                            {shots.length ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={shots[at]}
-                                alt=""
-                                loading="lazy"
-                                className="aspect-[4/3] w-full rounded-2xl bg-line/30 object-cover"
-                              />
-                            ) : (
-                              <div className="flex aspect-[4/3] w-full items-center justify-center rounded-2xl bg-line/20 text-[11px] text-muted">
-                                No photograph
-                              </div>
-                            )}
-                            <span className="absolute left-2 top-2 rounded-full bg-page/95 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-accent-dark shadow-sm">
-                              Let agreed
-                            </span>
-                            {shots.length > 1 && (
-                              <button
-                                type="button"
-                                aria-label="Next photograph"
-                                onClick={() => setSlide((m) => ({ ...m, [k]: (m[k] ?? 0) + 1 }))}
-                                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-page/90 text-[14px] opacity-0 shadow-sm transition-opacity group-hover:opacity-100"
-                              >
-                                &rsaquo;
-                              </button>
-                            )}
-                          </div>
-                          <div className="mt-2">
-                            <span className="figures text-[13.5px]">
-                              {l.rent ? money(l.rent) : "\u2014"}
-                              <span className="text-[10.5px] text-muted"> pcm</span>
-                            </span>
-                            <p className="mt-0.5 truncate text-[12px]">{l.address}</p>
-                            <p className="truncate text-[10.5px] text-muted">
-                              {[l.beds ? `${l.beds} bed` : null, l.type, l.postcode]
-                                .filter(Boolean)
-                                .join(" \u00b7 ")}
-                            </p>
-                            {l.agent && (
-                              <p className="truncate text-[10.5px] text-muted">{l.agent}</p>
-                            )}
-                          </div>
-                        </li>
-                      );
-                    })}
+                    {letAgreed
+                      .filter((l) => !pickedNearby.includes(keyOf(l)) || leaving.includes(keyOf(l)))
+                      .map((l) => propertyCard(l))}
                   </ul>
-                </>
-              )}
+                )}
+              </div>
 
               {/* MOVED HERE FROM "On the market". James, 29 Aug.
 

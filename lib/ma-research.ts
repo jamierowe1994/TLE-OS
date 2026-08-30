@@ -122,6 +122,34 @@ export function areaOf(postcode: string): string | null {
 const AREA_STATS = ["avg_price_on_market", "on_market_count", "off_market_count"] as const;
 
 /**
+ * THERE IS NO SOURCE OF COMPLETED LETS. Measured 30 Aug 2026, and worth not
+ * re-deriving:
+ *
+ * - NN5 let **2,570** properties in twelve months (`off_market_count`), but
+ *   `current_listings_crm/search/let/` holds **214 rows total** for the whole
+ *   district. About 8%, and it is the currently-advertised slice — a completed
+ *   let LEAVES the feed. There is no archive behind it.
+ * - `property/comparable/{recently_let,off_market_let,recently_leased}` and
+ *   `area_statistics/lettings/off_market_listings` all **404**. The sales-only
+ *   `recently_sold` and `off_market` comparables have no lettings twin.
+ * - `is_available=0` returns exactly the withdrawn rows (104 of 214) and
+ *   nothing else. So Homesearch's own split is: available = on market + let
+ *   agreed + fallen through; unavailable = withdrawn.
+ * - **`price_history` on a lettings row is SALE history.** Measured: £199,950
+ *   in 2006, £38,400 in 1999. Render it on a lettings card and you will show a
+ *   landlord a house price where they expect a rent.
+ *
+ * So "let agreed" is the closest thing to "recently let" that exists for
+ * anybody's stock but ours — and it means an offer ACCEPTED, not a move-in.
+ * Real move-in dates exist only in REX (`leased` + `state_change_timestamp`),
+ * PayProp and Propoly. Withdrawn is NOT a proxy: many are completed lets, many
+ * are genuine withdrawals, and nothing in the payload tells them apart.
+ *
+ * The only route to real let dates for other agents' stock is to capture the
+ * feed daily and observe the transition ourselves.
+ */
+
+/**
  * THE LETTINGS MARKET AT THREE SCOPES.
  *
  * F&C's Market Insights tab shows five panels in sales mode and only two in
