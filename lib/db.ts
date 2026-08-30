@@ -1008,6 +1008,14 @@ CREATE TABLE IF NOT EXISTS os_plc_shadow (
   agreement     TEXT
 );
 CREATE INDEX IF NOT EXISTS os_plc_shadow_agreement ON os_plc_shadow (agreement, decided_at DESC);
+-- How long the pack sat with compliance. Copied onto this row rather than
+-- joined from os_plc_cases, because a case can be reopened and resubmitted and
+-- the turnaround being measured is the one for THIS decision.
+ALTER TABLE os_plc_shadow ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ;
+-- Stored, not computed on read. The figure gets quoted to agents ("we have got
+-- it down to 24 hours"), so it must mean the same thing next year as it does
+-- today even if the two timestamps around it are ever changed.
+ALTER TABLE os_plc_shadow ADD COLUMN IF NOT EXISTS hours_to_decide NUMERIC;
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

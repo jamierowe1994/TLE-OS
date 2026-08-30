@@ -88,6 +88,11 @@ const GROUPS: Array<{
          owner-gated rather than merely admin-gated. */
       { href: "/admin/switches", label: "Switches", needs: "manage:roles" },
       { href: "/admin/activity", label: "Activity", needs: "see:people" },
+      /* Not beside Kirstie's view, which is where it superficially belongs.
+         This is a measurement OF her decisions, and a page that scores
+         somebody sitting inside their own screen invites them to read it while
+         deciding - which is exactly what would destroy the measurement. */
+      { href: "/admin/plc-checks", label: "PLC checks", needs: "see:reports" },
       { href: "/admin/todo", label: "To do", needs: "see:reports" },
       /* Deliberately NOT in the "Views" group: VIEW_PREFIXES is derived from
          that group, and any href in it unmounts this rail. Note /emails also

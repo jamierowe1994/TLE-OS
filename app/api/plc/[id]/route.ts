@@ -137,6 +137,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
             verdict: outcome.recommendation.verdict,
             headline: outcome.recommendation.headline,
             perCheck: outcome.recommendation.perCheck,
+            submittedAt: scanned.submittedAt,
           });
         }
         return NextResponse.json({ ok: true, ...payload(scanned) });
