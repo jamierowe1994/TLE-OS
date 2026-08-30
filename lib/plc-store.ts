@@ -301,7 +301,14 @@ export async function updateDetails(
  */
 export async function attachDocument(
   id: string,
-  doc: { checkId: CheckId; name: string; key: string; url: string; addedBy: string }
+  doc: {
+    checkId: CheckId;
+    name: string;
+    key: string;
+    url: string;
+    addedBy: string;
+    placeholder?: boolean;
+  }
 ): Promise<PlcCase> {
   return mutate(id, (c) => {
     if (c.state !== "assembling") {
@@ -316,6 +323,7 @@ export async function attachDocument(
       url: doc.url,
       addedAt: new Date().toISOString(),
       addedBy: doc.addedBy,
+      ...(doc.placeholder ? { placeholder: true as const } : {}),
     };
     return { ...c, documents: [...c.documents, next] };
   });

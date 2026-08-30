@@ -163,6 +163,9 @@ const REPORT_TOOL: Anthropic.Tool = {
 type Fetched = { media: string; base64: string };
 
 async function fetchDocument(doc: PlcDocument): Promise<Fetched> {
+  /* A name with no bytes behind it. Reported as unreadable rather than
+     skipped, so a placeholder can never pass through the pack unremarked. */
+  if (doc.placeholder) throw new Error("it was recorded by name only and never stored");
   if (!r2Configured) throw new Error("file storage isn't configured on this environment");
   const body = await withR2(async (client) => {
     const res = await client.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: doc.key }));

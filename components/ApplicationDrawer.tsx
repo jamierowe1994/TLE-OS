@@ -158,6 +158,22 @@ export default function ApplicationDrawer({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2.5">
+            {/* The handover starts HERE, on the record, rather than on a screen
+                the agent has to go and find. Everything the wizard needs is on
+                this application, so the only honest place to begin is the page
+                that already has it open.
+
+                Offered once the landlord has said yes. Before that there is no
+                tenancy to be compliant about, and a pack assembled against an
+                offer that then falls through is work thrown away. */}
+            {(app.stageKey === "accepted" || app.stageKey === "communicated") && (
+              <a
+                href={`/plc/start?application=${encodeURIComponent(app.id)}`}
+                className="rounded-lg bg-accent-dark px-3.5 py-2 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+              >
+                Start the PLC check
+              </a>
+            )}
             {app.flag && <Pill tone="accent">{app.flag}</Pill>}
             <button
               type="button"

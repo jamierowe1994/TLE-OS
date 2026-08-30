@@ -130,6 +130,69 @@ export const PLC_CHECKS: Check[] = [
 
 export const checkById = (id: CheckId) => PLC_CHECKS.find((c) => c.id === id) ?? null;
 
+/* ──────────────────────────── how they're asked ────────────────────────── */
+
+/**
+ * The pack, in the two piles an agent actually holds it in.
+ *
+ * Nine upload boxes on one screen reads as a chore and gets half-filled. Split
+ * in two it reads as two errands, and each one is a set of documents that come
+ * from the same place: the landlord's pile arrives from the landlord and the
+ * managing agent, the tenant's from referencing and the application.
+ *
+ * The grouping is presentational and lives here rather than in the wizard, so
+ * a tenth check has one obvious home instead of being quietly left out of
+ * whichever screen nobody remembered to edit.
+ */
+export const CHECK_GROUPS: { id: "landlord" | "tenant"; title: string; blurb: string; checks: CheckId[] }[] = [
+  {
+    id: "landlord",
+    title: "Landlord and property",
+    blurb: "Everything about the building and who owns it.",
+    checks: ["landlord-id-aml", "gas-safety", "epc", "eicr", "licensing"],
+  },
+  {
+    id: "tenant",
+    title: "Tenant and tenancy",
+    blurb: "Everything about the people moving in.",
+    checks: ["tenant-checks", "guarantor-checks", "right-to-rent", "tenancy-agreement"],
+  },
+];
+
+/**
+ * A first guess at which check a dropped file belongs to.
+ *
+ * A guess, and it is presented as one: the wizard shows the answer in a control
+ * the agent can change, never as a decision already made. Filing an EICR as a
+ * gas certificate because a filename said "certificate" would send a wrong
+ * document to compliance with a confident label on it, which is worse than
+ * asking.
+ *
+ * Order matters. "gas safety certificate.pdf" contains both "gas" and
+ * "certificate", so the specific patterns are tried before the loose ones.
+ */
+const FILENAME_HINTS: [RegExp, CheckId][] = [
+  [/cp-?12|gas/i, "gas-safety"],
+  [/eicr|electric|nice?ic|periodic.?inspect/i, "eicr"],
+  [/epc|energy.?perf/i, "epc"],
+  [/licen[cs]|hmo|selective/i, "licensing"],
+  [/guarantor|guarantee/i, "guarantor-checks"],
+  [/right.?to.?rent|share.?code|passport|visa|brp/i, "right-to-rent"],
+  [/ast|tenancy.?agree|agreement/i, "tenancy-agreement"],
+  [/referenc|goodlord|rightmove|van.?mildert|credit/i, "tenant-checks"],
+  [/aml|anti.?money|proof.?of.?address|landlord.?id|\bid\b|driving|utility/i, "landlord-id-aml"],
+];
+
+/** Null when nothing matched, which the wizard shows as "choose a check". */
+export function guessCheck(filename: string, within?: CheckId[]): CheckId | null {
+  for (const [re, id] of FILENAME_HINTS) {
+    if (!re.test(filename)) continue;
+    if (within && !within.includes(id)) continue;
+    return id;
+  }
+  return null;
+}
+
 /* ───────────────────────────── the states ──────────────────────────────── */
 
 export type PlcState =
@@ -223,6 +286,16 @@ export type PlcDocument = {
   addedAt: string;
   /** Who attached it. A pack is evidence, and evidence has a chain. */
   addedBy: string;
+  /**
+   * True when the bytes were never stored - a name standing in for a file on
+   * an environment with no bucket attached.
+   *
+   * It exists so that a walkthrough on a laptop can reach the end of the
+   * wizard without the screen ever implying a document is on file when it is
+   * not. Anything showing a pack must show this, and the scan reports it as
+   * unread rather than skipping it quietly.
+   */
+  placeholder?: boolean;
 };
 
 export type PlcCase = {

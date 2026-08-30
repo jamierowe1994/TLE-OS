@@ -672,7 +672,12 @@ export default function PlcDryRun() {
     try {
       const res = await api<{ cases: PlcCase[] }>("/api/plc");
       setCases(res.cases);
-      setId((prev) => prev ?? res.cases[0]?.id ?? null);
+      /* ?case=<id> is how the wizard's "See where it is up to" arrives, so a
+         handover just sent opens on itself rather than on whatever happens to
+         be newest. Read once, on the first load, so it cannot fight a
+         selection the user makes afterwards. */
+      const asked = new URLSearchParams(window.location.search).get("case");
+      setId((prev) => prev ?? (asked && res.cases.some((c) => c.id === asked) ? asked : null) ?? res.cases[0]?.id ?? null);
     } catch (e) {
       setError((e as Error).message);
     }

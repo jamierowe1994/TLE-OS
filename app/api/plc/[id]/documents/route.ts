@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { attachDocument, PlcRefused, removeDocument } from "@/lib/plc-store";
 import { checkById, missingDocuments, PLC_CHECKS, type CheckId } from "@/lib/plc";
-import { keyIsOurs } from "@/lib/r2";
+import { keyIsOurs, r2Configured } from "@/lib/r2";
 import { actorName } from "@/lib/plc-actor";
 
 /**
@@ -25,7 +25,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  let body: { checkId?: string; name?: string; key?: string };
+  let body: { checkId?: string; name?: string; key?: string; placeholder?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -36,6 +36,26 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   if (!checkId || !checkById(checkId)) {
     return NextResponse.json(
       { ok: false, error: `Unknown check. Expected one of: ${PLC_CHECKS.map((c) => c.id).join(", ")}.` },
+      { status: 400 }
+    );
+  }
+
+  /* ── A file with no bytes behind it ────────────────────────────────────
+
+     On a laptop with no bucket attached the upload route refuses, and without
+     this the wizard cannot be walked past its third screen — which is exactly
+     when somebody stops reviewing it. So the caller may file a name instead of
+     a file, and the case records that it did.
+
+     Two things keep it honest. It is refused whenever storage IS configured,
+     so the moment R2 is attached this path stops existing rather than becoming
+     a way to fake a certificate. And the flag travels with the document, so
+     every screen that lists a pack says "name only, not stored" rather than
+     showing it as filed. */
+  const placeholder = Boolean(body.placeholder);
+  if (placeholder && r2Configured) {
+    return NextResponse.json(
+      { ok: false, error: "Storage is connected here, so upload the file itself." },
       { status: 400 }
     );
   }
@@ -55,6 +75,7 @@ export async function POST(req: NextRequest, ctx: Ctx) {
       key,
       url: `/api/r2/file?key=${encodeURIComponent(key)}`,
       addedBy: await actorName(req, "Agent"),
+      placeholder,
     });
     return NextResponse.json({
       ok: true,
