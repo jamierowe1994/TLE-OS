@@ -21,17 +21,25 @@ import { NextRequest, NextResponse } from "next/server";
  * appeared, so a broken lookup and an unknown address were indistinguishable
  * on screen, and the field looked merely unhelpful rather than broken.
  *
- * MEASURED, 30 Aug: the live GOOGLE_MAPS_API_KEY is the same key as
- * NEXT_PUBLIC_GOOGLE_MAPS_API_KEY, and it is restricted by HTTP referrer.
+ * MEASURED 30 Aug, and FIXED the same day: GOOGLE_MAPS_API_KEY used to be the
+ * same key as NEXT_PUBLIC_GOOGLE_MAPS_API_KEY, restricted by HTTP referrer.
  * That is correct for a browser key and fatal for a server one — a call from
- * here sends no referrer, so Google answers
+ * here sends no referrer, so Google answered
  *
  *   403 API_KEY_HTTP_REFERRER_BLOCKED "Requests from referer <empty> are blocked."
  *
- * The map kept working (browser, referrer present) while lookup never had. A
- * server-side key cannot simply have that restriction lifted, because it is
- * the same public key the map ships to every visitor: it needs to be a SECOND
- * key, restricted by API rather than by referrer.
+ * The map kept working (browser, referrer present) while lookup never had.
+ *
+ * James issued a SECOND key that evening, restricted by API rather than by
+ * referrer, and pointed GOOGLE_MAPS_API_KEY at it. So the two are now
+ * genuinely different keys with different jobs, and they must stay that way:
+ *
+ *   NEXT_PUBLIC_GOOGLE_MAPS_API_KEY — browser, referrer-locked, the research
+ *                                     map in components/MarketMap
+ *   GOOGLE_MAPS_API_KEY             — server, API-locked, this route only
+ *
+ * Setting them to the same value again silently breaks lookup and nothing
+ * else, which is exactly how it went unnoticed the first time.
  *
  * So every failure now comes back with a `problem` the field can print. The
  * point is not politeness — it is that the next person to hit this should

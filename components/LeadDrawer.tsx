@@ -7,6 +7,7 @@ import { handoverTarget } from "@/lib/market-appraisal";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DetailRow, DoneTick, PressButton, SectionHead } from "@/components/Bits";
+import Compose from "@/components/Compose";
 import EmailProperties from "@/components/EmailProperties";
 import PhotoBox from "@/components/PhotoBox";
 import ProcessTimeline from "@/components/ProcessTimeline";
@@ -511,6 +512,11 @@ export default function LeadDrawer({
   const [added, setAdded] = useState<string[]>([]);
   const [justAdded, setJustAdded] = useState(false);
   const [emailing, setEmailing] = useState(false);
+  /* WRITING AN EMAIL IS NOT SENDING A SHORTLIST. `emailing` opens
+     EmailProperties, which is a property picker and right for a tenant.
+     `composing` opens a compose window, which is what a landlord needed and
+     never had — every landlord email action used to open the picker. */
+  const [composing, setComposing] = useState(false);
   // Where they are on their track, and the two panels a step can open.
   const [step, setStep] = useState(0);
   /* Declared here with the rest of the hooks, not down beside the markup that
@@ -681,7 +687,12 @@ export default function LeadDrawer({
     }
     else if (here.action === "docs") setDocsOpen("id");
     else if (here.action === "sign") setSigning(true);
-    else if (here.action === "send") setEmailing(true);
+    else if (here.action === "send") {
+      /* The shortlist step belongs to a tenant and IS the picker. Anyone else
+         reaching a "send" step wants to write something. */
+      if (isTenant) setEmailing(true);
+      else setComposing(true);
+    }
     else if (here.action === "handoff") setHandingOff(true);
     else advance();
   }
@@ -1239,7 +1250,11 @@ export default function LeadDrawer({
                         <div className="mt-3 flex flex-wrap justify-center gap-2">
                           {[
                             { label: "Schedule a viewing", icon: "calendar", go: () => setBooking(true) },
-                            { label: "Send details", icon: "mail", go: () => setEmailing(true) },
+                            {
+                              label: isTenant ? "Send details" : "Write an email",
+                              icon: "mail",
+                              go: () => (isTenant ? setEmailing(true) : setComposing(true)),
+                            },
                           ].map((a) => (
                             <PressButton
                               key={a.label}
@@ -1499,6 +1514,22 @@ export default function LeadDrawer({
           </div>
         </div>
       </aside>
+
+      {/* The landlord side of the same job. Merge values come from the record
+          in front of the agent, so {{address}} is this property and not a
+          placeholder somebody has to remember to replace. */}
+      <Compose
+        open={composing}
+        onClose={() => setComposing(false)}
+        to={contact.email || lead.email}
+        audience={isTenant ? "tenant" : "landlord"}
+        merge={{
+          name: lead.name,
+          firstName: (lead.name ?? "").trim().split(/\s+/)[0],
+          address: contact.area || lead.preferred || lead.area,
+          agent: lead.agent === "Unassigned" ? "" : lead.agent,
+        }}
+      />
 
       <EmailProperties
         open={emailing}

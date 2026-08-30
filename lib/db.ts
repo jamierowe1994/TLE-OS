@@ -634,6 +634,27 @@ CREATE INDEX IF NOT EXISTS os_campaign_sends_recent ON os_campaign_sends (at DES
 -- channel and audience stay where they can be read at a glance, and only the
 -- words live here. Deleting a row reverts the step to whatever the code says,
 -- which is the cheapest possible undo.
+-- THE WORDS AN AGENT SENDS BY HAND.
+--
+-- Distinct from os_email_templates below, which is keyed on
+-- (campaign_id, step_index) and is an overlay for campaign copy — a row there
+-- means nothing without a campaign behind it. This is the ordinary case: a
+-- landlord in front of you and one email to write now.
+--
+-- Built-ins live in lib/message-templates.ts, not here. A row with the same id
+-- OVERRIDES one, and deleting the row reverts it, which is why the built-ins
+-- are never written in on first read.
+CREATE TABLE IF NOT EXISTS os_message_templates (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL DEFAULT '',
+  subject     TEXT NOT NULL DEFAULT '',
+  body        TEXT NOT NULL DEFAULT '',
+  -- landlord | tenant | any
+  audience    TEXT NOT NULL DEFAULT 'any',
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by  TEXT NOT NULL DEFAULT ''
+);
+
 CREATE TABLE IF NOT EXISTS os_email_templates (
   id          TEXT PRIMARY KEY,
   campaign_id TEXT NOT NULL,
