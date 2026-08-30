@@ -134,6 +134,13 @@ export default function NewLeadPanel({
   const [d, setD] = useState<Draft>(EMPTY);
   const [geo, setGeo] = useState<ResolvedAddress | null>(null);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  /* What actually happened, in two parts: whether the OS stored it, and what
+     REX said. They fail independently, so one flag cannot describe both — the
+     version of this panel that tried showed "Saved to Leads" for a save that
+     never happened. */
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [rexNote, setRexNote] = useState<{ ok: boolean; detail: string } | null>(null);
   const [emailPreview, setEmailPreview] = useState(false);
   // The fork: who is this lead? Everything downstream hangs off it.
   const [kind, setKind] = useState<null | "tenant" | "landlord">(null);
@@ -170,6 +177,9 @@ export default function NewLeadPanel({
     setD(EMPTY);
     setGeo(null);
     setSaved(false);
+    setSaving(false);
+    setSaveError(null);
+    setRexNote(null);
     setPicked([]);
     setPicking(false);
     setKind(null);
@@ -276,6 +286,78 @@ export default function NewLeadPanel({
   const ready = d.name.trim() && d.mobile.trim();
   const set = (k: keyof Draft) => (v: string) => setD((cur) => ({ ...cur, [k]: v }));
 
+  /**
+   * Save, for real.
+   *
+   * This used to be `onCreated?.(d); setSaved(true)` — an OPTIONAL callback
+   * that the only caller never passed, followed by a success screen. Nothing
+   * was written anywhere and the panel said "Saved to Leads" regardless.
+   *
+   * The fix is not to pass the prop. It is to stop persistence being a prop at
+   * all: the panel posts to an endpoint that always writes, so no arrangement
+   * of callers can make this button quietly do nothing again. `onCreated` is
+   * now only a nudge to whoever wants to refresh a list.
+   */
+  async function save() {
+    if (!ready || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    setRexNote(null);
+    try {
+      const r = await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind: kind === "landlord" ? "landlord" : "tenant",
+          name: d.name,
+          email: d.email,
+          mobile: d.mobile,
+          address: d.address,
+          postcode: geo?.postcode ?? postcodeOf(d.address) ?? "",
+          source: d.source,
+          enquiry: d.enquiry,
+          notes: d.notes,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        setSaveError(j.error ?? "That didn't save.");
+        return;
+      }
+      setRexNote(j.rex ? { ok: Boolean(j.rex.ok), detail: String(j.rex.detail ?? "") } : null);
+      onCreated?.(d);
+      setSaved(true);
+    } catch {
+      setSaveError("That didn't save — the connection dropped. Nothing has been lost from this form.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Shared by both branches, so the two Save buttons cannot drift apart. */
+  const saveButton = (label: string) => (
+    <div>
+      <PressButton
+        onClick={save}
+        className={`w-full rounded-xl py-3.5 text-[14px] font-semibold transition-opacity ${
+          ready && !saving ? "bg-ink text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
+        }`}
+      >
+        {saving ? "Saving…" : label}
+      </PressButton>
+      {!ready && (
+        <p className="mt-2 text-center text-[11px] text-muted">
+          A name and a mobile is enough to start.
+        </p>
+      )}
+      {saveError && (
+        <p className="mt-2 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-center text-[11.5px] leading-relaxed">
+          {saveError}
+        </p>
+      )}
+    </div>
+  );
+
   /** The address resolved — go and read the property's history. Runs once,
       right at the start, so the agent never has to remember to ask. */
   async function runDossier(g: ResolvedAddress) {
@@ -362,14 +444,36 @@ export default function NewLeadPanel({
           {saved ? (
             <div className="mx-auto flex max-w-md flex-col items-center pt-10 text-center">
               <DoneTick />
-              <p className="hand mt-5 text-[22px]">{d.name} is on the board</p>
+              <p className="hand mt-5 text-[22px]">{d.name} is saved</p>
               <p className="mt-1.5 text-[12.5px] text-muted">
-                Saved to Leads{d.source ? ` · ${d.source}` : ""}
+                {/* "Saved to Leads" was never true: the Leads table is REX's
+                    book, and this row lives in the OS until it is pushed. */}
+                Saved in the OS{d.source ? ` · ${d.source}` : ""}
                 {shortlist.length
                   ? ` · ${shortlist.length} propert${shortlist.length === 1 ? "y" : "ies"} shortlisted`
                   : ""}
                 .
               </p>
+
+              {/* Whether REX has them is a SEPARATE fact from whether we do,
+                  and it is the one an agent will act on — they'll go looking
+                  in REX for a record that may not be there. Held is not an
+                  error: it means the write lock is still on and the record is
+                  queued, so nobody needs to re-type it later. */}
+              {rexNote && (
+                <p
+                  className={`mt-3 w-full rounded-xl border p-3 text-left text-[11.5px] leading-relaxed ${
+                    rexNote.ok
+                      ? "border-line/70 text-muted"
+                      : "border-accent-dark/40 bg-accent-soft/40"
+                  }`}
+                >
+                  <span className="font-semibold">
+                    {rexNote.ok ? "In REX too. " : "Not in REX yet. "}
+                  </span>
+                  {rexNote.detail}
+                </p>
+              )}
 
               {/* The bundle: GDPR notice + their portal, one email. Sent on
                   registration by default, because the notice is a legal duty
@@ -753,25 +857,7 @@ export default function NewLeadPanel({
                 </div>
               </Section>
 
-              <div>
-                <PressButton
-                  onClick={() => {
-                    if (!ready) return;
-                    onCreated?.(d);
-                    setSaved(true);
-                  }}
-                  className={`w-full rounded-xl py-3.5 text-[14px] font-semibold transition-opacity ${
-                    ready ? "bg-ink text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
-                  }`}
-                >
-                  Add landlord lead
-                </PressButton>
-                {!ready && (
-                  <p className="mt-2 text-center text-[11px] text-muted">
-                    A name and a mobile is enough to start.
-                  </p>
-                )}
-              </div>
+              {saveButton("Add landlord lead")}
             </div>
           ) : (
             <div className="grid gap-4 lg:grid-cols-2">
@@ -1002,25 +1088,7 @@ export default function NewLeadPanel({
               </Section>
 
               {/* ── Save ── */}
-              <div className="lg:col-span-2">
-                <PressButton
-                  onClick={() => {
-                    if (!ready) return;
-                    onCreated?.(d);
-                    setSaved(true);
-                  }}
-                  className={`w-full rounded-xl py-3.5 text-[14px] font-semibold transition-opacity ${
-                    ready ? "bg-ink text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
-                  }`}
-                >
-                  Add lead
-                </PressButton>
-                {!ready && (
-                  <p className="mt-2 text-center text-[11px] text-muted">
-                    A name and a mobile is enough to start.
-                  </p>
-                )}
-              </div>
+              <div className="lg:col-span-2">{saveButton("Add lead")}</div>
             </div>
           )}
         </div>

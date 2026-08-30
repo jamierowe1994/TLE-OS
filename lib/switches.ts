@@ -73,6 +73,18 @@ export const SWITCHES: Switch[] = [
     legacyOn: "on",
   },
   {
+    key: "rex_contact_create",
+    label: "Create contacts in REX",
+    what: "Lets a contact saved in the OS be created in REX, as whoever saved it.",
+    who: "Nobody is emailed. This one writes a record into REX - the live system six businesses share.",
+    confirm: "WRITE TO REX",
+    /* There is no old variable for this: it never existed before. REX_ALLOW_WRITES
+       is the separate, deploy-level lock and is checked as well - naming it here
+       would make one gate look like two. */
+    legacyEnv: "REX_CONTACT_CREATE",
+    legacyOn: "on",
+  },
+  {
     key: "campaign_sending",
     label: "Nurture campaigns",
     what: "Lets the scheduler send campaign steps as they fall due.",

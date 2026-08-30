@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
+import AddedHere from "@/components/AddedHere";
 import LeadDrawer from "@/components/LeadDrawer";
 import NewLeadPanel from "@/components/NewLeadPanel";
 import PageHeader from "@/components/PageHeader";
@@ -102,6 +103,8 @@ export default function Leads() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [creating, setCreating] = useState(false);
+  /** Bumped when a contact is saved, so the strip above the table re-reads. */
+  const [addedTick, setAddedTick] = useState(0);
   // Stacks of 25 — enough by default, more when they want a long scroll.
   const [perPage, setPerPage] = useState(25);
   const [q, setQ] = useState("");
@@ -249,6 +252,8 @@ export default function Leads() {
         }
       />
 
+      <AddedHere refreshKey={addedTick} />
+
       <div className="mt-4">
         <div className="fade-up min-w-0 rounded-2xl border border-line/80 bg-panel p-5">
           {/* Filters, with the column customiser at the end of the row. */}
@@ -333,7 +338,14 @@ export default function Leads() {
       </div>
 
       <LeadDrawer lead={open} onClose={() => setOpenId(null)} onStep={step} />
-      <NewLeadPanel open={creating} onClose={() => setCreating(false)} />
+      {/* onCreated is a REFRESH nudge, nothing more. The panel saves itself
+          now — this prop being forgotten is exactly how Save came to save
+          nothing, so nothing depends on it any more. */}
+      <NewLeadPanel
+        open={creating}
+        onClose={() => setCreating(false)}
+        onCreated={() => setAddedTick((n) => n + 1)}
+      />
     </>
   );
 }

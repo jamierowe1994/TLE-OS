@@ -25,7 +25,12 @@ export type AuditKind =
      outbound mail is the single most consequential control in the product, and
      "who turned it on, and when" is the first question after anything goes
      wrong with one. */
-  | "switch_changed";
+  | "switch_changed"
+  /* A record created in REX from the OS. REX is the live system six businesses
+     share and there is no undo, so the first question after a bad record is
+     "who made it, when, and from where" — and REX's own log will say the OS,
+     which is not an answer. */
+  | "rex_contact_created";
 
 export interface AuditRow {
   id: string;

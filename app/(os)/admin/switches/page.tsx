@@ -150,8 +150,18 @@ export default function AdminSwitches() {
 
             {arming === s.key ? (
               <div className="mt-3 rounded-xl border border-accent-dark/40 bg-accent-soft/30 p-3">
+                {/* Reads back WHAT it will do and WHO it reaches, rather than
+                    assuming every switch sends mail — one of them writes into
+                    REX and emails nobody, and "this will start sending to
+                    nobody is emailed" is how a warning stops being read. */}
                 <p className="text-[12px] leading-relaxed">
-                  This will start sending to <span className="font-semibold">{s.who}</span>{" "}
+                  Once armed: {s.what}
+                </p>
+                <p className="mt-1 text-[12px] leading-relaxed">
+                  <span className="text-muted">Reaches: </span>
+                  <span className="font-semibold">{s.who}</span>
+                </p>
+                <p className="mt-1.5 text-[12px] leading-relaxed">
                   Type <span className="font-semibold">{s.confirm}</span> to arm it.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">

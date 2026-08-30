@@ -497,6 +497,52 @@ CREATE TABLE IF NOT EXISTS os_switches (
   changed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- People added in the OS, and what became of them in REX.
+--
+-- The New Lead panel had a Save button that called an optional callback the
+-- only caller never passed. Pressing it showed "Saved to Leads" and wrote
+-- nothing anywhere: not here, not REX, not even React state. This table is
+-- what it should always have been writing to.
+--
+-- WHY THE PORTAL ROW COMES FIRST, AND REX SECOND.
+--
+-- REX is the live system six businesses run on, so a write into it is gated
+-- twice over and will often be refused. If Save depended on that write, Save
+-- would fail for reasons that have nothing to do with the person typing, and
+-- their twenty minutes on the phone would be gone. So the row is written here
+-- unconditionally, and rex_state records honestly what happened next:
+--
+--   held    saved here; the REX push was not armed, so nothing was attempted
+--   sent    created in REX, and rex_id is its contact id
+--   failed  attempted and refused, with the reason in rex_detail
+--   linked  they carried on an existing REX contact rather than making one
+--
+-- "held" is the important one. It means the work is not lost and can be sent
+-- the moment the lock comes off, which is the whole reason not to make Save
+-- and push the same act.
+CREATE TABLE IF NOT EXISTS os_contacts (
+  id             TEXT PRIMARY KEY,
+  kind           TEXT NOT NULL DEFAULT 'tenant',
+  name           TEXT NOT NULL DEFAULT '',
+  name_first     TEXT NOT NULL DEFAULT '',
+  name_last      TEXT NOT NULL DEFAULT '',
+  email          TEXT NOT NULL DEFAULT '',
+  mobile         TEXT NOT NULL DEFAULT '',
+  address        TEXT NOT NULL DEFAULT '',
+  postcode       TEXT NOT NULL DEFAULT '',
+  source         TEXT NOT NULL DEFAULT '',
+  enquiry        TEXT NOT NULL DEFAULT '',
+  notes          TEXT NOT NULL DEFAULT '',
+  created_by     TEXT NOT NULL DEFAULT '',
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  rex_id         TEXT,
+  rex_state      TEXT NOT NULL DEFAULT 'held',
+  rex_detail     TEXT NOT NULL DEFAULT '',
+  rex_at         TIMESTAMPTZ,
+  rex_by         TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS os_contacts_state ON os_contacts (rex_state, created_at DESC);
+
 -- Who is on which campaign.
 --
 -- Its own table, not a field on the case, because the questions are asked

@@ -116,6 +116,13 @@ export const WIRING: WiringRow[] = [
   {
     system: "rex",
     area: "Listings & publishing",
+    item: "Create contacts in REX from the OS",
+    state: "untested",
+    note: "Built 30 Aug. A contact saved in the New Lead panel is written to the OS first and REX second, and the two are reported separately — so a locked write can never lose somebody's typing. The REX half needs THREE things at once: Contacts/create named in REX_ALLOW_WRITES, the Create contacts in REX switch armed on Admin -> Switches, and the person to have linked their own REX account on Profile. There is no fallback to the office login: a contact created under the shared account would put the wrong name in REX's audit trail forever. Every contact made this way is tagged 'Added in TLE OS', so one search finds all of them if a batch ever needs undoing. Not yet run against live REX.",
+  },
+  {
+    system: "rex",
+    area: "Listings & publishing",
     item: "Create listings and properties from the OS",
     state: "untested",
     note: "listings and properties both expose create + update to our session (settled 3 Aug via describe). Editing one FIELD GROUP — the portal write-up — has since been proven and is live; creating a listing or property from scratch has not been, and + Add new listing is still not connected.",
