@@ -45,20 +45,56 @@ function hsAuth(): Record<string, string> | undefined {
   return t ? { Authorization: `Bearer ${t}` } : undefined;
 }
 
-async function hsJson<T>(path: string): Promise<T | null> {
+/**
+ * One fetch, with the failure kept distinguishable from the emptiness.
+ *
+ * MEASURED 30 Aug 2026, and it is the reason this exists. The daily sweep ran
+ * 179 sectors in sorted order and reported the last fifteen — SW8 1, TA6 3,
+ * every TQ, TW14 9, WA10 4, WC1X 9, WD18 0, WR1 3, WV11 3, WV3 9 — as having
+ * "no rows". They are not empty sectors. They are alphabetically contiguous to
+ * the end of the run: Homesearch started rate-limiting, `hsJson` swallowed the
+ * 429 to null, hsRows(null) gave [], and a throttled fetch became
+ * indistinguishable from a sector with nothing in it.
+ *
+ * That is the same defect three times over in this project now — a failure
+ * that renders as a confident zero. So the raw result carries its status, and
+ * 429/503 are RETRIED with backoff, honouring Retry-After the way F&C's own
+ * client does.
+ */
+async function hsFetch<T>(
+  path: string,
+  attempts = 4
+): Promise<{ ok: boolean; status: number; data: T | null }> {
   const headers = hsAuth();
-  if (!headers) return null;
-  try {
-    const r = await fetch(`${HS}/${path}`, {
-      headers,
-      cache: "no-store",
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!r.ok) return null;
-    return (await r.json()) as T;
-  } catch {
-    return null;
+  if (!headers) return { ok: false, status: 0, data: null };
+  let status = 0;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const r = await fetch(`${HS}/${path}`, {
+        headers,
+        cache: "no-store",
+        signal: AbortSignal.timeout(20_000),
+      });
+      status = r.status;
+      if (r.ok) return { ok: true, status, data: (await r.json()) as T };
+      /* Only these two are worth waiting for. A 404 will still be a 404. */
+      if (r.status !== 429 && r.status !== 503) return { ok: false, status, data: null };
+      const retryAfter = Number(r.headers.get("retry-after"));
+      const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+        ? Math.min(retryAfter * 1000, 30_000)
+        : Math.min(1000 * 2 ** i, 8000);
+      if (i < attempts - 1) await new Promise((res) => setTimeout(res, waitMs));
+    } catch {
+      status = status || 0;
+      if (i < attempts - 1) await new Promise((res) => setTimeout(res, 1000 * 2 ** i));
+    }
   }
+  return { ok: false, status, data: null };
+}
+
+/** Null on any failure — for the callers where absent and broken are the same. */
+async function hsJson<T>(path: string): Promise<T | null> {
+  return (await hsFetch<T>(path)).data;
 }
 
 /* ── address safety ───────────────────────────────────────────────────────── */
@@ -470,8 +506,17 @@ export async function hsLetRows(sector: string): Promise<Array<Record<string, un
       "limit=300",
       `offset=${page * 300}`,
     ];
-    const raw = await hsJson<unknown>(`current_listings_crm/search/let/?${parts.join("&")}`);
-    const batch = hsRows<Record<string, unknown>>(raw);
+    const res = await hsFetch<unknown>(`current_listings_crm/search/let/?${parts.join("&")}`);
+    /* THROW, do not return []. The capture treats an empty result as "this
+       sector has nothing" and skips it; it must never treat a throttled or
+       broken fetch the same way, or a bad afternoon reads as fifteen empty
+       towns. The sweep catches this and records the status. */
+    if (!res.ok) {
+      throw new Error(
+        `Homesearch returned ${res.status || "no response"} for ${sector} page ${page + 1} — not swept`
+      );
+    }
+    const batch = hsRows<Record<string, unknown>>(res.data);
     out.push(...batch);
     if (batch.length < 300) break;
   }

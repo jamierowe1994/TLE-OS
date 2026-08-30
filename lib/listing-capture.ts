@@ -193,7 +193,10 @@ export async function sweepSector(
       newRows: 0,
       newlyLetAgreed: 0,
       goneNow: 0,
-      skipped: "no rows came back — nothing written, so a failed fetch cannot erase a book",
+      skipped:
+        "the sector came back empty — nothing written, so this cannot erase a book. " +
+        "A throttled or broken fetch now THROWS instead of reaching here, so this " +
+        "message means genuinely no stock, not a bad afternoon.",
     };
   }
 

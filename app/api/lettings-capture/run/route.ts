@@ -44,7 +44,9 @@ import {
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 300;
+/* 181 sectors, each paged, each with a pause. The first run took well under
+   this; the pauses and retries add a couple of minutes. Railway allows it. */
+export const maxDuration = 800;
 
 function cronAuthorised(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET ?? "";
@@ -136,7 +138,13 @@ export async function POST(req: NextRequest) {
      all the time in the world. Sequential also means a mid-run failure leaves
      the sectors already done correctly written rather than half-applied. */
   const results: SweepResult[] = [];
-  for (const sector of sectors) {
+  for (const [i, sector] of sectors.entries()) {
+    /* A BREATH BETWEEN SECTORS. The first paged run was throttled from SW8 1
+       onwards — the last fifteen sectors alphabetically — because 181 sectors
+       of back-to-back paged fetches is faster than Homesearch wants to be
+       asked. hsFetch retries a 429 now, but not provoking one is better than
+       recovering from it, and a daily job has all the time in the world. */
+    if (i > 0) await new Promise((r) => setTimeout(r, 250));
     try {
       results.push(await sweepSector(sector, hsLetRows));
     } catch (e) {
