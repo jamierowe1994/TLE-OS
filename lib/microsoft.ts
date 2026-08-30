@@ -45,10 +45,31 @@ const GRAPH = "https://graph.microsoft.com/v1.0";
  *  exported constant there fails the build with a type error about `never`. */
 export const MS_STATE_COOKIE = "os_ms_state";
 
-/* Mail.Read is the only addition to Launch Pad's set. Changing this string
-   means every already-connected agent is re-prompted to consent, so it is not
-   a line to edit casually. */
-const SCOPES = "openid profile email offline_access User.Read Mail.Send Mail.Read";
+/**
+ * THIS STRING AND THE AZURE APP MUST AGREE.
+ *
+ * Changing it re-prompts every already-connected agent for consent, and asking
+ * for a scope the app registration does not hold fails at the consent screen
+ * with an error most people will read as "it's broken". So it is settled once,
+ * before anybody connects, rather than edited later.
+ *
+ * Beyond Launch Pad's set:
+ *   Mail.Read           read the thread back, not just send it
+ *   Calendars.ReadWrite create, change and delete events in THEIR OWN diary —
+ *                       which is what closes the gap the OS already admits to
+ *                       in five places ("it has NOT been added to your 365
+ *                       diary"). Sending a viewing invite is part of creating
+ *                       the event, so it needs nothing further.
+ *   MailboxSettings.Read their working hours and time zone. Cheap, and without
+ *                       it a viewing eventually gets booked at the wrong local
+ *                       time — a bug that is miserable to trace after the fact.
+ *
+ * Deliberately NOT here: Calendars.ReadWrite.Shared. James, 30 Aug — nobody
+ * books into anybody else's diary, so the wider grant would be asked for and
+ * never used. Add it the day that changes, not before.
+ */
+const SCOPES =
+  "openid profile email offline_access User.Read Mail.Send Mail.Read Calendars.ReadWrite MailboxSettings.Read";
 
 const DEFAULT_REDIRECT = "https://tle-os.co.uk/api/auth/microsoft/callback";
 
