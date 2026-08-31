@@ -176,12 +176,21 @@ async function withLiveAddress(rows: MarketAppraisal[]): Promise<MarketAppraisal
   if (!linked.length) return rows;
 
   const { getContact } = await import("@/lib/contacts-store");
-  const live = new Map<string, { address: string; postcode: string }>();
+  const live = new Map<
+    string,
+    { address: string; postcode: string; email: string; mobile: string }
+  >();
   await Promise.all(
     [...new Set(linked.map((r) => r.leadId!))].map(async (leadId) => {
       try {
         const c = await getContact(osContactIdFrom(leadId));
-        if (c) live.set(leadId, { address: c.address ?? "", postcode: c.postcode ?? "" });
+        if (c)
+          live.set(leadId, {
+            address: c.address ?? "",
+            postcode: c.postcode ?? "",
+            email: c.email ?? "",
+            mobile: c.mobile ?? "",
+          });
       } catch {
         /* One unreachable contact must not blank a whole list of appraisals. */
       }
@@ -189,7 +198,19 @@ async function withLiveAddress(rows: MarketAppraisal[]): Promise<MarketAppraisal
   );
 
   /* The rule itself is in lib/appraisal-address, pure and tested. */
-  return rows.map((r) => mergeAddress(r, r.leadId ? live.get(r.leadId) : null));
+  return rows.map((r) => {
+    const c = r.leadId ? live.get(r.leadId) : null;
+    return {
+      /* HOW TO REACH THEM, derived for the same reason the address is: the
+         contact record owns it, and a stored copy is a copy that goes stale
+         the first time somebody corrects a mobile number in Leads. Empty
+         string means the contact holds none; null means there is no contact
+         behind this appraisal at all, and the two look different on screen. */
+      ...mergeAddress(r, c),
+      landlordEmail: c ? c.email || null : null,
+      landlordMobile: c ? c.mobile || null : null,
+    };
+  });
 }
 
 export async function listAppraisals(): Promise<MarketAppraisal[]> {

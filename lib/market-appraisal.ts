@@ -60,6 +60,17 @@ export interface MarketAppraisal {
   address: string;
   postcode: string;
   agent: string | null;
+  /**
+   * How to reach the landlord. DERIVED from the contact record, never stored —
+   * the same rule as the address, and for the same reason: a copy goes stale
+   * the first time somebody corrects a number in Leads.
+   *
+   * Null means no contact record behind this appraisal; empty is impossible,
+   * because a contact holding no email yields null too. Both render as "not
+   * recorded" rather than as a blank that looks like a loading state.
+   */
+  landlordEmail?: string | null;
+  landlordMobile?: string | null;
   /** ISO. Null means booked-but-undated, which is a defect worth showing. */
   appointmentAt: string | null;
   stage: MaStage;

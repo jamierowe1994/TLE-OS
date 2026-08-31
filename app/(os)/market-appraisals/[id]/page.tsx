@@ -3,7 +3,6 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { Pill } from "@/components/Wire";
-import MaterialInfoPanel from "@/components/MaterialInfoPanel";
 import ResearchPanel from "@/components/ResearchPanel";
 import DeckRail from "@/components/DeckRail";
 import ValuationForm from "@/components/ValuationForm";
@@ -25,14 +24,20 @@ import type { MaResearch } from "@/lib/ma-research";
  *
  * The order is the order of the job, not of the data:
  *
- *   1. WHAT IT IS      — the property, including everything Homesearch holds
- *   2. WHERE IT IS UP TO — the spine, running down the page
- *   3. WHAT TO DO NEXT  — the actions, where the agent's hand is already going
+ *   1. WHO AND WHAT     — the landlord, how to reach them, the property in a line
+ *   2. THE APPOINTMENT  — when it is, and whether it has happened
+ *   3. WHAT THEY SEE    — pre-appraisal, appraisal, post-appraisal, in that order
  *   4. WHAT WE KNOW     — the evidence: comparables and the best-price guide
  *
- * An agent opening this at 8am wants (2) and (3). A landlord on the phone makes
- * them want (1). Nobody opens it wanting (4) first, which is why the research
- * — the slowest thing on the page — is last and loads without blocking.
+ * The full material-information panel is NOT here. It moved to the
+ * presentation builder, where it was already rendered: thirty fields of
+ * tenure and thermal transmittance is what you take to a landlord, not what
+ * you need when you open the file — and it made the top of this page an
+ * eight-second "Pulling the property details…" above everything an agent
+ * actually came for.
+ *
+ * Nothing above (3) waits on a fetch. The research at (4) is the slowest thing
+ * here and is last, loading without blocking anything above it.
  */
 
 /** What the appraisal is waiting on at each stage. */
@@ -135,40 +140,139 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           Market appraisal — stage {at + 1} of {spine.length}
         </p>
         <h1 className="hand mt-1 text-[26px] leading-tight">{ma.address}</h1>
+        {/* THE DATE AND THE AGENT USED TO BE REPEATED HERE. Both now have
+            sections of their own directly below, and the appointment was
+            printed three times on one screen — header, appointment card, and
+            again in "needs doing now". The header keeps only what those two
+            sections do NOT say: where it is, and the figure, which is the one
+            thing worth seeing without scrolling. */}
         <p className="mt-1 text-[12.5px] text-muted">
-          {ma.landlord} · {ma.postcode}
-          {ma.agent ? ` · with ${ma.agent}` : " · no agent recorded"}
+          {ma.postcode}
+          {ma.valuation ? ` · valued ${gbp(ma.valuation)} pcm` : ""}
         </p>
-        {ma.appointmentAt && (
-          <p className="mt-0.5 text-[12.5px] text-muted">
-            {new Date(ma.appointmentAt).toLocaleString("en-GB", {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-            {ma.valuation ? ` · valued ${gbp(ma.valuation)} pcm` : ""}
-          </p>
-        )}
       </header>
 
-      <div className="fade-up mt-4">
-        {failed ? (
-          <div className="rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-5">
-            <p className="text-[12.5px] leading-relaxed">
-              The property details couldn&apos;t be pulled. Nothing stale is shown in their
-              place — reload, and if it keeps failing the Homesearch call is down.
-            </p>
+      {/* ── 1b. how to reach them ───────────────────────────────────────── */}
+      {/* THE FULL MATERIAL-INFORMATION PANEL USED TO BE HERE and it has moved
+          to the presentation builder, where it was already rendered anyway.
+          James, 31 Aug: thirty fields of tenure and thermal transmittance is
+          what you take to a landlord, not what you need when you open the
+          file. It also meant the top of this page was a "Pulling the property
+          details…" placeholder for eight seconds, above everything an agent
+          actually came for.
+
+          What replaces it is what an agent opens an appraisal to find: the
+          property in one line, and a way to ring the landlord. Both are known
+          instantly — no fetch, nothing to wait for. */}
+      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-6">
+        <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
+          The landlord
+        </p>
+        <div className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-3">
+          <div>
+            <p className="text-[10.5px] uppercase tracking-wide text-muted">Name</p>
+            <p className="mt-0.5 text-[13px]">{ma.landlord}</p>
           </div>
-        ) : (
-          <MaterialInfoPanel
-            material={research?.material ?? null}
-            warning={research?.addressWarning ?? null}
-            loading={!research}
-          />
+          <div className="min-w-0">
+            <p className="text-[10.5px] uppercase tracking-wide text-muted">Email</p>
+            {ma.landlordEmail ? (
+              <a
+                href={`mailto:${ma.landlordEmail}`}
+                className="mt-0.5 block truncate text-[13px] underline"
+              >
+                {ma.landlordEmail}
+              </a>
+            ) : (
+              <p className="mt-0.5 text-[13px] text-muted">Not recorded</p>
+            )}
+          </div>
+          <div>
+            <p className="text-[10.5px] uppercase tracking-wide text-muted">Mobile</p>
+            {ma.landlordMobile ? (
+              <a href={`tel:${ma.landlordMobile}`} className="mt-0.5 block text-[13px] underline">
+                {ma.landlordMobile}
+              </a>
+            ) : (
+              <p className="mt-0.5 text-[13px] text-muted">Not recorded</p>
+            )}
+          </div>
+        </div>
+
+        {/* A few property facts once the research lands — never a placeholder
+            while it is in flight. Absent reads as "not here yet", which is
+            true, rather than as a screen that is broken. */}
+        {research?.material && (
+          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 border-t border-line/70 pt-3 text-[12px] text-muted">
+            {research.material.bedrooms != null && (
+              <span>
+                <span className="text-ink">{research.material.bedrooms}</span> bed
+              </span>
+            )}
+            {research.material.compliance.epcRating && (
+              <span>
+                EPC <span className="text-ink">{research.material.compliance.epcRating}</span>
+              </span>
+            )}
+            <span>{ma.postcode}</span>
+            <span className="ml-auto">
+              Full property details are on the presentation&apos;s first step.
+            </span>
+          </div>
         )}
-      </div>
+        {failed && (
+          <p className="mt-4 border-t border-line/70 pt-3 text-[11.5px] leading-relaxed text-muted">
+            Homesearch could not be reached, so there are no property facts here. Nothing stale is
+            shown in their place.
+          </p>
+        )}
+      </section>
+
+      {/* ── 2. the booking ──────────────────────────────────────────────── */}
+      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-6">
+        <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
+          The appointment
+        </p>
+        {ma.appointmentAt ? (
+          (() => {
+            const when = new Date(ma.appointmentAt);
+            const past = when < new Date();
+            return (
+              <>
+                <p className="mt-2.5 text-[14.5px]">
+                  {when.toLocaleString("en-GB", {
+                    weekday: "long",
+                    day: "numeric",
+                    month: "long",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+                <p className="mt-1.5 flex items-center gap-2 text-[11.5px] text-muted">
+                  {past ? "Been and gone" : "Still to come"}
+                  {ma.agent && <span>· with {ma.agent}</span>}
+                </p>
+                {/* Only when the visit has HAPPENED. Before it, "the
+                    pre-appraisal goes out the day before" is already the whole
+                    of Needs doing now, and saying it twice on one screen
+                    taught an agent to stop reading either. */}
+                {past && (
+                  <p className="mt-3 border-t border-line/70 pt-3 text-[11.5px] leading-relaxed text-muted">
+                    {missingFigure
+                      ? "No figure has been recorded. That is the next thing, and the post-appraisal deck waits on it."
+                      : "The figure is recorded, so the post-appraisal deck can go."}
+                  </p>
+                )}
+              </>
+            );
+          })()
+        ) : (
+          <p className="mt-2.5 text-[13px] leading-relaxed text-muted">
+            No date on this appraisal. It was booked without one — worth chasing, because the
+            pre-appraisal deck is scheduled from the appointment and has nothing to count back
+            from.
+          </p>
+        )}
+      </section>
 
       {/* ── 2. where it is up to ────────────────────────────────────────── */}
       <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-6">
@@ -255,15 +359,10 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
         </div>
       </section>
 
-      {/* ── 4. the figure ───────────────────────────────────────────────── */}
-      {/* ABOVE the decks, because it gates one of them. An agent who has just
-          come back from a visit lands on the thing they came to write down,
-          and the post-appraisal card below unlocks the moment they do. */}
-      <section className="fade-up mt-4">
-        <ValuationForm appraisal={ma} onSaved={setBooked} />
-      </section>
-
-      {/* ── 5. the three decks ──────────────────────────────────────────── */}
+      {/* ── 3. the three decks ──────────────────────────────────────────── */}
+      {/* The valuation form is passed INTO the post-appraisal card rather than
+          sitting in a section of its own further up. It is the thing that
+          unlocks that step, and it belongs beside the step it unlocks. */}
       <section className="fade-up mt-4">
         <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
           What they see
@@ -278,14 +377,12 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           postcode={ma.postcode}
           landlord={ma.landlord}
           appointmentAt={ma.appointmentAt ?? null}
-          /* Always false today. os_market_appraisals.valuation has no writer
-             anywhere in the repo, so this is not a stub — it is the accurate
-             answer until valuation capture is built. */
           hasValuation={ma.valuation != null}
+          valuationSlot={<ValuationForm appraisal={ma} onSaved={setBooked} />}
         />
       </section>
 
-      {/* ── 6. what we know ─────────────────────────────────────────────── */}
+      {/* ── 4. what we know ─────────────────────────────────────────────── */}
       <section className="fade-up mt-4">
         <ResearchPanel address={ma.address} postcode={ma.postcode} beds={2} />
       </section>

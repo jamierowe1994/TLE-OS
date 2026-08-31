@@ -59,6 +59,7 @@ export default function DeckRail({
   landlord,
   appointmentAt,
   hasValuation,
+  valuationSlot,
 }: {
   appraisalId: string;
   /** What os_presentations.ref is keyed on — the lead where there is one. */
@@ -67,8 +68,17 @@ export default function DeckRail({
   postcode: string;
   landlord: string;
   appointmentAt: string | null;
-  /** Gates the post-appraisal deck. Always false today — nothing writes one. */
+  /** Gates the post-appraisal deck: no figure, no offer to make. */
   hasValuation: boolean;
+  /**
+   * The valuation form, rendered INSIDE the post-appraisal card.
+   *
+   * It used to sit in a section of its own further up the page, which put the
+   * thing that unlocks a step a long way from the step it unlocks. Passed in
+   * rather than imported so this component stays about the decks and does not
+   * grow a second job.
+   */
+  valuationSlot?: React.ReactNode;
 }) {
   const [sent, setSent] = useState<SentDeck[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -252,17 +262,51 @@ export default function DeckRail({
         locked={
           hasValuation
             ? undefined
-            : "It carries the figure you agreed and the terms to sign, so it cannot be built until a valuation has been recorded against this appraisal."
+            : "It carries the figure you agreed and the terms to sign, so it cannot be built until a valuation has been recorded."
         }
       >
+        {/* The form that unlocks this card, inside the card it unlocks. */}
+        {valuationSlot && <div className="mb-4">{valuationSlot}</div>}
+
         {hasValuation ? (
-          <Link href={`/market-appraisals/${appraisalId}/build?kind=post-appraisal`} className={primary}>
-            {post ? "Rebuild it" : "Build the post-appraisal"}
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/market-appraisals/${appraisalId}/build?kind=post-appraisal`}
+              className={primary}
+            >
+              {post ? "Rebuild it" : "Build the post-appraisal"}
+            </Link>
+            {post && (
+              <a href={post.url} target="_blank" rel="noreferrer" className={ghost}>
+                Review the deck
+              </a>
+            )}
+            {/* DOCUSEAL IS NOT CONNECTED. The button is here so the shape of
+                the step is visible and the wiring has somewhere to land, and
+                it is DISABLED rather than live — a "send the terms" that
+                silently does nothing is worse than no button, because the
+                agent believes the landlord has been sent something. */}
+            <button
+              type="button"
+              disabled
+              title="DocuSeal isn't connected yet"
+              className={`${ghost} cursor-not-allowed opacity-50`}
+            >
+              Send the terms
+            </button>
+          </div>
         ) : (
           <span className="text-[11px] text-muted">
-            Record the rent agreed in the panel above and this unlocks.
+            Record the rent agreed above and this unlocks.
           </span>
+        )}
+
+        {hasValuation && (
+          <p className="mt-3 text-[10.5px] leading-relaxed text-muted">
+            Terms of business will go out through DocuSeal for e-signature. It is not connected
+            yet, so the deck carries the offer and tells the landlord their agent will send the
+            paperwork over — no dead link reaches them.
+          </p>
         )}
       </Card>
     </div>
