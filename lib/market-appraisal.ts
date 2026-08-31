@@ -63,12 +63,54 @@ export interface MarketAppraisal {
   /** ISO. Null means booked-but-undated, which is a defect worth showing. */
   appointmentAt: string | null;
   stage: MaStage;
-  /** What the agent valued it at. Null until the visit produces a figure. */
+  /** What the agent valued it at, £ pcm. Null until the visit produces one. */
   valuation: number | null;
+  /**
+   * WHAT WAS AGREED, not just what it is worth.
+   *
+   * The valuation on its own cannot build a post-appraisal deck. That deck's
+   * whole job is to put the offer in writing — the rent, what we will do for
+   * it, and what it costs — so the terms are recorded beside the figure rather
+   * than left in an agent's head between the visit and the paperwork.
+   *
+   * All optional: an agent standing in a hallway may know the rent and not yet
+   * the service level, and a form that refuses a figure until every box is
+   * filled is a form that gets skipped.
+   */
+  serviceLevel: ServiceLevel | null;
+  /** Management fee, percent of rent. */
+  feePct: number | null;
+  /** Tenancy set-up fee, £. */
+  setupFee: number | null;
+  /** Anything the figure needs explaining by — conditions, a range, a caveat. */
+  valuationNote: string | null;
+  /** ISO, and who. A figure with no author cannot be questioned later. */
+  valuedAt: string | null;
+  valuedBy: string | null;
   /** Presentation token, once one has been minted. */
   presentToken: string | null;
   createdAt: string;
 }
+
+/**
+ * PROPOLY'S VOCABULARY, not one of our own.
+ *
+ * Propoly is the source of truth for deals and it stores exactly these three
+ * (`full_managed` / `tenant_find` / `rent_collect`, see lib/business/propoly-deals).
+ * Inventing a fourth here, or renaming one, would mean a translation layer the
+ * day an appraisal becomes a deal — and translation layers are where service
+ * levels go to get mismatched.
+ *
+ * Rent protection is deliberately NOT here: it is a tag on a deal, not a
+ * service level, and it has been mistaken for one before.
+ */
+export type ServiceLevel = "full_managed" | "tenant_find" | "rent_collect";
+
+export const SERVICE_LEVELS: { id: ServiceLevel; label: string }[] = [
+  { id: "full_managed", label: "Fully managed" },
+  { id: "tenant_find", label: "Tenant find" },
+  { id: "rent_collect", label: "Rent collect" },
+];
 
 /**
  * The stage as it actually is, not as it was last written.

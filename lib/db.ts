@@ -367,6 +367,23 @@ CREATE TABLE IF NOT EXISTS os_market_appraisals (
 CREATE INDEX IF NOT EXISTS os_market_appraisals_stage_idx
   ON os_market_appraisals (stage, appointment_at);
 
+-- THE TERMS AGREED AT THE VISIT, added 31 Aug 2026.
+--
+-- The valuation column shipped on its own and had no writer at all for weeks,
+-- which is how a column ends up permanently NULL. These arrive together with
+-- the form that fills them, because the post-appraisal deck cannot state an
+-- offer without them.
+--
+-- ADD COLUMN IF NOT EXISTS rather than a new table: it is one row per appraisal
+-- either way, and a join to say "and the fee was 10%" buys nothing.
+-- fee_pct is NUMERIC, not INTEGER — 9.5% is a real number an agent will quote.
+ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS service_level   TEXT;
+ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS fee_pct         NUMERIC;
+ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS setup_fee       INTEGER;
+ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS valuation_note  TEXT;
+ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS valued_at       TIMESTAMPTZ;
+ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS valued_by       TEXT;
+
 -- WHAT KIRSTIE HAS ALREADY BEEN TOLD.
 --
 -- One row per (deal, stage) alert that has actually been sent. Without it the
