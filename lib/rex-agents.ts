@@ -155,7 +155,22 @@ export async function agentByEmail(email: string): Promise<RexAgent | null> {
 export async function presentAgentFor(
   email: string,
   fallback: { name: string; email: string },
-  bio: string
+  bio: string,
+  /**
+   * THE AGENT'S OWN HEADSHOT, from their OS profile, and it WINS.
+   *
+   * The profile page has had a photo uploader all along — click the headshot,
+   * pick a file, it downscales to 256px and saves. Nothing ever read it back
+   * out for the deck, which asked REX and the TEG Hub instead. REX's
+   * `photo_url` is empty for every TLE record and the Hub's is empty too, so
+   * an agent who had uploaded a picture of themselves still went out to a
+   * landlord as a monogram. James, 31 Aug: it should just pull through.
+   *
+   * It takes precedence over both directories rather than filling in behind
+   * them: it is the one of the three the agent chose deliberately, and it is
+   * the only one they can fix themselves when it is wrong.
+   */
+  profilePhoto?: string | null
 ): Promise<PresentAgent> {
   /* Two people-directories, asked in order of how likely each is to be right.
      REX first because its headshots are real today (~70% have one) and already
@@ -174,7 +189,10 @@ export async function presentAgentFor(
     title: rex?.title || teg?.jobTitle || "",
     email: rex?.email || fallback.email || "",
     phone: rex?.phone ?? "",
-    photo: rex?.photo ?? teg?.photoUrl ?? null,
+    /* Theirs first, then the two directories. `||` not `??`, because an empty
+       string is what a cleared uploader leaves behind and it must fall through
+       rather than render as a photo that is not there. */
+    photo: (profilePhoto || "").trim() || rex?.photo || teg?.photoUrl || null,
     /* The caller's bio wins — it is what the agent typed about themselves in
        the OS, and their own words beat the register's. The Hub is the
        fallback, which is what makes a partner who has never opened the profile

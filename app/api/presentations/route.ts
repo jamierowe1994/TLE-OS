@@ -64,6 +64,8 @@ type Body = {
   /** Post-appraisal only — the agreed figure, and the terms to sign. */
   valuation?: PresentValuation | null;
   terms?: PresentTerms | null;
+  /** Overrides the agent's profile headshot for this deck only. */
+  agentPhoto?: string | null;
   recipientName?: string;
   address?: string;
   postcode?: string;
@@ -149,17 +151,24 @@ export async function POST(req: NextRequest) {
   // The biography is the agent's own, written in their profile. REX has a
   // field for it and it is empty for every user on the account (measured), so
   // this is the only place it can come from.
-  const bio = await agentBio(me.id);
+  const profile = await agentProfile(me.id);
 
-  const agent = await presentAgentFor(me.email, { name: me.name, email: me.email }, bio).catch(
+  const agent = await presentAgentFor(
+    me.email,
+    { name: me.name, email: me.email },
+    profile.bio,
+    /* Whatever the caller sent wins over the profile — that is the "change it
+       out" control in the builder, choosing a photo for THIS deck only. */
+    body.agentPhoto ?? profile.photo
+  ).catch(
     () => ({
       name: me.name,
       firstName: firstNameOf(me.name),
       title: "",
       email: me.email,
       phone: "",
-      photo: null,
-      bio,
+      photo: body.agentPhoto ?? profile.photo,
+      bio: profile.bio,
     })
   );
 
@@ -241,10 +250,16 @@ export async function POST(req: NextRequest) {
  * Hub's bio, so a partner who never opened this page still gets a real
  * introduction rather than the stock one.
  */
-async function agentBio(userId: string): Promise<string> {
-  const rows = await q<{ value: { bio?: string } }>(
+async function agentProfile(userId: string): Promise<{ bio: string; photo: string | null }> {
+  const rows = await q<{ value: { bio?: string; photo?: string } }>(
     `SELECT value FROM os_user_prefs WHERE user_id = $1 AND key = 'tle-profile-v1'`,
     [userId]
   ).catch(() => []);
-  return (rows[0]?.value?.bio ?? "").trim();
+  return {
+    bio: (rows[0]?.value?.bio ?? "").trim(),
+    /* The uploader saves a data URL. Read back out for the deck, which used to
+       ask REX and the Hub only — and both hold nothing for TLE, so an agent
+       who had uploaded their own face still went out as a monogram. */
+    photo: (rows[0]?.value?.photo ?? "").trim() || null,
+  };
 }

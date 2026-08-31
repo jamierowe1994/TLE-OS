@@ -197,10 +197,15 @@ function Slide({
       // one that scrolls.
       //
       // pb-24 on small screens keeps the last line clear of the bottom bar.
-      // pr-44 on desktop keeps the copy clear of the contents rail, which
+      // pr-48 on desktop keeps the copy clear of the contents rail, which
       // floats over the slide — without it a hovered title prints straight
       // across a paragraph.
-      className="relative flex min-h-[100dvh] w-full shrink-0 snap-start flex-col justify-center px-6 pb-24 pt-16 sm:px-10 lg:px-20 lg:pb-16 lg:pr-44"
+      //
+      // MEASURED, and it was 12px short. The rail is fixed 32px from the right
+      // and runs 156px wide, so it reaches 188px in; pr-44 is 176px, and the
+      // Why slide's fourth heading printed under it. Every slide built on this
+      // helper inherited the same near-miss.
+      className="relative flex min-h-[100dvh] w-full shrink-0 snap-start flex-col justify-center px-6 pb-24 pt-16 sm:px-10 lg:px-20 lg:pb-16 lg:pr-48"
       style={{ background: dark ? RED : "#ffffff", color: dark ? "#ffffff" : INK }}
     >
       {children}
@@ -557,10 +562,26 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
         <Mark className="h-10 sm:h-11" />
       </header>
 
-      {/* pr-40 on desktop keeps the card clear of the contents rail, which
-          floats over every slide. */}
-      <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-12 lg:px-16 lg:py-12 lg:pr-40">
-        <div className="mx-auto grid w-full max-w-6xl gap-10 lg:grid-cols-[1fr_400px] lg:gap-16">
+      {/* THE RIGHT PADDING IS LOAD-BEARING, not spacing taste.
+
+          The panel below is absolutely positioned so it can run the full
+          height of the slide, which takes it out of the grid — and the moment
+          it did, the left column stretched underneath it and the last words of
+          two of the four beats ("...to win the instruction", "...we'll tell
+          you which") were printed under pink. Nothing may collide.
+
+          So the text column is stopped short by hand: 400px of panel, 192px of
+          gutter beyond it, and room to breathe between the two. On lg the grid
+          is ONE column for the same reason — a reserved 400px track for a
+          child that is no longer in flow would narrow the text twice over.
+
+          THE 192px GUTTER IS MEASURED, not chosen. The contents rail is fixed
+          32px from the right and runs 156px wide, so its labels reach 188px in
+          — at the 96px this started on, "Welcome" printed on top of the pink.
+          Because both are anchored to the right edge, 192 clears it at every
+          viewport width rather than only at the one I happened to test. */}
+      <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-12 lg:px-16 lg:py-8 lg:pr-[616px]">
+        <div className="mx-auto grid w-full max-w-6xl gap-10 lg:grid-cols-1 lg:gap-16">
           {/* ── left: the headline and the four beats ── */}
           <div className="min-w-0">
             <Rise show={show} i={0}>
@@ -638,7 +659,20 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
           </div>
 
           {/* ── right: the appointment itself ── */}
-          <Rise show={show} i={3}>
+          {/* THE POSITIONING LIVES ON THE RISE WRAPPER, not on the card inside
+              it, and that is not a style preference.
+
+              .present-rise carries `will-change: transform`, which makes it a
+              containing block for anything absolutely positioned inside it. So
+              an `inset-y-0` card in here measured its "full height" against
+              this 80px wrapper and landed as an 80px strip halfway down the
+              slide. Positioning the wrapper instead makes the section the
+              containing block, which is what full-height meant. */}
+          <Rise
+            show={show}
+            i={3}
+            className="lg:absolute lg:inset-y-0 lg:right-48 lg:w-[400px]"
+          >
             {/* The card carries the red rather than accenting with it — the
                 one block big enough to set the page's temperature.
                 
@@ -646,8 +680,22 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
                 paper it still reads unmistakably red while leaving the type
                 black and the button somewhere to go. Squarer corners than the
                 26px it started at, which suits the flatter colour. */}
+            {/* FULL HEIGHT ON DESKTOP, top to bottom — James, 31 Aug. It was a
+                rounded card floating in the middle of the right column with
+                paper above and below it; run to both edges it stops being a
+                box on the page and becomes the page's right-hand side.
+
+                Square corners follow from that: a radius on an edge that
+                touches nothing is decoration, and on an edge that touches the
+                frame it reads as a mistake.
+
+                It stops SHORT of the right edge rather than bleeding off it.
+                The contents rail floats over every slide down that side, and a
+                panel running underneath it would put dark nav labels on pink.
+                Stacked and rounded as before on phones, where full-bleed
+                colour behind a whole screen of text is oppressive. */}
             <aside
-              className="rounded-[16px] p-6 sm:p-8"
+              className="rounded-[16px] p-6 sm:p-8 lg:flex lg:h-full lg:flex-col lg:justify-center lg:rounded-none lg:p-10"
               style={{ background: `${RED}80`, color: INK }}
             >
               <ul>
@@ -720,37 +768,12 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
         </div>
       </div>
 
-      {/* The three promises again, in mist rather than clay. Repeating them
-          is the point: it is the one band that appears on every page of the
-          reference, and it ties the deck together the way a footer does. */}
-      <Rise show={show} i={5}>
-        {/* No fill. With the card at half strength the page has enough colour
-            in it; a tinted band underneath made the whole slide read as one
-            pink block. A hairline is all the separation it needs. */}
-        <div className="border-t pb-16 pt-7 lg:pb-8" style={{ borderColor: "rgba(59,59,60,0.10)" }}>
-          <div className="mx-auto grid max-w-5xl gap-y-5 px-6 sm:grid-cols-3 sm:gap-x-0 lg:px-10">
-            {BANNER.map((b, i) => (
-              <div
-                key={b.title}
-                className={`flex items-center gap-4 sm:px-7 ${i > 0 ? "sm:border-l" : ""}`}
-                style={{ borderColor: "rgba(59,59,60,0.14)" }}
-              >
-                <span className="shrink-0" style={{ color: RED }}>
-                  <Line name={b.icon} size={28} />
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-[11px] font-semibold uppercase tracking-[0.14em]">
-                    {b.title}
-                  </span>
-                  <span className="mt-1 block text-[12.5px] font-light leading-snug text-black/60">
-                    {b.body}
-                  </span>
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </Rise>
+      {/* THE THREE PROMISES USED TO REPEAT HERE and James took them off on
+          31 Aug. They open the deck on the welcome slide, where they are the
+          pitch; saying them again under the appointment made this slide about
+          us at the moment it is supposed to be about the landlord's Tuesday
+          afternoon. Still on the welcome slide, once, which is where a promise
+          keeps its force. */}
     </section>
   );
 }
@@ -781,7 +804,11 @@ function Agent({ deck, show }: { deck: Deck; show: boolean }) {
         <Mark className="h-10 sm:h-11" />
       </header>
 
-      <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-12 lg:px-16 lg:py-12 lg:pr-40">
+      {/* pr-48, not pr-40. The contents rail is fixed 32px from the right and
+          runs 156px wide, so it reaches 188px in — at 160px the bio and the
+          agent's name printed underneath it. Measured, not guessed, and the
+          same figure the appointment slide uses. */}
+      <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-12 lg:px-16 lg:py-12 lg:pr-48">
         <div className="mx-auto grid w-full max-w-6xl items-center gap-9 lg:grid-cols-[420px_1fr] lg:gap-14">
           {/* The portrait leads, and it is the point of the slide — this is
               the one moment before the visit where the landlord sees a face.
@@ -897,14 +924,24 @@ function Agent({ deck, show }: { deck: Deck; show: boolean }) {
             </Rise>
 
             <Rise show={show} i={4}>
-              <div
-                className="mt-8 grid max-w-2xl gap-y-5 rounded-[14px] px-6 py-5 sm:grid-cols-3 sm:gap-x-0"
-                style={{ background: MIST }}
-              >
+              {/* NO GREY PANEL — James, 31 Aug. It was a tinted box holding
+                  three things that are not a group of controls, and it read as
+                  a widget bolted under the introduction. The dividing lines
+                  already do the separating a fill was doing, and without the
+                  fill the three promises sit on the page as part of what the
+                  agent is saying rather than as a component.
+
+                  The first item loses its left padding so its icon starts on
+                  the SAME vertical line as the buttons above it. The box's own
+                  px-6 plus the item's px-5 had it inset 44px from a column
+                  everything else on the slide starts flush with. */}
+              <div className="mt-8 grid max-w-2xl gap-y-5 py-1 sm:grid-cols-3 sm:gap-x-0">
                 {AGENT_CHIPS.map((c, i) => (
                   <div
                     key={c.title}
-                    className={`flex items-start gap-3 sm:px-5 ${i > 0 ? "sm:border-l" : ""}`}
+                    className={`flex items-start gap-3 ${
+                      i === 0 ? "sm:pr-5" : "sm:border-l sm:px-5"
+                    }`}
                     style={{ borderColor: "rgba(59,59,60,0.14)" }}
                   >
                     <span className="mt-0.5 shrink-0" style={{ color: RED }}>
