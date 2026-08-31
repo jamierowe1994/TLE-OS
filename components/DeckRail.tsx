@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
+import TermsSigning from "@/components/TermsSigning";
 import { Pill } from "@/components/Wire";
 import { DECK_KINDS, type DeckKind } from "@/lib/present";
 
@@ -323,19 +324,6 @@ export default function DeckRail({
                 Review the deck
               </a>
             )}
-            {/* DOCUSEAL IS NOT CONNECTED. The button is here so the shape of
-                the step is visible and the wiring has somewhere to land, and
-                it is DISABLED rather than live — a "send the terms" that
-                silently does nothing is worse than no button, because the
-                agent believes the landlord has been sent something. */}
-            <button
-              type="button"
-              disabled
-              title="DocuSeal isn't connected yet"
-              className={`${ghost} cursor-not-allowed opacity-50`}
-            >
-              Send the terms
-            </button>
           </div>
         ) : (
           <span className="text-[11px] text-muted">
@@ -343,12 +331,20 @@ export default function DeckRail({
           </span>
         )}
 
+        {/* THE TERMS, SIGNED HERE. Below the deck buttons rather than beside
+            them: building the deck and signing the contract are different
+            moments, and an embedded contract is not a button — it is the whole
+            panel once it opens. */}
         {hasValuation && (
-          <p className="mt-3 text-[10.5px] leading-relaxed text-muted">
-            Terms of business will go out through DocuSeal for e-signature. It is not connected
-            yet, so the deck carries the offer and tells the landlord their agent will send the
-            paperwork over — no dead link reaches them.
-          </p>
+          <div className="mt-4 border-t border-line/70 pt-4">
+            <TermsSigning
+              appraisalId={appraisalId}
+              landlord={landlord}
+              /* A signature changes what the card should say, so the whole
+                 rail re-reads rather than guessing at the new state. */
+              onSigned={() => void load()}
+            />
+          </div>
         )}
       </Card>
     </div>

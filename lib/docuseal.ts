@@ -264,3 +264,118 @@ export const WEBHOOK_EVENTS = [
   "form.declined",
   "submission.completed",
 ] as const;
+
+/* ── embedded signing ─────────────────────────────────────────────────────── */
+
+/**
+ * THE TERMS, PREFILLED FROM WHAT THE APPRAISAL ALREADY KNOWS.
+ *
+ * ── Why this is the whole point ───────────────────────────────────────────
+ *
+ * The landlord agreed a rent and a fee in their own kitchen. Every one of
+ * those numbers is already on the appraisal record — so asking them to type
+ * their own name, address and the fee they just negotiated is the difference
+ * between a contract that gets signed on the spot and one that gets "sent
+ * over" and read next week, if at all.
+ *
+ * Measured on the real document (31 Aug 2026): six of the detail boxes and
+ * both fee cells can be filled before the landlord opens it. They touch a
+ * signature and a date.
+ *
+ * ── The field-count ceiling, which is real ────────────────────────────────
+ *
+ * The England terms carry ~45 fillable boxes across 14 pages. Fine & Country
+ * handed DocuSeal a shorter list than that and their seller was served a form
+ * with NOTHING on it — no fields, not even a signature box. So this template
+ * deliberately carries TEN fields, and bank details and the property
+ * information page are collected in the OS afterwards rather than in the
+ * contract. Growing this list is the one change most likely to break signing.
+ *
+ * ── Field names are load-bearing ──────────────────────────────────────────
+ *
+ * DocuSeal matches prefills on the EXACT string and silently drops anything
+ * that does not match — a renamed field does not error, it just arrives blank
+ * in front of a landlord. These strings must equal the template's field names
+ * character for character.
+ */
+export interface TermsPrefill {
+  /** Who the landlord is dealing with — the agent named on the appraisal. */
+  agentName: string;
+  landlordName: string;
+  landlordEmail: string;
+  landlordAddress: string;
+  contactNumber: string;
+  propertyAddress: string;
+  /** Set-up fee, £. Rendered into the service row that was agreed. */
+  feeAmount: number | null;
+  /** Management fee, percent of rent. */
+  feePercent: number | null;
+  /** Our own id for this appraisal, so a webhook can find its way home. */
+  externalId: string;
+}
+
+export interface SigningSession {
+  submitterId: number;
+  slug: string;
+  /** Where the embedded form is pointed. */
+  embedSrc: string;
+  status: string;
+}
+
+/**
+ * Open a signing session and hand back the embed URL.
+ *
+ * `send_email` is stated EXPLICITLY as false and must stay that way. DocuSeal
+ * defaults it to true — `params[:send_email] = true unless params.key?(...)` —
+ * so omitting it emails a real landlord as the immediate consequence of this
+ * function running. The whole point of embedding is that the landlord signs on
+ * our screen, in front of the agent, so nothing should be emailed at all.
+ */
+export async function openTermsSigning(
+  templateId: number,
+  p: TermsPrefill
+): Promise<SigningSession> {
+  const raw = await ds<
+    Array<{ id?: number; slug?: string; embed_src?: string; status?: string }>
+  >("/submissions", {
+    method: "POST",
+    body: {
+      template_id: templateId,
+      send_email: false,
+      send_sms: false,
+      submitters: [
+        {
+          role: "Landlord",
+          name: p.landlordName,
+          email: p.landlordEmail,
+          /* Ours, not theirs. The webhook uses this to find the appraisal
+             again — see the note on document URLs expiring in 40 minutes. */
+          external_id: p.externalId,
+          values: {
+            "Partner Agent": p.agentName,
+            "Landlord Name": p.landlordName,
+            "Landlord Address": p.landlordAddress,
+            "Contact Number": p.contactNumber,
+            "Email Address": p.landlordEmail,
+            "Property Address": p.propertyAddress,
+            "Management Fee Amount": p.feeAmount != null ? p.feeAmount.toFixed(2) : "",
+            "Management Fee Percent": p.feePercent != null ? String(p.feePercent) : "",
+          },
+        },
+      ],
+    },
+  });
+
+  const s = Array.isArray(raw) ? raw[0] : null;
+  if (!s?.slug) throw new DocusealBlocked("DocuSeal created no submitter to sign.");
+
+  /* embed_src is preferred over a URL we build: it is what DocuSeal itself
+     says the form lives at, and it already carries the right region. */
+  const base = (process.env.DOCUSEAL_URL ?? "").replace(/\/+$/, "").replace("://api.", "://");
+  return {
+    submitterId: Number(s.id),
+    slug: s.slug,
+    embedSrc: s.embed_src || `${base}/s/${s.slug}`,
+    status: s.status ?? "awaiting",
+  };
+}
