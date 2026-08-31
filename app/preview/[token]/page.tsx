@@ -29,6 +29,14 @@ const CARDS = [
     blurb:
       "The tour that runs the first time an agent reaches the OS. Two lengths: the whole system top to bottom, or just the assistant and how to report a problem.",
   },
+  {
+    href: "plc",
+    icon: "shield",
+    label: "The compliance handover",
+    time: "both halves",
+    blurb:
+      "What happens when an application is accepted: the agent hands the pack over, and compliance reads it. Includes the part where the reader catches a certificate that runs out mid-tenancy, and then does not get to decide about it.",
+  },
 ];
 
 export default async function PreviewHome({

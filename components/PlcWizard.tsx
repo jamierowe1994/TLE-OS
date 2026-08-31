@@ -13,6 +13,7 @@ import {
   type PlcDocument,
 } from "@/lib/plc";
 import type { Prefill } from "@/lib/plc-prefill";
+import { demoCase } from "@/lib/plc-demo";
 
 /**
  * Starting a PLC check.
@@ -177,12 +178,15 @@ function DocumentStep({
   documents,
   onChanged,
   illustration,
+  demo,
 }: {
   group: (typeof CHECK_GROUPS)[number];
   caseId: string;
   documents: PlcDocument[];
   onChanged: (c: PlcCase) => void;
   illustration: string;
+  /** Attach for show: nothing is uploaded and nothing is recorded. */
+  demo?: { case: PlcCase };
 }) {
   const [pending, setPending] = useState<Pending[]>([]);
   const input = useRef<HTMLInputElement | null>(null);
@@ -215,6 +219,26 @@ function DocumentStep({
       let key: string;
       let name = row.file.name;
       let placeholder = false;
+
+      if (demo) {
+        /* Recorded by name only, and flagged a placeholder - the same shape
+           the 503 branch below produces on an environment with no bucket, so
+           nothing downstream can mistake it for a document on file. The
+           bytes never leave the browser. */
+        const doc: PlcDocument = {
+          checkId: row.checkId,
+          name,
+          key: `documents/sample/${name.replace(/[^\w.\- ]+/g, "")}`,
+          url: "#",
+          addedAt: new Date().toISOString(),
+          addedBy: demo.case.agentName,
+          placeholder: true,
+        };
+        onChanged({ ...demo.case, documents: [...demo.case.documents, doc] });
+        setPending((p) => p.map((x) => (x.id === row.id ? { ...x, state: "done", placeholder: true } : x)));
+        inFlight.current = false;
+        return;
+      }
 
       const form = new FormData();
       form.append("file", row.file);
@@ -385,9 +409,37 @@ function DocumentStep({
 export default function PlcWizard({
   applicationId,
   listingId,
+  demo,
 }: {
   applicationId?: string;
   listingId?: string;
+  /**
+   * Drive the whole wizard against an invented pack, touching nothing.
+   *
+   * For the public preview at /preview/<token>/plc, which James sends to
+   * people who have no account. The real wizard reads a live REX application
+   * and creates a real case; neither can happen on a link handed to somebody
+   * outside the company.
+   *
+   * Four seams, and they are all of them - the prefill read, the case
+   * creation, the submit, and the document upload. Everything else in here
+   * is already local state, so a demo runs the genuine screens in the
+   * genuine order rather than a mock-up that will quietly drift.
+   */
+  demo?: {
+    prefill: Prefill;
+    /**
+     * Where the two buttons at the end go instead.
+     *
+     * The real wizard finishes by offering "Back to applications" and "See
+     * where it is up to", both of which push into the signed-in OS. On a link
+     * sent to somebody with no account that is a one-way trip to the sign-in
+     * page from the middle of a demonstration, so the preview supplies its
+     * own pair and stays where it is.
+     */
+    onSeeCompliance?: () => void;
+    onRestart?: () => void;
+  };
 }) {
   const router = useRouter();
   const [step, setStep] = useState<Step>("gathering");
@@ -418,11 +470,18 @@ export default function PlcWizard({
     (async () => {
       let got: Prefill | null = null;
       let failed: string | null = null;
-      try {
-        const res = await api<{ prefill: Prefill }>(`/api/plc/prefill?${params}`);
-        got = res.prefill;
-      } catch (e) {
-        failed = (e as Error).message;
+      if (demo) {
+        /* The theatre below still runs. It is not decoration: the pause is
+           what makes "we went and got this for you" legible, and skipping it
+           in the preview would show a faster product than the real one. */
+        got = demo.prefill;
+      } else {
+        try {
+          const res = await api<{ prefill: Prefill }>(`/api/plc/prefill?${params}`);
+          got = res.prefill;
+        } catch (e) {
+          failed = (e as Error).message;
+        }
       }
       /* The floor, never a ceiling: a read that took longer than the theatre
          has already told the agent something is happening. */
@@ -439,10 +498,17 @@ export default function PlcWizard({
     return () => {
       alive = false;
     };
-  }, [applicationId, listingId, go]);
+  }, [applicationId, listingId, go, demo]);
 
   const startAndContinue = async () => {
     if (!prefill) return;
+    if (demo) {
+      /* No case is created. The pack lives in this component's state for as
+         long as the tab is open and then it is gone. */
+      setKase(demoCase({ moveInDate: moveIn || null, documents: [] }));
+      go("landlord");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -479,6 +545,11 @@ export default function PlcWizard({
     if (!kase) return;
     go("sending");
     setError(null);
+    if (demo) {
+      setKase({ ...kase, state: "submitted", submittedAt: new Date().toISOString() });
+      window.setTimeout(() => setStep("done"), 1400);
+      return;
+    }
     try {
       const res = await api<{ case: PlcCase }>(`/api/plc/${kase.id}`, {
         method: "POST",
@@ -612,13 +683,18 @@ export default function PlcWizard({
                       old ones.
                     </p>
                     <div className="mt-4 flex flex-wrap gap-3">
-                      <button
-                        type="button"
-                        onClick={() => router.push(`/applications?open=${prefill.applicationId}`)}
-                        className="rounded-lg border border-ink bg-ink px-3.5 py-2 text-sm text-white"
-                      >
-                        Open the application
-                      </button>
+                      {/* Also a door out of the preview, so it is closed
+                          there. The sentence above still makes the point
+                          that the fix belongs on the application record. */}
+                      {!demo && (
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/applications?open=${prefill.applicationId}`)}
+                          className="rounded-lg border border-ink bg-ink px-3.5 py-2 text-sm text-white"
+                        >
+                          Open the application
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => setFixing(false)}
@@ -663,6 +739,7 @@ export default function PlcWizard({
               documents={documents}
               onChanged={setKase}
               illustration={step === "landlord" ? "home" : "file-contract"}
+              demo={demo ? { case: kase } : undefined}
             />
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <button
@@ -779,20 +856,41 @@ export default function PlcWizard({
               anything is missing they will say exactly what.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <button
-                type="button"
-                onClick={() => router.push("/applications")}
-                className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white"
-              >
-                Back to applications
-              </button>
-              <button
-                type="button"
-                onClick={() => router.push(`/plc?case=${kase.id}`)}
-                className="rounded-lg border border-line px-4 py-2.5 text-sm"
-              >
-                See where it is up to
-              </button>
+              {demo ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={demo.onSeeCompliance}
+                    className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white"
+                  >
+                    See what compliance sees
+                  </button>
+                  <button
+                    type="button"
+                    onClick={demo.onRestart}
+                    className="rounded-lg border border-line px-4 py-2.5 text-sm"
+                  >
+                    Run it again
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/applications")}
+                    className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white"
+                  >
+                    Back to applications
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/plc?case=${kase.id}`)}
+                    className="rounded-lg border border-line px-4 py-2.5 text-sm"
+                  >
+                    See where it is up to
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}

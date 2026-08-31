@@ -1,4 +1,6 @@
 import PageHeader from "@/components/PageHeader";
+import { previewToken } from "@/lib/preview-token";
+import CopyLink from "@/app/(os)/admin/onboarding/CopyLink";
 
 /**
  * The PLC handover, for demonstrating.
@@ -14,13 +16,11 @@ import PageHeader from "@/components/PageHeader";
  * open them in front of somebody, with a note on each about what is safe to
  * press.
  *
- * ── Everything here is behind sign-in ─────────────────────────────────────
+ * ── One sendable link, and the rest behind sign-in ────────────────────────
  *
- * Unlike the onboarding preview, these are not sendable links: they show real
- * REX data, so they can be clicked in a demo but not forwarded. Building a
- * public PLC preview would mean a mock case with invented documents, which is
- * a separate piece of work and worth doing only if somebody actually needs to
- * look at it without James present.
+ * The preview at the top runs the real wizard and the real review panel
+ * against an invented pack, so it can be sent to anybody. Everything below it
+ * reads live REX and can be clicked in front of people but never forwarded.
  */
 
 export const dynamic = "force-dynamic";
@@ -75,6 +75,8 @@ const DOORS: Door[] = [
 ];
 
 export default function PlcDemoPage() {
+  const token = previewToken();
+
   return (
     <>
       <PageHeader
@@ -83,6 +85,17 @@ export default function PlcDemoPage() {
       />
 
       <section className="fade-up mt-8 rounded-2xl border border-line/80 bg-panel p-5">
+        <h2 className="text-[15px]">The one you can send</h2>
+        <p className="mt-1 text-[12px] leading-relaxed text-muted">
+          Both halves of the handover, running the real screens against an
+          invented pack: a made-up address, two people called Sample, and a gas
+          certificate that expires eleven days after they move in. No sign-in,
+          nothing real, nothing written. Send this to Susan.
+        </p>
+        <CopyLink path={`/preview/${token}/plc`} />
+      </section>
+
+      <section className="fade-up mt-3 rounded-2xl border border-line/80 bg-panel p-5">
         <h2 className="text-[15px]">The rule worth saying out loud</h2>
         <p className="mt-1.5 text-[12.5px] leading-relaxed">
           The scan never decides. It reads the documents and produces findings;

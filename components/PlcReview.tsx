@@ -157,11 +157,24 @@ export function ComplianceSide({
   reload,
   onDecided,
   say,
+  perform,
 }: {
   data: Loaded;
   reload: () => Promise<void>;
   onDecided: () => void;
   say: (e: string | null) => void;
+  /**
+   * What a button actually does. Defaults to posting to the PLC API.
+   *
+   * Overridden by the public preview at /preview/<token>/plc, which drives
+   * this same panel against an invented pack and must not write anything.
+   * A seam rather than a copy, on purpose: a demonstration of the review
+   * screen that has drifted from the review screen is worse than none, and
+   * the whole point of showing this to somebody is that it is the real
+   * thing. Everything above this line is already prop-driven; `act` was the
+   * only place the panel reached for the network on its own.
+   */
+  perform?: (action: string, extra: Record<string, unknown>) => Promise<void>;
 }) {
   const c = data.case;
   const [busy, setBusy] = useState<string | null>(null);
@@ -171,10 +184,14 @@ export function ComplianceSide({
     setBusy(action);
     say(null);
     try {
-      await api(`/api/plc/${c.id}`, {
-        method: "POST",
-        body: JSON.stringify({ action, ...extra }),
-      });
+      if (perform) {
+        await perform(action, extra);
+      } else {
+        await api(`/api/plc/${c.id}`, {
+          method: "POST",
+          body: JSON.stringify({ action, ...extra }),
+        });
+      }
       await reload();
       if (action === "decide") onDecided();
     } catch (e) {
@@ -274,17 +291,30 @@ export function ComplianceSide({
                 {filed.length === 0 ? (
                   <span className="text-muted">nothing filed</span>
                 ) : (
-                  filed.map((d) => (
-                    <a
-                      key={d.key}
-                      href={d.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline decoration-neutral-300 underline-offset-2"
-                    >
-                      {d.name}
-                    </a>
-                  ))
+                  filed.map((d) =>
+                    /* A placeholder is a NAME, not a file: the bytes were
+                       never stored, because there was no bucket attached or
+                       because this is a walkthrough. PlcDocument's own note
+                       says anything showing a pack must show this, and this
+                       one did not - it rendered a link to nothing, which is
+                       the exact impression the flag exists to prevent. */
+                    d.placeholder ? (
+                      <span key={d.key} className="text-muted">
+                        {d.name}{" "}
+                        <span className="text-xs">(name only, no file attached)</span>
+                      </span>
+                    ) : (
+                      <a
+                        key={d.key}
+                        href={d.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline decoration-neutral-300 underline-offset-2"
+                      >
+                        {d.name}
+                      </a>
+                    )
+                  )
                 )}
               </li>
             );
