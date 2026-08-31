@@ -10,6 +10,8 @@ import MarketPicturePanel, {
   type MarketSelection,
 } from "@/components/MarketPicture";
 import type { MarketPicture } from "@/lib/market-picture";
+import type { DeckKind } from "@/lib/present";
+import { SERVICE_LEVELS, type MarketAppraisal } from "@/lib/market-appraisal";
 import { Pill } from "@/components/Wire";
 import {
   BUILD_STEPS,
@@ -83,6 +85,8 @@ export default function PresentationBuilder({
   postcode,
   landlord,
   refId,
+  kind = "appraisal",
+  appraisal,
   fullPage = false,
   backHref,
   onClose,
@@ -91,6 +95,23 @@ export default function PresentationBuilder({
   postcode: string;
   landlord?: string;
   refId?: string;
+  /**
+   * WHICH DECK this wizard is building. Defaults to the appraisal deck, which
+   * is what it has always built and what every existing caller means.
+   *
+   * On "post-appraisal" the same five steps run — the research and the
+   * comparables are identical — and two extra things travel: the agreed
+   * figure and the terms. See marketPayload's sibling, offerPayload.
+   */
+  kind?: DeckKind;
+  /**
+   * The appraisal record, for the figure the post-appraisal deck states.
+   *
+   * Passed in rather than fetched: this component already has a slow first
+   * paint, and the page above it has the record in hand. Optional, so the
+   * two callers that mint a pre-appraisal deck are unaffected.
+   */
+  appraisal?: MarketAppraisal | null;
   /** Rendered as a page rather than a modal — see the build route for why. */
   fullPage?: boolean;
   backHref?: string;
@@ -156,6 +177,38 @@ export default function PresentationBuilder({
   }
 
   /**
+   * THE OFFER — post-appraisal only, and only when there is a figure.
+   *
+   * Returns an EMPTY OBJECT rather than nulls for the other two decks, so the
+   * body carries no `valuation` key at all and the server's own gate never has
+   * to reason about a deliberate null on a deck that could not have one.
+   *
+   * The figure comes from the appraisal record, which is the single home for
+   * it — the same record the lead drawer and the valuation form both write to.
+   * Nothing is re-entered here: an agent who has already typed 1,300 once
+   * should not be asked for it again on the way to sending it.
+   */
+  function offerPayload() {
+    if (kind !== "post-appraisal" || !appraisal?.valuation) return {};
+    const level = SERVICE_LEVELS.find((s) => s.id === appraisal.serviceLevel);
+    return {
+      valuation: {
+        rent: appraisal.valuation,
+        /* Humanised HERE, not on the slide. The deck is a snapshot, and a
+           stored Propoly key would need this lookup again every time it is
+           rendered — including after somebody renames a label. */
+        serviceLevel: level?.label ?? null,
+        feePct: appraisal.feePct ?? null,
+        setupFee: appraisal.setupFee ?? null,
+        note: appraisal.valuationNote ?? null,
+      },
+      /* signUrl stays null until DocuSeal is connected. The slide renders the
+         no-button branch, which explains rather than dead-ends. */
+      terms: { signUrl: null, summary: null },
+    };
+  }
+
+  /**
    * Mint the deck.
    *
    * Only the TICKED comparables travel, and only the figures they produce —
@@ -183,7 +236,7 @@ export default function PresentationBuilder({
              here is the full research the agent takes with them and sends
              afterwards, which is why it is the only one with a five-step
              wizard in front of it. */
-          kind: "appraisal",
+          kind,
           recipientName: landlord ?? "",
           address,
           postcode,
@@ -207,6 +260,7 @@ export default function PresentationBuilder({
               }
             : null,
           market: marketPayload(),
+          ...offerPayload(),
         }),
       });
       const j = (await res.json()) as { ok?: boolean; url?: string; error?: string };

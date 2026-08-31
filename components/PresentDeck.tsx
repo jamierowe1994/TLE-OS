@@ -1233,6 +1233,177 @@ function Market({ deck, show }: { deck: Deck; show: boolean }) {
   );
 }
 
+/**
+ * THE FIGURE, on its own slide.
+ *
+ * The one thing a landlord opens a post-appraisal deck for. It leads with the
+ * rent at full size and puts what it costs underneath, in that order and on
+ * one screen — a landlord who has to hunt for the fee assumes it is being
+ * hidden, and an agent who has to explain why it wasn't there has lost the
+ * conversation before it started.
+ *
+ * The note is the agent's own words from the visit, shown verbatim. It is
+ * usually the conditional bit ("subject to the EPC being redone"), and
+ * dropping it would turn a qualified figure into an unqualified promise.
+ */
+function Valuation({ deck, show }: { deck: Deck; show: boolean }) {
+  const v = deck.valuation;
+  if (!v?.rent) return null;
+  const money = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
+
+  /* Only the terms that were actually agreed. A row reading "Fee —" invites
+     the question the slide exists to answer. */
+  const terms = [
+    v.serviceLevel ? { k: "Our service", v: v.serviceLevel } : null,
+    v.feePct != null ? { k: "Management fee", v: `${v.feePct}% of rent` } : null,
+    v.setupFee != null ? { k: "Set-up fee", v: `${money(v.setupFee)} one-off` } : null,
+  ].filter((x): x is { k: string; v: string } => x != null);
+
+  return (
+    <section
+      data-slide="valuation"
+      className="relative flex min-h-[100dvh] w-full shrink-0 snap-start flex-col"
+      style={{ background: PAPER, color: INK }}
+    >
+      <header className="px-6 pt-8 sm:px-12 sm:pt-10 lg:px-16">
+        <Mark className="h-10 sm:h-11" />
+      </header>
+
+      <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-12 lg:px-16">
+        <div className="mx-auto w-full max-w-4xl">
+          <Rise show={show} i={0}>
+            <Eyebrow>What we&rsquo;d put it on at</Eyebrow>
+            <h2
+              className="mt-3 text-[48px] leading-[0.95] sm:text-[76px]"
+              style={{ fontFamily: DISPLAY }}
+            >
+              {money(v.rent)}
+              <span className="text-[20px] font-light sm:text-[28px]"> pcm</span>
+            </h2>
+            <span className="mt-5 block h-[3px] w-[34px] rounded-full" style={{ background: RED }} />
+          </Rise>
+
+          {terms.length > 0 && (
+            <Rise show={show} i={1}>
+              <ul className="mt-8 divide-y divide-black/8 border-y border-black/8">
+                {terms.map((t) => (
+                  <li key={t.k} className="flex items-baseline justify-between gap-4 py-3">
+                    <span className="text-[14px] font-light text-black/60">{t.k}</span>
+                    <span className="text-[15px] font-medium">{t.v}</span>
+                  </li>
+                ))}
+              </ul>
+            </Rise>
+          )}
+
+          {v.note && (
+            <Rise show={show} i={2}>
+              <p className="mt-6 max-w-2xl text-[13.5px] font-light leading-relaxed text-black/60">
+                {v.note}
+              </p>
+            </Rise>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * GETTING STARTED — the ask.
+ *
+ * ── The button is deliberately conditional ────────────────────────────────
+ *
+ * DocuSeal is not connected yet, so `signUrl` is null on every deck built
+ * today. When it is null this slide shows NO button at all and says the
+ * paperwork is coming instead. A "Sign now" that goes nowhere, in front of a
+ * landlord who has just agreed a rent, is the single worst thing this slide
+ * could do — it converts a yes into a support call.
+ *
+ * When DocuSeal is wired, one field on the deck fills and the button appears.
+ * Nothing else here changes.
+ */
+function Terms({ deck, show }: { deck: Deck; show: boolean }) {
+  const t = deck.terms;
+  if (!t) return null;
+  const first = deck.agent.firstName || deck.agent.name;
+
+  return (
+    <section
+      data-slide="terms"
+      className="relative flex min-h-[100dvh] w-full shrink-0 snap-start flex-col"
+      style={{ background: PAPER, color: INK }}
+    >
+      <header className="px-6 pt-8 sm:px-12 sm:pt-10 lg:px-16">
+        <Mark className="h-10 sm:h-11" />
+      </header>
+
+      <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-12 lg:px-16">
+        <div className="mx-auto w-full max-w-3xl">
+          <Rise show={show} i={0}>
+            <Eyebrow>Getting started</Eyebrow>
+            <h2
+              className="mt-3 text-[30px] leading-[1.1] sm:text-[42px]"
+              style={{ fontFamily: DISPLAY }}
+            >
+              Ready when you are
+            </h2>
+            <p className="mt-3 max-w-xl text-[15px] font-light leading-relaxed text-black/60">
+              {t.summary ??
+                "The terms of business set out what we do, what it costs and how either of us can bring it to an end. Nothing starts until they are signed."}
+            </p>
+            <span className="mt-5 block h-[3px] w-[34px] rounded-full" style={{ background: RED }} />
+          </Rise>
+
+          <Rise show={show} i={1}>
+            {t.signUrl ? (
+              <a
+                href={t.signUrl}
+                className="mt-8 inline-block rounded-full px-7 py-3.5 text-[15px] font-medium text-white"
+                style={{ background: RED }}
+              >
+                Read and sign the terms
+              </a>
+            ) : (
+              /* No dead button. The sentence does the job the link would. */
+              <p className="mt-8 max-w-xl text-[14px] font-light leading-relaxed text-black/70">
+                {first} will send the terms of business across to sign
+                electronically &mdash; it takes a couple of minutes and nothing needs printing.
+                Reply to this and we&rsquo;ll get them straight over.
+              </p>
+            )}
+          </Rise>
+
+          <Rise show={show} i={2}>
+            <div className="mt-9 border-t border-black/8 pt-5">
+              <p className="text-[12px] uppercase tracking-[0.14em] text-black/40">
+                What happens next
+              </p>
+              <ol className="mt-3 space-y-2.5">
+                {[
+                  "Terms signed, and we get the photographs and details booked in.",
+                  "The property goes live on Rightmove and the portals, usually within a week.",
+                  "We handle the viewings, the referencing and the paperwork.",
+                ].map((s, i) => (
+                  <li key={s} className="flex gap-3 text-[14px] font-light leading-relaxed">
+                    <span
+                      className="mt-[3px] flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full text-[10px] font-medium text-white"
+                      style={{ background: RED }}
+                    >
+                      {i + 1}
+                    </span>
+                    <span className="text-black/70">{s}</span>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          </Rise>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Why() {
   return (
     <Slide id="why">
@@ -1445,8 +1616,12 @@ export default function PresentDeck({
         return <Agent deck={deck} show={show(i)} />;
       case "comparables":
         return <Comparables deck={deck} show={show(i)} />;
+      case "valuation":
+        return <Valuation deck={deck} show={show(i)} />;
       case "market":
         return <Market deck={deck} show={show(i)} />;
+      case "terms":
+        return <Terms deck={deck} show={show(i)} />;
       case "why":
         return <Why />;
       case "questions":

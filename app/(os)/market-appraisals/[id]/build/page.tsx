@@ -1,9 +1,11 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import PresentationBuilder from "@/components/PresentationBuilder";
 import type { MarketAppraisal } from "@/lib/market-appraisal";
+import { DECK_KINDS, type DeckKind } from "@/lib/present";
 
 /**
  * Building a presentation is a FULL PAGE, not a modal.
@@ -23,6 +25,17 @@ import type { MarketAppraisal } from "@/lib/market-appraisal";
  */
 export default function BuildPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  /* WHICH DECK. Absent means the appraisal deck - the one this wizard was
+     built for and the only one anybody reached it by before now. The
+     post-appraisal card links here with ?kind=post-appraisal.
+
+     Validated against the list rather than cast: this decides which slides a
+     landlord ends up seeing, and a typo in a URL must not quietly mint the
+     wrong deck. */
+  const asked = useSearchParams().get("kind");
+  const kind: DeckKind = DECK_KINDS.some((k) => k.id === asked)
+    ? (asked as DeckKind)
+    : "appraisal";
 
   /* THE RECORD IS FETCHED, NOT LOOKED UP IN AN ARRAY. The four hardcoded
      appraisals are gone — see lib/market-appraisal — so this page asks the
@@ -76,6 +89,8 @@ export default function BuildPage({ params }: { params: Promise<{ id: string }> 
       postcode={ma.postcode}
       landlord={ma.landlord}
       refId={ma.leadId ?? ma.id}
+      kind={kind}
+      appraisal={ma}
       fullPage
       backHref={`/market-appraisals?open=${ma.id}`}
     />

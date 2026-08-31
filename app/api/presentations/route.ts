@@ -9,6 +9,8 @@ import {
   type DeckKind,
   type PresentDeck,
   type PresentMarket,
+  type PresentValuation,
+  type PresentTerms,
 } from "@/lib/present";
 import { hasDb, q } from "@/lib/db";
 
@@ -59,6 +61,9 @@ type Body = {
   /** The market blocks the agent ticked on the Market step, already reduced to
    *  the figures that were on their screen. Absent means no market slide. */
   market?: PresentMarket | null;
+  /** Post-appraisal only — the agreed figure, and the terms to sign. */
+  valuation?: PresentValuation | null;
+  terms?: PresentTerms | null;
   recipientName?: string;
   address?: string;
   postcode?: string;
@@ -190,6 +195,12 @@ export async function POST(req: NextRequest) {
        something: an `area` with every block empty would mint a slide headed
        "Your local market" with nothing on it. slidesFor drops a null. */
     market: body.market && body.market.area ? body.market : null,
+    /* Gated on a real rent for the same reason slidesFor is: a valuation
+       object with no figure in it would mint an offer slide that makes no
+       offer. Terms need the figure too — asking somebody to sign before
+       telling them the number is the wrong way round. */
+    valuation: body.valuation?.rent ? body.valuation : null,
+    terms: body.valuation?.rent && body.terms ? body.terms : null,
     createdAt: new Date().toISOString(),
   };
 

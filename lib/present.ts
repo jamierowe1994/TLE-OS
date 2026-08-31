@@ -138,9 +138,52 @@ export type PresentMarket = {
   pulledAt: string;
 };
 
+/**
+ * THE OFFER, in writing. Post-appraisal only.
+ *
+ * This is the number the landlord has already been told in their own kitchen,
+ * repeated so they can show it to whoever else decides. It is a SNAPSHOT of
+ * what was agreed at the visit — if the figure is later revised, that is a new
+ * deck, not an edit to this one, because the old one has already been read.
+ *
+ * Everything except the rent is optional and the slide reads without it. An
+ * agent who agreed a rent and left the fee to the office must still be able to
+ * send the figure, or they will send nothing.
+ */
+export type PresentValuation = {
+  /** £ pcm. The reason the slide exists — no rent, no slide. */
+  rent: number;
+  /** Already humanised ("Fully managed"), not the Propoly key. */
+  serviceLevel: string | null;
+  feePct: number | null;
+  setupFee: number | null;
+  note: string | null;
+};
+
+/**
+ * The terms to sign.
+ *
+ * `signUrl` is NULL until DocuSeal is connected, and that is the normal state
+ * today rather than a defect. The slide still renders — it says what happens
+ * next and who to reply to — because a landlord reading "here is your figure"
+ * and then nothing at all is worse than one reading "your agent will send the
+ * paperwork over". What it must never do is show a button that goes nowhere:
+ * a dead "Sign now" in front of a landlord is the one outcome worth avoiding.
+ */
+export type PresentTerms = {
+  /** DocuSeal, once it exists. Null means the slide explains instead. */
+  signUrl: string | null;
+  /** What they are being asked to sign, in their words. */
+  summary: string | null;
+};
+
 export type PresentDeck = {
   /** Which of the three decks this is — see DeckKind. */
   kind: DeckKind;
+  /** Post-appraisal only. See PresentValuation. */
+  valuation?: PresentValuation | null;
+  /** Post-appraisal only. See PresentTerms. */
+  terms?: PresentTerms | null;
   comparables?: PresentComparables | null;
   /** The local market, if the agent chose to include any of it. */
   market?: PresentMarket | null;
@@ -308,9 +351,11 @@ export type SlideId =
   | "welcome"
   | "appointment"
   | "agent"
+  | "valuation"
   | "comparables"
   | "market"
   | "why"
+  | "terms"
   | "questions";
 
 export const SLIDES: { id: SlideId; title: string; removable: boolean }[] = [
@@ -319,11 +364,19 @@ export const SLIDES: { id: SlideId; title: string; removable: boolean }[] = [
   { id: "agent", title: "Who you're meeting", removable: false },
   /* Removable, and it MUST be: a comparables slide with two properties on it
      argues against us. Better absent than thin. */
+  /* BEFORE the evidence, not after it. On a post-appraisal deck the landlord
+     has already had the conversation and is opening this for one thing: the
+     number. Making them scroll past comparables to reach it reads as building
+     a case before daring to say it. Figure first, then why. */
+  { id: "valuation", title: "What we'd put it on at", removable: true },
   { id: "comparables", title: "What's letting nearby", removable: true },
   /* After comparables on purpose. Named properties first, then the area they
      sit in — the specific earns the attention that the general then uses. */
   { id: "market", title: "Your local market", removable: true },
   { id: "why", title: "Why The Letting Experts", removable: true },
+  /* Last thing before "any questions", because it is the ask. Everything above
+     it is the argument for saying yes to this. */
+  { id: "terms", title: "Getting started", removable: true },
   { id: "questions", title: "Any questions", removable: false },
 ];
 
@@ -359,14 +412,12 @@ export const SLIDES: { id: SlideId; title: string; removable: boolean }[] = [
  * **post-appraisal** — the same deck with the agreed figure and the terms to
  *   sign. It only goes once a valuation has been recorded.
  *
- * ── post-appraisal is DECLARED but not yet distinct ───────────────────────
+ * ── what makes post-appraisal different ───────────────────────────────────
  *
- * Its slide list is currently identical to the appraisal deck's, and that is
- * honest rather than lazy: the two slides that would tell them apart — the
- * agreed figure and the terms — have no data behind them yet. There is no
- * valuation capture in this OS at all (os_market_appraisals.valuation has no
- * writer anywhere), so a `valuation` slide today could only render a blank.
- * The kind exists now so the plumbing is real; the slides land with it.
+ * Two slides the other decks never carry: the agreed figure, and the terms to
+ * sign. Both were impossible until valuation capture existed; both are gated
+ * on real data, so a post-appraisal deck built before anyone recorded a
+ * figure quietly renders as the appraisal deck rather than as a blank offer.
  */
 export type DeckKind = "pre-appraisal" | "appraisal" | "post-appraisal";
 
@@ -398,7 +449,16 @@ export const DECK_KINDS: { id: DeckKind; label: string; blurb: string }[] = [
 const SLIDES_BY_KIND: Record<DeckKind, SlideId[]> = {
   "pre-appraisal": ["welcome", "appointment", "agent", "why", "questions"],
   appraisal: ["welcome", "agent", "comparables", "market", "why", "questions"],
-  "post-appraisal": ["welcome", "agent", "comparables", "market", "why", "questions"],
+  "post-appraisal": [
+    "welcome",
+    "agent",
+    "valuation",
+    "comparables",
+    "market",
+    "why",
+    "terms",
+    "questions",
+  ],
 };
 
 /** The kind, tolerant of a row written before kinds existed. */
@@ -424,6 +484,14 @@ export function slidesFor(deck: PresentDeck): typeof SLIDES {
        Market step and nothing is included by default. An unticked deck must not
        carry an empty "Your local market" heading with nothing underneath it. */
     if (s.id === "market") return Boolean(deck.market);
+    /* No rent, no offer slide. A "What we'd put it on at" heading above a dash
+       is the worst thing on any of these decks: the landlord opened it for
+       exactly that number. */
+    if (s.id === "valuation") return Boolean(deck.valuation?.rent);
+    /* The terms slide survives a null signUrl — it explains what happens next
+       instead — but not a missing valuation. Asking somebody to sign up before
+       telling them the figure is the wrong way round. */
+    if (s.id === "terms") return Boolean(deck.terms && deck.valuation?.rent);
     return true;
   });
 }
@@ -500,6 +568,20 @@ export const SAMPLE_DECK: PresentDeck = {
     reduced: 0,
     pulledAt: "2026-08-31T06:48:00.000Z",
   },
+  /* Only shown on /present/sample?kind=post-appraisal — the other two kinds
+     exclude these slides by membership, so carrying them costs nothing and
+     means the offer and the terms can be reviewed without recording a real
+     valuation against a real landlord. signUrl is null on purpose: that is
+     the live state until DocuSeal is connected, and the no-button branch is
+     the one worth looking at. */
+  valuation: {
+    rent: 1300,
+    serviceLevel: "Fully managed",
+    feePct: 10,
+    setupFee: 600,
+    note: "Subject to the EPC being redone before it goes live — the current one expired in August.",
+  },
+  terms: { signUrl: null, summary: null },
   property: {
     address: "12 Example Street, Lincoln",
     postcode: "LN5 9AB",
