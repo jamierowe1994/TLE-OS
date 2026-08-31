@@ -39,7 +39,7 @@ export const BUILD_STEPS = [
   { id: "property", label: "Property", blurb: "What we know about it — beds, type, tenure, EPC." },
   { id: "available", label: "On the market", blurb: "What a tenant is choosing between right now." },
   { id: "let", label: "Recently let", blurb: "What actually let nearby, and how long it took." },
-  { id: "market", label: "Market", blurb: "Area rents, stock and how fast things are moving." },
+  { id: "market", label: "Market", blurb: "Rents, pace, size and competition. Tick what goes to the landlord." },
   { id: "review", label: "Review", blurb: "What goes in the presentation, and in what order." },
 ] as const;
 
@@ -62,7 +62,11 @@ export const DECK_SECTIONS: DeckSection[] = [
   { id: "agent", label: "Your agent", always: false, onByDefault: true, blurb: "Who is coming, and how to reach them." },
   { id: "guide", label: "The rent guide", always: false, onByDefault: true, blurb: "The range, and what it rests on." },
   { id: "comparables", label: "What's letting nearby", always: false, onByDefault: true, blurb: "Named properties with rents and days to let." },
-  { id: "market", label: "The local market", always: false, onByDefault: false, blurb: "Area averages and stock. Off unless we have the figures." },
+  /* Off by default, and it stays off by default now that it is real: the
+     Market step's ticks are what turn it on, per appraisal. A section that
+     appeared automatically would put the whole area picture in front of a
+     landlord the agent had not yet chosen to show it to. */
+  { id: "market", label: "The local market", always: false, onByDefault: false, blurb: "Pace, rent by size, mix and competition — whatever is ticked on the Market step." },
   { id: "service", label: "How we let it", always: false, onByDefault: true, blurb: "What we do, and what it costs." },
   { id: "compliance", label: "Getting it legal", always: false, onByDefault: true, blurb: "The certificates a let needs — the bit landlords underestimate." },
   { id: "next", label: "What happens next", always: true, onByDefault: true, blurb: "The close. Always included." },

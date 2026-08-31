@@ -491,6 +491,21 @@ export async function listingAdvert(id: number): Promise<string | null> {
  * we had not thought of yet.
  */
 export async function hsLetRows(sector: string): Promise<Array<Record<string, unknown>>> {
+  return hsLetBook("sectors", sector);
+}
+
+/**
+ * The whole let book for one scope, paged — sector or district.
+ *
+ * District is what the market picture asks for, and asking for it ONCE is the
+ * point: a sector is a subset of its district, so one district fetch answers
+ * both scopes locally off `postcode`. Fetching the two separately would double
+ * the calls to say the same thing twice.
+ */
+export async function hsLetBook(
+  key: "sectors" | "districts",
+  value: string
+): Promise<Array<Record<string, unknown>>> {
   /* PAGED. 300 is the feed's cap, and on the first real sweep fourteen sectors
      returned exactly 300 — Birmingham, Bristol, Edinburgh, Nottingham, Sheffield,
      three London ones. Their books were cut off at the cap, and because the
@@ -500,7 +515,7 @@ export async function hsLetRows(sector: string): Promise<Array<Record<string, un
   const out: Array<Record<string, unknown>> = [];
   for (let page = 0; page < 8; page++) {
     const parts = [
-      `sectors%5B%5D=${encodeURIComponent(sector)}`,
+      `${key}%5B%5D=${encodeURIComponent(value)}`,
       "date_listed_from=1900-01-01",
       "sort%5B%5D=-listed_on",
       "limit=300",
@@ -513,7 +528,7 @@ export async function hsLetRows(sector: string): Promise<Array<Record<string, un
        towns. The sweep catches this and records the status. */
     if (!res.ok) {
       throw new Error(
-        `Homesearch returned ${res.status || "no response"} for ${sector} page ${page + 1} — not swept`
+        `Homesearch returned ${res.status || "no response"} for ${value} page ${page + 1} — not swept`
       );
     }
     const batch = hsRows<Record<string, unknown>>(res.data);
@@ -688,7 +703,7 @@ interface RexLeased {
   };
 }
 
-async function recentlyLet(postcode: string, limit = 12): Promise<RecentLet[]> {
+export async function recentlyLet(postcode: string, limit = 12): Promise<RecentLet[]> {
   const dist = districtOf(postcode);
   if (!dist) return [];
   try {

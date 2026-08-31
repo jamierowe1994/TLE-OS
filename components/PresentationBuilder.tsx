@@ -5,6 +5,11 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import MaterialInfoPanel from "@/components/MaterialInfoPanel";
 import MarketMap from "@/components/MarketMap";
+import MarketPicturePanel, {
+  type MarketBlockId,
+  type MarketSelection,
+} from "@/components/MarketPicture";
+import type { MarketPicture } from "@/lib/market-picture";
 import { Pill } from "@/components/Wire";
 import {
   BUILD_STEPS,
@@ -98,6 +103,57 @@ export default function PresentationBuilder({
   const [plan, setPlan] = useState<DeckPlan>(defaultPlan);
   const [making, setMaking] = useState(false);
   const [made, setMade] = useState<string | null>(null);
+  /* The market picture is loaded by its own panel on its own step, and lifted
+     here so the deck is built from exactly the object that was on screen when
+     the agent ticked the blocks. See MarketPicturePanel's onLoaded. */
+  const [marketPic, setMarketPic] = useState<MarketPicture | null>(null);
+  const [marketSel, setMarketSel] = useState<MarketSelection | null>(null);
+
+  /**
+   * The ticked market blocks, reduced to the figures the landlord will see.
+   *
+   * Only what was ticked travels. A block the agent left alone is `null` rather
+   * than an empty array, so the slide can tell "not chosen" from "chosen and
+   * empty" and draw neither a heading nor a bar for it.
+   */
+  function marketPayload() {
+    if (!marketPic || !marketSel?.blocks.length) return null;
+    const sc = marketPic.scopes.find((s) => s.area === marketSel.area);
+    if (!sc) return null;
+    const on = (b: MarketBlockId) => marketSel.blocks.includes(b);
+
+    return {
+      area: sc.area,
+      level: sc.level,
+      advertised: sc.advertised,
+      medianRent: sc.rent?.median ?? null,
+      /* Pace carries BOTH halves or neither. Sending the market's days without
+         ours turns a comparison into a bare statistic about the competition,
+         which is not what the agent ticked. */
+      marketDays: on("pace") ? (sc.daysAdvertised?.median ?? null) : null,
+      ourDays: on("pace") ? (marketPic.ourLetSpeed?.median ?? null) : null,
+      ourLets: on("pace") ? (marketPic.ourLetSpeed?.n ?? null) : null,
+      bands: on("bands")
+        ? [
+            { label: "Under 2 weeks", n: sc.bands.newIn14 },
+            { label: "2–4 weeks", n: sc.bands.days15to28 },
+            { label: "1–3 months", n: sc.bands.days29to84 },
+            { label: "Over 3 months", n: sc.bands.over84 },
+          ]
+        : null,
+      rentByBed: on("rent")
+        ? sc.beds.map((b) => ({
+            label: b.beds >= 5 ? "5+ bed" : `${b.beds} bed`,
+            n: b.n,
+            rent: b.rent?.median ?? null,
+          }))
+        : null,
+      mix: on("mix") ? { houses: sc.houses, flats: sc.flats } : null,
+      agents: on("agents") ? sc.agents : null,
+      reduced: sc.reduced,
+      pulledAt: marketPic.pulledAt,
+    };
+  }
 
   /**
    * Mint the deck.
@@ -143,6 +199,7 @@ export default function PresentationBuilder({
                 caveat: d.guide?.caveat ?? null,
               }
             : null,
+          market: marketPayload(),
         }),
       });
       const j = (await res.json()) as { ok?: boolean; url?: string; error?: string };
@@ -1373,14 +1430,28 @@ export default function PresentationBuilder({
                   not the answer.
               
                   A scope Homesearch holds nothing for is DROPPED upstream
-                  rather than drawn as a row of zeroes — see marketScopes. */}
+                  rather than drawn as a row of zeroes — see marketScopes.
+
+                  THE RENT COLUMN WAS REMOVED FROM THIS TABLE, deliberately.
+                  It carried `avg_price_on_market`, and the panel below carries
+                  the median of the listings themselves. Measured on NN5 4 on
+                  31 Aug they said £725 and £1,150 — the same screen quoting a
+                  landlord two rents for their own sector, 59% apart. That is
+                  the exact defect the comment at the foot of this step already
+                  describes, reintroduced one row higher up.
+
+                  The listings median wins because it can be defended property
+                  by property: it is the middle of twenty adverts we can name.
+                  The statistic cannot be taken apart, and is documented as
+                  disagreeing with the feed by up to 40%. What this table keeps
+                  is what only it can answer — twelve-month let volume, and the
+                  supply that falls out of it. */}
               {d.marketScopes.length > 0 && (
                 <div className="overflow-hidden rounded-xl border border-line/70">
                   <table className="w-full text-[12.5px]">
                     <thead>
                       <tr className="border-b border-line/70 bg-box/60 text-[10px] uppercase tracking-wide text-muted">
                         <th className="px-3 py-2 text-left font-semibold">Area</th>
-                        <th className="px-3 py-2 text-right font-semibold">Average asking rent</th>
                         <th className="px-3 py-2 text-right font-semibold">Advertised now</th>
                         <th className="px-3 py-2 text-right font-semibold">Let in 12 months</th>
                         <th className="px-3 py-2 text-right font-semibold">Months of supply</th>
@@ -1401,9 +1472,6 @@ export default function PresentationBuilder({
                             {/* Every cell is an em dash when the figure is
                                 absent. A blank reads as zero and a zero is a
                                 claim we cannot make. */}
-                            <td className="figures px-3 py-2 text-right">
-                              {sc.avgRent ? `${money(sc.avgRent)}` : <span className="text-muted">&mdash;</span>}
-                            </td>
                             <td className="figures px-3 py-2 text-right">
                               {sc.toLetNow != null ? sc.toLetNow.toLocaleString("en-GB") : <span className="text-muted">&mdash;</span>}
                             </td>
@@ -1455,13 +1523,32 @@ export default function PresentationBuilder({
                     ) : (
                       <>Homesearch has no letting volume for {closest.area}, so months of supply cannot be worked out.</>
                     )}{" "}
-                    Figures cover <span className="font-semibold">{size}</span>
-                    {d.scopeBeds ? "" : " — set a bed count on the market step to narrow them"}.{" "}
+                    Supply covers <span className="font-semibold">{size}</span>.{" "}
+                    {/* The old copy said "set a bed count on the market step",
+                        and there has never been one on this step — the control
+                        lives on On the market and Recently let. It now points
+                        at the per-size breakdown below, which is the thing that
+                        actually answers it. */}
                     &ldquo;Advertised&rdquo; counts let-agreed stock as well as available, so
-                    supply reads a little high.
+                    supply reads a little high. Rent by size is broken out below.
                   </p>
                 );
               })()}
+
+              {/* EVERYTHING BELOW THE SUPPLY TABLE IS DERIVED FROM THE
+                  LISTINGS, not from area statistics — pace, size, mix and the
+                  competition, none of which `area_statistics/lettings/` can
+                  answer, because it has exactly three members. This is also the
+                  only part of the Market step that can reach the landlord: the
+                  blocks carry "On slide" ticks and travel through
+                  marketPayload() into the deck. See lib/market-picture. */}
+              <MarketPicturePanel
+                postcode={postcode}
+                subjectBeds={d.scopeBeds ?? d.material?.bedrooms ?? null}
+                selection={marketSel}
+                onSelectionChange={setMarketSel}
+                onLoaded={setMarketPic}
+              />
 
               {d.guide ? (
                 <div className="rounded-xl border border-line/70 p-4">
@@ -1517,7 +1604,21 @@ export default function PresentationBuilder({
                 {plan.order.map((id) => {
                   const s = DECK_SECTIONS.find((x) => x.id === id);
                   if (!s) return null;
-                  const on = s.always || plan.enabled[s.id];
+                  /* THE MARKET ROW IS NOT PART OF `plan`, and must not be.
+
+                     It was, and the two disagreed on screen: an agent who
+                     ticked all five blocks on the Market step arrived here and
+                     read "The local market — off". Two controls for one thing,
+                     contradicting each other, on the page whose entire job is
+                     to say what the landlord will receive.
+
+                     The Market step's selection is the single source, because
+                     it is the one that carries the FIGURES. Unticking here
+                     clears it; there is nothing to tick here without having
+                     been to that step, so the box is disabled until there is. */
+                  const isMarket = s.id === "market";
+                  const marketOn = Boolean(marketSel?.blocks.length);
+                  const on = isMarket ? marketOn : s.always || plan.enabled[s.id];
                   return (
                     <li
                       key={s.id}
@@ -1526,15 +1627,26 @@ export default function PresentationBuilder({
                       <input
                         type="checkbox"
                         checked={on}
-                        disabled={s.always}
-                        onChange={() =>
-                          setPlan((p) => ({ ...p, enabled: { ...p.enabled, [s.id]: !p.enabled[s.id] } }))
-                        }
+                        disabled={s.always || (isMarket && !marketOn)}
+                        onChange={() => {
+                          if (isMarket) setMarketSel(null);
+                          else
+                            setPlan((p) => ({
+                              ...p,
+                              enabled: { ...p.enabled, [s.id]: !p.enabled[s.id] },
+                            }));
+                        }}
                         className="h-4 w-4 accent-[#e31f36] disabled:opacity-40"
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block">{s.label}</span>
-                        <span className="block text-[10.5px] text-muted">{s.blurb}</span>
+                        <span className="block text-[10.5px] text-muted">
+                          {isMarket
+                            ? marketOn
+                              ? `${marketSel!.blocks.length} block${marketSel!.blocks.length === 1 ? "" : "s"} from ${marketSel!.area}. Untick to leave it out.`
+                              : "Nothing ticked on the Market step, so this is not in the deck."
+                            : s.blurb}
+                        </span>
                       </span>
                       {s.always ? (
                         <Pill tone="neutral">always in</Pill>

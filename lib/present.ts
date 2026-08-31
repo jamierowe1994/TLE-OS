@@ -101,9 +101,48 @@ export type PresentComparables = {
   caveat: string | null;
 };
 
+/**
+ * The local market, frozen at send.
+ *
+ * A SNAPSHOT of numbers, not a set of instructions to go and fetch them — same
+ * rule as the rest of the deck. A landlord opening this on a Sunday must not
+ * depend on Homesearch being up, and the row then doubles as the record of
+ * exactly what we told them.
+ *
+ * Only the blocks the agent ticked survive, and each is optional, because the
+ * slide has to read with any subset present. `area` is on the object rather
+ * than on each block: every figure here describes ONE scope, and mixing a
+ * district rent with a sector pace would be a quiet lie a landlord could not
+ * detect.
+ */
+export type PresentMarket = {
+  /** "NN5 4" — and the level, so the landlord knows how local this is. */
+  area: string;
+  level: "district" | "sector";
+  advertised: number;
+  /** Median asking rent across every size, pcm. */
+  medianRent: number | null;
+  /** How long today's advertised stock has sat, and how long WE take. Kept as
+   *  two fields because they answer different questions — see the slide copy. */
+  marketDays: number | null;
+  ourDays: number | null;
+  ourLets: number | null;
+  /** Non-overlapping age bands, in display order. */
+  bands?: { label: string; n: number }[] | null;
+  /** Median asking rent per size. `n` travels so a thin one can be labelled. */
+  rentByBed?: { label: string; n: number; rent: number | null }[] | null;
+  mix?: { houses: number; flats: number } | null;
+  agents?: { agent: string; n: number; ours: boolean }[] | null;
+  reduced: number | null;
+  /** When the figures were read, shown on the slide. */
+  pulledAt: string;
+};
+
 export type PresentDeck = {
   kind: "pre-appraisal";
   comparables?: PresentComparables | null;
+  /** The local market, if the agent chose to include any of it. */
+  market?: PresentMarket | null;
   /** Optional throughout. The deck was designed without one and still reads. */
   welcomeVideo?: WelcomeVideo | null;
   /** Who this copy is addressed to. Each guest could get their own. */
@@ -264,7 +303,14 @@ export function absoluteUrl(url: string | null | undefined): string | null {
  * carry the appointment itself cannot be dropped, everything else can, and
  * the deck has to read properly with any subset of the rest gone.
  */
-export type SlideId = "welcome" | "appointment" | "agent" | "comparables" | "why" | "questions";
+export type SlideId =
+  | "welcome"
+  | "appointment"
+  | "agent"
+  | "comparables"
+  | "market"
+  | "why"
+  | "questions";
 
 export const SLIDES: { id: SlideId; title: string; removable: boolean }[] = [
   { id: "welcome", title: "Welcome", removable: false },
@@ -273,6 +319,9 @@ export const SLIDES: { id: SlideId; title: string; removable: boolean }[] = [
   /* Removable, and it MUST be: a comparables slide with two properties on it
      argues against us. Better absent than thin. */
   { id: "comparables", title: "What's letting nearby", removable: true },
+  /* After comparables on purpose. Named properties first, then the area they
+     sit in — the specific earns the attention that the general then uses. */
+  { id: "market", title: "Your local market", removable: true },
   { id: "why", title: "Why The Letting Experts", removable: true },
   { id: "questions", title: "Any questions", removable: false },
 ];
@@ -290,12 +339,18 @@ export const SLIDES: { id: SlideId; title: string; removable: boolean }[] = [
  */
 export function slidesFor(deck: PresentDeck): typeof SLIDES {
   return SLIDES.filter((s) => {
-    if (s.id !== "comparables") return true;
-    /* Three comparables is the floor. Below it the slide argues AGAINST us:
-       a landlord counting two properties concludes we do not know their
-       street, and the rest of the deck inherits that doubt. Absent is better. */
-    const c = deck.comparables;
-    return Boolean(c && c.rows.length >= 3);
+    if (s.id === "comparables") {
+      /* Three comparables is the floor. Below it the slide argues AGAINST us:
+         a landlord counting two properties concludes we do not know their
+         street, and the rest of the deck inherits that doubt. Absent is better. */
+      const c = deck.comparables;
+      return Boolean(c && c.rows.length >= 3);
+    }
+    /* The market slide is opt-in per appraisal — the agent ticks blocks on the
+       Market step and nothing is included by default. An unticked deck must not
+       carry an empty "Your local market" heading with nothing underneath it. */
+    if (s.id === "market") return Boolean(deck.market);
+    return true;
   });
 }
 
@@ -334,6 +389,42 @@ export const SAMPLE_DECK: PresentDeck = {
       { name: "9 Duntreath Avenue", locality: "Liverpool L34 5AB", rent: "\u00a31,250 pcm", days: 34, letAgreed: true },
     ],
     caveat: null,
+  },
+  /* Real NN5 4 figures, measured 31 Aug 2026, for the same reason the
+     comparables above are real: the sample has to show what a landlord
+     actually receives, and a market slide built from round invented numbers
+     would hide exactly the problems worth catching — a thin size band, a
+     competitor name too long for its row, an "us" figure we cannot fill in.
+     The one thing left null is our own let speed, because in NN5 it IS null. */
+  market: {
+    area: "NN5 4",
+    level: "sector",
+    advertised: 20,
+    medianRent: 1150,
+    marketDays: 31,
+    ourDays: null,
+    ourLets: null,
+    bands: [
+      { label: "Under 2 weeks", n: 6 },
+      { label: "2–4 weeks", n: 4 },
+      { label: "1–3 months", n: 9 },
+      { label: "Over 3 months", n: 1 },
+    ],
+    rentByBed: [
+      { label: "1 bed", n: 4, rent: 895 },
+      { label: "2 bed", n: 11, rent: 1150 },
+      { label: "3 bed", n: 5, rent: 1600 },
+    ],
+    mix: { houses: 9, flats: 11 },
+    agents: [
+      { agent: "Lomond Investment Management", n: 5, ours: false },
+      { agent: "O'Riordan Bond", n: 3, ours: false },
+      { agent: "Connells Lettings", n: 2, ours: false },
+      { agent: "Northwood Northampton", n: 1, ours: false },
+      { agent: "Richard Greener", n: 1, ours: false },
+    ],
+    reduced: 0,
+    pulledAt: "2026-08-31T06:48:00.000Z",
   },
   property: {
     address: "12 Example Street, Lincoln",

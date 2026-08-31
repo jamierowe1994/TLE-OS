@@ -141,6 +141,8 @@ export interface MaterialInfo {
   known: number;
   possible: number;
   valuation: Valuation | null;
+  /** The property's own size, or null when Homesearch does not record it. */
+  bedrooms: number | null;
   /** Straight through for a map pin, when we have it. */
   lat: number | null;
   lon: number | null;
@@ -318,6 +320,11 @@ export function shapeMaterialInfo(
     known,
     possible,
     valuation,
+    /* 0 IS "NOT RECORDED", not a studio — see the note at the top of this file.
+       It survives the shaping as a number because the market charts highlight
+       the band this property sits in, and a 0 would silently highlight nothing
+       while looking like a deliberate answer. */
+    bedrooms: typeof m.bedrooms === "number" && m.bedrooms > 0 ? m.bedrooms : null,
     lat: m.lat ?? null,
     lon: m.lon ?? null,
     compliance: {

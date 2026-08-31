@@ -3,7 +3,7 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { presentAgentFor } from "@/lib/rex-agents";
 import { createPresentation, presentationsFor } from "@/lib/present-store";
-import { firstNameOf, type PresentDeck } from "@/lib/present";
+import { firstNameOf, type PresentDeck, type PresentMarket } from "@/lib/present";
 import { hasDb, q } from "@/lib/db";
 
 /**
@@ -47,6 +47,9 @@ type Body = {
     rows: { name: string; locality: string; rent: string; days: number | null; letAgreed: boolean }[];
     caveat: string | null;
   } | null;
+  /** The market blocks the agent ticked on the Market step, already reduced to
+   *  the figures that were on their screen. Absent means no market slide. */
+  market?: PresentMarket | null;
   recipientName?: string;
   address?: string;
   postcode?: string;
@@ -155,6 +158,10 @@ export async function POST(req: NextRequest) {
        thin selection quietly becomes no slide rather than a weak one. */
     comparables:
       body.comparables && body.comparables.rows.length >= 3 ? body.comparables : null,
+    /* Snapshotted for the same reason, and only when the agent actually chose
+       something: an `area` with every block empty would mint a slide headed
+       "Your local market" with nothing on it. slidesFor drops a null. */
+    market: body.market && body.market.area ? body.market : null,
     createdAt: new Date().toISOString(),
   };
 

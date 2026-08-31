@@ -1009,6 +1009,230 @@ function Comparables({ deck, show }: { deck: Deck; show: boolean }) {
   );
 }
 
+/**
+ * The local market, for the landlord.
+ *
+ * ── WHY THIS IS NOT THE AGENT'S SCREEN WITH NICER FONTS ───────────────────
+ *
+ * The Market step in the builder shows an agent everything: five blocks, every
+ * sample size, every caveat, two scopes to switch between. That is right for
+ * somebody deciding what to say. It is wrong for the person being spoken to —
+ * a landlord handed twenty numbers reads none of them.
+ *
+ * So only the ticked blocks appear, each one is a sentence with a figure in
+ * it rather than a chart to be interpreted, and the bars carry counts rather
+ * than a y-axis. What survives is what the agent chose to argue with.
+ *
+ * Everything is a frozen snapshot from `deck.market` — no fetching here. See
+ * PresentMarket in lib/present for why.
+ */
+function Market({ deck, show }: { deck: Deck; show: boolean }) {
+  const m = deck.market;
+  if (!m) return null;
+  const money = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
+  const pct = (n: number) => (m.advertised > 0 ? Math.round((n / m.advertised) * 100) : 0);
+
+  /* One bar row. Width is a share of the biggest bar in its own group, so a
+     group of small numbers still reads — but a genuine zero draws nothing
+     rather than a stub, because a stub reads as "a few". */
+  const Row = ({
+    label,
+    n,
+    max,
+    right,
+    wide,
+  }: {
+    label: string;
+    n: number;
+    max: number;
+    right?: string;
+    /** Agency names need the room; band and size labels do not. */
+    wide?: boolean;
+  }) => (
+    <li className="flex items-center gap-2.5 py-[3px]">
+      <span
+        /* Wide enough for "Over 3 months" and "Under 2 weeks" to survive at
+           12px — measured, they were clipping to "Over 3 mont…" on the slide a
+           landlord reads. Agency names get more still and truncate anyway. */
+        className={`${wide ? "w-[152px]" : "w-[104px]"} shrink-0 truncate text-[12px] font-light text-black/60`}
+      >
+        {label}
+      </span>
+      <span className="relative h-[5px] flex-1 overflow-hidden rounded-full bg-black/8">
+        {/* Softened deliberately. At full strength twelve of these read as a
+            warning panel rather than a market — the bar's job is to carry the
+            eye down a column, and length already does that. The brand red is
+            kept for the headline rule and the one figure that is about us. */}
+        <span
+          className="absolute inset-y-0 left-0 rounded-full"
+          style={{
+            width: max > 0 && n > 0 ? `${Math.max((n / max) * 100, 3)}%` : "0%",
+            background: RED,
+            opacity: 0.55,
+          }}
+        />
+      </span>
+      <span className="w-[56px] shrink-0 text-right text-[12px]">{right ?? n}</span>
+    </li>
+  );
+
+  /* A titled block, so the four charts can be laid out two-up without each one
+     repeating its own heading markup. */
+  const Block = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div>
+      <p className="text-[10.5px] uppercase tracking-[0.14em] text-black/40">{title}</p>
+      <ul className="mt-1.5 border-t border-black/8 pt-1">{children}</ul>
+    </div>
+  );
+
+  const bandMax = Math.max(1, ...(m.bands ?? []).map((b) => b.n));
+  const bedMax = Math.max(1, ...(m.rentByBed ?? []).map((b) => b.n));
+  const agentMax = Math.max(1, ...(m.agents ?? []).map((a) => a.n));
+
+  return (
+    <section
+      data-slide="market"
+      className="relative flex min-h-[100dvh] w-full shrink-0 snap-start flex-col"
+      style={{ background: PAPER, color: INK }}
+    >
+      <header className="px-6 pt-8 sm:px-12 sm:pt-10 lg:px-16">
+        <Mark className="h-10 sm:h-11" />
+      </header>
+
+      {/* pb-24 ON MOBILE IS NOT PADDING TASTE, it is clearance.
+
+          Measured at 375×812 with all five blocks: the slide ran to 998px and
+          the last rows sat underneath the deck's own slide-nav dots and the
+          assistant bubble. This is the phone-sized collision this project keeps
+          shipping, so the last block is given room to end above them. */}
+      <div className="flex flex-1 flex-col justify-center px-6 py-8 pb-24 sm:px-12 sm:py-10 sm:pb-10 lg:px-16">
+        <div className="mx-auto w-full max-w-4xl">
+          <Rise show={show} i={0}>
+            <Eyebrow>Your local market</Eyebrow>
+            <h2
+              className="mt-3 text-[34px] leading-[1.05] sm:text-[50px]"
+              style={{ fontFamily: DISPLAY }}
+            >
+              {m.advertised} to let
+              <span className="text-[18px] font-light sm:text-[24px]"> in {m.area}</span>
+            </h2>
+            <p className="mt-2 text-[15px] font-light text-black/55">
+              {m.medianRent
+                ? `The middle asking rent here is ${money(m.medianRent)} pcm.`
+                : "Advertised right now, across every size."}
+              {m.reduced != null && m.reduced > 0 && (
+                <> {m.reduced} of them have already cut their asking rent.</>
+              )}
+            </p>
+            <span className="mt-5 block h-[3px] w-[34px] rounded-full" style={{ background: RED }} />
+          </Rise>
+
+          {/* Pace. The two figures are deliberately given different words —
+              "has been advertised" against "took to let" — because they are
+              different measurements and a landlord who later works that out
+              unaided stops believing the rest of the deck. */}
+          {(m.marketDays != null || m.ourDays != null) && (
+            <Rise show={show} i={1}>
+              <div className="mt-5 grid gap-4 sm:mt-7 sm:grid-cols-2">
+                {m.marketDays != null && (
+                  <div className="border-t border-black/10 pt-3">
+                    <p className="text-[28px] font-light leading-none">{m.marketDays} days</p>
+                    <p className="mt-1.5 text-[12.5px] font-light leading-snug text-black/55">
+                      How long the average property on the market in {m.area} has been advertised.
+                    </p>
+                  </div>
+                )}
+                {m.ourDays != null && (
+                  <div className="border-t pt-3" style={{ borderColor: RED }}>
+                    <p className="text-[28px] font-light leading-none">{m.ourDays} days</p>
+                    <p className="mt-1.5 text-[12.5px] font-light leading-snug text-black/55">
+                      How long our last {m.ourLets} lets round here actually took, start to finish.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </Rise>
+          )}
+
+          {/* TWO COLUMNS, because one was too tall to be a slide.
+
+              Measured at 1280×720 with all five blocks ticked: the single
+              column ran to 1140px inside a 100dvh section, so a landlord on a
+              laptop lost the competition chart and the date the figures were
+              taken off the bottom edge. A slide that has to be scrolled inside
+              a deck that scrolls by slide is a slide nobody reads the end of.
+              Stacked on phones, where vertical space is expected. */}
+          <Rise show={show} i={2}>
+            <div className="mt-5 grid gap-x-10 gap-y-5 sm:mt-7 sm:gap-y-6 sm:grid-cols-2">
+              {m.bands && m.bands.length > 0 && (
+                <Block title="How long it has been on the market">
+                  {m.bands.map((b) => (
+                    <Row key={b.label} label={b.label} n={b.n} max={bandMax} right={`${pct(b.n)}%`} />
+                  ))}
+                </Block>
+              )}
+
+              {m.rentByBed && m.rentByBed.length > 0 && (
+                <Block title="Asking rent by size">
+                  {m.rentByBed.map((b) => (
+                    <Row
+                      key={b.label}
+                      label={b.label}
+                      n={b.n}
+                      max={bedMax}
+                      right={b.rent ? money(b.rent) : "—"}
+                    />
+                  ))}
+                </Block>
+              )}
+
+              {m.mix && (
+                <Block title="What is competing">
+                  <Row
+                    label="Houses"
+                    n={m.mix.houses}
+                    max={Math.max(1, m.mix.houses, m.mix.flats)}
+                    right={`${pct(m.mix.houses)}%`}
+                  />
+                  <Row
+                    label="Flats"
+                    n={m.mix.flats}
+                    max={Math.max(1, m.mix.houses, m.mix.flats)}
+                    right={`${pct(m.mix.flats)}%`}
+                  />
+                </Block>
+              )}
+
+              {m.agents && m.agents.length > 0 && (
+                <Block title={`Who is letting in ${m.area}`}>
+                  {/* Five is the cap on a slide. The panel shows six; the
+                      sixth is always the smallest and costs a row of height
+                      the layout does not have. */}
+                  {m.agents.slice(0, 5).map((a) => (
+                    <Row key={a.agent} label={a.agent} n={a.n} max={agentMax} right={`${pct(a.n)}%`} wide />
+                  ))}
+                </Block>
+              )}
+            </div>
+          </Rise>
+
+          <Rise show={show} i={3}>
+            <p className="mt-6 text-[11px] font-light leading-relaxed text-black/45">
+              Figures for {m.area} taken on{" "}
+              {new Date(m.pulledAt).toLocaleDateString("en-GB", {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })}
+              , from the live record of what is advertised. Withdrawn listings are not counted.
+            </p>
+          </Rise>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Why() {
   return (
     <Slide id="why">
@@ -1221,6 +1445,8 @@ export default function PresentDeck({
         return <Agent deck={deck} show={show(i)} />;
       case "comparables":
         return <Comparables deck={deck} show={show(i)} />;
+      case "market":
+        return <Market deck={deck} show={show(i)} />;
       case "why":
         return <Why />;
       case "questions":
