@@ -158,10 +158,21 @@ export async function pushToRex(
   if (!rows.length) return { pushed: false, reason: "Nothing waiting to be copied." };
 
   const { rexWritesLocked } = await import("@/lib/rex");
-  /* Asked about THIS write specifically, not "is any write unlocked" — see the
-     note on writeIsUnlocked in lib/rex. */
-  if (rexWritesLocked("Documents", "upload")) {
-    const why = "REX writes are locked — set REX_ALLOW_WRITES to include the upload method.";
+  /* BOTH methods, by their real names. This asked about "Documents/upload",
+     which is not a call this function makes — REX has no document-create
+     method at all, which is the whole reason the attach goes through a nested
+     `related` update. A gate naming the wrong method is a gate that answers a
+     question nobody asked: it would have refused while the real writes were
+     unlocked, or worse, allowed while they were not. */
+  const needed: Array<[string, string]> = [
+    ["Upload", "uploadFileFromUrl"],
+    ["Listings", "update"],
+  ];
+  const locked = needed.filter(([s, m]) => rexWritesLocked(s, m));
+  if (locked.length) {
+    const why = `REX writes are locked — REX_ALLOW_WRITES needs ${locked
+      .map(([s, m]) => `${s}/${m}`)
+      .join(" and ")}.`;
     await note(submitterId, why);
     return { pushed: false, reason: why };
   }
@@ -172,14 +183,75 @@ export async function pushToRex(
     return { pushed: false, reason: why };
   }
 
-  /* Deliberately not implemented against a guess. REX's upload shape is
-     undocumented and untested, and inventing a payload here would either fail
-     silently or write something malformed into the system six businesses
-     share. The row records why, and the copy is retried once the shape is
-     confirmed against a real REX record. */
-  const why = "REX upload shape not yet confirmed — the OS copy is safe and this is queued.";
-  await note(submitterId, why);
-  return { pushed: false, reason: why };
+  /**
+   * TWO CALLS, and the shape is copied from Fine & Country's live pipeline
+   * rather than guessed: `Upload/uploadFileFromUrl` returns a `rextmp://` uri,
+   * and `Listings/update` with a nested `related.listing_documents` is what
+   * permanently attaches it. REX has no document-create method — the nested
+   * update IS the write path.
+   *
+   * ── We hand REX OUR url, not DocuSeal's ───────────────────────────────
+   *
+   * F&C pass DocuSeal's document URL straight through, which works only
+   * inside the 40 minutes before it expires — so a failed attach can never be
+   * retried, and theirs is a one-shot. Ours points at the copy already in R2,
+   * presigned for an hour. That is the entire payoff of storing first: the
+   * backup can be retried tomorrow, or after REX writes are unlocked, or after
+   * the appraisal finally becomes a listing.
+   */
+  const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
+  const { GetObjectCommand } = await import("@aws-sdk/client-s3");
+  const row = rows[0];
+
+  try {
+    const url = await withR2((client) =>
+      getSignedUrl(client, new GetObjectCommand({ Bucket: R2_BUCKET, Key: row.r2_key }), {
+        expiresIn: 3600,
+      })
+    );
+
+    const { rexCall } = await import("@/lib/rex");
+
+    const up = await rexCall("Upload", "uploadFileFromUrl", { url });
+    const uri = (up.result as { uri?: string } | undefined)?.uri;
+    if (!up.ok || !uri) {
+      const why = `REX would not take the file: ${JSON.stringify(up.result ?? "").slice(0, 200)}`;
+      await note(submitterId, why);
+      return { pushed: false, reason: why };
+    }
+
+    const attach = await rexCall("Listings", "update", {
+      data: {
+        id: opts.listingId,
+        related: {
+          listing_documents: [
+            {
+              description: row.template_name || "Signed terms of business",
+              type_id: "contract",
+              uri,
+            },
+          ],
+        },
+      },
+    });
+    if (!attach.ok) {
+      const why = `REX refused the attach: ${JSON.stringify(attach.result ?? "").slice(0, 200)}`;
+      await note(submitterId, why);
+      return { pushed: false, reason: why };
+    }
+
+    await q(
+      `UPDATE os_signed_documents
+          SET rex_pushed_at = NOW(), rex_document_id = $2, rex_error = NULL
+        WHERE submitter_id = $1`,
+      [submitterId, uri]
+    );
+    return { pushed: true };
+  } catch (e) {
+    const why = e instanceof Error ? e.message : "REX copy failed.";
+    await note(submitterId, why);
+    return { pushed: false, reason: why };
+  }
 }
 
 async function note(submitterId: number, reason: string): Promise<void> {
