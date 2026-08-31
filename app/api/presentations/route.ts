@@ -3,11 +3,17 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { presentAgentFor } from "@/lib/rex-agents";
 import { createPresentation, presentationsFor } from "@/lib/present-store";
-import { firstNameOf, type PresentDeck, type PresentMarket } from "@/lib/present";
+import {
+  firstNameOf,
+  DECK_KINDS,
+  type DeckKind,
+  type PresentDeck,
+  type PresentMarket,
+} from "@/lib/present";
 import { hasDb, q } from "@/lib/db";
 
 /**
- * Minting a pre-appraisal deck.
+ * Minting a deck — one of three, chosen by `kind`.
  *
  * The agent's side of this is one button. Everything that makes the deck
  * personal is assembled here, once, and frozen — see lib/present-store.ts for
@@ -36,6 +42,9 @@ function origin(req: NextRequest): string {
 
 type Body = {
   ref?: string;
+  /** Which of the three decks to mint. Absent means pre-appraisal, so every
+   *  caller written before kinds existed keeps working unchanged. */
+  kind?: DeckKind;
   /** Straight from the presentation builder: the comparables the agent
    *  actually ticked, and which sections they kept. Both optional — a deck
    *  minted without the wizard still works exactly as it did. */
@@ -77,6 +86,10 @@ export async function GET(req: NextRequest) {
     // and shipping the whole snapshot to every drawer render is waste.
     sent: rows.map((r) => ({
       token: r.token,
+      /* The kind travels now that there are three decks. Without it the
+         appraisal page cannot tell a pre-appraisal from the deck the agent
+         took on the day, and would list them as one undifferentiated pile. */
+      kind: r.kind,
       url: `${origin(req)}/present/${r.token}`,
       createdAt: r.createdAt,
       authorName: r.authorName,
@@ -105,6 +118,16 @@ export async function POST(req: NextRequest) {
   const address = (body.address ?? "").trim();
   if (!address) {
     return NextResponse.json({ ok: false, error: "The deck needs an address." }, { status: 400 });
+  }
+
+  /* Default to pre-appraisal so the two callers written before kinds existed
+     keep behaving exactly as they did; refuse anything else we do not know. */
+  const kind: DeckKind = body.kind ?? "pre-appraisal";
+  if (!DECK_KINDS.some((k) => k.id === kind)) {
+    return NextResponse.json(
+      { ok: false, error: `"${body.kind}" is not a deck we build.` },
+      { status: 400 }
+    );
   }
 
   const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
@@ -136,7 +159,12 @@ export async function POST(req: NextRequest) {
   );
 
   const deck: PresentDeck = {
-    kind: "pre-appraisal",
+    /* VALIDATED, not trusted. `kind` decides which slides a landlord sees, and
+       the DB column is free text with no CHECK behind it — an unrecognised
+       string would store fine and then render as a pre-appraisal by fallback,
+       which is a deck quietly becoming the wrong deck. Anything we do not
+       recognise is refused above rather than coerced here. */
+    kind,
     recipientName: (body.recipientName ?? "").trim(),
     property: {
       address,

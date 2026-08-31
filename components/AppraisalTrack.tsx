@@ -10,6 +10,8 @@ import {
   postBodyFor,
   postSubjectFor,
   subjectFor,
+  PRE_APPRAISAL_LEAD_DAYS,
+  PRE_APPRAISAL_LEAD_WORDS,
   type AppraisalInvite,
 } from "@/lib/appraisal-email";
 import EmailPopout from "@/components/EmailPopout";
@@ -327,7 +329,7 @@ export default function AppraisalTrack({
     const visit = new Date(c.bookedAt);
     if (Number.isNaN(visit.valueOf())) return null;
     const when = new Date(visit);
-    when.setDate(when.getDate() - 2);
+    when.setDate(when.getDate() - PRE_APPRAISAL_LEAD_DAYS);
     when.setHours(9, 0, 0, 0);
     const soon = new Date(Date.now() + 60 * 60 * 1000);
     return (when < soon ? soon : when).toISOString();
@@ -573,7 +575,7 @@ export default function AppraisalTrack({
                     <Choice
                       icon="calendar"
                       title="Calendar invite"
-                      body="An .ics for their diary. Sent WITH the confirmation, not with the pre-appraisal — an invite that lands two days before the visit has missed most of its job."
+                      body="An .ics for their diary. Sent WITH the confirmation, not with the pre-appraisal — an invite that lands the day before the visit has missed most of its job."
                       done={Boolean(c.inviteSavedAt)}
                       doneLabel="Saved"
                       onClick={() => {
@@ -640,7 +642,7 @@ export default function AppraisalTrack({
                         icon="clock"
                         row
                         title={scheduleFor ? `Schedule for ${scheduleWords}` : "Schedule it"}
-                        body="Sent on its own, two days out — when it's useful rather than convenient."
+                        body={`Sent on its own, ${PRE_APPRAISAL_LEAD_WORDS} — when it's useful rather than convenient.`}
                         onClick={schedulePre}
                         disabled={!invite || !scheduleFor || scheduling}
                         note={

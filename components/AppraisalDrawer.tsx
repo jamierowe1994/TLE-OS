@@ -23,7 +23,7 @@ import { MA_STAGES, effectiveStage, needsValuation, type MarketAppraisal } from 
 
 /** What the appraisal is waiting on at each stage. */
 const NEXT: Record<string, { do: string; who: string }> = {
-  booked: { do: "Send the pre-appraisal deck — two days before, with a welcome video if you can.", who: "Us" },
+  booked: { do: "The pre-appraisal deck goes out the day before. Record a welcome video for it if you can.", who: "Us" },
   pre_appraisal: { do: "Pull the comparables together and agree your opening figure before you go.", who: "Us" },
   appraisal: { do: "The visit. Walk it, then record the valuation while it is fresh.", who: "Us" },
   post_appraisal: { do: "Send the deck back with the figure, set the follow-up, and get the terms out for signature.", who: "Us" },

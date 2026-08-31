@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { readPresentation } from "@/lib/present-store";
-import { SAMPLE_DECK, slidesFor } from "@/lib/present";
+import { SAMPLE_DECK, DECK_KINDS, slidesFor } from "@/lib/present";
 import PresentDeck from "@/components/PresentDeck";
 
 /**
@@ -23,16 +23,28 @@ export const runtime = "nodejs";
 
 export default async function PresentPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ kind?: string }>;
 }) {
   const { token } = await params;
 
   /* The showroom copy. Reserved word, no customer data in it, and the only
      way an agent can look at the deck before sending their first one. It is
-     also what renders on a machine with no database. */
+     also what renders on a machine with no database.
+
+     ?kind= SWITCHES WHICH OF THE THREE IS SHOWN, and it earns its keep: the
+     decks differ only by which slides they are made of, so the sample is the
+     only way to see that difference without minting three real decks against
+     a real landlord's address. /present/sample?kind=appraisal is what to open
+     when reviewing the comparables and market slides — the pre-appraisal deck
+     deliberately carries neither. */
   if (token === "sample") {
-    return <PresentDeck token="sample" deck={SAMPLE_DECK} slides={slidesFor(SAMPLE_DECK)} />;
+    const { kind } = await searchParams;
+    const asked = DECK_KINDS.find((k) => k.id === kind)?.id ?? "pre-appraisal";
+    const deck = { ...SAMPLE_DECK, kind: asked };
+    return <PresentDeck token="sample" deck={deck} slides={slidesFor(deck)} />;
   }
 
   const row = await readPresentation(token);

@@ -195,12 +195,31 @@ export function postBodyFor(i: AppraisalInvite, f: AppraisalOutcomeFacts): strin
  * one exists to put the appointment in writing while the phone call is still
  * warm — they agreed a time verbally, and verbal is what gets forgotten. It
  * is short on purpose: a confirmation that runs to six paragraphs is a
- * confirmation nobody reads to the end of, and the detail has its own email a
- * couple of days out.
+ * confirmation nobody reads to the end of, and the detail has its own email
+ * the day before.
  *
  * The calendar invite rides WITH this one, not with the pre-appraisal. An
- * .ics that arrives two days before the visit has missed most of its job.
+ * .ics that arrives the day before the visit has missed most of its job.
  */
+/**
+ * How far ahead of the visit the pre-appraisal goes out.
+ *
+ * ONE day, set by James on 31 Aug 2026: *"the day before the valuation they
+ * will be sent a pre-appraisal out"*. It was two, on the reasoning that this
+ * left time to dig out an EPC — but the pre-appraisal deck carries no
+ * homework any more, it is a sneak peek at who is coming, so its job is to be
+ * fresh in the mind rather than to prompt anything.
+ *
+ * A NAMED CONSTANT because the old value was a bare `- 2` in a date
+ * calculation with the number "two days" written into six separate strings
+ * around it. Changing the offset used to mean finding all seven.
+ */
+export const PRE_APPRAISAL_LEAD_DAYS = 1;
+
+/** "the day before" / "two days before" — said the same way everywhere. */
+export const PRE_APPRAISAL_LEAD_WORDS =
+  PRE_APPRAISAL_LEAD_DAYS === 1 ? "the day before" : `${PRE_APPRAISAL_LEAD_DAYS} days before`;
+
 export function confirmSubjectFor(i: AppraisalInvite): string {
   return `Confirmed - your market appraisal${i.whenPretty ? `, ${i.whenPretty}` : ""}`;
 }

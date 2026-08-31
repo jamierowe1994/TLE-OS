@@ -177,6 +177,13 @@ export default function PresentationBuilder({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           ref: refId ?? "",
+          /* THIS BUILDER MAKES THE APPRAISAL DECK, not the pre-appraisal one.
+             The pre-appraisal is short, automatic and needs no building — it
+             is minted from the lead drawer the day before. What is assembled
+             here is the full research the agent takes with them and sends
+             afterwards, which is why it is the only one with a five-step
+             wizard in front of it. */
+          kind: "appraisal",
           recipientName: landlord ?? "",
           address,
           postcode,

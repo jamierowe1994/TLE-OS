@@ -24,7 +24,7 @@ import HandWord from "@/components/HandWord";
  *    a phone; anything that won't fit is cut rather than shrunk. If a slide
  *    is trying to say two things, one of them is on the wrong slide.
  *
- * 2. THE PHONE IS THE REAL DEVICE. This arrives by email, two days before a
+ * 2. THE PHONE IS THE REAL DEVICE. This arrives by email, the day before a
  *    visit, and gets opened standing in a kitchen. Desktop is the courtesy
  *    layout, not the other way round.
  *

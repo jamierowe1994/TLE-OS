@@ -8,8 +8,8 @@ import { findUserById } from "@/lib/users";
  * The queue: emails written now and sent later.
  *
  * Only the pre-appraisal uses it today. It is the one email in the run that is
- * better late — two days before the visit, close enough to be remembered and
- * far enough to dig out the EPC.
+ * better late — the day before the visit, close enough that it is still in
+ * mind when the agent knocks. See PRE_APPRAISAL_LEAD_DAYS.
  *
  * What is stored is the FINISHED EMAIL, not a recipe for it. A queue entry
  * that rebuilds its own wording at send time can fail hours after anybody is

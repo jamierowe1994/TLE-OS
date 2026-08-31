@@ -260,7 +260,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
     group: "Market appraisals",
     name: "Before The Visit",
     audience: "landlord",
-    trigger: "Sent or scheduled from the Pre-appraisal step, two days before the visit",
+    trigger: "Sent or scheduled from the Pre-appraisal step, the day before the visit",
     fires: "components/AppraisalTrack.tsx, or the queue in app/api/scheduled-sends/run",
     to: "The landlord",
     summary:

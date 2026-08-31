@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Pill } from "@/components/Wire";
 import MaterialInfoPanel from "@/components/MaterialInfoPanel";
 import ResearchPanel from "@/components/ResearchPanel";
+import DeckRail from "@/components/DeckRail";
+import ValuationForm from "@/components/ValuationForm";
 import {
   MA_STAGES,
   effectiveStage,
@@ -35,7 +37,7 @@ import type { MaResearch } from "@/lib/ma-research";
 
 /** What the appraisal is waiting on at each stage. */
 const NEXT: Record<string, { do: string; who: string }> = {
-  booked: { do: "Send the pre-appraisal deck — two days before, with a welcome video if you can.", who: "Us" },
+  booked: { do: "The pre-appraisal deck goes out the day before. Record a welcome video for it if you can.", who: "Us" },
   pre_appraisal: { do: "Pull the comparables together and agree your opening figure before you go.", who: "Us" },
   appraisal: { do: "The visit. Walk it, then record the valuation while it is fresh.", who: "Us" },
   post_appraisal: { do: "Send the deck back with the figure, set the follow-up, and get the terms out for signature.", who: "Us" },
@@ -237,19 +239,13 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           Waiting on <Pill tone="accent">{missingFigure ? "Us" : (next?.who ?? "Us")}</Pill>
         </p>
 
+        {/* "Record the valuation" USED TO LIVE HERE and it was a redirect
+            loop: it pointed at /market-appraisals?open=<id>, whose open
+            handler immediately router.replace'd back to this page. It has been
+            removed rather than left looking available, because there is no
+            valuation form anywhere in this OS to send anyone to. The
+            post-appraisal card below says so in words. */}
         <div className="mt-4 flex flex-wrap gap-2.5">
-          <Link
-            href={`/market-appraisals/${ma.id}/build`}
-            className="rounded-lg bg-accent-dark px-4 py-2.5 text-[12.5px] font-semibold text-white"
-          >
-            Build the presentation
-          </Link>
-          <Link
-            href={`/market-appraisals?open=${ma.id}`}
-            className="rounded-lg border border-line/80 px-4 py-2.5 text-[12.5px]"
-          >
-            Record the valuation
-          </Link>
           <Link
             href="/compliance"
             className="rounded-lg border border-line/80 px-4 py-2.5 text-[12.5px]"
@@ -259,7 +255,37 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
         </div>
       </section>
 
-      {/* ── 4. what we know ─────────────────────────────────────────────── */}
+      {/* ── 4. the figure ───────────────────────────────────────────────── */}
+      {/* ABOVE the decks, because it gates one of them. An agent who has just
+          come back from a visit lands on the thing they came to write down,
+          and the post-appraisal card below unlocks the moment they do. */}
+      <section className="fade-up mt-4">
+        <ValuationForm appraisal={ma} onSaved={setBooked} />
+      </section>
+
+      {/* ── 5. the three decks ──────────────────────────────────────────── */}
+      <section className="fade-up mt-4">
+        <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
+          What they see
+        </p>
+        <p className="mt-2 mb-3 text-[12px] leading-relaxed text-muted">
+          Three decks, in the order a landlord meets them.
+        </p>
+        <DeckRail
+          appraisalId={ma.id}
+          refId={ma.leadId ?? ma.id}
+          address={ma.address}
+          postcode={ma.postcode}
+          landlord={ma.landlord}
+          appointmentAt={ma.appointmentAt ?? null}
+          /* Always false today. os_market_appraisals.valuation has no writer
+             anywhere in the repo, so this is not a stub — it is the accurate
+             answer until valuation capture is built. */
+          hasValuation={ma.valuation != null}
+        />
+      </section>
+
+      {/* ── 6. what we know ─────────────────────────────────────────────── */}
       <section className="fade-up mt-4">
         <ResearchPanel address={ma.address} postcode={ma.postcode} beds={2} />
       </section>

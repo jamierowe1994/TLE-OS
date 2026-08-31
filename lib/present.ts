@@ -139,7 +139,8 @@ export type PresentMarket = {
 };
 
 export type PresentDeck = {
-  kind: "pre-appraisal";
+  /** Which of the three decks this is — see DeckKind. */
+  kind: DeckKind;
   comparables?: PresentComparables | null;
   /** The local market, if the agent chose to include any of it. */
   market?: PresentMarket | null;
@@ -337,8 +338,81 @@ export const SLIDES: { id: SlideId; title: string; removable: boolean }[] = [
  * comparables chosen, no valuation written — and the viewer should already be
  * built against a list it doesn't control.
  */
+/**
+ * THE THREE DECKS, and why they are one component rather than three.
+ *
+ * A landlord meets us three times on paper and the paper is nearly the same
+ * each time. Building three viewers would mean three places to fix a typo and
+ * three chances for them to drift apart, so there is one deck, one renderer,
+ * and a `kind` that decides which slides it is made of.
+ *
+ * ── What each one is for ──────────────────────────────────────────────────
+ *
+ * **pre-appraisal** — sent the day before, automatically. A sneak peek and
+ *   nothing more: who is coming, when, and why us. It carries NO comparables
+ *   and NO market, deliberately — the figures are the reason for the visit,
+ *   and giving them away the night before removes it. James, 31 Aug.
+ *
+ * **appraisal** — what the agent takes with them and sends afterwards. This is
+ *   the full research: the properties, the local market, the argument.
+ *
+ * **post-appraisal** — the same deck with the agreed figure and the terms to
+ *   sign. It only goes once a valuation has been recorded.
+ *
+ * ── post-appraisal is DECLARED but not yet distinct ───────────────────────
+ *
+ * Its slide list is currently identical to the appraisal deck's, and that is
+ * honest rather than lazy: the two slides that would tell them apart — the
+ * agreed figure and the terms — have no data behind them yet. There is no
+ * valuation capture in this OS at all (os_market_appraisals.valuation has no
+ * writer anywhere), so a `valuation` slide today could only render a blank.
+ * The kind exists now so the plumbing is real; the slides land with it.
+ */
+export type DeckKind = "pre-appraisal" | "appraisal" | "post-appraisal";
+
+export const DECK_KINDS: { id: DeckKind; label: string; blurb: string }[] = [
+  {
+    id: "pre-appraisal",
+    label: "Pre-appraisal",
+    blurb: "Goes out the day before. Who's coming, when, and why us.",
+  },
+  {
+    id: "appraisal",
+    label: "Appraisal",
+    blurb: "The full research. Taken on the day, sent afterwards.",
+  },
+  {
+    id: "post-appraisal",
+    label: "Post-appraisal",
+    blurb: "The agreed figure and the terms. Needs a valuation first.",
+  },
+];
+
+/**
+ * Which slides each kind is made of, in order.
+ *
+ * `appointment` is on the pre-appraisal ONLY. On the day the agent is standing
+ * in the hall, and afterwards the visit has happened — a deck that opens by
+ * confirming an appointment the landlord has already had reads as a mistake.
+ */
+const SLIDES_BY_KIND: Record<DeckKind, SlideId[]> = {
+  "pre-appraisal": ["welcome", "appointment", "agent", "why", "questions"],
+  appraisal: ["welcome", "agent", "comparables", "market", "why", "questions"],
+  "post-appraisal": ["welcome", "agent", "comparables", "market", "why", "questions"],
+};
+
+/** The kind, tolerant of a row written before kinds existed. */
+export function deckKind(deck: PresentDeck): DeckKind {
+  return DECK_KINDS.some((k) => k.id === deck.kind) ? deck.kind : "pre-appraisal";
+}
+
 export function slidesFor(deck: PresentDeck): typeof SLIDES {
+  const allowed = SLIDES_BY_KIND[deckKind(deck)];
   return SLIDES.filter((s) => {
+    /* The kind decides membership FIRST. A pre-appraisal deck that happened to
+       be minted with comparables on it must still not show them — the rule is
+       about what this deck is for, not about what data reached it. */
+    if (!allowed.includes(s.id)) return false;
     if (s.id === "comparables") {
       /* Three comparables is the floor. Below it the slide argues AGAINST us:
          a landlord counting two properties concludes we do not know their
