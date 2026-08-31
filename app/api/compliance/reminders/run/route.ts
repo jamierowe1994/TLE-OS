@@ -177,7 +177,7 @@ async function plan(): Promise<{
 }
 
 export async function GET(req: NextRequest) {
-  if (!cronAuthorised(req) && !(await requireCapability(req, "admin:open"))) {
+  if (!cronAuthorised(req) && !(await requireCapability(req, "staff:internal"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const p = await plan();

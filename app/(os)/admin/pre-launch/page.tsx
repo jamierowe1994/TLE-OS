@@ -3,6 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
+import { ROLES, ROLE_LABEL } from "@/lib/roles";
+
+/* Both role pickers on this screen used to be a hand-typed list of five
+   options. It was already wrong before this change — `pretenancy` existed and
+   was not offered, so the one person the role was created for could not be
+   invited as it — and adding `marketing` would have made it wrong twice.
+   Derived from ROLES now, so a role added in lib/roles.ts appears here. */
+const ROLE_OPTIONS = ROLES.map((r) => (
+  <option key={r} value={r}>
+    {ROLE_LABEL[r]}
+  </option>
+));
 
 /**
  * The pre-launch pilot.
@@ -83,7 +95,11 @@ export default function PreLaunch() {
      it — and the first person we actually wanted to invite, Francesca in
      marketing, could not be reached from this screen at all. The API already
      accepted any address; only the UI insisted on a roster. */
-  const [manual, setManual] = useState({ name: "", email: "", role: "support" });
+  /* Defaults to `agent`, the role that grants nothing, so a mis-click on a
+     half-filled row cannot invite somebody as something. It used to default to
+     `support` — which was the fullest role in the list after super_admin, and
+     the one nobody was ever deliberately choosing. */
+  const [manual, setManual] = useState({ name: "", email: "", role: "agent" });
 
   /* The screen as it looked when a report was filed. Fetched one at a time,
      on demand: every report carries a JPEG and pulling them all to draw a list
@@ -168,7 +184,7 @@ export default function PreLaunch() {
     const j = (await r.json()) as { ok?: boolean; message?: string; error?: string };
     setBusy(null);
     setFlash(j.ok ? (j.message ?? "Done.") : (j.error ?? "That didn't work."));
-    if (j.ok) setManual({ name: "", email: "", role: "support" });
+    if (j.ok) setManual({ name: "", email: "", role: "agent" });
     load();
   }
 
@@ -339,11 +355,7 @@ export default function PreLaunch() {
               onChange={(e) => setManual((m) => ({ ...m, role: e.target.value }))}
               className="rounded-lg border border-line bg-card px-2 py-1.5 text-[11.5px] outline-none focus:border-accent"
             >
-              <option value="agent">Agent</option>
-              <option value="support">Support</option>
-              <option value="developer">Developer</option>
-              <option value="super_admin">Super admin</option>
-              <option value="owner">Owner</option>
+              {ROLE_OPTIONS}
             </select>
             <button
               type="button"
@@ -394,11 +406,7 @@ export default function PreLaunch() {
                     title="What they can see once they join"
                     className="rounded-lg border border-line bg-card px-2 py-1.5 text-[11.5px] outline-none focus:border-accent disabled:opacity-40"
                   >
-                    <option value="agent">Agent</option>
-                    <option value="support">Support</option>
-                    <option value="developer">Developer</option>
-                    <option value="super_admin">Super admin</option>
-                    <option value="owner">Owner</option>
+                    {ROLE_OPTIONS}
                   </select>
                 )}
                 {!c.hasAccount && (

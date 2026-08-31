@@ -321,7 +321,7 @@ function AdminShell({
       {/* ── Desktop sidebar ── */}
       <aside className="hide-when-presenting fixed inset-y-0 left-0 z-30 hidden w-60 flex-col lg:flex">
         <div className="px-5 pt-7">
-          <WorkspaceSwitcher user={user} current="admin" size={34} />
+          <WorkspaceSwitcher current="admin" size={34} />
         </div>
 
         <div className="mx-5 mt-6 border-t border-line" />
@@ -416,8 +416,8 @@ function AdminShell({
       {/* ── Mobile top bar ── */}
       <header className="hide-when-presenting sticky top-0 z-40 border-b border-line bg-white lg:hidden">
         <div className="flex h-14 items-center gap-3 px-4">
-          <WorkspaceSwitcher user={user} current="admin" size={28} />
-          <div className="ml-auto flex items-center gap-2">
+          <WorkspaceSwitcher current="admin" size={28} />
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             <a href="/dashboard" className="rounded-lg border border-line px-2.5 py-1.5 text-[12px] font-medium text-muted">Customer</a>
             <PresentButton />
             <button onClick={() => void onSignOut()} className="rounded-lg border border-line px-2.5 py-1.5 text-[12px] font-medium text-muted">Sign out</button>

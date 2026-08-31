@@ -35,6 +35,25 @@ const nextConfig: NextConfig = {
       (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "") ||
       (process.env.NODE_ENV === "production" ? "" : "http://localhost:3200"),
   },
+  /**
+   * The three personal workspaces moved out of /admin on 30 Aug.
+   *
+   * Temporary rather than permanent (308): a permanent redirect is cached by
+   * the browser forever, and if one of these ever needs to come back — or is
+   * mistyped here — nobody can undo it on their own machine without knowing to
+   * clear it. There is no SEO to protect on a signed-in internal OS, so the
+   * only thing permanence buys is a trap.
+   */
+  async redirects() {
+    return [
+      { source: "/admin/business", destination: "/company-figures", permanent: false },
+      { source: "/admin/business/:path*", destination: "/company-figures/:path*", permanent: false },
+      { source: "/admin/pre-tenancy", destination: "/pre-tenancy", permanent: false },
+      { source: "/admin/pre-tenancy/:path*", destination: "/pre-tenancy/:path*", permanent: false },
+      { source: "/admin/marketing", destination: "/marketing-hub", permanent: false },
+      { source: "/admin/marketing/:path*", destination: "/marketing-hub/:path*", permanent: false },
+    ];
+  },
 };
 
 export default nextConfig;

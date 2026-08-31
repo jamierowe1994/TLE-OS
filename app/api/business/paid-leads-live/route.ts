@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireCapability } from "@/lib/admin";
+import { requireAnyCapability } from "@/lib/admin";
 import { findById, listUsers } from "@/lib/business/users-store";
 import { getBusinessLeadsMTD, metaTokenSet, parseCampaignIds } from "@/lib/business/meta";
 import { getGhlPaidLeadsMtd } from "@/lib/business/ghl";
@@ -10,8 +10,10 @@ import { currentMonth } from "@/lib/business/format";
 //   GHL  — the CRM funnel: leads created, referred to agents (Initial Call
 //          Booked), MAs booked (MA Booked stage / won). Cached in lib/ghl.ts.
 
+// Two audiences: Susan reads the spend and CPL as business performance,
+// Francesca reads the same numbers as her own campaigns' results.
 export async function GET(req: NextRequest) {
-  if (!(await requireCapability(req, "see:business"))) {
+  if (!(await requireAnyCapability(req, ["see:business", "see:marketing"]))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

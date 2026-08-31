@@ -17,6 +17,8 @@
  * here, where they would be dead weight in every page load.
  */
 
+import { can, type Capability } from "@/lib/roles";
+
 export type NavItem = {
   href: string;
   label: string;
@@ -78,13 +80,48 @@ export const BACK: NavItem[] = [
 ];
 
 /**
- * Owner only, and rendered only once /api/auth/me says so.
+ * "Yours only" — the one extra screen a person holds beyond an agent's day.
  *
- * A separate group rather than an entry in BACK OFFICE: the back-office rail
- * is an agent's working day, and an environment switch does not belong one
- * slip away from Compliance. Admin has its own sub-rail once you are inside.
+ * ── What this replaced, and why ───────────────────────────────────────────
+ *
+ * There used to be a single owner-ish entry here, drawn whenever /api/auth/me
+ * said `canAdmin`. Five of the six roles held that, so Susan's rail and
+ * Kirstie's both offered a door marked **Admin** into James's plumbing —
+ * Permissions, Wiring, Activity, Steve, the lot. James, 30 Aug: "no one should
+ * ever see my admin section. That's not designed for anyone else to see."
+ *
+ * So the group is now derived from what somebody actually holds, and each entry
+ * is named after the WORK rather than after the permission. Susan does not open
+ * "admin" and find her figures inside it; she opens **Company figures**. Kirstie
+ * opens **Pre-tenancy**. Francesca opens **Marketing**. James opens **Admin**,
+ * and their three views are shortcuts on his rail — which is the only place
+ * anybody sees somebody else's screen named after the person.
+ *
+ * ── Why the owner does not get all four ───────────────────────────────────
+ *
+ * He would end up with the same screen listed twice: once here as "Company
+ * figures" and once inside admin as "Susan's view". One rail, one route in.
+ *
+ * ── Roles with no entry ───────────────────────────────────────────────────
+ *
+ * `developer` and `support` deliberately produce an empty list. Their screens
+ * (Wiring, People, Pre-launch) are still inside the owner's admin area and have
+ * not been lifted out. Neither role is assigned to anybody, and lib/roles.ts
+ * says not to assign one until they are — this is where the absence shows up.
  */
-export const ADMIN: NavItem[] = [{ href: "/admin", label: "Admin", icon: "shield" }];
+export type Workspace = NavItem & { needs: Capability };
+
+const WORKSPACES: Workspace[] = [
+  { href: "/admin", label: "Admin", icon: "shield", needs: "admin:open" },
+  { href: "/company-figures", label: "Company figures", icon: "trend-up", needs: "see:business" },
+  { href: "/pre-tenancy", label: "Pre-tenancy", icon: "checklist", needs: "see:pretenancy" },
+  { href: "/marketing-hub", label: "Marketing", icon: "megaphone", needs: "see:marketing" },
+];
+
+export function workspacesFor(role: string | null | undefined): Workspace[] {
+  if (can(role, "admin:open")) return WORKSPACES.filter((w) => w.href === "/admin");
+  return WORKSPACES.filter((w) => w.href !== "/admin" && can(role, w.needs));
+}
 
 /**
  * Every screen an ordinary agent can reach from the rail.

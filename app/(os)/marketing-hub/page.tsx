@@ -46,9 +46,13 @@ export default function MarketingView() {
 
   return (
     <>
+      {/* "Marketing", not "Francesca's view" — she is the one who opens this
+          now, and a screen that introduces itself in the third person reads as
+          somebody else's. "Francesca's view" is the label on JAMES's admin
+          rail, which is the only place naming the person is the useful part. */}
       <PageHeader
-        title="Francesca's view"
-        blurb="Marketing — nurture campaigns, the file store, and the assistant."
+        title="Marketing"
+        blurb="Nurture campaigns, paid leads, the file store and the assistant."
       />
 
       <p className="fade-up mt-8 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12px] leading-relaxed">

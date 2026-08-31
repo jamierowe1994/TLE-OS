@@ -384,13 +384,13 @@ export default function AssistantConsole() {
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Link
-            href="/admin/business"
+            href="/company-figures"
             className="rounded-lg border border-line/80 px-3 py-1.5 text-[12px] transition-colors hover:border-ink"
           >
             Operational knowledge →
           </Link>
           <Link
-            href="/admin/marketing"
+            href="/marketing-hub"
             className="rounded-lg border border-line/80 px-3 py-1.5 text-[12px] transition-colors hover:border-ink"
           >
             Marketing knowledge →

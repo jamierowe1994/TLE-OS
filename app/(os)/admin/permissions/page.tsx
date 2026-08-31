@@ -16,16 +16,28 @@ import { Pill } from "@/components/Wire";
 type RoleDef = { id: string; label: string; blurb: string; can: string[] };
 type Person = { id: string; email: string; name: string; role: string; lastSeenAt: string | null };
 
+/* `see:pretenancy` was missing here, so Kirstie's own capability rendered as a
+   raw string on the screen that exists to explain them. Every capability in
+   lib/roles.ts now has a line. */
 const CAP_LABEL: Record<string, string> = {
-  "admin:open": "Open admin",
+  "admin:open": "Open MY admin area",
+  "staff:internal": "Internal staff, not a partner agent",
   "see:people": "See people",
-  "see:business": "Business figures",
+  "see:business": "Company figures",
+  "see:marketing": "Marketing",
   "see:wiring": "Wiring & connections",
   "see:reports": "Reported problems",
+  "see:pretenancy": "Pre-tenancy board",
   "see:everything": "All data, not just their own",
   "manage:people": "Invite, reset, view as",
   "manage:roles": "Hand out roles",
 };
+
+/* `developer`'s capabilities are real but its one screen (Wiring) is still
+   inside the owner's admin area, which nobody else can open. Giving it to a
+   contractor today signs them into an OS that shows them nothing. Said on the
+   screen where the decision is made, rather than only in lib/roles.ts. */
+const NO_SCREEN_YET = new Set(["developer"]);
 
 export default function Permissions() {
   const [d, setD] = useState<{ roles: RoleDef[]; people: Person[] } | null>(null);
@@ -122,6 +134,13 @@ export default function Permissions() {
             <li key={r.id} className="rounded-xl border border-line/70 p-3.5">
               <p className="text-[13px] font-semibold">{r.label}</p>
               <p className="mt-0.5 text-[11.5px] leading-relaxed text-muted">{r.blurb}</p>
+              {NO_SCREEN_YET.has(r.id) ? (
+                <p className="mt-2 rounded-lg border border-accent-dark/40 bg-accent-soft/40 px-2.5 py-1.5 text-[11px] leading-relaxed">
+                  <span className="font-semibold">Don&apos;t hand this out yet.</span> The
+                  capabilities work, but the screens they open still live in your admin area,
+                  which nobody else can reach. Lift them out first.
+                </p>
+              ) : null}
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {r.can.length === 0 ? (
                   <span className="text-[11px] text-muted">Their own book only.</span>

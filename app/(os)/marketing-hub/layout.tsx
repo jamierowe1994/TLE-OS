@@ -1,6 +1,7 @@
 "use client";
 
 import WorkspaceRail from "@/components/WorkspaceRail";
+import OwnWorkspace from "@/components/OwnWorkspace";
 
 /**
  * Francesca's view, with the same rail as everybody else.
@@ -11,9 +12,11 @@ import WorkspaceRail from "@/components/WorkspaceRail";
  * same shape Kirstie's and Susan's have. So it takes the window, hides the
  * admin rail, and puts up its own.
  *
- * That is also what makes it hand-over-able. When Francesca gets a login this
- * becomes what she lands on, unchanged; James's admin rail simply is not there
- * for her, and the "Back to admin" pill is the only thing she will not see.
+ * It is no longer nested in his admin either: it was /admin/marketing, and the
+ * capability it demanded was `see:business`, so the only way to hand Francesca
+ * marketing was to hand her GCI, arrears and every partner's earnings with it.
+ * There is a `marketing` role and a `see:marketing` capability now, and this is
+ * the whole of what they open.
  *
  * ── The frame is no longer hers alone ─────────────────────────────────────
  *
@@ -27,27 +30,34 @@ import WorkspaceRail from "@/components/WorkspaceRail";
 const GROUPS = [
   {
     items: [
-      { href: "/admin/marketing", label: "Overview", exact: true },
-      { href: "/admin/marketing/campaigns", label: "Nurture campaigns" },
-      { href: "/admin/marketing/paid-leads", label: "Paid leads & social" },
+      { href: "/marketing-hub", label: "Overview", exact: true },
+      { href: "/marketing-hub/campaigns", label: "Nurture campaigns" },
+      { href: "/marketing-hub/paid-leads", label: "Paid leads & social" },
     ],
   },
   {
     title: "Content",
     rule: true,
     items: [
-      { href: "/admin/marketing/templates", label: "Email templates" },
-      { href: "/admin/marketing/storage", label: "File storage" },
-      { href: "/admin/marketing/assistant", label: "The assistant" },
+      { href: "/marketing-hub/templates", label: "Email templates" },
+      { href: "/marketing-hub/storage", label: "File storage" },
+      { href: "/marketing-hub/assistant", label: "The assistant" },
     ],
   },
 ];
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex gap-5">
-      <WorkspaceRail label="Marketing" groups={GROUPS} />
-      <div className="min-w-0 flex-1 py-3">{children}</div>
-    </div>
+    <OwnWorkspace needs="see:marketing">
+      {/* No padding of its own, exactly as before: the workspace strips the
+          shell's and this rail has always sat flush to the window edge. */}
+      <div className="flex gap-5">
+        <WorkspaceRail label="Marketing" groups={GROUPS} />
+        {/* pb-20 leaves room for the workspace's floating back pill. This is
+            the one of the three screens that scrolls normally, so without it
+            the last paragraph on a long page ends underneath the pill. */}
+        <div className="min-w-0 flex-1 py-3 pb-20">{children}</div>
+      </div>
+    </OwnWorkspace>
   );
 }

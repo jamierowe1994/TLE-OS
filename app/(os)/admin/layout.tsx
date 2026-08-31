@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import WorkspaceRail from "@/components/WorkspaceRail";
+import { workspacesFor } from "@/lib/nav";
 import { can, type Capability } from "@/lib/roles";
 
 /**
@@ -69,13 +70,19 @@ const GROUPS: Array<{
   },
   {
     /* One entry per person, because that is genuinely how these differ: each is
-       somebody's whole working picture, not a feature of the OS. */
+       somebody's whole working picture, not a feature of the OS.
+
+       They no longer LIVE here. Each is its own top-level workspace now — a
+       person opening their own screen should not be walking through a door
+       marked Admin to reach it, and Susan reading /admin/business in the
+       address bar was the same problem written down. These are shortcuts into
+       somebody else's workspace, which is a different thing from owning it. */
     title: "Views",
     rule: true,
     items: [
-      { href: "/admin/business", label: "Susan's view", needs: "see:business" },
-      { href: "/admin/marketing", label: "Francesca's view", needs: "see:business" },
-      { href: "/admin/pre-tenancy", label: "Kirstie's view", needs: "see:pretenancy" },
+      { href: "/company-figures", label: "Susan's view", needs: "see:business" },
+      { href: "/marketing-hub", label: "Francesca's view", needs: "see:marketing" },
+      { href: "/pre-tenancy", label: "Kirstie's view", needs: "see:pretenancy" },
     ],
   },
   {
@@ -111,22 +118,20 @@ const GROUPS: Array<{
 ];
 
 /**
- * A person's view takes the WHOLE window.
+ * A person's view takes the WHOLE window — and it no longer does so from here.
  *
- * Susan's, Francesca's and Kirstie's are each somebody's entire working screen
- * with its own left rail. Mine on top of theirs is two rails fighting, and on
- * Susan's it sat over her tabs so they could not be clicked at all.
+ * This layout used to detect the three view routes and unmount its own rail for
+ * them, because they were nested inside /admin and would otherwise have had two
+ * rails fighting. They are top-level workspaces now, so this layout never
+ * mounts on them at all and the whole-window treatment lives in
+ * <OwnWorkspace/>, which each of the three wraps itself in.
  *
- * Derived from the Views group rather than written out again, and decided HERE
- * rather than in each page. Three pages had to remember to hide it and one
- * didn't — which is not a mistake anybody makes on purpose, it is what happens
- * when a rule lives in three places. Add a fourth view to the group above and
- * it inherits this for free.
+ * That is the better place for it in any case: the rule was "a workspace owns
+ * the window", and it now sits with the workspaces rather than with the one
+ * neighbour that happened to need to get out of their way.
  */
-const VIEW_PREFIXES = GROUPS.find((g) => g.title === "Views")!.items.map((i) => i.href);
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const path = usePathname();
   const router = useRouter();
 
   /* Undefined until we know. Same rule the agent rail follows for the Admin
@@ -158,42 +163,28 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }, [role]);
 
-  /* Somebody holding one screen should land ON it. Kirstie clicking Admin
-     would otherwise arrive at an Overview she cannot read, with a rail
-     offering her exactly one thing — a door that opens onto a corridor. */
-  const firstUsable = groups[0]?.items[0]?.href;
+  /**
+   * The admin area is the OWNER'S, and this is the last line that says so.
+   *
+   * The rail already only draws what you hold, and every page and API route
+   * here checks for itself — but "the menu is empty" is not the same statement
+   * as "this is not yours", and somebody who reaches /admin by typing it, or by
+   * following an old bookmark, deserves the second one. Their own workspace is
+   * one click away rather than a dead end.
+   *
+   * Decided on the ACTOR (via /api/auth/me), so an owner viewing as somebody
+   * else keeps admin and can always get back out to stop.
+   */
   useEffect(() => {
-    if (role === undefined || path !== "/admin") return;
-    if (can(role, "see:people")) return; // the Overview is theirs to read
-    if (firstUsable && firstUsable !== "/admin") router.replace(firstUsable);
-  }, [role, path, firstUsable, router]);
+    if (role === undefined || can(role, "admin:open")) return;
+    const mine = workspacesFor(role)[0]?.href;
+    router.replace(mine ?? "/dashboard");
+  }, [role, router]);
 
-  const inSomeonesView = VIEW_PREFIXES.some((h) => path.startsWith(h));
-
-  /* Not hidden with CSS — not rendered. A hidden rail still traps focus and
-     still answers a screen reader, and "why does tab go somewhere invisible"
-     is a horrible afternoon. */
-  if (inSomeonesView) {
+  if (role !== undefined && !can(role, "admin:open")) {
     return (
-      <div className="admin-scope">
-        {/* ALL the padding, not just the left. These pages declare
-            `min-h-screen` as though they own the window; leaving the shell's
-            `py-8` on meant they were a full screen tall inside a container
-            inset from the top and bottom, and therefore always overflowed by
-            exactly that padding. The horizontal-only reset was written when
-            this selector matched nothing, so it never had to be right. */}
-        <style>{`
-          [data-os-sidebar] { display: none !important; }
-          [data-os-content] { padding: 0 !important; margin: 0 !important; }
-        `}</style>
-        <button
-          type="button"
-          onClick={() => router.push("/admin")}
-          className="fixed left-4 top-4 z-[80] rounded-full border border-line/80 bg-panel px-3.5 py-1.5 text-[12px] shadow-[0_6px_18px_-8px_rgba(0,0,0,0.35)]"
-        >
-          ← Back to my view
-        </button>
-        {children}
+      <div className="admin-scope py-10 text-center">
+        <p className="text-[13px] text-muted">Taking you to your own screen…</p>
       </div>
     );
   }

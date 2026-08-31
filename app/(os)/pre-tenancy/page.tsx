@@ -945,7 +945,7 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
                 it in as another stage tab would have meant either sorting it
                 wrongly or sorting the whole board wrongly. */}
             <Link
-              href="/admin/pre-tenancy/plc"
+              href="/pre-tenancy/plc"
               className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30"
             >
               <span className="text-accent">

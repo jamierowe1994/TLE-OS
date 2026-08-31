@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
 import { readTheme, type ThemeChoice } from "@/lib/theme";
-import { FRONT, BACK, ADMIN, type NavItem } from "@/lib/nav";
+import { FRONT, BACK, workspacesFor, type NavItem } from "@/lib/nav";
 
 /**
  * The OS chrome. The rail is its own encapsulated card — a thin outline the
@@ -107,23 +107,34 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [accent, setAccent] = useState("");
   const [theme, setTheme] = useState<ThemeChoice>("auto");
-  /* Owner-only nav. Decided on the ACTOR, so an owner viewing as an agent
-     keeps the Admin link and can always get back to stop. */
-  const [isOwner, setIsOwner] = useState(false);
+  /* The one extra screen this person holds, if any — James gets Admin, Susan
+     gets Company figures, Kirstie Pre-tenancy, Francesca Marketing, an agent
+     nothing. Decided on the ACTOR's role, so an owner viewing as an agent keeps
+     his own entry and can always get back to stop.
+
+     A role rather than the old `canAdmin` boolean: that boolean was true for
+     five of the six roles and drew a link into James's admin for every one of
+     them. Undefined until we know — see the render below. */
+  const [role, setRole] = useState<string | null | undefined>(undefined);
   const [me, setMe] = useState<{ name?: string; email?: string; photo?: string | null } | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/me")
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: { canAdmin?: boolean; user?: { name?: string; email?: string; photo?: string | null } } | null) => {
-        setIsOwner(Boolean(j?.canAdmin));
+      .then((j: { role?: string | null; user?: { name?: string; email?: string; photo?: string | null } } | null) => {
+        setRole(j?.role ?? null);
         /* The SUBJECT, not the actor — while viewing as somebody, the foot
            should show whose screen you are looking at, which is the whole
            point of the red banner above it agreeing. */
         setMe(j?.user ?? null);
       })
-      .catch(() => {});
+      .catch(() => setRole(null));
   }, []);
+
+  /* Empty until /api/auth/me answers, so nothing is drawn optimistically and
+     then taken away — which reads as a glitch to everyone and as a demotion to
+     the person it happens to. */
+  const mine = role === undefined ? [] : workspacesFor(role);
 
   useEffect(() => {
     const saved = localStorage.getItem("os-accent") ?? "";  // instant paint; the account copy syncs via usePref on the profile
@@ -269,9 +280,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             />
           ))}
 
-          {/* Only for owners, and only once we know. Rendering it optimistically
-              and hiding it later would flash an Admin link at every agent. */}
-          {isOwner && (
+          {/* Only what this person actually holds, and only once we know.
+              Rendering it optimistically and hiding it later would flash an
+              Admin link at every agent. */}
+          {mine.length > 0 && (
             <>
               <div className="mb-1 mt-3 border-t border-line/70 pt-3">
                 <p
@@ -282,7 +294,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                   Yours only
                 </p>
               </div>
-              {ADMIN.map((item) => (
+              {mine.map((item) => (
                 <NavLink
                   key={item.href}
                   item={item}

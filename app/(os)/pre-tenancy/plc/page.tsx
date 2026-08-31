@@ -171,7 +171,7 @@ export default function PlcQueuePage() {
       )}
 
       <p className="mt-6 text-xs text-muted">
-        <Link href="/admin/pre-tenancy" className="underline">
+        <Link href="/pre-tenancy" className="underline">
           Back to the board
         </Link>
       </p>

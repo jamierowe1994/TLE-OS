@@ -117,9 +117,11 @@ export interface PreTenancyDeal {
 }
 
 export async function GET(req: NextRequest) {
-  /* The portal allowed EITHER a PRETENANCY_EMAILS address or an admin. Here
-     it is one question, asked of the role: owner, super_admin and support hold
-     see:pretenancy, and an env-var email list is not a permission system. */
+  /* The portal allowed EITHER a PRETENANCY_EMAILS address or an admin. Here it
+     is one question, asked of the role: owner, support and pretenancy hold
+     see:pretenancy, and an env-var email list is not a permission system.
+     Susan no longer does — she could look into Kirstie's board and never had
+     cause to; her move-in numbers are a tab on her own screen. */
   if (!(await requireCapability(req, "see:pretenancy"))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

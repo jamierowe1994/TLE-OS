@@ -124,3 +124,23 @@ export async function requireCapability(
   const { actor } = await whoIs(req);
   return actor && can(actor.role, capability) ? actor : null;
 }
+
+/**
+ * The signed-in person, if they hold ANY of these capabilities.
+ *
+ * For the handful of routes that genuinely serve two jobs. Paid leads and
+ * organic social are read by Susan as business performance and by Francesca as
+ * her own work; gating them on `see:business` alone meant the only way to give
+ * Francesca her Paid leads screen was to give her GCI and arrears too.
+ *
+ * Deliberately a short list rather than a "staff can read it" shrug — every
+ * caller names the two audiences it means, so widening one is a decision
+ * somebody makes on purpose.
+ */
+export async function requireAnyCapability(
+  req: NextRequest,
+  capabilities: Capability[]
+): Promise<OsUser | null> {
+  const { actor } = await whoIs(req);
+  return actor && capabilities.some((c) => can(actor.role, c)) ? actor : null;
+}

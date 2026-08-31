@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
 
   /* Minting a link. STAFF ONLY - this is the one operation that creates a
      credential, so it is the one that needs a person behind it. */
-  if (!(await requireCapability(req, "admin:open"))) {
+  if (!(await requireCapability(req, "staff:internal"))) {
     return new NextResponse(null, { status: 404 });
   }
   if (!hasDb()) {
