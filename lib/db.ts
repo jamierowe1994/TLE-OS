@@ -833,7 +833,7 @@ CREATE INDEX IF NOT EXISTS os_esign_watch_ref ON os_esign_watch (ref);
 
 -- Emails written now and sent later.
 --
--- The pre-appraisal is the one email in the run that is BETTER late: two days
+-- The pre-appraisal is the one email in the run that is BETTER late: the day
 -- before the visit, when it is close enough to matter and there is still time
 -- to dig out the EPC. Sending it in the same hour as the booking confirmation
 -- means two emails in an afternoon and one of them gets skimmed.

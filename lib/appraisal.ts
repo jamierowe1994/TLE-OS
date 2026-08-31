@@ -46,7 +46,7 @@ export const APPRAISAL_STEPS: AppraisalStep[] = [
     icon: "mail",
     title: "Before the visit",
     detail:
-      "What to expect on the day — who's coming, how long it takes, what to have to hand, and their own page with your face on it. Best sent a couple of days out rather than now: close enough to be remembered, far enough to dig out the EPC.",
+      "What to expect on the day — who's coming, how long it takes, what to have to hand, and their own page with your face on it. Best sent the day before rather than now - close enough that it is still in mind when you knock.",
     cta: "Send the pre-appraisal",
   },
   {
@@ -157,14 +157,30 @@ export type AppraisalCase = {
   /**
    * The pre-appraisal, queued rather than sent.
    *
-   * It is the one email in the run that is BETTER late: two days out, when
-   * the visit is close enough to matter and there is still time to find the
-   * EPC. So the step offers to schedule it, and this is the date it goes.
+   * It is the one email in the run that is BETTER late: the day before, when
+   * the visit is close enough to still be in mind when the agent knocks. So
+   * the step offers to schedule it, and this is the date it goes.
+   * See PRE_APPRAISAL_LEAD_DAYS in lib/appraisal-email.
    */
   preScheduledFor: string | null;
   preScheduleId: string | null;
-  /** What it was valued at, per calendar month. */
+  /**
+   * @deprecated READ-ONLY FALLBACK. The valuation lives on the appraisal record
+   * (os_market_appraisals.valuation), not here.
+   *
+   * There were two of these and they never spoke: a figure typed into the lead
+   * drawer landed in os_case_state, while the appraisal file and the
+   * post-appraisal deck read os_market_appraisals — so the same property could
+   * show 1,300 on one screen and "No figure yet" on the other.
+   *
+   * AppraisalTrack now reads and writes the appraisal record directly and only
+   * falls back to these when it holds nothing, so rows written before 31 Aug
+   * 2026 still display. NOTHING SHOULD WRITE THEM. Adding a writer back
+   * recreates the split.
+   */
   valuation: number | null;
+  /** @deprecated Read-only fallback — see valuation above. Now fee_pct on the
+   *  appraisal record. */
   feePercent: number | null;
   /**
    * What the landlord wants for it, which is a different number from the

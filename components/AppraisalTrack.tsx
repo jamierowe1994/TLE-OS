@@ -265,6 +265,89 @@ export default function AppraisalTrack({
   const [deckError, setDeckError] = useState<string | null>(null);
   const [minting, setMinting] = useState(false);
 
+  /**
+   * THE FIGURE LIVES ON THE APPRAISAL, NOT IN THIS CASE.
+   *
+   * There were two valuation fields in the OS and they never spoke: this one,
+   * saved into os_case_state against the LEAD, and os_market_appraisals.valuation,
+   * which is what the appraisal file shows and what the post-appraisal deck
+   * quotes. An agent typing 1,300 here left the appraisal page still reading
+   * "No figure yet" for the same property, and the deck could not be built.
+   *
+   * Fixed by DERIVING rather than syncing — the same call this repo already
+   * made for the address, and for the same reason: a write-through in both
+   * directions has to succeed every time and never be skipped, and the day it
+   * is skipped the two numbers disagree with nothing to say which is right.
+   *
+   * So there is one home, the appraisal record, and these two inputs read and
+   * write it directly. `c.valuation` / `c.feePercent` are still READ as a
+   * fallback, because rows written before this change hold real figures an
+   * agent typed and losing them would be worse than the split was.
+   *
+   * The id is derivable: booking POSTs `leadId: lead.id` and the store keys the
+   * appraisal `lead-<leadId>`, so the lead this panel is on names it exactly.
+   */
+  const appraisalId = recordId ? `lead-${recordId}` : null;
+  const [figure, setFigure] = useState<{ valuation: number | null; feePct: number | null } | null>(
+    null
+  );
+  const [figureError, setFigureError] = useState<string | null>(null);
+  /* Null means "not being edited" — an empty string is a real, deliberate
+     clear, and collapsing the two would make backspacing the box do nothing. */
+  const [vDraft, setVDraft] = useState<string | null>(null);
+  const [fDraft, setFDraft] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!appraisalId) return;
+    let live = true;
+    fetch("/api/appraisals", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!live) return;
+        const found = (j?.appraisals ?? []).find(
+          (m: { id: string }) => m.id === appraisalId
+        ) as { valuation: number | null; feePct: number | null } | undefined;
+        if (found) setFigure({ valuation: found.valuation, feePct: found.feePct });
+      })
+      .catch(() => {
+        /* Unreadable is not zero. Leaving `figure` null falls back to whatever
+           the case already held, which is the old behaviour rather than a
+           blank box over a number somebody typed. */
+      });
+    return () => {
+      live = false;
+    };
+  }, [appraisalId]);
+
+  /** What to SHOW: the appraisal's figure, else the legacy one on the case. */
+  const shownValuation = figure ? figure.valuation : (c.valuation ?? null);
+  const shownFeePct = figure ? figure.feePct : (c.feePercent ?? null);
+
+  /**
+   * Saved on BLUR, not per keystroke — this writes to a database rather than to
+   * local state, and "1", "13", "130", "1300" is four rows of history for one
+   * number. The local value moves immediately either way.
+   */
+  async function saveFigure(patchBody: { valuation?: number | null; feePct?: number | null }) {
+    if (!appraisalId) return;
+    setFigureError(null);
+    try {
+      const r = await fetch("/api/appraisals", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: appraisalId, ...patchBody }),
+      });
+      const j = (await r.json()) as {
+        appraisal?: { valuation: number | null; feePct: number | null };
+        error?: string;
+      };
+      if (j.appraisal) setFigure({ valuation: j.appraisal.valuation, feePct: j.appraisal.feePct });
+      else setFigureError(j.error ?? "That figure didn't save.");
+    } catch (e) {
+      setFigureError((e as Error).message);
+    }
+  }
+
   const at = stageIndex(c.state);
   const step = isOutcome(c.state) ? null : APPRAISAL_STEPS[at];
   const flag = needsAttention(c);
@@ -786,11 +869,19 @@ export default function AppraisalTrack({
               {c.state === "post" && (
                 <div className="mt-3 grid min-h-0 flex-1 grid-rows-[auto_1fr] gap-3 overflow-y-auto pr-1">
                   <div className="grid gap-3 sm:grid-cols-4">
+                    {/* Draft while typing, saved on blur. The draft is what
+                        makes the box feel local while the number it writes to
+                        lives on the appraisal record — see saveFigure. */}
                     <Field label="Valued at (pcm)">
                       <input
                         inputMode="numeric"
-                        value={c.valuation ?? ""}
-                        onChange={(e) => patch({ valuation: num(e.target.value) })}
+                        value={vDraft ?? (shownValuation != null ? String(shownValuation) : "")}
+                        onChange={(e) => setVDraft(e.target.value)}
+                        onBlur={() => {
+                          if (vDraft == null) return;
+                          void saveFigure({ valuation: num(vDraft) });
+                          setVDraft(null);
+                        }}
                         placeholder="1,250"
                         className={INPUT}
                       />
@@ -806,14 +897,15 @@ export default function AppraisalTrack({
                     <Field label="Fee quoted (%)">
                       <input
                         inputMode="decimal"
-                        value={c.feePercent ?? ""}
-                        onChange={(e) =>
-                          patch({
-                            feePercent: e.target.value
-                              ? Number(e.target.value.replace(/[^\d.]/g, ""))
-                              : null,
-                          })
-                        }
+                        value={fDraft ?? (shownFeePct != null ? String(shownFeePct) : "")}
+                        onChange={(e) => setFDraft(e.target.value)}
+                        onBlur={() => {
+                          if (fDraft == null) return;
+                          void saveFigure({
+                            feePct: fDraft ? Number(fDraft.replace(/[^\d.]/g, "")) : null,
+                          });
+                          setFDraft(null);
+                        }}
                         placeholder="10"
                         className={INPUT}
                       />
@@ -886,21 +978,21 @@ export default function AppraisalTrack({
 
         {/* RIGHT — the record, and everything anyone has done about it */}
         <div className="flex min-h-0 flex-col overflow-hidden p-5">
-          {(c.valuation != null || c.feePercent != null || c.bookedFor) && (
+          {(shownValuation != null || shownFeePct != null || c.bookedFor) && (
             <dl className="mb-3 flex flex-wrap gap-x-6 gap-y-1 text-[11.5px] text-muted">
               {c.bookedFor && (
                 <span>
                   Booked <span className="text-ink">{c.bookedFor}</span>
                 </span>
               )}
-              {c.valuation != null && (
+              {shownValuation != null && (
                 <span>
-                  Valued <span className="text-ink">{money(c.valuation)} pcm</span>
+                  Valued <span className="text-ink">{money(shownValuation)} pcm</span>
                 </span>
               )}
-              {c.feePercent != null && (
+              {shownFeePct != null && (
                 <span>
-                  Fee <span className="text-ink">{c.feePercent}%</span>
+                  Fee <span className="text-ink">{shownFeePct}%</span>
                 </span>
               )}
             </dl>
@@ -999,9 +1091,9 @@ export default function AppraisalTrack({
               : composing === "pre"
               ? bodyFor({ ...invite, presentationUrl: deck?.url ?? null })
               : postBodyFor(invite, {
-                  valuation: c.valuation,
+                  valuation: shownValuation,
                   askingRent: c.askingRent,
-                  feePercent: c.feePercent,
+                  feePercent: shownFeePct,
                   availableFrom: c.availableFrom,
                   summary: c.summary || c.condition,
                 })
