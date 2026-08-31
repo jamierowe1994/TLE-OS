@@ -449,6 +449,43 @@ CREATE INDEX IF NOT EXISTS os_listing_capture_letagreed_idx
 -- Explicit rather than derived, because the sweep costs Homesearch calls and a
 -- rule like <every sector we have ever appraised in> grows without anybody
 -- deciding to. Seeded from appraisal postcodes, then edited by hand.
+-- SIGNED CONTRACTS. The OS is the store of record; REX is a copy.
+--
+-- James, 31 Aug: "the main storage hub is OS, and then we push it to REX as a
+-- backup." That ordering is load-bearing and it is why rex_pushed_at is
+-- nullable rather than the row waiting on it -- the file is safe in R2 the
+-- moment this row exists, and a REX outage costs us a backup rather than the
+-- contract.
+--
+-- THE URL IS NOT STORED, and that is not an oversight. DocuSeal's document
+-- URLs expire after 40 minutes; their own docs say "do not store document URLs
+-- in your database". We keep the submission id and fetch a fresh URL whenever
+-- one is needed, and the bytes themselves live in R2 under r2_key.
+--
+-- submitter_id is the PRIMARY KEY because webhooks retry. Two deliveries of
+-- the same completion must produce one document, not two.
+CREATE TABLE IF NOT EXISTS os_signed_documents (
+  submitter_id   BIGINT PRIMARY KEY,
+  submission_id  BIGINT,
+  appraisal_id   TEXT NOT NULL DEFAULT '',
+  template_name  TEXT NOT NULL DEFAULT '',
+  signer_name    TEXT NOT NULL DEFAULT '',
+  signer_email   TEXT NOT NULL DEFAULT '',
+  r2_key         TEXT NOT NULL DEFAULT '',
+  bytes          INTEGER,
+  completed_at   TIMESTAMPTZ,
+  stored_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- The backup. Null means not copied yet; the error says why it failed, so a
+  -- silent gap and a known failure never look the same.
+  rex_pushed_at  TIMESTAMPTZ,
+  rex_document_id TEXT,
+  rex_error      TEXT
+);
+CREATE INDEX IF NOT EXISTS os_signed_documents_appraisal_idx
+  ON os_signed_documents (appraisal_id, stored_at DESC);
+CREATE INDEX IF NOT EXISTS os_signed_documents_unpushed_idx
+  ON os_signed_documents (rex_pushed_at) WHERE rex_pushed_at IS NULL;
+
 CREATE TABLE IF NOT EXISTS os_capture_sectors (
   sector      TEXT PRIMARY KEY,
   added_by    TEXT NOT NULL DEFAULT '',
