@@ -1,8 +1,27 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Railway deploys via standalone output for a smaller image
-  output: "standalone",
+  /**
+   * `output: "standalone"` USED to be here, and was removed on 31 Aug because
+   * nothing was using it.
+   *
+   * Standalone packs a minimal server into `.next/standalone`, and running it
+   * is a different start command. Railway starts this service with the
+   * package.json `start` script, which is `next start` - so the standalone
+   * bundle was built on every deploy, never run, and Next printed a warning on
+   * every boot saying exactly that.
+   *
+   * Two ways to end the disagreement: run the standalone server, or stop
+   * asking for it. James picked the second, and it is the right trade here -
+   * the win was a smaller image and a slightly faster boot, and the cost of
+   * getting it wrong is that `next build` does NOT copy `.next/static` or
+   * `public/` into the bundle, so a switch that missed that step serves every
+   * page with no CSS and no images at all.
+   *
+   * If it is ever worth revisiting: add a build step copying those two
+   * directories in, change `start` to `node .next/standalone/server.js`, and
+   * prove the stylesheets load before it goes anywhere near the live site.
+   */
   // A build and a dev server share .next by default, so verifying a change
   // with `next build` while `next dev` is up deletes the chunks the running
   // preview is serving — the page keeps rendering but silently stops

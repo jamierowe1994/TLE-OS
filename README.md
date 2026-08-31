@@ -34,8 +34,8 @@ With no `OS_ACCESS_CODE` set, the gate stands open (local dev).
 4. **Settings → Networking → Generate Domain** for a `*.up.railway.app` URL.
 5. Send Susan and Howard the URL and the code. Done — agents never see it.
 
-The build needs no other configuration: standalone output is already set in
-`next.config.ts`, and Railway detects Next.js on its own.
+The build needs no other configuration: Railway detects Next.js on its own and
+starts it with the `start` script.
 
 ## Phase plan
 

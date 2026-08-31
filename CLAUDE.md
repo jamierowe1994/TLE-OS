@@ -6,7 +6,8 @@ the same day. Client: Susan Liles. Ops: Howard. Pre-tenancy: Kirstie Mulholland.
 
 Next 15 App Router · React 19 · TS · Tailwind v4 · Postgres via `pg` · scrypt auth in `lib/auth.ts`
 · S3/R2 via `@aws-sdk/client-s3` + presigned URLs · `qrcode`
-Deploy: **Railway**, `output: "standalone"`.
+Deploy: **Railway**, started with `next start` (NOT standalone output — removed 31 Aug,
+see the note in `next.config.ts` before reinstating it).
 
 **Launch: 14 October 2026.** Scope end to end — leads → listings → viewings → applications →
 compliance → portfolio → finance.
