@@ -83,6 +83,36 @@ export default function DeckRail({
   const [sent, setSent] = useState<SentDeck[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [minting, setMinting] = useState(false);
+  /* The internal briefing. A BUTTON, not a side effect of minting: nothing in
+     this OS sends without somebody pressing send, and that rule is worth
+     keeping even for an email that can only reach a colleague. */
+  const [briefing, setBriefing] = useState<string | null>(null);
+  const [briefingBusy, setBriefingBusy] = useState(false);
+
+  async function tellTheAgent() {
+    setBriefingBusy(true);
+    setBriefing(null);
+    try {
+      const r = await fetch("/api/appraisals/briefing", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: appraisalId }),
+      });
+      const j = (await r.json()) as {
+        ok?: boolean;
+        to?: string;
+        note?: string | null;
+        error?: string;
+      };
+      setBriefing(
+        j.ok ? [`Sent to ${j.to}.`, j.note].filter(Boolean).join(" ") : (j.error ?? "Didn't send.")
+      );
+    } catch (e) {
+      setBriefing((e as Error).message);
+    } finally {
+      setBriefingBusy(false);
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -222,7 +252,19 @@ export default function DeckRail({
               <a href={pre.url} target="_blank" rel="noreferrer" className={ghost}>
                 Review the deck
               </a>
+              {/* THE HALF OF THE FLOW THAT CAN ACTUALLY SEND. The landlord's
+                  copy is blocked at the transport; this goes to a TLE address,
+                  which is the one thing lib/email-policy lets through. */}
+              <button
+                type="button"
+                onClick={tellTheAgent}
+                disabled={briefingBusy}
+                className={`${ghost} disabled:opacity-60`}
+              >
+                {briefingBusy ? "Sending…" : "Email the agent"}
+              </button>
             </div>
+            {briefing && <p className="mt-2 text-[11px] text-muted">{briefing}</p>}
             {/* THE RECORDER MOVES HERE from the lead drawer, where it only
                 appeared inside the email composer and only after a deck had
                 been minted — so in practice nobody found it. This is the
