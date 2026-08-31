@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { hasDb } from "@/lib/db";
 import {
   createPassport,
@@ -9,6 +10,7 @@ import {
   EMPTY_PASSPORT,
   type PassportData,
 } from "@/lib/passport";
+import { passportQuestions, setPassportAnswer, valuesFor } from "@/lib/attributes";
 
 /**
  * The tenant's own passport, reached by the link in their email.
@@ -44,7 +46,18 @@ export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token") ?? "";
   const rec = await getPassport(token).catch(() => null);
   if (!rec) return NextResponse.json({ error: "Not found." }, { status: 404 });
-  return NextResponse.json({ passport: rec });
+
+  /* The extra questions the agent who issued this passport asked for, plus
+     whatever the tenant has already answered. Scoped by the agent id on the
+     ROW, never by anything the caller sent - that is what stops a token being
+     used to read another agent's questions, and what makes an agent with none
+     add nothing at all. */
+  const [questions, answers] = await Promise.all([
+    passportQuestions(rec.agentId).catch(() => []),
+    rec.agentId ? valuesFor(rec.agentId, token).catch(() => ({})) : Promise.resolve({}),
+  ]);
+
+  return NextResponse.json({ passport: rec, questions, answers });
 }
 
 export async function PUT(req: NextRequest) {
@@ -52,7 +65,11 @@ export async function PUT(req: NextRequest) {
   const existing = await getPassport(token).catch(() => null);
   if (!existing) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
-  const body = (await req.json().catch(() => null)) as { data?: Partial<PassportData> } | null;
+  const body = (await req.json().catch(() => null)) as {
+    data?: Partial<PassportData>;
+    /** Answers to the issuing agent's own questions, keyed by definition id. */
+    answers?: Record<string, string>;
+  } | null;
   if (!body?.data) return NextResponse.json({ error: "Expected a passport." }, { status: 400 });
 
   /* Only known fields are kept. Anything else in the payload is dropped rather
@@ -67,7 +84,24 @@ export async function PUT(req: NextRequest) {
   }
 
   try {
-    return NextResponse.json({ passport: await savePassport(token, clean) });
+    const saved = await savePassport(token, clean);
+
+    /* The custom answers live in os_attr_values against this token, not in
+       the passport's JSONB. Two reasons: the whitelist above exists precisely
+       so invented keys cannot be written into that blob, and an answer whose
+       question is later deleted should go with it, which the values table
+       already does. `setPassportAnswer` re-checks each definition belongs to
+       this passport's agent, so a token cannot write onto anybody else's. */
+    if (body.answers && existing.agentId) {
+      const agentId = existing.agentId;
+      await Promise.all(
+        Object.entries(body.answers)
+          .filter(([, v]) => typeof v === "string")
+          .map(([defId, v]) => setPassportAnswer(agentId, defId, token, v))
+      );
+    }
+
+    return NextResponse.json({ passport: saved });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "That didn't save." },
@@ -108,6 +142,10 @@ export async function POST(req: NextRequest) {
     name: body.name?.trim(),
     email: body.email?.trim(),
     contactId: body.contactId ?? null,
+    /* Whoever minted it owns it, and their own custom questions are what the
+       tenant will be asked. Taken from the session rather than the body: an
+       agent id a caller can name is an agent id a caller can borrow. */
+    agentId: verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value),
   });
   return NextResponse.json({ passport: rec, path: `/tenant/passport/${rec.token}` });
 }

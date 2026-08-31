@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   if (!id) return NextResponse.json({ ok: false, error: "Not signed in." }, { status: 401 });
   const b = (await req.json().catch(() => ({}))) as {
     entity?: string; label?: string; kind?: string; options?: string[];
-    defId?: string; record?: string; value?: string;
+    defId?: string; record?: string; value?: string; required?: boolean;
   };
 
   /* Two jobs on one route: defining a field, and filling one in. Split by which
@@ -54,6 +54,8 @@ export async function POST(req: NextRequest) {
     label: b.label,
     kind,
     options: (b.options ?? []).map((o) => o.trim()).filter(Boolean),
+    /* addDef ignores this for every entity except tenant_passport. */
+    required: b.required === true,
   });
   return NextResponse.json({ ok: true });
 }

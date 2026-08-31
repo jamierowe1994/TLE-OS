@@ -1,5 +1,7 @@
 import PassportForm from "@/components/PassportForm";
 import { getPassport } from "@/lib/passport";
+import { passportQuestions, valuesFor } from "@/lib/attributes";
+import { findUserById } from "@/lib/users";
 
 /**
  * The passport, reached by the link in the tenant's email.
@@ -35,12 +37,35 @@ export default async function Page({ params }: { params: Promise<{ token: string
     );
   }
 
+  /**
+   * The issuing agent's own extra questions, read here rather than in the
+   * browser.
+   *
+   * Server-side for the same reason the passport itself is: the first paint
+   * has to be the finished form. It also means the browser never asks for a
+   * set of questions - it is handed the ones belonging to this passport's
+   * agent and has no way to name another.
+   *
+   * All three are independent reads, and an agent with no questions makes the
+   * last two cheap and the form identical to what it is today.
+   */
+  const [questions, answers, agent] = await Promise.all([
+    passportQuestions(record.agentId).catch(() => []),
+    record.agentId ? valuesFor(record.agentId, token).catch(() => ({})) : Promise.resolve({}),
+    record.agentId ? findUserById(record.agentId).catch(() => null) : Promise.resolve(null),
+  ]);
+
   return (
     <main>
       <PassportForm
         token={record.token}
         initial={record.data}
         submittedAt={record.submittedAt}
+        questions={questions}
+        initialAnswers={answers}
+        /* First name only. "A few more from Sam" is a person asking; the full
+           name reads like a letter from a solicitor. */
+        agentName={(agent?.name ?? "").trim().split(/\s+/)[0] ?? ""}
       />
     </main>
   );

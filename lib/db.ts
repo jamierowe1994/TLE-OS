@@ -271,7 +271,7 @@ CREATE INDEX IF NOT EXISTS os_bug_shots_at ON os_bug_shots (created_at);
 CREATE TABLE IF NOT EXISTS os_attr_defs (
   id             TEXT PRIMARY KEY,
   owner_id       TEXT NOT NULL,
-  -- leads | listings | viewings | market_appraisals
+  -- leads | listings | viewings | market_appraisals | tenant_passport
   entity         TEXT NOT NULL,
   label          TEXT NOT NULL,
   -- text | yesno | select
@@ -282,6 +282,10 @@ CREATE TABLE IF NOT EXISTS os_attr_defs (
   created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS os_attr_defs_owner ON os_attr_defs (owner_id, entity, position);
+-- Only meaningful for the tenant_passport entity, where the person answering
+-- is a tenant filling in a form rather than an agent noting something down.
+-- Defaults false: a question nobody marked as required is optional.
+ALTER TABLE os_attr_defs ADD COLUMN IF NOT EXISTS required BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- The values. record_id is whatever that entity is keyed on — a REX id, a
 -- sample id — kept as TEXT so it never has to care.
@@ -587,6 +591,12 @@ CREATE TABLE IF NOT EXISTS os_tenant_passports (
   submitted_at   TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS os_tenant_passports_contact ON os_tenant_passports (contact_id);
+-- Whose passport this is, as an os_users.id. It decides which custom
+-- questions the tenant is asked: an agent's questions follow their own
+-- properties and appear on nobody else's passports. Nullable, because every
+-- passport minted before this column existed has no agent, and the honest
+-- answer for those is "none" rather than a guess.
+ALTER TABLE os_tenant_passports ADD COLUMN IF NOT EXISTS agent_id TEXT;
 
 -- Who is on which campaign.
 --

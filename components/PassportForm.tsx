@@ -96,19 +96,60 @@ function YesNo({
   );
 }
 
+export type PassportQuestion = {
+  id: string;
+  label: string;
+  kind: string;
+  options: string[];
+  required: boolean;
+};
+
 export default function PassportForm({
   token,
   initial,
   submittedAt,
+  questions = [],
+  initialAnswers = {},
+  agentName = "",
+  demo = false,
 }: {
   token: string;
   initial: PassportData;
   submittedAt: string | null;
+  /**
+   * Extra questions the agent who issued this passport asked for.
+   *
+   * Empty for most passports, and that is the normal case rather than a
+   * degraded one: an agent who has written none adds nothing here, and the
+   * form is exactly the standard six sections. They arrive as a prop, read
+   * server-side from the passport's own agent, so the browser is never in a
+   * position to ask for somebody else's.
+   */
+  questions?: PassportQuestion[];
+  initialAnswers?: Record<string, string>;
+  agentName?: string;
+  /**
+   * Showing the form rather than filling one in.
+   *
+   * Used by the public preview, where the token belongs to no passport. Every
+   * field works and nothing is written: without this the autosave would fire
+   * against a token that does not exist, get a 404, and sit there saying "not
+   * saved" through an entire demonstration.
+   */
+  demo?: boolean;
 }) {
   const [d, setD] = useState<PassportData>({ ...EMPTY_PASSPORT, ...initial });
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [submitted, setSubmitted] = useState(Boolean(submittedAt));
   const [step, setStep] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers);
+  /* `save` is a useCallback keyed on the passport data, and the autosave
+     effect below fires on that. Reading the answers through a ref keeps them
+     out of that dependency list: adding them would rebuild the callback on
+     every keystroke in a custom question and restart the debounce, which is
+     the difference between saving once and saving on every letter. */
+  const answersRef = useRef(answers);
+  answersRef.current = answers;
   /** Which way the next panel comes in from, so Back reads as going back. */
   const [dir, setDir] = useState<1 | -1>(1);
   const first = useRef(true);
@@ -121,19 +162,25 @@ export default function PassportForm({
      here, and the habit that corrupts a record elsewhere. */
   const save = useCallback(
     async (next: PassportData) => {
+      if (demo) {
+        /* The reassurance without the round trip. Somebody watching a demo
+           should see it behave, and nothing should be written. */
+        setState("saved");
+        return;
+      }
       setState("saving");
       try {
         const r = await fetch(`/api/tenant/passport?token=${encodeURIComponent(token)}`, {
           method: "PUT",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ data: next }),
+          body: JSON.stringify({ data: next, answers: answersRef.current }),
         });
         setState(r.ok ? "saved" : "error");
       } catch {
         setState("error");
       }
     },
-    [token]
+    [token, demo]
   );
 
   useEffect(() => {
@@ -145,23 +192,79 @@ export default function PassportForm({
     return () => window.clearTimeout(id);
   }, [d, save]);
 
+  /* Answers save on the same debounce. Separate effect, same 800ms, because
+     `d` is untouched when somebody only answers a custom question and the
+     effect above would never fire. */
+  const firstAnswers = useRef(true);
+  useEffect(() => {
+    if (firstAnswers.current) {
+      firstAnswers.current = false;
+      return;
+    }
+    const id = window.setTimeout(() => void save(d), 800);
+    return () => window.clearTimeout(id);
+  }, [answers, save, d]);
+
+  /**
+   * The agent's own questions, as a seventh section - and only if there are
+   * any. An agent who has written none leaves the passport exactly as it is.
+   */
+  const extraDone =
+    questions.length > 0 &&
+    questions.every((qn) => !qn.required || (answers[qn.id] ?? "").trim() !== "");
+
+  const sections =
+    questions.length > 0
+      ? [
+          ...SECTIONS,
+          {
+            key: "extra",
+            title: agentName ? `A few more from ${agentName}` : "A few more questions",
+            blurb:
+              "Your agent asks these as well. They are not part of the standard passport, so nobody else will see them.",
+            stamp: "EXTRA",
+            done: () => extraDone,
+          },
+        ]
+      : SECTIONS;
+
   const { done, total } = completeness(d);
   const bar = answered(d);
   const household = householdIncome(d);
-  const allDone = done === total;
-  const last = step === SECTIONS.length - 1;
+  /* The extra section counts towards "finished" exactly like the other six. */
+  const allDone = done === total && (questions.length === 0 || extraDone);
+  const last = step === sections.length - 1;
+
+  /** Required questions with nothing in them. Named, so the message can say. */
+  const unanswered = questions.filter(
+    (qn) => qn.required && (answers[qn.id] ?? "").trim() === ""
+  );
+
+  /* `completeness` only knows about the standard six, so the count on the
+     button has to add the seventh itself. Without this the button sat
+     disabled reading "0 sections to go" the moment somebody had finished
+     everything except a required question - a dead end with no explanation,
+     which is the worst possible last screen. */
+  const sectionsLeft = total - done + (questions.length > 0 && !extraDone ? 1 : 0);
+  const finishLabel = allDone
+    ? "That's my passport done"
+    : done === total && unanswered.length
+      ? `${unanswered.length} question${unanswered.length === 1 ? "" : "s"} still to answer`
+      : `${sectionsLeft} section${sectionsLeft === 1 ? "" : "s"} to go`;
 
   function go(to: number) {
     setDir(to > step ? 1 : -1);
-    setStep(Math.max(0, Math.min(SECTIONS.length - 1, to)));
+    setStep(Math.max(0, Math.min(sections.length - 1, to)));
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function finish() {
     await save(d);
-    await fetch(`/api/tenant/passport?token=${encodeURIComponent(token)}&submit=1`, {
-      method: "POST",
-    }).catch(() => null);
+    if (!demo) {
+      await fetch(`/api/tenant/passport?token=${encodeURIComponent(token)}&submit=1`, {
+        method: "POST",
+      }).catch(() => null);
+    }
     setSubmitted(true);
   }
 
@@ -326,6 +429,57 @@ export default function PassportForm({
     </>,
   ];
 
+  /* The agent's own questions, rendered with the SAME field components as
+     everything above, so a custom question does not announce itself as an
+     afterthought bolted on the end. Pushed rather than always present: with
+     no questions there is no seventh panel and no seventh step. */
+  if (questions.length > 0) {
+    panels.push(
+      <>
+        {questions.map((qn) => {
+          const value = answers[qn.id] ?? "";
+          const put = (v: string) => setAnswers((a) => ({ ...a, [qn.id]: v }));
+          const label = qn.required ? `${qn.label} *` : qn.label;
+
+          if (qn.kind === "yesno") {
+            return (
+              <YesNo
+                key={qn.id}
+                label={label}
+                /* Tri-state on purpose: null is "not answered yet", which is
+                   what a required question needs to be able to mean. */
+                value={value === "" ? null : value === "yes"}
+                onChange={(v) => put(v ? "yes" : "no")}
+              />
+            );
+          }
+
+          if (qn.kind === "select") {
+            return (
+              <Field key={qn.id} label={label}>
+                <select className={input} value={value} onChange={(e) => put(e.target.value)}>
+                  <option value="">Please choose</option>
+                  {qn.options.map((o) => (
+                    <option key={o} value={o}>{o}</option>
+                  ))}
+                </select>
+              </Field>
+            );
+          }
+
+          return (
+            <Field key={qn.id} label={label}>
+              <input className={input} value={value} onChange={(e) => put(e.target.value)} />
+            </Field>
+          );
+        })}
+        <p className="text-[13px] leading-relaxed text-muted">
+          Anything marked * has to be answered before you can finish.
+        </p>
+      </>
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-[1500px] px-5 py-8 sm:px-8 lg:px-12 lg:py-10">
       {/* ── The bar, across the whole width ── */}
@@ -348,7 +502,7 @@ export default function PassportForm({
         {/* The steps, nameable and jumpable. Nothing is gated: somebody who
             cannot find their share code has to be able to carry on. */}
         <nav className="mt-4 flex flex-wrap gap-x-1.5 gap-y-2">
-          {SECTIONS.map((s, i) => {
+          {sections.map((s, i) => {
             const isDone = s.done(d);
             const here = i === step;
             return (
@@ -386,9 +540,9 @@ export default function PassportForm({
               ["--from" as string]: `${dir * 28}px`,
             }}
           >
-            <h1 className="hand text-[34px] leading-tight sm:text-[42px]">{SECTIONS[step].title}</h1>
+            <h1 className="hand text-[34px] leading-tight sm:text-[42px]">{sections[step].title}</h1>
             <p className="mt-2 max-w-2xl text-[14.5px] leading-relaxed text-muted">
-              {SECTIONS[step].blurb}
+              {sections[step].blurb}
             </p>
             <div className="mt-7 max-w-2xl space-y-6">{panels[step]}</div>
           </div>
@@ -425,7 +579,7 @@ export default function PassportForm({
                   allDone ? "bg-ink text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
                 }`}
               >
-                {allDone ? "That's my passport done" : `${total - done} section${total - done === 1 ? "" : "s"} to go`}
+                {finishLabel}
               </button>
             )}
             <span className="text-[12.5px] text-muted">Everything saves as you go.</span>

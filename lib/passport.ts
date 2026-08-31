@@ -32,6 +32,8 @@ import { EMPTY_PASSPORT, type PassportData } from "@/lib/passport-shape";
 export interface PassportRecord {
   token: string;
   contactId: string | null;
+  /** The agent this passport belongs to, and whose custom questions it asks. */
+  agentId: string | null;
   name: string;
   email: string;
   data: PassportData;
@@ -41,13 +43,14 @@ export interface PassportRecord {
 }
 
 type Row = {
-  token: string; contact_id: string | null; name: string; email: string;
+  token: string; contact_id: string | null; agent_id: string | null; name: string; email: string;
   data: Partial<PassportData>; created_at: string; updated_at: string; submitted_at: string | null;
 };
 
 const toRecord = (r: Row): PassportRecord => ({
   token: r.token,
   contactId: r.contact_id,
+  agentId: r.agent_id,
   name: r.name,
   email: r.email,
   /* Stored data spread OVER the empty shape, never under it. A passport saved
@@ -59,7 +62,7 @@ const toRecord = (r: Row): PassportRecord => ({
   submittedAt: r.submitted_at,
 });
 
-const COLS = `token, contact_id, name, email, data,
+const COLS = `token, contact_id, agent_id, name, email, data,
   created_at::text AS created_at, updated_at::text AS updated_at,
   submitted_at::text AS submitted_at`;
 
@@ -71,6 +74,15 @@ export async function createPassport(opts: {
   name?: string;
   email?: string;
   contactId?: string | null;
+  /**
+   * Whose passport this is.
+   *
+   * Set at mint and never changed. It is what makes an agent's own questions
+   * follow their own properties: the tenant is asked what THIS agent wants
+   * asked, and an agent who has written no questions adds nothing to the
+   * standard form.
+   */
+  agentId?: string | null;
 }): Promise<PassportRecord> {
   if (!hasDb()) throw new Error("No database is connected, so a passport cannot be started.");
   const token = newToken();
@@ -78,9 +90,12 @@ export async function createPassport(opts: {
   if (opts.name) seed.legalName = opts.name;
   if (opts.email) seed.email = opts.email;
   const rows = await q<Row>(
-    `INSERT INTO os_tenant_passports (token, contact_id, name, email, data)
-     VALUES ($1,$2,$3,$4,$5::jsonb) RETURNING ${COLS}`,
-    [token, opts.contactId ?? null, opts.name ?? "", opts.email ?? "", JSON.stringify(seed)]
+    `INSERT INTO os_tenant_passports (token, contact_id, agent_id, name, email, data)
+     VALUES ($1,$2,$3,$4,$5,$6::jsonb) RETURNING ${COLS}`,
+    [
+      token, opts.contactId ?? null, opts.agentId ?? null,
+      opts.name ?? "", opts.email ?? "", JSON.stringify(seed),
+    ]
   );
   return toRecord(rows[0]);
 }

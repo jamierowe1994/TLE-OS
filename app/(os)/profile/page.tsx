@@ -28,8 +28,11 @@ type TabKey = "info" | "appearance" | "custom" | "compliance" | "connections" | 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "info", label: "Profile information" },
   { key: "appearance", label: "Appearance" },
-  /* Your own fields, and the filters that come with them. */
-  { key: "custom", label: "Custom attributes" },
+  /* Your own fields, the filters that come with them, and the questions you
+     bolt onto your tenant passports. "Custom attributes" was accurate when
+     that was all it held; it is now two different kinds of custom thing, and
+     the shorter word covers both without promising either. */
+  { key: "custom", label: "Custom" },
   { key: "compliance", label: "Personal compliance" },
   { key: "connections", label: "Connections" },
   { key: "portals", label: "Portals" },

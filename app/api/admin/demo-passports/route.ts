@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { hasDb } from "@/lib/db";
 import {
   createPassport,
@@ -90,6 +91,10 @@ export async function POST(req: NextRequest) {
     name: body.name?.trim() || DEMO_NAME,
     email: DEMO_EMAIL,
     contactId: DEMO_CONTACT_ID,
+    /* Owned by whoever made it, so a demo passport asks that person's own
+       custom questions. That is the point: it is how you check what your
+       questions look like to a tenant before sending a real one. */
+    agentId: verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value),
   });
   return NextResponse.json({ ok: true, token: rec.token, path: `/tenant/passport/${rec.token}` });
 }

@@ -30,6 +30,14 @@ const CARDS = [
       "The tour that runs the first time an agent reaches the OS. Two lengths: the whole system top to bottom, or just the assistant and how to report a problem.",
   },
   {
+    href: "passport",
+    icon: "user",
+    label: "The tenant passport",
+    time: "six sections",
+    blurb:
+      "What a tenant fills in once and reuses for every application, instead of answering the same questions per property. The last few show what it looks like when an agent adds questions of their own.",
+  },
+  {
     href: "plc",
     icon: "shield",
     label: "The compliance handover",
