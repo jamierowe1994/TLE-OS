@@ -43,6 +43,21 @@ import { uid } from "@/lib/auth";
 
 /** What the card shows, and what the executor is allowed to act on. */
 export type ActionProposal =
+  /**
+   * A draft to type into the composer already open on their screen.
+   *
+   * Unlike every other proposal here it names no record and needs no lookup —
+   * the composer already knows who it is addressed to, which is the whole
+   * reason this exists. It is also the only one applied CLIENT-side: nothing
+   * on the server can fill a text box, and nothing here can send.
+   */
+  | {
+      kind: "fill-compose";
+      subject: string;
+      body: string;
+      /** Who the composer says it is going to, for the chat to report back. */
+      toEmail: string;
+    }
   | {
       kind: "note";
       listingId: string;
@@ -281,6 +296,24 @@ export async function perform(
   scope: Scope,
   actor: { id: string; name: string; osUserId: string | null }
 ): Promise<ActionOutcome> {
+  /* ── The one kind that must never reach a server ───────────────────────
+
+     "fill-compose" types into a text box in a browser. There is nothing here
+     that could carry it out, and an executor that quietly did nothing while
+     answering ok would be the worst possible shape: Steve would report that he
+     had typed it and nothing would have moved.
+
+     Refused explicitly, before the scope check, because it carries no
+     listingId to scope — and because a proposal reaching perform() at all
+     means somebody replayed a client-side card at the server, which is worth
+     saying no to loudly rather than falling through a switch. */
+  if (proposal.kind === "fill-compose") {
+    return {
+      ok: false,
+      message: "That draft is typed into the email on your screen, not run here.",
+    };
+  }
+
   /* Scope, again. The proposal was sealed under one person's rights and is
      being spent under whoever is holding it now. Every kind carries a
      listingId except a standalone reminder, which carries null. */

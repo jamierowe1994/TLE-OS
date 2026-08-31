@@ -1,5 +1,6 @@
 import "server-only";
 import type Anthropic from "@anthropic-ai/sdk";
+import type { OpenSurface } from "@/lib/open-record";
 import type { Scope } from "@/lib/scope";
 import { bookFor } from "@/lib/listings-cache";
 import { getComplianceBook } from "@/lib/compliance-cache";
@@ -43,6 +44,8 @@ export interface ToolContext {
   path: string | null;
   /** The record open in front of them, when the screen has one. */
   openListingId: string | null;
+  /** Everything layered on screen, furthest back first. See lib/open-record. */
+  surfaces?: OpenSurface[];
 }
 
 /** A tool's answer, plus the one-line label the widget shows while it runs. */
@@ -608,6 +611,75 @@ const proposeEmail: AssistantTool = {
 /* Fixed order. The tool list renders BEFORE the system prompt, so reordering
    it — or building it per person — moves every byte after it and throws away
    the prompt cache on every request. It is a constant for that reason. */
+/**
+ * Type a draft into the email they already have open.
+ *
+ * ── Why this is separate from propose_email ────────────────────────────────
+ *
+ * propose_email starts from a REX listing, looks the contact up, and hands
+ * back a card to copy from. That is right when somebody says "email the
+ * landlord at 4 Hermosa Road" from a dashboard.
+ *
+ * It is useless when the composer is ALREADY open, which is when people
+ * actually ask. James, 30 Aug: composer open on a lead that lives in the OS
+ * rather than REX, and propose_email refused because it could not find a REX
+ * contact to attach — so Steve pasted the copy into the chat and left him to
+ * move it across by hand.
+ *
+ * This one does no lookup at all, because there is nothing to look up: the
+ * composer knows who it is addressed to and is showing that address at the
+ * top. It fills the two boxes and says so.
+ *
+ * ── It cannot send ─────────────────────────────────────────────────────────
+ *
+ * Filling and sending are different acts and only one of them is his. There is
+ * no send path from here to reach: the proposal carries a subject and a body,
+ * the composer's own apply() sets two pieces of state, and the send button sits
+ * where it always did, under a person's finger. That separation is the reason
+ * this is safe to do without a confirmation step — nothing leaves the building
+ * because Steve typed.
+ */
+export const fillOpenEmail: AssistantTool = {
+  name: "fill_open_email",
+  description:
+    "Type a subject and message straight into the email the person already has open on screen. Use this WHENEVER a composer is open and they ask you to write, draft or finish an email - it is better than pasting copy into the chat for them to move across by hand. It fills the boxes only; it cannot and does not send. Do not use it if no email composer is listed as open on their screen.",
+  input_schema: {
+    type: "object",
+    properties: {
+      subject: { type: "string", description: "The subject line, as it should read." },
+      body: {
+        type: "string",
+        description:
+          "The whole message, ready to send. Plain text with blank lines between paragraphs. Sign it off as THEM, not as you. Use what you were told about the record on their screen, including the notes.",
+      },
+    },
+    required: ["subject", "body"],
+  },
+  label: () => "Writing it into the email…",
+  async run(input, ctx) {
+    const composer = (ctx.surfaces ?? []).filter((s) => s.kind === "compose" && s.canFill).pop();
+    if (!composer) {
+      /* Refused rather than proposed. A proposal for a box that is not there
+         would be applied by nothing and reported as done, which is the worst
+         of both — he would tell them he had typed it and nothing would have
+         moved. */
+      return {
+        error:
+          "They have no email composer open, so there is nothing to type into. Offer the copy in the chat instead, or tell them to open the email first.",
+      };
+    }
+    const subject = str(input.subject);
+    const body = str(input.body);
+    if (!subject || !body) return { error: "An email needs a subject and a body." };
+
+    const toField = (composer.fields ?? []).find((f) => f.label === "To");
+    return proposed(
+      { kind: "fill-compose", subject, body, toEmail: toField?.value ?? "" },
+      `Typed into the email on their screen. It is NOT sent and you cannot send it — tell them it is in the boxes, give them a SHORT summary of the line you took and anything you drew on from the record, and leave sending to them.`
+    );
+  },
+};
+
 export const TOOLS: AssistantTool[] = [
   findProperty,
   propertyDetail,
@@ -619,6 +691,7 @@ export const TOOLS: AssistantTool[] = [
   proposeReminder,
   proposeWriteUp,
   proposeEmail,
+  fillOpenEmail,
 ];
 
 /** Pull the proposal out of a tool result, if it made one. */

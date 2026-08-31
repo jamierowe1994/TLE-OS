@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import AssistantCharacter, { type Mood } from "@/components/AssistantCharacter";
 import { captureScreen } from "@/lib/screenshot";
 import AssistantSays, { type Screen } from "@/components/AssistantSays";
-import { getOpenListing, getOpenSurfaces } from "@/lib/open-record";
+import { fillFrontCompose, getOpenListing, getOpenSurfaces } from "@/lib/open-record";
 
 /**
  * The character in the corner, and what he says.
@@ -61,7 +61,7 @@ type Line = {
 
 /** Mirrors ActionProposal server-side, narrowed to what the card draws. */
 type Proposal = {
-  kind: "note" | "reminder" | "write-up" | "email";
+  kind: "note" | "reminder" | "write-up" | "email" | "fill-compose";
   address?: string | null;
   text?: string;
   title?: string;
@@ -76,12 +76,18 @@ type Proposal = {
 /* What each card says on it. Kept out of the markup so the promise a button
    makes and the words next to it can never drift apart. */
 const CARD_TITLE: Record<Proposal["kind"], string> = {
+  /* Never actually drawn — a fill-compose is applied on arrival and its card
+     suppressed, because the result is visible in the boxes themselves. Present
+     so the Record stays exhaustive and a new kind cannot be added without
+     deciding what its card says. */
+  "fill-compose": "Typed into your email",
   note: "Note, ready to save",
   reminder: "Reminder, ready to set",
   "write-up": "New advert, ready to publish",
   email: "Email, ready to send",
 };
 const CARD_BUTTON: Record<Proposal["kind"], string> = {
+  "fill-compose": "Type it in",
   note: "Save note",
   reminder: "Set reminder",
   "write-up": "Publish it",
@@ -90,6 +96,7 @@ const CARD_BUTTON: Record<Proposal["kind"], string> = {
 /* The consequence, spelled out. Somebody pressing a button in a chat bubble
    deserves to know it reaches Rightmove. */
 const CARD_EFFECT: Record<Proposal["kind"], string> = {
+  "fill-compose": "Puts the text in the boxes on your screen. Nothing is sent - that is still your button.",
   note: "Saves to the property file in the OS. Not sent to REX.",
   reminder: "Goes in the OS diary only - not REX, not your 365 calendar.",
   "write-up": "Writes to REX and goes live on Rightmove, Zoopla and OnTheMarket in about five to ten minutes.",
@@ -376,14 +383,46 @@ export default function HelpDock() {
       .then((x) => (x.ok ? x.json() : null))
       .catch(() => null);
 
-    const answer = r?.reply ?? "Something went wrong sending that. Try again in a moment.";
+    /* ── Type it in, right now ────────────────────────────────────────────
+
+       Applied on arrival rather than behind a "Do it" button, and that is a
+       considered difference from every other proposal. The others WRITE
+       something — a note onto a record, a reminder into a diary — so they wait
+       for a press. This one only puts text in two boxes on a screen the person
+       is looking at, next to a send button they still have to press
+       themselves. Making them confirm before their own draft appears would be
+       ceremony around the safest thing here.
+
+       Its card is suppressed for the same reason: the result IS the composer,
+       and showing a copy of the text underneath the chat is the paste-it-
+       yourself behaviour this replaces. If nothing was filled — the composer
+       closed while he was writing — the card falls back so the work is not
+       lost. */
+    let filled = false;
+    if (r?.proposal?.kind === "fill-compose") {
+      filled = fillFrontCompose({ subject: r.proposal.subject, body: r.proposal.body });
+    }
+
+    let answer = r?.reply ?? "Something went wrong sending that. Try again in a moment.";
+    if (r?.proposal?.kind === "fill-compose" && !filled) {
+      /* The composer closed while he was writing. The draft is real work and
+         must not evaporate, so it falls back to the behaviour this replaced:
+         in the chat, ready to copy, with the reason it is there. */
+      answer +=
+        `\n\nYour email closed before I could type it in, so here it is:` +
+        `\n\nSubject: ${r.proposal.subject ?? ""}\n\n${r.proposal.body ?? ""}`;
+    }
     setLines((l) => [
       ...l,
       {
         role: "assistant",
         text: answer,
         steps: Array.isArray(r?.steps) ? r.steps : undefined,
-        card: r?.proposal,
+        /* Never a card for a fill-compose. When it worked the result IS the
+           composer, and drawing a copy of the text underneath the chat is the
+           copy-it-yourself behaviour this exists to replace; when it failed the
+           draft is in the answer above instead. */
+        card: r?.proposal?.kind === "fill-compose" ? undefined : r?.proposal,
         sealed: r?.sealed,
       },
     ]);

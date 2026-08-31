@@ -536,6 +536,7 @@ export async function ask(
         scope: ctx.scope,
         path: ctx.path,
         openListingId: ctx.openListingId,
+        surfaces: ctx.surfaces,
       });
       /* Last one wins, and there is only ever one on the card. If he proposed
          twice in a turn the second is what he was actually talking about by

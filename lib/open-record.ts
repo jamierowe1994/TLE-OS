@@ -66,6 +66,24 @@ export interface OpenSurface {
    * agent would.
    */
   notes?: string[];
+  /**
+   * This surface can have a draft typed into it.
+   *
+   * Serialisable, unlike `apply` below, so the server can tell the model that
+   * filling is possible here — and refuse the tool when it is not.
+   */
+  canFill?: boolean;
+  /**
+   * Type a draft into the surface.
+   *
+   * Client-side only and never crosses the wire: JSON.stringify drops function
+   * properties, which is why the boolean above exists separately rather than
+   * being inferred from this.
+   *
+   * It fills. It does NOT send, and there is deliberately no send here for it
+   * to reach — the surface owns its own send button and a person presses it.
+   */
+  apply?: (draft: { subject?: string; body?: string }) => void;
 }
 
 /* Order is layering order: index 0 is furthest back, the last is what they are
@@ -117,4 +135,22 @@ export function getOpenListing(): string | null {
     if (stack[i].kind === "listing" && stack[i].id) return stack[i].id;
   }
   return null;
+}
+
+/**
+ * Type a draft into the composer they have open.
+ *
+ * Returns whether anything was filled, so the caller can say what happened
+ * rather than claim it. Searched from the front, because with two composers
+ * open the one they are looking at is the one they mean.
+ */
+export function fillFrontCompose(draft: { subject?: string; body?: string }): boolean {
+  for (let i = stack.length - 1; i >= 0; i--) {
+    const s = stack[i];
+    if (s.kind === "compose" && s.apply) {
+      s.apply(draft);
+      return true;
+    }
+  }
+  return false;
 }

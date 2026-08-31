@@ -80,6 +80,14 @@ export default function Compose({
       kind: "compose",
       id: null,
       label: `email to ${to || "nobody yet"}`,
+      canFill: true,
+      /* Steve types into the boxes; the person reads it and presses send.
+         Filling and sending are deliberately different acts, and only one of
+         them is his. */
+      apply: (draft) => {
+        if (draft.subject !== undefined) setSubject(draft.subject);
+        if (draft.body !== undefined) setBody(draft.body);
+      },
       fields: [
         { label: "To", value: to || "not set" },
         { label: "Audience", value: audience },
