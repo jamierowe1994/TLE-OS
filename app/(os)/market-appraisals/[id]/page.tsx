@@ -6,6 +6,7 @@ import { Pill } from "@/components/Wire";
 import ResearchPanel from "@/components/ResearchPanel";
 import DeckRail from "@/components/DeckRail";
 import ValuationForm from "@/components/ValuationForm";
+import RexPropertyPicker from "@/components/RexPropertyPicker";
 import {
   MA_STAGES,
   effectiveStage,
@@ -219,6 +220,13 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
             </span>
           </div>
         )}
+        {/* Which REX property this is, captured at the booking stage — long
+            before terms are signed, and by a person rather than by matching an
+            address. See RexPropertyPicker for why that distinction matters. */}
+        <div className="mt-4 border-t border-line/70 pt-3">
+          <RexPropertyPicker appraisal={ma} onSaved={setBooked} />
+        </div>
+
         {failed && (
           <p className="mt-4 border-t border-line/70 pt-3 text-[11.5px] leading-relaxed text-muted">
             Homesearch could not be reached, so there are no property facts here. Nothing stale is

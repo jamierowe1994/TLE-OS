@@ -72,6 +72,7 @@ interface Row extends Record<string, unknown> {
   valuation_note: string | null;
   valued_at: string | Date | null;
   valued_by: string | null;
+  rex_property_id: string | null;
   present_token: string | null;
   created_at: string | Date;
 }
@@ -79,7 +80,8 @@ interface Row extends Record<string, unknown> {
 /** Every column the reads select, in one place so they cannot drift apart. */
 const COLS = `id, lead_id, landlord, address, postcode, agent, appointment_at,
               stage, valuation, service_level, fee_pct, setup_fee,
-              valuation_note, valued_at, valued_by, present_token, created_at`;
+              valuation_note, valued_at, valued_by, rex_property_id,
+              present_token, created_at`;
 
 function rowTo(r: Row): MarketAppraisal {
   return {
@@ -105,6 +107,7 @@ function rowTo(r: Row): MarketAppraisal {
     valuationNote: r.valuation_note,
     valuedAt: r.valued_at ? new Date(r.valued_at).toISOString() : null,
     valuedBy: r.valued_by,
+    rexPropertyId: r.rex_property_id,
     presentToken: r.present_token,
     createdAt: new Date(r.created_at).toISOString(),
   };
@@ -129,6 +132,7 @@ async function readFile(): Promise<MarketAppraisal[]> {
       valuationNote: r.valuationNote ?? null,
       valuedAt: r.valuedAt ?? null,
       valuedBy: r.valuedBy ?? null,
+      rexPropertyId: r.rexPropertyId ?? null,
     }));
   } catch {
     /* No file yet is the normal state before the first booking, not an error. */
@@ -256,6 +260,7 @@ export interface ValuationPatch {
   feePct?: number | null;
   setupFee?: number | null;
   valuationNote?: string | null;
+  rexPropertyId?: string | null;
 }
 
 /**
@@ -313,8 +318,19 @@ export async function recordValuation(
     if (has("feePct")) put("fee_pct", patch.feePct ?? null);
     if (has("setupFee")) put("setup_fee", patch.setupFee ?? null);
     if (has("valuationNote")) put("valuation_note", patch.valuationNote ?? null);
-    put("valued_by", by);
-    sets.push("valued_at = NOW()", "updated_at = NOW()");
+    if (has("rexPropertyId")) put("rex_property_id", patch.rexPropertyId ?? null);
+    /* STAMPED ONLY WHEN A FIGURE MOVED. rexPropertyId travels through the same
+       patch, and stamping valued_by on it would credit whoever picked a
+       property with recording a valuation they never touched — on the one
+       field whose whole job is answering "who said it was worth this". */
+    const touchedFigure = (
+      ["valuation", "serviceLevel", "feePct", "setupFee", "valuationNote"] as const
+    ).some((k) => has(k));
+    if (touchedFigure) {
+      put("valued_by", by);
+      sets.push("valued_at = NOW()");
+    }
+    sets.push("updated_at = NOW()");
 
     const rows = await q<Row>(
       `UPDATE os_market_appraisals SET ${sets.join(", ")}
@@ -337,8 +353,12 @@ export async function recordValuation(
     ...(has("feePct") ? { feePct: patch.feePct ?? null } : {}),
     ...(has("setupFee") ? { setupFee: patch.setupFee ?? null } : {}),
     ...(has("valuationNote") ? { valuationNote: patch.valuationNote ?? null } : {}),
-    valuedAt: now,
-    valuedBy: by,
+    ...(has("rexPropertyId") ? { rexPropertyId: patch.rexPropertyId ?? null } : {}),
+    ...(["valuation", "serviceLevel", "feePct", "setupFee", "valuationNote"] as const).some((k) =>
+      has(k)
+    )
+      ? { valuedAt: now, valuedBy: by }
+      : {},
   };
   all[i] = next;
   await writeFile(all);
@@ -378,6 +398,7 @@ export async function createAppraisal(input: NewAppraisal): Promise<MarketApprai
     valuationNote: null,
     valuedAt: null,
     valuedBy: null,
+    rexPropertyId: null,
     presentToken: null,
     createdAt: now,
   };

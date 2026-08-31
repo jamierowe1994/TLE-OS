@@ -381,6 +381,19 @@ CREATE INDEX IF NOT EXISTS os_market_appraisals_stage_idx
 -- ADD COLUMN IF NOT EXISTS rather than a new table: it is one row per appraisal
 -- either way, and a join to say "and the fee was 10%" buys nothing.
 -- fee_pct is NUMERIC, not INTEGER — 9.5% is a real number an agent will quote.
+-- THE REX PROPERTY THIS APPRAISAL IS ABOUT, captured by a person.
+--
+-- Signing the terms creates a REX listing, and a listing hangs off a property.
+-- Resolving that property by matching an address is the one thing this project
+-- has been bitten by hardest -- Homesearch confidently returned "18 Knoll Rise"
+-- for "18 Ashworth Rise", and a startsWith postcode check put Luton
+-- comparables on a Liverpool flat. Those were READS. Getting it wrong here
+-- attaches a landlord's signed contract to somebody else's house in the live
+-- CRM six businesses share.
+--
+-- So it is never inferred. REX's own Properties/autocomplete does the matching
+-- and an agent picks from the results, once, deliberately.
+ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS rex_property_id TEXT;
 ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS service_level   TEXT;
 ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS fee_pct         NUMERIC;
 ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS setup_fee       INTEGER;

@@ -178,7 +178,9 @@ export async function pushToRex(
   }
 
   if (!opts.listingId) {
-    const why = "No REX listing to attach it to yet — the appraisal has not become a listing.";
+    const why =
+      "No REX listing to attach it to yet. Link the REX property on the appraisal, and the " +
+      "listing is created when the terms are signed.";
     await note(submitterId, why);
     return { pushed: false, reason: why };
   }

@@ -110,6 +110,8 @@ export async function PATCH(req: NextRequest) {
     feePct?: unknown;
     setupFee?: unknown;
     valuationNote?: unknown;
+    /** The REX property an agent picked. "" clears it. */
+    rexPropertyId?: unknown;
   };
 
   const id = (b.id ?? "").trim();
@@ -151,6 +153,15 @@ export async function PATCH(req: NextRequest) {
         ...(b.setupFee !== undefined ? { setupFee: money(b.setupFee) ?? null } : {}),
         ...(b.valuationNote !== undefined
           ? { valuationNote: String(b.valuationNote ?? "").trim().slice(0, 2000) || null }
+          : {}),
+        /* Digits only. This becomes a REX record id and eventually the parent
+           of a real listing — a stray character here would attach a contract
+           to nothing, or to something else. */
+        ...(b.rexPropertyId !== undefined
+          ? {
+              rexPropertyId:
+                String(b.rexPropertyId ?? "").replace(/\D/g, "") || null,
+            }
           : {}),
       },
       me.name || me.email

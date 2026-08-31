@@ -98,6 +98,14 @@ export interface MarketAppraisal {
   /** ISO, and who. A figure with no author cannot be questioned later. */
   valuedAt: string | null;
   valuedBy: string | null;
+  /**
+   * The REX property, chosen by an agent rather than matched by us.
+   *
+   * Null until somebody picks it. Signing the terms cannot create a REX
+   * listing without it, and that gate is deliberate — see the note on the
+   * column in lib/db.
+   */
+  rexPropertyId: string | null;
   /** Presentation token, once one has been minted. */
   presentToken: string | null;
   createdAt: string;
