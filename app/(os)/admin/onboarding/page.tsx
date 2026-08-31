@@ -94,6 +94,32 @@ export default function AdminOnboardingPage() {
         </ul>
       </section>
 
+      {/* The rest of the demo shelf. Onboarding is the one with a sendable
+          link, so it keeps its own page; these two are next door and a person
+          arriving here to find "the thing to show somebody" should not have to
+          know which of three rail entries it lives under. */}
+      <section className="fade-up mt-3 rounded-2xl border border-line/80 bg-panel p-5">
+        <h2 className="text-[15px]">The other things you demo</h2>
+        <p className="mt-1 text-[12px] leading-relaxed text-muted">
+          Both are behind sign-in, so they are click-through rather than
+          sendable. The passport is the exception: it makes a real public link.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a
+            href="/admin/tenant-passport"
+            className="rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] transition-colors hover:border-ink/40"
+          >
+            Tenant passport
+          </a>
+          <a
+            href="/admin/plc-demo"
+            className="rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] transition-colors hover:border-ink/40"
+          >
+            PLC handover
+          </a>
+        </div>
+      </section>
+
       <section className="fade-up mt-3 rounded-2xl border border-line/80 bg-panel p-5">
         <h2 className="text-[15px]">Your own account</h2>
         <p className="mt-1 text-[12px] leading-relaxed text-muted">

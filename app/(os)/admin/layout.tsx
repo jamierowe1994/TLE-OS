@@ -66,6 +66,13 @@ const GROUPS: Array<{
          people onto the product, and this is where James goes looking for the
          link to send somebody before a presentation. */
       { href: "/admin/onboarding", label: "Onboarding", needs: "see:reports" },
+      /* The demo shelf. James shows these to partners and to Susan, and the
+         links were previously in his head or in an old email - the passport
+         one is minted per person and the PLC screens want a query string, so
+         neither is findable by wandering. Grouped under Onboarding because
+         they are all "here is the thing I built, have a look". */
+      { href: "/admin/tenant-passport", label: "Tenant passport", needs: "see:reports" },
+      { href: "/admin/plc-demo", label: "PLC handover", needs: "see:reports" },
     ],
   },
   {
