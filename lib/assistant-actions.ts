@@ -7,6 +7,7 @@ import { isExpiredToken, rexCall, RexWriteBlocked } from "@/lib/rex";
 import { previewMerge } from "@/lib/rex-mailmerge";
 import { MailboxNotConnected, msSendMail } from "@/lib/microsoft";
 import { rexTokenFor } from "@/lib/rex-user";
+import { switchOn } from "@/lib/switches";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
 
@@ -232,6 +233,25 @@ async function doEmail(
   actorToken: string | null,
   rexUserId: string | null
 ): Promise<ActionOutcome> {
+  /* ARMED FIRST, before anything is resolved or rendered.
+
+     This is the only send in the OS that reaches a client without passing
+     either the internal-domain policy or REX_ALLOW_WRITES — see the
+     assistant_email switch for why it is gated by arming rather than by
+     recipient. Checked before resolveRecipient so a disarmed system does not
+     go and look a landlord up in REX to tell you it will not write to them.
+
+     switchOn() consults SENDING_LOCKED first, so the brake now reaches this
+     path too, which was the actual hole. */
+  if (!(await switchOn("assistant_email"))) {
+    return {
+      ok: false,
+      blocked: true,
+      message:
+        "I can write it, but sending is switched off — I'm not putting an email in front of a landlord until somebody arms that. It's on the switches screen, under \"Steve can send email\". Copy the draft out and send it yourself if it can't wait.",
+    };
+  }
+
   const who = await resolveRecipient(p.listingId, p.to);
   if ("error" in who) return { ok: false, message: who.error };
 

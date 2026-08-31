@@ -85,6 +85,37 @@ export const SWITCHES: Switch[] = [
     legacyOn: "on",
   },
   {
+    /**
+     * THE ONLY SEND THAT HAD NO SWITCH, added 31 Aug 2026.
+     *
+     * Every other path to a client is locked twice: Resend refuses any
+     * non-TLE domain at the transport, and REX MailMerge refuses without an
+     * exact entry in REX_ALLOW_WRITES. The assistant's email action goes out
+     * over Microsoft Graph from the agent's own mailbox, which is subject to
+     * NEITHER — and SENDING_LOCKED did not reach it, because the brake is only
+     * consulted inside switchOn() and nothing called switchOn() for this.
+     *
+     * So an agent with a connected mailbox could put a message in front of a
+     * real landlord, in TLE's name, through a system nobody has signed off,
+     * and there was no way to stop it short of a deploy.
+     *
+     * It is NOT gated by recipient, and that is deliberate: Graph is the one
+     * transport with a genuine sending identity — the agent's actual Outlook —
+     * so refusing external addresses here would break the only legitimate
+     * route to a landlord we have. What was missing was an arming step and a
+     * brake, not a recipient rule.
+     */
+    key: "assistant_email",
+    label: "Steve can send email",
+    what: "Lets the assistant's Send button actually send, from the agent's own Outlook via Microsoft Graph.",
+    who: "LANDLORDS AND TENANTS, in the agent's own name. A person presses the button, but the words are Steve's.",
+    confirm: "SEND AS ME",
+    /* No old variable — this was ungated rather than env-gated, so there is
+       nothing to stay compatible with. Unset means off, which is the point. */
+    legacyEnv: "ASSISTANT_EMAIL_SEND",
+    legacyOn: "on",
+  },
+  {
     key: "campaign_sending",
     label: "Nurture campaigns",
     what: "Lets the scheduler send campaign steps as they fall due.",
