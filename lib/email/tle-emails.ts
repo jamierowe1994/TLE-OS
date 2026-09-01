@@ -28,6 +28,7 @@ import { renderTemplate } from "@/lib/email/render.js";
 import { tleBrand } from "@/lib/campaign-mail";
 import { verifyEmailFor, resetEmailFor } from "@/lib/verify-email";
 import { pilotInviteEmail } from "@/lib/email/pilot-email";
+import { videoChaseEmail } from "@/lib/email/video-chase-email";
 import {
   bodyFor,
   confirmBodyFor,
@@ -266,6 +267,37 @@ export const TLE_EMAILS: CatalogEntry[] = [
     summary:
       "What happens on the day, how long it takes, what to have to hand, and a link to their own pre-appraisal page with the agent's photo on it.",
     render: () => renderPlain(subjectFor(SAMPLE_INVITE), bodyFor(SAMPLE_INVITE)),
+  },
+  {
+    /**
+     * The only email in here addressed to the agent about their own work.
+     *
+     * Two days out, and only when there is no recording against the appraisal
+     * yet — the landlord's pre-appraisal email goes the day before and carries
+     * the deck the video sits on, so the nudge has to land before that, not
+     * with it.
+     */
+    id: "appraisal-video-chase",
+    group: "Market appraisals",
+    name: "Record A Video",
+    audience: "partner",
+    trigger:
+      "Two days before an appraisal, when no video has been recorded for it. The landlord's pre-appraisal email goes the day after this one.",
+    fires:
+      "NOT WIRED YET — nothing schedules this, and Flow is not switched on either (FLOW_API_KEY unset in production, so the recorder refuses). The copy and the button are real; the trigger and the recorder are not.",
+    to: "The agent whose appraisal it is",
+    draft: true,
+    summary:
+      "A nudge, not a notification. Names the property because an agent may have three that week, says it takes a minute, and says plainly that ignoring it changes nothing — a chase that cannot be declined is one everybody learns to delete. The button goes to the appraisal in the OS, which is where the recorder is mounted; there is no Flow page to link to.",
+    render: () => {
+      const m = videoChaseEmail({
+        link: `${SITE}/market-appraisals/ma4`,
+        address: "12 Dover Close, Northampton NN5 4WJ",
+        firstName: "Rhiannon",
+        whenPretty: "on Thursday",
+      });
+      return { subject: m.subject, html: m.html };
+    },
   },
   {
     id: "appraisal-post",

@@ -127,15 +127,31 @@ export default function Viewings() {
       <PageHeader
         title="Viewings"
         blurb="Every viewing opens into its whole story: the property, who's coming, whether someone lives there — and whether every confirmation actually went."
-        illustration="/illustrations/relaxed.png"
-        /* She is long and low — 1378x388 — so she is sized by WIDTH in effect:
-           110 tall puts her at ~390 across, about the footprint the standing
-           figures take. The rule crosses at 0.94, the flat underside her back,
-           hip and legs all rest along, which leaves her shoes just past it to
-           cast. */
-        illustrationHeight={110}
-        seat={0.96}
+        illustration="/illustrations/scooter.gif"
+        /**
+         * He rides ON the rule, and stays put while he does it.
+         *
+         * The source is 480x480 with the figure floating in the middle of it,
+         * so it is CROPPED to its own ink before it gets here - 178x243, the
+         * bottom edge being exactly where the wheels meet the ground. That is
+         * the convention every other illustration here already follows (their
+         * ink bbox equals their file size), and it is what lets the default
+         * anchoring work: with no `seat`, PageHeader puts the rule at the
+         * bottom of the artwork, which is now the tyres.
+         *
+         * Measured across all forty frames before cropping: the bottom of the
+         * ink sits at y=359-360 every single frame, so the wheels never leave
+         * the ground - the 25px of movement is his leg kicking back, not the
+         * scooter travelling. That is what makes it read as riding on the spot
+         * rather than drifting off the side of the page.
+         *
+         * `lineBreak="none"` on purpose: DROP is 0 for it, so the rule stays
+         * dead flat and reads as the road he is on. A dip would have the line
+         * sagging under a scooter, which is the wrong physics for the joke.
+         */
+        illustrationHeight={160}
         lineBreak="none"
+        shadow
       />
 
       <div className="mt-10 flex flex-wrap items-center justify-between gap-3">

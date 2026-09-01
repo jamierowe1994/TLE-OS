@@ -240,14 +240,42 @@ export function ComplianceSide({
               missing.
             </p>
           )}
-          <div className="mt-3 flex flex-wrap gap-3">
-            <Btn onClick={() => act("scan")} busy={busy === "scan"} tone="primary">
-              Run AI scan
-            </Btn>
-            <Btn onClick={() => act("skip-scan")} busy={busy === "skip-scan"}>
-              Skip it, I will read them
-            </Btn>
-          </div>
+          {/* While it reads, show it reading.
+              The scan is one model call PER DOCUMENT, run in sequence, so a
+              full pack is a long wait behind a button that has gone grey -
+              and a grey button is indistinguishable from a stuck one. The
+              magnifier over the paperwork says the same thing the line under
+              it says, and says it continuously.
+
+              It replaces the two buttons rather than sitting beside them: the
+              choice has been made, and leaving "Skip it" pressable mid-scan
+              invites somebody to start a second thing while the first is
+              still going. */}
+          {busy === "scan" ? (
+            <div className="mt-3 flex flex-col items-center py-2 text-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/illustrations/scanning.gif"
+                alt=""
+                className="art h-auto w-[min(220px,55vw)] select-none motion-reduce:hidden"
+                draggable={false}
+              />
+              {/* A GIF ignores prefers-reduced-motion, so anybody who has asked
+                  for less movement gets the words and no picture. */}
+              <p className="mt-3 text-sm text-muted">
+                Reading the pack, one document at a time. This takes a minute on a full one.
+              </p>
+            </div>
+          ) : (
+            <div className="mt-3 flex flex-wrap gap-3">
+              <Btn onClick={() => act("scan")} busy={busy === "scan"} tone="primary">
+                Run AI scan
+              </Btn>
+              <Btn onClick={() => act("skip-scan")} busy={busy === "skip-scan"}>
+                Skip it, I will read them
+              </Btn>
+            </div>
+          )}
         </section>
       )}
 
