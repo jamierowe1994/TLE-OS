@@ -519,14 +519,38 @@ export function buildCreatePayload(a: NewApplication): Record<string, unknown> {
   };
 }
 
-/** File it. Refused by the REX write lock until somebody unlocks this exact
- *  method — creating a real application in the team's live system is not a
- *  thing to discover working by accident. */
-export async function createApplication(a: NewApplication) {
-  const res = await rexCall("TenancyApplications", "create", {
-    data: buildCreatePayload(a),
-    return_id: true,
-  });
+/**
+ * File it, AS SOMEBODY.
+ *
+ * Refused by the REX write lock until this exact method is unlocked — creating
+ * a real application in the team's live system is not a thing to discover
+ * working by accident.
+ *
+ * ── The actor token is not optional, and this is why ──────────────────────
+ *
+ * This called rexCall with no token, so it fell back to the office service
+ * account. That is precisely how the first listing write on 29 Aug came to be
+ * recorded against "System User": REX's audit trail then says the office did
+ * it, and the person who actually did it is unrecoverable.
+ *
+ * lib/rex-contacts refuses on the same grounds and has done since it was
+ * written. This now matches it rather than being the one write that quietly
+ * does not care who is asking — and it refuses BEFORE building a payload, so
+ * nothing is half-done.
+ */
+export async function createApplication(a: NewApplication, actorToken: string | null) {
+  if (!actorToken) {
+    throw new Error(
+      "No REX sign-in held for you, so this application would be filed under the office account " +
+        "rather than your name. Link your REX account on Profile, then try again."
+    );
+  }
+  const res = await rexCall(
+    "TenancyApplications",
+    "create",
+    { data: buildCreatePayload(a), return_id: true },
+    actorToken
+  );
   if (!res.ok) throw new Error(res.error ?? "REX refused the application.");
   return res.result;
 }

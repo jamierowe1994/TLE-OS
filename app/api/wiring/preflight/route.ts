@@ -142,9 +142,11 @@ export async function GET(req: NextRequest) {
         ? "REX_ALLOW_WRITES has TenancyApplications/create."
         : "REX_ALLOW_WRITES is missing TenancyApplications/create.",
       "Needs an existing REX listing_id, which the OS cannot create.",
-      "Also passes no actor token, so it would record as \"System User\".",
+      token
+        ? "It is attributed to you, so the record would carry your name."
+        : "You have no REX link, so it would be refused rather than filed as \"System User\".",
     ].join(" "),
-    "Fix the actor token first, then unblock the property and listing steps."
+    "Unblock the property and listing steps — this one has nothing to attach to."
   );
 
   const ready = checks.filter((c) => c.state === "ready").length;

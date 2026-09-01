@@ -1,4 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { findUserById } from "@/lib/users";
+import { rexTokenFor } from "@/lib/rex-user";
 import { rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
 import { toRexApplication, type TenancyLink } from "@/lib/tenancy-link";
 
@@ -23,7 +26,31 @@ import { toRexApplication, type TenancyLink } from "@/lib/tenancy-link";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  /* Same fix as the applications route: this wrote to REX with no actor, so
+     the record would carry the office account rather than the agent. A write
+     into the live system six businesses share should always be answerable to
+     a person. */
+  const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
+  const me = userId ? await findUserById(userId) : null;
+  if (!me) {
+    return NextResponse.json(
+      { error: "Sign in first — a tenancy application is filed under an agent's name." },
+      { status: 401 }
+    );
+  }
+  const actorToken = await rexTokenFor(me.id).catch(() => null);
+  if (!actorToken) {
+    return NextResponse.json(
+      {
+        error:
+          "No REX sign-in held for you, so this would be filed under the office account rather " +
+          "than your name. Link your REX account on Profile, then try again.",
+      },
+      { status: 409 }
+    );
+  }
+
   if (!rexConfigured()) {
     return NextResponse.json({ error: "REX isn't connected on this environment." }, { status: 503 });
   }
@@ -48,9 +75,12 @@ export async function POST(req: Request) {
   const updating = Boolean(link.rexApplicationId);
 
   try {
-    const res = await rexCall("TenancyApplications", updating ? "update" : "create", {
-      data: updating ? { ...data, id: Number(link.rexApplicationId) } : data,
-    });
+    const res = await rexCall(
+      "TenancyApplications",
+      updating ? "update" : "create",
+      { data: updating ? { ...data, id: Number(link.rexApplicationId) } : data },
+      actorToken
+    );
     if (!res.ok) {
       return NextResponse.json({ error: res.error ?? `REX refused (${res.status}).` }, { status: 502 });
     }

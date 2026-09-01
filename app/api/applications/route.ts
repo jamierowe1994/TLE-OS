@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { findUserById } from "@/lib/users";
+import { rexTokenFor } from "@/lib/rex-user";
 import {
   createApplication,
   getApplications,
@@ -36,6 +39,19 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  /* A REAL application in the team's live system, filed in somebody's name.
+     This route had no authentication at all — the middleware was the only
+     thing in front of it, and a middleware redirect protects the ROUTE while
+     saying nothing about WHO is writing. */
+  const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
+  const me = userId ? await findUserById(userId) : null;
+  if (!me) {
+    return NextResponse.json(
+      { error: "Sign in first — an application is filed under an agent's name." },
+      { status: 401 }
+    );
+  }
+
   let body: NewApplication & { askingRent?: number };
   try {
     body = (await req.json()) as NewApplication & { askingRent?: number };
@@ -49,7 +65,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const result = await createApplication(body);
+    const result = await createApplication(body, await rexTokenFor(me.id).catch(() => null));
     return NextResponse.json({ ok: true, status: "received", result });
   } catch (e) {
     // RexWriteBlocked lands here carrying its own instructions for lifting it.
