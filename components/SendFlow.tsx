@@ -35,6 +35,18 @@ export type Outgoing = {
   channel: Channel;
   /** Off by default for anyone optional. */
   on: boolean;
+  /**
+   * Why this one CANNOT be sent — shown in place of its controls, and
+   * excluded from the send whatever `on` says.
+   *
+   * The case it exists for: we know somebody ought to be told, and we do not
+   * know who they are. A viewing's landlord is the live example — REX holds no
+   * landlord against a rental, so the booker used to fill the gap with an
+   * invented person and offer to email them. Dropping the row instead would be
+   * quieter but worse: the agent would never learn that the landlord hasn't
+   * been told. So the row stays, says what's missing, and is unsendable.
+   */
+  blocked?: string;
 };
 
 export default function SendFlow({
@@ -52,7 +64,10 @@ export default function SendFlow({
   const set = (key: string, patch: Partial<Outgoing>) =>
     setRows((r) => r.map((m) => (m.key === key ? { ...m, ...patch } : m)));
 
-  const going = rows.filter((m) => m.on);
+  /* `!m.blocked` is the belt as well as the braces: a blocked row can never be
+     switched on below, but nothing downstream should depend on that. */
+  const going = rows.filter((m) => m.on && !m.blocked);
+  const blocked = rows.filter((m) => m.blocked);
 
   return (
     <div>
@@ -60,6 +75,13 @@ export default function SendFlow({
         {going.length === 0
           ? "Nobody selected — the viewing will be saved without telling anyone."
           : `${going.length} message${going.length === 1 ? "" : "s"} will go out, one per person. Open any of them to change the wording.`}
+        {blocked.length > 0 && (
+          <>
+            {" "}
+            {blocked.length === 1 ? "One person" : `${blocked.length} people`} can&apos;t be
+            told from here — see below.
+          </>
+        )}
       </p>
 
       <ul className="space-y-3">
@@ -70,36 +92,52 @@ export default function SendFlow({
             <li
               key={m.key}
               className={`overflow-hidden rounded-2xl border transition-colors ${
-                m.on ? "border-line/80" : "border-line/50 opacity-55"
+                m.blocked
+                  ? "border-dashed border-line/70"
+                  : m.on
+                    ? "border-line/80"
+                    : "border-line/50 opacity-55"
               }`}
             >
               <div className="flex flex-wrap items-center gap-3 p-3.5">
-                <button
-                  type="button"
-                  onClick={() => set(m.key, { on: !m.on })}
-                  className={`flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[10px] transition-colors ${
-                    m.on ? "border-accent-dark bg-accent-dark text-page" : "border-line"
-                  }`}
-                  title={m.on ? "Don't tell them" : "Tell them"}
-                >
-                  {m.on && "✓"}
-                </button>
+                {m.blocked ? (
+                  /* No tick, and nothing to tick. An empty checkbox invites a
+                     click that would have to be refused. */
+                  <span
+                    aria-hidden
+                    className="flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-dashed border-line text-[10px] text-muted"
+                  >
+                    —
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => set(m.key, { on: !m.on })}
+                    className={`flex h-[19px] w-[19px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[10px] transition-colors ${
+                      m.on ? "border-accent-dark bg-accent-dark text-page" : "border-line"
+                    }`}
+                    title={m.on ? "Don't tell them" : "Tell them"}
+                  >
+                    {m.on && "✓"}
+                  </button>
+                )}
 
                 <button
                   type="button"
+                  disabled={Boolean(m.blocked)}
                   onClick={() => setOpen(expanded ? null : m.key)}
-                  className="min-w-0 flex-1 text-left"
+                  className="min-w-0 flex-1 text-left disabled:cursor-default"
                 >
                   <span className="hand block truncate text-[13.5px]">{m.name}</span>
                   <span className="block truncate text-[10.5px] text-muted">
-                    {m.role} · {wa ? m.phone : m.email}
+                    {m.blocked ? m.role : `${m.role} · ${wa ? m.phone : m.email}`}
                   </span>
                 </button>
 
                 {/* Channel is per person, not per send — the landlord who
                     only answers WhatsApp shouldn't force the applicant's
                     confirmation onto WhatsApp too. */}
-                <div className="flex shrink-0 rounded-full border border-line/80 p-0.5">
+                <div className={`flex shrink-0 rounded-full border border-line/80 p-0.5 ${m.blocked ? "hidden" : ""}`}>
                   {(["email", "whatsapp"] as Channel[]).map((c) => (
                     <button
                       key={c}
@@ -115,16 +153,25 @@ export default function SendFlow({
                   ))}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setOpen(expanded ? null : m.key)}
-                  className="shrink-0 text-[11px] font-semibold text-muted transition-colors hover:text-ink"
-                >
-                  {expanded ? "Hide" : "Read"}
-                </button>
+                {!m.blocked && (
+                  <button
+                    type="button"
+                    onClick={() => setOpen(expanded ? null : m.key)}
+                    className="shrink-0 text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+                  >
+                    {expanded ? "Hide" : "Read"}
+                  </button>
+                )}
               </div>
 
-              {expanded && (
+              {/* Why they can't be told, and what would fix it. */}
+              {m.blocked && (
+                <p className="border-t border-dashed border-line/60 bg-panel/50 px-3.5 py-2.5 text-[11px] leading-relaxed text-muted">
+                  {m.blocked}
+                </p>
+              )}
+
+              {expanded && !m.blocked && (
                 <div className="border-t border-line/60 bg-card/60 p-3.5">
                   {!wa && (
                     <label className="mb-2.5 block">

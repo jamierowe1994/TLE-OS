@@ -97,13 +97,49 @@ async function rexPost(path: string, body: unknown, token?: string): Promise<Rex
   } catch {
     /* empty/non-JSON body */
   }
-  const error =
-    typeof data?.error === "string"
-      ? data.error
-      : data?.error
-        ? JSON.stringify(data.error)
-        : null;
+  const error = safeError(data?.error);
   return { status: res.status, ok: res.ok && !error, result: data?.result, error };
+}
+
+/**
+ * REX's error, with the credentials taken out.
+ *
+ * ⚠️ REX ECHOES THE SESSION TOKEN IN EVERY ERROR BODY. A failed call comes
+ * back as:
+ *
+ *   {"message":"A record with the id '999999999' was not found…",
+ *    "type":"RecordNotFoundException",
+ *    "extra":{"request_data":{"method":"Listings::read","args":{…},
+ *                             "token":"6e47-ddc7-dedc-7894-…"}}}
+ *
+ * This used to be `JSON.stringify(data.error)` and handed back whole. At least
+ * six API routes forward that string to the browser verbatim, so any REX call
+ * that failed — a mistyped id was enough — put a live REX bearer token in a
+ * network response, where anything with devtools could lift it and query the
+ * six businesses' CRM as us. Found 1 Sep 2026 by curling a nonsense listing id.
+ *
+ * `request_data` goes entirely: it carries the token, and its `args` can hold a
+ * tenant's details on a contact write. `message` and `type` are what a person
+ * actually needs, and they are safe.
+ */
+function safeError(raw: unknown): string | null {
+  if (!raw) return null;
+  if (typeof raw === "string") return raw;
+
+  const e = raw as { message?: unknown; type?: unknown };
+  const message = typeof e.message === "string" ? e.message : null;
+  const type = typeof e.type === "string" ? e.type : null;
+  if (message) return type ? `${message} (${type})` : message;
+
+  /* An unrecognised shape. Rather than stringify something that might carry a
+     token in a field we haven't seen, say so and let the server log hold the
+     detail — a redactor that fails open is not a redactor. */
+  try {
+    console.error("[rex] unrecognised error shape", JSON.stringify(raw).slice(0, 2000));
+  } catch {
+    /* not serialisable — nothing to log */
+  }
+  return "REX returned an error.";
 }
 
 async function login(accountId: string | null): Promise<string> {

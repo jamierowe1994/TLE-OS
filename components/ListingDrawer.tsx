@@ -14,7 +14,8 @@ import ListingDocuments from "@/components/ListingDocuments";
 import ViewingBooker, { type Person } from "@/components/ViewingBooker";
 import { CopyButton, DoneTick, PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
-import { landlordFor, LISTING_TRACK, listingStartingStep } from "@/lib/journey";
+import { LISTING_TRACK, listingStartingStep } from "@/lib/journey";
+import type { Landlord } from "@/lib/rex-landlord";
 import { LEADS, leadSide } from "@/lib/leads-sample";
 import { DIARY } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
@@ -63,6 +64,14 @@ export type Listing = {
 /** One live advert on a public portal. Mirrors lib/rex-portal-links.ts, kept
  *  local so a client component never reaches into the REX client. */
 type PortalLink = { portal: string; url: string; remoteId: string | null };
+
+/** The landlord lookup. "REX didn't answer" is kept apart from "no landlord". */
+type LandlordState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "known"; landlord: Landlord }
+  | { status: "none" }
+  | { status: "problem"; says: string };
 
 type TabKey = "home" | "property" | "marketing" | "photos" | "documents";
 
@@ -175,6 +184,39 @@ export default function ListingDrawer({
   const [portals, setPortals] = useState<PortalLink[]>([]);
   const [portalsLoading, setPortalsLoading] = useState(false);
 
+  /**
+   * The landlord, from REX's owner relationship on the listing.
+   *
+   * Was `landlordFor(listing.id)` — one of five invented people, hashed off
+   * the id, rendered with a name, a phone and an email exactly like a real
+   * record. It also fed the Terms of Business e-sign and the PLC handover
+   * package. See lib/rex-landlord.ts for what it reads and how well populated
+   * it is (88% of rentals).
+   */
+  const [landlord, setLandlord] = useState<LandlordState>({ status: "idle" });
+  useEffect(() => {
+    if (!listing) {
+      setLandlord({ status: "idle" });
+      return;
+    }
+    let gone = false;
+    setLandlord({ status: "loading" });
+    fetch(`/api/listings/landlord?id=${encodeURIComponent(listing.id)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; landlord?: Landlord | null; problem?: string }) => {
+        if (gone) return;
+        if (!j.ok) setLandlord({ status: "problem", says: j.problem ?? "REX didn't answer." });
+        else if (j.landlord) setLandlord({ status: "known", landlord: j.landlord });
+        else setLandlord({ status: "none" });
+      })
+      .catch(() => {
+        if (!gone) setLandlord({ status: "problem", says: "Couldn't reach REX to look the landlord up." });
+      });
+    return () => {
+      gone = true;
+    };
+  }, [listing]);
+
   const [type, setType] = useState("");
   const [beds, setBeds] = useState(0);
   const [baths, setBaths] = useState(0);
@@ -208,9 +250,14 @@ export default function ListingDrawer({
       rexApplicationId: null,
       listingId: listing.id,
       listingName: listing.name,
-      landlord: landlordFor(listing.id)
-        ? { contactId: null, name: landlordFor(listing.id)!.name }
-        : null,
+      /* null, not a name. This used to carry whichever invented landlord
+         `landlordFor()` hashed the listing id onto, straight into the PLC
+         handover package — a compliance record naming a person who does not
+         exist. Pre-tenancy fills the real one in when they have it. */
+      landlord:
+        landlord.status === "known"
+          ? { contactId: landlord.landlord.contactId, name: landlord.landlord.name }
+          : null,
       tenants: picked.tenants
         .filter((t) => t.name.trim())
         .map((t, i) => ({
@@ -374,7 +421,6 @@ export default function ListingDrawer({
 
   if (!listing) return null;
 
-  const ll = landlordFor(listing.id);
   /* Every photo when REX gave us them, the single primary when it didn't, and
      an empty set for the drafts — more than half the book has no photo at all,
      so an empty gallery is the normal case, not the broken one. */
@@ -596,13 +642,43 @@ export default function ListingDrawer({
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
                   Landlord
                 </p>
-                <p className="hand mt-1.5 text-[14px]">{ll.name}</p>
-                <p className="mt-2 flex items-center gap-2 text-[11.5px] text-muted">
-                  <DoodleIcon name="call" size={13} /> {ll.phone}
-                </p>
-                <p className="mt-1 flex items-center gap-2 truncate text-[11.5px] text-muted">
-                  <DoodleIcon name="mail" size={13} /> {ll.email}
-                </p>
+                {/* The REAL landlord, off the listing's owner relationship in
+                    REX. Was three lines of invented contact details rendered
+                    exactly like real ones. Loading, present, absent and
+                    unreachable are four different things and say so. */}
+                {landlord.status === "loading" && (
+                  <p className="mt-1.5 flex items-center gap-2 text-[11.5px] text-muted">
+                    <span className="block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+                    Looking them up…
+                  </p>
+                )}
+                {landlord.status === "known" && (
+                  <>
+                    <p className="hand mt-1.5 text-[14px]">{landlord.landlord.name}</p>
+                    <p className="mt-2 flex items-center gap-2 text-[11.5px] text-muted">
+                      <DoodleIcon name="call" size={13} />
+                      {landlord.landlord.phone ?? "No number on file"}
+                    </p>
+                    <p className="mt-1 flex items-center gap-2 truncate text-[11.5px] text-muted">
+                      <DoodleIcon name="mail" size={13} />
+                      {landlord.landlord.email ?? "No email on file"}
+                    </p>
+                  </>
+                )}
+                {landlord.status === "none" && (
+                  <>
+                    <p className="hand mt-1.5 text-[14px] text-muted/70">Not recorded in REX</p>
+                    <p className="mt-2 text-[11px] leading-relaxed text-muted">
+                      No landlord is held against this property, so there is nobody to ring or
+                      email from here. Adding them to the listing in REX brings them through.
+                    </p>
+                  </>
+                )}
+                {landlord.status === "problem" && (
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-accent-dark">
+                    {landlord.says}
+                  </p>
+                )}
                 {/* The people the property comes with. A tenanted viewing
                     without a heads-up is how goodwill dies — so the tenant
                     lives on the record, and the booker offers to tell them. */}
@@ -620,9 +696,18 @@ export default function ListingDrawer({
                     </p>
                   </div>
                 )}
-                <p className="mt-3 border-t border-line/60 pt-2.5 text-[10px] leading-relaxed text-muted">
-                  Stand-in until the REX property record is joined in.
-                </p>
+                {/* Said "Stand-in until the REX property record is joined in."
+                    That was honest when the landlord above it was one of five
+                    invented people. It is now read from REX, so the old line
+                    would be a lie in the opposite direction — telling an agent
+                    a real landlord is a placeholder, which is how a real
+                    person's details get ignored. It only appears now when
+                    there IS something provisional to say. */}
+                {landlord.status === "known" && (
+                  <p className="mt-3 border-t border-line/60 pt-2.5 text-[10px] leading-relaxed text-muted">
+                    From the property record in REX.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -1047,8 +1132,13 @@ export default function ListingDrawer({
                 terms={terms}
                 listingId={listing.id}
                 contactId={link?.landlord?.contactId ?? null}
-                landlordName={ll?.name}
-                landlordEmail={ll?.email}
+                /* Undefined, deliberately. These prefilled the Terms of
+                   Business e-sign from `landlordFor()` — so a contract could
+                   have gone out addressed to an invented person at an invented
+                   address. The panel already handles not knowing; it must be
+                   told the truth rather than handed a plausible name. */
+                landlordName={landlord.status === "known" ? landlord.landlord.name : undefined}
+                landlordEmail={landlord.status === "known" ? (landlord.landlord.email ?? undefined) : undefined}
                 address={listing.name}
               />
             )}
@@ -1079,7 +1169,7 @@ export default function ListingDrawer({
               {[
                 ["Property", listing.name],
                 ["Rent agreed", `£${listing.rent?.toLocaleString("en-GB")} pcm`],
-                ["Landlord", `${ll.name} · ${ll.phone}`],
+                ["Landlord", landlord.status === "known" ? [landlord.landlord.name, landlord.landlord.phone].filter(Boolean).join(" · ") : "Not recorded in REX"],
                 ["Applicant", "From the accepted offer"],
                 ["Available from", listing.availableFrom ?? "Not set"],
               ].map(([k, v]) => (
@@ -1274,7 +1364,7 @@ export default function ListingDrawer({
           />
           <div className="fade-up relative flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
             <div className="shrink-0 border-b border-line/70 px-6 py-4">
-              <h2 className="text-[19px] leading-tight">What {ll.name.split(" ")[0]} will see</h2>
+              <h2 className="text-[19px] leading-tight">What the landlord will see</h2>
               <p className="mt-0.5 text-[12px] text-muted">
                 A link to this page goes to the landlord — no names, just the substance.
                 They pick, or they ring you.

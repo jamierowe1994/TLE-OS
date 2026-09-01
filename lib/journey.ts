@@ -340,16 +340,31 @@ export function isStalled(lead: Lead): boolean {
 
 export type Party = { name: string; email: string; phone: string };
 
-const STAND_INS: Party[] = [
-  { name: "David Ashworth", email: "d.ashworth@gmail.com", phone: "07700 118 244" },
-  { name: "Yvonne Clarke", email: "yvonne.clarke@btinternet.com", phone: "07811 990 132" },
-  { name: "Raj Chauhan", email: "raj.chauhan@outlook.com", phone: "07922 415 780" },
-  { name: "Helen Bosworth", email: "h.bosworth@icloud.com", phone: "07533 662 019" },
-  { name: "Peter Nsofor", email: "peter.nsofor@gmail.com", phone: "07445 220 916" },
-];
-
-export function landlordFor(propertyId: string): Party {
-  let n = 0;
-  for (const ch of propertyId) n = (n * 31 + ch.charCodeAt(0)) >>> 0;
-  return STAND_INS[n % STAND_INS.length];
-}
+/**
+ * ── `landlordFor()` IS GONE. DO NOT BRING IT BACK. ───────────────────────────
+ *
+ * It held five invented people — "David Ashworth", "Yvonne Clarke" and three
+ * more, with plausible-looking mobiles — and picked one by hashing the property
+ * id. Stable per property, so it looked like a lookup rather than a coin toss.
+ *
+ * That was fine while this was a wireframe and fatal once the booker could
+ * send. `ViewingBooker.compose()` used it to address a real landlord
+ * confirmation email, so booking a viewing offered to email a fictional person
+ * about a property they have never owned. It also wrote a made-up name into the
+ * PLC handover package, which is a compliance record.
+ *
+ * ── Why there is no replacement ─────────────────────────────────────────────
+ *
+ * There is nothing to replace it WITH. REX's `legal_vendor_name` is populated
+ * on 0% of the rental book (see lib/rex-keys.ts), and REX's listing projection
+ * carries no landlord name at all — lib/rex-compliance.ts already renders the
+ * landlord as "—" for exactly this reason. PayProp knows the beneficiary on
+ * MANAGED properties only, and joining that to a listing is a real piece of
+ * work, not a fallback.
+ *
+ * So every screen that wants a landlord now says it doesn't have one, the way
+ * ViewingDrawer always has. "Not recorded in REX" is a true answer. A name is
+ * only allowed here when something authoritative supplied it.
+ */
+export const LANDLORD_UNKNOWN =
+  "Not recorded in REX — no landlord is held against this property.";

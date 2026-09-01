@@ -9,7 +9,7 @@ import { ConfettiBurst, DoneTick, PressButton } from "@/components/Bits";
 import PeopleFilterBar, { NO_FILTERS, passesFilters, milesBetween, type Filters } from "@/components/PeopleFilter";
 import SendFlow, { type Outgoing } from "@/components/SendFlow";
 import { dayKey, useForecast } from "@/lib/weather";
-import { landlordFor } from "@/lib/journey";
+import type { Landlord } from "@/lib/rex-landlord";
 import { minutesOf, type Appt } from "@/lib/diary";
 import { useDiary, refreshDiary } from "@/lib/diary-store";
 import { usePref } from "@/lib/prefs-store";
@@ -48,6 +48,16 @@ type TravelState =
   | { status: "problem"; says: string }
   /** `precise` false = we only placed the AREA, not the building. */
   | { status: "ready"; legs: Leg[]; precise: boolean; resolved: string | null };
+
+/** The landlord lookup, with "REX didn't answer" kept apart from "no landlord". */
+type LandlordState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "known"; landlord: Landlord }
+  /** REX holds no owner against this property — about 1 rental in 8. */
+  | { status: "none" }
+  /** We could not find out. NOT the same as none. */
+  | { status: "problem"; says: string };
 
 /** "9 Granby Road, Salford M7" — whichever of the two an entry actually has. */
 function placeOf(a: Appt): string {
@@ -196,6 +206,50 @@ export default function ViewingBooker({
 
   const { appts } = useDiary();
   const [profile] = usePref<BaseProfile | null>(PROFILE_KEY, null);
+
+  /**
+   * The property's REAL landlord, from REX.
+   *
+   * Fetched rather than invented. This used to be `landlordFor(property.id)` —
+   * one of five made-up people chosen by hashing the id — and it addressed a
+   * confirmation email that was ON by default. REX has the real one on 88% of
+   * rentals (the listing's "owner" contact relationship); the other 12% get an
+   * honest unsendable row. See lib/rex-landlord.ts.
+   */
+  const [landlord, setLandlord] = useState<LandlordState>({ status: "idle" });
+  useEffect(() => {
+    // Only viewings write to a landlord. An appraisal's recipient IS the
+    // landlord and is already on the record as `chosen`.
+    if (!open || toLandlord || !propertyId) {
+      setLandlord({ status: "idle" });
+      return;
+    }
+    let gone = false;
+    setLandlord({ status: "loading" });
+    fetch(`/api/listings/landlord?id=${encodeURIComponent(propertyId)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; landlord?: Landlord | null; problem?: string }) => {
+        if (gone) return;
+        if (!j.ok) {
+          setLandlord({ status: "problem", says: j.problem ?? "REX didn't answer." });
+        } else if (j.landlord) {
+          setLandlord({ status: "known", landlord: j.landlord });
+        } else {
+          setLandlord({ status: "none" });
+        }
+      })
+      .catch(() => {
+        if (!gone) {
+          setLandlord({
+            status: "problem",
+            says: "Couldn't reach REX to look the landlord up.",
+          });
+        }
+      });
+    return () => {
+      gone = true;
+    };
+  }, [open, toLandlord, propertyId]);
   const [travel, setTravel] = useState<TravelState>({ status: "idle" });
   /** Which origin they chose to buffer for, and whether the drive on/back
    *  is being blocked out too. Null and false = they said no, which is a
@@ -527,9 +581,67 @@ export default function ViewingBooker({
     }
 
     if (!property) return [];
-    const ll = landlordFor(property.id);
-    const llFirst = ll.name.split(" ")[0];
     const where = `${property.name}, ${property.locality}`;
+
+    /** The landlord row, in whichever of its four states applies. */
+    function landlordMessage(): Outgoing {
+      const base = {
+        key: "landlord",
+        role: "Landlord",
+        channel: "email" as const,
+        phone: "",
+        email: "",
+      };
+      if (landlord.status === "known") {
+        const ll = landlord.landlord;
+        const llFirst = ll.name.split(" ")[0];
+        return {
+          ...base,
+          name: ll.name,
+          email: ll.email ?? "",
+          phone: ll.phone ?? "",
+          /* On by default only if we can actually reach them. A landlord in
+             REX with no email address is still a landlord we can't email. */
+          on: Boolean(ll.email),
+          ...(ll.email
+            ? {}
+            : {
+                blocked:
+                  `${ll.name} is on the property in REX but has no email address, so there's ` +
+                  `nothing to send to.${ll.phone ? ` Their number is ${ll.phone}.` : ""}`,
+              }),
+          subject: `Viewing booked at ${property!.name} — ${shortDate}, ${slot}`,
+          emailBody:
+            `Hi ${llFirst},\n\n` +
+            `We've booked a viewing at ${where} for ${dayLabel} at ${slot}.\n\n` +
+            `${agent} will be accompanying, so there's nothing you need to do — ` +
+            `just let us know if that time is a problem for access.\n\n` +
+            `We'll come back to you with feedback the same day.\n\n` +
+            `Kind regards,\n${agent}\nThe Letting Experts`,
+          whatsappBody:
+            `Hi ${llFirst}, we've got a viewing at ${property!.name} on ${shortDate} at ${slot}. ` +
+            `${agent} is accompanying. Let us know if access is a problem.`,
+        };
+      }
+
+      const says =
+        landlord.status === "loading"
+          ? "Looking them up in REX…"
+          : landlord.status === "problem"
+            ? `${landlord.says} We can't tell whether this property has a landlord on file, so nothing will be sent.`
+            : "No landlord is held against this property in REX, so there's nobody to write to. " +
+              "Tell them yourself, or add them to the listing in REX and they'll appear here next time.";
+
+      return {
+        ...base,
+        name: "The landlord",
+        on: false,
+        blocked: says,
+        subject: "",
+        emailBody: "",
+        whatsappBody: "",
+      };
+    }
 
     const occupantMsg: Outgoing[] = occupant
       ? [
@@ -576,26 +688,17 @@ export default function ViewingBooker({
           `Hi ${first}, viewing booked for ${shortDate} at ${slot} — ${where}. ` +
           `${agent} will meet you outside. Reply here if you need to change it.`,
       },
-      {
-        key: "landlord",
-        role: "Landlord",
-        name: ll.name,
-        email: ll.email,
-        phone: ll.phone,
-        channel: "email",
-        on: true,
-        subject: `Viewing booked at ${property.name} — ${shortDate}, ${slot}`,
-        emailBody:
-          `Hi ${llFirst},\n\n` +
-          `We've booked a viewing at ${where} for ${dayLabel} at ${slot}.\n\n` +
-          `${agent} will be accompanying, so there's nothing you need to do — ` +
-          `just let us know if that time is a problem for access.\n\n` +
-          `We'll come back to you with feedback the same day.\n\n` +
-          `Kind regards,\n${agent}\nThe Letting Experts`,
-        whatsappBody:
-          `Hi ${llFirst}, we've got a viewing at ${property.name} on ${shortDate} at ${slot}. ` +
-          `${agent} is accompanying. Let us know if access is a problem.`,
-      },
+      /**
+       * The landlord — the REAL one, or an honest blank.
+       *
+       * This row used to be addressed to whichever of five invented people
+       * `landlordFor()` hashed the property id onto: a tickable, on-by-default
+       * email to somebody who does not exist, about a property they have never
+       * owned. It now comes from REX, and when REX has nobody the row stays but
+       * cannot be sent — because the landlord genuinely should be told, and a
+       * row that quietly vanished would let that quietly not happen.
+       */
+      landlordMessage(),
       {
         key: "agent",
         role: "Diary — for the person doing it",
@@ -607,7 +710,11 @@ export default function ViewingBooker({
         subject: `Diary: ${property.name}, ${shortDate} ${slot}`,
         emailBody:
           `${dayLabel}, ${slot}\n${where}\n\nApplicant: ${chosen.name} · ${chosen.phone}\n` +
-          `Landlord: ${ll.name} · ${ll.phone}`,
+          `Landlord: ${
+            landlord.status === "known"
+              ? [landlord.landlord.name, landlord.landlord.phone].filter(Boolean).join(" · ")
+              : "not recorded in REX"
+          }`,
         whatsappBody: `${shortDate} ${slot} — ${property.name}. ${chosen.name}, ${chosen.phone}.`,
       },
     ];
