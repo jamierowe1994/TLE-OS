@@ -139,6 +139,13 @@ const MACHINE_ROUTES = [
   "/api/pretenancy/alerts/run",       // the pre-tenancy digest
   "/api/compliance/reminders/run",    // the 30/14/7 certificate chase
   "/api/lettings-capture/run",        // the daily market sweep
+  /* DocuSeal POSTs a signed contract here. Without this it got 307 to
+     /sign-in — measured against the live site, not guessed — so the document
+     would never have reached our code and no signed terms would ever have
+     been stored. Verified against the precondition above: it returns 503 with
+     no DOCUSEAL_WEBHOOK_SECRET set and 401 on a signature that does not
+     check out, so the redirect was never what protected it. */
+  "/api/docuseal/webhook",            // signed contracts coming back
 ];
 
 export async function middleware(req: NextRequest) {
