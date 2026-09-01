@@ -116,6 +116,26 @@ export const SWITCHES: Switch[] = [
     legacyOn: "on",
   },
   {
+    /**
+     * Creating a PROPERTY in REX — the first time this OS would bring a record
+     * into existence in the live system six businesses share, rather than
+     * reading one or editing one that already exists.
+     *
+     * Its own switch rather than riding on rex_contact_create: a contact that
+     * should not exist is tidied up quietly, a property is the parent of
+     * listings, applications and documents, and deleting one is somebody
+     * else's afternoon.
+     */
+    key: "rex_property_create",
+    label: "Create properties in REX",
+    what: "Lets a new property be created in REX, as whoever created it, with the landlord attached as owner.",
+    who: "Nobody is emailed. This writes a NEW record into REX - the live system six businesses share - and everything else hangs off it.",
+    confirm: "CREATE IN REX",
+    /* No old variable: this never existed before. Unset means off. */
+    legacyEnv: "REX_PROPERTY_CREATE",
+    legacyOn: "on",
+  },
+  {
     key: "campaign_sending",
     label: "Nurture campaigns",
     what: "Lets the scheduler send campaign steps as they fall due.",

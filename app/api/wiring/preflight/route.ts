@@ -111,17 +111,25 @@ export async function GET(req: NextRequest) {
   /* ── property ────────────────────────────────────────────────────────── */
   /* Not a gate that is shut — a road that was never built. Reported as its own
      state so it cannot be mistaken for something an env var would fix. */
+  const propWriteOpen = !rexWritesLocked("Properties", "create");
+  const propSwitch = await switchOn("rex_property_create").catch(() => false);
   add(
-    "Create a property",
-    "missing",
-    "There is no Properties/create anywhere in this OS. \"+ Add new listing\" on the Listings page has no handler behind it.",
-    "Needs building: a REX property payload, a listing on top of it, and a form. This is the break in the chain."
+    "Create a property in REX",
+    propWriteOpen && propSwitch && token ? "ready" : "shut",
+    [
+      propWriteOpen ? "REX_ALLOW_WRITES has Properties/create." : "REX_ALLOW_WRITES is missing Properties/create.",
+      propSwitch ? "The rex_property_create switch is armed." : "The rex_property_create switch is off.",
+      "Payload copied from a real TLE record, but never executed against live REX.",
+    ].join(" "),
+    propWriteOpen && propSwitch && token
+      ? "Ready to test. Use a clearly-marked test address, not a real property."
+      : "Add Properties/create to REX_ALLOW_WRITES, arm the switch, and link your REX account."
   );
   add(
     "Create a listing",
     "missing",
-    "No Listings/create either. A tenancy application is keyed on a listing_id the OS cannot bring into existence.",
-    "Blocked behind the property step above."
+    "No Listings/create yet. A property can now be made, but nothing can be marketed on it.",
+    "Next piece of work — the listing sits between the property and a tenancy application."
   );
 
   /* ── deal ────────────────────────────────────────────────────────────── */
@@ -159,7 +167,7 @@ export async function GET(req: NextRequest) {
     /* The honest headline. Everything else can be armed with a variable; this
        one needs code that does not exist. */
     chainComplete: false,
-    breaksAt: "Create a property",
+    breaksAt: "Create a listing",
     checks,
     blocked: blocked.map((c) => c.step),
   });
