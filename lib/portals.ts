@@ -212,7 +212,7 @@ export const PORTAL_FOLDERS: PortalFolder[] = [
     name: "Agent",
     icon: "suitcase",
     blurb:
-      "What a new partner agent meets: the invitation, setting their account up, being shown round, and the handover to compliance.",
+      "What a partner agent meets: the invitation, setting their account up, being shown round, the handover to compliance, and the nudges that reach them once they are working.",
     items: [
       {
         kind: "email",
@@ -236,6 +236,20 @@ export const PORTAL_FOLDERS: PortalFolder[] = [
         blurb:
           "Both halves of a PLC pack: what the agent does, and what Kirstie sees when it lands.",
         href: "/admin/plc-demo",
+      },
+      {
+        /* The only email in the OS addressed to an agent about their own work,
+           which is why it sits here rather than in the landlord folder with the
+           rest of the appraisal run. Placed after the joining steps because it
+           reaches somebody who is already working, not somebody arriving. */
+        kind: "email",
+        id: "agent-video-nudge",
+        name: "The video reminder nudge",
+        blurb:
+          "Two days before an appraisal, when they have not recorded a personalised video for it. The landlord's pre-appraisal email goes the day after this one, carrying the deck the video sits on.",
+        emailId: "appraisal-video-chase",
+        caveat:
+          "Written and rendering, but nothing schedules it, and Flow is not switched on either - so the button reaches the appraisal screen rather than a recorder. On the to-do list.",
       },
       {
         kind: "open",
