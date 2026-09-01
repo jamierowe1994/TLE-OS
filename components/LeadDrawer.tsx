@@ -772,7 +772,7 @@ export default function LeadDrawer({
 
       <aside
         className={`absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-2xl bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-[transform,width] duration-[420ms] ${
-          wide ? "lg:w-[92%] xl:w-[86%]" : "lg:w-[76%] xl:w-[68%]"
+          wide ? "lg:w-[calc(100%-9rem)]" : "lg:w-[calc(100%-17rem)]"
         } ${
           shown ? "translate-x-0" : "translate-x-full"
         }`}
