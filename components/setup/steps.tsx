@@ -464,15 +464,28 @@ export function Finished({ name, onEnter }: { name: string; onEnter: () => void 
   const first = (name || "").trim().split(/\s+/)[0] || "";
   return (
     <div className="text-center">
+      {/* The one genuinely celebratory beat in the product, so it moves.
+          .art on both: they are ink on transparent, which globals.css inverts
+          for the dark room. The class keys off what the image IS, not its
+          extension - a GIF of line art belongs in the same bucket as the SVGs.
+
+          TWO images, and the still is not a nicety. A GIF cannot honour
+          prefers-reduced-motion the way every animation in globals.css does -
+          it just plays. So somebody who has asked their machine for less
+          movement gets the drawing this screen used to have, which is a real
+          picture rather than a frozen frame of a party popper mid-bang. */}
       <div className="intro-rise mb-4 flex justify-center">
+        <img
+          src="/illustrations/party-popper.gif"
+          alt=""
+          aria-hidden
+          className="art h-48 w-auto object-contain motion-reduce:hidden"
+        />
         <img
           src="/illustrations/people/welcome.svg"
           alt=""
           aria-hidden
-          /* .art, not .art-figure: the convention in globals.css is that line
-             art ships as SVG and gets inverted for the dark room, and filled
-             figures ship as PNG and opt out. This one is an SVG. */
-          className="art h-48 w-auto object-contain"
+          className="art hidden h-48 w-auto object-contain motion-reduce:block"
         />
       </div>
       <h1 className="hand intro-rise-late text-[26px] leading-tight">

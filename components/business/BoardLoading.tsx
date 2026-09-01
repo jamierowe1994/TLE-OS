@@ -52,11 +52,33 @@ export default function BoardLoading() {
 
   return (
     <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
+      {/* The waiting screen actually animates now, rather than being a still
+          drawing rocked by a keyframe. `board-loading-art` is deliberately NOT
+          on the GIF: the class exists to put motion on something that has
+          none, and running it over a moving image is two animations fighting.
+
+          `.art` on both, which neither had: this board lives inside the OS,
+          so it has a dark room, and black line art on warm charcoal is very
+          nearly invisible. That was already true of the still - the GIF would
+          just have inherited it.
+
+          The still is kept for prefers-reduced-motion, where it keeps its CSS
+          nudge (which globals.css already switches off for that preference).
+          A GIF ignores the setting entirely, so without this the one screen
+          somebody stares at while waiting would be the one that would not sit
+          still for them. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/illustrations/loading.gif"
+        alt=""
+        className="art h-auto w-[min(260px,60vw)] select-none motion-reduce:hidden"
+        draggable={false}
+      />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src="/illustrations/notioly/looking-for-something.svg"
         alt=""
-        className="board-loading-art h-auto w-[min(260px,60vw)] select-none"
+        className="art board-loading-art hidden h-auto w-[min(260px,60vw)] select-none motion-reduce:block"
         draggable={false}
       />
       <p className="hand mt-6 text-[17px] text-ink">Fetching the pipeline</p>
