@@ -70,6 +70,16 @@ function toPerson(m: TegTeamMember): Omit<TegPerson, "syncedAt"> | null {
     partnerPackage: str(m.partner_package),
     bio: str(m.bio),
     photoUrl: str(m.photo_url),
+    /* Free text, and typed by hand over years — multi-line, trailing commas,
+       the odd lone ".". Whitespace is squashed so it can be geocoded and shown
+       on one line; anything that is plainly not an address ("." on one record)
+       is dropped rather than offered to somebody as their home. */
+    homeAddress: (() => {
+      const raw = str(m.home_address);
+      if (!raw) return null;
+      const tidied = raw.replace(/\s*\n\s*/g, ", ").replace(/\s{2,}/g, " ").trim();
+      return tidied.replace(/[^A-Za-z0-9]/g, "").length < 6 ? null : tidied;
+    })(),
     /* `status` is blank or null on real records (Kiran, Tiffany, Kirstie), and
        it disagrees with `active` — Costin, Margo and Amanda are all
        status "Departed" with active true. Both are kept so a reader can decide;

@@ -8,7 +8,11 @@ import DiaryGrid from "@/components/DiaryGrid";
 import LeadSourceChart from "@/components/LeadSourceChart";
 import OutstandingTermsWidget from "@/components/OutstandingTerms";
 import { FlowTag, Pill } from "@/components/Wire";
-import { todaysAppts, DIARY as SAMPLE_DIARY, VIEWING_OUTCOMES } from "@/lib/diary";
+/* `todaysAppts` and `DIARY as SAMPLE_DIARY` used to be imported here. Both are
+   gone on purpose: the sample book must not be reachable from the dashboard,
+   or the next tile added quietly reaches for it too. SAMPLE_DIARY had already
+   been dead for a while and nobody noticed. */
+import { VIEWING_OUTCOMES, minutesOf, type Appt } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 import { dueWithin, CERT_META } from "@/lib/compliance";
 import { LEADS, leadSide } from "@/lib/leads-sample";
@@ -202,12 +206,28 @@ const tenantLeads = LEADS.filter((l) => leadSide(l) === "tenant");
    log in, glance, and go. ── */
 function DiaryWidget({ w, h }: { w: number; h: number }) {
   const [open, setOpen] = useState(false);
-  const today = todaysAppts();
+  /**
+   * LIVE, at every size.
+   *
+   * This read `todaysAppts()` — the hard-coded sample book in lib/diary — so
+   * the small and tall sizes showed Priya Shah and 12 Elm Gardens whatever was
+   * actually in the diary, while the 2×2 size rendered the real DiaryGrid. The
+   * same tile told you two different days depending on how you had resized it,
+   * and an appraisal you had just booked appeared in neither of the narrow
+   * ones. Same rule as every other figure in this product: live, or say so.
+   */
+  const { appts, loading } = useDiary();
+  const today = appts
+    .filter((a) => a.day === 0)
+    .sort((a, b) => minutesOf(a.start) - minutesOf(b.start));
   if (w === 1 && h === 1) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="block w-full text-left">
         <Head icon="calendar" label="Diary" />
-        <BigCount value={String(today.length)} hint={`today · next at ${today[0]?.start ?? "—"}`} />
+        <BigCount
+          value={loading ? "—" : String(today.length)}
+          hint={loading ? "reading your diary…" : `today · next at ${today[0]?.start ?? "—"}`}
+        />
         <DiaryCalendar open={open} onClose={() => setOpen(false)} />
       </button>
     );
@@ -216,6 +236,15 @@ function DiaryWidget({ w, h }: { w: number; h: number }) {
     return (
       <button type="button" onClick={() => setOpen(true)} className="block w-full text-left">
         <Head icon="calendar" label="Diary — today" />
+        {loading && (
+          <p className="mt-4 flex items-center gap-2 text-[11.5px] text-muted">
+            <span className="block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+            Reading your diary…
+          </p>
+        )}
+        {!loading && !today.length && (
+          <p className="mt-4 text-[11.5px] text-muted">Nothing in the diary today.</p>
+        )}
         <ul className="mt-4 space-y-2.5">
           {today.slice(0, h >= 3 ? 8 : 5).map((t) => (
             <li key={t.id} className="flex items-baseline gap-3">
@@ -257,9 +286,29 @@ function DiaryWidget({ w, h }: { w: number; h: number }) {
 function TodayWidget({ w, h }: { w: number; h: number }) {
   const [open, setOpen] = useState(false);
   const { appts } = useDiary();
-  const today = appts.filter((a) => a.day === 0);
-  const tomorrow = appts.filter((a) => a.day === 1);
+  /**
+   * IN TIME ORDER, all-day first.
+   *
+   * This filtered and never sorted, so against a live book the list read
+   * 00:00, 07:00, 04:00, 10:00 — REX's own order, which is not the order the
+   * day happens in. A "what's on today" tile whose second entry is before its
+   * first is worse than no tile.
+   *
+   * All-day entries sort to the top and print no time, because the midnight
+   * they carry is not a time anybody booked — it's the absence of one, and
+   * showing "00:00 Summer bank holiday" invents an appointment.
+   */
+  const inOrder = (list: Appt[]) =>
+    [...list].sort(
+      (a, b) =>
+        Number(Boolean(b.allDay)) - Number(Boolean(a.allDay)) ||
+        minutesOf(a.start) - minutesOf(b.start)
+    );
+  const today = inOrder(appts.filter((a) => a.day === 0));
+  const tomorrow = inOrder(appts.filter((a) => a.day === 1));
   const showTomorrow = w >= 2 || h >= 3;
+  /** The next thing with an actual time on it. */
+  const nextUp = today.find((a) => !a.allDay)?.start ?? "—";
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} className="block w-full text-left">
@@ -268,13 +317,15 @@ function TodayWidget({ w, h }: { w: number; h: number }) {
           {w >= 2 && <FlowTag from="365 calendar (sign-in TBC)" />}
         </div>
         {h === 1 ? (
-          <BigCount value={String(today.length)} hint={`next at ${today[0]?.start ?? "—"}`} />
+          <BigCount value={String(today.length)} hint={`next at ${nextUp}`} />
         ) : (
           <div className={showTomorrow && w >= 2 ? "mt-5 grid grid-cols-2 gap-4" : "mt-5"}>
             <ul className="space-y-2.5">
               {today.slice(0, 4).map((t) => (
                 <li key={t.id} className="flex items-baseline gap-3">
-                  <span className="figures w-11 shrink-0 text-[13px] text-accent-dark">{t.start}</span>
+                  <span className={`w-11 shrink-0 text-accent-dark ${t.allDay ? "text-[9.5px] uppercase tracking-wide" : "figures text-[13px]"}`}>
+                    {t.allDay ? "all day" : t.start}
+                  </span>
                   <span className="min-w-0">
                     <span className="block truncate text-[12.5px]">{t.what}</span>
                     <span className="block truncate text-[10.5px] text-muted">{t.who}</span>
@@ -287,7 +338,9 @@ function TodayWidget({ w, h }: { w: number; h: number }) {
                 <li className="text-[10px] font-semibold uppercase tracking-wide text-muted">Tomorrow</li>
                 {tomorrow.slice(0, 4).map((t) => (
                   <li key={t.id} className="flex items-baseline gap-3">
-                    <span className="figures w-11 shrink-0 text-[13px] text-muted">{t.start}</span>
+                    <span className={`w-11 shrink-0 text-muted ${t.allDay ? "text-[9.5px] uppercase tracking-wide" : "figures text-[13px]"}`}>
+                      {t.allDay ? "all day" : t.start}
+                    </span>
                     <span className="min-w-0">
                       <span className="block truncate text-[12.5px]">{t.what}</span>
                       <span className="block truncate text-[10.5px] text-muted">{t.who}</span>

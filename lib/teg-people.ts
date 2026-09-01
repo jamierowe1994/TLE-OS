@@ -51,6 +51,17 @@ export interface TegPerson {
   /** Master headshot. Empty for every TLE person as of 28 Aug 2026 — James is
    *  adding them, so this is wired now and will fill in behind us. */
   photoUrl: string | null;
+  /**
+   * Their home address, free text. PERSONAL DATA — see the warning on
+   * `home_address` in lib/business/teg-hub.ts.
+   *
+   * Read for the signed-in person's OWN record only, by /api/teg/me, to
+   * prefill the travel-time origin on their profile. `listTegPeople()`
+   * deliberately does NOT select it: that list feeds the admin people screen,
+   * and a staff directory that quietly carries everyone's home address is one
+   * careless render away from being exactly the dump this was avoiding.
+   */
+  homeAddress: string | null;
   status: string | null;
   syncedAt: string;
 }
@@ -65,6 +76,7 @@ interface Row extends Record<string, unknown> {
   partner_package: string | null;
   bio: string | null;
   photo_url: string | null;
+  home_address?: string | null;
   status: string | null;
   synced_at: string;
 }
@@ -78,12 +90,18 @@ const toPerson = (r: Row): TegPerson => ({
   partnerPackage: r.partner_package,
   bio: r.bio,
   photoUrl: r.photo_url,
+  homeAddress: r.home_address ?? null,
   status: r.status,
   syncedAt: r.synced_at,
 });
 
+/* The everyday columns. NO home_address — see the field's doc comment. Only
+   getTegPerson(), which is always somebody's own record, asks for it. */
 const COLS = `email, rex_id, name, job_title, person_type,
               partner_package, bio, photo_url, status, synced_at::text AS synced_at`;
+
+/** COLS plus the home address. Used by getTegPerson ONLY. */
+const COLS_WITH_HOME = `${COLS}, home_address`;
 
 /** Normalise an email for comparison. The Hub's uniqueness is case-insensitive
  *  and its stored data is not — this is the only safe way to match. */
@@ -109,14 +127,14 @@ export async function getTegPerson(opts: {
        person the Rex sync never touched is still found. */
     if (rexId) {
       const byRex = await q<Row>(
-        `SELECT ${COLS} FROM os_teg_people WHERE rex_id = $1 LIMIT 1`,
+        `SELECT ${COLS_WITH_HOME} FROM os_teg_people WHERE rex_id = $1 LIMIT 1`,
         [rexId]
       );
       if (byRex[0]) return toPerson(byRex[0]);
     }
     if (email) {
       const byEmail = await q<Row>(
-        `SELECT ${COLS} FROM os_teg_people WHERE email = $1 LIMIT 1`,
+        `SELECT ${COLS_WITH_HOME} FROM os_teg_people WHERE email = $1 LIMIT 1`,
         [email]
       );
       if (byEmail[0]) return toPerson(byEmail[0]);
@@ -165,8 +183,8 @@ export async function storeTegPeople(people: Array<Omit<TegPerson, "syncedAt">>)
     await q(
       `INSERT INTO os_teg_people
          (email, rex_id, name, job_title, person_type,
-          partner_package, bio, photo_url, status, payload, synced_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+          partner_package, bio, photo_url, home_address, status, payload, synced_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NOW())
        ON CONFLICT (email) DO UPDATE SET
          rex_id = EXCLUDED.rex_id,
          name = EXCLUDED.name,
@@ -175,6 +193,7 @@ export async function storeTegPeople(people: Array<Omit<TegPerson, "syncedAt">>)
          partner_package = EXCLUDED.partner_package,
          bio = EXCLUDED.bio,
          photo_url = EXCLUDED.photo_url,
+         home_address = EXCLUDED.home_address,
          status = EXCLUDED.status,
          payload = EXCLUDED.payload,
          synced_at = NOW()`,
@@ -187,6 +206,7 @@ export async function storeTegPeople(people: Array<Omit<TegPerson, "syncedAt">>)
         p.partnerPackage,
         p.bio,
         p.photoUrl,
+        p.homeAddress,
         p.status,
         JSON.stringify(p),
       ]

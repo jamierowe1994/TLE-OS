@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { geocode } from "@/lib/geocode";
 
 /**
  * Address lookup + geocoding, proxied server-side.
@@ -111,6 +112,28 @@ export async function GET(req: NextRequest) {
   const resolve = req.nextUrl.searchParams.get("resolve");
   const IDEAL = ideal();
   const GOOGLE = google();
+
+  /* ?geocode=<free text> — for an address we ALREADY hold as a string and
+     nobody is typing: the home address the TEG Hub has for someone, a lead's
+     area. Autocomplete needs a person choosing from a dropdown; this needs an
+     answer. Shares lib/geocode with the travel-time lookup, so both agree
+     about what counts as a precise hit. */
+  const toGeocode = req.nextUrl.searchParams.get("geocode")?.trim();
+  if (toGeocode) {
+    const found = await geocode(toGeocode);
+    if (!found.ok) {
+      return NextResponse.json({ configured: Boolean(GOOGLE), problem: found.problem });
+    }
+    return NextResponse.json({
+      configured: true,
+      provider: "google",
+      address: found.at.tidied,
+      postcode: found.at.postcode,
+      lat: found.at.lat,
+      lng: found.at.lng,
+      precise: found.at.precise,
+    });
+  }
 
   if (!IDEAL && !GOOGLE) {
     return NextResponse.json({

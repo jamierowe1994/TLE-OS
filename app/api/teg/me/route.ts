@@ -38,5 +38,11 @@ export async function GET(req: NextRequest) {
     bio: person?.bio ?? null,
     photoUrl: person?.photoUrl ?? null,
     jobTitle: person?.jobTitle ?? null,
+    /* Their OWN home address, and the reason this route takes no id parameter.
+       Used once: to prefill the travel-time origin on their profile when they
+       have not set one. Everything else about it — that it is never shown to a
+       landlord or tenant, never on a deck, never in the admin list — is
+       enforced at the query in lib/teg-people.ts, not here. */
+    homeAddress: person?.homeAddress ?? null,
   });
 }

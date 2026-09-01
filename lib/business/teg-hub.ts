@@ -67,6 +67,17 @@ export interface TegTeamMember {
    *  photo so every app can consume it. */
   photo_url?: string;
   job_title?: string;
+  /**
+   * Their home address, free text. Populated for 31 TLE partners as of
+   * 1 Sep 2026 (measured against the Hub, not assumed).
+   *
+   * PERSONAL DATA, and it must stay that way: it is read for the signed-in
+   * person's OWN record only, to prefill the travel-time origin on their
+   * profile. It must never reach an admin list, a deck, a directory or an
+   * email. The Hub's `address` field sits beside it and is blank on every
+   * record, so this is the one that matters.
+   */
+  home_address?: string;
   location_id?: string;
   territory_postcodes?: string[];
   date_signed?: string;
@@ -107,6 +118,7 @@ const TM_FIELDS = [
   "bio",
   "photo_url",
   "job_title",
+  "home_address",
   "location_id",
   "date_signed",
   "date_launched",

@@ -137,12 +137,16 @@ export default function ProfilePage() {
      and null if the Hub has none for them — the pill simply doesn't render,
      rather than inventing a tier. */
   const [pkg, setPkg] = useState<string | null>(null);
+  /** Their home address as the TEG Hub holds it, offered when they have none. */
+  const [hubHome, setHubHome] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
     fetch("/api/teg/me", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { partnerPackage?: string | null } | null) => {
-        if (alive) setPkg(d?.partnerPackage ?? null);
+      .then((d: { partnerPackage?: string | null; homeAddress?: string | null } | null) => {
+        if (!alive) return;
+        setPkg(d?.partnerPackage ?? null);
+        setHubHome(d?.homeAddress ?? null);
       })
       .catch(() => {
         /* A missing package badge must never break the profile page. */
@@ -153,6 +157,8 @@ export default function ProfilePage() {
   }, []);
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
   const [saved, setSaved] = useState(false);
+  /** Geocoding the Hub's address after they accept it. */
+  const [placing, setPlacing] = useState(false);
   const [theme, setTheme] = useState<ThemeChoice>("auto");
   const [darkBg, setDarkBg] = useState(DARK_BG_DEFAULT);
   const [darkBox, setDarkBox] = useState(DARK_BOX_DEFAULT);
@@ -410,6 +416,49 @@ export default function ProfilePage() {
                 appointment of the day, so the booker can offer you a buffer — never shown to
                 landlords or tenants, and never on a deck or an email.
               </span>
+
+              {/* What the Team Hub already holds for them, OFFERED rather than
+                  written in. It is their home address: filling it in silently
+                  from another system, on a screen they did not ask to have it
+                  on, is not a thing to do without showing them first. One
+                  click, and it geocodes so the booker can actually use it. */}
+              {hubHome && !profile.base && (
+                <div className="mt-2.5 rounded-xl border border-line/60 bg-panel/60 p-3">
+                  <p className="text-[11.5px] leading-relaxed">
+                    The Team Hub has this for you:{" "}
+                    <span className="text-ink">{hubHome}</span>
+                  </p>
+                  <button
+                    type="button"
+                    disabled={placing}
+                    onClick={async () => {
+                      setPlacing(true);
+                      try {
+                        const r = await fetch(
+                          `/api/address?geocode=${encodeURIComponent(hubHome)}`,
+                          { cache: "no-store" }
+                        );
+                        const j = await r.json();
+                        // Saved either way — a home address we can't place is
+                        // still their address, and they can correct it.
+                        save({
+                          ...profile,
+                          base: j.address ?? hubHome,
+                          baseLat: j.lat ?? null,
+                          baseLng: j.lng ?? null,
+                        });
+                      } catch {
+                        save({ ...profile, base: hubHome, baseLat: null, baseLng: null });
+                      } finally {
+                        setPlacing(false);
+                      }
+                    }}
+                    className="hand mt-2 rounded-full border border-accent-dark px-3.5 py-1.5 text-[12px] text-accent-dark transition-colors hover:bg-accent-soft/40 disabled:opacity-50"
+                  >
+                    {placing ? "Placing it on the map…" : "Use this address"}
+                  </button>
+                </div>
+              )}
               {/* Typed text saves fine but has no coordinates, and a home
                   address with no coordinates is invisible to the booker while
                   looking perfectly filled in. Say so where they'll see it. */}

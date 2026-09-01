@@ -106,6 +106,26 @@ function toAppt(e: RexEvent): Appt | null {
     ? Math.max(15, Math.round((new Date(endIso).getTime() - new Date(startIso).getTime()) / 60000))
     : 30;
 
+  /**
+   * All-day, inferred — REX gives us no flag for it.
+   *
+   * The RexEvent shape carries no `is_all_day` (checked against the live
+   * payload), so it has to be read off the times: an entry that starts at
+   * local midnight and runs a full day or longer is a day off, a course or a
+   * block, not something booked for 00:00. The old code kept these at
+   * `start: "00:00"` and only capped their HEIGHT — which is the wrong axis.
+   * The height never mattered; the midnight START is what dragged the grid's
+   * window open and squeezed the working day into half the screen.
+   *
+   * A 22-hour span with a 00:15 start is not caught, and shouldn't be: that
+   * is a genuinely odd entry and seeing it is the right outcome.
+   */
+  const startAt = new Date(startIso);
+  const allDay =
+    startAt.getHours() === 0 &&
+    startAt.getMinutes() === 0 &&
+    (!endIso || mins >= 20 * 60);
+
   const owner = ownerOf(e);
   const priv = Boolean(e.is_private);
   const title = (e.title ?? "").trim();
@@ -118,7 +138,8 @@ function toAppt(e: RexEvent): Appt | null {
     id: `rex-${e.id}`,
     day: dayOffset(startIso),
     start: hhmm(startIso),
-    mins: Math.min(mins, 8 * 60), // an all-day block shouldn't paint over the grid
+    mins: Math.min(mins, 8 * 60), // a long block shouldn't paint over the grid
+    ...(allDay ? { allDay: true } : {}),
     kind: priv ? "other" : kindOf(title),
     what: priv ? "Busy" : what || "(untitled)",
     where: priv ? "" : loc,

@@ -27,6 +27,21 @@ import { milesBetween } from "@/components/PeopleFilter";
  */
 const BASE_START = 8 * 60; // 08:00 →
 const BASE_END = 19 * 60; //        → 19:00
+/**
+ * How far the window may be stretched by an early bird or a late viewing.
+ *
+ * The widening had no limit, so the grid was only ever as sensible as the
+ * oddest entry in the week. One 00:00 all-day block opened it to nineteen
+ * hours and the 08:00–19:00 working day — the part anybody actually books
+ * into — ended up squeezed into the top half, which is how "the calendar
+ * only shows up to 2pm" happens on a screen that is showing the whole day.
+ *
+ * All-day entries no longer reach here at all (they're chips in the header),
+ * but a real 06:30 start still widens the grid, and a 21:00 viewing still
+ * does. Beyond these bounds the block is clamped rather than the grid.
+ */
+const FLOOR = 6 * 60; //  never open earlier than 06:00
+const CEILING = 22 * 60; // never run later than 22:00
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export function todayStart(): Date {
@@ -110,6 +125,20 @@ function laneMap(appts: { id: string; start: string; mins: number }[]) {
   return out;
 }
 
+/** "10:15" + 90 → "11:45". For the hover, which shows the real span. */
+function endLabel(start: string, mins: number): string {
+  const end = minutesOf(start) + mins;
+  return `${String(Math.floor(end / 60) % 24).padStart(2, "0")}:${String(end % 60).padStart(2, "0")}`;
+}
+
+/** 90 → "1h 30m". Said the way a diary entry is read aloud. */
+function lengthLabel(mins: number): string {
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
 export type Wx = { glyph: string; temp: number; word: string };
 
 export default function DiaryGrid({
@@ -149,12 +178,14 @@ export default function DiaryGrid({
   const { appts: DIARY } = useDiary();
   const columns = weekOffsets(week);
 
-  // The window: the base day, widened to hold anything outside it.
+  // The window: the base day, widened to hold anything outside it — but only
+  // by TIMED entries, and only as far as FLOOR/CEILING allow.
   const visible = columns.flatMap((c) => DIARY.filter((a) => a.day === c.offset));
-  const earliest = visible.reduce((m, a) => Math.min(m, minutesOf(a.start)), BASE_START);
-  const latest = visible.reduce((m, a) => Math.max(m, minutesOf(a.start) + a.mins), BASE_END);
-  const DAY_START = Math.floor(earliest / 60) * 60;
-  const DAY_END = Math.ceil(latest / 60) * 60;
+  const timed = visible.filter((a) => !a.allDay);
+  const earliest = timed.reduce((m, a) => Math.min(m, minutesOf(a.start)), BASE_START);
+  const latest = timed.reduce((m, a) => Math.max(m, minutesOf(a.start) + a.mins), BASE_END);
+  const DAY_START = Math.max(FLOOR, Math.floor(earliest / 60) * 60);
+  const DAY_END = Math.min(CEILING, Math.ceil(latest / 60) * 60);
 
   const PX = hourPx / 60;
   const gridH = (DAY_END - DAY_START) * PX;
@@ -216,6 +247,18 @@ export default function DiaryGrid({
                   <span className="figures ml-1 text-[10.5px] text-muted">{wx.temp}°</span>
                 </span>
               )}
+              {/* All-day entries live HERE, not in the grid. A day off is not
+                  an appointment at midnight, and drawing it as one cost the
+                  whole week its readable hours. */}
+              {DIARY.filter((a) => a.day === c.offset && a.allDay).map((a) => (
+                <span
+                  key={a.id}
+                  title={[a.what, a.where, a.who, a.agent].filter(Boolean).join(" · ")}
+                  className="mt-1 block truncate rounded-md border border-line/70 bg-panel px-1 py-0.5 text-[9px] leading-tight text-muted"
+                >
+                  {a.what}
+                </span>
+              ))}
             </div>
           );
         })}
@@ -236,7 +279,9 @@ export default function DiaryGrid({
         </div>
 
         {columns.map((c, i) => {
-          const appts = DIARY.filter((a) => a.day === c.offset);
+          // All-day entries were drawn in the header; they must not also be
+          // dealt a lane here, or every day off eats a quarter of the column.
+          const appts = DIARY.filter((a) => a.day === c.offset && !a.allDay);
           // Overlapping appointments share the column rather than burying
           // one another — a clash you can see is a clash you can fix.
           const lanes = laneMap(appts);
@@ -271,8 +316,15 @@ export default function DiaryGrid({
                 );
               })()}
               {appts.map((a) => {
-                const top = (minutesOf(a.start) - DAY_START) * PX;
-                const h = Math.max(a.mins * PX, 26);
+                /* Clamped into the window rather than allowed outside it. With
+                   a floor and a ceiling on the grid, a 05:30 start would
+                   otherwise render at a negative offset — drawn over the day
+                   headings, or clipped away entirely so an appointment that
+                   exists cannot be seen. Pinned to the edge it stays visible,
+                   and the hover says the real time. */
+                const rawTop = (minutesOf(a.start) - DAY_START) * PX;
+                const top = Math.max(0, Math.min(rawTop, gridH - 26));
+                const h = Math.max(Math.min(a.mins * PX, gridH - top), 26);
                 const seat = lanes.get(a.id) ?? { lane: 0, lanes: 1, hidden: false };
                 if (seat.hidden) return null;
                 const widthPct = 100 / seat.lanes;
@@ -285,6 +337,23 @@ export default function DiaryGrid({
                   <button
                     key={a.id}
                     type="button"
+                    /* The whole entry on hover, so the block itself can stay
+                       small. At 24–44px a block fits a time and a truncated
+                       title and nothing else; without this the only way to
+                       find out what a viewing actually is was to open it. */
+                    title={[
+                      `${a.start}–${endLabel(a.start, a.mins)}${a.mins ? ` (${lengthLabel(a.mins)})` : ""}`,
+                      a.what,
+                      a.where,
+                      a.who && `With ${a.who}`,
+                      a.agent && `Diary: ${a.agent}`,
+                      a.tenant && `Sitting tenant: ${a.tenant}`,
+                      a.comms?.some((c2) => !c2.done)
+                        ? `Not sent: ${a.comms.filter((c2) => !c2.done).map((c2) => c2.label).join(", ")}`
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join("\n")}
                     onClick={(e) => {
                       e.stopPropagation();
                       onAppt?.(a.id);

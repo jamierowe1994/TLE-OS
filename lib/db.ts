@@ -1035,6 +1035,11 @@ CREATE TABLE IF NOT EXISTS os_teg_people (
   synced_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS os_teg_people_rex_id ON os_teg_people (rex_id);
+-- Their home address, from the Hub. PERSONAL DATA: read for the signed-in
+-- person's OWN record only, to prefill the travel-time origin on their
+-- profile. It is deliberately absent from the columns the admin people list
+-- selects -- see lib/teg-people.ts.
+ALTER TABLE os_teg_people ADD COLUMN IF NOT EXISTS home_address TEXT;
 
 -- The PLC handover: an accepted application on its way through compliance.
 --
