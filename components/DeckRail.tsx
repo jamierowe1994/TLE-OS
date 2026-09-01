@@ -179,20 +179,76 @@ export default function DeckRail({
   const appraisal = latest("appraisal");
   const post = latest("post-appraisal");
 
+  /**
+   * WHICH STEP THIS APPRAISAL IS ACTUALLY ON.
+   *
+   * Derived, not stored — the same rule effectiveStage follows, and for the
+   * same reason: a stored answer goes stale the moment an appointment passes
+   * or a figure is recorded, and then the page opens on the wrong card.
+   *
+   * A recorded valuation means the visit produced something, so the offer is
+   * the live step. Before that, a passed appointment means the visit has
+   * happened. Otherwise the pre-appraisal is what is next out of the door.
+   */
+  const visitPassed = Boolean(appointmentAt && new Date(appointmentAt) < new Date());
+  const stage: DeckKind = hasValuation
+    ? "post-appraisal"
+    : visitPassed
+      ? "appraisal"
+      : "pre-appraisal";
+
+  /* The live step first, then the rest in the order a landlord meets them.
+     Reordering rather than always-pre-first is the whole point: an agent back
+     from a visit should land on the offer, not scroll past two finished steps
+     to reach it. */
+  const order: DeckKind[] = [stage, ...(["pre-appraisal", "appraisal", "post-appraisal"] as DeckKind[]).filter((k) => k !== stage)];
+
+  /**
+   * A deck card, open or folded away.
+   *
+   * James, 1 Sep: the stage you are ON belongs at the top and open; the ones
+   * behind you are "good to be able to see but not needed". So a finished step
+   * folds to one line you can still click into, and the page stops being three
+   * equal panels competing for the same attention.
+   */
   const Card = ({
     kind,
     children,
     deck,
     locked,
+    current,
   }: {
     kind: DeckKind;
     children: React.ReactNode;
     deck: SentDeck | null;
     locked?: string;
+    current: boolean;
   }) => {
     const meta = DECK_KINDS.find((k) => k.id === kind)!;
+    const [open, setOpen] = useState(current);
+    /* Ordered by CSS rather than by rearranging the JSX. The three cards keep
+       their own state — a collapsed card that moved position in the tree would
+       remount and lose it. */
+    const style = { order: order.indexOf(kind) };
+    if (!open) {
+      return (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          style={style}
+          className="flex w-full items-center gap-3 rounded-2xl border border-line/60 bg-panel/50 px-5 py-3 text-left"
+        >
+          <span className="text-[12.5px] font-semibold text-muted">{meta.label}</span>
+          <span className="text-[11px] text-muted">
+            {deck ? `made ${when(deck.createdAt)}` : locked ? "waiting" : "not made"}
+          </span>
+          <span className="ml-auto text-[11px] text-muted">Show</span>
+        </button>
+      );
+    }
     return (
       <div
+        style={style}
         className={`rounded-2xl border p-5 ${
           locked ? "border-line/60 bg-panel/50" : "border-line/80 bg-panel"
         }`}
@@ -239,14 +295,14 @@ export default function DeckRail({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       {error && (
         <p className="rounded-xl border border-accent-dark/40 bg-accent-soft/30 p-3 text-[12px]">
           {error}
         </p>
       )}
 
-      <Card kind="pre-appraisal" deck={pre}>
+      <Card kind="pre-appraisal" deck={pre} current={stage === "pre-appraisal"}>
         {pre ? (
           <>
             <div className="flex flex-wrap gap-2">
@@ -286,15 +342,21 @@ export default function DeckRail({
         </p>
       </Card>
 
-      <Card kind="appraisal" deck={appraisal}>
+      <Card kind="appraisal" deck={appraisal} current={stage === "appraisal"}>
+        {/* NO REBUILD ONCE IT EXISTS. James, 1 Sep: "we should send the money
+            deck as we took with us on the day." A rebuild silently replaces
+            the figures a landlord was shown in their own hallway with whatever
+            the market says this morning — and nobody would know it had
+            changed. The deck is the record of that conversation. */}
         <div className="flex flex-wrap gap-2">
-          <Link href={`/market-appraisals/${appraisalId}/build`} className={primary}>
-            {appraisal ? "Rebuild it" : "Build the presentation"}
-          </Link>
-          {appraisal && (
-            <a href={appraisal.url} target="_blank" rel="noreferrer" className={ghost}>
+          {appraisal ? (
+            <a href={appraisal.url} target="_blank" rel="noreferrer" className={primary}>
               Review the deck
             </a>
+          ) : (
+            <Link href={`/market-appraisals/${appraisalId}/build`} className={primary}>
+              Build the presentation
+            </Link>
           )}
         </div>
       </Card>
@@ -302,6 +364,7 @@ export default function DeckRail({
       <Card
         kind="post-appraisal"
         deck={post}
+        current={stage === "post-appraisal"}
         locked={
           hasValuation
             ? undefined
@@ -313,16 +376,17 @@ export default function DeckRail({
 
         {hasValuation ? (
           <div className="flex flex-wrap gap-2">
-            <Link
-              href={`/market-appraisals/${appraisalId}/build?kind=post-appraisal`}
-              className={primary}
-            >
-              {post ? "Rebuild it" : "Build the post-appraisal"}
-            </Link>
-            {post && (
-              <a href={post.url} target="_blank" rel="noreferrer" className={ghost}>
+            {post ? (
+              <a href={post.url} target="_blank" rel="noreferrer" className={primary}>
                 Review the deck
               </a>
+            ) : (
+              <Link
+                href={`/market-appraisals/${appraisalId}/build?kind=post-appraisal`}
+                className={primary}
+              >
+                Build the post-appraisal
+              </Link>
             )}
           </div>
         ) : (

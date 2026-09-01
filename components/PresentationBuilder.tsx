@@ -188,8 +188,22 @@ export default function PresentationBuilder({
    * Nothing is re-entered here: an agent who has already typed 1,300 once
    * should not be asked for it again on the way to sending it.
    */
-  function offerPayload() {
+  async function offerPayload() {
     if (kind !== "post-appraisal" || !appraisal?.valuation) return {};
+    /* Best effort. A signing session that cannot be opened must not stop a
+       deck being built — the offer is still worth sending. */
+    let signUrl: string | null = null;
+    try {
+      const r = await fetch("/api/docuseal/sign", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: appraisal.id }),
+      });
+      const j = (await r.json()) as { ok?: boolean; embedSrc?: string };
+      if (j.ok && j.embedSrc) signUrl = j.embedSrc;
+    } catch {
+      /* left null — the slide explains rather than dead-ends */
+    }
     const level = SERVICE_LEVELS.find((s) => s.id === appraisal.serviceLevel);
     return {
       valuation: {
@@ -202,9 +216,19 @@ export default function PresentationBuilder({
         setupFee: appraisal.setupFee ?? null,
         note: appraisal.valuationNote ?? null,
       },
-      /* signUrl stays null until DocuSeal is connected. The slide renders the
-         no-button branch, which explains rather than dead-ends. */
-      terms: { signUrl: null, summary: null },
+      /* THE SIGNING LINK GOES ON THE DECK ITSELF. James, 1 Sep: opening the
+         post-appraisal deck should put the contract one button away, so the
+         landlord reads the offer and signs in the same sitting rather than
+         waiting for an agent to open something on their behalf.
+
+         Minted at build time and frozen into the deck like everything else
+         here. A DocuSeal submission costs nothing until it is signed, so a
+         deck that is never opened has cost nothing either.
+
+         Null when DocuSeal is not connected or the session could not be
+         opened, and the slide's no-button branch explains instead — a dead
+         "sign here" in front of a landlord is worse than none. */
+      terms: { signUrl: signUrl ?? null, summary: null },
     };
   }
 
@@ -260,7 +284,7 @@ export default function PresentationBuilder({
               }
             : null,
           market: marketPayload(),
-          ...offerPayload(),
+          ...(await offerPayload()),
         }),
       });
       const j = (await res.json()) as { ok?: boolean; url?: string; error?: string };
