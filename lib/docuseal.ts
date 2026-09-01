@@ -84,6 +84,43 @@ function baseUrl(): string | null {
   return raw ? raw.replace(/\/+$/, "") : null;
 }
 
+/**
+ * THE API ROOT, whichever host was configured — and this cost a real failure.
+ *
+ * This file was written for a SELF-HOSTED instance, where the API hangs off
+ * `/api` on your own domain. TLE went to Cloud instead, where the API host IS
+ * `api.docuseal.eu` and there is no `/api` segment. So `${base}/api/submissions`
+ * became `https://api.docuseal.eu/api/submissions` and DocuSeal answered
+ * **404 with an empty body** — no message, nothing naming the problem, on the
+ * one screen where an agent is sitting in front of a landlord.
+ *
+ * Measured, both shapes work:
+ *   https://api.docuseal.eu/templates       → 200
+ *   https://docuseal.eu/api/templates       → 200
+ *   https://api.docuseal.eu/api/templates   → 404   ← what we were sending
+ *
+ * So the host decides. An `api.` host is already the API root; anything else
+ * needs `/api` appending. Telling James to set the variable a particular way
+ * would have worked once and broken the next time somebody set the obvious
+ * value, and the error it produces names nothing.
+ */
+function apiRoot(base: string): string {
+  return /^https?:\/\/api\./i.test(base) ? base : `${base}/api`;
+}
+
+/**
+ * WHERE A HUMAN SIGNS — never the API host.
+ *
+ * The same confusion one level down: signing forms live at
+ * `https://docuseal.eu/s/<slug>`, not on `api.docuseal.eu`. Built from the API
+ * host it produces a link that looks right, is wrong, and would be discovered
+ * by a landlord rather than by us. Derived by dropping the leading `api.` so
+ * the two can never drift to different regions.
+ */
+function signingBase(base: string): string {
+  return base.replace("://api.", "://");
+}
+
 async function ds<T>(
   path: string,
   init?: { method?: string; body?: unknown }
@@ -95,7 +132,7 @@ async function ds<T>(
       "DocuSeal isn't connected on this environment. DOCUSEAL_URL and DOCUSEAL_API_KEY are both needed."
     );
   }
-  const res = await fetch(`${base}/api${path}`, {
+  const res = await fetch(`${apiRoot(base)}${path}`, {
     method: init?.method ?? "GET",
     headers: {
       "X-Auth-Token": key,
@@ -177,7 +214,7 @@ function shapeSubmission(s: RawSubmission): DocusealSubmission {
       completedAt: x.completed_at ?? null,
       /* A signing link an agent can read down the phone. `embed_src` when
          DocuSeal gives one, otherwise the public /s/<slug> form. */
-      url: x.embed_src ?? (x.slug && base ? `${base}/s/${x.slug}` : null),
+      url: x.embed_src ?? (x.slug && base ? `${signingBase(base)}/s/${x.slug}` : null),
     })),
   };
 }
@@ -371,7 +408,7 @@ export async function openTermsSigning(
 
   /* embed_src is preferred over a URL we build: it is what DocuSeal itself
      says the form lives at, and it already carries the right region. */
-  const base = (process.env.DOCUSEAL_URL ?? "").replace(/\/+$/, "").replace("://api.", "://");
+  const base = signingBase(baseUrl() ?? "");
   return {
     submitterId: Number(s.id),
     slug: s.slug,
