@@ -146,6 +146,16 @@ const MACHINE_ROUTES = [
      no DOCUSEAL_WEBHOOK_SECRET set and 401 on a signature that does not
      check out, so the redirect was never what protected it. */
   "/api/docuseal/webhook",            // signed contracts coming back
+  /* Flow saying a recording moved on, and the same bug as the line above:
+     measured against the live site on 1 Sep, POST /api/video/webhook answered
+     307 to /sign-in. Flow retries at 1m, 5m, 30m, 2h, 6h and then gives up, so
+     every welcome video would have sat on "uploading" for ever while the
+     recording itself was perfectly fine.
+
+     Meets the precondition: with no FLOW_WEBHOOK_SECRET it answers 503 rather
+     than accepting anything, and with one it verifies an HMAC over the RAW
+     body before reading a single field. The redirect was never the guard. */
+  "/api/video/webhook",               // Flow: recording ready / failed
 ];
 
 export async function middleware(req: NextRequest) {
