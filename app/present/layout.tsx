@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import PreviewReturnBar from "@/components/PreviewReturnBar";
 
 /**
  * The presentation shell — customer-facing, so none of the OS's handwriting.
@@ -33,6 +34,8 @@ export default function PresentLayout({ children }: { children: React.ReactNode 
       style={{ fontFamily: "var(--font-montserrat), system-ui, sans-serif" }}
     >
       {children}
+      {/* Only ever renders with ?from=admin — a real customer never sees it. */}
+      <PreviewReturnBar />
     </div>
   );
 }

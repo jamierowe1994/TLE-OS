@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PreviewReturnBar from "@/components/PreviewReturnBar";
 
 /**
  * The landlord portal's shell — the same official red as the tenant side,
@@ -50,6 +51,8 @@ export default function LandlordLayout({ children }: { children: React.ReactNode
           </span>
         </div>
       </footer>
+      {/* Only ever renders with ?from=admin — a real customer never sees it. */}
+      <PreviewReturnBar />
     </div>
   );
 }

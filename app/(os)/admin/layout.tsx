@@ -62,17 +62,14 @@ const GROUPS: Array<{
       { href: "/admin/people", label: "People", needs: "see:people" },
       { href: "/admin/permissions", label: "Permissions", needs: "manage:roles" },
       { href: "/admin/pre-launch", label: "Pre-launch", needs: "see:reports" },
-      /* Beside Pre-launch rather than down in System: both are about getting
-         people onto the product, and this is where James goes looking for the
-         link to send somebody before a presentation. */
-      { href: "/admin/onboarding", label: "Onboarding", needs: "see:reports" },
-      /* The demo shelf. James shows these to partners and to Susan, and the
-         links were previously in his head or in an old email - the passport
-         one is minted per person and the PLC screens want a query string, so
-         neither is findable by wandering. Grouped under Onboarding because
-         they are all "here is the thing I built, have a look". */
-      { href: "/admin/tenant-passport", label: "Tenant passport", needs: "see:reports" },
-      { href: "/admin/plc-demo", label: "PLC handover", needs: "see:reports" },
+      /* ONE entry, not four.
+         Onboarding, Tenant passport and PLC handover each had their own line
+         here, which was three rail entries for one idea - "show me the thing I
+         built" - and a rail that grows an entry per demo stops being a rail.
+         They all live under Portals now, in the folder for the person who
+         actually sees them. The pages are unchanged and still reachable
+         directly; this is where you find them. */
+      { href: "/admin/portals", label: "Portals", needs: "see:reports" },
     ],
   },
   {

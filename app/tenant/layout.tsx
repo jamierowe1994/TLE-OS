@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PreviewReturnBar from "@/components/PreviewReturnBar";
 
 /**
  * The tenant portal's shell — THE LETTINGS EXPERTS, customer-facing.
@@ -61,6 +62,8 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
           </span>
         </div>
       </footer>
+      {/* Only ever renders with ?from=admin — a real customer never sees it. */}
+      <PreviewReturnBar />
     </div>
   );
 }
