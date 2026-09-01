@@ -390,8 +390,14 @@ export default function ProfilePage() {
               </label>
             </div>
 
+            {/* Home address. Stored as `base`/`baseLat`/`baseLng` rather than
+                `home` — those names shipped first and somebody may already
+                have saved one, and renaming a stored key silently empties the
+                field for whoever did. The LABEL is what needed fixing: "where
+                you usually set off from" is not a thing anybody scans a
+                profile looking for. */}
             <div className="mt-5">
-              <span className={label}>Where you usually set off from</span>
+              <span className={label}>Home address</span>
               <AddressField
                 value={profile.base ?? ""}
                 onChange={(v) => save({ ...profile, base: v, baseLat: null, baseLng: null })}
@@ -400,18 +406,26 @@ export default function ProfilePage() {
                 }
               />
               <span className="mt-1 block text-[10px] leading-relaxed text-muted">
-                Used only to work out your travel time to the first appointment of the day, so the
-                booker can offer you a buffer. Never shown to landlords or tenants.
-                {profile.base && profile.baseLat == null && (
-                  <>
-                    {" "}
-                    <span className="text-accent-dark">
-                      Pick one of the suggestions so it can be placed on the map — typed text alone
-                      has no coordinates, so travel time from here stays unavailable.
-                    </span>
-                  </>
-                )}
+                Where you normally set off from. Used only to work out your travel time to the first
+                appointment of the day, so the booker can offer you a buffer — never shown to
+                landlords or tenants, and never on a deck or an email.
               </span>
+              {/* Typed text saves fine but has no coordinates, and a home
+                  address with no coordinates is invisible to the booker while
+                  looking perfectly filled in. Say so where they'll see it. */}
+              {profile.base && profile.baseLat == null && (
+                <span className="mt-1.5 flex items-start gap-1.5 text-[10.5px] leading-relaxed text-accent-dark">
+                  <DoodleIcon name="target" size={11} className="mt-0.5 shrink-0" />
+                  Pick one of the suggestions as you type so we can place it on the map. Typed text
+                  on its own has no coordinates, so travel time from home stays unavailable.
+                </span>
+              )}
+              {profile.baseLat != null && (
+                <span className="mt-1.5 flex items-center gap-1.5 text-[10.5px] text-muted">
+                  <DoodleIcon name="target" size={11} className="shrink-0 text-accent-dark" />
+                  Placed on the map — the booker can measure your drive from here.
+                </span>
+              )}
             </div>
 
             <label className="mt-5 block">
