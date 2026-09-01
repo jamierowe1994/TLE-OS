@@ -277,6 +277,10 @@ export default function DiaryGrid({
                 if (seat.hidden) return null;
                 const widthPct = 100 / seat.lanes;
                 const on = selApptId === a.id;
+                /* Travel reads as the gap it is: striped, quiet, obviously
+                   not an appointment. It still takes up its slot, because
+                   the whole point is that the time is spoken for. */
+                const isTravel = a.kind === "travel";
                 return (
                   <button
                     key={a.id}
@@ -290,22 +294,38 @@ export default function DiaryGrid({
                       height: h - 2,
                       left: `calc(${seat.lane * widthPct}% + 2px)`,
                       width: `calc(${widthPct}% - 4px)`,
+                      ...(isTravel
+                        ? {
+                            backgroundImage:
+                              "repeating-linear-gradient(135deg, currentColor 0 1px, transparent 1px 6px)",
+                          }
+                        : {}),
                     }}
                     className={`absolute overflow-hidden rounded-lg border px-1.5 py-1 text-left transition-colors ${
-                      on
-                        ? "border-accent-dark bg-accent-soft"
-                        : past
-                          ? "border-line/70 bg-page opacity-60 hover:opacity-100"
-                          : "border-accent-dark/40 bg-accent-soft/55 hover:border-accent-dark"
+                      isTravel
+                        ? "border-dashed border-line text-muted/40 hover:border-ink/40"
+                        : on
+                          ? "border-accent-dark bg-accent-soft"
+                          : past
+                            ? "border-line/70 bg-page opacity-60 hover:opacity-100"
+                            : "border-accent-dark/40 bg-accent-soft/55 hover:border-accent-dark"
                     } ${onPick && !onAppt ? "pointer-events-none" : ""}`}
                   >
-                    <span className="figures block text-[9px] leading-none text-accent-dark">
+                    <span
+                      className={`figures block text-[9px] leading-none ${
+                        isTravel ? "text-muted" : "text-accent-dark"
+                      }`}
+                    >
                       {a.start}
                     </span>
-                    <span className="hand block truncate text-[10.5px] leading-tight">
+                    <span
+                      className={`hand block truncate text-[10.5px] leading-tight ${
+                        isTravel ? "text-muted" : ""
+                      }`}
+                    >
                       {a.what.replace(/^[^—]+—\s*/, "")}
                     </span>
-                    {h > 44 && (
+                    {h > 44 && !isTravel && (
                       <span className="block truncate text-[9px] text-muted">
                         {origin && a.lat != null && a.lng != null
                           ? `${Math.round(milesBetween(origin, { lat: a.lat, lng: a.lng }))} mi away · ${a.who}`

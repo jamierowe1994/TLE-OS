@@ -36,19 +36,47 @@ function set(next: DiaryState) {
   listeners.forEach((l) => l());
 }
 
-function start() {
-  if (started) return;
-  started = true;
-  fetch("/api/diary")
+function load(): Promise<void> {
+  return fetch("/api/diary", { cache: "no-store" })
     .then((r) => r.json())
     .then((j) => {
       if (j.ok && j.live && Array.isArray(j.appts)) {
+        // Live book — the server has already merged our own appointments in.
         set({ appts: j.appts, live: true, loading: false, agents: j.agents ?? [] });
+      } else if (j.ok && Array.isArray(j.mine) && j.mine.length) {
+        /* No REX, so the sample book is standing in — but appointments made
+           HERE are real and get merged on top. Without this, booking a travel
+           buffer on an environment with no REX looks like it did nothing. */
+        set({
+          appts: [...DIARY, ...j.mine].sort((a, b) => a.day - b.day || a.start.localeCompare(b.start)),
+          live: false,
+          loading: false,
+          agents: state.agents,
+        });
       } else {
         set({ ...state, loading: false });
       }
     })
     .catch(() => set({ ...state, loading: false }));
+}
+
+function start() {
+  if (started) return;
+  started = true;
+  void load();
+}
+
+/**
+ * Re-read the diary now.
+ *
+ * The store fetched once and never again, which was fine when it only
+ * mirrored REX. It isn't once the OS can WRITE to the diary: booking a
+ * travel buffer and then looking at the week you just changed has to show
+ * the change, and nothing short of a page reload used to.
+ */
+export function refreshDiary(): Promise<void> {
+  started = true;
+  return load();
 }
 
 /** The diary, live where possible. Safe to call from any client component. */

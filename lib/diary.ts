@@ -20,6 +20,11 @@ export type ApptKind =
   | "takeon"
   | "movein"
   | "inspection"
+  /** Getting there and getting back. Kept as its OWN entry either side of the
+   *  visit rather than padded onto it, so the diary shows the appraisal as
+   *  the hour it really is and the drive as the drive — and so moving one
+   *  doesn't silently move the other. */
+  | "travel"
   /** Everything else in a real working day — appointments, training, the
    *  private entries that show only as "Busy". Hiding these would tell you
    *  an agent is free when they are not. */
@@ -62,6 +67,11 @@ export const KIND_META: Record<ApptKind, { label: string; icon: string }> = {
   takeon: { label: "Take-on & photos", icon: "pack/photo" },
   movein: { label: "Move-in", icon: "pack/house" },
   inspection: { label: "Inspection", icon: "pack/checklist" },
+  /* "target" rather than a car, because there isn't one in the icon set and a
+     name with no file behind it renders as a solid square (the mask fails
+     open, not closed). It is already the geotag marker on AddressField, so it
+     at least reads as "somewhere to get to". */
+  travel: { label: "Travel time", icon: "target" },
   other: { label: "In the diary", icon: "clock" },
 };
 

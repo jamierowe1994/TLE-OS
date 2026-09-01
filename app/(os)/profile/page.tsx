@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import CustomAttributes from "@/components/CustomAttributes";
+import AddressField from "@/components/AddressField";
 import { PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
 import RexSignIn from "@/components/RexSignIn";
@@ -50,7 +51,21 @@ const ACCENTS = [
 
 const PROFILE_KEY = "tle-profile-v1";
 
-type Profile = { name: string; phone: string; patch: string; bio: string; photo?: string };
+type Profile = {
+  name: string; phone: string; patch: string; bio: string; photo?: string;
+  /**
+   * Where they set off from — home for most partners, since TLE is a
+   * self-employed network with no office anybody commutes to.
+   *
+   * Only ever used as the STARTING point for a travel-time estimate on the
+   * first appointment of a day, and never shown to a landlord or a tenant.
+   * Kept as coordinates alongside the text so the booker doesn't re-geocode
+   * the same house on every glance at the calendar.
+   */
+  base?: string;
+  baseLat?: number | null;
+  baseLng?: number | null;
+};
 /**
  * EMPTY. Never a person.
  *
@@ -373,6 +388,30 @@ export default function ProfilePage() {
                   className={field}
                 />
               </label>
+            </div>
+
+            <div className="mt-5">
+              <span className={label}>Where you usually set off from</span>
+              <AddressField
+                value={profile.base ?? ""}
+                onChange={(v) => save({ ...profile, base: v, baseLat: null, baseLng: null })}
+                onResolved={(a) =>
+                  save({ ...profile, base: a.address, baseLat: a.lat, baseLng: a.lng })
+                }
+              />
+              <span className="mt-1 block text-[10px] leading-relaxed text-muted">
+                Used only to work out your travel time to the first appointment of the day, so the
+                booker can offer you a buffer. Never shown to landlords or tenants.
+                {profile.base && profile.baseLat == null && (
+                  <>
+                    {" "}
+                    <span className="text-accent-dark">
+                      Pick one of the suggestions so it can be placed on the map — typed text alone
+                      has no coordinates, so travel time from here stays unavailable.
+                    </span>
+                  </>
+                )}
+              </span>
             </div>
 
             <label className="mt-5 block">

@@ -10,7 +10,9 @@ import PeopleFilterBar, { NO_FILTERS, passesFilters, milesBetween, type Filters 
 import SendFlow, { type Outgoing } from "@/components/SendFlow";
 import { dayKey, useForecast } from "@/lib/weather";
 import { landlordFor } from "@/lib/journey";
-import { DIARY, minutesOf } from "@/lib/diary";
+import { minutesOf, type Appt } from "@/lib/diary";
+import { useDiary, refreshDiary } from "@/lib/diary-store";
+import { usePref } from "@/lib/prefs-store";
 
 /**
  * Booking a viewing, in the order the job actually happens: which property,
@@ -27,6 +29,29 @@ type Listing = {
 
 function startOfDay(d: Date) {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** Only the bit of the profile the booker needs — where they set off from. */
+type BaseProfile = { base?: string; baseLat?: number | null; baseLng?: number | null };
+const PROFILE_KEY = "tle-profile-v1";
+
+/** One measured journey, as /api/travel answers it. */
+type Leg =
+  | { id: string; ok: true; minutes: number; miles: number; withTraffic: boolean; buffer: number }
+  | { id: string; ok: false; problem: { code: string; says: string } };
+
+type TravelState =
+  | { status: "idle" }
+  /** Nothing to measure FROM — no base saved and nothing earlier in the day. */
+  | { status: "nowhere" }
+  | { status: "loading" }
+  | { status: "problem"; says: string }
+  /** `precise` false = we only placed the AREA, not the building. */
+  | { status: "ready"; legs: Leg[]; precise: boolean; resolved: string | null };
+
+/** "9 Granby Road, Salford M7" — whichever of the two an entry actually has. */
+function placeOf(a: Appt): string {
+  return a.where || a.what.replace(/^[^—]+—\s*/, "") || "the last appointment";
 }
 
 
@@ -147,19 +172,150 @@ export default function ViewingBooker({
   const toLandlord = mode !== "viewing";
   const forecast = useForecast(open && toLandlord);
 
+  /* ══ TRAVEL TIME ═══════════════════════════════════════════════════════
+     Everything from here to the early return is hook-order-critical: this
+     component returns null when closed, so a hook added BELOW that line
+     would run on some renders and not others. There is no ESLint config in
+     this repo, so nothing catches that but reading it. */
 
-
-  if (!open) return null;
-
-
-
-  const property = properties.find((p) => p.id === propertyId) ?? properties[0] ?? null;
   const offsetOf = (d: Date) => Math.round((startOfDay(d).getTime() - today.getTime()) / 86400000);
   const dateFromOffset = (o: number) => {
     const d = new Date(today);
     d.setDate(d.getDate() + o);
     return d;
   };
+
+  /** The picked slot as an instant. Slots are "HH:MM" on the local clock. */
+  const startsAt = (() => {
+    if (!day || !slot) return null;
+    const [h, m] = slot.split(":").map(Number);
+    const at = new Date(day);
+    at.setHours(h, m, 0, 0);
+    return at.toISOString();
+  })();
+
+  const { appts } = useDiary();
+  const [profile] = usePref<BaseProfile | null>(PROFILE_KEY, null);
+  const [travel, setTravel] = useState<TravelState>({ status: "idle" });
+  /** Which origin they chose to buffer for, and whether the drive on/back
+   *  is being blocked out too. Null and false = they said no, which is a
+   *  real answer and must not be overwritten by a re-render. */
+  const [bufferFrom, setBufferFrom] = useState<string | null>(null);
+  const [bufferAfter, setBufferAfter] = useState(false);
+  const [savingBuffers, setSavingBuffers] = useState(false);
+
+  const pickDay = day ? offsetOf(day) : null;
+  const pickStart = slot ? minutesOf(slot) : null;
+
+  /**
+   * What sits either side of this slot on the same day.
+   *
+   * Only entries that know WHERE they are can be measured from, so anything
+   * without coordinates is skipped rather than guessed at — and travel blocks
+   * are skipped too, or the buffer would start measuring from the last buffer.
+   */
+  const neighbours = useMemo(() => {
+    if (pickDay == null || pickStart == null) return { prev: null as Appt | null, next: null as Appt | null };
+    const placed = appts.filter(
+      (a) => a.day === pickDay && a.kind !== "travel" && a.lat != null && a.lng != null
+    );
+    const endsBy = (a: Appt) => minutesOf(a.start) + a.mins;
+    const prev =
+      placed.filter((a) => endsBy(a) <= pickStart).sort((a, b) => endsBy(b) - endsBy(a))[0] ?? null;
+    const next =
+      placed
+        .filter((a) => minutesOf(a.start) >= pickStart + mins)
+        .sort((a, b) => minutesOf(a.start) - minutesOf(b.start))[0] ?? null;
+    return { prev, next };
+  }, [appts, pickDay, pickStart, mins]);
+
+  /* Only where there's a real address to drive to. Appraisals and take-ons
+     carry the landlord's own address; a viewing has a listing name and a
+     town, which geocodes to the middle of the town and would quote a
+     confident travel time to the wrong street. */
+  const destination = toLandlord ? address.trim() : "";
+  const canTravel = Boolean(open && destination && startsAt);
+
+  const prevId = neighbours.prev?.id ?? null;
+  const nextId = neighbours.next?.id ?? null;
+  const homeLat = profile?.baseLat ?? null;
+  const homeLng = profile?.baseLng ?? null;
+
+  useEffect(() => {
+    if (!canTravel || !startsAt) {
+      setTravel({ status: "idle" });
+      return;
+    }
+    const ends = new Date(new Date(startsAt).getTime() + mins * 60000).toISOString();
+    const legs: { id: string; from: { lat: number; lng: number }; arriveBy: string }[] = [];
+    if (homeLat != null && homeLng != null) {
+      legs.push({ id: "home", from: { lat: homeLat, lng: homeLng }, arriveBy: startsAt });
+    }
+    if (neighbours.prev?.lat != null && neighbours.prev?.lng != null) {
+      legs.push({
+        id: "prev",
+        from: { lat: neighbours.prev.lat, lng: neighbours.prev.lng },
+        arriveBy: startsAt,
+      });
+    }
+    /* The drive AWAY is measured as next→property rather than property→next.
+       Same road, and it lets all three journeys ride one request; the two
+       directions differ by which side of the dual carriageway is queued,
+       which is well inside the rounding a buffer gets anyway. `arriveBy` is
+       the end of the visit, so it's costed in the right traffic. */
+    if (neighbours.next?.lat != null && neighbours.next?.lng != null) {
+      legs.push({
+        id: "next",
+        from: { lat: neighbours.next.lat, lng: neighbours.next.lng },
+        arriveBy: ends,
+      });
+    }
+    if (!legs.length) {
+      setTravel({ status: "nowhere" });
+      return;
+    }
+
+    let alive = true;
+    setTravel({ status: "loading" });
+    fetch("/api/travel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toAddress: destination, legs }),
+    })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!alive) return;
+        if (j?.ok && Array.isArray(j.legs)) {
+          setTravel({
+            status: "ready",
+            legs: j.legs,
+            precise: j.precise !== false,
+            resolved: j.resolved ?? null,
+          });
+        }
+        else setTravel({ status: "problem", says: j?.problem?.says ?? j?.error ?? "Travel times aren't available." });
+      })
+      .catch(() => {
+        if (alive) setTravel({ status: "problem", says: "Couldn't work out the travel time just now." });
+      });
+    return () => {
+      alive = false;
+    };
+    // neighbours.prev/next are read through their ids: the objects are rebuilt
+    // on every diary render and would re-fetch forever as dependencies.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canTravel, destination, startsAt, mins, homeLat, homeLng, prevId, nextId]);
+
+  /* A new slot is a new set of journeys, so a buffer agreed for the old one
+     must not silently carry over onto it. */
+  useEffect(() => {
+    setBufferFrom(null);
+    setBufferAfter(false);
+  }, [pickDay, slot, mins]);
+
+  if (!open) return null;
+
+  const property = properties.find((p) => p.id === propertyId) ?? properties[0] ?? null;
   /* The booking's real length, in words, so the confirmation cannot promise
      half an hour for a visit the agent has just set aside ninety minutes for.
      That mismatch is exactly how a landlord ends up with somewhere else to be
@@ -210,17 +366,96 @@ export default function ViewingBooker({
    */
   const bookedOnly = mode === "appraisal";
 
-  /** The same moment as an instant. Slots are "HH:MM" on the local clock. */
-  const startsAt = (() => {
-    if (!day || !slot) return null;
-    const [h, m] = slot.split(":").map(Number);
-    const at = new Date(day);
-    at.setHours(h, m, 0, 0);
-    return at.toISOString();
-  })();
+  /* `startsAt` is computed up with the hooks — the travel lookup needs it. */
+
+  const legOf = (id: string): Leg | undefined =>
+    travel.status === "ready" ? travel.legs.find((l) => l.id === id) : undefined;
+  const drivable = (id: string) => {
+    const l = legOf(id);
+    return l && l.ok ? l : undefined;
+  };
+
+  /** Where they could be setting off from, longest drive first — the one
+   *  most worth knowing about sits at the top. */
+  const beforeOptions = [
+    neighbours.prev && drivable("prev")
+      ? { id: "prev", label: `You're at ${placeOf(neighbours.prev)} before this`, leg: drivable("prev")! }
+      : null,
+    drivable("home")
+      ? { id: "home", label: profile?.base ? `From ${profile.base}` : "From home", leg: drivable("home")! }
+      : null,
+  ]
+    .filter((o): o is { id: string; label: string; leg: Extract<Leg, { ok: true }> } => Boolean(o))
+    .sort((a, b) => b.leg.minutes - a.leg.minutes);
+
+  /** The drive away afterwards: on to the next job, or home if it's the last. */
+  const afterOption = neighbours.next && drivable("next")
+    ? { label: `On to ${placeOf(neighbours.next)}`, leg: drivable("next")! }
+    : drivable("home")
+      ? { label: "Back home", leg: drivable("home")! }
+      : null;
+
+  const chosenBefore = beforeOptions.find((o) => o.id === bufferFrom) ?? null;
+
+  /**
+   * Travel goes in as its OWN entries, either side of the visit.
+   *
+   * Not padded onto the appraisal: an hour's appraisal that says 90 minutes
+   * is a lie to everyone who reads the diary, including the landlord on the
+   * confirmation. Two separate blocks say what they are, and can be deleted
+   * on their own when a journey turns out not to be needed.
+   */
+  async function saveBuffers(): Promise<void> {
+    if (!startsAt) return;
+    const jobs: Record<string, unknown>[] = [];
+    if (chosenBefore) {
+      const at = new Date(new Date(startsAt).getTime() - chosenBefore.leg.buffer * 60000);
+      jobs.push({
+        startsAt: at.toISOString(),
+        mins: chosenBefore.leg.buffer,
+        kind: "travel",
+        title: `Travel time - to ${address}`,
+        where: chosenBefore.label,
+        who: agent,
+      });
+    }
+    if (bufferAfter && afterOption) {
+      const at = new Date(new Date(startsAt).getTime() + mins * 60000);
+      jobs.push({
+        startsAt: at.toISOString(),
+        mins: afterOption.leg.buffer,
+        kind: "travel",
+        title: `Travel time - ${afterOption.label.toLowerCase()}`,
+        where: address,
+        who: agent,
+      });
+    }
+    if (!jobs.length) return;
+
+    setSavingBuffers(true);
+    try {
+      await Promise.all(
+        jobs.map((j) =>
+          fetch("/api/appointments", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(j),
+          })
+        )
+      );
+      // The week the agent is looking at has just changed. Without this the
+      // buffer they asked for isn't there when they glance back at it.
+      await refreshDiary();
+    } catch {
+      /* A buffer that didn't save must not lose the booking behind it. */
+    } finally {
+      setSavingBuffers(false);
+    }
+  }
 
   /** Hand the booking to the record and get out of the way. */
-  function bookAndClose() {
+  async function bookAndClose() {
+    await saveBuffers();
     onBooked({
       when: whenLabel,
       property: address || "Visit",
@@ -564,6 +799,160 @@ export default function ViewingBooker({
                 drawn in, so a clash is visible before it happens.
                 {slot && " Drag the bar at the bottom of your booking to make it longer."}
               </p>
+
+              {/* ══ TRAVEL TIME ══
+                  Offered, never imposed. The buffer is the thing everybody
+                  means to add and nobody remembers to, so it appears the
+                  moment a slot is picked — with the drive already measured,
+                  because "add a buffer" is a question you can't answer
+                  without knowing how far away the place is. */}
+              {canTravel && travel.status !== "idle" && (
+                <div className="mt-4 rounded-xl border border-line/60 bg-panel/50 p-4">
+                  <p className="mb-2.5 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                    <DoodleIcon name="target" size={13} />
+                    Travel time
+                  </p>
+
+                  {travel.status === "loading" && (
+                    <p className="flex items-center gap-2 text-[12.5px] text-muted">
+                      <span className="block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+                      Working out how long it takes to get there…
+                    </p>
+                  )}
+
+                  {/* Nothing to measure FROM is a different fact from a broken
+                      lookup, and it has a fix the agent can action. */}
+                  {travel.status === "nowhere" && (
+                    <p className="text-[12px] leading-relaxed text-muted">
+                      Nothing earlier in the day to set off from, and no base address saved. Add
+                      where you usually set off from on your profile and this will offer you a
+                      buffer.
+                    </p>
+                  )}
+
+                  {/* Never a guessed number. If Google won't answer, the panel
+                      says so — an invented travel time is how somebody ends up
+                      on the wrong doorstep trusting the software. */}
+                  {travel.status === "problem" && (
+                    <p className="text-[12px] leading-relaxed text-accent-dark">{travel.says}</p>
+                  )}
+
+                  {travel.status === "ready" && !beforeOptions.length && !afterOption && (
+                    <p className="text-[12px] leading-relaxed text-muted">
+                      Couldn&apos;t measure a drive to {address} — the address may not be precise
+                      enough to place on a map.
+                    </p>
+                  )}
+
+                  {travel.status === "ready" && (beforeOptions.length > 0 || afterOption) && (
+                    <>
+                      {beforeOptions.length > 0 && (
+                        <>
+                          <p className="mb-2 text-[12px] text-muted">
+                            Where are you coming from?
+                          </p>
+                          <ul className="space-y-2">
+                            {beforeOptions.map((o) => {
+                              const on = bufferFrom === o.id;
+                              return (
+                                <li key={o.id}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setBufferFrom(on ? null : o.id)}
+                                    className={`flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-colors ${
+                                      on ? "border-accent-dark bg-accent-soft/40" : "border-line/60 hover:border-ink/30"
+                                    }`}
+                                  >
+                                    <span
+                                      className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[9px] ${
+                                        on ? "border-accent-dark bg-accent-dark text-page" : "border-line"
+                                      }`}
+                                    >
+                                      {on && "✓"}
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block truncate text-[12.5px]">{o.label}</span>
+                                      <span className="figures block text-[10.5px] text-muted">
+                                        {o.leg.minutes} min drive
+                                        {o.leg.miles ? ` · ${o.leg.miles} miles` : ""}
+                                        {o.leg.withTraffic ? " · traffic at that time" : ""}
+                                      </span>
+                                    </span>
+                                    <span className="hand shrink-0 text-[12.5px] text-accent-dark">
+                                      {on ? `${o.leg.buffer} min added` : `Add ${o.leg.buffer} min`}
+                                    </span>
+                                  </button>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </>
+                      )}
+
+                      {afterOption && (
+                        <button
+                          type="button"
+                          onClick={() => setBufferAfter((v) => !v)}
+                          className={`mt-2 flex w-full items-center gap-3 rounded-xl border p-2.5 text-left transition-colors ${
+                            bufferAfter ? "border-accent-dark bg-accent-soft/40" : "border-line/60 hover:border-ink/30"
+                          }`}
+                        >
+                          <span
+                            className={`flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-[5px] border-[1.5px] text-[9px] ${
+                              bufferAfter ? "border-accent-dark bg-accent-dark text-page" : "border-line"
+                            }`}
+                          >
+                            {bufferAfter && "✓"}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[12.5px]">
+                              {afterOption.label} afterwards
+                            </span>
+                            <span className="figures block text-[10.5px] text-muted">
+                              {afterOption.leg.minutes} min drive
+                              {afterOption.leg.miles ? ` · ${afterOption.leg.miles} miles` : ""}
+                            </span>
+                          </span>
+                          <span className="hand shrink-0 text-[12.5px] text-accent-dark">
+                            {bufferAfter ? `${afterOption.leg.buffer} min added` : `Add ${afterOption.leg.buffer} min`}
+                          </span>
+                        </button>
+                      )}
+
+                      {/* The address we were given is often only an area —
+                          REX fills it from the town or the outward postcode.
+                          Measuring to the middle of M7 and calling it the
+                          property is how a confident number turns into a
+                          late arrival, so it says which one this is. */}
+                      {!travel.precise && (
+                        <p className="mt-2.5 text-[10.5px] leading-relaxed text-accent-dark">
+                          Measured to {travel.resolved ?? address}, which is the area rather than the
+                          exact address — so treat this as a rough steer. Put the full address on the
+                          lead to get a real door-to-door time.
+                        </p>
+                      )}
+
+                      {/* What Google actually matched, always. A precise hit
+                          can still be the WRONG house — "9 Granby Road,
+                          Salford M7" resolves confidently to an M27 address
+                          in Swinton — and the only way anyone catches that
+                          is by being shown the address that was measured. */}
+                      {travel.precise && travel.resolved && (
+                        <p className="mt-2.5 text-[10.5px] leading-relaxed text-muted">
+                          Measured to {travel.resolved}. If that isn&apos;t the right house, fix the
+                          address on the lead.
+                        </p>
+                      )}
+
+                      <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
+                        {chosenBefore || bufferAfter
+                          ? "Saved as its own Travel time entry either side of the visit - not added to the appraisal itself, so the length you promised the landlord stays the length you booked."
+                          : "Each drive is rounded up to the next five minutes with a little for parking."}
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
             </>
           )}
 
@@ -575,6 +964,10 @@ export default function ViewingBooker({
               onSend={(sent) => {
                 setSentCount(sent.length);
                 setStage("done");
+                /* Take-ons come through here rather than through bookAndClose,
+                   so the buffer has to be written on this path too or it is
+                   silently dropped for every mode but the appraisal. */
+                void saveBuffers();
                 // Appraisals have no listing — the guard must not eat them.
                 if (toLandlord || property) {
                   onBooked({
@@ -641,14 +1034,18 @@ export default function ViewingBooker({
                     : "Pick a day and a time"}
                 </p>
                 <PressButton
-                  onClick={() => ready && (bookedOnly ? bookAndClose() : setStage("who"))}
+                  onClick={() => ready && !savingBuffers && (bookedOnly ? void bookAndClose() : setStage("who"))}
                   className={`shrink-0 rounded-full px-6 py-2.5 text-[13px] font-semibold ${
-                    ready ? "bg-ink text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
+                    ready && !savingBuffers ? "bg-ink text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
                   }`}
                 >
                   <span className="flex items-center gap-2">
-                    <DoodleIcon name="calendar" size={15} />
-                    {bookedOnly ? "Book it" : "Next — who do we tell?"}
+                    {savingBuffers ? (
+                      <span className="block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-page/40 border-t-page" />
+                    ) : (
+                      <DoodleIcon name="calendar" size={15} />
+                    )}
+                    {savingBuffers ? "Booking…" : bookedOnly ? "Book it" : "Next — who do we tell?"}
                   </span>
                 </PressButton>
               </>
