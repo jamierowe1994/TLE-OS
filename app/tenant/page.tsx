@@ -296,11 +296,17 @@ export default function TenantHome() {
     );
   }
 
+  /* Stacks on a phone.
+     This was `flex gap-8` with a 208px rail that never shrank, which left about
+     95px for everything else on a 375px screen - so the page ran 496px wide and
+     scrolled sideways. A tenant reads this on a phone more than anywhere else,
+     so the rail goes above the content and turns into a row of pills you swipe,
+     the same shape WorkspaceRail already uses below md. */
   return (
-    <div className="flex gap-8 py-8">
+    <div className="flex flex-col gap-6 py-8 lg:flex-row lg:gap-8">
       {/* ══ The left rail — one place at a time, locked where it isn't time yet. ══ */}
-      <aside className="w-52 shrink-0">
-        <nav className="space-y-1">
+      <aside className="w-full lg:w-52 lg:shrink-0">
+        <nav className="flex gap-1.5 overflow-x-auto pb-1 lg:block lg:space-y-1 lg:overflow-visible lg:pb-0">
           {SECTIONS.map((s) => {
             const locked = MY_STAGE < s.opensAt;
             const on = section === s.key;
@@ -310,7 +316,11 @@ export default function TenantHome() {
                 type="button"
                 onClick={() => { if (!locked) { setSection(s.key); setQuery(""); } }}
                 title={locked ? s.locked : undefined}
-                className={`flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left text-[13px] font-semibold transition-colors ${
+                /* shrink-0 + whitespace-nowrap so the pills stay their own
+                   width and the row scrolls, rather than each one squashing
+                   to a couple of characters. Full width again from lg, where
+                   it is a vertical rail. */
+                className={`flex shrink-0 items-center justify-between gap-1.5 whitespace-nowrap rounded-xl px-3.5 py-2.5 text-left text-[13px] font-semibold transition-colors lg:w-full lg:shrink ${
                   on ? "text-white" : locked ? "cursor-default text-black/30" : "text-black/70 hover:bg-black/[0.04] hover:text-black"
                 }`}
                 style={on ? { backgroundColor: "#16181d" } : undefined}
