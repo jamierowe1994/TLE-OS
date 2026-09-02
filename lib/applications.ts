@@ -370,11 +370,22 @@ export function shapeApplication(r: Row): Application {
  * than an error when you ask for more, so a limit of 200 reads as "no
  * applications" instead of failing. Paged deliberately.
  */
-export async function getApplications(limit = 100): Promise<Application[]> {
+/**
+ * @param rexUserId  Whose applications. Null or omitted returns the business.
+ *
+ * MULTI-TENANT. Filtered AT REX on `application.agent_id` - the same field
+ * the dashboard's figures route counts on - rather than after the walk, so
+ * another agent's applicants, with their incomes and offers, never enter this
+ * process for this request. This read predated the OS going per-person (22
+ * Aug against 27 Aug) and was the one screen on the rail still showing every
+ * agent everybody's book.
+ */
+export async function getApplications(limit = 100, rexUserId?: string | null): Promise<Application[]> {
   const out: Application[] = [];
   for (let offset = 0; out.length < limit; offset += 100) {
     const page = Math.min(100, limit - out.length);
     const res = await rexCall("TenancyApplications", "search", {
+      ...(rexUserId ? { criteria: [{ name: "application.agent_id", type: "=", value: rexUserId }] } : {}),
       limit: page,
       offset,
       order_by: { system_ctime: "desc" },

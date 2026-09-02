@@ -9,6 +9,7 @@ import {
   type NewApplication,
 } from "@/lib/applications";
 import { rexConfigured, rexWritesLocked } from "@/lib/rex";
+import { scopeFor } from "@/lib/scope";
 
 /**
  * GET  /api/applications?limit=100  → the live book from REX, newest first
@@ -26,10 +27,27 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "REX isn't connected here.", applications: [] }, { status: 503 });
   }
   const limit = Math.min(300, Number(req.nextUrl.searchParams.get("limit") ?? 100) || 100);
+
+  /* Whose book. An owner gets the business, an agent their own, and an agent
+     whose account is not linked to a REX user gets a sentence rather than
+     everybody's applicants - see lib/scope.ts for why that third state is
+     the one that matters. */
+  const scope = await scopeFor(req);
+  if (scope.unlinked) {
+    return NextResponse.json({
+      error:
+        "We can't tell which REX user you are, so we can't show you your applications — and we won't show you everybody's. Ask James to link your account.",
+      unlinked: true,
+      applications: [],
+    });
+  }
+
   try {
-    const applications = await getApplications(limit);
+    const applications = await getApplications(limit, scope.rexUserId);
     return NextResponse.json({
       applications,
+      scope: scope.label,
+      everything: scope.everything,
       pulledAt: new Date().toISOString(),
       writesLocked: rexWritesLocked(),
     });

@@ -958,12 +958,11 @@ function OnMarketWidget({ w, h }: { w: number; h: number }) {
  * are counted only for the last thirty days. "Stalled" is an open one older
  * than a week; the list is those, oldest first.
  *
- * Reads the same route as the Applications screen, which is the whole
- * business's newest applications rather than one agent's - that screen is
- * not scoped yet either, so the tile and the screen agree.
+ * Reads the same route as the Applications screen, scoped the same way:
+ * an owner's business, an agent's own.
  */
 function ApplicationsWidget({ w, h }: { w: number; h: number }) {
-  const { data, loading, error } = useShared<{ applications: Application[] }>(
+  const { data, loading, unlinked, error } = useShared<{ applications: Application[] }>(
     applicationsSlot, "/api/applications?limit=300",
     (j) => (Array.isArray(j.applications) && !j.error ? { applications: j.applications as Application[] } : null)
   );
@@ -975,7 +974,7 @@ function ApplicationsWidget({ w, h }: { w: number; h: number }) {
   const age = (a: Application) => daysSince(a.dateReceived, a.createdAt ? a.createdAt * 1000 : null);
   const stalled = open.filter((a) => (age(a) ?? 0) > 7).sort((a, b) => (age(b) ?? 0) - (age(a) ?? 0));
   const count = loading ? "·" : data ? String(open.length) : "—";
-  const hint = loading ? "asking REX" : data ? `${stalled.length} waiting over a week` : (error ?? "couldn't read REX");
+  const hint = loading ? "asking REX" : data ? `${stalled.length} waiting over a week` : unlinked ? "link your REX account" : (error ?? "couldn't read REX");
 
   return (
     <>

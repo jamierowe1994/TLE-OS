@@ -46,7 +46,7 @@ const gbp = (n: number | null) => (n == null ? "—" : `£${n.toLocaleString("en
  * Holding the PROMISE rather than the result means a later mount joins the
  * call already in flight instead of racing it.
  */
-let inFlight: Promise<{ applications?: Application[]; error?: string }> | null = null;
+let inFlight: Promise<{ applications?: Application[]; error?: string; scope?: string; everything?: boolean }> | null = null;
 function book() {
   inFlight ??= fetch("/api/applications?limit=200")
     .then((r) => r.json())
@@ -99,6 +99,10 @@ export default function Applications() {
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
+  /* Whose book this is - "the whole business" for an owner, the agent's own
+     name otherwise - so the page can say so rather than leave somebody to
+     wonder why they see less than they used to. */
+  const [scope, setScope] = useState<{ label: string; everything: boolean } | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -106,6 +110,7 @@ export default function Applications() {
       .then((d) => {
         if (!live) return;
         if (d.error) setError(d.error);
+        if (d.scope) setScope({ label: d.scope, everything: Boolean(d.everything) });
         setApps(d.applications ?? []);
       })
       .catch((e: Error) => live && setError(e.message));
@@ -216,7 +221,11 @@ export default function Applications() {
     <>
       <PageHeader
         title="Applications"
-        blurb="Every application on REX's four statuses, live. The eight pre-tenancy stages open once one is accepted."
+        blurb={
+          scope && !scope.everything
+            ? `${scope.label}'s applications on REX's four statuses, live. The eight pre-tenancy stages open once one is accepted.`
+            : "Every application on REX's four statuses, live. The eight pre-tenancy stages open once one is accepted."
+        }
         /* She hangs off the rule by one fist, swinging — which is why the
            pipeline below was pulled in: her body dangles down that gutter.
            0.05 is where her fist is in the artwork, measured off the frames. */
