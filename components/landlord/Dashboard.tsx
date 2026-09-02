@@ -14,12 +14,12 @@ import type { LandlordView, ViewAction } from "@/lib/landlord-view";
 export default function LandlordDashboard({ view: v }: { view: LandlordView }) {
   const done = v.todos.filter((t) => t.done).length;
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_1fr_1.35fr]">
+    <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1.35fr]">
       {/* ── LEFT: location and actions ── */}
       {/* min-w-0 on every column: a grid track defaults to min-width auto,
           and the no-wrap beats row would otherwise hold the whole grid wider
           than a phone, cutting every panel off at the right edge. */}
-      <div className="flex min-w-0 flex-col gap-4">
+      <div className="flex min-w-0 flex-col gap-3">
         <Panel title="Location" data-search icon="search" className="min-h-[340px]">
           <div className="mt-3 h-[280px]">
             <PropertyMap
@@ -32,15 +32,15 @@ export default function LandlordDashboard({ view: v }: { view: LandlordView }) {
           </div>
         </Panel>
 
-        <div className="grid grid-cols-3 gap-3" data-search>
+        <div className="grid grid-cols-3 gap-2.5" data-search>
           {v.actions.map((a) => (
             <ActionTile key={a.label} a={a} />
           ))}
         </div>
 
         {v.agent && (v.agent.phone || v.agent.email) && (
-          <div className="flex items-center gap-3 rounded-2xl border border-line/70 bg-white p-4" data-search>
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line/70 text-accent-dark">
+          <div className="flex items-center gap-3 rounded-[20px] bg-white p-4" data-search>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f3f3f1] text-accent-dark">
               <DoodleIcon name="call" size={16} />
             </span>
             <div className="min-w-0 flex-1">
@@ -66,7 +66,7 @@ export default function LandlordDashboard({ view: v }: { view: LandlordView }) {
             {v.todos.map((t) => {
               const inner = (
                 <>
-                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${t.done ? "bg-ink text-white" : "border border-line/70 text-ink"}`}>
+                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${t.done ? "bg-ink text-white" : "bg-white text-ink"}`}>
                     <DoodleIcon name={t.done ? "checklist" : t.icon} size={15} />
                   </span>
                   <span className="min-w-0 flex-1">
@@ -76,11 +76,11 @@ export default function LandlordDashboard({ view: v }: { view: LandlordView }) {
                   {!t.done && t.href && <DoodleIcon name="link" size={13} className="text-muted" />}
                 </>
               );
-              const cls = "flex items-center gap-3 rounded-2xl bg-box px-3.5 py-3";
+              const cls = "flex items-center gap-3 rounded-2xl bg-[#f3f3f1] px-3.5 py-3";
               return (
                 <li key={t.title}>
                   {t.href && !t.done ? (
-                    <Link href={t.href} className={`${cls} transition-colors hover:bg-line/30`}>{inner}</Link>
+                    <Link href={t.href} className={`${cls} transition-colors hover:bg-[#ebebe9]`}>{inner}</Link>
                   ) : (
                     <div className={cls}>{inner}</div>
                   )}
@@ -93,8 +93,8 @@ export default function LandlordDashboard({ view: v }: { view: LandlordView }) {
         <AskAgent to={v.agent?.email ?? null} name={v.agent?.name ?? null} property={v.property.address} />
 
         {v.deck && (
-          <div className="rounded-2xl border border-line/70 bg-white p-4" data-search>
-            <div className="relative h-[150px] overflow-hidden rounded-xl bg-[#f4f4f2]">
+          <div className="rounded-[20px] bg-white p-4" data-search>
+            <div className="relative h-[150px] overflow-hidden rounded-2xl bg-[#f3f3f1]">
               <PropertyPhoto src={v.deck.image} alt="" className="h-full w-full object-cover" />
               <span className="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wide text-ink">
                 Presentation
@@ -118,10 +118,10 @@ export default function LandlordDashboard({ view: v }: { view: LandlordView }) {
       </div>
 
       {/* ── RIGHT: the property ── */}
-      <div className="min-w-0 rounded-2xl bg-[var(--art-wash)] p-5" data-search>
+      <div className="min-w-0 rounded-[20px] bg-white p-5" data-search>
         <div className="flex items-center justify-between gap-3">
           <p className="text-[13px] font-semibold">Property details</p>
-          <span className="rounded-full bg-white px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wide text-muted">{v.property.state}</span>
+          <span className="rounded-full bg-[#f3f3f1] px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wide text-muted">{v.property.state}</span>
         </div>
 
         <div className="mt-6 text-center">
@@ -134,7 +134,7 @@ export default function LandlordDashboard({ view: v }: { view: LandlordView }) {
         </div>
 
         {/* The journey as a segmented control, the current beat filled. */}
-        <div className="mt-5 flex min-w-0 gap-1 overflow-x-auto rounded-full bg-white p-1">
+        <div className="mt-5 flex min-w-0 gap-1 overflow-x-auto rounded-full bg-[#f3f3f1] p-1">
           {v.beats.map((b, i) => (
             <span
               key={b}
@@ -149,7 +149,7 @@ export default function LandlordDashboard({ view: v }: { view: LandlordView }) {
         <p className="mt-3 text-center text-[12.5px] text-muted">{v.status}</p>
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl bg-white p-4">
+          <div className="rounded-2xl bg-[#f3f3f1] p-4">
             <p className="text-[13px] font-semibold">Valuation</p>
             <p className="mt-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted">{v.valuation.caption}</p>
             <p className="figures mt-4 text-[34px] leading-none">
@@ -165,7 +165,7 @@ export default function LandlordDashboard({ view: v }: { view: LandlordView }) {
               ))}
             </dl>
           </div>
-          <div className="rounded-2xl bg-white p-4">
+          <div className="rounded-2xl bg-[#f3f3f1] p-4">
             <p className="text-[13px] font-semibold">{v.readiness.title}</p>
             <Gauge pct={v.readiness.pct} />
             <p className="mt-2 text-center text-[11.5px] text-muted">{v.readiness.note}</p>
@@ -187,7 +187,7 @@ function Panel({
   "data-search"?: boolean;
 }) {
   return (
-    <section className={`rounded-2xl border border-line/70 bg-white p-4 ${className}`} {...rest}>
+    <section className={`rounded-[20px] bg-white p-4 ${className}`} {...rest}>
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-[13px] font-semibold">{title}</p>
@@ -202,8 +202,8 @@ function Panel({
 
 function ActionTile({ a }: { a: ViewAction }) {
   const dark = a.tone === "dark";
-  const cls = `flex aspect-square flex-col items-center justify-center gap-2 rounded-2xl p-3 text-center transition-transform hover:scale-[1.02] ${
-    dark ? "bg-ink text-white" : "border border-line/70 bg-white text-ink"
+  const cls = `flex aspect-square flex-col items-center justify-center gap-2 rounded-[20px] p-3 text-center transition-transform hover:scale-[1.02] ${
+    dark ? "bg-ink text-white" : "bg-white text-ink"
   } ${a.href ? "" : "opacity-60"}`;
   const inner = (
     <>

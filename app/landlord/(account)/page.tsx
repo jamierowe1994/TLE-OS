@@ -42,8 +42,8 @@ export default async function LandlordHome() {
   const rest = open[0] ? managed : managed.slice(1);
 
   return (
-    <div className="py-6">
-      <div className="fade-up mb-5">
+    <div className="py-3">
+      <div className="fade-up mb-4 px-1">
         <h1 className="text-[28px] leading-tight">Hello, {first}</h1>
         <p className="mt-1 text-[13.5px] text-muted">
           {view ? view.intro : "We don't have a property against this address yet."}
@@ -53,14 +53,14 @@ export default async function LandlordHome() {
       {view ? (
         <LandlordDashboard view={view} />
       ) : (
-        <div className="rounded-2xl border border-dashed border-line p-5 text-[13px] leading-relaxed text-muted">
+        <div className="rounded-[20px] bg-white p-5 text-[13px] leading-relaxed text-muted">
           If you have a property with us that is not showing, it may be held against a different
           email address. Your agent can put that right.
         </div>
       )}
 
       {open[0] && (
-        <section id="ready" className="mt-6 rounded-2xl border border-line/70 bg-white p-5" data-search>
+        <section id="ready" className="mt-3 rounded-[20px] bg-white p-5" data-search>
           <div className="flex items-center gap-2.5">
             <DoodleIcon name="shield" size={16} className="text-accent-dark" />
             <h2 className="text-[19px]">Getting it ready to let</h2>
@@ -83,8 +83,8 @@ export default async function LandlordHome() {
       )}
 
       {rest.length > 0 && (
-        <section className="mt-6" data-search>
-          <h2 className="text-[20px]">{open[0] ? "Already looked after" : "Your other properties"}</h2>
+        <section className="mt-3" data-search>
+          <h2 className="px-1 text-[20px]">{open[0] ? "Already looked after" : "Your other properties"}</h2>
           <div className="mt-3 space-y-3">
             {rest.map((p) => (
               <ManagedRow key={p.listingId} p={p} />
@@ -244,7 +244,7 @@ function managedView(p: ManagedProperty, first: string): LandlordView {
 function ManagedRow({ p }: { p: ManagedProperty }) {
   const tenant = p.tenants[0];
   return (
-    <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-line/70 bg-white p-4 [&>div]:min-w-[55%]">
+    <div className="flex flex-wrap items-center gap-4 rounded-[20px] bg-white p-4 [&>div]:min-w-[55%]">
       <PropertyPhoto src={p.image} className="h-16 w-24 shrink-0 rounded-xl object-cover" />
       <div className="min-w-0 flex-1">
         <h3 className="text-[17px]">{p.name}</h3>

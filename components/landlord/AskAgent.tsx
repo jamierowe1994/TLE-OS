@@ -14,7 +14,7 @@ export default function AskAgent({ to, name, property }: { to: string | null; na
   const address = to ?? "hello@thelettingexperts.co.uk";
   const href = `mailto:${address}?subject=${encodeURIComponent(`About ${property}`)}&body=${encodeURIComponent(text)}`;
   return (
-    <div className="rounded-2xl border border-line/70 bg-white p-4" data-search>
+    <div className="rounded-[20px] bg-white p-4" data-search>
       <textarea
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -24,8 +24,8 @@ export default function AskAgent({ to, name, property }: { to: string | null; na
       />
       <div className="mt-2 flex items-center justify-between gap-3">
         <span className="flex items-center gap-1 text-muted">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-line/70"><DoodleIcon name="call" size={13} /></span>
-          <span className="flex h-8 w-8 items-center justify-center rounded-full border border-line/70"><DoodleIcon name="upload" size={13} /></span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f3f3f1]"><DoodleIcon name="call" size={13} /></span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#f3f3f1]"><DoodleIcon name="upload" size={13} /></span>
         </span>
         <a
           href={href}

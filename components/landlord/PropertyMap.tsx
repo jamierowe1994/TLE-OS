@@ -85,7 +85,7 @@ export default function PropertyMap({
   const showMap = canMap && !failed;
 
   return (
-    <div className="relative h-full min-h-[280px] overflow-hidden rounded-2xl bg-[#f4f4f2]">
+    <div className="relative h-full min-h-[280px] overflow-hidden rounded-2xl bg-[#f3f3f1]">
       {showMap ? (
         <div ref={holder} className={`absolute inset-0 transition-opacity ${ready ? "opacity-100" : "opacity-0"}`} />
       ) : (

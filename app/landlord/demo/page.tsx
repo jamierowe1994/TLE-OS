@@ -63,8 +63,8 @@ const RAJ: LandlordView = {
 
 export default function LandlordDemo() {
   return (
-    <div className="py-6">
-      <div className="fade-up mb-5">
+    <div className="py-3">
+      <div className="fade-up mb-4 px-1">
         <h1 className="text-[28px] leading-tight">{RAJ.greeting}</h1>
         <p className="mt-1 text-[13.5px] text-muted">{RAJ.intro}</p>
       </div>
@@ -72,15 +72,15 @@ export default function LandlordDemo() {
       <LandlordDashboard view={RAJ} />
 
       {/* The one we already look after, underneath. */}
-      <section className="mt-6" id="ready" data-search>
-        <h2 className="text-[20px]">Already looked after</h2>
-        <div className="mt-3 flex flex-wrap items-center gap-4 rounded-2xl border border-line/70 bg-white p-4 [&>div]:min-w-[55%]">
+      <section className="mt-3" id="ready" data-search>
+        <h2 className="px-1 text-[20px]">Already looked after</h2>
+        <div className="mt-3 flex flex-wrap items-center gap-4 rounded-[20px] bg-white p-4 [&>div]:min-w-[55%]">
           <PropertyPhoto src={img("Walesby")} className="h-16 w-24 shrink-0 rounded-xl object-cover" />
           <div className="min-w-0 flex-1">
             <h3 className="text-[17px]">183 Walesby Lane, New Ollerton</h3>
             <p className="text-[12px] text-muted">Tenanted · £750 a month · Fully managed · Dean Halliwell, in since March 2024</p>
           </div>
-          <span className="rounded-full bg-box px-3 py-1 text-[11px] font-semibold text-muted">All in order</span>
+          <span className="rounded-full bg-[#f3f3f1] px-3 py-1 text-[11px] font-semibold text-muted">All in order</span>
         </div>
       </section>
     </div>
