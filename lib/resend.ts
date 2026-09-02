@@ -58,6 +58,22 @@ export function fromAddress(): string | null {
   return raw || null;
 }
 
+/**
+ * The PUBLIC sender - the Lettings Experts domain, for landlords and tenants.
+ *
+ * Two senders, routed by audience, exactly as lib/email-policy said to do the
+ * day the public domain arrived (2 Sep 2026). Internal mail keeps RESEND_FROM
+ * and its internal-only guard; customer mail goes out on this one and never
+ * on the OS domain. Unset means customer mail is refused with a sentence that
+ * names the variable, not sent from the wrong place.
+ */
+export function publicFromAddress(): string | null {
+  const raw = (process.env.RESEND_FROM_PUBLIC ?? "").trim();
+  return raw || null;
+}
+
+export type Audience = "internal" | "customer";
+
 export interface SendResult {
   id: string;
 }
@@ -108,13 +124,20 @@ export async function sendEmail(msg: {
   html: string;
   text?: string;
   replyTo?: string;
+  /** Who this is for. "customer" goes out on the public sender and may reach
+   *  anyone; "internal" (the default) keeps the OS domain and its guard. */
+  audience?: Audience;
 }): Promise<SendResult> {
+  const audience: Audience = msg.audience ?? "internal";
   if (!process.env.RESEND_API_KEY) {
     throw new ResendBlocked("Resend isn't connected — RESEND_API_KEY isn't set.");
   }
-  if (!fromAddress()) {
+  const from = audience === "customer" ? publicFromAddress() : fromAddress();
+  if (!from) {
     throw new ResendBlocked(
-      "RESEND_FROM isn't set. It must be an address on the domain verified in Resend, e.g. hello@thelettingexperts.co.uk."
+      audience === "customer"
+        ? "RESEND_FROM_PUBLIC isn't set. Customer email needs an address on the Lettings Experts domain verified in Resend, e.g. \"The Letting Experts <hello@thelettingexperts.co.uk>\"."
+        : "RESEND_FROM isn't set. It must be an address on the domain verified in Resend, e.g. hello@tle-os.co.uk."
     );
   }
   if (!resendSendUnlocked()) {
@@ -136,7 +159,7 @@ export async function sendEmail(msg: {
      mail from it — client email waits for the public Lettings Experts domain.
      Enforced here, at the one place mail actually leaves, rather than at the
      call sites, which multiply. See lib/email-policy for the full reasoning. */
-  assertInternalRecipient(to);
+  if (audience === "internal") assertInternalRecipient(to);
   if (!msg.subject.trim() || !msg.html.trim()) {
     throw new ResendBlocked("The email needs a subject and a body.");
   }
@@ -148,7 +171,7 @@ export async function sendEmail(msg: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: fromAddress(),
+      from,
       to: [to],
       subject: msg.subject,
       html: msg.html,

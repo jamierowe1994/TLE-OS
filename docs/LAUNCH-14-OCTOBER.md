@@ -38,7 +38,7 @@ Key: **built** works on real data · **partial** exists, with the gap named ·
 | 11 | Agent compliance checker in profile | Michael | **todo** |
 | 12 | Resend on two domains | — | **blocked** — Resend refuses every non-TLE domain until the domains are set up |
 | 13 | Every email flow tested and on brand | — | **blocked** on 12 — the emails themselves are written and previewable on /emails |
-| 14 | Landlord + tenant portals refined and secured | Customers | **partial** — both built, phone-fitted (1 Sep) and one click from the rail; no tenant or landlord sign-in, and both run on demo people |
+| 14 | Landlord + tenant portals refined and secured | Customers | **partial** — landlord sign-in built 2 Sep: a magic link to the email on the REX owner contact, and a live home showing their managed properties; offers, certificates, upkeep and documents are still the sample (kept at /landlord/demo); tenant side still has no sign-in |
 | 15 | Marketing email builder | Francesca | **partial** — builder built (28 Aug) with fonts, layouts, drag and drop; nurture campaigns exist behind a switch; sending blocked on 12 |
 | 16 | REX PM integration | — | **settled: not viable, data is empty** (22 Aug) |
 | 17 | Tenant passport in-house | — | **partial** — passport built (30 Aug) with agent-written questions; the invite has no send path, so nobody receives one automatically |
@@ -541,7 +541,7 @@ Re-read 2 September 2026.
 | Blocked on | What it unblocks |
 |---|---|
 | PayProp UK API key, or v2 OAuth credentials from PayProp support | Finances on the real UK book instead of sample (item 7); damage deposits, unreconciled funds, account statements |
-| Resend domains set up (two senders) | items 12, 13, 15 and every landlord/tenant email test |
+| Resend: the Lettings Experts domain is verified (2 Sep) - needs `RESEND_FROM_PUBLIC` on Railway, e.g. `The Letting Experts <hello@thelettingexperts.co.uk>` | the landlord sign-in link, items 12, 13, 15 and every landlord/tenant email test |
 | Who does referencing, and whether they have an API, webhook or export | a real referencing status on Applications and Pre-tenancy |
 | PayProp: an endpoint for unreconciled/incoming funds, or a fixed reference format on the holding-fee note | holding fees visible on the pre-tenancy board |
 | Flatfair API meeting | item 9 |

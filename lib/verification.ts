@@ -52,6 +52,9 @@ import { assertInternalRecipient } from "@/lib/email-policy";
 const TTL_BY_PURPOSE: Record<Purpose, number> = {
   join: 24 * 60 * 60 * 1000,
   reset: 60 * 60 * 1000,
+  /* A landlord opens email when they open email. An hour would expire on
+     most of them before they saw it; single use is what keeps it safe. */
+  landlord: 24 * 60 * 60 * 1000,
 };
 
 /** Long enough that guessing is hopeless: 32 bytes, url-safe. */
@@ -61,7 +64,15 @@ function mintToken(): string {
 
 const hashToken = (t: string) => createHash("sha256").update(t).digest("hex");
 
-export type Purpose = "join" | "reset";
+/**
+ * "landlord" is a customer's magic link into their property file. It is the
+ * one purpose that may be minted for an OUTSIDE address - the whole point is
+ * that landlords are not staff - so it skips the internal-domain guard and is
+ * sent on the public sender instead. Kept apart from join and reset for the
+ * same reason those are kept apart from each other: a token for one must
+ * never be spendable on another.
+ */
+export type Purpose = "join" | "reset" | "landlord";
 
 export interface Verification {
   email: string;
@@ -92,7 +103,7 @@ export async function startVerification(
      will mint tokens for any address is a way to use our sending domain to
      mail strangers, and the refusal should happen before anything is written
      to the database, not after. */
-  assertInternalRecipient(email);
+  if (purpose !== "landlord") assertInternalRecipient(email);
 
   if (!hasDb()) {
     throw new VerificationError(

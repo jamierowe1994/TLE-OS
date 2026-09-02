@@ -366,6 +366,34 @@ export const TENANT_PASSPORT_INVITE = {
  * is publicly known about their property, and they can correct it before we
  * turn up - which is worth more to them than it is to us, and is true.
  */
+/**
+ * The landlord's way in. No password: the link IS the sign-in, the way the
+ * pre-appraisal deck and the tenant passport already work, and it is single
+ * use and a day long. Short on purpose - the person asked for it thirty
+ * seconds ago and is waiting for it.
+ */
+export const LANDLORD_SIGN_IN = {
+  subject: "Your link to your property file",
+  preheader: "One click and you are in. The link works once and lasts a day.",
+  mode: "blocks",
+  blocks: [
+    H("ls1", "Here is your link"),
+    T(
+      "ls2",
+      "Hi {{firstName}},<br><br>Open the button below and you are into your property file with The Letting Experts: your properties, your certificates and everything happening on them."
+    ),
+    SP("ls3", 8),
+    BTN("ls4", "Open my property file", "{{link}}"),
+    SP("ls5", 8),
+    T("ls6", "The link works once and lasts 24 hours. If it has run out, ask for another from the sign-in page."),
+    T("ls7", "If you didn't ask for this, you can ignore it. Nothing happens unless the link is opened."),
+    SP("ls8", 8),
+    T("ls9", "The Letting Experts"),
+    FOOT("ls10", "You're getting this because a sign-in was requested for this address at The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 export const LANDLORD_DECK_INVITE = {
   subject: "Your appraisal is booked. Here is your property file",
   preheader: "See what we already know about the property, and correct it before we visit.",

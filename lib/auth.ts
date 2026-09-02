@@ -77,6 +77,48 @@ export function createSessionToken(userId: string): string {
  * minutes is deliberately short: this is the gap between reading a card and
  * clicking it, not a session.
  */
+/**
+ * Portal sessions - landlords now, tenants later.
+ *
+ * A separate cookie and a separate token shape from staff sessions, on
+ * purpose: the kind is part of what is signed, so a landlord's token can
+ * never be presented as an OS session and read as a user id, and a staff
+ * token can never open a landlord's file. os_portal_accounts is likewise its
+ * own table, not a row in os_users - a customer must never be one bad join
+ * away from an office login.
+ */
+export const LANDLORD_COOKIE = "tle_landlord";
+const PORTAL_DAYS = 30;
+
+export function createPortalToken(kind: string, accountId: string): string {
+  const data = `${kind}.${accountId}.${Date.now() + PORTAL_DAYS * 864e5}`;
+  return `${data}.${sign(data)}`;
+}
+
+/** The account id behind a valid, unexpired token OF THAT KIND; null otherwise. */
+export function verifyPortalToken(token: string | undefined, kind: string): string | null {
+  if (!token) return null;
+  const parts = token.split(".");
+  if (parts.length !== 4) return null;
+  const [k, id, exp, sig] = parts;
+  if (k !== kind || !id) return null;
+  const a = Buffer.from(sig);
+  const b = Buffer.from(sign(`${k}.${id}.${exp}`));
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  if (Number(exp) < Date.now()) return null;
+  return id;
+}
+
+export function portalCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: PORTAL_DAYS * 24 * 60 * 60,
+  };
+}
+
 const ENVELOPE_MS = 10 * 60_000;
 
 export function sealPayload(payload: unknown): string {

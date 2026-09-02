@@ -65,7 +65,7 @@ export type PortalFolder = {
    deck already works. Saying so on each card stops a demo implying a login
    that is not there. */
 const SAMPLE_TENANT = "Runs on a sample tenant, Sophie. There is no tenant sign-in yet, so the password screen is a wireframe.";
-const SAMPLE_LANDLORD = "Runs on a sample landlord, Raj. There is no landlord sign-in yet, so the password screen is a wireframe.";
+const SAMPLE_LANDLORD = "The sample landlord, Raj, kept for walking people through. The live portal at /landlord shows a real landlord their real properties once they have signed in.";
 
 export const PORTAL_FOLDERS: PortalFolder[] = [
   {
@@ -186,24 +186,32 @@ export const PORTAL_FOLDERS: PortalFolder[] = [
       },
       {
         kind: "open",
-        id: "landlord-welcome",
-        name: "Setting up their account",
-        blurb: "Where that invitation lands: choose a password, and the GDPR notice.",
-        href: "/landlord/welcome?from=admin",
-        caveat: SAMPLE_LANDLORD,
+        id: "landlord-sign-in",
+        name: "Signing in",
+        blurb: "They type the email REX holds for them and get a link. No password.",
+        href: "/landlord/sign-in?from=admin",
+        caveat: "Only an address that is the owner contact on a managed listing gets a link. Anyone else sees the same message and no email.",
+      },
+      {
+        kind: "email",
+        id: "landlord-sign-in-email",
+        name: "The link they get",
+        blurb: "Single use, lasts a day, sent on the public Lettings Experts sender.",
+        emailId: "landlord-sign-in",
       },
       {
         kind: "open",
         id: "landlord-portal",
-        name: "The portal itself",
+        name: "The portal, as a sample",
         blurb:
           "The letting in flight, offers to accept or negotiate, compliance certificates, upkeep approvals, and documents both ways.",
-        href: "/landlord?from=admin",
+        href: "/landlord/demo?from=admin",
         caveat: SAMPLE_LANDLORD,
       },
     ],
     missing: [
-      "No landlord sign-in, same as the tenant side.",
+      "The live home shows a landlord their managed properties. Offers, certificates, upkeep and documents are still the sample.",
+      "A landlord whose only property is still on the market, not yet let, is not found by the sign-in yet.",
       "The property-file invitation has no send path yet.",
     ],
   },

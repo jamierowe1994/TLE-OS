@@ -45,6 +45,7 @@ import {
   COMPLIANCE_CHASE_LANDLORD,
   TENANT_PASSPORT_INVITE,
   LANDLORD_DECK_INVITE,
+  LANDLORD_SIGN_IN,
   SITE,
   type EmailDoc,
 } from "@/lib/email/tle-documents";
@@ -377,6 +378,26 @@ The Letting Experts`
       )(),
   },
   {
+    id: "landlord-sign-in",
+    group: "Doorways",
+    name: "Landlord Sign-in Link",
+    audience: "landlord",
+    trigger: "A landlord asks for their link on /landlord/sign-in",
+    fires: "Wired 2 Sep 2026. Goes on the public Lettings Experts sender (RESEND_FROM_PUBLIC) to the email on the landlord's REX owner contact.",
+    to: "The landlord, at the address REX holds for them",
+    draft: false,
+    summary:
+      "No password. The link is the sign-in, single use and a day long, the same way the deck and the passport already work. It only ever goes to an address that is the owner contact on a managed listing, so a stranger typing an email gets the same on-screen answer and no email.",
+    doc: LANDLORD_SIGN_IN,
+    render: (o) =>
+      blocks(
+        withSample(o ?? LANDLORD_SIGN_IN, {
+          firstName: "Helen",
+          link: `${SITE}/landlord/enter?token=sample`,
+        })
+      )(),
+  },
+  {
     id: "landlord-deck-invite",
     group: "Doorways",
     name: "Appraisal Booked - Open Your Property File",
@@ -438,4 +459,39 @@ export function renderComplianceAgentChase(input: {
     }),
   };
   return blocks(doc as unknown as EmailDoc)();
+}
+
+/** The sign-in link email, filled for one landlord and ready to send. */
+export function renderLandlordSignIn(input: { firstName: string; link: string }): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const fill = (t: string) =>
+    t.replace(/\{\{firstName\}\}/g, input.firstName).replace(/\{\{link\}\}/g, input.link);
+  const doc = {
+    ...LANDLORD_SIGN_IN,
+    subject: fill(LANDLORD_SIGN_IN.subject),
+    blocks: LANDLORD_SIGN_IN.blocks.map((b) => {
+      const rec = b as unknown as Record<string, unknown>;
+      const next: Record<string, unknown> = { ...rec };
+      if (typeof rec.text === "string") next.text = fill(rec.text);
+      if (typeof rec.href === "string") next.href = fill(rec.href);
+      if (typeof rec.url === "string") next.url = fill(rec.url);
+      if (typeof rec.link === "string") next.link = fill(rec.link);
+      return next as unknown as (typeof LANDLORD_SIGN_IN.blocks)[number];
+    }),
+  };
+  const out = blocks(doc as unknown as EmailDoc)();
+  const text = [
+    `Hi ${input.firstName},`,
+    "",
+    "Here is your link to your property file with The Letting Experts:",
+    input.link,
+    "",
+    "It works once and lasts 24 hours. If you didn't ask for this, ignore it.",
+    "",
+    "The Letting Experts",
+  ].join("\n");
+  return { ...out, text };
 }
