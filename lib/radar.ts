@@ -539,9 +539,22 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
   const quiet = await q<{ property_key: string }>(
     `UPDATE os_radar_prospects
         SET signals = '[]'::jsonb, score = 0, updated_at = NOW()
-      WHERE district = ANY($1::text[]) AND score > 0 AND NOT (property_key = ANY($2::text[]))
+      WHERE district = ANY($1::text[]) AND score > 0 AND hand_reason IS NULL
+        AND NOT (property_key = ANY($2::text[]))
       RETURNING property_key`,
     [districts, active]
+  );
+
+  /* Hand-added properties keep their line and their points whatever the
+     feed says, until somebody takes them off. Same shape as the company
+     signal: rebuilt after the recompute, every time. */
+  await q(
+    `UPDATE os_radar_prospects
+        SET signals = signals || jsonb_build_array(jsonb_build_object('key', 'added_by_hand', 'detail', hand_reason)),
+            score = score + 20,
+            updated_at = NOW()
+      WHERE hand_reason IS NOT NULL
+        AND NOT (signals @> '[{"key":"added_by_hand"}]'::jsonb)`
   );
 
   /* The company on the title, from the Land Registry files, and its signal.
@@ -577,6 +590,7 @@ interface ProspectRow extends Record<string, unknown> {
   tenancy_start: Date | string | null;
   next_anniversary: Date | string | null;
   tenancy_basis: string | null;
+  hand_reason: string | null;
   signals: Signal[];
   score: number;
   stage: string;
@@ -638,6 +652,7 @@ function toProspect(r: ProspectRow): Prospect {
     tenancy_start: ymd(r.tenancy_start),
     next_anniversary: ymd(r.next_anniversary),
     tenancy_basis: r.tenancy_basis === "observed" || r.tenancy_basis === "estimated" ? r.tenancy_basis : null,
+    hand_reason: r.hand_reason ?? null,
     signals: Array.isArray(r.signals) ? r.signals : [],
     score: r.score,
     stage: isStage(r.stage) ? r.stage : "new",

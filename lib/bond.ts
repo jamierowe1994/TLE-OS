@@ -28,9 +28,9 @@ import type { AddressCandidate, Prospect } from "@/lib/radar-signals";
  */
 
 const HS = "https://data.homesearch.co.uk/avi/api/v1";
-const hsToken = () => (process.env.HOMESEARCH_TOKEN ?? "").trim();
+export const hsToken = () => (process.env.HOMESEARCH_TOKEN ?? "").trim();
 
-async function hs<T>(path: string): Promise<T | null> {
+export async function hs<T>(path: string): Promise<T | null> {
   const token = hsToken();
   if (!token) return null;
   for (let i = 0; i < 3; i++) {
@@ -50,7 +50,7 @@ async function hs<T>(path: string): Promise<T | null> {
   return null;
 }
 
-function unwrap<T>(raw: unknown): T[] {
+export function unwrap<T>(raw: unknown): T[] {
   if (Array.isArray(raw)) return raw as T[];
   const o = raw as { data?: unknown } | null;
   return Array.isArray(o?.data) ? (o!.data as T[]) : [];

@@ -365,3 +365,26 @@ Measured locally on 3 Sep: 716 tenancies estimated, 4 in the window now, and the
 anniversaries cluster in Aug and Sep 2027 because most of the let-agreed rows in the feed
 today are this summer's lets. It is thin on purpose: it gets better every day the sweep
 runs, and the observed basis takes over from the estimate as lets are actually seen.
+
+---
+
+## Look up any address, and Add a property, 3 Sep 2026
+
+A **Look up** room in Bond. Type any address or postcode in the patch; the property
+register returns the doors (a full postcode lists them all, narrowed to the typed house
+number; anything else goes to the register's free-text search). Pick one and the dossier
+is everything Bond holds about it: register facts (beds, type, tenure, council tax band,
+EPC and date, UPRN), every listing the sweep has seen to let or for sale, completed sales
+from the price-paid file, the company on the title if any, the tenancy estimate, and the
+prospect record with its signals if it is already on the list.
+
+**Add to the list** puts a door on the board by hand with a one-line reason - "private
+lister seen in the Northampton rentals Facebook group", a board outside, a conversation.
+It becomes the **Added by hand** signal (20) with the reason as its detail, kept through
+every recompute until someone takes it off. That is the lawful answer to Facebook groups:
+a person reads the group and types the address, and no scraping happens.
+
+`lib/property-lookup.ts`, `/api/bond/property`. Verified locally: 78 Cyril Street NN1 5EJ
+resolved from free text, dossier read, added with a reason, score 45, still there after a
+rescore; a postcode-only search listed the twelve doors; the board opens filtered to the
+address from the dossier.

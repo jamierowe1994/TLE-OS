@@ -26,12 +26,13 @@ import { PressButton } from "@/components/Bits";
  * ever shows a placeholder as if it were a fact.
  */
 
-type Room = "today" | "map" | "prospects" | "owners" | "postcards";
+type Room = "today" | "map" | "prospects" | "lookup" | "owners" | "postcards";
 
 const ROOMS: { key: Room; label: string; icon: string }[] = [
   { key: "today", label: "Today", icon: "dashboard" },
   { key: "map", label: "Map", icon: "search" },
   { key: "prospects", label: "Prospects", icon: "list" },
+  { key: "lookup", label: "Look up", icon: "home" },
   { key: "owners", label: "Owners", icon: "key" },
   { key: "postcards", label: "Postcards", icon: "mail" },
 ];
@@ -101,6 +102,7 @@ export default function BondApp() {
   const [todayError, setTodayError] = useState<string | null>(null);
   const [quick, setQuick] = useState("");
   const [nearPreset, setNearPreset] = useState<string | undefined>(undefined);
+  const [filterPreset, setFilterPreset] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const t = setTimeout(() => setPhase("in"), 1400);
@@ -216,7 +218,15 @@ export default function BondApp() {
                 would then be clipped to this box instead of covering the
                 screen. Measured, not guessed. */}
             {(room === "map" || room === "prospects") && (
-              <RadarBoard embedded view={room === "map" ? "map" : "list"} nearPreset={nearPreset} />
+              <RadarBoard embedded view={room === "map" ? "map" : "list"} nearPreset={nearPreset} filterPreset={filterPreset} />
+            )}
+            {room === "lookup" && (
+              <Lookup
+                openOnBoard={(address) => {
+                  setFilterPreset(address);
+                  setRoom("prospects");
+                }}
+              />
             )}
             {room === "owners" && <Owners />}
             {room === "postcards" && <Postcards />}
@@ -519,3 +529,284 @@ function SalesCard() {
     </div>
   );
 }
+
+
+interface DossierFacts {
+  hs_id: string; uprn: string | null; address: string; postcode: string; beds: number | null; category: string | null;
+  tenure: string | null; tax_band: string | null; energy_rating: string | null; energy_epc_date: string | null;
+}
+interface DossierData {
+  facts: DossierFacts;
+  property_key: string;
+  listings: Array<{ listing_key: string; market: "let" | "sale"; agent: string | null; price: number | null; status: string; listed_on: string | null; first_seen: string; let_agreed_at: string | null; gone_at: string | null }>;
+  sales: Array<{ sold_on: string; price: number; new_build: boolean; tenure: string | null }>;
+  company: { name: string; number: string | null; address: string; title_number: string } | null;
+  prospect: { property_key: string; score: number; stage: string; signals: Array<{ key: string; detail: string }>; hand_reason: string | null; tenancy_start: string | null; next_anniversary: string | null; tenancy_basis: string | null } | null;
+}
+
+/**
+ * Look up any door in the patch, flagged or not, and put it on the list by
+ * hand. The search goes to the property register; the answer is everything
+ * Bond already holds about that door.
+ */
+function Lookup({ openOnBoard }: { openOnBoard: (address: string) => void }) {
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [candidates, setCandidates] = useState<Array<{ hs_id: string; label: string }>>([]);
+  const [note, setNote] = useState<string | null>(null);
+  const [dossier, setDossier] = useState<DossierData | null>(null);
+  const [reason, setReason] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+
+  async function search(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (!query.trim()) return;
+    setBusy(true);
+    setNote(null);
+    setDossier(null);
+    setCandidates([]);
+    try {
+      const r = await fetch(`/api/bond/property?q=${encodeURIComponent(query.trim())}`, { cache: "no-store" });
+      const j = await r.json();
+      if (!j.ok) {
+        setNote(j.error ?? "Could not search.");
+        return;
+      }
+      setCandidates(j.candidates ?? []);
+      if (j.reason) setNote(j.reason);
+      if ((j.candidates ?? []).length === 1) void open(j.candidates[0].hs_id);
+    } catch {
+      setNote("Could not search.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function open(hsId: string) {
+    setBusy(true);
+    setNote(null);
+    try {
+      const r = await fetch(`/api/bond/property?hs_id=${encodeURIComponent(hsId)}`, { cache: "no-store" });
+      const j = await r.json();
+      if (!j.ok) {
+        setNote(j.error ?? "Could not read that door.");
+        return;
+      }
+      setDossier(j.dossier);
+      setCandidates([]);
+    } catch {
+      setNote("Could not read that door.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function add() {
+    if (!dossier) return;
+    setAdding(true);
+    setAddError(null);
+    try {
+      const r = await fetch("/api/bond/property", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ hs_id: dossier.facts.hs_id, reason }),
+      });
+      const j = await r.json();
+      if (!r.ok || !j.ok) {
+        setAddError(j.error ?? "That did not save.");
+        return;
+      }
+      setDossier({ ...dossier, prospect: j.prospect });
+      setReason("");
+    } catch {
+      setAddError("That did not save.");
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  async function remove() {
+    if (!dossier?.prospect) return;
+    setAdding(true);
+    try {
+      const r = await fetch("/api/bond/property", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ property_key: dossier.prospect.property_key, remove: true }),
+      });
+      const j = await r.json();
+      if (j.ok) setDossier({ ...dossier, prospect: j.prospect ?? null });
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  const f = dossier?.facts;
+  const money = (n: number | null) => (n == null ? "-" : `£${n.toLocaleString("en-GB")}`);
+
+  return (
+    <div className="fade-up mx-auto max-w-4xl space-y-4">
+      <form onSubmit={search} className="flex flex-wrap items-center gap-2">
+        <label className="flex min-w-64 flex-1 items-center gap-2.5 rounded-full border border-line/80 bg-panel px-4 py-2.5 focus-within:border-ink">
+          <DoodleIcon name="search" size={15} className="shrink-0 text-muted" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Any address in the patch, with the postcode if you have it..."
+            className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted/70"
+          />
+        </label>
+        <button type="submit" disabled={busy} className="press-wobble rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page disabled:opacity-40">
+          {busy ? "Looking..." : "Look up"}
+        </button>
+      </form>
+      <p className="text-[11.5px] text-muted">
+        Flagged or not, every door has a record: what the sweep has seen listed, the sale history, the company on the title, the tenancy estimate. Seen a private lister on Facebook or a board on the street? Look the address up and add it.
+      </p>
+      {note && <p className="text-[12.5px] text-muted">{note}</p>}
+
+      {candidates.length > 1 && (
+        <section className="rounded-2xl border border-line/80 bg-panel p-4">
+          <h2 className="text-[13px]">Which door?</h2>
+          <ul className="mt-2 divide-y divide-line/60 text-[12.5px]">
+            {candidates.map((c) => (
+              <li key={c.hs_id}>
+                <button type="button" onClick={() => void open(c.hs_id)} className="w-full py-2 text-left hover:text-accent-dark">
+                  {c.label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {dossier && f && (
+        <>
+          <section className="rounded-2xl border border-line/80 bg-panel p-5">
+            <p className="text-[11px] uppercase tracking-wider text-muted">Property</p>
+            <h2 className="mt-1 text-[20px] leading-snug">{f.address}</h2>
+            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[12.5px] sm:grid-cols-4">
+              <div><dt className="text-[11px] text-muted">Beds</dt><dd>{f.beds ?? "-"}</dd></div>
+              <div><dt className="text-[11px] text-muted">Type</dt><dd>{f.category ?? "-"}</dd></div>
+              <div><dt className="text-[11px] text-muted">Tenure</dt><dd>{f.tenure ?? "-"}</dd></div>
+              <div><dt className="text-[11px] text-muted">Council tax</dt><dd>{f.tax_band ?? "-"}</dd></div>
+              <div><dt className="text-[11px] text-muted">EPC</dt><dd>{f.energy_rating ? `${f.energy_rating}${f.energy_epc_date ? ` · ${when(f.energy_epc_date)}` : ""}` : "-"}</dd></div>
+              <div><dt className="text-[11px] text-muted">Property id</dt><dd className="text-muted">{f.uprn ? `UPRN ${f.uprn}` : "none on the register"}</dd></div>
+            </dl>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {dossier.prospect ? (
+                <>
+                  <span className="rounded-full border border-accent-dark bg-accent-soft/40 px-3 py-1 text-[11.5px] text-accent-dark">
+                    On the list · score {dossier.prospect.score} · {dossier.prospect.stage}
+                  </span>
+                  <button type="button" onClick={() => openOnBoard(f.address.split(",")[0])} className="rounded-full border border-ink/80 px-4 py-1.5 text-[11.5px] font-semibold">
+                    Open on the board
+                  </button>
+                  {dossier.prospect.hand_reason && (
+                    <button type="button" onClick={() => void remove()} disabled={adding} className="rounded-full border border-line/80 px-4 py-1.5 text-[11.5px] text-muted">
+                      Take off the hand-added list
+                    </button>
+                  )}
+                </>
+              ) : null}
+            </div>
+
+            {dossier.prospect?.signals?.length ? (
+              <ul className="mt-3 space-y-1 text-[12px]">
+                {dossier.prospect.signals.map((s) => (
+                  <li key={s.key}><span className="font-semibold">{SIGNAL_LABEL[s.key] ?? s.key}</span> <span className="text-muted">· {s.detail}</span></li>
+                ))}
+              </ul>
+            ) : null}
+
+            {!dossier.prospect?.hand_reason && (
+              <div className="mt-4 rounded-xl border border-dashed border-line/80 p-3">
+                <p className="text-[12px]">Add it to the list</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <input
+                    value={reason}
+                    onChange={(e) => setReason(e.target.value)}
+                    placeholder="Why: private lister on Facebook, board outside, spoke to the owner..."
+                    className="min-w-64 flex-1 rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none placeholder:text-muted/70 focus:border-ink"
+                  />
+                  <button type="button" onClick={() => void add()} disabled={adding || !reason.trim()} className="press-wobble rounded-full bg-ink px-4 py-2 text-[12px] font-semibold text-page disabled:opacity-40">
+                    {adding ? "Adding..." : "Add to the list"}
+                  </button>
+                </div>
+                {addError && <p className="mt-2 text-[12px] text-red-700">{addError}</p>}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-line/80 bg-panel p-5">
+            <h2 className="text-[14px]">What the sweep has seen</h2>
+            {dossier.listings.length === 0 ? (
+              <p className="mt-2 text-[12.5px] text-muted">Nothing listed since the sweep began on 2 September 2026.</p>
+            ) : (
+              <table className="mt-3 w-full text-left text-[12px]">
+                <thead className="text-[10.5px] uppercase tracking-wider text-muted">
+                  <tr><th className="pb-1">Market</th><th className="pb-1">Agent</th><th className="pb-1">Price</th><th className="pb-1">Listed</th><th className="pb-1">Status</th><th className="pb-1">Let agreed</th></tr>
+                </thead>
+                <tbody className="divide-y divide-line/60">
+                  {dossier.listings.map((l) => (
+                    <tr key={l.listing_key}>
+                      <td className="py-1.5">{l.market === "sale" ? "For sale" : "To let"}</td>
+                      <td className="py-1.5">{l.agent ?? "-"}</td>
+                      <td className="figures py-1.5">{l.market === "sale" ? money(l.price) : l.price == null ? "-" : `${money(l.price)} pcm`}</td>
+                      <td className="py-1.5">{when(l.listed_on)}</td>
+                      <td className="py-1.5 capitalize">{l.gone_at ? `gone ${when(l.gone_at)}` : l.status}</td>
+                      <td className="py-1.5">{l.let_agreed_at ? when(l.let_agreed_at) : "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <section className="rounded-2xl border border-line/80 bg-panel p-5">
+              <h2 className="text-[14px]">Sales on the register</h2>
+              {dossier.sales.length === 0 ? (
+                <p className="mt-2 text-[12.5px] text-muted">None in the files loaded.</p>
+              ) : (
+                <ul className="mt-2 space-y-1 text-[12.5px]">
+                  {dossier.sales.map((s, i) => (
+                    <li key={i}>{when(s.sold_on)} · {money(s.price)}{s.new_build ? " · new build" : ""}{s.tenure ? ` · ${s.tenure === "L" ? "leasehold" : "freehold"}` : ""}</li>
+                  ))}
+                </ul>
+              )}
+            </section>
+            <section className="rounded-2xl border border-line/80 bg-panel p-5">
+              <h2 className="text-[14px]">Owner</h2>
+              {dossier.company ? (
+                <div className="mt-2 text-[12.5px]">
+                  <p className="font-semibold">{dossier.company.name}</p>
+                  <p className="text-muted">{dossier.company.address}</p>
+                  <p className="text-[11px] text-muted">Land Registry company file · title {dossier.company.title_number}</p>
+                </div>
+              ) : (
+                <p className="mt-2 text-[12.5px] text-muted">
+                  Not a company on the Land Registry files loaded. An individual owner is looked up from the property panel on the board.
+                </p>
+              )}
+              {dossier.prospect?.tenancy_start && (
+                <p className="mt-3 text-[12px] text-muted">
+                  Tenancy from about {when(dossier.prospect.tenancy_start)}, next anniversary {when(dossier.prospect.next_anniversary)}{dossier.prospect.tenancy_basis === "estimated" ? " (estimated)" : ""}.
+                </p>
+              )}
+            </section>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+const SIGNAL_LABEL: Record<string, string> = {
+  self_managing: "Self-managing", withdrawn: "Withdrawn", switched_agent: "Switched agent", fallen_through: "Fallen through",
+  stale_90: "90+ days", stale_60: "60+ days", stale_30: "30+ days", relisted: "Back on market", reduced: "Rent reduced",
+  competitor_new: "New with a competitor", company_owned: "Company owned", let_to_sale: "Let, now for sale", sale_stuck: "Not selling",
+  sale_to_let: "Could not sell, now to let", just_bought: "Just bought", anniversary_due: "Anniversary due", added_by_hand: "Added by hand",
+};

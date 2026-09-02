@@ -1342,6 +1342,12 @@ ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS next_anniversary DATE;
 ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS tenancy_basis TEXT;
 CREATE INDEX IF NOT EXISTS os_radar_prospects_anniversary_idx ON os_radar_prospects (next_anniversary);
 
+-- A property somebody added by hand - seen on Facebook, a board, a
+-- conversation. The reason keeps it on the board through every recompute.
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS hand_reason TEXT;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS hand_added_by TEXT;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS hand_added_at TIMESTAMPTZ;
+
 -- One row per Radar run. The run takes minutes now that both feeds are read
 -- and the edge closes a request at 100 seconds, so the route answers at once
 -- and this is where the answer goes.

@@ -26,7 +26,8 @@ export type SignalKey =
   | "sale_stuck"
   | "sale_to_let"
   | "just_bought"
-  | "anniversary_due";
+  | "anniversary_due"
+  | "added_by_hand";
 
 export const SIGNALS: Record<SignalKey, { label: string; weight: number; why: string }> = {
   self_managing: {
@@ -93,6 +94,11 @@ export const SIGNALS: Record<SignalKey, { label: string; weight: number; why: st
     weight: 25,
     why: "The tenancy started about a year ago. Fixed terms end and rents get reviewed around now, and this is when a landlord decides whether to keep the agent. Write before it, not after.",
   },
+  added_by_hand: {
+    label: "Added by hand",
+    weight: 20,
+    why: "A colleague put this on the list themselves: seen on Facebook, a board on the street, a conversation. The reason is on the record.",
+  },
 };
 
 export const SIGNAL_ORDER = Object.keys(SIGNALS) as SignalKey[];
@@ -158,6 +164,8 @@ export interface Prospect {
   tenancy_start: string | null;
   next_anniversary: string | null;
   tenancy_basis: "observed" | "estimated" | null;
+  /** Why a colleague added it, when they did. */
+  hand_reason: string | null;
   agent: string | null;
   status: string | null;
   listed_on: string | null;

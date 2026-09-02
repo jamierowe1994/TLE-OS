@@ -157,6 +157,7 @@ export default function RadarBoard({
   embedded = false,
   view: viewProp,
   nearPreset,
+  filterPreset,
 }: {
   /** Inside Bond: no page header, the workspace supplies its own. */
   embedded?: boolean;
@@ -164,6 +165,8 @@ export default function RadarBoard({
   view?: "map" | "list";
   /** An address to search around on arrival - Today's quick search. */
   nearPreset?: string;
+  /** Text to put in the filter box on arrival - "open this door on the board". */
+  filterPreset?: string;
 } = {}) {
   const [rows, setRows] = useState<Row[]>([]);
   const [summary, setSummary] = useState<RadarSummary | null>(null);
@@ -186,6 +189,15 @@ export default function RadarBoard({
   useEffect(() => {
     if (viewProp) setView(viewProp);
   }, [viewProp]);
+  useEffect(() => {
+    if (filterPreset != null) {
+      setQ(filterPreset);
+      setSignalsOn(new Set());
+      setNear(null);
+      setArea(null);
+      setFStage(null);
+    }
+  }, [filterPreset]);
   /* What the map currently holds, and the area somebody asked to list. */
   const [inView, setInView] = useState<string[]>([]);
   const [area, setArea] = useState<Set<string> | null>(null);
