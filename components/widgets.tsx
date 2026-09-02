@@ -15,7 +15,9 @@ import { FlowTag, Pill } from "@/components/Wire";
 import { VIEWING_OUTCOMES, minutesOf, type Appt } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 import { dueWithin, CERT_META } from "@/lib/compliance";
-import { LEADS, leadSide } from "@/lib/leads-sample";
+import type { Lead } from "@/lib/leads-sample";
+import type { Application } from "@/lib/applications";
+import type { OsListing } from "@/lib/rex-listings";
 
 /**
  * The widget registry — every box the dashboard can hold.
@@ -183,8 +185,6 @@ export function RowList({
 }
 
 /* ── Sample series (no history store yet — these are the wireframe's truth) ── */
-const LEADS_12W = [8, 11, 9, 14, 12, 10, 15, 13, 17, 12, 16, 14];
-const LEADS_12M = [31, 28, 35, 42, 39, 45, 52, 48, 41, 44, 50, 47];
 const FB_8W = [2, 4, 3, 5, 4, 6, 5, 9];
 const IG_8W = [1, 1, 2, 3, 2, 2, 4, 4];
 const ADS = [
@@ -193,7 +193,6 @@ const ADS = [
   { name: "Free valuation", platform: "Facebook", leads: 4, spend: "£5.20/lead" },
 ];
 
-const tenantLeads = LEADS.filter((l) => leadSide(l) === "tenant");
 
 /* ── The Diary widget: the day at 1×1, the week grid from 2×2, the full
    two-row diary at 4×3 — the same grid as everywhere else, so someone can
@@ -760,130 +759,285 @@ function PipelineWidget({ w, h }: { w: number; h: number }) {
       );
 }
 
+/* ── Live sources for the board's first row ─────────────────────────────────
+ *
+ * Leads today, On market and Applications were the last tiles still typed
+ * in - "14 · 3 uncontacted", "24 · 2 under offer", "6 · 1 stalled" - on the
+ * first screen anybody sees. Each now reads the same route its full screen
+ * reads, one fetch shared across the board, and a failure kept apart from an
+ * empty book (see useMyFigures for why that distinction matters).
+ */
+
+type Fetched<T> = { data: T | null; loading: boolean; unlinked: boolean; error: string | null };
+
+function useShared<T>(
+  slot: { p: Promise<unknown> | null },
+  url: string,
+  pick: (j: Record<string, unknown>) => T | null
+): Fetched<T> {
+  const [state, setState] = useState<Fetched<T>>({ data: null, loading: true, unlinked: false, error: null });
+  useEffect(() => {
+    let alive = true;
+    slot.p ??= fetch(url)
+      .then((r) => r.json())
+      .catch(() => null);
+    void slot.p.then((raw) => {
+      if (!alive) return;
+      const j = (raw ?? null) as Record<string, unknown> | null;
+      const data = j ? pick(j) : null;
+      setState({
+        data,
+        loading: false,
+        unlinked: Boolean(j?.unlinked),
+        error: data ? null : String(j?.error ?? j?.reason ?? "REX didn't answer."),
+      });
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return state;
+}
+
+const leadsSlot: { p: Promise<unknown> | null } = { p: null };
+const listingsSlot: { p: Promise<unknown> | null } = { p: null };
+const applicationsSlot: { p: Promise<unknown> | null } = { p: null };
+
+const sameDay = (iso: string | undefined, d: Date) => {
+  if (!iso) return false;
+  const t = new Date(iso);
+  return t.getFullYear() === d.getFullYear() && t.getMonth() === d.getMonth() && t.getDate() === d.getDate();
+};
+const daysSince = (iso: string | null | undefined, ms?: number | null) => {
+  const t = iso ? new Date(iso).getTime() : ms ?? NaN;
+  return Number.isFinite(t) ? Math.floor((Date.now() - t) / 86_400_000) : null;
+};
+
+/**
+ * Leads today. The count is enquiries received TODAY; the line under it is
+ * everything still at "New" - the actionable number, whichever day it
+ * arrived. The bars are enquiries per week, but only for the weeks the
+ * book actually covers: the route walks the newest 500 leads, and for the
+ * business that can be less than twelve weeks, so a week older than the
+ * oldest lead we hold is left out rather than drawn as zero.
+ */
+function LeadsTodayWidget({ w, h }: { w: number; h: number }) {
+  const { data, loading, unlinked, error } = useShared<{ leads: Lead[] }>(
+    leadsSlot, "/api/leads",
+    (j) => (j.ok && Array.isArray(j.leads) ? { leads: j.leads as Lead[] } : null)
+  );
+  const leads = data?.leads ?? [];
+  const now = new Date();
+  const today = leads.filter((l) => sameDay(l.receivedAt, now));
+  const waiting = leads.filter((l) => l.stage === "New");
+  const oldest = leads.reduce<number>((a, l) => Math.min(a, l.receivedAt ? new Date(l.receivedAt).getTime() : Infinity), Infinity);
+  const weeks: number[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const end = new Date(now); end.setHours(23, 59, 59, 999); end.setDate(end.getDate() - i * 7);
+    const start = new Date(end); start.setDate(start.getDate() - 6); start.setHours(0, 0, 0, 0);
+    if (start.getTime() < oldest && i !== 0) continue; // not covered by what we hold
+    weeks.push(leads.filter((l) => l.receivedAt && new Date(l.receivedAt) >= start && new Date(l.receivedAt) <= end).length);
+  }
+  const count = loading ? "·" : data ? String(today.length) : "—";
+  const hint = loading ? "asking REX" : data ? `${waiting.length} uncontacted` : unlinked ? "link your REX account" : (error ?? "couldn't read REX");
+  const newest = [...leads].sort((a, b) => (b.receivedAt ?? "").localeCompare(a.receivedAt ?? ""));
+  const rows = (n: number) => newest.slice(0, n).map((l) => ({ a: l.received, b: l.name, c: l.source }));
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <Head icon="pack/target" label="Leads today" />
+        {w >= 2 && data && <FlowTag from="REX" />}
+      </div>
+      {w === 1 && h === 1 && <BigCount value={count} hint={hint} />}
+      {w >= 2 && h === 1 && (
+        <div className="mt-2 flex items-end gap-4">
+          <div>
+            <p className="figures text-[34px] leading-none">{count}</p>
+            <p className="mt-1 text-[11px] font-medium text-accent-dark">{hint}</p>
+          </div>
+          {data && weeks.length > 1 && (
+            <div className="mb-1 min-w-0 flex-1">
+              <Bars data={weeks} />
+              <p className="mt-1 text-[9px] text-muted">enquiries a week · last {weeks.length} weeks</p>
+            </div>
+          )}
+        </div>
+      )}
+      {w === 1 && h >= 2 && (
+        <>
+          <BigCount value={count} hint={hint} />
+          {data && <RowList rows={rows(h >= 3 ? 9 : 5)} max={h >= 3 ? 9 : 5} />}
+        </>
+      )}
+      {w >= 2 && h >= 2 && (
+        <div className="mt-3 grid grid-cols-2 gap-5">
+          <div>
+            <p className="figures text-[34px] leading-none">{count}</p>
+            <p className="mt-1 text-[11px] font-medium text-accent-dark">{hint}</p>
+            {data && weeks.length > 1 && (
+              <div className="mt-3">
+                <Bars data={weeks} tall />
+                <p className="mt-1 text-[9px] text-muted">enquiries a week · last {weeks.length} weeks · {leads.length} held</p>
+              </div>
+            )}
+          </div>
+          {data && <RowList rows={rows(h >= 3 ? 10 : 6)} max={h >= 3 ? 10 : 6} />}
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * On market: the current rental book that is actually PUBLISHED. Drafts are
+ * in REX but on no portal, so they are not "on market" and are counted
+ * beside it instead. "Under offer" is a sales word; rentals have let agreed.
+ * The slow movers are the available ones by days live, with the reason a
+ * listing tends to sit - no photographs, no write-up - read off the record.
+ */
+function OnMarketWidget({ w, h }: { w: number; h: number }) {
+  const { data, loading, unlinked, error } = useShared<{ listings: OsListing[]; draft: number }>(
+    listingsSlot, "/api/listings",
+    (j) => (j.ok && j.live && Array.isArray(j.listings)
+      ? { listings: j.listings as OsListing[], draft: Number((j.counts as { draft?: number } | undefined)?.draft ?? 0) }
+      : null)
+  );
+  const live = (data?.listings ?? []).filter((l) => l.publicationStatus === "published");
+  const available = live.filter((l) => !l.letAgreed);
+  const agreed = live.filter((l) => l.letAgreed);
+  const slow = [...available].sort((a, b) => (b.daysOnMarket ?? -1) - (a.daysOnMarket ?? -1));
+  const count = loading ? "·" : data ? String(live.length) : "—";
+  const hint = loading ? "asking REX" : data ? `${agreed.length} let agreed` : unlinked ? "link your REX account" : (error ?? "couldn't read REX");
+  const why = (l: OsListing) => (l.imageCount === 0 ? "no photos" : !l.advertBody ? "no write-up" : undefined);
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <Head icon="pack/house" label="On market" />
+        {w >= 2 && data && <FlowTag from="REX" />}
+      </div>
+      {w === 1 && h === 1 && <BigCount value={count} hint={hint} />}
+      {(w >= 2 || h >= 2) && (
+        <>
+          <div className="mt-2 flex items-end gap-5">
+            <p className="figures text-[34px] leading-none">{count}</p>
+            {data ? (
+              <div className="mb-0.5 flex flex-wrap gap-4 text-[11px]">
+                <span><span className="figures text-[15px]">{available.length}</span> <span className="text-muted">available</span></span>
+                <span><span className="figures text-[15px]">{agreed.length}</span> <span className="text-muted">let agreed</span></span>
+                <span><span className="figures text-[15px]">{data.draft}</span> <span className="text-muted">still drafts</span></span>
+              </div>
+            ) : (
+              <p className="mb-1 text-[11px] text-muted">{hint}</p>
+            )}
+          </div>
+          {h >= 2 && data && (
+            <>
+              <p className="mt-4 text-[10px] font-semibold uppercase tracking-wide text-muted">Slowest movers</p>
+              <RowList
+                rows={slow.slice(0, w >= 2 ? 4 : 3).map((l) => ({
+                  a: l.daysOnMarket == null ? "—" : `${l.daysOnMarket}d`,
+                  b: l.name,
+                  c: why(l),
+                }))}
+                max={w >= 2 ? 4 : 3}
+              />
+            </>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+/**
+ * Applications: the ones still OPEN - received, or communicated to the
+ * landlord and waiting on an answer. Accepted and unsuccessful are done and
+ * are counted only for the last thirty days. "Stalled" is an open one older
+ * than a week; the list is those, oldest first.
+ *
+ * Reads the same route as the Applications screen, which is the whole
+ * business's newest applications rather than one agent's - that screen is
+ * not scoped yet either, so the tile and the screen agree.
+ */
+function ApplicationsWidget({ w, h }: { w: number; h: number }) {
+  const { data, loading, error } = useShared<{ applications: Application[] }>(
+    applicationsSlot, "/api/applications?limit=300",
+    (j) => (Array.isArray(j.applications) && !j.error ? { applications: j.applications as Application[] } : null)
+  );
+  const apps = data?.applications ?? [];
+  const open = apps.filter((a) => a.status === "received" || a.status === "communicated");
+  const received = open.filter((a) => a.status === "received");
+  const communicated = open.filter((a) => a.status === "communicated");
+  const accepted30 = apps.filter((a) => a.status === "accepted" && (daysSince(a.dateAccepted ?? a.dateReceived, a.createdAt ? a.createdAt * 1000 : null) ?? 99) <= 30);
+  const age = (a: Application) => daysSince(a.dateReceived, a.createdAt ? a.createdAt * 1000 : null);
+  const stalled = open.filter((a) => (age(a) ?? 0) > 7).sort((a, b) => (age(b) ?? 0) - (age(a) ?? 0));
+  const count = loading ? "·" : data ? String(open.length) : "—";
+  const hint = loading ? "asking REX" : data ? `${stalled.length} waiting over a week` : (error ?? "couldn't read REX");
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <Head icon="pack/checklist" label="Applications" />
+        {w >= 2 && data && <FlowTag from="REX" />}
+      </div>
+      {w === 1 && h === 1 && <BigCount value={count} hint={hint} />}
+      {(w >= 2 || h >= 2) && (
+        <>
+          <div className="mt-2 flex items-end gap-5">
+            <p className="figures text-[34px] leading-none">{count}</p>
+            {data ? (
+              <div className="mb-0.5 flex flex-wrap gap-4 text-[11px]">
+                <span><span className="figures text-[15px]">{received.length}</span> <span className="text-muted">received</span></span>
+                <span><span className="figures text-[15px]">{communicated.length}</span> <span className="text-muted">with landlord</span></span>
+                <span><span className="figures text-[15px]">{accepted30.length}</span> <span className="text-muted">accepted, 30 days</span></span>
+              </div>
+            ) : (
+              <p className="mb-1 text-[11px] text-muted">{hint}</p>
+            )}
+          </div>
+          {h >= 2 && data && (
+            <>
+              <p className="mt-4 text-[10px] font-semibold uppercase tracking-wide text-muted">Needs a push</p>
+              {stalled.length ? (
+                <RowList
+                  rows={stalled.slice(0, w >= 2 ? 4 : 3).map((a) => ({
+                    a: `${age(a)}d`,
+                    b: `${a.property} — ${a.applicants[0]?.name ?? "applicant"}`,
+                    c: a.statusLabel,
+                  }))}
+                  max={w >= 2 ? 4 : 3}
+                />
+              ) : (
+                <p className="mt-1 text-[11px] text-muted">Nothing open is older than a week.</p>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
 export const WIDGETS: Record<string, WidgetDef> = {
   "leads-today": {
     label: "Leads today", icon: "pack/target", hint: "count → trend → the names themselves",
     defaultW: 1, defaultH: 1,
-    render: (w, h) => (
-      <>
-        <div className="flex items-center justify-between gap-2">
-          <Head icon="pack/target" label="Leads today" />
-          {w >= 2 && h >= 2 && <FlowTag from="REX + GHL" />}
-        </div>
-        {w === 1 && h === 1 && <BigCount value="14" hint="3 uncontacted" />}
-        {w >= 2 && h === 1 && (
-          <div className="mt-2 flex items-end gap-4">
-            <div>
-              <p className="figures text-[34px] leading-none">14</p>
-              <p className="mt-1 text-[11px] font-medium text-accent-dark">3 uncontacted</p>
-            </div>
-            <div className="mb-1 min-w-0 flex-1">
-              <Bars data={LEADS_12W} />
-              <p className="mt-1 text-[9px] text-muted">last 12 weeks</p>
-            </div>
-          </div>
-        )}
-        {w === 1 && h >= 2 && (
-          <>
-            <BigCount value="14" hint="3 uncontacted" />
-            <RowList
-              rows={tenantLeads.slice(0, h >= 3 ? 9 : 5).map((l) => ({ a: l.received, b: l.name, c: l.source }))}
-              max={h >= 3 ? 9 : 5}
-            />
-          </>
-        )}
-        {w >= 2 && h >= 2 && (
-          <div className="mt-3 grid grid-cols-2 gap-5">
-            <div>
-              <p className="figures text-[34px] leading-none">14</p>
-              <p className="mt-1 text-[11px] font-medium text-accent-dark">3 uncontacted today</p>
-              <div className="mt-3">
-                <LineGraph data={LEADS_12M} tall />
-                <p className="mt-1 text-[9px] text-muted">last 12 months · 502 leads</p>
-              </div>
-            </div>
-            <RowList
-              rows={tenantLeads.slice(0, h >= 3 ? 10 : 6).map((l) => ({ a: l.received, b: l.name, c: l.source }))}
-              max={h >= 3 ? 10 : 6}
-            />
-          </div>
-        )}
-      </>
-    ),
+    render: (w, h) => <LeadsTodayWidget w={w} h={h} />,
   },
 
   "on-market": {
     label: "On market", icon: "pack/house", hint: "count → by status → the slow movers",
     defaultW: 1, defaultH: 1,
-    render: (w, h) => (
-      <>
-        <Head icon="pack/house" label="On market" />
-        {w === 1 && h === 1 && <BigCount value="24" hint="2 under offer" />}
-        {(w >= 2 || h >= 2) && (
-          <>
-            <div className="mt-2 flex items-end gap-5">
-              <p className="figures text-[34px] leading-none">24</p>
-              <div className="mb-0.5 flex gap-4 text-[11px]">
-                <span><span className="figures text-[15px]">18</span> <span className="text-muted">available</span></span>
-                <span><span className="figures text-[15px]">2</span> <span className="text-muted">under offer</span></span>
-                <span><span className="figures text-[15px]">4</span> <span className="text-muted">let agreed</span></span>
-              </div>
-            </div>
-            {h >= 2 && (
-              <>
-                <p className="mt-4 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                  Slowest movers
-                </p>
-                <RowList
-                  rows={[
-                    { a: "44d", b: "8 Recreation Terrace", c: "no photos" },
-                    { a: "31d", b: "228a Chapter Road", c: "price?" },
-                    { a: "19d", b: "108 Cherry Tree Drive" },
-                    { a: "12d", b: "Flat 2, Mercer Street" },
-                  ]}
-                  max={w >= 2 ? 4 : 3}
-                />
-              </>
-            )}
-          </>
-        )}
-      </>
-    ),
+    render: (w, h) => <OnMarketWidget w={w} h={h} />,
   },
 
   applications: {
     label: "Applications", icon: "pack/checklist", hint: "count → by stage → the stalled",
     defaultW: 1, defaultH: 1,
-    render: (w, h) => (
-      <>
-        <Head icon="pack/checklist" label="Applications" />
-        {w === 1 && h === 1 && <BigCount value="6" hint="1 stalled" />}
-        {(w >= 2 || h >= 2) && (
-          <>
-            <div className="mt-2 flex items-end gap-5">
-              <p className="figures text-[34px] leading-none">6</p>
-              <div className="mb-0.5 flex gap-4 text-[11px]">
-                <span><span className="figures text-[15px]">2</span> <span className="text-muted">new</span></span>
-                <span><span className="figures text-[15px]">3</span> <span className="text-muted">referencing</span></span>
-                <span><span className="figures text-[15px]">1</span> <span className="text-muted">signing</span></span>
-              </div>
-            </div>
-            {h >= 2 && (
-              <>
-                <p className="mt-4 text-[10px] font-semibold uppercase tracking-wide text-muted">Needs a push</p>
-                <RowList
-                  rows={[
-                    { a: "6d", b: "Flat 2, Mercer St — referencing stalled", c: "chase" },
-                    { a: "2d", b: "Flat A, Milton Rd — awaiting guarantor" },
-                  ]}
-                  max={2}
-                />
-              </>
-            )}
-          </>
-        )}
-      </>
-    ),
+    render: (w, h) => <ApplicationsWidget w={w} h={h} />,
   },
 
   occupancy: {
