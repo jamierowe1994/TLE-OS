@@ -42,11 +42,12 @@ import {
  */
 
 /** James, 2 Sep 2026: "Northampton and Milton Keynes, so NN postcode and MK
- *  postcodes." NN1–NN18 and MK1–MK19. Bedford is MK40–MK46 and is NOT here;
- *  add it with ?add=MK40,MK41 if the patch grows. */
+ *  postcodes", then the same afternoon "add Bedford, MK40 to MK46". So
+ *  NN1–NN18, MK1–MK19 and MK40–MK46. Anything further is ?add=. */
 export const PATCH_DISTRICTS: string[] = [
   ...Array.from({ length: 18 }, (_, i) => `NN${i + 1}`),
   ...Array.from({ length: 19 }, (_, i) => `MK${i + 1}`),
+  ...Array.from({ length: 7 }, (_, i) => `MK${i + 40}`),
 ];
 
 export interface WatchedDistrict extends Record<string, unknown> {

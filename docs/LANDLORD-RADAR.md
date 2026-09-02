@@ -200,8 +200,8 @@ Both create a prospect in Radar with source `inbound` and a lead in REX.
 ## Status, 2 Sep 2026
 
 **Phase 1 is built** and verified against a local Postgres with a real sweep of the
-patch (James named it: NN and MK, so NN1-NN18 and MK1-MK19; Bedford's MK40-MK46 are
-not in and can be added with `?add=`).
+patch (James named it: NN and MK, so NN1-NN18 and MK1-MK19, and later the same day
+Bedford, MK40-MK46). Anything further is `?add=`.
 
 What exists:
 
