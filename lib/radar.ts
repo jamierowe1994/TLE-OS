@@ -11,6 +11,7 @@ import {
   SIGNALS,
   STAGES,
   STAGE_LABEL,
+  type AddressCandidate,
   type Prospect,
   type RadarSummary,
   type Signal,
@@ -397,6 +398,11 @@ interface ProspectRow extends Record<string, unknown> {
   signals: Signal[];
   score: number;
   stage: string;
+  resolved_address: string | null;
+  resolved_uprn: string | null;
+  address_confidence: number | null;
+  address_candidates: AddressCandidate[] | null;
+  resolved_at: Date | string | null;
   assigned_to: string | null;
   notes: string;
   first_flagged: Date | string;
@@ -430,7 +436,19 @@ function toProspect(r: ProspectRow): Prospect {
     first_flagged: new Date(r.first_flagged).toISOString(),
     last_signal_at: r.last_signal_at ? new Date(r.last_signal_at).toISOString() : null,
     last_action_at: r.last_action_at ? new Date(r.last_action_at).toISOString() : null,
+    resolved_address: r.resolved_address ?? null,
+    resolved_uprn: r.resolved_uprn ?? null,
+    address_confidence: r.address_confidence ?? null,
+    address_candidates: Array.isArray(r.address_candidates) ? r.address_candidates : null,
+    resolved_at: r.resolved_at ? new Date(r.resolved_at).toISOString() : null,
   };
+}
+
+/** One prospect, for the routes that act on a single property. */
+export async function getProspect(key: string): Promise<Prospect | null> {
+  if (!hasDb()) return null;
+  const rows = await q<ProspectRow>(`SELECT * FROM os_radar_prospects WHERE property_key = $1`, [key]);
+  return rows[0] ? toProspect(rows[0]) : null;
 }
 
 /** Everything flagged, strongest first, plus anything somebody has worked

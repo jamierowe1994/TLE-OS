@@ -232,3 +232,40 @@ Switches James owns before it runs for real:
 - `RADAR_DIGEST_TO` on Railway (comma-separated colleague addresses) plus Resend unlocked,
   or the run reports "no digest went out" and everything else still happens.
 - The workflow needs the same `CRON_SECRET` repository secret the capture uses.
+
+---
+
+## Bond, 2 Sep 2026 (evening)
+
+James: "rather than calling this Landlord Radar, make this a full prospecting app...
+we're going to call it Bond." So the tool is now **Bond**, at `/tools/bond`
+(`/tools/radar` redirects). It covers the OS full screen, fades its name in, then brings
+the workspace up. Five rooms:
+
+- **Today**: the figures (flagged, new today, worked this week, appraisals booked, owners
+  found, postcards sent), a quick "where are you prospecting" search that opens the map
+  around that address, and the activity feed (`os_bond_activity`: stage changes, notes,
+  assignments, appraisals, address pins, and later owner lookups and postcards).
+- **Map** and **Prospects**: RadarBoard embedded. Address-and-radius search, signal
+  switches, the 150-strongest cap, the property panel.
+- **Owners**: the Land Registry room. Shows lookups (`os_bond_owner_lookups`) and, until a
+  provider is connected, exactly what is needed. Find the owner on a property refuses and
+  says so; nothing is written.
+- **Postcards**: same shape (`os_bond_postcards`, Stannp when connected).
+
+**Which front door** (built, live): for a street-only listing (OpenRent gives street and
+postcode only) Bond pulls every address in the postcode from Homesearch, asks the register
+for each one's bedrooms and type, and keeps the doors that agree with the advert. The
+confidence is 100 divided by the number of doors that fit, and every candidate is listed.
+Measured on Harefield Road, NN3 8ES (3-bed): 40 doors in the postcode, 16 fit, 6%. A full
+address from the feed pins at 95%. Stored on the prospect (`resolved_*`,
+`address_confidence`, `address_candidates`). Up to forty register calls per pin, sequential,
+on demand only.
+
+**What James still owns** before the Owners and Postcards rooms do anything:
+`LAND_REGISTRY_PROVIDER` + `LAND_REGISTRY_API_KEY` (HMLR Business Gateway or a reseller),
+`STANNP_API_KEY`, the postcard design, and the legitimate interests note. The lookup call
+itself is a stub in `lib/bond.ts` (`requestOwner`) waiting for the provider.
+
+An AI pass over the candidates (photos in the advert against the register's build type,
+floor area, EPC) is the next step for the confidence figure; not built.

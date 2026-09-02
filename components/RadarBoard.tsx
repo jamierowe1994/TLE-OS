@@ -153,7 +153,18 @@ function SignalPills({ signals, max = 3 }: { signals: Prospect["signals"]; max?:
   );
 }
 
-export default function RadarBoard() {
+export default function RadarBoard({
+  embedded = false,
+  view: viewProp,
+  nearPreset,
+}: {
+  /** Inside Bond: no page header, the workspace supplies its own. */
+  embedded?: boolean;
+  /** Which view to show. Bond's nav drives it; standalone it is a toggle. */
+  view?: "map" | "list";
+  /** An address to search around on arrival - Today's quick search. */
+  nearPreset?: string;
+} = {}) {
   const [rows, setRows] = useState<Row[]>([]);
   const [summary, setSummary] = useState<RadarSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -171,7 +182,10 @@ export default function RadarBoard() {
   const [fAgent, setFAgent] = useState<string | null>(null);
   const [fStage, setFStage] = useState<string | null>(null);
   /* The map is the front door; the list is a view of the same book. */
-  const [view, setView] = useState<"map" | "list">("map");
+  const [view, setView] = useState<"map" | "list">(viewProp ?? "map");
+  useEffect(() => {
+    if (viewProp) setView(viewProp);
+  }, [viewProp]);
   /* What the map currently holds, and the area somebody asked to list. */
   const [inView, setInView] = useState<string[]>([]);
   const [area, setArea] = useState<Set<string> | null>(null);
@@ -210,9 +224,17 @@ export default function RadarBoard() {
     });
   }
 
-  async function lookUpNear(e?: React.SyntheticEvent) {
+  useEffect(() => {
+    if (nearPreset && nearPreset.trim()) {
+      setNearQuery(nearPreset);
+      void lookUpNear(undefined, nearPreset);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nearPreset]);
+
+  async function lookUpNear(e?: React.SyntheticEvent, preset?: string) {
     e?.preventDefault();
-    const qy = nearQuery.trim();
+    const qy = (preset ?? nearQuery).trim();
     if (!qy) {
       setNear(null);
       return;
@@ -362,13 +384,17 @@ export default function RadarBoard() {
 
   return (
     <>
-      <PageHeader
-        title="Landlord Radar"
-        blurb={blurb}
-        illustration="/illustrations/notioly/paper-airplane.png"
-      />
+      {embedded ? (
+        <p className="text-[12px] text-muted">{blurb}</p>
+      ) : (
+        <PageHeader
+          title="Landlord Radar"
+          blurb={blurb}
+          illustration="/illustrations/notioly/paper-airplane.png"
+        />
+      )}
 
-      <div className="mt-4">
+      <div className={embedded ? "mt-3" : "mt-4"}>
         <div className="fade-up min-w-0 rounded-2xl border border-line/80 bg-panel p-5">
           {/* The signals, as switches. Pick the ones you work; none picked is all. */}
           <div className="flex flex-wrap items-center gap-1.5">
@@ -485,7 +511,7 @@ export default function RadarBoard() {
                 Map area · {area.size} <span className="text-[10px]">✕</span>
               </button>
             )}
-            <span className="ml-auto flex items-center gap-1 rounded-full border border-line/80 p-0.5">
+            <span className={`ml-auto flex items-center gap-1 rounded-full border border-line/80 p-0.5 ${embedded ? "hidden" : ""}`}>
               {(["map", "list"] as const).map((v) => (
                 <button
                   key={v}
@@ -519,7 +545,7 @@ export default function RadarBoard() {
             </div>
           ) : view === "map" ? (
             <>
-              <div className="mt-4 h-[calc(100vh-380px)] min-h-[420px]">
+              <div className={`mt-4 min-h-[420px] ${embedded ? "h-[calc(100vh-330px)]" : "h-[calc(100vh-380px)]"}`}>
                 <RadarMap prospects={mapList} openId={openId} onOpen={setOpenId} onInView={onInView} />
               </div>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[11.5px] text-muted">
@@ -748,6 +774,8 @@ function ProspectPanel({
             </ul>
           </section>
 
+          <AddressSection prospect={prospect} onPatched={onPatched} />
+
           <section className="mt-6 space-y-4">
             <label className="block text-[12px]">
               <span className="text-[11px] text-muted">Stage</span>
@@ -824,5 +852,143 @@ function ProspectPanel({
         }}
       />
     </div>
+  );
+}
+
+
+/**
+ * Which front door, who owns it, and the postcard. The three Bond steps,
+ * in the order they happen. The first is live; the other two say what they
+ * are waiting on rather than pretending.
+ */
+function AddressSection({ prospect, onPatched }: { prospect: Prospect; onPatched: (p: Prospect) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ownerNote, setOwnerNote] = useState<{ text: string; needs: string[] } | null>(null);
+  const [ownerBusy, setOwnerBusy] = useState(false);
+
+  async function pin() {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/bond/resolve", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ property_key: prospect.property_key }),
+      });
+      const j = await r.json();
+      if (!r.ok || !j.ok) {
+        setError(j.error ?? "Could not check the register.");
+        return;
+      }
+      onPatched(j.prospect as Prospect);
+    } catch {
+      setError("Could not check the register.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function findOwner() {
+    setOwnerBusy(true);
+    setOwnerNote(null);
+    try {
+      const r = await fetch("/api/bond/owner", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ property_key: prospect.property_key }),
+      });
+      const j = await r.json();
+      setOwnerNote({ text: j.error ?? (j.ok ? "Ordered." : "Not available."), needs: j.provider?.needs ?? [] });
+    } catch {
+      setOwnerNote({ text: "Could not reach the owner lookup.", needs: [] });
+    } finally {
+      setOwnerBusy(false);
+    }
+  }
+
+  const conf = prospect.address_confidence;
+  const cands = prospect.address_candidates ?? [];
+  const fitting = cands.filter((c) => c.fits);
+
+  return (
+    <section className="mt-6 rounded-2xl border border-line/80 bg-panel p-4">
+      <h3 className="flex items-center justify-between text-[13px]">
+        <span>Which front door</span>
+        {conf != null && (
+          <span className={`figures text-[15px] font-semibold ${conf >= 80 ? "text-accent-dark" : ""}`}>{conf}%</span>
+        )}
+      </h3>
+      {prospect.resolved_at == null ? (
+        <p className="mt-2 text-[12px] text-muted">
+          {prospect.uprn
+            ? "The feed gave a property id, so this is one known door. Pin it anyway to see the register's view."
+            : "The advert gives a street and a postcode. Pin it to see every door in the postcode and which ones match."}
+        </p>
+      ) : (
+        <div className="mt-2 text-[12.5px]">
+          {prospect.resolved_address ? (
+            <p>
+              <span className="font-semibold">{prospect.resolved_address}</span>
+              {prospect.resolved_uprn ? <span className="text-muted"> · UPRN {prospect.resolved_uprn}</span> : null}
+            </p>
+          ) : (
+            <p className="text-muted">
+              {fitting.length || cands.length} doors fit the advert. Pick the one that looks right when the owner lookup is on.
+            </p>
+          )}
+          {cands.length > 0 && (
+            <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-[11.5px]">
+              {cands.map((c) => (
+                <li key={c.hs_id} className={`flex items-center justify-between gap-2 ${c.fits ? "" : "text-muted/70"}`}>
+                  <span className="truncate">{c.label}</span>
+                  <span className="figures shrink-0 text-muted">
+                    {c.beds != null ? `${c.beds} bed` : "beds unknown"}
+                    {c.category ? ` · ${c.category}` : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <PressButton
+          onClick={() => void pin()}
+          disabled={busy}
+          className="rounded-full border border-ink/80 px-4 py-1.5 text-[11.5px] font-semibold disabled:opacity-40"
+        >
+          {busy ? "Checking the register..." : prospect.resolved_at ? "Check again" : "Pin down the address"}
+        </PressButton>
+        <PressButton
+          onClick={() => void findOwner()}
+          disabled={ownerBusy}
+          className="rounded-full border border-line/80 px-4 py-1.5 text-[11.5px] disabled:opacity-40"
+          title="Ask the Land Registry who owns it"
+        >
+          {ownerBusy ? "Asking..." : "Find the owner"}
+        </PressButton>
+        <PressButton
+          disabled
+          className="rounded-full border border-line/80 px-4 py-1.5 text-[11.5px] disabled:opacity-40"
+          title="Needs the owner's address first"
+        >
+          Send a postcard
+        </PressButton>
+      </div>
+      {error && <p className="mt-2 text-[12px] text-red-700">{error}</p>}
+      {ownerNote && (
+        <div className="mt-3 rounded-xl border border-dashed border-line/80 p-3 text-[11.5px]">
+          <p className="text-ink">{ownerNote.text}</p>
+          {ownerNote.needs.length > 0 && (
+            <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-muted">
+              {ownerNote.needs.map((n) => (
+                <li key={n}>{n}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </section>
   );
 }

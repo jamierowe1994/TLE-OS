@@ -796,3 +796,16 @@ h1, h2, h3, h4, h5 {
     to   { opacity: 1; }
   }
 }
+
+/* Bond's entrance: the word settles, then the tiles rise one after another. */
+@keyframes bond-word {
+  0% { opacity: 0; letter-spacing: 0.08em; transform: translateY(8px); }
+  100% { opacity: 1; letter-spacing: 0; transform: translateY(0); }
+}
+.bond-word { animation: bond-word 0.9s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.bond-tile:nth-child(1) { animation-delay: 0.05s; }
+.bond-tile:nth-child(2) { animation-delay: 0.12s; }
+.bond-tile:nth-child(3) { animation-delay: 0.19s; }
+.bond-tile:nth-child(4) { animation-delay: 0.26s; }
+.bond-tile:nth-child(5) { animation-delay: 0.33s; }
+.bond-tile:nth-child(6) { animation-delay: 0.4s; }

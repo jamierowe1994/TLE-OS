@@ -128,6 +128,21 @@ export interface Prospect {
   first_flagged: string;
   last_signal_at: string | null;
   last_action_at: string | null;
+  /** Bond: the front door we settled on, and how sure we are. */
+  resolved_address: string | null;
+  resolved_uprn: string | null;
+  address_confidence: number | null;
+  address_candidates: AddressCandidate[] | null;
+  resolved_at: string | null;
+}
+
+export interface AddressCandidate {
+  hs_id: string;
+  label: string;
+  beds: number | null;
+  category: string | null;
+  /** True for the candidates whose beds and type agree with the listing. */
+  fits: boolean;
 }
 
 export interface RadarSummary {

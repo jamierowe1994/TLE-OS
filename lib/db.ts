@@ -1198,6 +1198,64 @@ CREATE INDEX IF NOT EXISTS os_radar_prospects_score_idx
 -- Where it is, for the map. From the feed; 1,561 of the first 1,583 flagged had one.
 ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
 ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS lon DOUBLE PRECISION;
+
+-- ── Bond (the prospecting workspace over Radar) ───────────────────────────
+-- Pinning a street-only listing to one front door: the candidates in the
+-- postcode, which one we settled on, and how sure we are. See lib/bond.
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS resolved_hs_id TEXT;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS resolved_address TEXT;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS resolved_uprn TEXT;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS address_confidence INTEGER;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS address_candidates JSONB;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
+
+-- What people did in Bond, so Today can show it. Never a person outside
+-- the company: actor is the colleague, the property is the subject.
+CREATE TABLE IF NOT EXISTS os_bond_activity (
+  id           BIGSERIAL PRIMARY KEY,
+  actor        TEXT NOT NULL DEFAULT '',
+  kind         TEXT NOT NULL,
+  property_key TEXT,
+  address      TEXT NOT NULL DEFAULT '',
+  detail       TEXT NOT NULL DEFAULT '',
+  at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_bond_activity_at_idx ON os_bond_activity (at DESC);
+
+-- Land Registry lookups. A row is a REQUEST; status says what came of it.
+-- Nothing is written here until a provider is connected (lib/bond).
+CREATE TABLE IF NOT EXISTS os_bond_owner_lookups (
+  id                     BIGSERIAL PRIMARY KEY,
+  property_key           TEXT NOT NULL,
+  address                TEXT NOT NULL DEFAULT '',
+  status                 TEXT NOT NULL DEFAULT 'requested',
+  provider               TEXT,
+  title_number           TEXT,
+  owner_name             TEXT,
+  correspondence_address TEXT,
+  cost_pence             INTEGER,
+  requested_by           TEXT NOT NULL DEFAULT '',
+  requested_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at           TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS os_bond_owner_lookups_property_idx ON os_bond_owner_lookups (property_key, requested_at DESC);
+
+-- Postcards. Same shape: a request, then what the print house said.
+CREATE TABLE IF NOT EXISTS os_bond_postcards (
+  id            BIGSERIAL PRIMARY KEY,
+  property_key  TEXT NOT NULL,
+  property      TEXT NOT NULL DEFAULT '',
+  to_name       TEXT,
+  to_address    TEXT NOT NULL DEFAULT '',
+  status        TEXT NOT NULL DEFAULT 'queued',
+  provider      TEXT,
+  provider_ref  TEXT,
+  cost_pence    INTEGER,
+  requested_by  TEXT NOT NULL DEFAULT '',
+  requested_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  sent_at       TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS os_bond_postcards_at_idx ON os_bond_postcards (requested_at DESC);
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a
