@@ -1119,6 +1119,82 @@ ALTER TABLE os_plc_shadow ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMPTZ;
 -- it down to 24 hours"), so it must mean the same thing next year as it does
 -- today even if the two timestamps around it are ever changed.
 ALTER TABLE os_plc_shadow ADD COLUMN IF NOT EXISTS hours_to_decide NUMERIC;
+
+-- ── Landlord Radar (docs/LANDLORD-RADAR.md) ─────────────────────────────────
+-- The capture learns the property behind the listing, and the district the
+-- Radar sweep asked for. Additive, so the original sector sweep is untouched.
+ALTER TABLE os_listing_capture ADD COLUMN IF NOT EXISTS district TEXT;
+ALTER TABLE os_listing_capture ADD COLUMN IF NOT EXISTS uprn TEXT;
+ALTER TABLE os_listing_capture ADD COLUMN IF NOT EXISTS hs_id TEXT;
+ALTER TABLE os_listing_capture ADD COLUMN IF NOT EXISTS street TEXT;
+ALTER TABLE os_listing_capture ADD COLUMN IF NOT EXISTS reduced_at DATE;
+-- UPRN where the feed gives one, otherwise address-derived. See propertyKeyOf.
+ALTER TABLE os_listing_capture ADD COLUMN IF NOT EXISTS property_key TEXT;
+-- Rows from before the district column existed: the outcode of their sector.
+UPDATE os_listing_capture SET district = split_part(sector, ' ', 1) WHERE district IS NULL;
+CREATE INDEX IF NOT EXISTS os_listing_capture_district_idx
+  ON os_listing_capture (district, status);
+CREATE INDEX IF NOT EXISTS os_listing_capture_property_idx
+  ON os_listing_capture (property_key);
+
+-- What changed, when. The capture upserts in place, so without this a rent
+-- reduction is simply the new rent by the next morning. seen, back, gone,
+-- rent, status, agent. Values are text so one table holds all of them.
+CREATE TABLE IF NOT EXISTS os_listing_events (
+  id           BIGSERIAL PRIMARY KEY,
+  listing_key  TEXT NOT NULL,
+  property_key TEXT,
+  district     TEXT,
+  event        TEXT NOT NULL,
+  from_value   TEXT,
+  to_value     TEXT,
+  at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_listing_events_listing_idx
+  ON os_listing_events (listing_key, at DESC);
+CREATE INDEX IF NOT EXISTS os_listing_events_district_idx
+  ON os_listing_events (district, event, at DESC);
+
+-- The patch Radar watches, by district. NN and MK to start.
+CREATE TABLE IF NOT EXISTS os_radar_districts (
+  district    TEXT PRIMARY KEY,
+  added_by    TEXT NOT NULL DEFAULT '',
+  added_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_run_at TIMESTAMPTZ,
+  last_seen_n INTEGER
+);
+
+-- One row per PROPERTY the signals have flagged, keyed the same way as the
+-- capture. Signals and score are recomputed after every sweep; stage, assignee
+-- and notes are the human side and survive the recompute. No person is named
+-- here: this is properties, agents and prices only, by design.
+CREATE TABLE IF NOT EXISTS os_radar_prospects (
+  property_key   TEXT PRIMARY KEY,
+  listing_key    TEXT,
+  uprn           TEXT,
+  address        TEXT NOT NULL DEFAULT '',
+  street         TEXT,
+  postcode       TEXT NOT NULL DEFAULT '',
+  sector         TEXT,
+  district       TEXT,
+  beds           INTEGER,
+  property_type  TEXT,
+  rent           INTEGER,
+  agent          TEXT,
+  status         TEXT,
+  listed_on      DATE,
+  signals        JSONB NOT NULL DEFAULT '[]'::jsonb,
+  score          INTEGER NOT NULL DEFAULT 0,
+  stage          TEXT NOT NULL DEFAULT 'new',
+  assigned_to    TEXT,
+  notes          TEXT NOT NULL DEFAULT '',
+  first_flagged  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_signal_at TIMESTAMPTZ,
+  last_action_at TIMESTAMPTZ,
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_radar_prospects_score_idx
+  ON os_radar_prospects (score DESC, last_signal_at DESC);
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

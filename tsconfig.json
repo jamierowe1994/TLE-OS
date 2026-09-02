@@ -32,11 +32,12 @@
     "**/*.ts",
     "**/*.tsx",
     ".next-alt/types/**/*.ts",
+    ".next-c/types/**/*.ts",
     ".next-check/types/**/*.ts",
     ".next-emails/types/**/*.ts",
     ".next/types/**/*.ts",
     "next-env.d.ts",
-    ".next-c/types/**/*.ts"
+    ".next-radar/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

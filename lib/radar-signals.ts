@@ -1,0 +1,149 @@
+/**
+ * Landlord Radar — the signals, the stages, and the shape of a prospect.
+ *
+ * Client-safe on purpose: the board renders these labels and the server
+ * computes against these keys, and they must be the same list. The weights
+ * are here too, in one place, so tuning them is a one-line change and the
+ * screen can explain a score by showing its parts.
+ *
+ * The weights are a starting guess. Phase 3 of docs/LANDLORD-RADAR.md replaces
+ * them with weights learned from which signals led to booked appraisals.
+ */
+
+export type SignalKey =
+  | "self_managing"
+  | "withdrawn"
+  | "switched_agent"
+  | "fallen_through"
+  | "stale_90"
+  | "stale_60"
+  | "stale_30"
+  | "relisted"
+  | "reduced"
+  | "competitor_new";
+
+export const SIGNALS: Record<SignalKey, { label: string; weight: number; why: string }> = {
+  self_managing: {
+    label: "Self-managing",
+    weight: 40,
+    why: "Listed privately. Lost Section 21 in May, and the PRS register and Making Tax Digital are next.",
+  },
+  withdrawn: {
+    label: "Withdrawn",
+    weight: 25,
+    why: "Taken down within two months of listing and never marked let. Fell out with the agent, gave up, or let privately.",
+  },
+  switched_agent: {
+    label: "Switched agent",
+    weight: 30,
+    why: "Back on the market with a different agent inside a year. Proven willing to move.",
+  },
+  fallen_through: {
+    label: "Fallen through",
+    weight: 30,
+    why: "A let was agreed and then lost. The landlord is exposed and the agent looks bad.",
+  },
+  stale_90: { label: "90+ days", weight: 30, why: "Three months on the market. The agent is not shifting it." },
+  stale_60: { label: "60+ days", weight: 20, why: "Two months on the market." },
+  stale_30: { label: "30+ days", weight: 10, why: "A month on the market." },
+  relisted: {
+    label: "Back on market",
+    weight: 25,
+    why: "Listed again within a year of the last time. A short tenancy, or churn.",
+  },
+  reduced: { label: "Rent reduced", weight: 20, why: "The asking rent came down. The landlord is already unhappy." },
+  competitor_new: {
+    label: "New with a competitor",
+    weight: 5,
+    why: "Just listed with someone else. Worth knowing, not worth chasing yet.",
+  },
+};
+
+export const SIGNAL_ORDER = Object.keys(SIGNALS) as SignalKey[];
+
+export interface Signal {
+  key: SignalKey;
+  /** One line, in an agent's words, on what was seen. "64 days on the market with Leaders". */
+  detail: string;
+}
+
+export const STAGES = [
+  "new",
+  "queued",
+  "contacted",
+  "appraisal_booked",
+  "won",
+  "not_interested",
+  "do_not_contact",
+] as const;
+export type Stage = (typeof STAGES)[number];
+
+export const STAGE_LABEL: Record<Stage, string> = {
+  new: "New",
+  queued: "Queued",
+  contacted: "Contacted",
+  appraisal_booked: "Appraisal booked",
+  won: "Won",
+  not_interested: "Not interested",
+  do_not_contact: "Do not contact",
+};
+
+export const STAGE_TONE: Record<Stage, "neutral" | "accent" | "good"> = {
+  new: "neutral",
+  queued: "accent",
+  contacted: "accent",
+  appraisal_booked: "good",
+  won: "good",
+  not_interested: "neutral",
+  do_not_contact: "neutral",
+};
+
+export function isStage(v: unknown): v is Stage {
+  return typeof v === "string" && (STAGES as readonly string[]).includes(v);
+}
+
+/** A prospect as the API hands it to the board. Dates are ISO strings. */
+export interface Prospect {
+  property_key: string;
+  listing_key: string | null;
+  uprn: string | null;
+  address: string;
+  street: string | null;
+  postcode: string;
+  sector: string | null;
+  district: string | null;
+  beds: number | null;
+  property_type: string | null;
+  rent: number | null;
+  agent: string | null;
+  status: string | null;
+  listed_on: string | null;
+  signals: Signal[];
+  score: number;
+  stage: Stage;
+  assigned_to: string | null;
+  notes: string;
+  first_flagged: string;
+  last_signal_at: string | null;
+  last_action_at: string | null;
+}
+
+export interface RadarSummary {
+  districts: number;
+  districtList: string[];
+  lastRun: string | null;
+  active: number;
+  newToday: number;
+  bySignal: Partial<Record<SignalKey, number>>;
+  byStage: Partial<Record<Stage, number>>;
+}
+
+/** Listers that mean "no agent": the landlord is doing it themselves. */
+export function isPrivateLister(agent: string | null | undefined): boolean {
+  return /openrent|private\s*landlord|gumtree|spareroom|lettingaproperty|upad|\bprivate\b/i.test(agent ?? "");
+}
+
+/** Our own stock. Never a prospect, whatever the signals say. */
+export function isOurs(agent: string | null | undefined): boolean {
+  return /letting(s)?\s*experts/i.test(agent ?? "");
+}

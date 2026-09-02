@@ -41,21 +41,65 @@ interface HsRow {
   full_address?: string | null;
   street?: string | null;
   postcode?: string | null;
-  beds?: number | null;
+  beds?: number | string | null;
   type?: string | null;
-  price?: number | null;
+  price?: number | string | null;
   agent?: string | null;
   lat?: number | null;
   lon?: number | null;
   status?: string | null;
   listed_on?: string | null;
+  /** The feed's own reduction stamp — set when the asking rent came down. */
+  reduced_at?: string | null;
   link?: string | null;
+  uprn?: number | string | null;
+  hs_id?: number | string | null;
 }
 
 /** Same identity rule the cards use — the Homesearch listing id where there is one. */
 function keyOf(r: HsRow): string {
   const m = /\/(\d+)\/?$/.exec(r.link ?? "");
   return m ? `hs:${m[1]}` : `${r.full_address ?? r.street ?? "?"}|${r.price ?? ""}`;
+}
+
+function numberOrNull(v: unknown): number | null {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function textOrNull(v: unknown): string | null {
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s === "" ? null : s;
+}
+
+/**
+ * THE PROPERTY, as opposed to the listing.
+ *
+ * A listing key changes every time a property comes back to market, which is
+ * exactly the moment Landlord Radar wants to notice. So a second identity: the
+ * UPRN where the feed gives one, which it does for about four listings in ten
+ * (measured on NN1, 2 Sep 2026 — 174 of 300 rows had none, almost all of them
+ * OpenRent, which publishes a street and a postcode and nothing else).
+ *
+ * Without a UPRN the key is the full address; without that it is street,
+ * postcode and bed count, which is as close as the feed lets us get. Two
+ * different two-beds on the same street in one postcode would share a key.
+ * That is a known limit, and the price of seeing OpenRent at all.
+ */
+export function propertyKeyOf(r: HsRow): string | null {
+  const uprn = textOrNull(r.uprn);
+  if (uprn) return `uprn:${uprn}`;
+  const pc = (r.postcode ?? "").toUpperCase().replace(/\s+/g, " ").trim();
+  if (!pc) return null;
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  if (r.full_address) return `addr:${norm(r.full_address)}`;
+  if (r.street) return `street:${norm(r.street)}|${pc}|${numberOrNull(r.beds) ?? ""}`;
+  return null;
 }
 
 export async function watchedSectors(): Promise<string[]> {
@@ -155,52 +199,102 @@ export async function seedSectorsFromAppraisals(by: string): Promise<string[]> {
   return added;
 }
 
+/**
+ * What a sweep looks at. The original capture watched postcode SECTORS, seeded
+ * from wherever the REX book had stock. Landlord Radar watches whole DISTRICTS,
+ * because a patch is "NN and MK" and nobody wants to name a hundred sectors.
+ * Both land in the same table; a row remembers both its sector and district.
+ */
+export type SweepScope = { kind: "sector" | "district"; value: string };
+
 export interface SweepResult {
+  /** The scope value — a sector for the original sweep, a district for Radar.
+   *  Still called sector because the capture workflow reads it by that name. */
   sector: string;
   seen: number;
   newRows: number;
   newlyLetAgreed: number;
   goneNow: number;
+  /** Events written this run: arrivals, departures, rent, status and agent changes. */
+  events: number;
   skipped?: string;
   /** Set when the feed returned the page cap and there may be more behind it. */
   truncated?: boolean;
 }
 
-/**
- * One sector, one day.
- *
- * THE EMPTY-SWEEP GUARD IS THE POINT OF THIS FUNCTION. If Homesearch 429s, or
- * the token lapses, or a sector is simply mistyped, the fetch returns nothing.
- * Writing that through would mark every listing in the sector as gone on the
- * same timestamp, and the history would be confidently wrong forever with
- * nothing to show it had happened. A sweep that sees zero rows writes NOTHING
- * and says so.
- */
+/** One sector, one day. Kept for the original capture route. */
 export async function sweepSector(
   sector: string,
   fetchRows: (sector: string) => Promise<Array<Record<string, unknown>>>
 ): Promise<SweepResult> {
-  const rows = (await fetchRows(sector)) as unknown as HsRow[];
+  return sweepScope({ kind: "sector", value: sector }, fetchRows);
+}
+
+type Held = {
+  listing_key: string;
+  rent: number | null;
+  status: string;
+  agent: string | null;
+  gone_at: string | null;
+};
+
+/**
+ * One scope, one day.
+ *
+ * THE EMPTY-SWEEP GUARD IS THE POINT OF THIS FUNCTION. If Homesearch 429s, or
+ * the token lapses, or a sector is simply mistyped, the fetch returns nothing.
+ * Writing that through would mark every listing in the scope as gone on the
+ * same timestamp, and the history would be confidently wrong forever with
+ * nothing to show it had happened. A sweep that sees zero rows writes NOTHING
+ * and says so.
+ *
+ * THE DIFF IS THE SECOND POINT. The first version upserted in place, so a rent
+ * that came down on Tuesday was simply Tuesday's rent by Wednesday — the
+ * reduction itself was never anywhere. Now what we held is read before the
+ * write, and every change becomes a row in os_listing_events. Radar's
+ * "reduced", "switched agent" and "back on market" signals are read off that
+ * table, not inferred from the current state.
+ */
+export async function sweepScope(
+  scope: SweepScope,
+  fetchRows: (value: string) => Promise<Array<Record<string, unknown>>>
+): Promise<SweepResult> {
+  const rows = (await fetchRows(scope.value)) as unknown as HsRow[];
   /* 300 is the feed's page cap. Fourteen sectors hit it exactly on the first
      real run — B16 9, BS7 0, EH3 9, NG1 1, SW8 1 and the rest — which means
      their books were cut off and the tail would then have been marked gone.
-     hsLetRows pages now; this flag catches the day it stops being enough. */
+     hsLetBook pages now; this flag catches the day it stops being enough. */
   const truncatedAt = rows.length > 0 && rows.length % 300 === 0;
   if (rows.length === 0) {
     return {
-      sector,
+      sector: scope.value,
       seen: 0,
       newRows: 0,
       newlyLetAgreed: 0,
       goneNow: 0,
+      events: 0,
       skipped:
-        "the sector came back empty — nothing written, so this cannot erase a book. " +
+        "the scope came back empty — nothing written, so this cannot erase a book. " +
         "A throttled or broken fetch now THROWS instead of reaching here, so this " +
         "message means genuinely no stock, not a bad afternoon.",
     };
   }
 
+  const scopeCol = scope.kind === "sector" ? "sector" : "district";
+  const district = scope.kind === "district" ? scope.value : scope.value.split(" ")[0];
+
+  /* What we held before this run, so a change can be SEEN rather than
+     overwritten. One read per scope, not one per row. */
+  const held = new Map<string, Held>();
+  for (const h of await q<Held>(
+    `SELECT listing_key, rent, status, agent, gone_at FROM os_listing_capture WHERE ${scopeCol} = $1`,
+    [scope.value]
+  )) {
+    held.set(h.listing_key, h);
+  }
+
   let newRows = 0;
+  let events = 0;
   const seenKeys: string[] = [];
   /* Stamped before the first write, so the flip count below can ask "what
      became let agreed during THIS run" rather than trying to infer it from an
@@ -209,63 +303,106 @@ export async function sweepSector(
      whole file exists to observe. */
   const runStart = (await q<{ now: string }>(`SELECT NOW() AS now`))[0]?.now;
 
+  const str = (v: unknown) => (v == null ? null : String(v));
+
   for (const r of rows) {
     const key = keyOf(r);
     seenKeys.push(key);
     const status = String(r.status ?? "").trim().toLowerCase();
     const isLetAgreed = status === "let agreed";
+    const postcode = r.postcode ?? "";
+    const sector = scope.kind === "sector" ? scope.value : (sectorOf(postcode) ?? `${district} ?`);
+    const rent = numberOrNull(r.price);
+    const agent = textOrNull(r.agent);
+    const propertyKey = propertyKeyOf(r);
+    const prev = held.get(key);
 
     /* WE ONLY KNOW A LET DATE IF WE SAW IT CHANGE.
-    
+
        The first cut stamped let_agreed_at on insert whenever a row arrived
        already let agreed. Run one then reported 1,985 properties as having let
        agreed that day — every one of them a date we invented, because they went
        let agreed at unknown times before we ever looked. Tomorrow's "let in the
        last 24 hours" would have read 1,985 forever.
-    
+
        So: NEVER on insert. Only on an UPDATE where the status we held was not
        let agreed and the status we just saw is. That is an observation.
-    
+
        A row that is let agreed with let_agreed_at NULL is therefore meaningful
        and must stay readable: "already taken when we found it, date unknown".
        It is not the same as "not let", and a report that treats it as such is
        the same fabrication in a different direction. */
-    const res = await q<{ inserted: boolean }>(
+    await q(
       `INSERT INTO os_listing_capture
-         (listing_key, sector, postcode, address, beds, property_type, rent,
-          agent, lat, lon, status, listed_on, let_agreed_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, NULL)
+         (listing_key, sector, district, postcode, address, street, beds, property_type,
+          rent, agent, lat, lon, status, listed_on, reduced_at, uprn, hs_id, property_key,
+          let_agreed_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18, NULL)
        ON CONFLICT (listing_key) DO UPDATE SET
          status        = EXCLUDED.status,
          rent          = EXCLUDED.rent,
          agent         = EXCLUDED.agent,
          postcode      = EXCLUDED.postcode,
          address       = EXCLUDED.address,
+         district      = EXCLUDED.district,
+         street        = COALESCE(EXCLUDED.street, os_listing_capture.street),
+         reduced_at    = COALESCE(EXCLUDED.reduced_at, os_listing_capture.reduced_at),
+         uprn          = COALESCE(EXCLUDED.uprn, os_listing_capture.uprn),
+         hs_id         = COALESCE(EXCLUDED.hs_id, os_listing_capture.hs_id),
+         property_key  = COALESCE(EXCLUDED.property_key, os_listing_capture.property_key),
          last_seen     = NOW(),
          gone_at       = NULL,
          /* The transition, and only the transition. Held once set. */
          let_agreed_at = COALESCE(
            os_listing_capture.let_agreed_at,
-           CASE WHEN $13 AND os_listing_capture.status <> 'let agreed'
-                THEN NOW() ELSE NULL END)
-       RETURNING (xmax = 0) AS inserted`,
+           CASE WHEN $19 AND os_listing_capture.status <> 'let agreed'
+                THEN NOW() ELSE NULL END)`,
       [
         key,
         sector,
-        r.postcode ?? "",
+        district,
+        postcode,
         r.full_address ?? r.street ?? "",
-        typeof r.beds === "number" ? r.beds : null,
+        textOrNull(r.street),
+        numberOrNull(r.beds),
         r.type ?? null,
-        typeof r.price === "number" ? Math.round(r.price) : null,
-        r.agent ?? null,
+        rent == null ? null : Math.round(rent),
+        agent,
         typeof r.lat === "number" ? r.lat : null,
         typeof r.lon === "number" ? r.lon : null,
         status,
         r.listed_on ?? null,
+        r.reduced_at ?? null,
+        textOrNull(r.uprn),
+        textOrNull(r.hs_id),
+        propertyKey,
         isLetAgreed,
       ]
     );
-    if (res[0]?.inserted) newRows++;
+
+    /* The diff. "seen" on arrival; "back" when a listing we had marked gone
+       reappears; and one event per field that changed. Rent is compared as a
+       rounded integer, the same way it is stored, so a feed that flickers
+       between 925 and 925.0 does not write a change. */
+    const changes: Array<[string, string | null, string | null]> = [];
+    if (!prev) {
+      newRows++;
+      changes.push(["seen", null, status]);
+    } else {
+      if (prev.gone_at) changes.push(["back", prev.status, status]);
+      const rentNow = rent == null ? null : Math.round(rent);
+      if ((prev.rent ?? null) !== rentNow) changes.push(["rent", str(prev.rent), str(rentNow)]);
+      if (prev.status !== status) changes.push(["status", prev.status, status]);
+      if ((prev.agent ?? "") !== (agent ?? "")) changes.push(["agent", prev.agent, agent]);
+    }
+    for (const [event, from, to] of changes) {
+      await q(
+        `INSERT INTO os_listing_events (listing_key, property_key, district, event, from_value, to_value)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [key, propertyKey, district, event, from, to]
+      );
+      events++;
+    }
   }
 
   /* THE NUMBER THIS JOB EXISTS FOR: properties that became let agreed today.
@@ -274,35 +411,51 @@ export async function sweepSector(
      exactly the case an insert-counter misses. */
   const flipped = await q<{ n: string }>(
     `SELECT count(*) AS n FROM os_listing_capture
-      WHERE sector = $1 AND let_agreed_at >= $2`,
-    [sector, runStart]
+      WHERE ${scopeCol} = $1 AND let_agreed_at >= $2`,
+    [scope.value, runStart]
   );
   const newlyLetAgreed = Number(flipped[0]?.n ?? 0);
 
-  /* Anything we hold for this sector that today's sweep did NOT return has
+  /* Anything we hold for this scope that today's sweep did NOT return has
      left the feed. For a row already marked let agreed that is a completed
      let; for anything else it is a withdrawal we cannot tell apart from one.
      Either way the date it disappeared is worth keeping. */
-  const gone = await q<{ listing_key: string }>(
+  const gone = await q<{ listing_key: string; property_key: string | null; status: string }>(
     `UPDATE os_listing_capture
         SET gone_at = NOW()
-      WHERE sector = $1 AND gone_at IS NULL AND NOT (listing_key = ANY($2::text[]))
-      RETURNING listing_key`,
-    [sector, seenKeys]
+      WHERE ${scopeCol} = $1 AND gone_at IS NULL AND NOT (listing_key = ANY($2::text[]))
+      RETURNING listing_key, property_key, status`,
+    [scope.value, seenKeys]
   );
+  for (const g of gone) {
+    await q(
+      `INSERT INTO os_listing_events (listing_key, property_key, district, event, from_value, to_value)
+       VALUES ($1,$2,$3,'gone',$4,NULL)`,
+      [g.listing_key, g.property_key, district, g.status]
+    );
+    events++;
+  }
 
-  await q(
-    `UPDATE os_capture_sectors SET last_run_at = NOW(), last_seen_n = $2 WHERE sector = $1`,
-    [sector, rows.length]
-  );
+  if (scope.kind === "sector") {
+    await q(
+      `UPDATE os_capture_sectors SET last_run_at = NOW(), last_seen_n = $2 WHERE sector = $1`,
+      [scope.value, rows.length]
+    );
+  } else {
+    await q(
+      `UPDATE os_radar_districts SET last_run_at = NOW(), last_seen_n = $2 WHERE district = $1`,
+      [scope.value, rows.length]
+    );
+  }
 
   return {
-    sector,
+    sector: scope.value,
     seen: rows.length,
     newRows,
     newlyLetAgreed,
     goneNow: gone.length,
-    /* A run that stopped at the cap has NOT seen the sector, and the gone_at
+    events,
+    /* A run that stopped at the cap has NOT seen the scope, and the gone_at
        sweep above would then mark the unseen tail as vanished. Reported so a
        silent truncation cannot read as full coverage. */
     ...(truncatedAt ? { truncated: true } : {}),

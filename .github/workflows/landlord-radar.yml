@@ -1,0 +1,64 @@
+# Landlord Radar: sweep the NN and MK patch, rescore the prospects, send the digest.
+#
+# Runs after the lettings capture (06:12 UTC) so the two never race for the
+# Homesearch rate limit. Same shape as that job for the same reasons: GitHub
+# Actions because Railway cron is the wrong shape for an HTTP endpoint on a
+# running service; -f so a 4xx/5xx fails the job; the numbers surfaced in the
+# run summary so a green run that swept nothing is visible without the log.
+#
+# The digest inside the run only goes out when RADAR_DIGEST_TO is set on
+# Railway AND Resend sending is unlocked there. Both are James's switches.
+# Until then the run reports "no digest went out" and everything else still
+# happens. See docs/LANDLORD-RADAR.md.
+
+name: Landlord Radar
+
+on:
+  schedule:
+    # 06:40 UTC daily, half an hour behind the capture.
+    - cron: "40 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  radar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sweep the patch and rescore
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "CRON_SECRET is not set on this repository - nothing was swept."
+            exit 1
+          fi
+
+          BODY=$(curl -sS -f -X POST \
+            -H "x-cron-key: ${CRON_SECRET}" \
+            --max-time 780 \
+            "https://tle-os.co.uk/api/radar/run")
+
+          echo "$BODY" | python3 -c 'import json,sys; d=json.load(sys.stdin); d.pop("results", None); print(json.dumps(d, indent=2))'
+
+          python3 - "$BODY" <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, sys
+          d = json.loads(sys.argv[1])
+          s = d.get("summary", {})
+          p = d.get("prospects", {})
+          print("## Landlord Radar\n")
+          if d.get("seeded"):
+              print(f"- seeded the patch: {', '.join(d['seeded'])}")
+          print(f"- swept **{d.get('swept', 0)}** districts, **{d.get('seen', 0)}** listings seen, **{d.get('newRows', 0)}** new")
+          print(f"- **{d.get('events', 0)}** changes recorded (rent, status, agent, arrivals, departures)")
+          print(f"- **{p.get('active', 0)}** properties flagged, **{p.get('quiet', 0)}** went quiet, **{s.get('newToday', 0)}** new today")
+          dg = d.get("digest", {})
+          if dg.get("sent"):
+              print(f"- digest sent to {', '.join(dg['sent'])}")
+          elif dg.get("skipped"):
+              print(f"- digest: {dg['skipped']}")
+          if d.get("skipped"):
+              print(f"- :warning: **{d['skipped']}** districts skipped (nothing written for them)")
+          if d.get("truncated"):
+              print(f"- :warning: truncated at the page cap: {', '.join(d['truncated'])}")
+          PY

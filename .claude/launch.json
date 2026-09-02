@@ -18,6 +18,20 @@
         "dev:alt"
       ],
       "port": 3220
+    },
+    {
+      "name": "tle-os-radar",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "DATABASE_URL=postgres://postgres:radar@localhost:55432/tleos",
+        "NEXT_DIST_DIR=.next-radar",
+        "npx",
+        "next",
+        "dev",
+        "-p",
+        "3280"
+      ],
+      "port": 3280
     }
   ]
 }

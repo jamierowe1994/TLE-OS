@@ -97,6 +97,19 @@ export const TOOLS: Tool[] = [
     group: "prospecting",
     gate: "launchpad",
   },
+  {
+    key: "radar",
+    name: "Landlord Radar",
+    blurb:
+      "Properties in the patch whose landlord looks ready to move agent - self-managing, stuck, reduced or withdrawn - scored every morning off the market sweep.",
+    icon: "analytics",
+    href: "/tools/radar",
+    status: "live",
+    /* Ours, built on data we already pay for. Whether it is ever sold
+       separately is James's call; until then it comes with the package. */
+    access: "included",
+    group: "prospecting",
+  },
 ];
 
 /** The tools in a group, in declaration order. */

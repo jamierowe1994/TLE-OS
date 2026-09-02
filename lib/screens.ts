@@ -81,15 +81,16 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "The kit that sits alongside your book, grouped by the job it does. The first group is Prospecting — the doors nobody has knocked on yet.",
     does: [
       "See every tool, what it is for, and whether it comes with your package or is bought separately.",
-      "Open a tool that is ready. One that is still being built shows what it is waiting on and cannot be opened.",
+      "Open Landlord Radar: properties in NN and MK whose landlord looks ready to move agent, scored off the daily market sweep. Filter by signal, district, agent or stage; open a row to see why it is flagged, set its stage, assign it, write a note, or book an appraisal, which opens a new landlord lead with the address filled in.",
+      "Open Launch Pad to read the leads from your ads and where each one has got to.",
     ],
-    /* "shell" is the honest answer and it should stay that way until a tool on
-       this page actually opens. The hub itself renders real data — but the data
-       is a list of tools, and today not one of them can be used, so anybody
-       sent here to do a job would arrive and find nothing to press. */
-    wiring: "shell",
+    /* Partial rather than shell since 2 Sep: Landlord Radar opens and is
+       live off the capture. Launch Pad opens too, but only as a list. */
+    wiring: "partial",
     caveats: [
-      "Nothing on here opens yet. Launch Pad is being rebuilt into the OS; until it lands, use Launch Pad in the browser as you do now.",
+      "Radar names properties, not people. There is no landlord name or number on it by design; the letter and owner-lookup steps are Phase 2 of docs/LANDLORD-RADAR.md and are not built.",
+      "Radar is only as fresh as the morning sweep. A property that let this afternoon still shows until tomorrow.",
+      "Launch Pad here is the list only. Working a lead - logging a call, booking, marking it lost - still happens in Launch Pad itself.",
       "The Paid badge describes the tool, not you. Nothing here knows what you have bought, so it will not tell you whether a tool is yours.",
     ],
   },

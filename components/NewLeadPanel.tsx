@@ -125,10 +125,18 @@ export default function NewLeadPanel({
   open,
   onClose,
   onCreated,
+  initial,
+  initialKind,
 }: {
   open: boolean;
   onClose: () => void;
   onCreated?: (d: Draft) => void;
+  /** Fields to arrive with. Landlord Radar opens this with the property's
+   *  address already in; the person is still typed by hand, because Radar
+   *  holds no names by design. */
+  initial?: Partial<Draft>;
+  /** Skip the tenant-or-landlord fork when the caller already knows. */
+  initialKind?: "tenant" | "landlord";
 }) {
   const [shown, setShown] = useState(false);
   const [d, setD] = useState<Draft>(EMPTY);
@@ -174,7 +182,7 @@ export default function NewLeadPanel({
       setShown(false);
       return;
     }
-    setD(EMPTY);
+    setD({ ...EMPTY, ...(initial ?? {}) });
     setGeo(null);
     setSaved(false);
     setSaving(false);
@@ -182,7 +190,7 @@ export default function NewLeadPanel({
     setRexNote(null);
     setPicked([]);
     setPicking(false);
-    setKind(null);
+    setKind(initialKind ?? null);
     setDossier(null);
     setDossierBusy(false);
     setBeds(0); setBaths(0);

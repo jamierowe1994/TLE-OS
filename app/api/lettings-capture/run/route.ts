@@ -154,6 +154,7 @@ export async function POST(req: NextRequest) {
         newRows: 0,
         newlyLetAgreed: 0,
         goneNow: 0,
+        events: 0,
         skipped: (e as Error).message,
       });
     }
