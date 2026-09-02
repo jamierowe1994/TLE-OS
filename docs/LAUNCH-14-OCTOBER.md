@@ -38,7 +38,7 @@ Key: **built** works on real data · **partial** exists, with the gap named ·
 | 11 | Agent compliance checker in profile | Michael | **todo** |
 | 12 | Resend on two domains | — | **blocked** — Resend refuses every non-TLE domain until the domains are set up |
 | 13 | Every email flow tested and on brand | — | **blocked** on 12 — the emails themselves are written and previewable on /emails |
-| 14 | Landlord + tenant portals refined and secured | Customers | **partial** — landlord sign-in built 2 Sep: a magic link to the email on the REX owner contact, and a live home showing their managed properties; offers, certificates, upkeep and documents are still the sample (kept at /landlord/demo); tenant side still has no sign-in |
+| 14 | Landlord + tenant portals refined and secured | Customers | **partial** — landlord sign-in built 2 Sep (magic link to the email on the REX owner contact or the appraisal's contact), and a live home that tells the journey: the property, the beats, the valuation and terms agreed at the visit, the decks to open, the terms signed, documents up, plus any managed properties; certificates, offers and upkeep still to come; the Raj sample stays at /landlord/demo; tenant side still has no sign-in |
 | 15 | Marketing email builder | Francesca | **partial** — builder built (28 Aug) with fonts, layouts, drag and drop; nurture campaigns exist behind a switch; sending blocked on 12 |
 | 16 | REX PM integration | — | **settled: not viable, data is empty** (22 Aug) |
 | 17 | Tenant passport in-house | — | **partial** — passport built (30 Aug) with agent-written questions; the invite has no send path, so nobody receives one automatically |
