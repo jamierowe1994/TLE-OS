@@ -215,11 +215,17 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
 
   "/portfolio": {
     purpose: "The whole managed book — properties, landlords, and where they are.",
-    does: [],
-    wiring: "shell",
+    does: [
+      "Search the managed book by address, landlord, tenant or agent, and filter it by service level, agent, town or certificates needing a look.",
+      "Open a property to see its rent, service, let date, agent, landlord, sitting tenant, photographs and certificates, and open the same record in REX.",
+      "Switch to Landlords to see each landlord with their properties and rent roll, and to Map to see the book on a map with the properties needing attention picked out.",
+    ],
+    wiring: "partial",
     caveats: [
-      "This screen is a wireframe. The figures on it are placeholders, not your book, and nothing on it can be clicked.",
-      "The property directory, the landlord directory and the map view are all still to be built.",
+      "Live from REX's leased rental book. The rent roll is REX's agreed rent, not money received — PayProp's UK agency has no API key on this environment yet.",
+      "Certificates take a few minutes to read the first time each day and fill in behind the list. Until then the certificate column says it is checking.",
+      "About a quarter of the book has no landlord on the REX record. Those properties say so rather than guessing.",
+      "Nothing on this screen writes to REX.",
     ],
   },
 

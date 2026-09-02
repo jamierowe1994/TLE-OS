@@ -98,18 +98,40 @@ export interface ComplianceBook {
   };
 }
 
+const EMPTY: ComplianceBook = {
+  properties: [],
+  counts: { properties: 0, withAnyRecord: 0, entries: 0, withCertificate: 0, gasUnknown: 0 },
+};
+
+/** What a certificate read needs to know about a property: enough to name the row. */
+export interface CertSubject {
+  propertyId: string;
+  name: string;
+  locality: string;
+  epcExpiry: string | null;
+}
+
+/** The current rental book's certificates — the Compliance screen. */
 export async function fetchComplianceBook(): Promise<ComplianceBook> {
-  const empty: ComplianceBook = {
-    properties: [],
-    counts: { properties: 0, withAnyRecord: 0, entries: 0, withCertificate: 0, gasUnknown: 0 },
-  };
-  if (!rexConfigured()) return empty;
-
+  if (!rexConfigured()) return EMPTY;
   const book = await fetchListingBook();
-  const listings = book.listings.filter((l) => l.propertyId);
-  if (!listings.length) return empty;
+  return certificatesFor(
+    book.listings
+      .filter((l) => l.propertyId)
+      .map((l) => ({ propertyId: l.propertyId as string, name: l.name, locality: l.locality, epcExpiry: l.epcExpiry }))
+  );
+}
 
-  const ids = listings.map((l) => l.propertyId!) as string[];
+/**
+ * Certificates for ANY set of properties. Split out of fetchComplianceBook so
+ * the Portfolio screen can read the managed (leased) book's certificates with
+ * the same rules — latest expiry wins, EPC falls back to the listing field,
+ * "no gas record" stays unknown — rather than a second copy of them.
+ */
+export async function certificatesFor(listings: CertSubject[]): Promise<ComplianceBook> {
+  if (!rexConfigured() || !listings.length) return EMPTY;
+
+  const ids = listings.map((l) => l.propertyId);
   const chunks: string[][] = [];
   for (let i = 0; i < ids.length; i += CHUNK) chunks.push(ids.slice(i, i + CHUNK));
 
@@ -138,7 +160,7 @@ export async function fetchComplianceBook(): Promise<ComplianceBook> {
   let gasUnknown = 0;
 
   const properties: CompProperty[] = listings.map((l) => {
-    const mine = byProperty.get(l.propertyId!) ?? [];
+    const mine = byProperty.get(l.propertyId) ?? [];
     const certs: CompProperty["certs"] = {};
 
     for (const e of mine) {
@@ -165,7 +187,7 @@ export async function fetchComplianceBook(): Promise<ComplianceBook> {
     if (!hasGasRecord) gasUnknown++;
 
     return {
-      id: l.propertyId!,
+      id: l.propertyId,
       name: l.name,
       locality: l.locality,
       // REX's listing projection carries neither the landlord's name nor the

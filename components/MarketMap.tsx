@@ -44,7 +44,8 @@ const KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
 /** Loaded once per page, not once per mount. */
 let googleReady: Promise<void> | null = null;
-function loadGoogle(): Promise<void> {
+/** Shared with PortfolioMap, so two maps on one session load the script once. */
+export function loadGoogle(): Promise<void> {
   if (!KEY) return Promise.reject(new Error("no key"));
   if (googleReady) return googleReady;
   googleReady = new Promise<void>((resolve, reject) => {

@@ -1,6 +1,7 @@
 import "server-only";
 import type { NextRequest } from "next/server";
 import { whoIs } from "@/lib/admin";
+import { hasDb } from "@/lib/db";
 import { ensureRexLink } from "@/lib/users";
 import { readViewAs, VIEW_AS_COOKIE } from "@/lib/view-as";
 
@@ -48,6 +49,16 @@ export interface Scope {
 }
 
 export async function scopeFor(req: NextRequest): Promise<Scope> {
+  /* No database at all means a developer's laptop and nothing else: hasDb()
+     is false only when DATABASE_URL is unset, and it is always set in
+     production, so this can never widen a real person's scope. Without it a
+     laptop has no actor, every data route answers "unlinked", and a screen
+     that has no static fallback - Portfolio - cannot be looked at before it
+     ships. Same reasoning as the dock in HelpDock.tsx. */
+  if (!hasDb()) {
+    return { rexUserId: null, everything: true, unlinked: false, label: "the whole business" };
+  }
+
   const { actor, subject, viewingAs } = await whoIs(req);
 
   if (!actor) return { rexUserId: null, everything: false, unlinked: true, label: "" };
