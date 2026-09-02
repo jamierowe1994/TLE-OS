@@ -55,6 +55,28 @@ export interface Switch {
 
 export const SWITCHES: Switch[] = [
   {
+    /**
+     * Email to CUSTOMERS - the public Lettings Experts sender, verified in
+     * Resend on 2 Sep 2026. The landlord sign-in link is the first thing to
+     * go out on it; the appraisal, compliance and invitation emails follow as
+     * they are wired.
+     *
+     * Its legacy variable is RESEND_ALLOW_SEND, so until somebody touches it
+     * here it says whatever that says, and the moment it is flipped in Admin
+     * the row wins - which is the brake James asked for. Staff mail (invites,
+     * resets, the internal chases) is not behind this switch: it still
+     * follows RESEND_ALLOW_SEND on its own, so turning customers off does not
+     * lock a colleague out of their password reset.
+     */
+    key: "customer_email",
+    label: "Email to landlords and tenants",
+    what: "Lets the OS send email to customers on the public Lettings Experts sender: the landlord sign-in link today, the appraisal and compliance emails as they are wired.",
+    who: "LANDLORDS AND TENANTS, from the address in RESEND_FROM_PUBLIC. Staff email is not affected.",
+    confirm: "EMAIL CUSTOMERS",
+    legacyEnv: "RESEND_ALLOW_SEND",
+    legacyOn: "yes",
+  },
+  {
     key: "compliance_chases",
     label: "Certificate chases",
     what: "Emails agents the certificates coming up for renewal on their book, once per 30/14/7 band.",

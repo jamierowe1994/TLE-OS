@@ -33,6 +33,7 @@ import { SANDBOX_EMAIL_DOMAIN } from "@/lib/sandbox";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
 import { assertInternalRecipient } from "@/lib/email-policy";
+import { switchOn } from "@/lib/switches";
 
 const API = "https://api.resend.com/emails";
 
@@ -131,6 +132,15 @@ export async function sendEmail(msg: {
   const audience: Audience = msg.audience ?? "internal";
   if (!process.env.RESEND_API_KEY) {
     throw new ResendBlocked("Resend isn't connected — RESEND_API_KEY isn't set.");
+  }
+  /* Customers have their own brake on Admin → Switches, checked BEFORE the
+     sender and the variable so that when it is off, "switched off" is the
+     sentence that comes back rather than a note about configuration. See the
+     customer_email switch for why staff mail is not behind it. */
+  if (audience === "customer" && !(await switchOn("customer_email"))) {
+    throw new ResendBlocked(
+      "Email to landlords and tenants is switched off on Admin → Switches. Turn it on there to send this."
+    );
   }
   const from = audience === "customer" ? publicFromAddress() : fromAddress();
   if (!from) {
