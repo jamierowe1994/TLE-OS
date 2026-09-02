@@ -101,6 +101,16 @@ function Filter({
   );
 }
 
+/** Great-circle distance in miles. Close enough at this scale. */
+function milesBetween(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 3958.8;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
 function daysOn(listed: string | null): number | null {
   if (!listed) return null;
   const t = new Date(listed).getTime();
@@ -153,7 +163,10 @@ export default function RadarBoard() {
   const [page, setPage] = useState(0);
   const [perPage, setPerPage] = useState(25);
   const [q, setQ] = useState("");
-  const [fSignal, setFSignal] = useState<string | null>(null);
+  /* Which signals they care about. Empty means all. Remembered per browser,
+     because a person who only works OpenRent should not have to say so
+     every morning. */
+  const [signalsOn, setSignalsOn] = useState<Set<SignalKey>>(() => new Set());
   const [fDistrict, setFDistrict] = useState<string | null>(null);
   const [fAgent, setFAgent] = useState<string | null>(null);
   const [fStage, setFStage] = useState<string | null>(null);
@@ -162,6 +175,65 @@ export default function RadarBoard() {
   /* What the map currently holds, and the area somebody asked to list. */
   const [inView, setInView] = useState<string[]>([]);
   const [area, setArea] = useState<Set<string> | null>(null);
+  /* An address and a radius. James, 2 Sep: "punch in an address and a
+     radius search", because the whole patch on one map is too much to read
+     and too many pins to move. */
+  const [nearQuery, setNearQuery] = useState("");
+  const [radius, setRadius] = useState(1);
+  const [near, setNear] = useState<{ label: string; lat: number; lon: number } | null>(null);
+  const [nearBusy, setNearBusy] = useState(false);
+  const [nearError, setNearError] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("radar.signals");
+      if (raw) {
+        const keys = (JSON.parse(raw) as string[]).filter((k): k is SignalKey => k in SIGNALS);
+        setSignalsOn(new Set(keys));
+      }
+    } catch {
+      /* A browser that will not remember is a browser that starts on all. */
+    }
+  }, []);
+
+  function toggleSignal(k: SignalKey) {
+    setSignalsOn((cur) => {
+      const next = new Set(cur);
+      if (next.has(k)) next.delete(k);
+      else next.add(k);
+      try {
+        localStorage.setItem("radar.signals", JSON.stringify([...next]));
+      } catch {
+        /* see above */
+      }
+      return next;
+    });
+  }
+
+  async function lookUpNear(e?: React.SyntheticEvent) {
+    e?.preventDefault();
+    const qy = nearQuery.trim();
+    if (!qy) {
+      setNear(null);
+      return;
+    }
+    setNearBusy(true);
+    setNearError(null);
+    try {
+      const r = await fetch(`/api/radar/near?q=${encodeURIComponent(qy)}`, { cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok || !j.ok) {
+        setNearError(j.error ?? "Could not place that address.");
+        return;
+      }
+      setNear({ label: j.label, lat: j.lat, lon: j.lon });
+      setArea(null);
+    } catch {
+      setNearError("Could not place that address.");
+    } finally {
+      setNearBusy(false);
+    }
+  }
 
   useEffect(() => {
     let gone = false;
@@ -189,29 +261,43 @@ export default function RadarBoard() {
 
   const districts = useMemo(() => [...new Set(rows.map((r) => r.district).filter(Boolean) as string[])].sort(), [rows]);
   const agents = useMemo(() => [...new Set(rows.map((r) => r.agent).filter(Boolean) as string[])].sort(), [rows]);
-  const signalsPresent = useMemo(
-    () => SIGNAL_ORDER.filter((k) => rows.some((r) => r.signals.some((s) => s.key === k))),
-    [rows]
-  );
+  const signalCounts = useMemo(() => {
+    const m = new Map<SignalKey, number>();
+    for (const r of rows) {
+      if (r.score === 0) continue;
+      for (const s of r.signals) m.set(s.key, (m.get(s.key) ?? 0) + 1);
+    }
+    return m;
+  }, [rows]);
 
   const book = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows.filter((r) => {
       if (fStage ? r.stage !== fStage : !OPEN_STAGES.includes(r.stage)) return false;
       if (!fStage && r.score === 0) return false;
-      if (fSignal && !r.signals.some((s) => s.key === fSignal)) return false;
+      if (signalsOn.size > 0 && !r.signals.some((s) => signalsOn.has(s.key))) return false;
       if (fDistrict && r.district !== fDistrict) return false;
       if (fAgent && r.agent !== fAgent) return false;
       if (area && !area.has(r.property_key)) return false;
+      if (near) {
+        if (r.lat == null || r.lon == null) return false;
+        if (milesBetween(near.lat, near.lon, r.lat, r.lon) > radius) return false;
+      }
       if (needle) {
         const hay = `${r.address} ${r.street ?? ""} ${r.postcode} ${r.agent ?? ""} ${r.notes}`.toLowerCase();
         if (!hay.includes(needle)) return false;
       }
       return true;
     });
-  }, [rows, q, fSignal, fDistrict, fAgent, fStage, area]);
+  }, [rows, q, signalsOn, fDistrict, fAgent, fStage, area, near, radius]);
 
-  useEffect(() => { setPage(0); }, [q, fSignal, fDistrict, fAgent, fStage, perPage, area]);
+  useEffect(() => { setPage(0); }, [q, signalsOn, fDistrict, fAgent, fStage, perPage, area, near, radius]);
+
+  /* NEVER THE WHOLE PATCH ON THE MAP. 1,875 pins is unreadable and slow to
+     drag. Without an address or a map area the map gets the strongest 150;
+     the list underneath still pages through everything. */
+  const MAP_CAP = 150;
+  const mapList = useMemo(() => (near || area ? book : book.slice(0, MAP_CAP)), [book, near, area]);
 
   /* The map reports on every pan. Only re-render when the set changed. */
   const inViewSig = inView.join("|");
@@ -284,24 +370,102 @@ export default function RadarBoard() {
 
       <div className="mt-4">
         <div className="fade-up min-w-0 rounded-2xl border border-line/80 bg-panel p-5">
-          <div className="flex flex-wrap items-center gap-2.5">
+          {/* The signals, as switches. Pick the ones you work; none picked is all. */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {SIGNAL_ORDER.filter((k) => (signalCounts.get(k) ?? 0) > 0).map((k) => {
+              const on = signalsOn.has(k);
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => toggleSignal(k)}
+                  title={SIGNALS[k].why}
+                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11.5px] transition-colors ${
+                    on
+                      ? "border-ink bg-ink text-page"
+                      : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
+                  }`}
+                >
+                  {SIGNALS[k].label}
+                  <span className={`figures text-[10px] ${on ? "text-page/70" : "text-muted/80"}`}>
+                    {(signalCounts.get(k) ?? 0).toLocaleString("en-GB")}
+                  </span>
+                </button>
+              );
+            })}
+            {signalsOn.size > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSignalsOn(new Set());
+                  try { localStorage.removeItem("radar.signals"); } catch { /* fine */ }
+                }}
+                className="rounded-full px-2.5 py-1.5 text-[11px] text-muted underline-offset-2 hover:underline"
+              >
+                Show all
+              </button>
+            )}
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2.5">
+            <form onSubmit={lookUpNear} className="flex min-w-64 flex-1 items-center gap-2">
+              <label className="flex flex-1 items-center gap-2.5 rounded-full border border-line/80 px-3.5 py-2 focus-within:border-ink">
+                <DoodleIcon name="search" size={14} className="shrink-0 text-muted" />
+                <input
+                  type="text"
+                  placeholder="Address or postcode to search around..."
+                  value={nearQuery}
+                  onChange={(e) => setNearQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void lookUpNear(e);
+                  }}
+                  className="w-full bg-transparent text-[12px] outline-none placeholder:text-muted/70"
+                />
+              </label>
+              <select
+                value={radius}
+                onChange={(e) => setRadius(Number(e.target.value))}
+                title="Radius"
+                className="rounded-full border border-line/80 bg-transparent px-2.5 py-2 text-[12px] outline-none"
+              >
+                {[0.25, 0.5, 1, 2, 3, 5].map((m) => (
+                  <option key={m} value={m}>{m} mile{m === 1 ? "" : "s"}</option>
+                ))}
+              </select>
+              {/* A real submit, so Return in the box and a press on the button
+                  are the same action. PressButton is type=button by design. */}
+              <button
+                type="submit"
+                disabled={nearBusy}
+                className="press-wobble rounded-full bg-ink px-4 py-2 text-[12px] font-semibold text-page disabled:opacity-40"
+              >
+                {nearBusy ? "Placing..." : "Search"}
+              </button>
+            </form>
+            {near && (
+              <button
+                type="button"
+                onClick={() => { setNear(null); setNearQuery(""); }}
+                title="Clear the address search"
+                className="flex items-center gap-2 whitespace-nowrap rounded-full border border-accent-dark bg-accent-soft/50 px-3.5 py-2 text-[12px] font-semibold text-accent-dark"
+              >
+                Within {radius} mile{radius === 1 ? "" : "s"} of {near.label} <span className="text-[10px]">✕</span>
+              </button>
+            )}
+            {nearError && <span className="text-[11.5px] text-red-700">{nearError}</span>}
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2.5">
             <label className="flex min-w-44 flex-1 items-center gap-2.5 rounded-full border border-line/80 px-3.5 py-2 focus-within:border-ink">
               <DoodleIcon name="search" size={14} className="shrink-0 text-muted" />
               <input
                 type="text"
-                placeholder="Search address, postcode or agent..."
+                placeholder="Filter by address, postcode or agent..."
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 className="w-full bg-transparent text-[12px] outline-none placeholder:text-muted/70"
               />
             </label>
-            <Filter
-              label="All signals"
-              options={signalsPresent}
-              value={fSignal}
-              onChange={setFSignal}
-              render={(k) => SIGNALS[k as SignalKey].label}
-            />
             <Filter label="All districts" options={districts} value={fDistrict} onChange={setFDistrict} />
             <Filter label="All agents" options={agents} value={fAgent} onChange={setFAgent} />
             <Filter
@@ -356,11 +520,15 @@ export default function RadarBoard() {
           ) : view === "map" ? (
             <>
               <div className="mt-4 h-[calc(100vh-380px)] min-h-[420px]">
-                <RadarMap prospects={book} openId={openId} onOpen={setOpenId} onInView={onInView} />
+                <RadarMap prospects={mapList} openId={openId} onOpen={setOpenId} onInView={onInView} />
               </div>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[11.5px] text-muted">
                 <span>
-                  {book.length.toLocaleString("en-GB")} properties match the filters · {inView.length.toLocaleString("en-GB")} in view
+                  {mapList.length < book.length
+                    ? `Showing the ${MAP_CAP} strongest of ${book.length.toLocaleString("en-GB")}. Search an address to see everything around it.`
+                    : `${book.length.toLocaleString("en-GB")} properties match`}
+                  {" · "}
+                  {inView.length.toLocaleString("en-GB")} in view
                 </span>
                 <PressButton
                   onClick={() => {
