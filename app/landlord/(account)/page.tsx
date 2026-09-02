@@ -1,7 +1,7 @@
-import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
-import PropertyPhoto from "@/components/PropertyPhoto";
+import LandlordDashboard from "@/components/landlord/Dashboard";
 import LandlordDocuments from "@/components/LandlordDocuments";
+import PropertyPhoto from "@/components/PropertyPhoto";
 import { Pill } from "@/components/Wire";
 import {
   currentLandlord,
@@ -9,31 +9,25 @@ import {
   landlordProperties,
   JOURNEY,
   type AppraisalJourney,
-  type JourneyBeat,
 } from "@/lib/landlord-account";
 import { OUTSTANDING_AT_APPRAISAL } from "@/lib/appraisal-compliance";
+import { geocode } from "@/lib/geocode";
 import { DECK_KINDS } from "@/lib/present";
+import type { LandlordView } from "@/lib/landlord-view";
 import type { ManagedProperty } from "@/lib/portfolio-types";
 
 const money = (n: number | null | undefined) => (n == null ? "—" : `£${Math.round(n).toLocaleString("en-GB")}`);
 const dayLong = (iso: string | null | undefined) =>
-  iso
-    ? new Date(iso).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
-    : null;
+  iso ? new Date(iso).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) : null;
 const dayShort = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "—";
 
 /**
- * The landlord's home: the property first, then where they are with us.
- *
- * James, 2 Sep: "the first thing they should see is the property, and then
- * the second thing after that is that they'll see the valuation. They can
- * also view the presentation in there as well... then they can see all of
- * the terms." One property at a time, the journey drawn as beats a landlord
- * would use, and every card either shows the real thing or says plainly
- * what happens next. Nothing on this page is a sample.
- *
- * Drawn in the OS's hand - see the note on app/landlord/layout.tsx.
+ * The landlord's home, live. Builds the dashboard's view from the appraisal
+ * journey (lib/landlord-account.ts) - the property first, then the valuation,
+ * the presentation, the terms - and from the managed book for a landlord we
+ * already look after. Nothing on the page is a sample; each tile shows the
+ * real thing or says what happens next.
  */
 export default async function LandlordHome() {
   const me = (await currentLandlord())!;
@@ -43,42 +37,57 @@ export default async function LandlordHome() {
   const open = journeys
     .filter((j) => j.stage !== "lost")
     .sort((a, b) => Number(a.stage === "won") - Number(b.stage === "won") || b.appraisal.createdAt.localeCompare(a.appraisal.createdAt));
-  const nothing = open.length === 0 && managed.length === 0;
+
+  const view = open[0] ? await appraisalView(open[0], first) : managed[0] ? managedView(managed[0], first) : null;
+  const rest = open[0] ? managed : managed.slice(1);
 
   return (
-    <div className="py-10">
-      <div className="fade-up">
-        <h1 className="text-[30px] leading-tight">Hello, {first}</h1>
-        <p className="mt-1.5 text-[13.5px] text-muted">
-          {nothing
-            ? "We don't have a property against this address yet."
-            : open.length && managed.length
-              ? "Your property with us, where it is on the way to being let, and the ones we already look after."
-              : open.length
-                ? "Your property with us, and where it is on the way to being let."
-                : managed.length === 1
-                  ? "Your property with us, and everything we hold on it."
-                  : `Your ${managed.length} properties with us, and everything we hold on them.`}
+    <div className="py-6">
+      <div className="fade-up mb-5">
+        <h1 className="text-[28px] leading-tight">Hello, {first}</h1>
+        <p className="mt-1 text-[13.5px] text-muted">
+          {view ? view.intro : "We don't have a property against this address yet."}
         </p>
       </div>
 
-      {nothing && (
-        <div className="mt-8 rounded-2xl border border-dashed border-line p-5 text-[13px] leading-relaxed text-muted">
+      {view ? (
+        <LandlordDashboard view={view} />
+      ) : (
+        <div className="rounded-2xl border border-dashed border-line p-5 text-[13px] leading-relaxed text-muted">
           If you have a property with us that is not showing, it may be held against a different
           email address. Your agent can put that right.
         </div>
       )}
 
-      {open.map((j) => (
-        <Appraisal key={j.appraisal.id} j={j} accountId={me.id} />
-      ))}
+      {open[0] && (
+        <section id="ready" className="mt-6 rounded-2xl border border-line/70 bg-white p-5" data-search>
+          <div className="flex items-center gap-2.5">
+            <DoodleIcon name="shield" size={16} className="text-accent-dark" />
+            <h2 className="text-[19px]">Getting it ready to let</h2>
+          </div>
+          <p className="mt-1.5 max-w-[60ch] text-[12.5px] leading-relaxed text-muted">
+            These are the things the law needs in place before a tenant moves in. Some you will
+            already have; send us what you have and we will tell you what is missing.
+          </p>
+          <div className="mt-5">
+            <LandlordDocuments
+              accountId={me.id}
+              wanted={[
+                "Photo ID and proof you own the property",
+                ...OUTSTANDING_AT_APPRAISAL.slice(0, 4).map((o) => o.label),
+                "Energy performance certificate (EPC)",
+              ]}
+            />
+          </div>
+        </section>
+      )}
 
-      {managed.length > 0 && (
-        <section className="mt-10">
-          {open.length > 0 && <h2 className="text-[20px]">Already looked after</h2>}
-          <div className={`${open.length ? "mt-4" : "mt-8"} space-y-5`}>
-            {managed.map((p) => (
-              <Managed key={p.listingId} p={p} />
+      {rest.length > 0 && (
+        <section className="mt-6" data-search>
+          <h2 className="text-[20px]">{open[0] ? "Already looked after" : "Your other properties"}</h2>
+          <div className="mt-3 space-y-3">
+            {rest.map((p) => (
+              <ManagedRow key={p.listingId} p={p} />
             ))}
           </div>
         </section>
@@ -87,274 +96,166 @@ export default async function LandlordHome() {
   );
 }
 
-/* --------------------------------------------------------- the appraisal -- */
+/* --------------------------------------------------------- the feeders -- */
 
-function Appraisal({ j, accountId }: { j: AppraisalJourney; accountId: string }) {
+async function appraisalView(j: AppraisalJourney, first: string): Promise<LandlordView> {
   const a = j.appraisal;
   const latest = j.decks[0] ?? null;
   const post = j.decks.find((d) => d.kind === "post-appraisal") ?? null;
-  const image = latest?.deck.property.image ?? null;
-  const agent = latest?.deck.agent ?? null;
+  const deckAgent = latest?.deck.agent ?? null;
   const when = dayLong(a.appointmentAt);
   const visitPassed = a.appointmentAt ? new Date(a.appointmentAt) < new Date() : false;
   const signUrl = post?.deck.terms?.signUrl ?? null;
   const at = JOURNEY.findIndex((b) => b.id === j.at);
+  const agentName = a.agent ?? deckAgent?.name ?? null;
 
-  return (
-    <section className="mt-8">
-      {/* ── the property ── */}
-      <div className="fade-up overflow-hidden rounded-2xl border border-line/80 bg-panel">
-        <div className="relative">
-          <PropertyPhoto src={image} className="h-[220px] w-full object-cover sm:h-[300px]" />
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent p-6 text-white">
-            <p className="text-[10.5px] font-semibold uppercase tracking-wide opacity-80">Your property</p>
-            <h2 className="mt-1 text-[26px] leading-tight text-white">{a.address}</h2>
-            <p className="text-[13px] opacity-80">{a.postcode}</p>
-          </div>
-        </div>
+  /* Placed on the map from the address. Cached for six months in the
+     geocoder, so this is one lookup per property, ever. */
+  const geo = await geocode(`${a.address}, ${a.postcode}`).catch(() => null);
+  const lat = geo?.ok ? geo.at.lat : null;
+  const lng = geo?.ok ? geo.at.lng : null;
 
-        {/* ── where you are ── */}
-        <div className="border-t border-line/70 px-6 py-5">
-          <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-8">
-            {JOURNEY.map((b, i) => (
-              <div key={b.id} className="min-w-0">
-                <div className={`h-1.5 rounded-full ${i <= at ? "bg-accent-dark" : "bg-line/50"}`} />
-                <p className={`mt-1.5 truncate text-[10.5px] ${i === at ? "font-semibold text-ink" : "text-muted"}`}>{b.label}</p>
-              </div>
-            ))}
-          </div>
-          <p className="mt-3.5 text-[13.5px]">{Where(j, when, visitPassed)}</p>
-        </div>
-      </div>
+  const subtitle =
+    a.valuation != null
+      ? `Valued ${dayShort(a.valuedAt)}${a.valuedBy ? ` by ${a.valuedBy}` : ""}`
+      : when
+        ? `${agentName ?? "Your agent"} is visiting on ${when}`
+        : "A visit is being arranged";
 
-      {/* ── valuation and presentation ── */}
-      <div className="mt-5 grid gap-5 lg:grid-cols-2">
-        <Card icon="coin" title="Your valuation">
-          {a.valuation != null ? (
-            <>
-              <p className="figures text-[36px] leading-none">
-                {money(a.valuation)} <span className="text-[13px] font-normal text-muted">a month</span>
-              </p>
-              <dl className="mt-5 grid grid-cols-2 gap-x-4 gap-y-3.5">
-                <Fact label="Service" value={j.serviceLabel ?? "To be agreed"} />
-                <Fact label="Management fee" value={a.feePct != null ? `${a.feePct}% of rent` : "To be agreed"} />
-                <Fact label="Tenancy set-up" value={a.setupFee != null ? money(a.setupFee) : "To be agreed"} />
-                <Fact label="Valued" value={`${dayShort(a.valuedAt)}${a.valuedBy ? ` by ${a.valuedBy}` : ""}`} />
-              </dl>
-              {a.valuationNote && (
-                <p className="mt-4 rounded-xl bg-box px-3.5 py-2.5 text-[12.5px] leading-relaxed text-muted">{a.valuationNote}</p>
-              )}
-            </>
-          ) : (
-            <p className="text-[13px] leading-relaxed text-muted">
-              {visitPassed
-                ? `${a.agent ?? "Your agent"} is writing up the figure from the visit. It will appear here, with what it is based on.`
-                : when
-                  ? `Comes after the visit on ${when}. ${a.agent ?? "Your agent"} will talk you through it on the day, and it will be written down here.`
-                  : "Comes after the visit. It will be written down here, with what it is based on."}
-            </p>
-          )}
-        </Card>
+  const status = (() => {
+    switch (j.at) {
+      case "visit": return when ? `${agentName ?? "Your agent"} is visiting on ${when}.` : "A visit is being arranged.";
+      case "valuation": return visitPassed && a.valuation == null ? "We have been round. Your figure is being written up." : "Your figure is in. Your presentation is next.";
+      case "presentation": return "Your presentation is ready to read.";
+      case "terms": return "Your figure and your presentation are here. The terms of business are next.";
+      case "ready": return "Terms signed. We are getting the property ready to go to market.";
+      case "market": return "On the market.";
+      case "let": return "Let.";
+      default: return "Looked after by us.";
+    }
+  })();
 
-        <Card icon="doc" title="Your presentation">
-          {j.decks.length ? (
-            <ul className="space-y-2.5">
-              {j.decks.map((d) => {
-                const kind = DECK_KINDS.find((k) => k.id === d.kind);
-                return (
-                  <li key={d.token} className="flex items-center justify-between gap-3 rounded-xl border border-line/70 bg-box px-4 py-3">
-                    <div className="min-w-0">
-                      <p className="text-[13px] font-semibold">{kind?.label ?? d.kind}</p>
-                      <p className="truncate text-[11.5px] text-muted">
-                        {dayShort(d.createdAt)}
-                        {d.authorName ? ` · ${d.authorName}` : ""}
-                      </p>
-                    </div>
-                    <Link
-                      href={`/present/${d.token}`}
-                      className="shrink-0 rounded-full bg-accent-dark px-4 py-1.5 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
-                    >
-                      Open
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="text-[13px] leading-relaxed text-muted">
-              {visitPassed
-                ? "Your presentation is being put together and will appear here."
-                : "What we already know about the property, the local market and what it should let for. It lands here before the visit."}
-            </p>
-          )}
-        </Card>
-      </div>
+  const signed = j.signed.length > 0;
+  const todos: LandlordView["todos"] = [
+    { title: "Your valuation", sub: a.valuation != null ? `${money(a.valuation)} a month, recorded ${dayShort(a.valuedAt)}` : "Comes after the visit", done: a.valuation != null, icon: "coin" },
+    { title: "Read your presentation", sub: latest ? `${DECK_KINDS.find((k) => k.id === latest.kind)?.label ?? latest.kind} · ${dayShort(latest.createdAt)}` : "Lands here before the visit", done: Boolean(latest?.firstOpenedAt), href: latest ? `/present/${latest.token}` : null, icon: "doc" },
+    { title: "Sign your terms", sub: signed ? `Signed ${dayShort(j.signed[0].signedAt)}` : signUrl ? "Ready to read and sign" : `${agentName ?? "Your agent"} will send them over`, done: signed, href: signUrl, icon: "file-contract" },
+    { title: "Photo ID and proof of ownership", sub: "Send them below and we file them", done: false, href: "#ready", icon: "user" },
+    { title: "Safety certificates", sub: "Gas, electrical, EPC · send what you have", done: false, href: "#ready", icon: "shield" },
+  ];
+  const done = todos.filter((t) => t.done).length;
 
-      {/* ── terms and the agent ── */}
-      <div className="mt-5 grid gap-5 lg:grid-cols-2">
-        <Card icon="file-contract" title="Your terms">
-          {j.signed.length ? (
-            <ul className="space-y-2">
-              {j.signed.map((s, i) => (
-                <li key={i} className="flex items-center justify-between gap-3 rounded-xl border border-line/70 bg-box px-4 py-3">
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-semibold">{s.name}</p>
-                    <p className="text-[11.5px] text-muted">Signed {dayShort(s.signedAt)}</p>
-                  </div>
-                  <Pill tone="good">Signed</Pill>
-                </li>
-              ))}
-            </ul>
-          ) : post?.deck.terms?.summary || signUrl ? (
-            <>
-              {post?.deck.terms?.summary && <p className="text-[13px] leading-relaxed">{post.deck.terms.summary}</p>}
-              {signUrl ? (
-                <a
-                  href={signUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mt-4 inline-block rounded-full bg-accent-dark px-5 py-2 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90"
-                >
-                  Read and sign your terms
-                </a>
-              ) : (
-                <p className="mt-3 text-[12.5px] text-muted">
-                  {a.agent ?? "Your agent"} will send the terms over for signing. Once they are signed they live here.
-                </p>
-              )}
-            </>
-          ) : (
-            <p className="text-[13px] leading-relaxed text-muted">
-              {a.valuation != null
-                ? `${a.agent ?? "Your agent"} will send the terms over for signing. Once they are signed they live here.`
-                : "Once you and your agent have agreed a figure, the terms of business come here to read and sign."}
-            </p>
-          )}
-        </Card>
-
-        <Card icon="user" title="Who is looking after you">
-          {agent ? (
-            <div className="flex items-start gap-4">
-              {agent.photo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={agent.photo} alt="" className="h-14 w-14 shrink-0 rounded-full object-cover" />
-              ) : (
-                <span className="hand flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-line/80 bg-box text-[20px] text-muted">
-                  {agent.firstName?.[0] ?? agent.name[0]}
-                </span>
-              )}
-              <div className="min-w-0 text-[13px]">
-                <p className="font-semibold">{agent.name}</p>
-                {agent.title && <p className="text-muted">{agent.title}</p>}
-                <p className="mt-2 flex flex-wrap gap-x-3 text-[12.5px] text-muted">
-                  {agent.phone && <a href={`tel:${agent.phone.replace(/\s+/g, "")}`} className="hover:text-ink">{agent.phone}</a>}
-                  {agent.email && <a href={`mailto:${agent.email}`} className="truncate hover:text-ink">{agent.email}</a>}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <p className="text-[13px]">{a.agent ?? "Your agent will be in touch."}</p>
-          )}
-        </Card>
-      </div>
-
-      <div className="fade-up mt-5 rounded-2xl border border-line/80 bg-panel p-5">
-        <div className="flex items-center gap-2.5">
-          <DoodleIcon name="checklist" size={18} className="text-accent-dark" />
-          <h2 className="text-[17px]">Getting it ready to let</h2>
-        </div>
-        <p className="mt-1.5 max-w-[60ch] text-[12.5px] leading-relaxed text-muted">
-          These are the things the law needs in place before a tenant moves in. Some you will
-          already have; send us what you have and we will tell you what is missing.
-        </p>
-        <div className="mt-5">
-          <LandlordDocuments
-            accountId={accountId}
-            wanted={[
-              "Photo ID and proof you own the property",
-              ...OUTSTANDING_AT_APPRAISAL.slice(0, 4).map((o) => o.label),
-              "Energy performance certificate (EPC)",
-            ]}
-          />
-        </div>
-      </div>
-    </section>
-  );
+  return {
+    greeting: `Hello, ${first}`,
+    intro: "Your property, where it is on the way to being let, and everything we hold on it.",
+    property: {
+      address: a.address,
+      postcode: a.postcode,
+      image: latest?.deck.property.image ?? null,
+      lat,
+      lng,
+      subtitle,
+      state: j.stage === "won" ? "On the market" : "Being valued",
+    },
+    beats: JOURNEY.map((b) => b.label.replace(/^Your /, "").replace(/^The /, "")).map((s) => s[0].toUpperCase() + s.slice(1)),
+    at: Math.max(0, at),
+    status,
+    actions: [
+      { label: "View presentation", hint: latest ? DECK_KINDS.find((k) => k.id === latest.kind)?.label : "Not yet", href: latest ? `/present/${latest.token}` : null, icon: "doc", tone: latest ? "dark" : "light", external: true },
+      { label: "Sign contracts", hint: signed ? "Signed" : signUrl ? "Ready" : "Not yet", href: signUrl, icon: "file-contract", tone: signUrl && !signed ? "dark" : "light", external: true },
+      { label: "Compliance", hint: "What we need", href: "#ready", icon: "shield", tone: "dark" },
+      { label: "Documents", hint: "Send us files", href: "#ready", icon: "folder", tone: "light" },
+      { label: "Your agent", hint: agentName ?? undefined, href: deckAgent?.email ? `mailto:${deckAgent.email}` : null, icon: "user", tone: "light", external: true },
+      { label: "My details", href: "/landlord/profile", icon: "setting", tone: "light" },
+    ],
+    todos,
+    valuation: {
+      figure: a.valuation != null ? money(a.valuation) : null,
+      unit: "a month",
+      caption: a.valuation != null ? "Agreed at the visit" : "After the visit",
+      lines: [
+        ["Service", j.serviceLabel ?? "To be agreed"],
+        ["Fee", a.feePct != null ? `${a.feePct}% of rent` : "To be agreed"],
+        ["Set-up", a.setupFee != null ? money(a.setupFee) : "To be agreed"],
+      ],
+    },
+    readiness: {
+      pct: Math.round((done / todos.length) * 100),
+      title: "Ready to let",
+      note: done === todos.length ? "Everything we need is in" : `${todos.length - done} of ${todos.length} things still to do`,
+    },
+    deck: latest
+      ? {
+          title: DECK_KINDS.find((k) => k.id === latest.kind)?.label ?? "Your presentation",
+          sub: `${latest.authorName || agentName || "Your agent"} · ${dayShort(latest.createdAt)}`,
+          href: `/present/${latest.token}`,
+          image: latest.deck.property.image ?? null,
+        }
+      : null,
+    agent: deckAgent
+      ? { name: deckAgent.name, title: deckAgent.title, phone: deckAgent.phone, email: deckAgent.email, photo: deckAgent.photo }
+      : agentName
+        ? { name: agentName }
+        : null,
+  };
 }
 
-function Where(j: AppraisalJourney, when: string | null, visitPassed: boolean): string {
-  const a = j.appraisal;
-  const agent = a.agent ?? "your agent";
-  switch (j.at as JourneyBeat) {
-    case "visit":
-      return when ? `${agent} is visiting on ${when}.` : `A visit is being arranged with ${agent}.`;
-    case "valuation":
-      return visitPassed && a.valuation == null
-        ? `We have been round. ${agent} is writing up your figure.`
-        : `Your figure is in. ${agent} will send your presentation over.`;
-    case "presentation":
-      return "Your presentation is ready to read.";
-    case "terms":
-      return "Your figure and your presentation are here. The terms of business are next.";
-    case "ready":
-      return "Terms signed. We are getting the property ready to go to market.";
-    case "market":
-      return "On the market.";
-    case "let":
-      return "Let.";
-    default:
-      return "Looked after by us.";
-  }
+function managedView(p: ManagedProperty, first: string): LandlordView {
+  const tenant = p.tenants[0];
+  return {
+    greeting: `Hello, ${first}`,
+    intro: "Your property with us, and everything we hold on it.",
+    property: {
+      address: p.name,
+      postcode: p.locality,
+      image: p.image,
+      lat: p.lat,
+      lng: p.lng,
+      subtitle: `${p.service ?? "Managed"} · let since ${dayShort(p.letSince)}`,
+      state: tenant ? "Tenanted" : "Let",
+    },
+    beats: ["Visit", "Valuation", "Presentation", "Terms", "Marketing", "Offers", "Let", "Looked after"],
+    at: 7,
+    status: tenant ? `${p.tenants.map((t) => t.name).join(", ")} in since ${dayShort(p.letSince)}.` : "Let, and looked after by us.",
+    actions: [
+      { label: "Certificates", hint: "Coming", href: null, icon: "shield", tone: "light" },
+      { label: "Statements", hint: "Coming", href: null, icon: "wallet", tone: "light" },
+      { label: "Documents", hint: "Coming", href: null, icon: "folder", tone: "light" },
+      { label: "Your agent", hint: p.agent?.name, href: null, icon: "user", tone: "light" },
+      { label: "My details", href: "/landlord/profile", icon: "setting", tone: "light" },
+    ],
+    todos: [],
+    valuation: {
+      figure: p.rent == null ? null : money(p.rent),
+      unit: p.rentPeriod === "week" ? "a week" : "a month",
+      caption: "Rent",
+      lines: [
+        ["Service", p.service ?? "Not set"],
+        ["Let type", p.letType ?? "—"],
+        ["Tenant", tenant?.name ?? "Not on record"],
+      ],
+    },
+    readiness: { pct: 100, title: "Let", note: "Nothing waiting on you" },
+    deck: null,
+    agent: p.agent ? { name: p.agent.name } : null,
+  };
 }
 
-/* ----------------------------------------------------------- managed -- */
-
-function Managed({ p }: { p: ManagedProperty }) {
+function ManagedRow({ p }: { p: ManagedProperty }) {
   const tenant = p.tenants[0];
   return (
-    <section className="fade-up overflow-hidden rounded-2xl border border-line/80 bg-panel">
-      <div className="flex flex-wrap items-center gap-4 border-b border-line/70 p-4 [&>div]:min-w-[55%]">
-        <PropertyPhoto src={p.image} className="h-16 w-24 shrink-0 rounded-xl object-cover" />
-        <div className="min-w-0 flex-1">
-          <h3 className="text-[17px]">{p.name}</h3>
-          <p className="text-[12px] text-muted">
-            {p.locality}
-            {p.service ? ` · ${p.service}` : ""}
-          </p>
-        </div>
-        <Pill tone={tenant ? "good" : "accent"}>{tenant ? "Tenanted" : "Let"}</Pill>
+    <div className="flex flex-wrap items-center gap-4 rounded-2xl border border-line/70 bg-white p-4 [&>div]:min-w-[55%]">
+      <PropertyPhoto src={p.image} className="h-16 w-24 shrink-0 rounded-xl object-cover" />
+      <div className="min-w-0 flex-1">
+        <h3 className="text-[17px]">{p.name}</h3>
+        <p className="text-[12px] text-muted">
+          {p.locality}
+          {p.service ? ` · ${p.service}` : ""}
+          {p.rent != null ? ` · ${money(p.rent)} ${p.rentPeriod === "week" ? "a week" : "a month"}` : ""}
+          {tenant ? ` · ${tenant.name}` : ""}
+        </p>
       </div>
-      <dl className="grid gap-4 p-4 sm:grid-cols-3">
-        <Fact label="Rent" value={p.rent == null ? "Not set" : `${money(p.rent)} ${p.rentPeriod === "week" ? "a week" : "a month"}`} />
-        <Fact label="Let since" value={dayShort(p.letSince)} />
-        <Fact label="Let type" value={p.letType ?? "—"} />
-        <Fact label={p.tenants.length > 1 ? "Tenants" : "Tenant"} value={p.tenants.length ? p.tenants.map((t) => t.name).join(", ") : "Not on our record"} />
-        <Fact label="Your agent" value={p.agent?.name ?? "—"} />
-        <Fact label="Service" value={p.service ?? "Not set"} />
-      </dl>
-    </section>
-  );
-}
-
-/* --------------------------------------------------------------- bits -- */
-
-function Card({ icon, title, children }: { icon: string; title: string; children: React.ReactNode }) {
-  return (
-    <section className="fade-up rounded-2xl border border-line/80 bg-panel p-5">
-      <div className="flex items-center gap-2.5">
-        <DoodleIcon name={icon} size={18} className="text-accent-dark" />
-        <h2 className="text-[17px]">{title}</h2>
-      </div>
-      <div className="mt-4">{children}</div>
-    </section>
-  );
-}
-
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">{label}</dt>
-      <dd className="mt-0.5 text-[13px]">{value}</dd>
+      <Pill tone={tenant ? "good" : "accent"}>{tenant ? "Tenanted" : "Let"}</Pill>
     </div>
   );
 }
