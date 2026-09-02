@@ -5,6 +5,7 @@ import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
 import AssistantCharacter from "@/components/AssistantCharacter";
+import SteveRepertoire from "@/components/SteveRepertoire";
 
 /**
  * The assistant's console — what people have asked, and what he can answer.
@@ -399,6 +400,21 @@ export default function AssistantConsole() {
             <Pill tone="neutral">Guides not built yet</Pill>
           </span>
         </div>
+      </section>
+
+      {/* ------------------------- his repertoire ------------------------ */}
+      {/* Every face he can pull, in one place. He only ever shows one at a
+          time in the corner and most of them are tied to something you have
+          to do first, so without this the only way to check a new expression
+          was to go and provoke it. A tile replays its gesture when clicked -
+          the one-shots (the hop, the yawn, the bow) are over in a second. */}
+      <section className="fade-up mt-8">
+        <h2 className="text-sm font-semibold uppercase tracking-wide">His repertoire</h2>
+        <p className="mt-1 max-w-[62ch] text-[12px] leading-relaxed text-muted">
+          Everything he can do with his face, and when he does it. Click one to see it
+          again.
+        </p>
+        <SteveRepertoire />
       </section>
     </>
   );

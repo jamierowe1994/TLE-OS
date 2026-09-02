@@ -44,6 +44,60 @@ import { fillFrontCompose, getOpenListing, getOpenSurfaces } from "@/lib/open-re
 const PHONE_MS = 60_000;
 const SLEEP_MS = 120_000;
 
+/**
+ * Fidgets, before the phone comes out.
+ *
+ * James, 2 Sep: "occasionally get bored and maybe bounce a little bit on the
+ * screen… just to make it feel a little bit more fleshed out."
+ *
+ * A minute of perfectly even hovering is a screensaver. So on the way to his
+ * phone he gets bored twice and yawns once, each a few seconds long, at times
+ * that are jittered so two agents side by side are not bouncing in step. The
+ * order is fixed - bored, bored, yawn - because that IS the order: you fidget
+ * before you stretch, and you stretch before you give up and get your phone
+ * out. Every fidget returns him to idle on its own, and all of them live in the
+ * same timer list as the phone and the nap, so opening him clears the lot.
+ */
+const FIDGETS: Array<{ mood: Mood; at: number; jitter: number; for: number }> = [
+  { mood: "bored", at: 16_000, jitter: 6_000, for: 4_800 },
+  { mood: "bored", at: 34_000, jitter: 6_000, for: 4_800 },
+  { mood: "yawn", at: 50_000, jitter: 4_000, for: 2_400 },
+];
+
+/**
+ * What the feedback form does to his face.
+ *
+ * The three pills are three feelings, and he wears whichever is selected for
+ * as long as the form is open: sad that something is broken, puzzled that
+ * something is confusing, lit up by an idea. Then after it is sent, a small
+ * bow for the first two - somebody has just told us something went wrong, and
+ * a hop and a sparkle would be the wrong note - and the hop for the third.
+ */
+const FEEDBACK_MOOD: Record<string, Mood> = { bug: "sad", confusing: "confused", idea: "idea" };
+const SENT_MOOD: Record<string, Mood> = { bug: "nod", confusing: "nod", idea: "happy" };
+
+/**
+ * How he takes what was typed at him.
+ *
+ * Read on the client, off the words the person used, rather than asked of the
+ * model - it needs to be instant, it costs nothing, and being wrong costs a
+ * face that is briefly the wrong shape. Checked in this order because "thanks,
+ * but it's still broken" is about the broken part.
+ */
+const SAID_BROKEN =
+  /\b(broken|not working|doesn'?t work|isn'?t working|won'?t (load|work|open|save|send)|crash(ed|es|ing)?|error|bug|stuck|fail(ed|s|ing)?|gone wrong)\b/i;
+const SAID_CONFUSED =
+  /\b(confus(ed|ing)|don'?t understand|no idea|i'?m lost|makes no sense|unclear|can'?t (find|see|figure|work out|tell)|what does .* mean|what is this for)\b/i;
+const SAID_THANKS =
+  /\b(thanks?|thank you|thankyou|cheers|ta|nice one|brilliant|perfect|great|lovely|legend|star|much appreciated|that worked|sorted)\b/i;
+
+function heard(text: string): Mood | null {
+  if (SAID_BROKEN.test(text)) return "sad";
+  if (SAID_CONFUSED.test(text)) return "confused";
+  if (SAID_THANKS.test(text)) return "happy";
+  return null;
+}
+
 type Line = {
   role: "agent" | "assistant";
   text: string;
@@ -170,6 +224,11 @@ export default function HelpDock() {
       setTimeout(() => setMood("texting"), PHONE_MS),
       setTimeout(() => setMood("asleep"), SLEEP_MS),
     ];
+    for (const f of FIDGETS) {
+      const at = f.at + Math.random() * f.jitter;
+      timers.current.push(setTimeout(() => setMood(f.mood), at));
+      timers.current.push(setTimeout(() => setMood("idle"), at + f.for));
+    }
   }, []);
 
   useEffect(() => {
@@ -177,6 +236,42 @@ export default function HelpDock() {
     rest();
     return () => timers.current.forEach(clearTimeout);
   }, [signedIn, open, rest]);
+
+  /**
+   * The face he goes back to when nothing else is happening.
+   *
+   * Idle, except on the feedback form, where the selected pill is what he
+   * feels for as long as the form is open. Kept in a ref rather than derived
+   * at each call site, so the moment a reaction ends it can ask "what should I
+   * look like now?" and get the answer for the tab the person is on NOW, not
+   * the one they were on when the reaction started.
+   */
+  const resting = useRef<Mood>("idle");
+  useEffect(() => {
+    const next: Mood = open && tab === "feedback" && !sent ? (FEEDBACK_MOOD[kind] ?? "idle") : "idle";
+    const was = resting.current;
+    resting.current = next;
+    if (next !== "idle") setMood(next);
+    /* Leaving the tab takes the feeling off his face. Sending the form does
+       not go through here - sendFeedback puts its own reaction on and it must
+       not be wiped by the form emptying underneath it. */
+    else if (was !== "idle" && !sent) setMood("idle");
+  }, [open, tab, kind, sent]);
+  const settle = useCallback(() => setMood(resting.current), []);
+
+  /**
+   * A reaction: a mood held for a moment, then back to rest.
+   *
+   * One timer, replaced each time, so a second reaction landing before the
+   * first has finished does not leave a stale "back to rest" waiting to cut
+   * the new one short.
+   */
+  const reacting = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const react = useCallback((m: Mood, ms: number) => {
+    if (reacting.current) clearTimeout(reacting.current);
+    setMood(m);
+    reacting.current = setTimeout(settle, ms);
+  }, [settle]);
 
   /**
    * Always sitting on the newest message.
@@ -299,9 +394,9 @@ export default function HelpDock() {
     }
 
     /* Caught napping or mid-scroll, he startles before he greets you. */
-    const waking = mood === "asleep" || mood === "texting";
-    setMood(waking ? "surprised" : "wave");
-    setTimeout(() => setMood("idle"), waking ? 2600 : 1800);
+    /* Caught mid-bounce or mid-yawn counts as caught out too. */
+    const waking = mood === "asleep" || mood === "texting" || mood === "bored" || mood === "yawn";
+    react(waking ? "surprised" : "wave", waking ? 2600 : 1800);
 
     if (lines.length) return;
     const r = await fetch("/api/assistant/ask", { cache: "no-store" })
@@ -429,9 +524,13 @@ export default function HelpDock() {
     setBusy(false);
 
     /* Thinking ends the moment he has something to say, and he says it —
-       which is the whole reason the mouth animates. */
-    setMood("talking");
-    setTimeout(() => setMood("idle"), 1400);
+       which is the whole reason the mouth animates. Unless what was said to
+       him deserves a face first: a thank-you gets the hop, a "this is broken"
+       gets the droop, a "this makes no sense" gets the head-scratch. The
+       reply is on screen either way; the face is the acknowledgement. */
+    const felt = heard(text);
+    if (felt) react(felt, 2800);
+    else react("talking", 1400);
 
     setStage(stage === "onboarding-name" ? "onboarding-help" : "ask");
   }
@@ -503,7 +602,8 @@ export default function HelpDock() {
     setBusy(false);
     setSent(true);
     setFb("");
-    setMood("happy");
+    /* A bow for a bug or a confusion, the hop for an idea - see SENT_MOOD. */
+    setMood(SENT_MOOD[kind] ?? "happy");
     setTimeout(() => {
       setSent(false);
       setOpen(false);

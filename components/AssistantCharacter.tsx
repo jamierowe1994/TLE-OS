@@ -48,6 +48,33 @@ import { useEffect, useId, useRef, useState } from "react";
  * Idle is a slow hover and an irregular blink, arms down. Everything louder is
  * tied to an event: he waves when there is something worth seeing, wakes with
  * a start when clicked, shrugs when he has no answer.
+ *
+ * ── The second batch, 2 Sep ───────────────────────────────────────────────
+ *
+ * James: "a bit more expressive… happy if it helps and someone says thanks,
+ * sad if someone gives feedback that something's broken, a confused face if
+ * they give feedback that something's confusing, occasionally get bored and
+ * bounce a little bit."
+ *
+ * Six more, built the same way as the first ten - a pose, a face, a body
+ * movement, and at most one prop each:
+ *
+ *   sad        Broken. Everything droops: brows, mouth, arms, and the whole
+ *              body sinks and tilts. One tear, because a sad face without one
+ *              reads as merely disappointed.
+ *   confused   Confusing. Head cocked, one brow up, a wobble of a mouth, and
+ *              the left hand scratching the top of his head. A drawn question
+ *              mark floats up, the way the thought cloud does for thinking.
+ *   idea       An idea. A lightbulb, a finger in the air, and a small hop.
+ *   bored      Waiting. Half-lidded eyes that wander, a flat mouth, and the
+ *              impatient bounce James asked for - two quick ones and a rest.
+ *   yawn       The stretch. Arms up and out, eyes shut, mouth wide. Plays once
+ *              on the way from bored to reaching for his phone.
+ *   nod        A small bow of thanks - for when somebody has just told us
+ *              something is wrong and a celebration would be the wrong note.
+ *
+ * Each of these has a face that works with NO arms and no prop, tested at
+ * 40px. The arms and the props are the second reading, not the first.
  */
 
 export type Mood =
@@ -60,7 +87,13 @@ export type Mood =
   | "surprised"
   | "texting"
   | "flex"
-  | "asleep";
+  | "asleep"
+  | "sad"
+  | "confused"
+  | "idea"
+  | "bored"
+  | "yawn"
+  | "nod";
 
 /* ------------------------------------------------------------- geometry -- */
 const BODY = { cx: 60, cy: 54, r: 35.4 };
@@ -132,6 +165,22 @@ const POSE: Record<Mood, { ls: number; le: number; rs: number; re: number }> = {
      Shown while the new-starter tour is pointing at him: James wanted him
      visibly pleased with himself rather than standing there being described. */
   flex: { ls: 24, le: 88, rs: -24, re: -88 },
+  /* Hanging lower than idle, forearms turned slightly in. Not as far as
+     asleep - he is still holding himself up, just not with any enthusiasm. */
+  sad: { ls: -26, le: -10, rs: 26, re: 10 },
+  /* Left hand up to the crown to scratch it - the same reach as thinking,
+     with the forearm carried a little further so the hand sits on the head
+     rather than beside it. The scratch itself is a keyframe on the forearm. */
+  confused: { ls: 70, le: 52, rs: 14, re: -8 },
+  /* One finger in the air. Straight up, elbow nearly locked, so the hand is
+     the highest thing in the drawing and the bulb sits above it. */
+  idea: { ls: 96, le: 8, rs: 4, re: -2 },
+  /* Slack and out - idle with the shoulders dropped a touch. */
+  bored: { ls: -14, le: 2, rs: 14, re: -2 },
+  /* The stretch: both up and out at a diagonal, elbows open, wide. */
+  yawn: { ls: 72, le: 10, rs: -72, re: -10 },
+  /* Brought a little forward and down, the way arms go when a body bows. */
+  nod: { ls: -12, le: 14, rs: 12, re: -14 },
 };
 
 /**
@@ -227,15 +276,46 @@ function Brows({ mood }: { mood: Mood }) {
       </g>
     );
   }
+  /* Inner ends UP. The sad brow is the sorry brow with both sides doing the
+     worried half — outer ends low, meeting high over the nose. */
+  if (mood === "sad") {
+    return (
+      <g {...c}>
+        <path d="M46.2 42.4q3.6 -3.6 7.4 -1.4" />
+        <path d="M66.4 41q3.8 -2.2 7.4 1.4" />
+      </g>
+    );
+  }
+  /* One hoisted, one pressed flat. Thinking's asymmetry is a question to
+     himself; this is a question to the page, and it has to be wider. */
+  if (mood === "confused") {
+    return (
+      <g {...c}>
+        <path d="M46.4 41.6q3.4 0.6 6.8 -0.2" />
+        <path d="M66.4 37.4q3.6 -2.8 7.2 -0.4" />
+      </g>
+    );
+  }
+  /* Both up, as for surprised, but a fraction lower: alert, not startled. */
+  if (mood === "idea") {
+    return (
+      <g {...c}>
+        <path d="M46.6 39q3.6 -2.2 7 0" />
+        <path d="M66.4 39q3.6 -2.2 7 0" />
+      </g>
+    );
+  }
   return null;
 }
 
 /* ---------------------------------------------------------------- eyes -- */
-function Eyes({ mood, blink, dx, dy }: { mood: Mood; blink: boolean; dx: number; dy: number }) {
+function Eyes({
+  mood, blink, dx, dy, still,
+}: { mood: Mood; blink: boolean; dx: number; dy: number; still: boolean }) {
   const w = "var(--panel, #fff)";
   const lx = 50, rx = 70, y = 48;
 
-  if (blink || mood === "asleep") {
+  if (blink || mood === "asleep" || mood === "yawn") {
     /* Curving DOWN at the ends, like a lid closing over a ball. A flat line or
        an upward curve both read as a squint. */
     return (
@@ -246,8 +326,9 @@ function Eyes({ mood, blink, dx, dy }: { mood: Mood; blink: boolean; dx: number;
     );
   }
   /* Flex borrows the happy arch: eyes squeezed shut with the effort, which is
-     the difference between showing off and simply standing with arms raised. */
-  if (mood === "happy" || mood === "flex") {
+     the difference between showing off and simply standing with arms raised.
+     The nod has them too - a bow with open eyes is a stare. */
+  if (mood === "happy" || mood === "flex" || mood === "nod") {
     return (
       <g stroke={w} strokeWidth="2.2" strokeLinecap="round" fill="none">
         <path d={`M${lx - 3.6} ${y + 1} q3.6 -5 7.2 0`} />
@@ -272,7 +353,47 @@ function Eyes({ mood, blink, dx, dy }: { mood: Mood; blink: boolean; dx: number;
       </g>
     );
   }
-  const big = mood === "surprised";
+  /* Smaller, and looking down and slightly in. Sorry's tilt is the outer
+     corners dropping; sad keeps the eyes level and simply lowers them. */
+  if (mood === "sad") {
+    return (
+      <g fill={w} transform="translate(0 2.2)">
+        <ellipse cx={lx + 0.6} cy={y} rx="2.9" ry="4.2" />
+        <ellipse cx={rx - 0.6} cy={y} rx="2.9" ry="4.2" />
+      </g>
+    );
+  }
+  /* One eye wide under the raised brow, the other narrowed under the flat
+     one. It is the mismatch that does the work: two wide eyes are surprise,
+     two narrow ones are suspicion. */
+  if (mood === "confused") {
+    return (
+      <g fill={w} transform={`translate(${dx} ${dy})`}>
+        <ellipse cx={lx} cy={y + 0.8} rx="3.2" ry="3.4" />
+        <ellipse cx={rx} cy={y - 0.6} rx="3.8" ry="5.6" />
+      </g>
+    );
+  }
+  /* Half-lidded. The lid is a slab of body colour laid over the top of each
+     eye rather than a shorter ellipse, so the eye keeps its round bottom edge
+     and reads as an eye with a lid on it, not as a smaller eye. The whole
+     group wanders sideways on a keyframe: the eyes of somebody with nothing
+     to look at. */
+  if (mood === "bored") {
+    return (
+      <g className={still ? undefined : "nib-drift"}>
+        <g fill={w}>
+          <ellipse cx={lx} cy={y} rx="3.4" ry="5.2" />
+          <ellipse cx={rx} cy={y} rx="3.4" ry="5.2" />
+        </g>
+        <g fill="currentColor">
+          <rect x={lx - 4} y={y - 6} width="8" height="6.4" />
+          <rect x={rx - 4} y={y - 6} width="8" height="6.4" />
+        </g>
+      </g>
+    );
+  }
+  const big = mood === "surprised" || mood === "idea";
   return (
     <g fill={w} transform={`translate(${dx} ${dy})`}>
       <ellipse cx={lx} cy={y} rx={big ? 4.4 : 3.4} ry={big ? 6.1 : 5.2} />
@@ -291,6 +412,21 @@ function Mouth({ mood, still }: { mood: Mood; still: boolean }) {
   if (mood === "asleep") return <ellipse cx="59" cy="63" rx="2" ry="2.8" stroke={w} strokeWidth="1.7" fill="none" />;
   if (mood === "sorry") return <path d="M55 62q2.5 -2.2 5 0t5 0" {...c} />;
   if (mood === "texting") return <path d="M57 63h6" {...c} />;
+  /* The rest smile, turned over. Same width, same depth: the whole difference
+     between his default face and his sad one is which way this curves, which
+     is as it should be — it means the two read as the same person. */
+  if (mood === "sad") return <path d="M55.5 64.6C57.4 60.8 62.6 60.8 64.5 64.6" {...c} />;
+  /* A short wobble, set off-centre and slightly uphill. Sorry's wave is
+     symmetrical, which reads as a wince; this one is lopsided and reads as
+     "hm?". */
+  if (mood === "confused") return <path d="M54.5 63.2q2.2 -2.8 4.4 -0.6t4.4 -1.6" {...c} />;
+  /* Flat. Bored is the one mood with no expression on the mouth at all - the
+     eyes and the bouncing say everything, and any curve here would tip it
+     toward a feeling he does not have. */
+  if (mood === "bored") return <path d="M56.5 62.6h7" {...c} />;
+  /* Wide open: the biggest oval on the face, and the only time it is. */
+  if (mood === "yawn") return <ellipse cx="60" cy="63.4" rx="3.3" ry="4.4" fill={w} />;
+  if (mood === "idea") return <path d="M54 60.5C56.4 66.8 63.6 66.8 66 60.5" {...c} />;
   if (mood === "talking") {
     return (
       <ellipse
@@ -376,7 +512,13 @@ export default function AssistantCharacter({
   }, [still, mood]);
 
   useEffect(() => {
-    if (!track || still || mood === "thinking" || mood === "asleep" || mood === "texting") return;
+    /* No tracking while the eyes are shut, lowered, or wandering on their own
+       - a sad face that follows the cursor round the screen is not sad. */
+    if (
+      !track || still ||
+      mood === "thinking" || mood === "asleep" || mood === "texting" ||
+      mood === "sad" || mood === "bored" || mood === "yawn"
+    ) return;
     const onMove = (e: PointerEvent) => {
       const el = svg.current;
       if (!el) return;
@@ -393,7 +535,7 @@ export default function AssistantCharacter({
 
   const eyeShift =
     mood === "thinking" && !still ? { x: 2.2, y: -2.6 }
-    : mood === "asleep" || mood === "texting" ? { x: 0, y: 0 }
+    : mood === "asleep" || mood === "texting" || mood === "sad" || mood === "bored" || mood === "yawn" ? { x: 0, y: 0 }
     : look;
 
   const a = (n?: string) => (still ? undefined : n);
@@ -417,11 +559,25 @@ export default function AssistantCharacter({
     : mood === "wave" ? (loop ? "nib-lean-loop" : "nib-lean")
     : mood === "talking" ? "nib-hover-fast"
     : mood === "asleep" ? "nib-sleep"
+    /* Sinks and tilts, and stays there. The hover is deliberately lost: a
+       sad thing does not bob. */
+    : mood === "sad" ? "nib-droop"
+    /* Head cocked to one side and held, with a small rock as if weighing it. */
+    : mood === "confused" ? "nib-tilt"
+    /* The impatient bounce: two quick ones, then a rest, on a loop. */
+    : mood === "bored" ? "nib-bored"
+    /* Up on the toes and held, then settle. */
+    : mood === "yawn" ? "nib-stretch"
+    /* A dip forward, twice. */
+    : mood === "nod" ? "nib-bow"
+    /* One small hop - the bulb coming on lifts him. */
+    : mood === "idea" ? "nib-pop"
     : "nib-hover";
   const shadowAnim =
-    mood === "happy" ? "nib-shadow-hop"
+    mood === "happy" || mood === "idea" ? "nib-shadow-hop"
     : mood === "talking" ? "nib-shadow-fast"
-    : mood === "asleep" ? "nib-shadow-sleep"
+    : mood === "asleep" || mood === "sad" ? "nib-shadow-sleep"
+    : mood === "bored" ? "nib-shadow-bored"
     : "nib-shadow";
 
   return (
@@ -435,6 +591,9 @@ export default function AssistantCharacter({
       aria-label={
         mood === "thinking" ? "Steve, thinking"
         : mood === "asleep" ? "Steve, idle"
+        : mood === "sad" ? "Steve, sorry to hear it"
+        : mood === "confused" ? "Steve, puzzled"
+        : mood === "bored" || mood === "yawn" ? "Steve, waiting"
         : "Steve"
       }
       className={className}
@@ -520,7 +679,10 @@ export default function AssistantCharacter({
           <g mask={`url(#${maskId})`}>
             <Arm a={L} pose={{ s: pose.ls, e: pose.le }} ease={ease}
                  waveClass={a(mood === "wave" ? "nib-wave" : mood === "surprised" ? "nib-jelly-l" : undefined)}
-                 jellyClass={a(mood === "surprised" ? "nib-jelly-f" : undefined)} />
+                 /* The head-scratch is the forearm alone, rocking on the elbow
+                    while the upper arm holds still - which is how a real one
+                    goes; the shoulder does not join in. */
+                 jellyClass={a(mood === "surprised" ? "nib-jelly-f" : mood === "confused" ? "nib-scratch" : undefined)} />
             <Arm a={R} pose={{ s: pose.rs, e: pose.re }} ease={ease} flip
                  waveClass={a(mood === "surprised" ? "nib-jelly-r" : undefined)}
                  jellyClass={a(mood === "surprised" ? "nib-jelly-f" : undefined)} />
@@ -564,7 +726,19 @@ export default function AssistantCharacter({
         <circle cx={BODY.cx} cy={BODY.cy} r={RING} stroke="currentColor" strokeWidth="1.7" fill="none" />
 
         <Brows mood={mood} />
-        <Eyes mood={mood} blink={blink} dx={eyeShift.x} dy={eyeShift.y} />
+        <Eyes mood={mood} blink={blink} dx={eyeShift.x} dy={eyeShift.y} still={still} />
+
+        {/* One tear, from the left eye, falling and fading on a loop. A single
+            drop is sadness; two is a cartoon of it. It sits INSIDE the body
+            group so it droops with him. */}
+        {mood === "sad" && !still && (
+          <path
+            d="M50 54.5c-1.6 2.6-2.2 3.8-2.2 5a2.2 2.2 0 0 0 4.4 0c0-1.2-.6-2.4-2.2-5Z"
+            fill="var(--panel, #fff)"
+            opacity="0.8"
+            className="nib-tear"
+          />
+        )}
         <Mouth mood={mood} still={still} />
 
         {/* Texting: the phone, then the arms over the top of everything, with a
@@ -602,6 +776,34 @@ export default function AssistantCharacter({
           className={a("nib-sparkle")}
           style={{ transformOrigin: "18px 21.6px" }}
         />
+      )}
+
+      {/* A drawn question mark, floating up beside him the way the thought
+          cloud does. Drawn as a stroke rather than set as type so it matches
+          the weight of everything else in the picture. */}
+      {mood === "confused" && (
+        <g className={a("nib-dots")} stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none">
+          <path d="M97 15c0-4.2 3.2-6.6 6.6-6.6s6.4 2.2 6.4 5.8c0 4.6-6.2 4.8-6.2 10.2" />
+          <circle cx="103.8" cy="30.4" r="1.3" fill="currentColor" />
+        </g>
+      )}
+
+      {/* The lightbulb, over the raised hand. A round bulb on a short stem with
+          three rays, and it pulses: a bulb that has just come ON, not one that
+          was already lit. The accent colour is borrowed from the sparkle so
+          the two props read as belonging to the same character. */}
+      {/* Sits ABOVE the raised hand, which ends at about (19, 28) - the bulb
+          used to be centred on it, and a bulb held in the fist is a torch. */}
+      {mood === "idea" && (
+        <g className={a("nib-glow")} style={{ transformOrigin: "21px 12px" }}>
+          <circle cx="21" cy="10" r="6" fill="var(--accent, #7f1d1d)" opacity="0.9" />
+          <rect x="18.2" y="15.4" width="5.6" height="3.4" rx="1" fill="currentColor" />
+          <g stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+            <path d="M21 1.5v-3.5" />
+            <path d="M12.2 4.8l-2.8-2.2" />
+            <path d="M29.8 4.8l2.8-2.2" />
+          </g>
+        </g>
       )}
 
       {/* Airborne. Streaks under the body sell the height far better than more
@@ -758,12 +960,110 @@ export default function AssistantCharacter({
           0%, 100% { opacity: 0.4; transform: translateY(0); }
           50%      { opacity: 1;   transform: translateY(-2.5px); }
         }
+
+        /* ---- the second batch ---- */
+
+        /* Sad: sink and lean, and stay sunk. Fill-forwards rather than a loop
+           because the hover is what he does when he is fine. */
+        .nib-droop { animation: nib-droop 0.8s ease-out forwards; }
+        @keyframes nib-droop {
+          0%   { transform: translateY(0) rotate(0deg); }
+          100% { transform: translateY(3px) rotate(-3deg) scale(1.01, 0.99); }
+        }
+        /* The tear: slides down the cheek and thins out, then another. The
+           pause at the end of each cycle is the gap between tears. */
+        .nib-tear { animation: nib-tear 2.2s ease-in infinite; }
+        @keyframes nib-tear {
+          0%   { opacity: 0;   transform: translateY(0); }
+          15%  { opacity: 0.8; transform: translateY(1px); }
+          70%  { opacity: 0.7; transform: translateY(9px); }
+          82%, 100% { opacity: 0; transform: translateY(11px); }
+        }
+        /* Confused: cock the head and hold it there, with one slow rock while
+           he weighs it up. */
+        .nib-tilt { animation: nib-tilt 1.6s ease-in-out forwards; }
+        @keyframes nib-tilt {
+          0%   { transform: rotate(0deg); }
+          30%  { transform: rotate(-9deg); }
+          58%  { transform: rotate(-5.5deg); }
+          80%  { transform: rotate(-8.5deg); }
+          100% { transform: rotate(-8deg); }
+        }
+        /* The scratch: the forearm alone, rocking on the elbow. Absolute
+           angles, like the wave, so it swings around the raised pose. */
+        .nib-scratch { animation: nib-scratch 0.36s ease-in-out infinite; }
+        @keyframes nib-scratch {
+          0%, 100% { transform: rotate(46deg); }
+          50%      { transform: rotate(60deg); }
+        }
+        /* Bored: two quick impatient bounces, then a rest that lasts longer
+           than the bouncing did. The rest is the point - continuous bouncing
+           is excitement, and this is the opposite. */
+        .nib-bored { animation: nib-bored 2.4s cubic-bezier(.3,1.2,.5,1) infinite; }
+        @keyframes nib-bored {
+          0%   { transform: translateY(0) scale(1, 1); }
+          8%   { transform: translateY(1.5px) scale(1.05, 0.95); }
+          18%  { transform: translateY(-6px) scale(0.97, 1.03); }
+          28%  { transform: translateY(0) scale(1.04, 0.96); }
+          36%  { transform: translateY(-4px) scale(0.98, 1.02); }
+          45%  { transform: translateY(0) scale(1, 1); }
+          100% { transform: translateY(0) scale(1, 1); }
+        }
+        .nib-shadow-bored { animation: nib-shadow-bored 2.4s cubic-bezier(.3,1.2,.5,1) infinite; }
+        @keyframes nib-shadow-bored {
+          0%   { transform: scaleX(1);    opacity: 1; }
+          8%   { transform: scaleX(1.08); opacity: 1; }
+          18%  { transform: scaleX(0.8);  opacity: 0.6; }
+          28%  { transform: scaleX(1.08); opacity: 1; }
+          36%  { transform: scaleX(0.86); opacity: 0.7; }
+          45%, 100% { transform: scaleX(1); opacity: 1; }
+        }
+        /* The eyes wandering while bored: over to one side, hold, over to the
+           other, hold. The holds are what make it a wander and not a twitch. */
+        .nib-drift { animation: nib-drift 3.4s ease-in-out infinite; }
+        @keyframes nib-drift {
+          0%, 100% { transform: translateX(0); }
+          22%, 40% { transform: translateX(-2.6px); }
+          62%, 82% { transform: translateX(2.6px); }
+        }
+        /* The yawn: up onto the toes, taller and narrower, held, then settle. */
+        .nib-stretch { animation: nib-stretch 2.4s ease-in-out; }
+        @keyframes nib-stretch {
+          0%   { transform: translateY(0) scale(1, 1); }
+          30%  { transform: translateY(-6px) scale(0.955, 1.08); }
+          68%  { transform: translateY(-6px) scale(0.955, 1.08); }
+          100% { transform: translateY(0) scale(1, 1); }
+        }
+        /* The nod: a dip forward and down, twice. Rotates about the base, so
+           it is the top of him that moves - which is what a bow is. */
+        .nib-bow { animation: nib-bow 0.95s ease-in-out 2; }
+        @keyframes nib-bow {
+          0%, 100% { transform: translateY(0) rotate(0deg) scale(1, 1); }
+          40%      { transform: translateY(4px) rotate(5deg) scale(1.04, 0.95); }
+        }
+        /* The idea: one hop, sharper and shorter than the celebration hop. */
+        .nib-pop { animation: nib-pop 0.8s cubic-bezier(.3,1.3,.5,1); }
+        @keyframes nib-pop {
+          0%   { transform: translateY(0) scale(1, 1); }
+          20%  { transform: translateY(1.5px) scale(1.06, 0.94); }
+          50%  { transform: translateY(-9px) scale(0.96, 1.05); }
+          78%  { transform: translateY(0) scale(1.04, 0.97); }
+          100% { transform: translateY(0) scale(1, 1); }
+        }
+        .nib-glow { animation: nib-glow 1.1s ease-in-out infinite; }
+        @keyframes nib-glow {
+          0%, 100% { transform: scale(0.92); opacity: 0.7; }
+          50%      { transform: scale(1.06); opacity: 1; }
+        }
+
         @media (prefers-reduced-motion: reduce) {
           .nib-hover, .nib-hover-fast, .nib-hop, .nib-lean, .nib-startle, .nib-sleep,
           .nib-flex, .nib-flex-loop, .nib-lean-loop,
           .nib-shadow, .nib-shadow-fast, .nib-shadow-hop, .nib-shadow-sleep,
           .nib-wave, .nib-talk, .nib-sparkle, .nib-ticks, .nib-dots,
-          .nib-jelly-l, .nib-jelly-r, .nib-jelly-f, .nib-scroll { animation: none; }
+          .nib-jelly-l, .nib-jelly-r, .nib-jelly-f, .nib-scroll,
+          .nib-droop, .nib-tear, .nib-tilt, .nib-scratch, .nib-bored, .nib-shadow-bored,
+          .nib-drift, .nib-stretch, .nib-bow, .nib-pop, .nib-glow { animation: none; }
         }
       `}</style>
     </svg>
