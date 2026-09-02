@@ -265,9 +265,9 @@ export function ownerProvider(): ProviderStatus {
   return {
     connected: Boolean(provider && process.env.LAND_REGISTRY_API_KEY),
     name: provider || null,
-    cost: "About £3 a title through the trade API, £7 through the public search.",
+    cost: "£7 a title, whichever route: HM Land Registry raised the digital official-copy fee from £3 to £7 in December 2024.",
     needs: [
-      "A Land Registry route: an HMLR Business Gateway account, or a reseller that sells title registers per call.",
+      "A Land Registry route: an HMLR Business e-services account with Business Gateway API access, or a reseller that sells title registers per call.",
       "LAND_REGISTRY_PROVIDER and LAND_REGISTRY_API_KEY on Railway.",
       "The legitimate interests note signed off, because an owner's name is personal data.",
     ],

@@ -91,8 +91,8 @@ type, with the top ten by score.
 - *To the property* addressed "To the Owner": no personal data, but it lands with the
   tenant or an empty house, so it only works for self-managing landlords who live nearby
   or check post. Cheap, fine for a first test.
-- *To the owner's correspondence address* from the Land Registry title register (about
-  £3 through the HMLR Business Gateway API, £7 through the public search). This is how
+- *To the owner's correspondence address* from the Land Registry title register (£7 a
+  title since December 2024, by any route). This is how
   Spectre reaches absentee landlords. It is personal data, so it waits for the GDPR step
   below and is bought per prospect only when a letter is actually queued.
 
@@ -181,7 +181,7 @@ Both create a prospect in Radar with source `inbound` and a lead in REX.
 |---|---|
 | Homesearch sweep for the patch | already paid; a few dozen calls a day |
 | EPC, HMO registers, CCOD/OCOD, Companies House | free |
-| Title register lookup | about £3 to £7 per prospect, only when a letter is queued |
+| Title register lookup | £7 per prospect, only when a letter is queued |
 | Letters | about £1 each through a print API, stamps if posted in-house |
 | Spectre, for comparison | subscription per postcode sector; trial only as a benchmark |
 
