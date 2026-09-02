@@ -1195,6 +1195,9 @@ CREATE TABLE IF NOT EXISTS os_radar_prospects (
 );
 CREATE INDEX IF NOT EXISTS os_radar_prospects_score_idx
   ON os_radar_prospects (score DESC, last_signal_at DESC);
+-- Where it is, for the map. From the feed; 1,561 of the first 1,583 flagged had one.
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS lon DOUBLE PRECISION;
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

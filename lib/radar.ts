@@ -134,6 +134,8 @@ interface Lite extends Record<string, unknown> {
   status: string;
   listed_on: Date | string | null;
   reduced_at: Date | string | null;
+  lat: number | null;
+  lon: number | null;
   first_seen: Date | string;
   last_seen: Date | string;
   let_agreed_at: Date | string | null;
@@ -266,7 +268,7 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
 
   const rows = await q<Lite>(
     `SELECT listing_key, property_key, uprn, address, street, postcode, sector, district,
-            beds, property_type, rent, agent, status, listed_on, reduced_at,
+            beds, property_type, rent, agent, status, listed_on, reduced_at, lat, lon,
             first_seen, last_seen, let_agreed_at, gone_at
        FROM os_listing_capture
       WHERE district = ANY($1::text[]) AND property_key IS NOT NULL`,
@@ -313,8 +315,8 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
       `INSERT INTO os_radar_prospects
          (property_key, listing_key, uprn, address, street, postcode, sector, district,
           beds, property_type, rent, agent, status, listed_on, signals, score,
-          last_signal_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16, NOW(), NOW())
+          lat, lon, last_signal_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$17,$18, NOW(), NOW())
        ON CONFLICT (property_key) DO UPDATE SET
          listing_key   = EXCLUDED.listing_key,
          uprn          = COALESCE(EXCLUDED.uprn, os_radar_prospects.uprn),
@@ -331,6 +333,8 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
          listed_on     = EXCLUDED.listed_on,
          signals       = EXCLUDED.signals,
          score         = EXCLUDED.score,
+         lat           = COALESCE(EXCLUDED.lat, os_radar_prospects.lat),
+         lon           = COALESCE(EXCLUDED.lon, os_radar_prospects.lon),
          /* Moves only when the signals actually changed, so "new today" and
             the sort by recency mean something. */
          last_signal_at = CASE
@@ -354,6 +358,8 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
         ymd(cur.listed_on),
         JSON.stringify(signals),
         score,
+        cur.lat,
+        cur.lon,
       ]
     );
   }
@@ -386,6 +392,8 @@ interface ProspectRow extends Record<string, unknown> {
   agent: string | null;
   status: string | null;
   listed_on: Date | string | null;
+  lat: number | null;
+  lon: number | null;
   signals: Signal[];
   score: number;
   stage: string;
@@ -412,6 +420,8 @@ function toProspect(r: ProspectRow): Prospect {
     agent: r.agent,
     status: r.status,
     listed_on: ymd(r.listed_on),
+    lat: r.lat,
+    lon: r.lon,
     signals: Array.isArray(r.signals) ? r.signals : [],
     score: r.score,
     stage: isStage(r.stage) ? r.stage : "new",

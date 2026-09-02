@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import NewLeadPanel from "@/components/NewLeadPanel";
+import RadarMap from "@/components/RadarMap";
 import { PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
 import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
@@ -156,6 +157,11 @@ export default function RadarBoard() {
   const [fDistrict, setFDistrict] = useState<string | null>(null);
   const [fAgent, setFAgent] = useState<string | null>(null);
   const [fStage, setFStage] = useState<string | null>(null);
+  /* The map is the front door; the list is a view of the same book. */
+  const [view, setView] = useState<"map" | "list">("map");
+  /* What the map currently holds, and the area somebody asked to list. */
+  const [inView, setInView] = useState<string[]>([]);
+  const [area, setArea] = useState<Set<string> | null>(null);
 
   useEffect(() => {
     let gone = false;
@@ -196,15 +202,22 @@ export default function RadarBoard() {
       if (fSignal && !r.signals.some((s) => s.key === fSignal)) return false;
       if (fDistrict && r.district !== fDistrict) return false;
       if (fAgent && r.agent !== fAgent) return false;
+      if (area && !area.has(r.property_key)) return false;
       if (needle) {
         const hay = `${r.address} ${r.street ?? ""} ${r.postcode} ${r.agent ?? ""} ${r.notes}`.toLowerCase();
         if (!hay.includes(needle)) return false;
       }
       return true;
     });
-  }, [rows, q, fSignal, fDistrict, fAgent, fStage]);
+  }, [rows, q, fSignal, fDistrict, fAgent, fStage, area]);
 
-  useEffect(() => { setPage(0); }, [q, fSignal, fDistrict, fAgent, fStage, perPage]);
+  useEffect(() => { setPage(0); }, [q, fSignal, fDistrict, fAgent, fStage, perPage, area]);
+
+  /* The map reports on every pan. Only re-render when the set changed. */
+  const inViewSig = inView.join("|");
+  const onInView = (keys: string[]) => {
+    if (keys.join("|") !== inViewSig) setInView(keys);
+  };
 
   const open = book.find((r) => r.id === openId) ?? rows.find((r) => r.id === openId) ?? null;
 
@@ -298,7 +311,31 @@ export default function RadarBoard() {
               onChange={setFStage}
               render={(s) => STAGE_LABEL[s as Stage]}
             />
-            <ColumnCustomiser cols={cols} />
+            {area && (
+              <button
+                type="button"
+                onClick={() => setArea(null)}
+                title="Clear the map area"
+                className="flex items-center gap-2 whitespace-nowrap rounded-full border border-accent-dark bg-accent-soft/50 px-3.5 py-2 text-[12px] font-semibold text-accent-dark"
+              >
+                Map area · {area.size} <span className="text-[10px]">✕</span>
+              </button>
+            )}
+            <span className="ml-auto flex items-center gap-1 rounded-full border border-line/80 p-0.5">
+              {(["map", "list"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setView(v)}
+                  className={`rounded-full px-3.5 py-1.5 text-[12px] transition-colors ${
+                    view === v ? "bg-ink text-page" : "text-muted hover:text-ink"
+                  }`}
+                >
+                  {v === "map" ? "Map" : "List"}
+                </button>
+              ))}
+            </span>
+            {view === "list" && <ColumnCustomiser cols={cols} />}
           </div>
 
           {loading ? (
@@ -316,6 +353,28 @@ export default function RadarBoard() {
               Nothing flagged yet. The first sweep of the patch fills this in; signals that need history, like a rent
               cut or a switched agent, arrive over the following weeks.
             </div>
+          ) : view === "map" ? (
+            <>
+              <div className="mt-4 h-[calc(100vh-380px)] min-h-[420px]">
+                <RadarMap prospects={book} openId={openId} onOpen={setOpenId} onInView={onInView} />
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[11.5px] text-muted">
+                <span>
+                  {book.length.toLocaleString("en-GB")} properties match the filters · {inView.length.toLocaleString("en-GB")} in view
+                </span>
+                <PressButton
+                  onClick={() => {
+                    setArea(new Set(inView));
+                    setView("list");
+                  }}
+                  disabled={inView.length === 0}
+                  className="rounded-full border border-line/80 px-4 py-1.5 text-[11.5px] text-ink disabled:opacity-40"
+                  title="Open the properties inside the map as a list"
+                >
+                  List these {inView.length ? `(${inView.length.toLocaleString("en-GB")})` : ""}
+                </PressButton>
+              </div>
+            </>
           ) : (
             <>
               <div className="mt-4">

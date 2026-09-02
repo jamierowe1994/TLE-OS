@@ -118,6 +118,8 @@ export interface Prospect {
   agent: string | null;
   status: string | null;
   listed_on: string | null;
+  lat: number | null;
+  lon: number | null;
   signals: Signal[];
   score: number;
   stage: Stage;
