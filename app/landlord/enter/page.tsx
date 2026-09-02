@@ -3,12 +3,11 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-
-const RED = "#e31f36";
+import FindingData from "@/components/business/FindingData";
 
 /**
  * Where the link lands. The token is spent on arrival, the cookie is set,
- * and they are sent on: to the welcome the first time, to their properties
+ * and they are sent on: to the welcome the first time, to their property
  * after that. A dead link says so and offers the sign-in page, since that
  * is the only cure.
  */
@@ -40,25 +39,22 @@ function Enter() {
   }, [params, router]);
 
   return (
-    <div className="mx-auto max-w-md py-20 text-center">
+    <div className="mx-auto max-w-md py-24 text-center">
       {failed ? (
         <>
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: RED }}>
-            That link didn&rsquo;t work
-          </p>
-          <h1 className="mt-2 text-[22px] font-bold leading-tight">{failed}</h1>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">That link didn&rsquo;t work</p>
+          <h1 className="mt-2 text-[24px] leading-tight">{failed}</h1>
           <Link
             href="/landlord/sign-in"
-            className="mt-6 inline-block rounded-lg px-6 py-3 text-[13.5px] font-bold text-white"
-            style={{ backgroundColor: RED }}
+            className="mt-6 inline-block rounded-xl bg-accent-dark px-6 py-3 text-[13.5px] font-semibold text-white"
           >
             Get a new link
           </Link>
         </>
       ) : (
         <>
-          <h1 className="text-[22px] font-bold leading-tight">Opening your property file…</h1>
-          <p className="mt-2 text-[13px] text-black/50">One moment.</p>
+          <h1 className="text-[24px] leading-tight">Opening your property file</h1>
+          <p className="mt-3 text-[13px]"><FindingData label="One moment" /></p>
         </>
       )}
     </div>
@@ -67,7 +63,7 @@ function Enter() {
 
 export default function EnterPage() {
   return (
-    <Suspense fallback={<div className="py-20 text-center text-[13px] text-black/50">One moment.</div>}>
+    <Suspense fallback={<div className="py-24 text-center text-[13px] text-muted">One moment.</div>}>
       <Enter />
     </Suspense>
   );

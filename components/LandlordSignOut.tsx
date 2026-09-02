@@ -17,7 +17,7 @@ export default function LandlordSignOut() {
         router.push("/landlord/sign-in");
         router.refresh();
       }}
-      className="text-[12.5px] font-medium text-black/60 transition-colors hover:text-black disabled:opacity-50"
+      className="rounded-full border border-line/80 px-3.5 py-1.5 text-[12.5px] text-muted transition-colors hover:border-ink/40 hover:text-ink disabled:opacity-50"
     >
       Sign out
     </button>
