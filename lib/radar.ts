@@ -562,6 +562,10 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
      here, and a static import each way is a cycle. */
   const { matchCompanyOwners } = await import("@/lib/company-owners");
   await matchCompanyOwners();
+  const { matchHmoLicences } = await import("@/lib/hmo");
+  await matchHmoLicences();
+  const { matchEpc } = await import("@/lib/epc");
+  await matchEpc();
 
   return { active: active.length, quiet: quiet.length, properties: groups.size };
 }
@@ -591,6 +595,10 @@ interface ProspectRow extends Record<string, unknown> {
   next_anniversary: Date | string | null;
   tenancy_basis: string | null;
   hand_reason: string | null;
+  hmo_licence_ref: string | null;
+  hmo_expires_on: Date | string | null;
+  epc_band: string | null;
+  epc_registered_on: Date | string | null;
   signals: Signal[];
   score: number;
   stage: string;
@@ -653,6 +661,10 @@ function toProspect(r: ProspectRow): Prospect {
     next_anniversary: ymd(r.next_anniversary),
     tenancy_basis: r.tenancy_basis === "observed" || r.tenancy_basis === "estimated" ? r.tenancy_basis : null,
     hand_reason: r.hand_reason ?? null,
+    hmo_licence_ref: r.hmo_licence_ref ?? null,
+    hmo_expires_on: ymd(r.hmo_expires_on),
+    epc_band: r.epc_band ?? null,
+    epc_registered_on: ymd(r.epc_registered_on),
     signals: Array.isArray(r.signals) ? r.signals : [],
     score: r.score,
     stage: isStage(r.stage) ? r.stage : "new",

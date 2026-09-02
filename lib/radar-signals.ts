@@ -27,7 +27,10 @@ export type SignalKey =
   | "sale_to_let"
   | "just_bought"
   | "anniversary_due"
-  | "added_by_hand";
+  | "added_by_hand"
+  | "hmo_licence_expiring"
+  | "epc_below_c"
+  | "epc_expiring";
 
 export const SIGNALS: Record<SignalKey, { label: string; weight: number; why: string }> = {
   self_managing: {
@@ -99,6 +102,21 @@ export const SIGNALS: Record<SignalKey, { label: string; weight: number; why: st
     weight: 20,
     why: "A colleague put this on the list themselves: seen on Facebook, a board on the street, a conversation. The reason is on the record.",
   },
+  hmo_licence_expiring: {
+    label: "HMO licence expiring",
+    weight: 20,
+    why: "The council's HMO licence runs out within five months. Renewal is paperwork, inspections and fees; a landlord in that process is open to help running the house.",
+  },
+  epc_below_c: {
+    label: "EPC below C",
+    weight: 10,
+    why: "Every private rental must reach EPC C by October 2030. The work is the landlord's to organise, and most do not know where to start.",
+  },
+  epc_expiring: {
+    label: "EPC expiring",
+    weight: 15,
+    why: "The certificate is in its tenth year. Without a new one the property cannot be re-let, so a decision is coming.",
+  },
 };
 
 export const SIGNAL_ORDER = Object.keys(SIGNALS) as SignalKey[];
@@ -166,6 +184,11 @@ export interface Prospect {
   tenancy_basis: "observed" | "estimated" | null;
   /** Why a colleague added it, when they did. */
   hand_reason: string | null;
+  /** The council HMO licence on this door, if the register has one. */
+  hmo_licence_ref: string | null;
+  hmo_expires_on: string | null;
+  epc_band: string | null;
+  epc_registered_on: string | null;
   agent: string | null;
   status: string | null;
   listed_on: string | null;

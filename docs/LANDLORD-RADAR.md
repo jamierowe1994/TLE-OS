@@ -388,3 +388,30 @@ a person reads the group and types the address, and no scraping happens.
 resolved from free text, dossier read, added with a reason, score 45, still there after a
 rescore; a postcode-only search listed the twelve doors; the board opens filtered to the
 address from the dossier.
+
+---
+
+## HMO registers and EPCs, 3 Sep 2026
+
+**HMO licences, built and live-tested.** `lib/hmo.ts` reads West Northamptonshire's monthly
+public register PDF (the link is read off the council page each run; the file name carries
+the month), parses each licence with one pattern, keeps the watched districts in
+`os_hmo_licences`, and after every rescore stamps the licence and expiry onto any flagged
+door with the same postcode and house number. **HMO licence expiring** (20) fires from 30
+days before to 150 days after today's date against the expiry. Measured on the February
+2026 file: 1,122 licences parsed, 1,120 kept, 50 expiring within 150 days, 89 flagged
+properties matched. The redacted register has no holder name; the Organisation column is
+the issuing body. One row in the file has a date that does not exist (31/04/2024); bad
+dates become null rather than failing the run. pdf-parse is imported from its library
+entry because the package index runs a fixture self-test under Next's bundling. Milton
+Keynes, Bedford and North Northants publish differently and are not read yet.
+`/api/bond/hmo-sync`, `.github/workflows/hmo-registers.yml` on the 6th.
+
+**EPCs, built, waiting on a token.** The old opendatacommunities API closed in May 2026; the
+replacement service needs a GOV.UK One Login account and a bearer token (`EPC_API_TOKEN`).
+`lib/epc.ts` reads `GET /api/domestic/search?council[]=…&page_size=5000` per council into
+`os_epc` (certificate, address, postcode, UPRN, band, registration date) and matches by
+UPRN or postcode and house number. **EPC below C** (10) and **EPC expiring** (15, tenth
+year). Untested against the live API for want of a token; the field names follow the
+documentation read on 3 Sep. `/api/bond/epc-sync`, `.github/workflows/epc-register.yml`
+on the 8th, one council per call ten minutes apart.

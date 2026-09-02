@@ -1,0 +1,33 @@
+# Energy certificates, into Bond, once a month, one council per run.
+#
+# Needs EPC_API_TOKEN on Railway (a GOV.UK One Login account on the register
+# service). Until then the route answers "not set" and this job fails loudly.
+# Each council is a separate read, spaced out for the register's rate limit.
+
+name: EPC register
+
+on:
+  schedule:
+    - cron: "30 6 8 * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read each council
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "CRON_SECRET is not set on this repository - nothing was read."
+            exit 1
+          fi
+          for c in "West Northamptonshire" "North Northamptonshire" "Milton Keynes" "Bedford"; do
+            echo "## $c" >> "$GITHUB_STEP_SUMMARY"
+            curl -sS -f -X POST -H "x-cron-key: ${CRON_SECRET}" --max-time 60 \
+              "https://tle-os.co.uk/api/bond/epc-sync?council=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$c")" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo >> "$GITHUB_STEP_SUMMARY"
+            sleep 600
+          done

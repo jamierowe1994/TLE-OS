@@ -769,6 +769,20 @@ function ProspectPanel({
               <dt className="text-[11px] text-muted">Property id</dt>
               <dd className="text-muted">{prospect.uprn ? `UPRN ${prospect.uprn}` : "No UPRN in the feed"}</dd>
             </div>
+            {prospect.epc_band && (
+              <div>
+                <dt className="text-[11px] text-muted">EPC</dt>
+                <dd>{prospect.epc_band}{prospect.epc_registered_on ? <span className="text-muted"> · {when(prospect.epc_registered_on)}</span> : null}</dd>
+              </div>
+            )}
+            {prospect.hmo_licence_ref && (
+              <div className="col-span-2">
+                <dt className="text-[11px] text-muted">HMO licence</dt>
+                <dd>
+                  {prospect.hmo_licence_ref.split(":")[0]} council · expires {when(prospect.hmo_expires_on)}
+                </dd>
+              </div>
+            )}
           </dl>
 
           <section className="mt-6 rounded-2xl border border-line/80 bg-panel p-4">

@@ -1348,6 +1348,71 @@ ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS hand_reason TEXT;
 ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS hand_added_by TEXT;
 ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS hand_added_at TIMESTAMPTZ;
 
+-- HMO licences from the councils' public registers. West Northamptonshire
+-- publishes a redacted PDF monthly: address, category, occupants, licence
+-- and expiry dates. No holder name in the redacted file; the issuing body is
+-- what the Organisation column carries. A licence about to expire is a
+-- landlord who has to deal with the council in the next few months.
+CREATE TABLE IF NOT EXISTS os_hmo_licences (
+  licence_ref   TEXT PRIMARY KEY,
+  council       TEXT NOT NULL,
+  category      TEXT,
+  households    INTEGER,
+  people        INTEGER,
+  licensed_on   DATE,
+  expires_on    DATE,
+  address       TEXT NOT NULL DEFAULT '',
+  postcode      TEXT NOT NULL DEFAULT '',
+  district      TEXT,
+  house_number  TEXT,
+  organisation  TEXT,
+  seen_in       TEXT,
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_hmo_licences_postcode_idx ON os_hmo_licences (postcode, house_number);
+CREATE INDEX IF NOT EXISTS os_hmo_licences_expiry_idx ON os_hmo_licences (expires_on);
+CREATE TABLE IF NOT EXISTS os_hmo_sync (
+  id          BIGSERIAL PRIMARY KEY,
+  council     TEXT NOT NULL,
+  file_name   TEXT NOT NULL DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'running',
+  rows_kept   INTEGER NOT NULL DEFAULT 0,
+  error       TEXT,
+  started_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finished_at TIMESTAMPTZ
+);
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS hmo_licence_ref TEXT;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS hmo_expires_on DATE;
+
+-- Energy Performance Certificates for the patch, from the government
+-- register (needs a token). The newest certificate per door is what counts.
+CREATE TABLE IF NOT EXISTS os_epc (
+  certificate   TEXT PRIMARY KEY,
+  council       TEXT NOT NULL,
+  address       TEXT NOT NULL DEFAULT '',
+  postcode      TEXT NOT NULL DEFAULT '',
+  district      TEXT,
+  house_number  TEXT,
+  uprn          TEXT,
+  band          TEXT,
+  registered_on DATE NOT NULL,
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_epc_postcode_idx ON os_epc (postcode, house_number, registered_on DESC);
+CREATE INDEX IF NOT EXISTS os_epc_uprn_idx ON os_epc (uprn, registered_on DESC);
+CREATE TABLE IF NOT EXISTS os_epc_sync (
+  id          BIGSERIAL PRIMARY KEY,
+  council     TEXT NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'running',
+  rows_read   INTEGER NOT NULL DEFAULT 0,
+  rows_kept   INTEGER NOT NULL DEFAULT 0,
+  error       TEXT,
+  started_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finished_at TIMESTAMPTZ
+);
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS epc_band TEXT;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS epc_registered_on DATE;
+
 -- One row per Radar run. The run takes minutes now that both feeds are read
 -- and the edge closes a request at 100 seconds, so the route answers at once
 -- and this is where the answer goes.

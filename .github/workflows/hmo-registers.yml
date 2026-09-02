@@ -1,0 +1,27 @@
+# The councils' HMO public registers, into Bond, once a month.
+#
+# West Northamptonshire republishes its PDF around the start of the month;
+# the link is read off the council page each run. See lib/hmo.
+
+name: HMO registers
+
+on:
+  schedule:
+    - cron: "10 6 6 * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read the registers
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "CRON_SECRET is not set on this repository - nothing was read."
+            exit 1
+          fi
+          curl -sS -f -X POST -H "x-cron-key: ${CRON_SECRET}" --max-time 120 \
+            "https://tle-os.co.uk/api/bond/hmo-sync" | tee -a "$GITHUB_STEP_SUMMARY"

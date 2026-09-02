@@ -429,6 +429,10 @@ function Owners() {
 
       <SalesCard />
 
+      <HmoCard />
+
+      <EpcCard />
+
       <ProviderCard p={data.provider} title="Individual owners, from a Land Registry provider" />
 
       <section className="rounded-2xl border border-line/80 bg-panel p-5">
@@ -809,4 +813,80 @@ const SIGNAL_LABEL: Record<string, string> = {
   stale_90: "90+ days", stale_60: "60+ days", stale_30: "30+ days", relisted: "Back on market", reduced: "Rent reduced",
   competitor_new: "New with a competitor", company_owned: "Company owned", let_to_sale: "Let, now for sale", sale_stuck: "Not selling",
   sale_to_let: "Could not sell, now to let", just_bought: "Just bought", anniversary_due: "Anniversary due", added_by_hand: "Added by hand",
+  hmo_licence_expiring: "HMO licence expiring", epc_below_c: "EPC below C", epc_expiring: "EPC expiring",
 };
+
+
+function HmoCard() {
+  const [d, setD] = useState<{ councils: string[]; licencesHeld: number; expiringSoon: number; matched: number; lastRun: { council: string; file_name: string; status: string; rows_kept: number; error: string | null; started_at: string } | null } | null>(null);
+  useEffect(() => {
+    fetch("/api/bond/hmo-sync", { cache: "no-store" })
+      .then(async (r) => {
+        const j = await r.json();
+        if (j.ok) setD(j);
+      })
+      .catch(() => {});
+  }, []);
+  return (
+    <div className="rounded-2xl border border-line/80 bg-panel p-5">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-[14px]">HMO licences, from the councils' public registers</h2>
+        <span className="rounded-full border border-accent-dark px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-accent-dark">Free, no key</span>
+      </div>
+      <p className="mt-2 text-[12.5px] text-muted">
+        Every licensed HMO in the patch with its expiry. A licence running out inside five months is the HMO licence expiring signal. Reading: {d?.councils.join(", ") ?? "..."}. Milton Keynes, Bedford and North Northants publish differently and are not read yet.
+      </p>
+      {d && (
+        <dl className="mt-3 grid grid-cols-2 gap-3 text-[12.5px] sm:grid-cols-4">
+          <div><dt className="text-[11px] text-muted">Licences held</dt><dd className="figures">{d.licencesHeld.toLocaleString("en-GB")}</dd></div>
+          <div><dt className="text-[11px] text-muted">Expiring in 150 days</dt><dd className="figures">{d.expiringSoon.toLocaleString("en-GB")}</dd></div>
+          <div><dt className="text-[11px] text-muted">Flagged properties matched</dt><dd className="figures">{d.matched.toLocaleString("en-GB")}</dd></div>
+          <div><dt className="text-[11px] text-muted">Last read</dt><dd>{d.lastRun ? `${when(d.lastRun.started_at)} · ${d.lastRun.status}` : "never"}</dd></div>
+        </dl>
+      )}
+      {d?.lastRun?.error && <p className="mt-2 text-[12px] text-red-700">{d.lastRun.error}</p>}
+    </div>
+  );
+}
+
+
+function EpcCard() {
+  const [d, setD] = useState<{ connected: boolean; needs: string[]; certificatesHeld: number; belowC: number; expiringSoon: number; matched: number; lastRun: { council: string; status: string; rows_kept: number; error: string | null; started_at: string } | null } | null>(null);
+  useEffect(() => {
+    fetch("/api/bond/epc-sync", { cache: "no-store" })
+      .then(async (r) => {
+        const j = await r.json();
+        if (j.ok) setD(j);
+      })
+      .catch(() => {});
+  }, []);
+  return (
+    <div className={`rounded-2xl border p-5 ${d?.connected ? "border-line/80 bg-panel" : "border-dashed border-line/80"}`}>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-[14px]">Energy certificates, from the government register</h2>
+        <span className={`rounded-full border px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider ${d?.connected ? "border-accent-dark text-accent-dark" : "border-line/70 text-muted"}`}>
+          {d == null ? "Not read" : d.connected ? "Connected" : "Not connected"}
+        </span>
+      </div>
+      <p className="mt-2 text-[12.5px] text-muted">
+        Every certificate in the patch. Below C is a 2030 problem for the landlord; a certificate in its tenth year means no re-let without a new one.
+      </p>
+      {d && (
+        <dl className="mt-3 grid grid-cols-2 gap-3 text-[12.5px] sm:grid-cols-4">
+          <div><dt className="text-[11px] text-muted">Certificates held</dt><dd className="figures">{d.certificatesHeld.toLocaleString("en-GB")}</dd></div>
+          <div><dt className="text-[11px] text-muted">Below C</dt><dd className="figures">{d.belowC.toLocaleString("en-GB")}</dd></div>
+          <div><dt className="text-[11px] text-muted">Flagged properties matched</dt><dd className="figures">{d.matched.toLocaleString("en-GB")}</dd></div>
+          <div><dt className="text-[11px] text-muted">Last read</dt><dd>{d.lastRun ? `${when(d.lastRun.started_at)} · ${d.lastRun.status}` : "never"}</dd></div>
+        </dl>
+      )}
+      {d?.lastRun?.error && <p className="mt-2 text-[12px] text-red-700">{d.lastRun.error}</p>}
+      {d && !d.connected && (
+        <ul className="mt-3 list-disc space-y-1 pl-4 text-[12px] text-muted">
+          {d.needs.map((n) => (
+            <li key={n}>{n}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
