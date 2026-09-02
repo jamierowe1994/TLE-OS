@@ -20,7 +20,8 @@ export type SignalKey =
   | "stale_30"
   | "relisted"
   | "reduced"
-  | "competitor_new";
+  | "competitor_new"
+  | "company_owned";
 
 export const SIGNALS: Record<SignalKey, { label: string; weight: number; why: string }> = {
   self_managing: {
@@ -56,6 +57,11 @@ export const SIGNALS: Record<SignalKey, { label: string; weight: number; why: st
     label: "New with a competitor",
     weight: 5,
     why: "Just listed with someone else. Worth knowing, not worth chasing yet.",
+  },
+  company_owned: {
+    label: "Company owned",
+    weight: 10,
+    why: "The Land Registry names a company as the owner. Contactable at its registered office by post, phone and email, no title to buy.",
   },
 };
 
@@ -134,6 +140,25 @@ export interface Prospect {
   address_confidence: number | null;
   address_candidates: AddressCandidate[] | null;
   resolved_at: string | null;
+  /** The company on the title, when the Land Registry files matched. */
+  company: OwnerCompany | null;
+  /** The owner somebody recorded or a provider returned. */
+  owner: OwnerRecord | null;
+}
+
+export interface OwnerCompany {
+  name: string;
+  number: string | null;
+  address: string;
+  title_number: string | null;
+}
+
+export interface OwnerRecord {
+  name: string;
+  address: string;
+  source: string;
+  title_number: string | null;
+  at: string;
 }
 
 export interface AddressCandidate {

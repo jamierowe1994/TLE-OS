@@ -269,3 +269,30 @@ itself is a stub in `lib/bond.ts` (`requestOwner`) waiting for the provider.
 
 An AI pass over the candidates (photos in the advert against the register's build type,
 floor area, EPC) is the next step for the confidence figure; not built.
+
+---
+
+## Company owners and the manual owner, 2 Sep 2026 (late)
+
+**Company owners, built.** `lib/company-owners.ts` streams HM Land Registry's free monthly
+files (UK companies, `ccod`; overseas companies, `ocod`) and keeps only titles whose postcode
+is in a watched district, into `os_company_titles`. After every Radar refresh
+`matchCompanyOwners()` stamps the company onto any flagged property whose postcode and
+leading house number agree with a title, and appends the `company_owned` signal (+10). The
+panel shows the company, its correspondence address, the title number and a Companies House
+link. Needs `HMLR_DATA_API_KEY` from a free account on use-land-property-data.service.gov.uk
+with both licences accepted; until then the Owners room says so. `/api/bond/company-sync`
+(cron, MACHINE_ROUTES) starts a run and returns; progress is in `os_company_sync`.
+`.github/workflows/company-owners.yml` runs it on the 4th of each month. Verified locally
+against a zip in the published format: 3 rows read, the out-of-patch row skipped, 2 titles
+kept, 2 flagged properties matched, the signal survives a full rescore.
+
+Known limit: a title that leaves the file (sold to an individual) is not removed until a
+full reload; and street-only listings match only after the front door is pinned.
+
+**Manual owner, built.** "Record the owner" on the panel: name, correspondence address,
+source (LandInsight, Land Registry title, Companies House, HMO register, planning, open
+register, other), optional title number and note. Writes a `found` row to
+`os_bond_owner_lookups` with provider `manual:<source>`, logs to Today, and shows on the
+panel and in the Owners room exactly as a provider's answer would. The postcard button
+stays disabled until the print house is connected.

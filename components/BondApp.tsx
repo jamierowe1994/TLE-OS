@@ -352,8 +352,18 @@ function ProviderCard({ p, title }: { p: Provider; title: string }) {
   );
 }
 
+interface CompanySync {
+  connected: boolean;
+  needs: string[];
+  titlesHeld: number;
+  matched: number;
+  running: boolean;
+  lastRun: { dataset: string; file_name: string; status: string; rows_read: number; rows_kept: number; error: string | null; started_at: string; finished_at: string | null } | null;
+}
+
 function Owners() {
   const [data, setData] = useState<{ provider: Provider; lookups: Array<Record<string, unknown>> } | null>(null);
+  const [companies, setCompanies] = useState<CompanySync | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     fetch("/api/bond/owner", { cache: "no-store" })
@@ -363,24 +373,69 @@ function Owners() {
         else setError(j.reason ?? "Could not read the lookups.");
       })
       .catch(() => setError("Could not read the lookups."));
+    fetch("/api/bond/company-sync", { cache: "no-store" })
+      .then(async (r) => {
+        const j = await r.json();
+        if (j.ok) setCompanies(j);
+      })
+      .catch(() => {
+        /* The card below says "not read" rather than inventing a state. */
+      });
   }, []);
   if (error) return <p className="text-[12.5px] text-muted">{error}</p>;
   if (!data) return <p className="flex items-center gap-3 py-10 text-[12.5px] text-muted"><span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-line border-t-ink" />Reading...</p>;
   return (
     <div className="fade-up mx-auto max-w-4xl space-y-4">
-      <ProviderCard p={data.provider} title="Land Registry" />
+      {/* The free half: company owners from the Land Registry files. */}
+      <div className={`rounded-2xl border p-5 ${companies?.connected ? "border-line/80 bg-panel" : "border-dashed border-line/80"}`}>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-[14px]">Company owners, from the Land Registry files</h2>
+          <span className={`rounded-full border px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider ${companies?.connected ? "border-accent-dark text-accent-dark" : "border-line/70 text-muted"}`}>
+            {companies == null ? "Not read" : companies.connected ? "Connected" : "Not connected"}
+          </span>
+        </div>
+        <p className="mt-2 text-[12.5px] text-muted">
+          Free, monthly, no personal data: every title in the patch owned by a UK or overseas company, with the company's name, number and correspondence address. About one rented home in six.
+        </p>
+        {companies && (
+          <dl className="mt-3 grid grid-cols-2 gap-3 text-[12.5px] sm:grid-cols-4">
+            <div><dt className="text-[11px] text-muted">Titles held</dt><dd className="figures">{companies.titlesHeld.toLocaleString("en-GB")}</dd></div>
+            <div><dt className="text-[11px] text-muted">Flagged properties matched</dt><dd className="figures">{companies.matched.toLocaleString("en-GB")}</dd></div>
+            <div><dt className="text-[11px] text-muted">Last read</dt><dd>{companies.lastRun ? `${when(companies.lastRun.started_at)} · ${companies.lastRun.status}` : "never"}</dd></div>
+            <div><dt className="text-[11px] text-muted">File</dt><dd className="truncate">{companies.lastRun?.file_name || "-"}</dd></div>
+          </dl>
+        )}
+        {companies?.lastRun?.error && <p className="mt-2 text-[12px] text-red-700">{companies.lastRun.error}</p>}
+        {companies && !companies.connected && (
+          <ul className="mt-3 list-disc space-y-1 pl-4 text-[12px] text-muted">
+            {companies.needs.map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <ProviderCard p={data.provider} title="Individual owners, from a Land Registry provider" />
+
       <section className="rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[14px]">Owners looked up</h2>
+        <h2 className="text-[14px]">Owners on record</h2>
         {data.lookups.length === 0 ? (
           <p className="mt-2 text-[12.5px] text-muted">
-            None yet. Open a property, pin down the address, then press Find the owner. Each lookup is a small charge, so the screen will show the cost before it orders.
+            None yet. Open a property, pin down the address, then either press Find the owner or look them up elsewhere and record what you found.
           </p>
         ) : (
           <ul className="mt-3 divide-y divide-line/60 text-[12.5px]">
             {data.lookups.map((l) => (
-              <li key={String(l.id)} className="flex items-center justify-between gap-3 py-2">
-                <span>{String(l.address)}</span>
-                <span className="text-muted">{String(l.status)}</span>
+              <li key={String(l.id)} className="grid gap-1 py-2.5 sm:grid-cols-[1fr_1fr_auto]">
+                <div>
+                  <p>{String(l.address)}</p>
+                  <p className="text-[11px] text-muted">{String(l.requested_by || "")} · {when(String(l.requested_at))}</p>
+                </div>
+                <div>
+                  <p>{String(l.owner_name ?? "") || <span className="text-muted">no name</span>}</p>
+                  <p className="text-[11px] text-muted">{String(l.correspondence_address ?? "")}</p>
+                </div>
+                <span className="text-[11px] text-muted">{String(l.provider ?? "").replace(/^manual:/, "by hand · ")} · {String(l.status)}</span>
               </li>
             ))}
           </ul>

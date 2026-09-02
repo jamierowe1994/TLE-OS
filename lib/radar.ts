@@ -373,6 +373,12 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
     [districts, active]
   );
 
+  /* The company on the title, from the Land Registry files, and its signal.
+     Imported lazily: lib/company-owners reads the watched districts from
+     here, and a static import each way is a cycle. */
+  const { matchCompanyOwners } = await import("@/lib/company-owners");
+  await matchCompanyOwners();
+
   return { active: active.length, quiet: quiet.length, properties: groups.size };
 }
 
@@ -408,7 +414,30 @@ interface ProspectRow extends Record<string, unknown> {
   first_flagged: Date | string;
   last_signal_at: Date | string | null;
   last_action_at: Date | string | null;
+  owner_company_name: string | null;
+  owner_company_number: string | null;
+  owner_company_address: string | null;
+  owner_title_number: string | null;
+  owner_name: string | null;
+  owner_address: string | null;
+  owner_source: string | null;
+  owner_title: string | null;
+  owner_at: Date | string | null;
 }
+
+/* The prospect row plus the latest owner anybody recorded for it. One query
+   shape for the list and the single read, so the two can never disagree. */
+const PROSPECT_SELECT = `
+  SELECT r.*, o.owner_name, o.owner_address, o.owner_source, o.owner_title, o.owner_at
+    FROM os_radar_prospects r
+    LEFT JOIN LATERAL (
+      SELECT l.owner_name, l.correspondence_address AS owner_address, l.provider AS owner_source,
+             l.title_number AS owner_title, l.completed_at AS owner_at
+        FROM os_bond_owner_lookups l
+       WHERE l.property_key = r.property_key AND l.status = 'found'
+       ORDER BY l.completed_at DESC NULLS LAST, l.id DESC
+       LIMIT 1
+    ) o ON TRUE`;
 
 function toProspect(r: ProspectRow): Prospect {
   return {
@@ -441,13 +470,30 @@ function toProspect(r: ProspectRow): Prospect {
     address_confidence: r.address_confidence ?? null,
     address_candidates: Array.isArray(r.address_candidates) ? r.address_candidates : null,
     resolved_at: r.resolved_at ? new Date(r.resolved_at).toISOString() : null,
+    company: r.owner_company_name
+      ? {
+          name: r.owner_company_name,
+          number: r.owner_company_number ?? null,
+          address: r.owner_company_address ?? "",
+          title_number: r.owner_title_number ?? null,
+        }
+      : null,
+    owner: r.owner_name
+      ? {
+          name: r.owner_name,
+          address: r.owner_address ?? "",
+          source: r.owner_source ?? "",
+          title_number: r.owner_title ?? null,
+          at: r.owner_at ? new Date(r.owner_at).toISOString() : "",
+        }
+      : null,
   };
 }
 
 /** One prospect, for the routes that act on a single property. */
 export async function getProspect(key: string): Promise<Prospect | null> {
   if (!hasDb()) return null;
-  const rows = await q<ProspectRow>(`SELECT * FROM os_radar_prospects WHERE property_key = $1`, [key]);
+  const rows = await q<ProspectRow>(`${PROSPECT_SELECT} WHERE r.property_key = $1`, [key]);
   return rows[0] ? toProspect(rows[0]) : null;
 }
 
@@ -456,9 +502,9 @@ export async function getProspect(key: string): Promise<Prospect | null> {
 export async function listProspects(): Promise<Prospect[]> {
   if (!hasDb()) return [];
   const rows = await q<ProspectRow>(
-    `SELECT * FROM os_radar_prospects
-      WHERE score > 0 OR stage <> 'new'
-      ORDER BY score DESC, last_signal_at DESC NULLS LAST, address
+    `${PROSPECT_SELECT}
+      WHERE r.score > 0 OR r.stage <> 'new'
+      ORDER BY r.score DESC, r.last_signal_at DESC NULLS LAST, r.address
       LIMIT 3000`
   );
   return rows.map(toProspect);
@@ -485,12 +531,12 @@ export async function updateProspect(
     sets.push(`notes = $${vals.length}`);
   }
   if (sets.length === 0) throw new Error("Nothing to change.");
-  const rows = await q<ProspectRow>(
+  await q(
     `UPDATE os_radar_prospects SET ${sets.join(", ")}, last_action_at = NOW(), updated_at = NOW()
-      WHERE property_key = $1 RETURNING *`,
+      WHERE property_key = $1`,
     vals
   );
-  return rows[0] ? toProspect(rows[0]) : null;
+  return getProspect(key);
 }
 
 export async function radarSummary(): Promise<RadarSummary> {

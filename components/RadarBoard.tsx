@@ -952,6 +952,8 @@ function AddressSection({ prospect, onPatched }: { prospect: Prospect; onPatched
           )}
         </div>
       )}
+      <OwnerBlock prospect={prospect} onPatched={onPatched} />
+
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <PressButton
           onClick={() => void pin()}
@@ -971,7 +973,7 @@ function AddressSection({ prospect, onPatched }: { prospect: Prospect; onPatched
         <PressButton
           disabled
           className="rounded-full border border-line/80 px-4 py-1.5 text-[11.5px] disabled:opacity-40"
-          title="Needs the owner's address first"
+          title={prospect.owner || prospect.company ? "The print house is not connected yet" : "Needs the owner's address first"}
         >
           Send a postcard
         </PressButton>
@@ -990,5 +992,161 @@ function AddressSection({ prospect, onPatched }: { prospect: Prospect; onPatched
         </div>
       )}
     </section>
+  );
+}
+
+
+const OWNER_SOURCES: Array<[string, string]> = [
+  ["landinsight", "LandInsight"],
+  ["land_registry", "Land Registry title"],
+  ["companies_house", "Companies House"],
+  ["hmo_register", "HMO licence register"],
+  ["planning", "Planning register"],
+  ["electoral", "Open electoral register"],
+  ["other", "Other"],
+];
+
+function sourceLabel(src: string): string {
+  const k = src.replace(/^manual:/, "");
+  return OWNER_SOURCES.find(([key]) => key === k)?.[1] ?? src;
+}
+
+/**
+ * Who owns it, as far as Bond knows: the company from the Land Registry
+ * files, the owner somebody recorded, and the form to record one. The form
+ * is the manual half of the waterfall - the lookup happens on another
+ * screen, the answer lands here, and from then on it is the same as a
+ * provider's answer.
+ */
+function OwnerBlock({ prospect, onPatched }: { prospect: Prospect; onPatched: (p: Prospect) => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [address, setAddress] = useState("");
+  const [source, setSource] = useState("landinsight");
+  const [title, setTitle] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/bond/owner-manual", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ property_key: prospect.property_key, name, address, source, title_number: title, note }),
+      });
+      const j = await r.json();
+      if (!r.ok || !j.ok) {
+        setError(j.error ?? "That did not save.");
+        return;
+      }
+      onPatched(j.prospect as Prospect);
+      setOpen(false);
+      setName(""); setAddress(""); setTitle(""); setNote("");
+    } catch {
+      setError("That did not save.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const field = "mt-1 w-full rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none placeholder:text-muted/70 focus:border-ink";
+
+  return (
+    <div className="mt-4 border-t border-line/60 pt-3">
+      <h4 className="text-[12.5px] font-semibold">Who owns it</h4>
+
+      {prospect.company && (
+        <div className="mt-2 rounded-xl border border-accent-dark/40 bg-accent-soft/30 p-3 text-[12px]">
+          <p className="font-semibold">{prospect.company.name}</p>
+          <p className="text-muted">{prospect.company.address || "No correspondence address on the title"}</p>
+          <p className="mt-1 text-[11px] text-muted">
+            Land Registry company file
+            {prospect.company.title_number ? ` · title ${prospect.company.title_number}` : ""}
+            {prospect.company.number ? (
+              <>
+                {" · "}
+                <a
+                  href={`https://find-and-update.company-information.service.gov.uk/company/${prospect.company.number.padStart(8, "0")}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline"
+                >
+                  Companies House {prospect.company.number}
+                </a>
+              </>
+            ) : null}
+          </p>
+        </div>
+      )}
+
+      {prospect.owner && (
+        <div className="mt-2 rounded-xl border border-line/80 p-3 text-[12px]">
+          <p className="font-semibold">{prospect.owner.name}</p>
+          <p className="whitespace-pre-line text-muted">{prospect.owner.address}</p>
+          <p className="mt-1 text-[11px] text-muted">
+            {sourceLabel(prospect.owner.source)}
+            {prospect.owner.title_number ? ` · title ${prospect.owner.title_number}` : ""}
+            {prospect.owner.at ? ` · ${when(prospect.owner.at)}` : ""}
+          </p>
+        </div>
+      )}
+
+      {!prospect.company && !prospect.owner && (
+        <p className="mt-1 text-[12px] text-muted">
+          Nobody yet. If it is company-owned the Land Registry files fill this in on the next refresh. Otherwise look the owner up and record what you found.
+        </p>
+      )}
+
+      {open ? (
+        <div className="mt-3 space-y-2.5 rounded-xl border border-dashed border-line/80 p-3">
+          <label className="block text-[11px] text-muted">
+            Owner's name
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="As it appears on the register" className={field} />
+          </label>
+          <label className="block text-[11px] text-muted">
+            Correspondence address
+            <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={3} placeholder="The address for service, not the property" className={`${field} resize-y`} />
+          </label>
+          <div className="grid grid-cols-2 gap-2.5">
+            <label className="block text-[11px] text-muted">
+              Where from
+              <select value={source} onChange={(e) => setSource(e.target.value)} className={field}>
+                {OWNER_SOURCES.map(([k, l]) => (
+                  <option key={k} value={k}>{l}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-[11px] text-muted">
+              Title number
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Optional" className={field} />
+            </label>
+          </div>
+          <label className="block text-[11px] text-muted">
+            Note
+            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" className={field} />
+          </label>
+          <div className="flex items-center gap-2">
+            <PressButton onClick={() => void save()} disabled={busy} className="rounded-full bg-ink px-4 py-1.5 text-[11.5px] font-semibold text-page disabled:opacity-40">
+              {busy ? "Saving..." : "Record the owner"}
+            </PressButton>
+            <PressButton onClick={() => setOpen(false)} className="rounded-full px-3 py-1.5 text-[11.5px] text-muted">
+              Cancel
+            </PressButton>
+            {error && <span className="text-[11.5px] text-red-700">{error}</span>}
+          </div>
+        </div>
+      ) : (
+        <PressButton
+          onClick={() => setOpen(true)}
+          className="mt-2 rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px]"
+          title="Type in an owner you looked up elsewhere"
+        >
+          {prospect.owner ? "Record a different owner" : "Record the owner"}
+        </PressButton>
+      )}
+    </div>
   );
 }

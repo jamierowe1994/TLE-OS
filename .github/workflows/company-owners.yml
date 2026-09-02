@@ -1,0 +1,38 @@
+# The Land Registry company-ownership files, into Bond, once a month.
+#
+# HM Land Registry publishes them from the second working day of the month.
+# This runs on the 4th, UK companies first and the overseas file after, and
+# each run returns at once: the sync streams a file of over a gigabyte in the
+# background and reports into os_company_sync. Needs HMLR_DATA_API_KEY on
+# Railway, or the route says so and nothing is read. See lib/company-owners.
+
+name: Company owners
+
+on:
+  schedule:
+    - cron: "20 5 4 * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start the two syncs
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "CRON_SECRET is not set on this repository - nothing was started."
+            exit 1
+          fi
+          for ds in ccod ocod; do
+            echo "## $ds" >> "$GITHUB_STEP_SUMMARY"
+            curl -sS -X POST -H "x-cron-key: ${CRON_SECRET}" --max-time 60 \
+              "https://tle-os.co.uk/api/bond/company-sync?dataset=$ds" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo >> "$GITHUB_STEP_SUMMARY"
+            # The overseas file is small; the UK file is not. Let the first
+            # one finish before asking for the second, so they never share
+            # the connection pool.
+            [ "$ds" = "ccod" ] && sleep 900 || true
+          done

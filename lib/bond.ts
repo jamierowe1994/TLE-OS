@@ -325,6 +325,55 @@ export async function requestOwner(key: string, actor: string): Promise<{ ok: bo
   return { ok: false, reason: `${provider.name} is named but the lookup is not wired yet.`, provider };
 }
 
+/** Where a manually recorded owner came from. The label is what the screen shows. */
+export const OWNER_SOURCES: Record<string, string> = {
+  landinsight: "LandInsight",
+  land_registry: "Land Registry title",
+  companies_house: "Companies House",
+  hmo_register: "HMO licence register",
+  planning: "Planning register",
+  electoral: "Open electoral register",
+  other: "Other",
+};
+
+/**
+ * Somebody looked the owner up elsewhere and typed it in. This is the manual
+ * half of the waterfall: LandInsight on one screen, Bond on the other. The
+ * row is a real lookup with status found, so everything downstream - the
+ * Owners room, the postcard, the Today figures - treats it exactly like a
+ * provider's answer. The provider column records where it came from.
+ */
+export async function recordOwner(
+  key: string,
+  actor: string,
+  input: { name: unknown; address: unknown; source: unknown; title_number?: unknown; note?: unknown }
+): Promise<{ ok: boolean; reason?: string; prospect?: Prospect }> {
+  const p = await getProspect(key);
+  if (!p) return { ok: false, reason: "No such property." };
+  const name = String(input.name ?? "").trim();
+  const address = String(input.address ?? "").trim();
+  const source = String(input.source ?? "").trim();
+  if (!name) return { ok: false, reason: "The owner's name is needed." };
+  if (!address) return { ok: false, reason: "The correspondence address is needed. Without one there is nowhere to write." };
+  if (!(source in OWNER_SOURCES)) return { ok: false, reason: "Say where it came from." };
+  const title = String(input.title_number ?? "").trim() || null;
+  const propertyAddress = p.resolved_address || p.address || p.street || p.postcode;
+  await q(
+    `INSERT INTO os_bond_owner_lookups
+       (property_key, address, status, provider, title_number, owner_name, correspondence_address, cost_pence, requested_by, completed_at)
+     VALUES ($1, $2, 'found', $3, $4, $5, $6, 0, $7, NOW())`,
+    [key, propertyAddress, `manual:${source}`, title, name, address, actor]
+  );
+  await logActivity({
+    actor,
+    kind: "owner",
+    property_key: key,
+    address: propertyAddress,
+    detail: `Owner recorded from ${OWNER_SOURCES[source]}${String(input.note ?? "").trim() ? `: ${String(input.note).trim().slice(0, 120)}` : ""}`,
+  });
+  return { ok: true, prospect: (await getProspect(key)) ?? undefined };
+}
+
 export interface Postcard extends Record<string, unknown> {
   id: number;
   property_key: string;

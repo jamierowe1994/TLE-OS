@@ -1256,6 +1256,52 @@ CREATE TABLE IF NOT EXISTS os_bond_postcards (
   sent_at       TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS os_bond_postcards_at_idx ON os_bond_postcards (requested_at DESC);
+
+-- Company-owned titles in the patch, from HM Land Registry's free monthly
+-- files (UK companies, overseas companies). Only rows whose postcode is in a
+-- watched district are kept; the rest of the 3.7 million are streamed past.
+-- No private individual is ever in these files: the Land Registry strips them.
+CREATE TABLE IF NOT EXISTS os_company_titles (
+  title_number     TEXT PRIMARY KEY,
+  source           TEXT NOT NULL,
+  tenure           TEXT,
+  property_address TEXT NOT NULL DEFAULT '',
+  postcode         TEXT NOT NULL DEFAULT '',
+  district         TEXT,
+  house_number     TEXT,
+  proprietor_name  TEXT NOT NULL DEFAULT '',
+  company_number   TEXT,
+  category         TEXT,
+  proprietor_address TEXT NOT NULL DEFAULT '',
+  proprietor_country TEXT,
+  other_proprietors  INTEGER NOT NULL DEFAULT 0,
+  price_paid       INTEGER,
+  proprietor_added DATE,
+  seen_in          TEXT,
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_company_titles_postcode_idx ON os_company_titles (postcode, house_number);
+CREATE INDEX IF NOT EXISTS os_company_titles_company_idx ON os_company_titles (company_number);
+
+-- One row per sync run, so the Owners room can say when the files were last
+-- read and whether a run is still going.
+CREATE TABLE IF NOT EXISTS os_company_sync (
+  id          BIGSERIAL PRIMARY KEY,
+  dataset     TEXT NOT NULL,
+  file_name   TEXT NOT NULL DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'running',
+  rows_read   INTEGER NOT NULL DEFAULT 0,
+  rows_kept   INTEGER NOT NULL DEFAULT 0,
+  error       TEXT,
+  started_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finished_at TIMESTAMPTZ
+);
+
+-- The company behind a flagged property, when one of the titles matched.
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS owner_company_name TEXT;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS owner_company_number TEXT;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS owner_company_address TEXT;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS owner_title_number TEXT;
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

@@ -140,6 +140,7 @@ const MACHINE_ROUTES = [
   "/api/compliance/reminders/run",    // the 30/14/7 certificate chase
   "/api/lettings-capture/run",        // the daily market sweep
   "/api/radar/run",                   // Landlord Radar: sweep the patch, rescore, digest
+  "/api/bond/company-sync",           // Bond: read the Land Registry company files, monthly
   /* DocuSeal POSTs a signed contract here. Without this it got 307 to
      /sign-in — measured against the live site, not guessed — so the document
      would never have reached our code and no signed terms would ever have
