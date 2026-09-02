@@ -81,11 +81,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  /* A test goes out the way the real one would. A landlord's or tenant's
+     email is sent on the public Lettings Experts sender, to the owner's own
+     inbox - which is the only way to see, from Admin, that the public domain
+     and its key actually work. Staff email keeps the OS sender. */
+  const audience = entry.audience === "landlord" || entry.audience === "tenant" ? "customer" : "internal";
   try {
     await sendEmail({
       to: me.email,
       subject: `[Test] ${subject}`,
       html,
+      audience,
     });
   } catch (e) {
     /* The send path throws with a sentence that says which lock stopped it —
