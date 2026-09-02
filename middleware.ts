@@ -197,12 +197,18 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
+    /* `rex` is public/rex: the handful of property photographs in the static
+       REX export, used by the sample listings and by the landlord demo. The
+       demo is a public page, and behind the door those images were a 307 to
+       the sign-in page - a broken picture where the house should be, on the
+       one page Susan is being shown. Photographs of houses on the market are
+       not a secret; the folder holds nothing else. */
     /* `preview` is the onboarding demonstration, and it is exempt because the
        whole point of it is a link James can send to somebody with no account.
        It is safe to exempt because the route itself refuses without a valid
        share token, and because everything under it is self-contained: mock
        rail, sample figures, no fetches, no writes, no session. See
        lib/preview-token.ts - that token must never gate anything real. */
-    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|api/tenant/passport|api/landlord|brand|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$).*)",
+    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|api/tenant/passport|api/landlord|brand|rex|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$).*)",
   ],
 };
