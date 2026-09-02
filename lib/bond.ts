@@ -109,13 +109,15 @@ export interface BondSummary {
   appraisalsBooked: number;
   ownersFound: number;
   postcardsSent: number;
+  /** Tenancies whose anniversary falls in the next 60 days. */
+  anniversariesSoon: number;
   lastSweep: string | null;
   districts: number;
 }
 
 export async function bondSummary(): Promise<BondSummary> {
   const empty: BondSummary = {
-    flagged: 0, newToday: 0, workedThisWeek: 0, appraisalsBooked: 0, ownersFound: 0, postcardsSent: 0, lastSweep: null, districts: 0,
+    flagged: 0, newToday: 0, workedThisWeek: 0, appraisalsBooked: 0, ownersFound: 0, postcardsSent: 0, anniversariesSoon: 0, lastSweep: null, districts: 0,
   };
   if (!hasDb()) return empty;
   const [p] = await q<{ flagged: string; new_today: string; booked: string }>(
@@ -132,6 +134,10 @@ export async function bondSummary(): Promise<BondSummary> {
   const [d] = await q<{ n: string; last: string | null }>(
     `SELECT count(*) AS n, max(last_run_at) AS last FROM os_radar_districts`
   );
+  const [a] = await q<{ n: string }>(
+    `SELECT count(*) AS n FROM os_radar_prospects
+      WHERE next_anniversary BETWEEN CURRENT_DATE AND CURRENT_DATE + 60`
+  );
   return {
     flagged: Number(p?.flagged ?? 0),
     newToday: Number(p?.new_today ?? 0),
@@ -139,6 +145,7 @@ export async function bondSummary(): Promise<BondSummary> {
     appraisalsBooked: Number(p?.booked ?? 0),
     ownersFound: Number(o?.n ?? 0),
     postcardsSent: Number(c?.n ?? 0),
+    anniversariesSoon: Number(a?.n ?? 0),
     lastSweep: d?.last ? new Date(d.last).toISOString() : null,
     districts: Number(d?.n ?? 0),
   };

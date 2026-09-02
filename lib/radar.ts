@@ -164,9 +164,14 @@ function ymd(d: Date | string | null | undefined): string | null {
   return t == null ? null : new Date(t).toISOString().slice(0, 10);
 }
 
+/** "11 Aug" this year, "6 Oct 2021" for any other year: a date without its
+ *  year reads as recent, and a stale advert must not. */
 function dmy(d: Date | string | null | undefined): string {
   const t = ms(d);
-  return t == null ? "" : new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  if (t == null) return "";
+  const dt = new Date(t);
+  const thisYear = dt.getFullYear() === new Date().getFullYear();
+  return dt.toLocaleDateString("en-GB", thisYear ? { day: "numeric", month: "short" } : { day: "numeric", month: "short", year: "numeric" });
 }
 
 function pounds(n: number | null): string {
@@ -178,6 +183,54 @@ function listedAt(r: Lite): number {
   return ms(r.listed_on) ?? ms(r.first_seen) ?? 0;
 }
 
+const ymdOf = (t: number) => new Date(t).toISOString().slice(0, 10);
+
+export interface Tenancy {
+  start: number;
+  next: number;
+  basis: "observed" | "estimated";
+}
+
+/**
+ * When the tenancy behind this property probably began, and when its next
+ * anniversary falls.
+ *
+ * Observed: we saw the listing go let agreed (let_agreed_at), and a tenancy
+ * usually starts about three weeks after that. Estimated: the listing was
+ * already let agreed, or had gone, when we first met it, so the advert date
+ * plus five weeks - the typical time to let - stands in. The basis is kept,
+ * because a letter timed off a guess should say so on the screen.
+ *
+ * The next anniversary is the first one still ahead of today, so a
+ * three-year tenancy gets a window every year, not just the first.
+ */
+function tenancyFor(rows: Lite[], now: number): Tenancy | null {
+  const cur = rows[0];
+  if (cur.market !== "let") return null;
+  const letOrGone = cur.status === "let agreed" || (cur.gone_at != null && cur.status !== "withdrawn" && cur.status !== "fallen through");
+  if (!letOrGone) return null;
+  let start: number;
+  let basis: Tenancy["basis"];
+  if (cur.let_agreed_at) {
+    start = (ms(cur.let_agreed_at) ?? 0) + 21 * DAY;
+    basis = "observed";
+  } else {
+    const listed = ms(cur.listed_on) ?? ms(cur.first_seen);
+    if (listed == null) return null;
+    /* The feed keeps let-agreed rows for years. An advert older than three
+       years says nothing reliable about who is in the house now, so it is
+       not used to time a letter; an observed let is trusted at any age. */
+    if (now - listed > 3 * 365 * DAY) return null;
+    start = listed + 35 * DAY;
+    basis = "estimated";
+  }
+  if (start > now + 60 * DAY) return null;
+  const year = 365 * DAY;
+  const k = Math.max(1, Math.ceil((now - start - 14 * DAY) / year));
+  const next = start + k * year;
+  return { start, next, basis };
+}
+
 /**
  * The signals for one property, read off its listings newest-first.
  *
@@ -187,12 +240,33 @@ function signalsFor(
   rows: Lite[],
   drops: Map<string, { from: number; to: number; at: number }>,
   sales: Map<string, RecentSale[]>,
+  tenancy: Tenancy | null,
   now: number
 ): Signal[] {
   const cur = rows[0];
   const out: Signal[] = [];
   const agent = cur.agent ?? "no agent named";
   const listedDays = daysSince(cur.listed_on ?? cur.first_seen, now) ?? 0;
+
+  /* THE ANNIVERSARY. James, 2 Sep: "if we notice that a property goes off
+     market around the month of January... we know that in November or
+     December we should be hitting that person with letters." The window
+     opens 75 days before the anniversary - time to write and be read - and
+     closes two weeks after it. */
+  if (tenancy) {
+    const untilNext = (tenancy.next - now) / DAY;
+    if (untilNext <= 75 && untilNext >= -14) {
+      const when = new Date(tenancy.next).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+      const started = new Date(tenancy.start).toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+      out.push({
+        key: "anniversary_due",
+        detail:
+          tenancy.basis === "observed"
+            ? `Let agreed ${dmy(cur.let_agreed_at)}${cur.agent ? ` through ${cur.agent}` : ""}; tenancy from about ${started}, anniversary around ${when}`
+            : `Advertised ${dmy(cur.listed_on ?? cur.first_seen)}${cur.agent ? ` by ${cur.agent}` : ""} and let; tenancy from about ${started}, anniversary around ${when} (estimated)`,
+      });
+    }
+  }
 
   /* THE SALES BRANCH. When the newest listing is a sale, the lettings signals
      do not apply - the landlord is not letting it - and two of their own do.
@@ -390,16 +464,21 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
     group.sort((a, b) => listedAt(b) - listedAt(a) || (ms(b.first_seen) ?? 0) - (ms(a.first_seen) ?? 0));
     const cur = group[0];
     if (isOurs(cur.agent)) continue;
-    const signals = signalsFor(group, drops, sales, now);
-    if (signals.length === 0) continue;
+    const tenancy = tenancyFor(group, now);
+    const signals = signalsFor(group, drops, sales, tenancy, now);
+    /* A property with no signal but a known tenancy is kept, quietly, so the
+       calendar can count anniversaries ahead. Nothing else is. */
+    if (signals.length === 0 && !tenancy) continue;
     const score = signals.reduce((n, s) => n + SIGNALS[s.key].weight, 0);
-    active.push(key);
+    if (score > 0) active.push(key);
     await q(
       `INSERT INTO os_radar_prospects
          (property_key, listing_key, uprn, address, street, postcode, sector, district,
           beds, property_type, rent, agent, status, listed_on, signals, score,
-          lat, lon, market, asking_price, last_signal_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$17,$18,$19,$20, NOW(), NOW())
+          lat, lon, market, asking_price, tenancy_start, next_anniversary, tenancy_basis,
+          last_signal_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$17,$18,$19,$20,$21,$22,$23,
+               CASE WHEN $16 > 0 THEN NOW() ELSE NULL END, NOW())
        ON CONFLICT (property_key) DO UPDATE SET
          listing_key   = EXCLUDED.listing_key,
          uprn          = COALESCE(EXCLUDED.uprn, os_radar_prospects.uprn),
@@ -420,6 +499,9 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
          lon           = COALESCE(EXCLUDED.lon, os_radar_prospects.lon),
          market        = EXCLUDED.market,
          asking_price  = EXCLUDED.asking_price,
+         tenancy_start = EXCLUDED.tenancy_start,
+         next_anniversary = EXCLUDED.next_anniversary,
+         tenancy_basis = EXCLUDED.tenancy_basis,
          /* Moves only when the signals actually changed, so "new today" and
             the sort by recency mean something. */
          last_signal_at = CASE
@@ -447,6 +529,9 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
         cur.lon,
         cur.market,
         cur.market === "sale" ? cur.rent : null,
+        tenancy ? ymdOf(tenancy.start) : null,
+        tenancy ? ymdOf(tenancy.next) : null,
+        tenancy?.basis ?? null,
       ]
     );
   }
@@ -489,6 +574,9 @@ interface ProspectRow extends Record<string, unknown> {
   lon: number | null;
   market: "let" | "sale" | null;
   asking_price: number | null;
+  tenancy_start: Date | string | null;
+  next_anniversary: Date | string | null;
+  tenancy_basis: string | null;
   signals: Signal[];
   score: number;
   stage: string;
@@ -547,6 +635,9 @@ function toProspect(r: ProspectRow): Prospect {
     lon: r.lon,
     market: r.market === "sale" ? "sale" : "let",
     asking_price: r.asking_price ?? null,
+    tenancy_start: ymd(r.tenancy_start),
+    next_anniversary: ymd(r.next_anniversary),
+    tenancy_basis: r.tenancy_basis === "observed" || r.tenancy_basis === "estimated" ? r.tenancy_basis : null,
     signals: Array.isArray(r.signals) ? r.signals : [],
     score: r.score,
     stage: isStage(r.stage) ? r.stage : "new",

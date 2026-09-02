@@ -43,6 +43,7 @@ interface Summary {
   appraisalsBooked: number;
   ownersFound: number;
   postcardsSent: number;
+  anniversariesSoon: number;
   lastSweep: string | null;
   districts: number;
 }
@@ -292,9 +293,10 @@ function Today({
         </button>
       </form>
 
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
         <Tile label="Flagged" value={s.flagged.toLocaleString("en-GB")} hint={`across ${s.districts} districts`} onClick={() => go("map")} />
         <Tile label="New today" value={s.newToday.toLocaleString("en-GB")} hint={s.lastSweep ? `swept ${when(s.lastSweep)}` : "not swept yet"} onClick={() => go("prospects")} />
+        <Tile label="Anniversaries" value={s.anniversariesSoon.toLocaleString("en-GB")} hint="in the next 60 days" onClick={() => go("prospects")} />
         <Tile label="Worked this week" value={s.workedThisWeek.toLocaleString("en-GB")} hint="properties touched" />
         <Tile label="Appraisals booked" value={s.appraisalsBooked.toLocaleString("en-GB")} hint="from Bond" />
         <Tile label="Owners found" value={s.ownersFound.toLocaleString("en-GB")} hint={data.providers.owner.connected ? "Land Registry" : "not connected"} onClick={() => go("owners")} />

@@ -341,3 +341,27 @@ day one - low because most OpenRent adverts carry no house number, and the regis
 weeks behind. Both improve on their own: pinning the front door gives the number, and each
 monthly file back-fills the lag. Example: 34 Sharman Road NN5 5JZ, bought 4 June for
 £180,000, to let on OpenRent from 6 June.
+
+---
+
+## The anniversary predictor, 3 Sep 2026
+
+Every property whose newest lettings listing is let agreed, or has left the feed without
+being withdrawn, gets a tenancy estimate on the prospect row: `tenancy_start`,
+`next_anniversary`, `tenancy_basis`.
+
+- **Observed**: the sweep saw the listing go let agreed (`let_agreed_at`); tenancy start is
+  that date plus three weeks. Trusted at any age.
+- **Estimated**: the listing was already let when we met it; tenancy start is the advert
+  date plus five weeks. Only used for adverts under three years old, because the feed keeps
+  let-agreed rows for years and a 2021 advert says nothing about who is in the house now.
+
+The next anniversary is the first one still ahead of today, so long tenancies get a window
+every year. **Anniversary due** (25) fires from 75 days before it to 14 days after. Today
+shows "Anniversaries in the next 60 days"; the panel shows the tenancy block with the basis
+in plain words.
+
+Measured locally on 3 Sep: 716 tenancies estimated, 4 in the window now, and the predicted
+anniversaries cluster in Aug and Sep 2027 because most of the let-agreed rows in the feed
+today are this summer's lets. It is thin on purpose: it gets better every day the sweep
+runs, and the observed basis takes over from the estimate as lets are actually seen.

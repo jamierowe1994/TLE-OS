@@ -782,6 +782,27 @@ function ProspectPanel({
             </ul>
           </section>
 
+          {prospect.tenancy_start && (
+            <section className="mt-6 rounded-2xl border border-line/80 bg-panel p-4">
+              <h3 className="text-[13px]">The tenancy</h3>
+              <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-[12.5px]">
+                <div>
+                  <dt className="text-[11px] text-muted">Started about</dt>
+                  <dd>{when(prospect.tenancy_start)}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] text-muted">Next anniversary</dt>
+                  <dd>{when(prospect.next_anniversary)}</dd>
+                </div>
+              </dl>
+              <p className="mt-2 text-[11px] text-muted">
+                {prospect.tenancy_basis === "observed"
+                  ? "From the day the sweep saw it go let agreed, plus three weeks."
+                  : "Estimated from the advert date plus five weeks. It firms up once the sweep sees a let happen."}
+              </p>
+            </section>
+          )}
+
           <AddressSection prospect={prospect} onPatched={onPatched} />
 
           <section className="mt-6 space-y-4">

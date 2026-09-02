@@ -25,7 +25,8 @@ export type SignalKey =
   | "let_to_sale"
   | "sale_stuck"
   | "sale_to_let"
-  | "just_bought";
+  | "just_bought"
+  | "anniversary_due";
 
 export const SIGNALS: Record<SignalKey, { label: string; weight: number; why: string }> = {
   self_managing: {
@@ -86,6 +87,11 @@ export const SIGNALS: Record<SignalKey, { label: string; weight: number; why: st
     label: "Just bought",
     weight: 35,
     why: "Sold in the last year, now to let. A brand new landlord, deciding how to run it right now.",
+  },
+  anniversary_due: {
+    label: "Anniversary due",
+    weight: 25,
+    why: "The tenancy started about a year ago. Fixed terms end and rents get reviewed around now, and this is when a landlord decides whether to keep the agent. Write before it, not after.",
   },
 };
 
@@ -148,6 +154,10 @@ export interface Prospect {
   /** Which feed the current listing is in. */
   market: "let" | "sale";
   asking_price: number | null;
+  /** When the tenancy probably began, the next anniversary, and how we know. */
+  tenancy_start: string | null;
+  next_anniversary: string | null;
+  tenancy_basis: "observed" | "estimated" | null;
   agent: string | null;
   status: string | null;
   listed_on: string | null;
