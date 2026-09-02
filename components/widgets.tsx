@@ -187,12 +187,6 @@ const LEADS_12W = [8, 11, 9, 14, 12, 10, 15, 13, 17, 12, 16, 14];
 const LEADS_12M = [31, 28, 35, 42, 39, 45, 52, 48, 41, 44, 50, 47];
 const FB_8W = [2, 4, 3, 5, 4, 6, 5, 9];
 const IG_8W = [1, 1, 2, 3, 2, 2, 4, 4];
-const VOIDS = [
-  { name: "14 Portland Street", weeks: 6, rent: 795 },
-  { name: "Flat 3, King Edward House", weeks: 3, rent: 650 },
-  { name: "22 Ashfield Road", weeks: 2, rent: 725 },
-  { name: "9 Granby Road", weeks: 1, rent: 995 },
-];
 const ADS = [
   { name: "2-bed launch — Didsbury", platform: "Facebook", leads: 6, spend: "£4.10/lead" },
   { name: "Landlord switch offer", platform: "Instagram", leads: 3, spend: "£7.40/lead" },
@@ -559,6 +553,213 @@ export function Figure({ n }: { n: number | null | undefined }) {
   return <>{n.toLocaleString("en-GB")}</>;
 }
 
+/**
+ * The managed book, live, for the Portfolio tile.
+ *
+ * Same shape as useMyFigures: one fetch shared across the board, a failure
+ * kept apart from an empty book. Reads the same cached answer the Portfolio
+ * screen does (/api/portfolio), so the tile and the screen can never disagree.
+ */
+type BookForTile = {
+  counts: { properties: number; rentRoll: number; landlords: number };
+  properties: Array<{ listingId: string; name: string; letSince: string | null; agent: { name: string } | null; service: string | null }>;
+};
+let bookPromise: Promise<{ ok?: boolean; unlinked?: boolean; error?: string; counts?: BookForTile["counts"]; properties?: BookForTile["properties"] } | null> | null = null;
+
+function useManagedBook() {
+  const [state, setState] = useState<{
+    book: BookForTile | null;
+    loading: boolean;
+    unlinked: boolean;
+    error: string | null;
+  }>({ book: null, loading: true, unlinked: false, error: null });
+
+  useEffect(() => {
+    let alive = true;
+    bookPromise ??= fetch("/api/portfolio")
+      .then((r) => r.json())
+      .catch(() => null);
+    void bookPromise.then((j) => {
+      if (!alive) return;
+      if (j?.ok && j.counts && j.properties) {
+        setState({ book: { counts: j.counts, properties: j.properties }, loading: false, unlinked: false, error: null });
+      } else {
+        setState({ book: null, loading: false, unlinked: Boolean(j?.unlinked), error: j?.error ?? "REX didn't answer." });
+      }
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  return state;
+}
+
+const money = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
+
+/**
+ * Portfolio: the managed book, live off REX.
+ *
+ * Was "568, +27 this year" typed in. The count is now the leased book, and
+ * the bars are NEW LETS per month for the last twelve - each property's
+ * let date is real (REX's state_change_timestamp) - rather than a growth
+ * curve, because a property that leaves the book leaves the leased state,
+ * so its history is not there to draw. New lets is what REX can say; net
+ * growth is not, and the label says which this is.
+ *
+ * Month-scoped off now(), so it rolls over on its own.
+ */
+function PortfolioWidget({ w, h }: { w: number; h: number }) {
+  const { book, loading, unlinked, error } = useManagedBook();
+
+  const now = new Date();
+  const months: string[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  const perMonth = months.map(
+    (m) => book?.properties.filter((p) => p.letSince?.startsWith(m)).length ?? 0
+  );
+  const thisMonth = perMonth[perMonth.length - 1] ?? 0;
+  const twelve = perMonth.reduce((a, b) => a + b, 0);
+  const latest = [...(book?.properties ?? [])]
+    .filter((p) => p.letSince)
+    .sort((a, b) => (b.letSince ?? "").localeCompare(a.letSince ?? ""));
+
+  const count = loading ? "·" : book ? book.counts.properties.toLocaleString("en-GB") : "—";
+  const hint = loading
+    ? "reading the book"
+    : book
+      ? `${thisMonth} let this month · ${money(book.counts.rentRoll)} pcm`
+      : unlinked
+        ? "link your REX account to see yours"
+        : "couldn't read REX";
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <Head icon="folder" label="Portfolio" />
+        {w >= 2 && book && <FlowTag from="REX" />}
+      </div>
+      {w === 1 && h === 1 ? (
+        <BigCount value={count} hint={hint} />
+      ) : (
+        <>
+          <div className="mt-2 flex items-end gap-4">
+            <div>
+              <p className="figures text-[34px] leading-none">{count}</p>
+              <p className="mt-1 text-[11px] font-medium text-accent-dark">
+                {book ? `managed · ${money(book.counts.rentRoll)} pcm` : hint}
+              </p>
+            </div>
+            {book && (
+              <div className="mb-1 min-w-0 flex-1">
+                <Bars data={perMonth} tall={h >= 2} />
+                <p className="mt-1 text-[9px] text-muted">new lets · last 12 months · {twelve}</p>
+              </div>
+            )}
+          </div>
+          {error && !loading && !book && (
+            <p className="mt-2 text-[11px] leading-relaxed text-accent-dark">{error}</p>
+          )}
+          {h >= 2 && book && (
+            <>
+              <p className="mt-4 text-[10px] font-semibold uppercase tracking-wide text-muted">Latest lets</p>
+              <RowList
+                rows={latest.slice(0, w >= 2 ? 4 : 3).map((p) => ({
+                  a: p.letSince ? new Date(`${p.letSince}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "—",
+                  b: p.name,
+                  c: p.agent?.name ?? p.service ?? undefined,
+                }))}
+                max={w >= 2 ? 4 : 3}
+              />
+              {w >= 2 && (
+                <p className="mt-3 border-t border-line/50 pt-2 text-[11px] text-muted">
+                  {book.counts.landlords} landlords ·{" "}
+                  <Link href="/portfolio" className="text-accent-dark hover:underline">open the book →</Link>
+                </p>
+              )}
+            </>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+/**
+ * Pipeline snapshot, as a COMPONENT.
+ *
+ * This used to call useMyFigures() inside the tile's render function, which
+ * runs in BentoDash's render - so the hook belonged to the board, not the
+ * tile. Take the tile off the board in Customise and the board rendered
+ * fewer hooks than last time, and React threw ("Rendered fewer hooks than
+ * expected"). Every other live tile is a component for exactly this reason;
+ * this one had an eslint-disable where the component should have been.
+ */
+function PipelineWidget({ w, h }: { w: number; h: number }) {
+      /* LIVE, and this agent's own. These were literals — 14, 9, 3, 24, 6,
+         568, 2 — on the first screen anybody sees. Viewings and move-ins are
+         gone rather than kept: REX calendar events carry no owning agent, so a
+         per-agent viewings count cannot be produced, and a business-wide one
+         sitting beside an agent's own everything-else is the most misleading
+         number that could be on this screen. */
+      const { figures, unlinked, loading } = useMyFigures();
+      const STAGES = [
+        { label: "Leads", value: figures?.leads ?? null, href: "/leads" },
+        { label: "Appraisals", value: figures?.appraisals ?? null, href: "/market-appraisals" },
+        { label: "On market", value: figures?.onMarket ?? null, href: "/listings" },
+        { label: "Applications", value: figures?.applications ?? null, href: "/applications" },
+        { label: "Managed", value: figures?.managed ?? null, href: "/portfolio" },
+      ].slice(0, w >= 4 ? 5 : w >= 2 ? 4 : 2);
+      return (
+        <>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <Head icon="trend-up" label="Pipeline snapshot" />
+            {w >= 3 && !unlinked && <FlowTag from="REX" />}
+          </div>
+          {unlinked && (
+            <p className="mb-2 text-[11px] leading-relaxed text-accent-dark">
+              We can&apos;t tell which REX user you are, so these would be somebody
+              else&apos;s numbers. Ask James to link your account.
+            </p>
+          )}
+          <div className={`grid gap-4 ${w >= 4 ? "grid-cols-7" : w >= 2 ? "grid-cols-4" : "grid-cols-2"}`}>
+            {STAGES.map((p, i) => {
+              const inner = (
+                <>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-accent" />
+                    <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted">
+                      {p.label}
+                    </span>
+                  </span>
+                  <span className="figures mt-1.5 block text-[24px] leading-none">
+                    {loading ? <span className="text-muted">·</span> : <Figure n={p.value} />}
+                  </span>
+                  {/* The conversion percentages were invented too, and a made-up
+                      rate under a live number is worse than under a fake one —
+                      it borrows the credibility of the figure above it. Gone
+                      until they are derived from these counts. */}
+                </>
+              );
+              return p.href ? (
+                <Link key={p.label} href={p.href} className="min-w-0 transition-opacity hover:opacity-70">{inner}</Link>
+              ) : (
+                <div key={p.label} className="min-w-0">{inner}</div>
+              );
+            })}
+          </div>
+          {h >= 2 && (
+            <p className="mt-3 border-t border-line/50 pt-2 text-[10px] text-muted">
+              Conversion figures are placeholders until the history store lands — the shape is the point.
+            </p>
+          )}
+        </>
+      );
+}
+
 export const WIDGETS: Record<string, WidgetDef> = {
   "leads-today": {
     label: "Leads today", icon: "pack/target", hint: "count → trend → the names themselves",
@@ -688,48 +889,19 @@ export const WIDGETS: Record<string, WidgetDef> = {
   occupancy: {
     label: "Occupancy", icon: "pack/building", hint: "the % → the voids → what they cost",
     defaultW: 1, defaultH: 1,
+    /* Was "93%", typed in. Occupancy is who is EMPTY, and REX cannot say:
+       its leased book is the let properties by definition, and PayProp -
+       which knows which tenancies are running - has no UK key on this
+       environment. So the tile says that, rather than a percentage nobody
+       measured. It comes back the day the key does. */
     render: (w, h) => (
       <>
         <Head icon="pack/building" label="Occupancy" />
-        {w === 1 && h === 1 && <BigCount value="93%" hint="of the managed book" />}
+        <BigCount value="—" hint="not available yet" />
         {(w >= 2 || h >= 2) && (
-          <>
-            <div className="mt-2 flex items-center gap-4">
-              <Donut
-                centre="93%"
-                sub="occupied"
-                parts={[
-                  { value: 529, color: "var(--accent-dark)" },
-                  { value: 39, color: "var(--accent-soft)" },
-                ]}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="text-[12px]"><span className="figures text-[16px]">529</span> <span className="text-muted">occupied</span></p>
-                <p className="mt-1 text-[12px]"><span className="figures text-[16px]">39</span> <span className="text-muted">standing empty</span></p>
-              </div>
-            </div>
-            {h >= 2 && (
-              <>
-                {/* The next stage of "93%": the 7% — who's empty, for how
-                    long, and what it costs. Occupancy is a rent number
-                    wearing a percentage. */}
-                <p className="mt-4 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                  The voids, and the rent they&apos;re not paying
-                </p>
-                <RowList
-                  rows={VOIDS.map((v) => ({
-                    a: `${v.weeks}w`, b: v.name, c: `−£${v.rent}/mo`,
-                  }))}
-                  max={w >= 2 ? 4 : 3}
-                />
-                {w >= 2 && (
-                  <p className="mt-3 border-t border-line/50 pt-2 text-[11px] font-semibold text-accent-dark">
-                    £3,165/month walking out the door — relet these first.
-                  </p>
-                )}
-              </>
-            )}
-          </>
+          <p className="mt-2 text-[11px] leading-relaxed text-muted">
+            Needs PayProp&apos;s UK key. REX knows what is let; only PayProp knows what is standing empty.
+          </p>
         )}
       </>
     ),
@@ -784,68 +956,7 @@ export const WIDGETS: Record<string, WidgetDef> = {
     label: "Pipeline snapshot", icon: "trend-up", hint: "the journey in numbers; taller adds conversion",
     defaultW: 4, defaultH: 1,
     sizes: { s: [2, 1], m: [4, 1], l: [4, 2] },
-    render: (w, h) => {
-      /* LIVE, and this agent's own. These were literals — 14, 9, 3, 24, 6,
-         568, 2 — on the first screen anybody sees. Viewings and move-ins are
-         gone rather than kept: REX calendar events carry no owning agent, so a
-         per-agent viewings count cannot be produced, and a business-wide one
-         sitting beside an agent's own everything-else is the most misleading
-         number that could be on this screen. */
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      const { figures, unlinked, loading } = useMyFigures();
-      const STAGES = [
-        { label: "Leads", value: figures?.leads ?? null, href: "/leads" },
-        { label: "Appraisals", value: figures?.appraisals ?? null, href: "/market-appraisals" },
-        { label: "On market", value: figures?.onMarket ?? null, href: "/listings" },
-        { label: "Applications", value: figures?.applications ?? null, href: "/applications" },
-        { label: "Managed", value: figures?.managed ?? null, href: "/portfolio" },
-      ].slice(0, w >= 4 ? 5 : w >= 2 ? 4 : 2);
-      return (
-        <>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <Head icon="trend-up" label="Pipeline snapshot" />
-            {w >= 3 && !unlinked && <FlowTag from="REX" />}
-          </div>
-          {unlinked && (
-            <p className="mb-2 text-[11px] leading-relaxed text-accent-dark">
-              We can&apos;t tell which REX user you are, so these would be somebody
-              else&apos;s numbers. Ask James to link your account.
-            </p>
-          )}
-          <div className={`grid gap-4 ${w >= 4 ? "grid-cols-7" : w >= 2 ? "grid-cols-4" : "grid-cols-2"}`}>
-            {STAGES.map((p, i) => {
-              const inner = (
-                <>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full bg-accent" />
-                    <span className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted">
-                      {p.label}
-                    </span>
-                  </span>
-                  <span className="figures mt-1.5 block text-[24px] leading-none">
-                    {loading ? <span className="text-muted">·</span> : <Figure n={p.value} />}
-                  </span>
-                  {/* The conversion percentages were invented too, and a made-up
-                      rate under a live number is worse than under a fake one —
-                      it borrows the credibility of the figure above it. Gone
-                      until they are derived from these counts. */}
-                </>
-              );
-              return p.href ? (
-                <Link key={p.label} href={p.href} className="min-w-0 transition-opacity hover:opacity-70">{inner}</Link>
-              ) : (
-                <div key={p.label} className="min-w-0">{inner}</div>
-              );
-            })}
-          </div>
-          {h >= 2 && (
-            <p className="mt-3 border-t border-line/50 pt-2 text-[10px] text-muted">
-              Conversion figures are placeholders until the history store lands — the shape is the point.
-            </p>
-          )}
-        </>
-      );
-    },
+    render: (w, h) => <PipelineWidget w={w} h={h} />,
   },
 
   "facebook-leads": {
@@ -945,42 +1056,9 @@ export const WIDGETS: Record<string, WidgetDef> = {
   },
 
   portfolio: {
-    label: "Portfolio size", icon: "folder", hint: "the managed book, and how it's growing",
+    label: "Portfolio size", icon: "folder", hint: "the managed book, and what joined it",
     defaultW: 1, defaultH: 1,
-    render: (w, h) => (
-      <>
-        <Head icon="folder" label="Portfolio" />
-        {w === 1 && h === 1 ? (
-          <BigCount value="568" hint="+27 this year" />
-        ) : (
-          <>
-            <div className="mt-2 flex items-end gap-4">
-              <div>
-                <p className="figures text-[34px] leading-none">568</p>
-                <p className="mt-1 text-[11px] font-medium text-accent-dark">homes managed</p>
-              </div>
-              <div className="mb-1 min-w-0 flex-1">
-                <Bars data={[541, 544, 546, 549, 551, 553, 558, 560, 561, 563, 566, 568]} tall={h >= 2} />
-                <p className="mt-1 text-[9px] text-muted">12 months · +27</p>
-              </div>
-            </div>
-            {h >= 2 && (
-              <>
-                <p className="mt-4 text-[10px] font-semibold uppercase tracking-wide text-muted">This month</p>
-                <RowList
-                  rows={[
-                    { a: "+2", b: "New instructions taken on", c: "MA wins" },
-                    { a: "+1", b: "Switched from another agent" },
-                    { a: "−1", b: "Sold — landlord exited", c: "22 Ashfield Rd" },
-                  ]}
-                  max={3}
-                />
-              </>
-            )}
-          </>
-        )}
-      </>
-    ),
+    render: (w, h) => <PortfolioWidget w={w} h={h} />,
   },
 
   earnings: {
@@ -1171,7 +1249,7 @@ export const DEFAULT_LAYOUT: { id: string; type: string; w: number; h: number }[
   { id: "d1", type: "leads-today", w: 1, h: 1 },
   { id: "d2", type: "on-market", w: 1, h: 1 },
   { id: "d3", type: "applications", w: 1, h: 1 },
-  { id: "d4", type: "occupancy", w: 1, h: 1 },
+  { id: "d4", type: "portfolio", w: 1, h: 1 },
   { id: "d5", type: "attention", w: 1, h: 2 },
   { id: "d6", type: "today", w: 1, h: 2 },
   { id: "d7", type: "lead-sources", w: 2, h: 2 },
