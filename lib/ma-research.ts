@@ -506,6 +506,21 @@ export async function hsLetBook(
   key: "sectors" | "districts",
   value: string
 ): Promise<Array<Record<string, unknown>>> {
+  return hsBook(key, value, "let");
+}
+
+/**
+ * Either market. The sales feed has the same shape as the lettings one
+ * (measured 2 Sep 2026 on NN1: same fields, statuses on market, sstc, under
+ * offer, withdrawn), so one pager serves both. Bond reads both: a property
+ * that was let and is now for sale is a landlord leaving, and one that will
+ * not sell is a landlord in waiting.
+ */
+export async function hsBook(
+  key: "sectors" | "districts",
+  value: string,
+  market: "let" | "sale"
+): Promise<Array<Record<string, unknown>>> {
   /* PAGED. 300 is the feed's cap, and on the first real sweep fourteen sectors
      returned exactly 300 — Birmingham, Bristol, Edinburgh, Nottingham, Sheffield,
      three London ones. Their books were cut off at the cap, and because the
@@ -521,7 +536,7 @@ export async function hsLetBook(
       "limit=300",
       `offset=${page * 300}`,
     ];
-    const res = await hsFetch<unknown>(`current_listings_crm/search/let/?${parts.join("&")}`);
+    const res = await hsFetch<unknown>(`current_listings_crm/search/${market}/?${parts.join("&")}`);
     /* THROW, do not return []. The capture treats an empty result as "this
        sector has nothing" and skips it; it must never treat a throttled or
        broken fetch the same way, or a bad afternoon reads as fifteen empty

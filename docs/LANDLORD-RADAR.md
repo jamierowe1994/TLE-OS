@@ -296,3 +296,28 @@ register, other), optional title number and note. Writes a `found` row to
 `os_bond_owner_lookups` with provider `manual:<source>`, logs to Today, and shows on the
 panel and in the Owners room exactly as a provider's answer would. The postcard button
 stays disabled until the print house is connected.
+
+---
+
+## Both markets, 2 Sep 2026 (night)
+
+The sweep now reads the Homesearch **sales** feed for every watched district as well as
+lettings (same fields; statuses on market, sstc, under offer, withdrawn). Rows carry a
+`market` column; sale keys are prefixed `hss:`. Measured on the first run: 21,803 sale
+listings across the 37 NN and MK districts, 90 seconds for both feeds.
+
+Three signals came out of joining the two feeds on the property:
+
+- **Let, now for sale** (35): a let listing followed by a sale listing. 139 on day one.
+- **Not selling** (20): the rental that went up for sale and is still there after 120
+  days. Only fires on a property that was a rental - on its own an unsold house is not a
+  lettings prospect, and there were 2,083 of those over 120 days.
+- **Could not sell, now to let** (30): a sale listing followed by a let listing. 149 on day
+  one, most of them OpenRent, which is about as good as a lettings lead gets.
+
+Cross-listing matches on street-only keys are only trusted when the second listing follows
+the first within a year; on a UPRN or full-address key, within two years. "Back on market"
+and "switched agent" now compare lettings listings only.
+
+The board shows an asking price instead of a rent for a property whose current listing is
+a sale.

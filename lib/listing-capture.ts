@@ -56,10 +56,12 @@ interface HsRow {
   hs_id?: number | string | null;
 }
 
-/** Same identity rule the cards use — the Homesearch listing id where there is one. */
-function keyOf(r: HsRow): string {
+/** Same identity rule the cards use — the Homesearch listing id where there is one.
+ *  Sales rows carry their own prefix so the two feeds can never collide. */
+function keyOf(r: HsRow, market: "let" | "sale" = "let"): string {
   const m = /\/(\d+)\/?$/.exec(r.link ?? "");
-  return m ? `hs:${m[1]}` : `${r.full_address ?? r.street ?? "?"}|${r.price ?? ""}`;
+  const p = market === "sale" ? "hss" : "hs";
+  return m ? `${p}:${m[1]}` : `${market === "sale" ? "sale|" : ""}${r.full_address ?? r.street ?? "?"}|${r.price ?? ""}`;
 }
 
 function numberOrNull(v: unknown): number | null {
@@ -205,7 +207,7 @@ export async function seedSectorsFromAppraisals(by: string): Promise<string[]> {
  * because a patch is "NN and MK" and nobody wants to name a hundred sectors.
  * Both land in the same table; a row remembers both its sector and district.
  */
-export type SweepScope = { kind: "sector" | "district"; value: string };
+export type SweepScope = { kind: "sector" | "district"; value: string; market?: "let" | "sale" };
 
 export interface SweepResult {
   /** The scope value — a sector for the original sweep, a district for Radar.
@@ -220,6 +222,7 @@ export interface SweepResult {
   skipped?: string;
   /** Set when the feed returned the page cap and there may be more behind it. */
   truncated?: boolean;
+  market?: "let" | "sale";
 }
 
 /** One sector, one day. Kept for the original capture route. */
@@ -282,13 +285,14 @@ export async function sweepScope(
 
   const scopeCol = scope.kind === "sector" ? "sector" : "district";
   const district = scope.kind === "district" ? scope.value : scope.value.split(" ")[0];
+  const market = scope.market ?? "let";
 
   /* What we held before this run, so a change can be SEEN rather than
      overwritten. One read per scope, not one per row. */
   const held = new Map<string, Held>();
   for (const h of await q<Held>(
-    `SELECT listing_key, rent, status, agent, gone_at FROM os_listing_capture WHERE ${scopeCol} = $1`,
-    [scope.value]
+    `SELECT listing_key, rent, status, agent, gone_at FROM os_listing_capture WHERE ${scopeCol} = $1 AND market = $2`,
+    [scope.value, market]
   )) {
     held.set(h.listing_key, h);
   }
@@ -306,10 +310,10 @@ export async function sweepScope(
   const str = (v: unknown) => (v == null ? null : String(v));
 
   for (const r of rows) {
-    const key = keyOf(r);
+    const key = keyOf(r, market);
     seenKeys.push(key);
     const status = String(r.status ?? "").trim().toLowerCase();
-    const isLetAgreed = status === "let agreed";
+    const isLetAgreed = market === "let" && status === "let agreed";
     const postcode = r.postcode ?? "";
     const sector = scope.kind === "sector" ? scope.value : (sectorOf(postcode) ?? `${district} ?`);
     const rent = numberOrNull(r.price);
@@ -336,9 +340,10 @@ export async function sweepScope(
       `INSERT INTO os_listing_capture
          (listing_key, sector, district, postcode, address, street, beds, property_type,
           rent, agent, lat, lon, status, listed_on, reduced_at, uprn, hs_id, property_key,
-          let_agreed_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18, NULL)
+          let_agreed_at, market)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18, NULL, $20)
        ON CONFLICT (listing_key) DO UPDATE SET
+         market        = EXCLUDED.market,
          status        = EXCLUDED.status,
          rent          = EXCLUDED.rent,
          agent         = EXCLUDED.agent,
@@ -377,6 +382,7 @@ export async function sweepScope(
         textOrNull(r.hs_id),
         propertyKey,
         isLetAgreed,
+        market,
       ]
     );
 
@@ -411,8 +417,8 @@ export async function sweepScope(
      exactly the case an insert-counter misses. */
   const flipped = await q<{ n: string }>(
     `SELECT count(*) AS n FROM os_listing_capture
-      WHERE ${scopeCol} = $1 AND let_agreed_at >= $2`,
-    [scope.value, runStart]
+      WHERE ${scopeCol} = $1 AND market = $3 AND let_agreed_at >= $2`,
+    [scope.value, runStart, market]
   );
   const newlyLetAgreed = Number(flipped[0]?.n ?? 0);
 
@@ -423,9 +429,9 @@ export async function sweepScope(
   const gone = await q<{ listing_key: string; property_key: string | null; status: string }>(
     `UPDATE os_listing_capture
         SET gone_at = NOW()
-      WHERE ${scopeCol} = $1 AND gone_at IS NULL AND NOT (listing_key = ANY($2::text[]))
+      WHERE ${scopeCol} = $1 AND market = $3 AND gone_at IS NULL AND NOT (listing_key = ANY($2::text[]))
       RETURNING listing_key, property_key, status`,
-    [scope.value, seenKeys]
+    [scope.value, seenKeys, market]
   );
   for (const g of gone) {
     await q(
@@ -441,7 +447,8 @@ export async function sweepScope(
       `UPDATE os_capture_sectors SET last_run_at = NOW(), last_seen_n = $2 WHERE sector = $1`,
       [scope.value, rows.length]
     );
-  } else {
+  } else if (market === "let") {
+    /* The district's stamp is the lettings sweep; the sales sweep rides after it. */
     await q(
       `UPDATE os_radar_districts SET last_run_at = NOW(), last_seen_n = $2 WHERE district = $1`,
       [scope.value, rows.length]
@@ -455,6 +462,7 @@ export async function sweepScope(
     newlyLetAgreed,
     goneNow: gone.length,
     events,
+    market,
     /* A run that stopped at the cap has NOT seen the scope, and the gone_at
        sweep above would then mark the unseen tail as vanished. Reported so a
        silent truncation cannot read as full coverage. */

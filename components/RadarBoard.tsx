@@ -341,7 +341,13 @@ export default function RadarBoard({
       },
       { key: "postcode", label: "Postcode", cell: "whitespace-nowrap text-muted", render: (r) => r.postcode },
       { key: "agent", label: "Listed by", cell: "whitespace-nowrap", render: (r) => r.agent ?? "-" },
-      { key: "rent", label: "Rent", cell: "figures whitespace-nowrap", render: (r) => (r.rent == null ? "-" : `${pounds(r.rent)} pcm`) },
+      {
+        key: "rent", label: "Rent or price", cell: "figures whitespace-nowrap",
+        render: (r) =>
+          r.market === "sale"
+            ? r.asking_price == null ? "for sale" : `${pounds(r.asking_price)} asking`
+            : r.rent == null ? "-" : `${pounds(r.rent)} pcm`,
+      },
       { key: "beds", label: "Beds", optional: true, cell: "figures whitespace-nowrap text-muted", render: (r) => r.beds ?? "-" },
       {
         key: "listed", label: "On market", cell: "whitespace-nowrap text-muted",
@@ -715,7 +721,9 @@ function ProspectPanel({
             {[
               prospect.beds != null ? `${prospect.beds} bed` : null,
               prospect.property_type,
-              prospect.rent != null ? `${pounds(prospect.rent)} pcm` : null,
+              prospect.market === "sale"
+                ? `for sale${prospect.asking_price != null ? ` at ${pounds(prospect.asking_price)}` : ""}`
+                : prospect.rent != null ? `${pounds(prospect.rent)} pcm` : null,
             ]
               .filter(Boolean)
               .join(" · ")}

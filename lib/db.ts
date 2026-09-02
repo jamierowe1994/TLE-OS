@@ -1302,6 +1302,13 @@ ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS owner_company_name TEXT;
 ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS owner_company_number TEXT;
 ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS owner_company_address TEXT;
 ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS owner_title_number TEXT;
+
+-- Both markets in one capture. A row is a listing to let or a listing for
+-- sale; the property behind it is the same, which is the whole point.
+ALTER TABLE os_listing_capture ADD COLUMN IF NOT EXISTS market TEXT NOT NULL DEFAULT 'let';
+CREATE INDEX IF NOT EXISTS os_listing_capture_market_idx ON os_listing_capture (district, market, status);
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS market TEXT NOT NULL DEFAULT 'let';
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS asking_price INTEGER;
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

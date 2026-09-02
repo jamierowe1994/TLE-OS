@@ -21,7 +21,10 @@ export type SignalKey =
   | "relisted"
   | "reduced"
   | "competitor_new"
-  | "company_owned";
+  | "company_owned"
+  | "let_to_sale"
+  | "sale_stuck"
+  | "sale_to_let";
 
 export const SIGNALS: Record<SignalKey, { label: string; weight: number; why: string }> = {
   self_managing: {
@@ -62,6 +65,21 @@ export const SIGNALS: Record<SignalKey, { label: string; weight: number; why: st
     label: "Company owned",
     weight: 10,
     why: "The Land Registry names a company as the owner. Contactable at its registered office by post, phone and email, no title to buy.",
+  },
+  let_to_sale: {
+    label: "Let, now for sale",
+    weight: 35,
+    why: "It was a rental and the landlord has put it up for sale. Either they are leaving, or a sale that stalls comes back to let.",
+  },
+  sale_stuck: {
+    label: "Not selling",
+    weight: 20,
+    why: "Four months for sale and still there. A vendor who cannot sell is a landlord in waiting.",
+  },
+  sale_to_let: {
+    label: "Could not sell, now to let",
+    weight: 30,
+    why: "It was for sale, did not go, and is now to let. A landlord by circumstance, often with no agent relationship yet.",
   },
 };
 
@@ -121,6 +139,9 @@ export interface Prospect {
   beds: number | null;
   property_type: string | null;
   rent: number | null;
+  /** Which feed the current listing is in. */
+  market: "let" | "sale";
+  asking_price: number | null;
   agent: string | null;
   status: string | null;
   listed_on: string | null;

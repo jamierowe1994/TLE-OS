@@ -1,6 +1,6 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
-import { hsLetBook } from "@/lib/ma-research";
+import { hsBook } from "@/lib/ma-research";
 import { sweepScope, type SweepResult } from "@/lib/listing-capture";
 import { resendConfigured, resendSendUnlocked, sendEmail } from "@/lib/resend";
 import { assertInternalRecipient } from "@/lib/email-policy";
@@ -97,21 +97,26 @@ export async function sweepPatch(): Promise<SweepResult[]> {
   const districts = await watchedDistricts();
   const results: SweepResult[] = [];
   for (const [i, d] of districts.entries()) {
-    if (i > 0) await new Promise((r) => setTimeout(r, 250));
-    try {
-      results.push(
-        await sweepScope({ kind: "district", value: d.district }, (v) => hsLetBook("districts", v))
-      );
-    } catch (e) {
-      results.push({
-        sector: d.district,
-        seen: 0,
-        newRows: 0,
-        newlyLetAgreed: 0,
-        goneNow: 0,
-        events: 0,
-        skipped: (e as Error).message,
-      });
+    /* Both feeds for the district, lettings first. A property that was let and
+       is now for sale only shows up when both are read. */
+    for (const market of ["let", "sale"] as const) {
+      if (i > 0 || market === "sale") await new Promise((r) => setTimeout(r, 250));
+      try {
+        results.push(
+          await sweepScope({ kind: "district", value: d.district, market }, (v) => hsBook("districts", v, market))
+        );
+      } catch (e) {
+        results.push({
+          sector: d.district,
+          seen: 0,
+          newRows: 0,
+          newlyLetAgreed: 0,
+          goneNow: 0,
+          events: 0,
+          market,
+          skipped: (e as Error).message,
+        });
+      }
     }
   }
   return results;
@@ -133,6 +138,7 @@ interface Lite extends Record<string, unknown> {
   rent: number | null;
   agent: string | null;
   status: string;
+  market: "let" | "sale";
   listed_on: Date | string | null;
   reduced_at: Date | string | null;
   lat: number | null;
@@ -183,11 +189,47 @@ function signalsFor(
 ): Signal[] {
   const cur = rows[0];
   const out: Signal[] = [];
+  const agent = cur.agent ?? "no agent named";
+  const listedDays = daysSince(cur.listed_on ?? cur.first_seen, now) ?? 0;
+
+  /* THE SALES BRANCH. When the newest listing is a sale, the lettings signals
+     do not apply - the landlord is not letting it - and two of their own do.
+     A property that has never been let and is simply unsold is a landlord in
+     waiting, not a landlord, so "not selling" alone scores low. */
+  if (cur.market === "sale") {
+    const forSale = (cur.status === "on market" || cur.status === "under offer") && !cur.gone_at;
+    if (!forSale) return out;
+    /* The let that came before. On a key that names one property (UPRN or
+       full address) any let in the last two years counts. On a street-only
+       key two similar houses can share the key, so the let must sit within a
+       year before the sale went up - the ordinary "tenant left, put it on the
+       market" gap - or it is not trusted. */
+    const oneProperty = !cur.property_key.startsWith("street:");
+    const wasLet = rows.find((r) => {
+      if (r.market !== "let" || listedAt(r) >= listedAt(cur)) return false;
+      const gap = (listedAt(cur) - listedAt(r)) / DAY;
+      return oneProperty ? gap <= 730 : gap <= 365;
+    });
+    if (wasLet) {
+      out.push({
+        key: "let_to_sale",
+        detail: `To let${wasLet.agent ? ` with ${wasLet.agent}` : ""} from ${dmy(wasLet.listed_on ?? wasLet.first_seen)}, for sale with ${agent} since ${dmy(cur.listed_on)}${cur.rent ? ` at ${pounds(cur.rent)}` : ""}`,
+      });
+      /* "Still on the market after X days" - James's words - is the rental
+         that went up for sale and did not go. On its own, an unsold house in a
+         town of 20,000 sale listings is not a lettings prospect: measured 2 Sep,
+         2,083 of them over 120 days, 1,168 over 180 and reduced. So this only
+         fires on a property that was a rental. */
+      if (listedDays >= 120) {
+        out.push({ key: "sale_stuck", detail: `${listedDays} days for sale and not gone` });
+      }
+    }
+    return out;
+  }
+
   /* A row keeps its last feed status after it leaves the feed, so "on market"
      alone would keep flagging a property for weeks after it let. */
   const onMarket = cur.status === "on market" && !cur.gone_at;
-  const agent = cur.agent ?? "no agent named";
-  const listedDays = daysSince(cur.listed_on ?? cur.first_seen, now) ?? 0;
   /* Street-and-postcode keys can be two different flats. Signals that
      compare one listing with an earlier one are only trusted on a key that
      names one property. See propertyKeyOf in lib/listing-capture. */
@@ -216,8 +258,24 @@ function signalsFor(
   /* Back on market: another listing of the same property, listed before this
      one and within a year of it. Only while THIS listing is recent, or the
      history would keep flagging a property that settled down long ago. */
+  /* The sale that came before this let: tried to sell, could not, letting it
+     instead. Same trust rule as the other cross-listing signals. */
+  const prevSale = onMarket && listedDays <= 180
+    ? rows.find((r) => {
+        if (r.market !== "sale" || listedAt(r) >= listedAt(cur)) return false;
+        const gap = (listedAt(cur) - listedAt(r)) / DAY;
+        return oneProperty ? gap <= 730 : gap <= 365;
+      })
+    : undefined;
+  if (prevSale) {
+    out.push({
+      key: "sale_to_let",
+      detail: `For sale${prevSale.agent ? ` with ${prevSale.agent}` : ""} from ${dmy(prevSale.listed_on ?? prevSale.first_seen)}${prevSale.rent ? ` at ${pounds(prevSale.rent)}` : ""}, to let since ${dmy(cur.listed_on)}`,
+    });
+  }
+
   const prev = oneProperty && cur.status !== "let agreed" && !cur.gone_at
-    ? rows.find((r) => r.listing_key !== cur.listing_key && listedAt(r) < listedAt(cur))
+    ? rows.find((r) => r.market === "let" && r.listing_key !== cur.listing_key && listedAt(r) < listedAt(cur))
     : undefined;
   if (prev && listedDays <= 180) {
     const gap = Math.max(0, Math.round((listedAt(cur) - listedAt(prev)) / DAY));
@@ -269,7 +327,7 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
 
   const rows = await q<Lite>(
     `SELECT listing_key, property_key, uprn, address, street, postcode, sector, district,
-            beds, property_type, rent, agent, status, listed_on, reduced_at, lat, lon,
+            beds, property_type, rent, agent, status, market, listed_on, reduced_at, lat, lon,
             first_seen, last_seen, let_agreed_at, gone_at
        FROM os_listing_capture
       WHERE district = ANY($1::text[]) AND property_key IS NOT NULL`,
@@ -316,8 +374,8 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
       `INSERT INTO os_radar_prospects
          (property_key, listing_key, uprn, address, street, postcode, sector, district,
           beds, property_type, rent, agent, status, listed_on, signals, score,
-          lat, lon, last_signal_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$17,$18, NOW(), NOW())
+          lat, lon, market, asking_price, last_signal_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$17,$18,$19,$20, NOW(), NOW())
        ON CONFLICT (property_key) DO UPDATE SET
          listing_key   = EXCLUDED.listing_key,
          uprn          = COALESCE(EXCLUDED.uprn, os_radar_prospects.uprn),
@@ -336,6 +394,8 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
          score         = EXCLUDED.score,
          lat           = COALESCE(EXCLUDED.lat, os_radar_prospects.lat),
          lon           = COALESCE(EXCLUDED.lon, os_radar_prospects.lon),
+         market        = EXCLUDED.market,
+         asking_price  = EXCLUDED.asking_price,
          /* Moves only when the signals actually changed, so "new today" and
             the sort by recency mean something. */
          last_signal_at = CASE
@@ -353,7 +413,7 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
         cur.district,
         cur.beds,
         cur.property_type,
-        cur.rent,
+        cur.market === "let" ? cur.rent : null,
         cur.agent,
         cur.status,
         ymd(cur.listed_on),
@@ -361,6 +421,8 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
         score,
         cur.lat,
         cur.lon,
+        cur.market,
+        cur.market === "sale" ? cur.rent : null,
       ]
     );
   }
@@ -401,6 +463,8 @@ interface ProspectRow extends Record<string, unknown> {
   listed_on: Date | string | null;
   lat: number | null;
   lon: number | null;
+  market: "let" | "sale" | null;
+  asking_price: number | null;
   signals: Signal[];
   score: number;
   stage: string;
@@ -457,6 +521,8 @@ function toProspect(r: ProspectRow): Prospect {
     listed_on: ymd(r.listed_on),
     lat: r.lat,
     lon: r.lon,
+    market: r.market === "sale" ? "sale" : "let",
+    asking_price: r.asking_price ?? null,
     signals: Array.isArray(r.signals) ? r.signals : [],
     score: r.score,
     stage: isStage(r.stage) ? r.stage : "new",
