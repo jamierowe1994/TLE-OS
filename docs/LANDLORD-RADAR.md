@@ -321,3 +321,23 @@ and "switched agent" now compare lettings listings only.
 
 The board shows an asking price instead of a rent for a property whose current listing is
 a sale.
+
+---
+
+## Just bought, 2 Sep 2026 (late night)
+
+`lib/sales.ts` reads HM Land Registry Price Paid Data - free, no account - keeping only the
+watched districts into `os_sales`. The monthly update (about 18 MB, published on the 20th
+working day) runs from `.github/workflows/price-paid.yml` on the 1st; the yearly files
+(`?file=2026`, `?file=2025`) are for the first load. `/api/bond/sales-sync` (cron,
+MACHINE_ROUTES) starts a read and returns; progress in `os_sales_sync`. The primary host
+refused connections from the laptop but the S3 mirror answered, so both are tried in turn.
+
+**Just bought** (35): a listing to let whose address carries the house number (and flat
+number, if any) of a sale completed in the year before it went up, or up to a month after,
+because the register lags completion. Measured locally: the monthly file plus the 2026 file
+gave 6,925 sales in the patch, 6,666 in the last year, and 15 flagged properties matched on
+day one - low because most OpenRent adverts carry no house number, and the register runs
+weeks behind. Both improve on their own: pinning the front door gives the number, and each
+monthly file back-fills the lag. Example: 34 Sharman Road NN5 5JZ, bought 4 June for
+£180,000, to let on OpenRent from 6 June.

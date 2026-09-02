@@ -1309,6 +1309,60 @@ ALTER TABLE os_listing_capture ADD COLUMN IF NOT EXISTS market TEXT NOT NULL DEF
 CREATE INDEX IF NOT EXISTS os_listing_capture_market_idx ON os_listing_capture (district, market, status);
 ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS market TEXT NOT NULL DEFAULT 'let';
 ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS asking_price INTEGER;
+
+-- Completed sales in the patch, from HM Land Registry Price Paid Data: free,
+-- no account, published monthly. Only the districts we watch are kept. A sale
+-- followed by a listing to let is a brand new landlord.
+CREATE TABLE IF NOT EXISTS os_sales (
+  transaction_id TEXT PRIMARY KEY,
+  price          INTEGER NOT NULL,
+  sold_on        DATE NOT NULL,
+  postcode       TEXT NOT NULL,
+  district       TEXT,
+  property_type  TEXT,
+  new_build      BOOLEAN NOT NULL DEFAULT FALSE,
+  tenure         TEXT,
+  paon           TEXT NOT NULL DEFAULT '',
+  saon           TEXT NOT NULL DEFAULT '',
+  street         TEXT NOT NULL DEFAULT '',
+  town           TEXT NOT NULL DEFAULT '',
+  house_number   TEXT,
+  category       TEXT,
+  record_status  TEXT,
+  seen_in        TEXT,
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_sales_postcode_idx ON os_sales (postcode, house_number, sold_on DESC);
+CREATE INDEX IF NOT EXISTS os_sales_sold_idx ON os_sales (sold_on DESC);
+-- One row per Radar run. The run takes minutes now that both feeds are read
+-- and the edge closes a request at 100 seconds, so the route answers at once
+-- and this is where the answer goes.
+CREATE TABLE IF NOT EXISTS os_radar_runs (
+  id          BIGSERIAL PRIMARY KEY,
+  status      TEXT NOT NULL DEFAULT 'running',
+  swept       INTEGER NOT NULL DEFAULT 0,
+  skipped     INTEGER NOT NULL DEFAULT 0,
+  seen        INTEGER NOT NULL DEFAULT 0,
+  new_rows    INTEGER NOT NULL DEFAULT 0,
+  events      INTEGER NOT NULL DEFAULT 0,
+  active      INTEGER,
+  quiet       INTEGER,
+  digest      TEXT,
+  error       TEXT,
+  started_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finished_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS os_sales_sync (
+  id          BIGSERIAL PRIMARY KEY,
+  file_name   TEXT NOT NULL DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'running',
+  rows_read   INTEGER NOT NULL DEFAULT 0,
+  rows_kept   INTEGER NOT NULL DEFAULT 0,
+  error       TEXT,
+  started_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finished_at TIMESTAMPTZ
+);
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

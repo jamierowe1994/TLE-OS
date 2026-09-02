@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
-import { hasDb } from "@/lib/db";
+import { hasDb, q } from "@/lib/db";
 import {
   addDistricts,
   PATCH_DISTRICTS,
@@ -52,9 +52,14 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: "no database" }, { status: 503 });
   }
   const districts = await watchedDistricts();
+  const runs = await q<Record<string, unknown>>(
+    `SELECT id, status, swept, skipped, seen, new_rows, events, active, quiet, digest, error, started_at, finished_at
+       FROM os_radar_runs ORDER BY started_at DESC LIMIT 3`
+  );
   return NextResponse.json({
     ok: true,
     dryRun: true,
+    runs,
     capability: ["district-sweep", "events", "prospects", "digest"],
     watching: districts.length,
     districts,
@@ -86,33 +91,81 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, refreshedOnly: true, seeded, addedByHand, prospects, summary: await radarSummary() });
   }
 
-  const results = await sweepPatch();
-  const skipped = results.filter((r) => r.skipped);
-  const prospects = await refreshProspects();
+  /* THE RUN ANSWERS AT ONCE. Both feeds for 44 districts take two to three
+     minutes, and the edge in front of Railway closes any request at 100
+     seconds with a 524 - measured 2 Sep, the run had finished server-side
+     and the caller was told it failed. So the work is detached, the row in
+     os_radar_runs is the answer, and GET reports it. ?wait=1 keeps the old
+     synchronous shape for a laptop. */
+  const running = await q<{ id: number }>(
+    `SELECT id FROM os_radar_runs WHERE status = 'running' AND started_at > NOW() - INTERVAL '30 minutes'`
+  );
+  if (running.length) {
+    return NextResponse.json({ ok: false, error: "A run is already going.", runId: running[0].id }, { status: 409 });
+  }
+  const [run] = await q<{ id: number }>(`INSERT INTO os_radar_runs DEFAULT VALUES RETURNING id`);
+  const runId = run.id;
 
-  let digest: { sent: string[]; skipped: string | null };
-  try {
-    digest = await sendDigest();
-  } catch (e) {
-    digest = { sent: [], skipped: `Digest failed: ${(e as Error).message}` };
+  const work = async () => {
+    try {
+      const results = await sweepPatch();
+      const skipped = results.filter((r) => r.skipped);
+      const prospects = await refreshProspects();
+      let digest: { sent: string[]; skipped: string | null };
+      try {
+        digest = await sendDigest();
+      } catch (e) {
+        digest = { sent: [], skipped: `Digest failed: ${(e as Error).message}` };
+      }
+      await q(
+        `UPDATE os_radar_runs
+            SET status = 'done', swept = $2, skipped = $3, seen = $4, new_rows = $5, events = $6,
+                active = $7, quiet = $8, digest = $9, finished_at = NOW()
+          WHERE id = $1`,
+        [
+          runId,
+          results.length - skipped.length,
+          skipped.length,
+          results.reduce((n, r) => n + r.seen, 0),
+          results.reduce((n, r) => n + r.newRows, 0),
+          results.reduce((n, r) => n + r.events, 0),
+          prospects.active,
+          prospects.quiet,
+          digest.sent.length ? `sent to ${digest.sent.join(", ")}` : digest.skipped,
+        ]
+      );
+      return { results, skipped, prospects, digest };
+    } catch (e) {
+      await q(`UPDATE os_radar_runs SET status = 'failed', error = $2, finished_at = NOW() WHERE id = $1`, [runId, (e as Error).message]);
+      throw e;
+    }
+  };
+
+  if (req.nextUrl.searchParams.get("wait")) {
+    const { results, skipped, prospects, digest } = await work();
+    return NextResponse.json({
+      ok: true,
+      runId,
+      seeded,
+      addedByHand,
+      swept: results.length - skipped.length,
+      skipped: skipped.length,
+      skippedDetail: skipped,
+      truncated: results.filter((r) => r.truncated).map((r) => r.sector),
+      seen: results.reduce((n, r) => n + r.seen, 0),
+      newRows: results.reduce((n, r) => n + r.newRows, 0),
+      newlyLetAgreed: results.reduce((n, r) => n + r.newlyLetAgreed, 0),
+      goneNow: results.reduce((n, r) => n + r.goneNow, 0),
+      events: results.reduce((n, r) => n + r.events, 0),
+      prospects,
+      digest,
+      summary: await radarSummary(),
+      results,
+    });
   }
 
-  return NextResponse.json({
-    ok: true,
-    seeded,
-    addedByHand,
-    swept: results.length - skipped.length,
-    skipped: skipped.length,
-    skippedDetail: skipped,
-    truncated: results.filter((r) => r.truncated).map((r) => r.sector),
-    seen: results.reduce((n, r) => n + r.seen, 0),
-    newRows: results.reduce((n, r) => n + r.newRows, 0),
-    newlyLetAgreed: results.reduce((n, r) => n + r.newlyLetAgreed, 0),
-    goneNow: results.reduce((n, r) => n + r.goneNow, 0),
-    events: results.reduce((n, r) => n + r.events, 0),
-    prospects,
-    digest,
-    summary: await radarSummary(),
-    results,
+  void work().catch(() => {
+    /* Recorded on the run row. */
   });
+  return NextResponse.json({ ok: true, started: true, runId, seeded, addedByHand }, { status: 202 });
 }

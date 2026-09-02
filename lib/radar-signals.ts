@@ -24,7 +24,8 @@ export type SignalKey =
   | "company_owned"
   | "let_to_sale"
   | "sale_stuck"
-  | "sale_to_let";
+  | "sale_to_let"
+  | "just_bought";
 
 export const SIGNALS: Record<SignalKey, { label: string; weight: number; why: string }> = {
   self_managing: {
@@ -80,6 +81,11 @@ export const SIGNALS: Record<SignalKey, { label: string; weight: number; why: st
     label: "Could not sell, now to let",
     weight: 30,
     why: "It was for sale, did not go, and is now to let. A landlord by circumstance, often with no agent relationship yet.",
+  },
+  just_bought: {
+    label: "Just bought",
+    weight: 35,
+    why: "Sold in the last year, now to let. A brand new landlord, deciding how to run it right now.",
   },
 };
 

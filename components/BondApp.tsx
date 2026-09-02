@@ -415,6 +415,8 @@ function Owners() {
         )}
       </div>
 
+      <SalesCard />
+
       <ProviderCard p={data.provider} title="Individual owners, from a Land Registry provider" />
 
       <section className="rounded-2xl border border-line/80 bg-panel p-5">
@@ -479,6 +481,39 @@ function Postcards() {
           </ul>
         )}
       </section>
+    </div>
+  );
+}
+
+
+function SalesCard() {
+  const [d, setD] = useState<{ salesHeld: number; recent: number; running: boolean; lastRun: { file_name: string; status: string; rows_kept: number; error: string | null; started_at: string } | null } | null>(null);
+  useEffect(() => {
+    fetch("/api/bond/sales-sync", { cache: "no-store" })
+      .then(async (r) => {
+        const j = await r.json();
+        if (j.ok) setD(j);
+      })
+      .catch(() => {});
+  }, []);
+  return (
+    <div className="rounded-2xl border border-line/80 bg-panel p-5">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-[14px]">Completed sales, from the Land Registry price-paid file</h2>
+        <span className="rounded-full border border-accent-dark px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-accent-dark">Free, no key</span>
+      </div>
+      <p className="mt-2 text-[12.5px] text-muted">
+        Every sale in the patch, monthly. A sale followed by a listing to let is the Just bought signal: a brand new landlord.
+      </p>
+      {d && (
+        <dl className="mt-3 grid grid-cols-2 gap-3 text-[12.5px] sm:grid-cols-4">
+          <div><dt className="text-[11px] text-muted">Sales held</dt><dd className="figures">{d.salesHeld.toLocaleString("en-GB")}</dd></div>
+          <div><dt className="text-[11px] text-muted">In the last year</dt><dd className="figures">{d.recent.toLocaleString("en-GB")}</dd></div>
+          <div><dt className="text-[11px] text-muted">Last read</dt><dd>{d.lastRun ? `${when(d.lastRun.started_at)} · ${d.lastRun.status}` : "never"}</dd></div>
+          <div><dt className="text-[11px] text-muted">File</dt><dd className="truncate">{d.lastRun?.file_name || "-"}</dd></div>
+        </dl>
+      )}
+      {d?.lastRun?.error && <p className="mt-2 text-[12px] text-red-700">{d.lastRun.error}</p>}
     </div>
   );
 }

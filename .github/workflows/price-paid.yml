@@ -1,0 +1,28 @@
+# HM Land Registry Price Paid Data, into Bond, once a month.
+#
+# The monthly update is published at 11am on the 20th working day, which
+# lands between the 27th and the 30th. This runs on the 1st and reads the
+# file that appeared the week before. Free, no key. See lib/sales.
+
+name: Price paid
+
+on:
+  schedule:
+    - cron: "40 5 1 * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start the monthly read
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "CRON_SECRET is not set on this repository - nothing was started."
+            exit 1
+          fi
+          curl -sS -X POST -H "x-cron-key: ${CRON_SECRET}" --max-time 60 \
+            "https://tle-os.co.uk/api/bond/sales-sync?file=monthly" | tee -a "$GITHUB_STEP_SUMMARY"

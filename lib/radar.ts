@@ -2,6 +2,7 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { hsBook } from "@/lib/ma-research";
 import { sweepScope, type SweepResult } from "@/lib/listing-capture";
+import { saleMatches, type RecentSale } from "@/lib/sales";
 import { resendConfigured, resendSendUnlocked, sendEmail } from "@/lib/resend";
 import { assertInternalRecipient } from "@/lib/email-policy";
 import {
@@ -185,6 +186,7 @@ function listedAt(r: Lite): number {
 function signalsFor(
   rows: Lite[],
   drops: Map<string, { from: number; to: number; at: number }>,
+  sales: Map<string, RecentSale[]>,
   now: number
 ): Signal[] {
   const cur = rows[0];
@@ -258,6 +260,24 @@ function signalsFor(
   /* Back on market: another listing of the same property, listed before this
      one and within a year of it. Only while THIS listing is recent, or the
      history would keep flagging a property that settled down long ago. */
+  /* Bought, then to let. A completed sale from the price-paid file in the
+     year before this listing went up (or up to a month after - the register
+     lags), on an address that carries the sale's house number. */
+  if (onMarket) {
+    const addr = cur.address || "";
+    const sale = (sales.get(cur.postcode.toUpperCase()) ?? []).find((s) => {
+      if (!saleMatches(addr, s)) return false;
+      const gap = (listedAt(cur) - new Date(s.sold_on).getTime()) / DAY;
+      return gap >= -30 && gap <= 365;
+    });
+    if (sale) {
+      out.push({
+        key: "just_bought",
+        detail: `Bought ${dmy(sale.sold_on)} for ${pounds(sale.price)}${sale.new_build ? ", new build" : ""}, to let since ${dmy(cur.listed_on)}`,
+      });
+    }
+  }
+
   /* The sale that came before this let: tried to sell, could not, letting it
      instead. Same trust rule as the other cross-listing signals. */
   const prevSale = onMarket && listedDays <= 180
@@ -353,6 +373,10 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
     }
   }
 
+  /* Completed sales for the patch, from the price-paid file. */
+  const { recentSales } = await import("@/lib/sales");
+  const sales = await recentSales(districts);
+
   const groups = new Map<string, Lite[]>();
   for (const r of rows) {
     const g = groups.get(r.property_key);
@@ -366,7 +390,7 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
     group.sort((a, b) => listedAt(b) - listedAt(a) || (ms(b.first_seen) ?? 0) - (ms(a.first_seen) ?? 0));
     const cur = group[0];
     if (isOurs(cur.agent)) continue;
-    const signals = signalsFor(group, drops, now);
+    const signals = signalsFor(group, drops, sales, now);
     if (signals.length === 0) continue;
     const score = signals.reduce((n, s) => n + SIGNALS[s.key].weight, 0);
     active.push(key);
