@@ -51,7 +51,10 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
     <OwnWorkspace needs="see:marketing">
       {/* No padding of its own, exactly as before: the workspace strips the
           shell's and this rail has always sat flush to the window edge. */}
-      <div className="flex gap-5">
+      {/* Stacked below md for the same reason the admin layout is: the rail
+          turns into a scrolling strip at that breakpoint, and a strip beside
+          the content squeezes both. */}
+      <div className="flex flex-col gap-5 md:flex-row">
         <WorkspaceRail label="Marketing" groups={GROUPS} />
         {/* pb-20 leaves room for the workspace's floating back pill. This is
             the one of the three screens that scrolls normally, so without it

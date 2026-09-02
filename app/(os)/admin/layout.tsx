@@ -117,6 +117,9 @@ const GROUPS: Array<{
       /* Where James feeds the assistant. The agent-facing side of it lives in
          the help panel; this is the console behind it. */
       { href: "/admin/assistant", label: "Steve", needs: "see:reports" },
+      /* Next to Steve on purpose: these are written for HIS Guides tab, and
+         sit here only while they are being drafted and checked. */
+      { href: "/admin/guides", label: "Guides", needs: "see:reports" },
     ],
   },
 ];
@@ -209,7 +212,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         [data-os-sidebar] { display: none !important; }
       `}</style>
 
-      <div className="flex gap-5">
+      {/* Stacked below md, side by side above it. The rail already swaps a
+          240px column for a scrolling strip at that breakpoint (see
+          WorkspaceRail); this is the other half of the same idea — a strip
+          belongs ABOVE the content, not in a column beside it, which is what
+          `flex` alone was doing and why admin pages were unreadable on a
+          phone. */}
+      <div className="flex flex-col gap-5 md:flex-row">
         <WorkspaceRail
           label="Admin"
           groups={groups}

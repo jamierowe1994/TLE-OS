@@ -110,11 +110,18 @@ export default function WorkspaceRail({
       </aside>
 
       {/* On a phone the rail becomes a scrolling strip — a 240px column beside
-          content on a 375px screen leaves neither of them usable. */}
+          content on a 375px screen leaves neither of them usable.
+
+          `min-w-0` is what makes `overflow-x-auto` mean anything. This nav is a
+          flex ITEM of the wrapper each layout draws, and a flex item's default
+          `min-width: auto` refuses to shrink below its own content — so the
+          strip never scrolled, it just grew, and took the whole document
+          sideways with it. Every admin page scrolled horizontally on a phone
+          because of it, by exactly the width of the pills that did not fit. */}
       <nav
         data-admin-rail
         aria-label={label}
-        className="mb-4 flex gap-1.5 overflow-x-auto pb-1 md:hidden"
+        className="mb-4 flex min-w-0 gap-1.5 overflow-x-auto pb-1 md:hidden"
       >
         {groups
           .flatMap((g) => g.items)
