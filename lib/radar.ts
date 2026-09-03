@@ -581,6 +581,8 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
   await matchEpc();
   const { rebuildLandlords } = await import("@/lib/landlords");
   await rebuildLandlords();
+  const { queueSends } = await import("@/lib/bond-campaigns");
+  await queueSends();
 
   return { active: active.length, quiet: quiet.length, properties: groups.size };
 }

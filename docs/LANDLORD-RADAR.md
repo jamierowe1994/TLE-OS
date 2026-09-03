@@ -504,3 +504,31 @@ count shown so an average of one door reads as one door. The panel shows a bar a
 score; the Landlords list has a Condition column; the profile has a Portfolio condition tile.
 The register search only returns the current band, so the potential band fills in as the
 monthly reads pick it up where the API supplies it.
+
+---
+
+## Campaigns, 3 Sep 2026
+
+`lib/bond-campaigns.ts`. A campaign is a trigger (tenancy anniversary, just bought, private
+listing) and steps at offsets from it, each a postcard or a letter with plain-text copy and
+merge fields ({address} {postcode} {agent} {anniversary} {landlord} {since} {phone}). Two
+are seeded: **1 Year Renewal** (12, 8, 6, 4 weeks before; the 8-week step off with no
+content, as Spectre's example) and **Just Bought** (the day we see it, two weeks later).
+Copy is a draft for James to sign.
+
+Every morning after the rescore `queueSends()` builds the queue: for each active step, each
+door whose trigger date plus the offset fell today or in the last week gets one row per
+step per due date. Each row is judged - step off, no copy, landlord Do not send, door do
+not contact, written to inside 21 days, no owner address (unless the campaign posts to the
+property) - and a HOLD carries its reason. Recent holds are thrown away and judged again
+each morning, so an owner recorded on Tuesday frees Monday's card; queued and sent rows are
+never touched. Idempotent: a second run adds nothing.
+
+Rooms: **Campaigns** (steps with switches, offsets in words, Active / Off / No content,
+mail type, an editor with a live preview, "Build today's queue") and **Postcards** (the
+queue: queued, held with reasons, sent). Nothing prints until the print house is connected;
+the queued rows are exactly what would have gone.
+
+Verified locally: 19 cards judged on the first build, all held for want of an owner address;
+an owner recorded on 34 Sharman Road freed its Just Bought letter to queued; a second build
+added nothing.

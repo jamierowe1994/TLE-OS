@@ -26,7 +26,7 @@ import { PressButton } from "@/components/Bits";
  * ever shows a placeholder as if it were a fact.
  */
 
-type Room = "today" | "map" | "prospects" | "landlords" | "competitors" | "lookup" | "owners" | "postcards";
+type Room = "today" | "map" | "prospects" | "landlords" | "competitors" | "lookup" | "campaigns" | "owners" | "postcards";
 
 const ROOMS: { key: Room; label: string; icon: string }[] = [
   { key: "today", label: "Today", icon: "dashboard" },
@@ -35,6 +35,7 @@ const ROOMS: { key: Room; label: string; icon: string }[] = [
   { key: "landlords", label: "Landlords", icon: "user" },
   { key: "competitors", label: "Competitors", icon: "target" },
   { key: "lookup", label: "Look up", icon: "home" },
+  { key: "campaigns", label: "Campaigns", icon: "megaphone" },
   { key: "owners", label: "Owners", icon: "key" },
   { key: "postcards", label: "Postcards", icon: "mail" },
 ];
@@ -319,6 +320,7 @@ export default function BondApp() {
                 }}
               />
             )}
+            {room === "campaigns" && <Campaigns />}
             {room === "owners" && <Owners />}
             {room === "postcards" && <Postcards />}
           </main>
@@ -559,37 +561,61 @@ function Owners() {
 }
 
 function Postcards() {
-  const [data, setData] = useState<{ provider: Provider; postcards: Array<Record<string, unknown>> } | null>(null);
+  const [data, setData] = useState<{ provider: Provider } | null>(null);
+  const [queue, setQueue] = useState<SendRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [state, setState] = useState<"queued" | "held" | "sent" | "all">("queued");
   useEffect(() => {
     fetch("/api/bond/postcards", { cache: "no-store" })
-      .then(async (r) => {
-        const j = await r.json();
-        if (j.ok) setData(j);
-        else setError(j.reason ?? "Could not read the postcards.");
-      })
+      .then(async (r) => { const j = await r.json(); if (j.ok) setData(j); else setError(j.reason ?? "Could not read the postcards."); })
       .catch(() => setError("Could not read the postcards."));
+    fetch("/api/bond/campaigns", { cache: "no-store" })
+      .then(async (r) => { const j = await r.json(); if (j.ok) setQueue(j.sends); })
+      .catch(() => {});
   }, []);
   if (error) return <p className="text-[12.5px] text-muted">{error}</p>;
-  if (!data) return <p className="flex items-center gap-3 py-10 text-[12.5px] text-muted"><span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-line border-t-ink" />Reading...</p>;
+  if (!data || queue == null) return <p className="flex items-center gap-3 py-10 text-[12.5px] text-muted"><span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-line border-t-ink" />Reading...</p>;
+  const shown = queue.filter((s) => state === "all" || s.status === state);
+  const counts = { queued: queue.filter((s) => s.status === "queued").length, held: queue.filter((s) => s.status === "held").length, sent: queue.filter((s) => s.status === "sent").length };
   return (
-    <div className="fade-up mx-auto max-w-4xl space-y-4">
-      <ProviderCard p={data.provider} title="Postcards" />
+    <div className="fade-up mx-auto max-w-5xl space-y-4">
+      <ProviderCard p={data.provider} title="Postcards and letters" />
       <section className="rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[14px]">Sent and queued</h2>
-        {data.postcards.length === 0 ? (
-          <p className="mt-2 text-[12.5px] text-muted">
-            None yet. A postcard goes to the owner's correspondence address once the Land Registry has given us one, never to the property itself.
-          </p>
-        ) : (
-          <ul className="mt-3 divide-y divide-line/60 text-[12.5px]">
-            {data.postcards.map((c) => (
-              <li key={String(c.id)} className="flex items-center justify-between gap-3 py-2">
-                <span>{String(c.property)} → {String(c.to_address)}</span>
-                <span className="text-muted">{String(c.status)}</span>
-              </li>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-[14px]">The queue</h2>
+          <span className="flex items-center gap-1 rounded-full border border-line/80 p-0.5">
+            {(["queued", "held", "sent", "all"] as const).map((k) => (
+              <button key={k} type="button" onClick={() => setState(k)} className={`rounded-full px-3.5 py-1.5 text-[12px] capitalize transition-colors ${state === k ? "bg-ink text-page" : "text-muted hover:text-ink"}`}>
+                {k}{k !== "all" ? ` ${counts[k]}` : ""}
+              </button>
             ))}
-          </ul>
+          </span>
+        </div>
+        <p className="mt-1 text-[12px] text-muted">
+          Queued cards go to the print house on the morning it is connected. Held cards say why they did not: no owner address, Do not send, written to lately, or a step with no copy.
+        </p>
+        {shown.length === 0 ? (
+          <p className="mt-3 text-[12.5px] text-muted">Nothing {state === "all" ? "yet" : state}. The queue is built every morning from the campaigns.</p>
+        ) : (
+          <table className="mt-3 w-full text-left text-[12.5px]">
+            <thead className="text-[10.5px] uppercase tracking-wider text-muted">
+              <tr className="border-b border-line/70"><th className="py-2 pr-3">Due</th><th className="py-2 pr-3">Door</th><th className="py-2 pr-3">To</th><th className="py-2 pr-3">Step</th><th className="py-2">Status</th></tr>
+            </thead>
+            <tbody className="divide-y divide-line/60">
+              {shown.slice(0, 200).map((s) => (
+                <tr key={s.id}>
+                  <td className="py-2 pr-3 whitespace-nowrap">{when(s.due_on)}</td>
+                  <td className="py-2 pr-3"><span className="block max-w-[22rem] truncate">{s.address}</span></td>
+                  <td className="py-2 pr-3 text-muted"><span className="block max-w-[18rem] truncate">{s.to_name ? `${s.to_name}, ` : ""}{s.to_address ?? "no address"}</span></td>
+                  <td className="py-2 pr-3 text-muted">{s.campaign_name} · {s.step_title} · {s.mail_type}</td>
+                  <td className="py-2">
+                    <span className={`rounded-full border px-2 py-0.5 text-[10.5px] ${s.status === "queued" ? "border-accent-dark/60 bg-accent-soft text-accent-dark" : s.status === "sent" ? "border-line/70 text-ink" : "border-line/70 text-muted"}`}>{s.status}</span>
+                    {s.reason && <span className="ml-2 text-[11px] text-muted">{s.reason}</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </section>
     </div>
@@ -1544,5 +1570,186 @@ function ConditionMark({ score, doors }: { score: number | null; doors: number }
       <span className="h-1.5 w-16 overflow-hidden rounded-full bg-line/40"><span className="block h-full rounded-full" style={{ width: `${score}%`, background: colour }} /></span>
       <span className="figures text-[12px]">{score}</span>
     </span>
+  );
+}
+
+
+interface StepRow { id: number; campaign_id: number; title: string; offset_days: number; mail_type: "postcard" | "letter"; active: boolean; copy: string; sort: number }
+interface CampaignRow { id: number; key: string; name: string; trigger: string; active: boolean; fallback_to_property: boolean; steps: StepRow[]; stats: { queued: number; held: number; sent: number; due_7: number } }
+interface SendRow { id: number; campaign_name: string; step_title: string; mail_type: string; property_key: string; address: string; to_name: string | null; to_address: string | null; due_on: string; status: "queued" | "held" | "sent" | "skipped" | "cancelled"; reason: string | null }
+
+const TRIGGER_WORDS: Record<string, string> = { anniversary: "the tenancy anniversary", just_bought: "the day we first see the purchase", self_managing: "the day we first see the private listing" };
+
+function offsetWords(d: number): string {
+  if (d === 0) return "on the day";
+  const w = Math.abs(d) % 7 === 0 ? `${Math.abs(d) / 7} week${Math.abs(d) === 7 ? "" : "s"}` : `${Math.abs(d)} days`;
+  return d < 0 ? `${w} before` : `${w} after`;
+}
+
+/**
+ * Campaigns: the sequences, each step a card or a letter at an offset from
+ * the moment, switched on or off, with its copy. Spectre's "1 Year Renewal:
+ * 12 weeks before, postcard, active" - ours, with the queue counts alongside
+ * and "Build today's queue" for an impatient morning.
+ */
+function Campaigns() {
+  const [rows, setRows] = useState<CampaignRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<StepRow | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/bond/campaigns", { cache: "no-store" })
+      .then(async (r) => { const j = await r.json(); if (j.ok) setRows(j.campaigns); else setError(j.reason ?? "Could not read the campaigns."); })
+      .catch(() => setError("Could not read the campaigns."));
+  }, []);
+
+  async function patch(body: Record<string, unknown>) {
+    setBusy(true);
+    setNote(null);
+    try {
+      const r = await fetch("/api/bond/campaigns", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+      const j = await r.json();
+      if (!r.ok || !j.ok) { setNote(j.error ?? "That did not save."); return false; }
+      setRows(j.campaigns);
+      return true;
+    } catch {
+      setNote("That did not save.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function buildQueue() {
+    setBusy(true);
+    setNote(null);
+    try {
+      const r = await fetch("/api/bond/campaigns", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ queue: true }) });
+      const j = await r.json();
+      if (j.ok) { setRows(j.campaigns); setNote(`Queue built: ${j.queued} queued, ${j.held} held.`); }
+      else setNote(j.error ?? "Could not build the queue.");
+    } catch {
+      setNote("Could not build the queue.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (error) return <p className="text-[12.5px] text-muted">{error}</p>;
+  if (!rows) return <p className="flex items-center gap-3 py-10 text-[12.5px] text-muted"><span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-line border-t-ink" />Reading the campaigns...</p>;
+
+  return (
+    <div className="fade-up mx-auto max-w-5xl space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[12px] text-muted">A campaign is a sequence of cards and letters around a moment. The queue is built every morning; nothing prints until the print house is connected.</p>
+        <PressButton onClick={() => void buildQueue()} disabled={busy} className="rounded-full border border-ink/80 px-4 py-2 text-[12px] font-semibold disabled:opacity-40">Build today's queue</PressButton>
+      </div>
+      {note && <p className="text-[12px] text-accent-dark">{note}</p>}
+      {rows.map((c) => (
+        <section key={c.id} className="rounded-2xl border border-line/80 bg-panel p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="hand text-[18px]">{c.name}</h2>
+              <p className="text-[11.5px] text-muted">Counted from {TRIGGER_WORDS[c.trigger] ?? c.trigger} · {c.stats.queued} queued, {c.stats.held} held, {c.stats.sent} sent{c.stats.due_7 ? ` · ${c.stats.due_7} due this week` : ""}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-[11.5px] text-muted">
+                <input type="checkbox" checked={c.fallback_to_property} onChange={(e) => void patch({ campaign: c.id, fallback_to_property: e.target.checked })} />
+                Post to the property when there is no owner address
+              </label>
+              <Toggle on={c.active} onChange={(v) => void patch({ campaign: c.id, active: v })} label={c.active ? "Active" : "Paused"} />
+            </div>
+          </div>
+          <table className="mt-4 w-full text-left text-[12.5px]">
+            <thead className="text-[10.5px] uppercase tracking-wider text-muted">
+              <tr className="border-b border-line/70"><th className="py-2 pr-3 w-12"></th><th className="py-2 pr-3">Step</th><th className="py-2 pr-3">When</th><th className="py-2 pr-3">Status</th><th className="py-2 pr-3">Mail type</th><th className="py-2"></th></tr>
+            </thead>
+            <tbody className="divide-y divide-line/60">
+              {c.steps.map((st) => (
+                <tr key={st.id}>
+                  <td className="py-3 pr-3"><Toggle on={st.active} onChange={(v) => void patch({ step: st.id, active: v })} /></td>
+                  <td className="py-3 pr-3">{st.title}</td>
+                  <td className="py-3 pr-3 text-muted">{offsetWords(st.offset_days)}</td>
+                  <td className="py-3 pr-3">
+                    {st.copy.trim() ? (
+                      <span className={`rounded-full border px-2 py-0.5 text-[10.5px] ${st.active ? "border-accent-dark/60 bg-accent-soft text-accent-dark" : "border-line/70 text-muted"}`}>{st.active ? "Active" : "Off"}</span>
+                    ) : (
+                      <span className="rounded-full border border-red-700/40 bg-red-50 px-2 py-0.5 text-[10.5px] text-red-700">No content</span>
+                    )}
+                  </td>
+                  <td className="py-3 pr-3 capitalize text-muted">{st.mail_type}</td>
+                  <td className="py-3 text-right"><button type="button" onClick={() => setEditing(st)} className="text-[12px] text-accent-dark underline-offset-2 hover:underline">Edit</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      ))}
+      {editing && (
+        <StepEditor
+          step={editing}
+          onClose={() => setEditing(null)}
+          onSave={async (fields) => { const ok = await patch({ step: editing.id, ...fields }); if (ok) setEditing(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function Toggle({ on, onChange, label }: { on: boolean; onChange: (v: boolean) => void; label?: string }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} onClick={() => onChange(!on)} className="flex items-center gap-2" title={on ? "Switch off" : "Switch on"}>
+      <span className={`relative inline-block h-5 w-9 rounded-full transition-colors ${on ? "bg-accent-dark" : "bg-line"}`}>
+        <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-page shadow transition-[left] ${on ? "left-[18px]" : "left-0.5"}`} />
+      </span>
+      {label && <span className="text-[12px]">{label}</span>}
+    </button>
+  );
+}
+
+function StepEditor({ step, onClose, onSave }: { step: StepRow; onClose: () => void; onSave: (fields: Record<string, unknown>) => Promise<void> }) {
+  const [title, setTitle] = useState(step.title);
+  const [offset, setOffset] = useState(String(step.offset_days));
+  const [mailType, setMailType] = useState<"postcard" | "letter">(step.mail_type);
+  const [copy, setCopy] = useState(step.copy);
+  const [saving, setSaving] = useState(false);
+  const preview = copy
+    .replace(/\{address\}/g, "12 Example Road, Northampton")
+    .replace(/\{postcode\}/g, "NN1 1AA")
+    .replace(/\{agent\}/g, "Your Move")
+    .replace(/\{anniversary\}/g, "14 November")
+    .replace(/\{landlord\}/g, "Mr Example")
+    .replace(/\{since\}/g, "last November")
+    .replace(/\{phone\}/g, "01604 000000");
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-ink/35 p-4">
+      <div className="fade-up max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-line/80 bg-page p-6 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.45)]">
+        <h2 className="hand text-[22px]">{step.title}</h2>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <label className="block text-[12px]"><span className="text-[11px] text-muted">Title</span>
+            <input value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1 w-full rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink" /></label>
+          <label className="block text-[12px]"><span className="text-[11px] text-muted">Days from the moment (minus is before)</span>
+            <input value={offset} onChange={(e) => setOffset(e.target.value)} inputMode="numeric" className="mt-1 w-full rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink" /></label>
+          <label className="block text-[12px]"><span className="text-[11px] text-muted">Mail type</span>
+            <select value={mailType} onChange={(e) => setMailType(e.target.value as "postcard" | "letter")} className="mt-1 w-full rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink">
+              <option value="postcard">Postcard</option><option value="letter">Letter</option>
+            </select></label>
+        </div>
+        <label className="mt-3 block text-[12px]"><span className="text-[11px] text-muted">Copy · fields: {"{address} {postcode} {agent} {anniversary} {landlord} {since} {phone}"}</span>
+          <textarea value={copy} onChange={(e) => setCopy(e.target.value)} rows={8} className="mt-1 w-full resize-y rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink" /></label>
+        <div className="mt-3 rounded-xl border border-dashed border-line/80 p-3">
+          <p className="text-[10.5px] uppercase tracking-wider text-muted">Preview</p>
+          <p className="mt-1 whitespace-pre-wrap text-[12.5px]">{preview || "Nothing written yet."}</p>
+        </div>
+        <div className="mt-5 flex flex-wrap items-center gap-2.5">
+          <button type="button" disabled={saving} onClick={async () => { setSaving(true); await onSave({ title, offset_days: Number(offset), mail_type: mailType, copy }); setSaving(false); }} className="press-wobble rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page disabled:opacity-40">
+            {saving ? "Saving..." : "Save"}
+          </button>
+          <button type="button" onClick={onClose} className="rounded-full border border-line/80 px-4 py-2.5 text-[12.5px] text-muted">Cancel</button>
+        </div>
+      </div>
+    </div>
   );
 }
