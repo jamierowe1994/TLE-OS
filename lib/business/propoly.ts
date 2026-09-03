@@ -187,6 +187,51 @@ export async function propolyGet(path: string): Promise<PropolyResult> {
 }
 
 /** The client name Propoly reported with the last token (null until fetched). */
+/**
+ * Writes. Propoly is the live lettings system, so nothing here sends a POST
+ * or PATCH unless the offer-accepted handover has been switched on for real
+ * in Admin (lib/switches, "handover_live"). Below that switch these throw
+ * before a request is built - shadow mode never reaches them.
+ */
+export class PropolyWriteBlocked extends Error {
+  constructor(method: string, path: string) {
+    super(
+      `Refusing to ${method} ${path} - Propoly writes are off. Switch on "Handover: create in Propoly" in Admin → Switches to allow them.`
+    );
+    this.name = "PropolyWriteBlocked";
+  }
+}
+
+async function propolyWrite(method: "POST" | "PATCH", path: string, payload: unknown): Promise<PropolyResult> {
+  const { switchOn } = await import("@/lib/switches");
+  if (!(await switchOn("handover_live"))) throw new PropolyWriteBlocked(method, path);
+  const keyHeaders = { "x-api-key": apiKey(), "agent-name": agentName() };
+  const send = async (token: string) =>
+    fetch(`${BASE}${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        ...keyHeaders,
+      },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+  let res = await send(await getToken());
+  if (res.status === 401) res = await send(await getToken(true));
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    body = null;
+  }
+  return { status: res.status, body };
+}
+
+export const propolyPost = (path: string, payload: unknown) => propolyWrite("POST", path, payload);
+export const propolyPatch = (path: string, payload: unknown) => propolyWrite("PATCH", path, payload);
+
 export function propolyClientName(): string | null {
   return cached?.clientName ?? null;
 }

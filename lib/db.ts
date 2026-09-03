@@ -1517,6 +1517,26 @@ CREATE TABLE IF NOT EXISTS os_bond_campaign_sends (
 CREATE UNIQUE INDEX IF NOT EXISTS os_bond_campaign_sends_once_idx ON os_bond_campaign_sends (step_id, property_key, due_on);
 CREATE INDEX IF NOT EXISTS os_bond_campaign_sends_status_idx ON os_bond_campaign_sends (status, due_on);
 
+-- Ask Bond: the consult panel's conversation, both halves, per person. Its own
+-- table rather than Steve's, so the two histories never bleed into each
+-- other's panels and each has its own daily ceiling. role 'cleared' is a
+-- marker, not a message: nothing is deleted, the panel reads from the last one.
+CREATE TABLE IF NOT EXISTS os_bond_ask (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     TEXT NOT NULL,
+  user_email  TEXT NOT NULL DEFAULT '',
+  -- agent | bond | cleared
+  role        TEXT NOT NULL DEFAULT 'agent',
+  text        TEXT NOT NULL,
+  steps       JSONB NOT NULL DEFAULT '[]'::jsonb,
+  focus       TEXT NOT NULL DEFAULT '',
+  in_tokens   INTEGER NOT NULL DEFAULT 0,
+  out_tokens  INTEGER NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_bond_ask_user_idx ON os_bond_ask (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS os_bond_ask_time_idx ON os_bond_ask (created_at DESC);
+
 -- One row per Radar run. The run takes minutes now that both feeds are read
 -- and the edge closes a request at 100 seconds, so the route answers at once
 -- and this is where the answer goes.
@@ -1602,6 +1622,25 @@ CREATE TABLE IF NOT EXISTS os_application_comments (
 );
 CREATE INDEX IF NOT EXISTS os_application_comments_app
   ON os_application_comments (application_id, created_at);
+
+-- The offer-accepted handover, run by the OS: every step, what it sent, what
+-- came back. mode 'shadow' works everything out against live Propoly and REX
+-- reads and writes NOTHING; 'live' performs the writes. Kept for ever - "why
+-- did that landlord never appear in Propoly" is the question this answers.
+CREATE TABLE IF NOT EXISTS os_handovers (
+  id             TEXT PRIMARY KEY,
+  application_id TEXT NOT NULL,
+  mode           TEXT NOT NULL DEFAULT 'shadow',
+  -- running | ok | failed | blocked
+  status         TEXT NOT NULL DEFAULT 'running',
+  steps          JSONB NOT NULL DEFAULT '[]'::jsonb,
+  packet         JSONB,
+  triggered_by   TEXT NOT NULL DEFAULT '',
+  started_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finished_at    TIMESTAMPTZ,
+  error          TEXT
+);
+CREATE INDEX IF NOT EXISTS os_handovers_app ON os_handovers (application_id, started_at DESC);
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a
