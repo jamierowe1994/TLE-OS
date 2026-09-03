@@ -10,11 +10,12 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  *
  * ── READ THIS BEFORE TRUSTING IT ──────────────────────────────────────────
  *
- * The Flow Integration API is BUILT BUT NEVER EXERCISED. Its own documentation
- * says so plainly: no recording has been created through it, no webhook has
- * been delivered to a real endpoint, and the recorder route has never run in a
- * browser. We are the first integration, so we will be the ones who find
- * whatever is wrong.
+ * The Flow Integration API was BUILT BUT NEVER EXERCISED until 3 Sep 2026,
+ * when this app became its first integration: create, read and delete a
+ * recording all answered correctly with the production key, and a signed
+ * recording.deleted was delivered to /api/video/webhook and accepted. The
+ * recorder route has still never run in a browser from here, so the notes
+ * below stand.
  *
  * Three consequences shape this file:
  *

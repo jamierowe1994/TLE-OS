@@ -15,8 +15,10 @@ import type { WelcomeVideo } from "@/lib/present";
  * video's own key and refuses to move a `ready` video backwards, so a
  * duplicate is a no-op and a late `uploading` cannot undo a finished one.
  *
- * Note there is no registration UI on Flow's side yet — this endpoint's URL
- * and secret have to be inserted into Flow's database directly.
+ * Registered on Flow with POST /api/integration/v1/webhooks (the app's own
+ * secret key mints the endpoint and its whsec_ secret; that secret is
+ * FLOW_WEBHOOK_SECRET here). Proven live 3 Sep 2026: a recording.deleted
+ * from Flow's delivery job answered 200 on this route in production.
  */
 
 export const dynamic = "force-dynamic";
