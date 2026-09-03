@@ -41,6 +41,8 @@ export interface EpcSyncStatus {
   belowC: number;
   expiringSoon: number;
   matched: number;
+  /** Flagged doors carrying a condition score. */
+  scored: number;
   lastRun: { council: string; status: string; rows_read: number; rows_kept: number; error: string | null; started_at: string; finished_at: string | null } | null;
   running: boolean;
 }
@@ -52,14 +54,16 @@ export async function epcSyncStatus(): Promise<EpcSyncStatus> {
         "A GOV.UK One Login account on get-energy-performance-data.communities.gov.uk (free).",
         "EPC_API_TOKEN on Railway: the bearer token from that account's page.",
       ];
-  if (!hasDb()) return { connected: Boolean(token()), needs, certificatesHeld: 0, belowC: 0, expiringSoon: 0, matched: 0, lastRun: null, running: false };
+  if (!hasDb()) return { connected: Boolean(token()), needs, certificatesHeld: 0, belowC: 0, expiringSoon: 0, matched: 0, scored: 0, lastRun: null, running: false };
   const [t] = await q<{ n: string; c: string; e: string }>(
     `SELECT count(*) AS n,
             count(*) FILTER (WHERE band IN ('D','E','F','G')) AS c,
             count(*) FILTER (WHERE registered_on BETWEEN CURRENT_DATE - INTERVAL '10 years' AND CURRENT_DATE - INTERVAL '9 years') AS e
        FROM os_epc`
   );
-  const [m] = await q<{ n: string }>(`SELECT count(*) AS n FROM os_radar_prospects WHERE epc_band IS NOT NULL`);
+  const [m] = await q<{ n: string; s: string }>(
+    `SELECT count(*) AS n, count(*) FILTER (WHERE condition_score IS NOT NULL) AS s FROM os_radar_prospects WHERE epc_band IS NOT NULL`
+  );
   const runs = await q<NonNullable<EpcSyncStatus["lastRun"]> & Record<string, unknown>>(
     `SELECT council, status, rows_read, rows_kept, error, started_at, finished_at FROM os_epc_sync ORDER BY started_at DESC LIMIT 1`
   );
@@ -73,6 +77,7 @@ export async function epcSyncStatus(): Promise<EpcSyncStatus> {
     belowC: Number(t?.c ?? 0),
     expiringSoon: Number(t?.e ?? 0),
     matched: Number(m?.n ?? 0),
+    scored: Number(m?.s ?? 0),
     lastRun: last,
     running: last?.status === "running",
   };
