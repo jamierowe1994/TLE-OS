@@ -26,12 +26,13 @@ import { PressButton } from "@/components/Bits";
  * ever shows a placeholder as if it were a fact.
  */
 
-type Room = "today" | "map" | "prospects" | "lookup" | "owners" | "postcards";
+type Room = "today" | "map" | "prospects" | "landlords" | "lookup" | "owners" | "postcards";
 
 const ROOMS: { key: Room; label: string; icon: string }[] = [
   { key: "today", label: "Today", icon: "dashboard" },
   { key: "map", label: "Map", icon: "search" },
   { key: "prospects", label: "Prospects", icon: "list" },
+  { key: "landlords", label: "Landlords", icon: "user" },
   { key: "lookup", label: "Look up", icon: "home" },
   { key: "owners", label: "Owners", icon: "key" },
   { key: "postcards", label: "Postcards", icon: "mail" },
@@ -287,6 +288,15 @@ export default function BondApp() {
                 nearPreset={nearPreset}
                 filterPreset={filterPreset}
                 districts={patch ?? []}
+              />
+            )}
+            {room === "landlords" && (
+              <Landlords
+                districts={patch ?? []}
+                openDoor={(address) => {
+                  setFilterPreset(address);
+                  setRoom("prospects");
+                }}
               />
             )}
             {room === "lookup" && (
@@ -1069,6 +1079,274 @@ function PatchChooser({
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+
+interface LandlordRow {
+  landlord_key: string;
+  kind: "company" | "individual" | "unknown";
+  name: string;
+  company_number: string | null;
+  address: string;
+  source: string;
+  portfolio_size: number;
+  flagged: number;
+  score: number;
+  band: "Very high" | "High" | "Medium" | "Low";
+  marketing_status: "active" | "do_not_send";
+  linkedin_url: string | null;
+  notes: string;
+  last_written_at: string | null;
+}
+interface LandlordDoorRow {
+  property_key: string;
+  address: string;
+  postcode: string;
+  via: string;
+  prospect: { score: number; stage: string; photo: string | null; agent: string | null; rent: number | null; signals: Array<{ key: string; detail: string }> } | null;
+}
+
+const BAND_TONE: Record<LandlordRow["band"], string> = {
+  "Very high": "border-accent-dark bg-accent-dark text-white",
+  High: "border-accent-dark/60 bg-accent-soft text-accent-dark",
+  Medium: "border-line/80 text-ink",
+  Low: "border-line/70 text-muted",
+};
+
+/**
+ * Landlords: the people and companies behind the doors, with a portfolio,
+ * a score and a marketing status. What Spectre lists; ours is built from
+ * the company files, the owners recorded on doors, and later REX.
+ */
+function Landlords({ districts, openDoor }: { districts: string[]; openDoor: (address: string) => void }) {
+  const [rows, setRows] = useState<LandlordRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [kind, setKind] = useState<"all" | "company" | "individual">("all");
+  const [openKey, setOpenKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    let gone = false;
+    setRows(null);
+    fetch(`/api/bond/landlords?districts=${encodeURIComponent(districts.join(","))}`, { cache: "no-store" })
+      .then(async (r) => {
+        const j = await r.json();
+        if (gone) return;
+        if (j.ok) setRows(j.landlords);
+        else setError(j.reason ?? "Could not read the landlords.");
+      })
+      .catch(() => { if (!gone) setError("Could not read the landlords."); });
+    return () => { gone = true; };
+  }, [districts.join(",")]);
+
+  const shown = (rows ?? []).filter((l) => {
+    if (kind !== "all" && l.kind !== kind) return false;
+    if (q.trim() && !`${l.name} ${l.address} ${l.company_number ?? ""}`.toLowerCase().includes(q.trim().toLowerCase())) return false;
+    return true;
+  });
+
+  function patched(l: LandlordRow) {
+    setRows((rs) => (rs ?? []).map((r) => (r.landlord_key === l.landlord_key ? { ...r, ...l } : r)));
+  }
+
+  return (
+    <div className="fade-up">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <label className="flex min-w-64 flex-1 items-center gap-2.5 rounded-full border border-line/80 bg-panel px-4 py-2.5 focus-within:border-ink">
+          <DoodleIcon name="search" size={15} className="shrink-0 text-muted" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search landlords by name, address or company number..." className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted/70" />
+        </label>
+        <span className="flex items-center gap-1 rounded-full border border-line/80 p-0.5">
+          {(["all", "company", "individual"] as const).map((k) => (
+            <button key={k} type="button" onClick={() => setKind(k)} className={`rounded-full px-3.5 py-1.5 text-[12px] capitalize transition-colors ${kind === k ? "bg-ink text-page" : "text-muted hover:text-ink"}`}>
+              {k === "all" ? "All" : k === "company" ? "Companies" : "Individuals"}
+            </button>
+          ))}
+        </span>
+      </div>
+
+      {error ? (
+        <p className="mt-4 text-[12.5px] text-muted">{error}</p>
+      ) : rows == null ? (
+        <p className="mt-6 flex items-center gap-3 text-[12.5px] text-muted"><span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-line border-t-ink" />Reading the landlords...</p>
+      ) : rows.length === 0 ? (
+        <div className="mt-4 rounded-2xl border border-dashed border-line/80 p-6 text-[12.5px] text-muted">
+          No landlords yet. They come from the Land Registry company files once the key is in, and from owners recorded on doors. Record an owner on any property and they appear here.
+        </div>
+      ) : (
+        <div className="mt-4 overflow-x-auto rounded-2xl border border-line/80 bg-panel">
+          <table className="w-full text-left text-[12.5px]">
+            <thead className="text-[10.5px] uppercase tracking-wider text-muted">
+              <tr className="border-b border-line/70">
+                <th className="px-4 py-3">Landlord</th>
+                <th className="px-4 py-3">Kind</th>
+                <th className="px-4 py-3">Opportunity</th>
+                <th className="px-4 py-3 text-right">Properties</th>
+                <th className="px-4 py-3 text-right">Flagged</th>
+                <th className="px-4 py-3">Marketing</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line/60">
+              {shown.slice(0, 200).map((l) => (
+                <tr key={l.landlord_key} onClick={() => setOpenKey(l.landlord_key)} className="cursor-pointer transition-colors hover:bg-page">
+                  <td className="px-4 py-3">
+                    <p className="hand text-[13.5px]">{l.name}</p>
+                    <p className="max-w-[28rem] truncate text-[11px] text-muted">{l.address || "No correspondence address on file"}</p>
+                  </td>
+                  <td className="px-4 py-3 capitalize text-muted">{l.kind}</td>
+                  <td className="px-4 py-3"><span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${BAND_TONE[l.band]}`}>{l.band}</span></td>
+                  <td className="figures px-4 py-3 text-right">{l.portfolio_size}</td>
+                  <td className="figures px-4 py-3 text-right">{l.flagged}</td>
+                  <td className="px-4 py-3">{l.marketing_status === "do_not_send" ? <span className="rounded-full border border-red-700/40 bg-red-50 px-2 py-0.5 text-[10.5px] font-semibold text-red-700">Do not send</span> : <span className="text-muted">Active</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="border-t border-line/70 px-4 py-2.5 text-[11px] text-muted">
+            {shown.length.toLocaleString("en-GB")} landlord{shown.length === 1 ? "" : "s"}{shown.length > 200 ? ", first 200 shown" : ""}
+          </p>
+        </div>
+      )}
+
+      {openKey && <LandlordPanel landlordKey={openKey} onClose={() => setOpenKey(null)} onPatched={patched} openDoor={openDoor} />}
+    </div>
+  );
+}
+
+function LandlordPanel({ landlordKey, onClose, onPatched, openDoor }: { landlordKey: string; onClose: () => void; onPatched: (l: LandlordRow) => void; openDoor: (address: string) => void }) {
+  const [data, setData] = useState<{ landlord: LandlordRow; doors: LandlordDoorRow[] } | null>(null);
+  const [shown, setShown] = useState(false);
+  const [linkedin, setLinkedin] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setShown(true));
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    fetch(`/api/bond/landlords?key=${encodeURIComponent(landlordKey)}`, { cache: "no-store" })
+      .then(async (r) => {
+        const j = await r.json();
+        if (j.ok) {
+          setData({ landlord: j.landlord, doors: j.doors });
+          setLinkedin(j.landlord.linkedin_url ?? "");
+          setNotes(j.landlord.notes ?? "");
+        } else setErr(j.reason ?? "Could not read this landlord.");
+      })
+      .catch(() => setErr("Could not read this landlord."));
+    return () => { cancelAnimationFrame(id); window.removeEventListener("keydown", onKey); };
+  }, [landlordKey, onClose]);
+
+  async function save(patch: Record<string, unknown>) {
+    setSaving(true);
+    setErr(null);
+    try {
+      const r = await fetch("/api/bond/landlords", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ key: landlordKey, ...patch }) });
+      const j = await r.json();
+      if (!r.ok || !j.ok) { setErr(j.error ?? "That did not save."); return; }
+      setData((d) => (d ? { ...d, landlord: j.landlord } : d));
+      onPatched(j.landlord);
+    } catch {
+      setErr("That did not save.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const l = data?.landlord;
+  const searchUrl = l ? `https://www.linkedin.com/search/results/all/?keywords=${encodeURIComponent(l.name + (l.kind === "individual" ? " landlord" : ""))}` : "#";
+
+  return (
+    <div className="fixed inset-0 z-[120]">
+      <button aria-label="Close" onClick={onClose} className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`} />
+      <aside
+        className={`absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-2xl bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] sm:w-[560px] ${shown ? "translate-x-0" : "translate-x-full"}`}
+        style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
+      >
+        <div className="flex shrink-0 items-center justify-between gap-3 px-6 pt-5">
+          <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink" title="Close (Esc)">✕</button>
+          {l && <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${BAND_TONE[l.band]}`}>{l.band} opportunity · {l.score}</span>}
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-4">
+          {err && <p className="text-[12.5px] text-red-700">{err}</p>}
+          {!data && !err && <p className="flex items-center gap-3 text-[12.5px] text-muted"><span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-line border-t-ink" />Reading...</p>}
+          {l && (
+            <>
+              <p className="text-[11px] uppercase tracking-wider text-muted">{l.kind === "company" ? "Company landlord" : "Landlord"}</p>
+              <h2 className="mt-1 text-[22px] leading-snug">{l.name}</h2>
+              <p className="mt-1 text-[12.5px] text-muted">{l.address || "No correspondence address on file"}</p>
+              {l.company_number && (
+                <p className="mt-1 text-[11.5px] text-muted">
+                  Company {l.company_number} ·{" "}
+                  <a className="underline" href={`https://find-and-update.company-information.service.gov.uk/company/${l.company_number}`} target="_blank" rel="noreferrer">Companies House</a>
+                </p>
+              )}
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <PressButton disabled className="rounded-full bg-ink px-5 py-2 text-[12.5px] font-semibold text-page disabled:opacity-40" title="Postcards are not connected yet">Write to</PressButton>
+                <PressButton
+                  onClick={() => void save({ marketing_status: l.marketing_status === "do_not_send" ? "active" : "do_not_send" })}
+                  disabled={saving}
+                  className={`rounded-full border px-4 py-2 text-[12.5px] ${l.marketing_status === "do_not_send" ? "border-red-700/40 text-red-700" : "border-line/80 text-muted"}`}
+                >
+                  {l.marketing_status === "do_not_send" ? "Do not send · switch back on" : "Mark Do not send"}
+                </PressButton>
+                <a href={searchUrl} target="_blank" rel="noreferrer" className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] text-muted hover:text-ink">Find on LinkedIn</a>
+              </div>
+
+              <dl className="mt-5 grid grid-cols-3 gap-3 text-[12.5px]">
+                <div className="rounded-xl border border-line/80 bg-panel p-3"><dt className="text-[10.5px] uppercase tracking-wider text-muted">Properties</dt><dd className="figures mt-1 text-[20px]">{l.portfolio_size}</dd></div>
+                <div className="rounded-xl border border-line/80 bg-panel p-3"><dt className="text-[10.5px] uppercase tracking-wider text-muted">Flagged</dt><dd className="figures mt-1 text-[20px]">{l.flagged}</dd></div>
+                <div className="rounded-xl border border-line/80 bg-panel p-3"><dt className="text-[10.5px] uppercase tracking-wider text-muted">Last written</dt><dd className="mt-1 text-[13px]">{l.last_written_at ? when(l.last_written_at) : "never"}</dd></div>
+              </dl>
+
+              <section className="mt-5">
+                <h3 className="text-[13px]">Properties</h3>
+                <ul className="mt-2 divide-y divide-line/60">
+                  {data!.doors.map((d) => (
+                    <li key={d.property_key} className="flex items-center gap-3 py-2 text-[12.5px]">
+                      {d.prospect?.photo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={d.prospect.photo} alt="" className="h-10 w-14 shrink-0 rounded-lg object-cover" />
+                      ) : (
+                        <span className="h-10 w-14 shrink-0 rounded-lg border border-line/70 bg-page" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate">{d.address || d.postcode}</p>
+                        <p className="truncate text-[11px] text-muted">
+                          {d.prospect ? `${d.prospect.signals.map((s) => SIGNAL_LABEL[s.key] ?? s.key).join(", ") || "on record"} · score ${d.prospect.score}` : "Not on the market"}
+                        </p>
+                      </div>
+                      {d.prospect && (
+                        <button type="button" onClick={() => openDoor((d.address || d.postcode).split(",")[0])} className="shrink-0 rounded-full border border-line/80 px-3 py-1 text-[11px] text-muted hover:text-ink">Open</button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              <section className="mt-5 space-y-3">
+                <label className="block text-[12px]">
+                  <span className="text-[11px] text-muted">LinkedIn</span>
+                  <div className="mt-1 flex gap-2">
+                    <input value={linkedin} onChange={(e) => setLinkedin(e.target.value)} placeholder="https://www.linkedin.com/in/..." className="min-w-0 flex-1 rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none placeholder:text-muted/70 focus:border-ink" />
+                    <PressButton onClick={() => void save({ linkedin_url: linkedin })} disabled={saving || linkedin === (l.linkedin_url ?? "")} className="rounded-full border border-ink/80 px-4 py-2 text-[12px] font-semibold disabled:opacity-40">Save</PressButton>
+                  </div>
+                  {l.linkedin_url && <a href={l.linkedin_url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11.5px] text-accent-dark underline">Open profile</a>}
+                </label>
+                <label className="block text-[12px]">
+                  <span className="text-[11px] text-muted">Notes</span>
+                  <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} className="mt-1 w-full resize-y rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink" />
+                  <PressButton onClick={() => void save({ notes })} disabled={saving || notes === l.notes} className="mt-2 rounded-full border border-ink/80 px-4 py-2 text-[12px] font-semibold disabled:opacity-40">Save notes</PressButton>
+                </label>
+              </section>
+            </>
+          )}
+        </div>
+      </aside>
     </div>
   );
 }

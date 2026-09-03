@@ -452,3 +452,26 @@ until then. Measured locally on 3 Sep: 27,612 of 28,187 listings carry a photo; 
 1,782 flagged doors. The pictures are the listing agents' and are internal reference only;
 nothing Bond sends will carry them. R2 is not configured on the laptop, so the archive
 step reports "stays as links" locally and runs for real on Railway.
+
+---
+
+## Landlords, 3 Sep 2026
+
+The unit Bond works in, over the doors. `lib/landlords.ts` rebuilds `os_bond_landlords` and
+`os_bond_landlord_doors` after every rescore from two sources: every company on the Land
+Registry files (one landlord per company number, portfolio = every title it holds in the
+patch, flagged or not) and every owner recorded on a door (one landlord per name and
+correspondence address). REX landlords are next. The human fields - marketing status,
+LinkedIn, notes - survive the rebuild because the key is stable.
+
+Opportunity score: the strongest flagged door, plus 8 for each further flagged door (to 30),
+plus 2 per extra property (to 15), capped at 100, shown as Very high / High / Medium / Low
+so nobody reads precision into it. A Landlords room lists them with kind, band, portfolio,
+flagged count and marketing status, scoped to the person's patch by the doors' postcodes;
+the profile panel has the address, Companies House link, Write to (disabled until the print
+house), Mark Do not send, Find on LinkedIn (a search link, nothing automated; a saved
+profile URL must be on linkedin.com), the doors with photos and signals, and notes.
+
+Verified locally with the company fixture and two recorded owners: four landlords, the two
+with live flagged doors scoring 100 (Very high), the two whose adverts have since gone
+scoring 0 (Low); Do not send and LinkedIn saved and refused correctly.

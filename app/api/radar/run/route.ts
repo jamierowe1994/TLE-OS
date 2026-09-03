@@ -53,7 +53,7 @@ export async function GET() {
   }
   const districts = await watchedDistricts();
   const runs = await q<Record<string, unknown>>(
-    `SELECT id, status, swept, skipped, seen, new_rows, events, active, quiet, digest, error, started_at, finished_at
+    `SELECT id, status, swept, skipped, seen, new_rows, events, active, quiet, digest, photos, error, started_at, finished_at
        FROM os_radar_runs ORDER BY started_at DESC LIMIT 3`
   );
   return NextResponse.json({
@@ -113,7 +113,11 @@ export async function POST(req: NextRequest) {
       const prospects = await refreshProspects();
       /* The pictures, a few hundred a day, after everything that matters. */
       const { archivePhotos } = await import("@/lib/photos");
-      await archivePhotos(600).catch(() => ({ copied: 0, failed: 0, skipped: "archive failed" }));
+      const photos = await archivePhotos(600).catch(() => ({ copied: 0, failed: 0, skipped: "archive failed" }));
+      await q(`UPDATE os_radar_runs SET photos = $2 WHERE id = $1`, [
+        runId,
+        photos.skipped ?? `${photos.copied} copied, ${photos.failed} failed`,
+      ]);
       let digest: { sent: string[]; skipped: string | null };
       try {
         digest = await sendDigest();

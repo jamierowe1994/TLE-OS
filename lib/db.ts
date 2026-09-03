@@ -1436,6 +1436,39 @@ ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS image_key TEXT;
 CREATE INDEX IF NOT EXISTS os_listing_capture_photo_todo_idx
   ON os_listing_capture (first_seen) WHERE image_url IS NOT NULL AND image_key IS NULL;
 
+-- ── Landlords: the unit Bond works in, over the doors ──────────────────────
+-- A landlord is what the doors have in common: a company on the Land
+-- Registry files, an owner somebody recorded, later a REX landlord. Rebuilt
+-- after every rescore from those sources; the human fields (marketing
+-- status, LinkedIn, notes) survive the rebuild because the key is stable.
+CREATE TABLE IF NOT EXISTS os_bond_landlords (
+  landlord_key     TEXT PRIMARY KEY,
+  kind             TEXT NOT NULL,
+  name             TEXT NOT NULL,
+  company_number   TEXT,
+  address          TEXT NOT NULL DEFAULT '',
+  source           TEXT NOT NULL,
+  portfolio_size   INTEGER NOT NULL DEFAULT 0,
+  flagged          INTEGER NOT NULL DEFAULT 0,
+  score            INTEGER NOT NULL DEFAULT 0,
+  marketing_status TEXT NOT NULL DEFAULT 'active',
+  linkedin_url     TEXT,
+  notes            TEXT NOT NULL DEFAULT '',
+  last_written_at  TIMESTAMPTZ,
+  first_seen       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_bond_landlords_score_idx ON os_bond_landlords (score DESC, portfolio_size DESC);
+CREATE TABLE IF NOT EXISTS os_bond_landlord_doors (
+  landlord_key TEXT NOT NULL,
+  property_key TEXT NOT NULL,
+  address      TEXT NOT NULL DEFAULT '',
+  postcode     TEXT NOT NULL DEFAULT '',
+  via          TEXT NOT NULL,
+  PRIMARY KEY (landlord_key, property_key)
+);
+CREATE INDEX IF NOT EXISTS os_bond_landlord_doors_property_idx ON os_bond_landlord_doors (property_key);
+
 -- One row per Radar run. The run takes minutes now that both feeds are read
 -- and the edge closes a request at 100 seconds, so the route answers at once
 -- and this is where the answer goes.
@@ -1454,6 +1487,7 @@ CREATE TABLE IF NOT EXISTS os_radar_runs (
   started_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   finished_at TIMESTAMPTZ
 );
+ALTER TABLE os_radar_runs ADD COLUMN IF NOT EXISTS photos TEXT;
 
 CREATE TABLE IF NOT EXISTS os_sales_sync (
   id          BIGSERIAL PRIMARY KEY,

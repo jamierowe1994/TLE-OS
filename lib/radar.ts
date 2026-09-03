@@ -573,6 +573,8 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
   await matchHmoLicences();
   const { matchEpc } = await import("@/lib/epc");
   await matchEpc();
+  const { rebuildLandlords } = await import("@/lib/landlords");
+  await rebuildLandlords();
 
   return { active: active.length, quiet: quiet.length, properties: groups.size };
 }
