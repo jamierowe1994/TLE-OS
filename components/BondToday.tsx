@@ -189,7 +189,7 @@ export default function BondToday({
       </div>
 
       {/* The picture. */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-[1.3fr_1.1fr_0.85fr]">
+      <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-[1.15fr_0.95fr_1.1fr]">
         <Card title="Opportunity" icon="magic-wand" delay="0.3s">
           {pic ? <Gauge o={pic.opportunity} /> : <Loading />}
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
