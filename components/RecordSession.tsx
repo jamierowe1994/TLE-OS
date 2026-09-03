@@ -367,7 +367,7 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
             <div className="overflow-hidden rounded-2xl border border-line/80 bg-panel">
               <div className="flex items-center justify-between gap-3 border-b border-line/70 px-4 py-3">
                 <p className="text-[12.5px] text-muted">
-                  {frameSays ?? "Up to two and a half minutes. Say who you are and one thing you already know about the place."}
+                  {frameSays ?? "Say who you are and one thing you already know about the place. A minute is plenty."}
                 </p>
               </div>
               {/* `allow` is REQUIRED - without it the browser refuses the
@@ -375,7 +375,7 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
               <iframe
                 src={recorderUrl}
                 allow="camera; microphone; display-capture"
-                className={phone ? "h-[70dvh] w-full border-0" : "h-[520px] w-full border-0"}
+                className={phone ? "h-[calc(100dvh-150px)] min-h-[480px] w-full border-0" : "h-[560px] w-full border-0"}
                 title="Flow recorder"
               />
             </div>

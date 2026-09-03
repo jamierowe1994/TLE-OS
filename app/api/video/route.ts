@@ -123,9 +123,11 @@ export async function POST(req: NextRequest) {
   const { recording, error } = await createRecording({
     reference: key,
     title: `Welcome — ${row.deck.property.address}`,
-    // Ninety seconds to two minutes was the brief. 150 leaves room to finish a
-    // sentence without inviting a lecture.
-    maxDurationSecs: 150,
+    /* Five minutes. The brief was ninety seconds to two, and the page says
+       a minute is plenty, but a cap that cuts an agent off mid-sentence is
+       worse than a long take - James, 3 Sep, on seeing "up to two and a
+       half minutes": "is there a reason?" There was not a good one. */
+    maxDurationSecs: 300,
     metadata: {
       // Deliberately no token, no landlord name, no address beyond the title:
       // this is stored on a third party and read back on every webhook.
