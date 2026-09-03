@@ -421,6 +421,15 @@ export interface TodayPicture {
     /** Landlords with a door in the patch, and their average opportunity score. */
     landlords: number;
     avgScore: number | null;
+    /**
+     * The patch opportunity score, 0 to 100, from four counted things:
+     * strong doors (up to 40), timing (up to 20), contactable (up to 20) and
+     * warm contacts on the call list (up to 20). A ranking, not a probability,
+     * and every part is shown so nobody has to take the total on trust.
+     */
+    score: number | null;
+    parts: { strong: number; timing: number; contactable: number; warm: number };
+    counts: { strong: number; timing: number; contactable: number; warm: number };
     bands: { very_high: number; high: number; medium: number; low: number };
     /** Advertised rent across the flagged lets, £ pcm, and how many carry a rent. */
     rentRoll: number;
@@ -450,7 +459,7 @@ export interface TodayPicture {
 /** Every figure here is counted from the tables; nothing is estimated. */
 export async function todayPicture(districts: string[] = []): Promise<TodayPicture> {
   const empty: TodayPicture = {
-    opportunity: { landlords: 0, avgScore: null, bands: { very_high: 0, high: 0, medium: 0, low: 0 }, rentRoll: 0, rentDoors: 0, flagged: 0 },
+    opportunity: { landlords: 0, avgScore: null, score: null, parts: { strong: 0, timing: 0, contactable: 0, warm: 0 }, counts: { strong: 0, timing: 0, contactable: 0, warm: 0 }, bands: { very_high: 0, high: 0, medium: 0, low: 0 }, rentRoll: 0, rentDoors: 0, flagged: 0 },
     condition: { score: null, doors: 0, excellent: 0, average: 0, poor: 0 },
     top: [],
   };
@@ -467,11 +476,28 @@ export async function todayPicture(districts: string[] = []): Promise<TodayPictu
        FROM mine`,
     [districts]
   );
-  const [r] = await q<{ flagged: string; rent_doors: string; rent_roll: string | null }>(
-    `SELECT count(*) AS flagged, count(rent) FILTER (WHERE market = 'let') AS rent_doors, sum(rent) FILTER (WHERE market = 'let') AS rent_roll
+  const [r] = await q<{ flagged: string; rent_doors: string; rent_roll: string | null; strong: string; timing: string; contactable: string }>(
+    `SELECT count(*) AS flagged, count(rent) FILTER (WHERE market = 'let') AS rent_doors, sum(rent) FILTER (WHERE market = 'let') AS rent_roll,
+            count(*) FILTER (WHERE score >= 45) AS strong,
+            count(*) FILTER (WHERE (next_anniversary BETWEEN CURRENT_DATE AND CURRENT_DATE + 60)
+                                OR signals @> '[{"key":"just_bought"}]'::jsonb OR signals @> '[{"key":"self_managing"}]'::jsonb
+                                OR signals @> '[{"key":"let_to_sale"}]'::jsonb OR signals @> '[{"key":"sale_to_let"}]'::jsonb) AS timing,
+            count(*) FILTER (WHERE owner_company_name IS NOT NULL
+                                OR EXISTS (SELECT 1 FROM os_bond_owner_lookups o WHERE o.property_key = os_radar_prospects.property_key AND o.status = 'found')) AS contactable
        FROM os_radar_prospects WHERE score > 0 AND ($1::text[] = '{}' OR district = ANY($1::text[]))`,
     [districts]
   );
+  const [w] = await q<{ n: string }>(`SELECT count(*) AS n FROM os_bond_nudges WHERE status = 'open' AND ($1::text[] = '{}' OR district = ANY($1::text[]))`, [districts]);
+  const flagged = Number(r?.flagged ?? 0);
+  const counts = { strong: Number(r?.strong ?? 0), timing: Number(r?.timing ?? 0), contactable: Number(r?.contactable ?? 0), warm: Number(w?.n ?? 0) };
+  const share = (n: number) => (flagged ? n / flagged : 0);
+  const parts = {
+    strong: Math.round(40 * Math.min(1, share(counts.strong) * 2)),
+    timing: Math.round(20 * Math.min(1, share(counts.timing) * 2)),
+    contactable: Math.round(20 * Math.min(1, share(counts.contactable) * 2)),
+    warm: Math.round(20 * Math.min(1, counts.warm / 5)),
+  };
+  const score = flagged ? Math.min(100, parts.strong + parts.timing + parts.contactable + parts.warm) : null;
   const [c] = await q<{ score: string | null; doors: string; ex: string; av: string; po: string }>(
     `SELECT round(avg(condition_score))::text AS score, count(condition_score) AS doors,
             count(*) FILTER (WHERE condition_score >= 70) AS ex,
@@ -492,10 +518,13 @@ export async function todayPicture(districts: string[] = []): Promise<TodayPictu
     opportunity: {
       landlords: Number(l?.n ?? 0),
       avgScore: l?.avg == null ? null : Number(l.avg),
+      score,
+      parts,
+      counts,
       bands: { very_high: Number(l?.vh ?? 0), high: Number(l?.h ?? 0), medium: Number(l?.m ?? 0), low: Number(l?.lo ?? 0) },
       rentRoll: Number(r?.rent_roll ?? 0),
       rentDoors: Number(r?.rent_doors ?? 0),
-      flagged: Number(r?.flagged ?? 0),
+      flagged,
     },
     condition: { score: c?.score == null ? null : Number(c.score), doors: Number(c?.doors ?? 0), excellent: Number(c?.ex ?? 0), average: Number(c?.av ?? 0), poor: Number(c?.po ?? 0) },
     top: top.map((t) => ({

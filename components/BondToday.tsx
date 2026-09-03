@@ -30,6 +30,9 @@ export interface TodayPicture {
   opportunity: {
     landlords: number;
     avgScore: number | null;
+    score: number | null;
+    parts: { strong: number; timing: number; contactable: number; warm: number };
+    counts: { strong: number; timing: number; contactable: number; warm: number };
     bands: { very_high: number; high: number; medium: number; low: number };
     rentRoll: number;
     rentDoors: number;
@@ -186,9 +189,9 @@ export default function BondToday({
       </div>
 
       {/* The picture. */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-[1.1fr_0.8fr_1.25fr]">
+      <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-[1.2fr_1fr_1fr]">
         <Card title="Opportunity" icon="magic-wand" delay="0.3s">
-          {pic ? <Gauge score={pic.opportunity.avgScore} /> : <Loading />}
+          {pic ? <Gauge o={pic.opportunity} /> : <Loading />}
           <div className="mt-3 grid grid-cols-3 gap-3 xl:grid-cols-1 2xl:grid-cols-3">
             <Mini tone="lilac" label="Landlords" value={pic ? pic.opportunity.landlords.toLocaleString("en-GB") : "…"} hint="with a door in the patch" />
             <Mini tone="mint" label="Advertised rent" value={pic ? short(pic.opportunity.rentRoll) : "…"} hint={pic ? `pcm across ${pic.opportunity.rentDoors.toLocaleString("en-GB")} lets` : ""} />
@@ -353,7 +356,8 @@ function arc(from: number, to: number, r = 78, cx = 100, cy = 96): string {
   return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${r} ${r} 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
 }
 
-function Gauge({ score }: { score: number | null }) {
+function Gauge({ o }: { o: TodayPicture["opportunity"] }) {
+  const score = o.score;
   const at = Math.max(0, Math.min(100, score ?? 0));
   const [mx, my] = polar(100, 96, 78, (at / 100) * 180);
   return (
@@ -379,8 +383,29 @@ function Gauge({ score }: { score: number | null }) {
         <span className="whitespace-nowrap rounded-full border border-line bg-panel px-2.5 py-0.5 text-[10.5px] text-ink">Patch opportunity</span>
         <span>High</span>
       </div>
-      <p className="mt-1.5 text-center text-[10.5px] text-muted">{score == null ? "No landlords scored in the patch yet" : "Average opportunity score of the landlords in the patch"}</p>
+      {score == null ? (
+        <p className="mt-1.5 text-center text-[10.5px] text-muted">Nothing flagged in the patch yet</p>
+      ) : (
+        <ul className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-muted">
+          <Part label="Strong doors" got={o.parts.strong} of={40} n={o.counts.strong} />
+          <Part label="Right timing" got={o.parts.timing} of={20} n={o.counts.timing} />
+          <Part label="Contactable" got={o.parts.contactable} of={20} n={o.counts.contactable} />
+          <Part label="Warm calls" got={o.parts.warm} of={20} n={o.counts.warm} />
+        </ul>
+      )}
     </div>
+  );
+}
+
+function Part({ label, got, of, n }: { label: string; got: number; of: number; n: number }) {
+  return (
+    <li className="flex items-center justify-between gap-2" title={`${n.toLocaleString("en-GB")} doors`}>
+      <span className="truncate">{label}</span>
+      <span className="figures shrink-0 text-ink">
+        {got}
+        <span className="text-muted">/{of}</span>
+      </span>
+    </li>
   );
 }
 
@@ -418,20 +443,21 @@ function Condition({ c }: { c: TodayPicture["condition"] }) {
           <p className="mt-2 text-[10.5px] text-muted">{c.doors ? `${c.doors.toLocaleString("en-GB")} doors with a certificate` : "no certificates matched yet"}</p>
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 text-[11px] text-muted">
-        <Legend colour="var(--bond-lilac-ink)" label={`Excellent · ${c.excellent}`} />
-        <Legend colour="var(--bond-coral)" label={`Average · ${c.average}`} />
-        <Legend colour="var(--bond-butter-ink)" label={`Poor · ${c.poor}`} />
-      </div>
+      <ul className="mt-4 space-y-1.5 text-[11.5px] text-muted">
+        <Legend colour="var(--bond-lilac-ink)" label="Excellent" n={c.excellent} />
+        <Legend colour="var(--bond-coral)" label="Average" n={c.average} />
+        <Legend colour="var(--bond-butter-ink)" label="Poor" n={c.poor} />
+      </ul>
     </div>
   );
 }
 
-function Legend({ colour, label }: { colour: string; label: string }) {
+function Legend({ colour, label, n }: { colour: string; label: string; n: number }) {
   return (
-    <span className="flex items-center gap-1.5">
-      <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: colour, opacity: 0.8 }} />
-      {label}
-    </span>
+    <li className="flex items-center gap-2">
+      <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colour, opacity: 0.8 }} />
+      <span className="w-20">{label}</span>
+      <span className="figures text-ink">{n.toLocaleString("en-GB")}</span>
+    </li>
   );
 }
