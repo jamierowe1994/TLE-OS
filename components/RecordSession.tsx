@@ -87,6 +87,38 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
     setPhone(coarse || window.innerWidth < 720);
   }, []);
 
+  /* 3: our own API, until Flow settles. Roughly four minutes at most. */
+  const watch = useCallback(
+    (token: string) => {
+      stopPolling();
+      let tries = 0;
+      polling.current = setInterval(async () => {
+        if (++tries > 80) {
+          stopPolling();
+          setNote("Flow is still working on it. It will appear on the page when it's done - you can close this.");
+          return;
+        }
+        try {
+          const d = (await fetch(`/api/video?token=${encodeURIComponent(token)}`).then((r) => r.json())) as {
+            video?: WelcomeVideo | null;
+          };
+          if (!d.video) return;
+          setVideo(d.video);
+          if (d.video.status === "ready") {
+            stopPolling();
+            setPhase("done");
+          } else if (d.video.status === "failed") {
+            stopPolling();
+            setPhase("failed");
+          }
+        } catch {
+          /* Transient. Next tick. */
+        }
+      }, 3000);
+    },
+    [stopPolling]
+  );
+
   /** Reserve a slot on the deck and open the recorder. */
   const openRecorder = useCallback(
     async (token: string, replace = false) => {
@@ -101,10 +133,19 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
         recorderUrl?: string;
         origin?: string;
         alreadyRecorded?: boolean;
+        inFlight?: boolean;
       };
       if (d.alreadyRecorded && d.video) {
         setVideo(d.video);
         setPhase("done");
+        return;
+      }
+      /* A take is already on its way - the page was reopened mid-save. Keep
+         watching it rather than opening a new slot over it. */
+      if (d.inFlight && d.video) {
+        setVideo(d.video);
+        setPhase("saving");
+        watch(token);
         return;
       }
       if (!d.ok || !d.recorderUrl) throw new Error(d.error ?? "Flow wouldn't start a recording.");
@@ -114,7 +155,7 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
       setFrameSays(null);
       setPhase("ready");
     },
-    []
+    [watch]
   );
 
   /* 1 and 2: the appraisal, its deck (minted if missing), the recorder. */
@@ -194,38 +235,6 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
         /* No code is fine; the laptop recorder still works. */
       });
   }, [phone, phase, qr, appraisalId]);
-
-  /* 3: our own API, until Flow settles. Roughly four minutes at most. */
-  const watch = useCallback(
-    (token: string) => {
-      stopPolling();
-      let tries = 0;
-      polling.current = setInterval(async () => {
-        if (++tries > 80) {
-          stopPolling();
-          setNote("Flow is still working on it. It will appear on the page when it's done - you can close this.");
-          return;
-        }
-        try {
-          const d = (await fetch(`/api/video?token=${encodeURIComponent(token)}`).then((r) => r.json())) as {
-            video?: WelcomeVideo | null;
-          };
-          if (!d.video) return;
-          setVideo(d.video);
-          if (d.video.status === "ready") {
-            stopPolling();
-            setPhase("done");
-          } else if (d.video.status === "failed") {
-            stopPolling();
-            setPhase("failed");
-          }
-        } catch {
-          /* Transient. Next tick. */
-        }
-      }, 3000);
-    },
-    [stopPolling]
-  );
 
   /* What the frame says, origin-checked. Presentation only - the poll above
      is what decides anything. */
@@ -330,14 +339,6 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
                 <p className="text-[12.5px] text-muted">
                   {frameSays ?? "Up to two and a half minutes. Say who you are and one thing you already know about the place."}
                 </p>
-                <button
-                  type="button"
-                  onClick={reRecord}
-                  className="shrink-0 text-[11.5px] font-semibold text-muted transition-colors hover:text-ink"
-                  title="Throw this take away and start a fresh one"
-                >
-                  Start again
-                </button>
               </div>
               {/* `allow` is REQUIRED - without it the browser refuses the
                   camera inside the frame and the recorder cannot recover. */}

@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { createRecording, flowConfigured, flowOrigin, getRecording } from "@/lib/flow-video";
 import { attachVideo, newVideoKey, readPresentation, updateVideoByKey } from "@/lib/present-store";
 import type { WelcomeVideo } from "@/lib/present";
+import { hasDb, q } from "@/lib/db";
 
 /**
  * The agent's welcome video, for one pre-appraisal page.
@@ -18,6 +19,48 @@ import type { WelcomeVideo } from "@/lib/present";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+
+/**
+ * The recorder link for a slot, kept OFF the deck.
+ *
+ * The recorder URL carries a two-hour token that lets its holder record into
+ * the slot. The deck JSON travels to the landlord's browser, so it must never
+ * sit there; it lives in os_cache under the video's own key instead, and is
+ * only ever handed to a signed-in agent by this route.
+ *
+ * Why keep it at all: a laptop and a phone must share ONE slot. Measured
+ * 3 Sep: the laptop opened a slot, the phone scanned the code and opened a
+ * second one, the deck's pointer moved, and the take recorded on the laptop
+ * came back from Flow with a key nothing was watching.
+ */
+const recorderKey = (videoKey: string) => `recorder:${videoKey}`;
+
+async function rememberRecorder(videoKey: string, recorderUrl: string, expiresAt: string | null) {
+  if (!hasDb()) return;
+  await q(
+    `INSERT INTO os_cache (key, payload, computed_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, computed_at = NOW()`,
+    [recorderKey(videoKey), JSON.stringify({ recorderUrl, expiresAt })]
+  ).catch(() => []);
+}
+
+async function recallRecorder(videoKey: string): Promise<{ recorderUrl: string; expiresAt: string | null } | null> {
+  if (!hasDb()) return null;
+  const rows = await q<{ payload: { recorderUrl?: string; expiresAt?: string | null } }>(
+    `SELECT payload FROM os_cache WHERE key = $1`,
+    [recorderKey(videoKey)]
+  ).catch(() => []);
+  const p = rows[0]?.payload;
+  if (!p?.recorderUrl) return null;
+  /* A minute of slack: a link that dies while the camera warms up is worse
+     than a fresh slot. */
+  if (p.expiresAt && new Date(p.expiresAt).getTime() < Date.now() + 60_000) return null;
+  return { recorderUrl: p.recorderUrl, expiresAt: p.expiresAt ?? null };
+}
+
+async function qrFor(url: string): Promise<string | null> {
+  return QRCode.toString(url, { type: "svg", errorCorrectionLevel: "M", margin: 1 }).catch(() => null);
+}
 
 export async function POST(req: NextRequest) {
   if (!flowConfigured()) {
@@ -46,6 +89,34 @@ export async function POST(req: NextRequest) {
      deleting it here would race the landlord who has the page open. */
   if (held && held.status === "ready" && !body.replace) {
     return NextResponse.json({ ok: true, video: held, alreadyRecorded: true });
+  }
+  /* IN FLIGHT IS HELD TOO. Measured 3 Sep: an 8-second take was stopped, and
+     twelve seconds later a second slot was opened over it - the deck's
+     pointer moved to the empty slot, the finished recording came back from
+     Flow with a key nothing was listening for, and the page waited for ever.
+     While a take is uploading or processing the page reopening (a reload,
+     a second tab, the phone after the laptop) gets the held one back and
+     carries on watching it. Only an explicit re-record moves the pointer. */
+  if (held && (held.status === "uploading" || held.status === "processing") && !body.replace) {
+    return NextResponse.json({ ok: true, video: held, inFlight: true });
+  }
+  /* AN OPEN SLOT IS SHARED. The phone that scanned the laptop's code joins
+     the laptop's slot; whichever device finishes first fills the deck, and
+     the other sees it land. Only when the link has expired, or the caller
+     asked for a fresh one, is a new slot opened. */
+  if (held && held.status === "awaiting_recording" && !body.replace) {
+    const kept = await recallRecorder(held.key);
+    if (kept) {
+      return NextResponse.json({
+        ok: true,
+        video: held,
+        recorderUrl: kept.recorderUrl,
+        qrSvg: await qrFor(kept.recorderUrl),
+        expiresAt: kept.expiresAt,
+        origin: flowOrigin(),
+        reused: true,
+      });
+    }
   }
 
   const key = newVideoKey();
@@ -76,6 +147,9 @@ export async function POST(req: NextRequest) {
     recordedAt: null,
   };
   const saved = await attachVideo(token, video);
+  if (saved && recording.recorderUrl) {
+    await rememberRecorder(key, recording.recorderUrl, recording.expiresAt ?? null);
+  }
   if (!saved) {
     return NextResponse.json(
       { error: "Couldn't attach the recording to the page." },
@@ -99,14 +173,7 @@ export async function POST(req: NextRequest) {
      Error correction M rather than L: it costs eight more modules and buys
      tolerance for the actual failure mode, which is glare on a laptop screen
      rather than a damaged print. */
-  let qrSvg: string | null = null;
-  if (recording.recorderUrl) {
-    qrSvg = await QRCode.toString(recording.recorderUrl, {
-      type: "svg",
-      errorCorrectionLevel: "M",
-      margin: 1,
-    }).catch(() => null);
-  }
+  const qrSvg = recording.recorderUrl ? await qrFor(recording.recorderUrl) : null;
 
   return NextResponse.json({
     ok: true,
