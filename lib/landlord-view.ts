@@ -6,11 +6,14 @@
  * it by hand. The dashboard itself knows nothing about REX or appraisals -
  * it is a layout, and the layout is the thing Susan is deciding on.
  *
- * The layout, from James's reference (2 Sep): white, three columns. Left is
- * the location - a greyscale map with the address card over it - then a
- * bento of actions. Middle is what there is to do, a way to ask the agent,
- * and the presentation. Right is the property itself: name, photograph,
- * where it is on the journey, the figure, and how ready it is to let.
+ * ── The simpler shape, James 2 Sep ───────────────────────────────────────
+ *
+ * "It feels complicated... a lot of buttons... we just want a really simple
+ * process." So: ONE next step above everything, then five panels. The map
+ * with three tiles under it - view the presentation, sign the terms, what
+ * we need. The agent, properly, with the message box inside their card. The
+ * presentation. The property. And what we need from them, under the grid,
+ * as the only place documents are asked for.
  */
 
 export interface ViewAction {
@@ -24,20 +27,21 @@ export interface ViewAction {
   external?: boolean;
 }
 
-export interface ViewTodo {
+export interface ViewNeed {
   title: string;
   sub?: string;
   done: boolean;
-  href?: string | null;
-  icon: string;
 }
 
 export interface LandlordView {
   greeting: string;
   intro: string;
+  /** The one thing to do now. A landlord who reads only this line does the right thing. */
+  next: { label: string; hint?: string; href: string | null; external?: boolean };
   property: {
     address: string;
     postcode: string;
+    /** Our photograph, once take-on has happened. Null before that. */
     image: string | null;
     lat: number | null;
     lng: number | null;
@@ -49,15 +53,15 @@ export interface LandlordView {
   beats: string[];
   at: number;
   status: string;
+  /** Exactly three: the presentation, the terms, what we need. */
   actions: ViewAction[];
-  todos: ViewTodo[];
+  needs: ViewNeed[];
   valuation: {
     figure: string | null;
     unit: string;
     caption: string;
     lines: Array<[string, string]>;
   };
-  readiness: { pct: number; title: string; note: string };
   deck: { title: string; sub: string; href: string | null; image: string | null } | null;
-  agent: { name: string; title?: string | null; phone?: string | null; email?: string | null; photo?: string | null } | null;
+  agent: { name: string; title?: string | null; phone?: string | null; email?: string | null; photo?: string | null; bio?: string | null } | null;
 }

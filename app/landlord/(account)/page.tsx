@@ -1,4 +1,3 @@
-import DoodleIcon from "@/components/DoodleIcon";
 import LandlordDashboard from "@/components/landlord/Dashboard";
 import LandlordDocuments from "@/components/LandlordDocuments";
 import PropertyPhoto from "@/components/PropertyPhoto";
@@ -51,35 +50,26 @@ export default async function LandlordHome() {
       </div>
 
       {view ? (
-        <LandlordDashboard view={view} />
+        <LandlordDashboard
+          view={view}
+          documents={
+            open[0] ? (
+              <LandlordDocuments
+                accountId={me.id}
+                wanted={[
+                  "Photo ID and proof you own the property",
+                  ...OUTSTANDING_AT_APPRAISAL.slice(0, 4).map((o) => o.label),
+                  "Energy performance certificate (EPC)",
+                ]}
+              />
+            ) : undefined
+          }
+        />
       ) : (
         <div className="rounded-[20px] bg-white p-5 text-[13px] leading-relaxed text-muted">
           If you have a property with us that is not showing, it may be held against a different
           email address. Your agent can put that right.
         </div>
-      )}
-
-      {open[0] && (
-        <section id="ready" className="mt-3 rounded-[20px] bg-white p-5" data-search>
-          <div className="flex items-center gap-2.5">
-            <DoodleIcon name="shield" size={16} className="text-accent-dark" />
-            <h2 className="text-[19px]">Getting it ready to let</h2>
-          </div>
-          <p className="mt-1.5 max-w-[60ch] text-[12.5px] leading-relaxed text-muted">
-            These are the things the law needs in place before a tenant moves in. Some you will
-            already have; send us what you have and we will tell you what is missing.
-          </p>
-          <div className="mt-5">
-            <LandlordDocuments
-              accountId={me.id}
-              wanted={[
-                "Photo ID and proof you own the property",
-                ...OUTSTANDING_AT_APPRAISAL.slice(0, 4).map((o) => o.label),
-                "Energy performance certificate (EPC)",
-              ]}
-            />
-          </div>
-        </section>
       )}
 
       {rest.length > 0 && (
@@ -136,14 +126,29 @@ async function appraisalView(j: AppraisalJourney, first: string): Promise<Landlo
   })();
 
   const signed = j.signed.length > 0;
-  const todos: LandlordView["todos"] = [
-    { title: "Your valuation", sub: a.valuation != null ? `${money(a.valuation)} a month, recorded ${dayShort(a.valuedAt)}` : "Comes after the visit", done: a.valuation != null, icon: "coin" },
-    { title: "Read your presentation", sub: latest ? `${DECK_KINDS.find((k) => k.id === latest.kind)?.label ?? latest.kind} · ${dayShort(latest.createdAt)}` : "Lands here before the visit", done: Boolean(latest?.firstOpenedAt), href: latest ? `/present/${latest.token}` : null, icon: "doc" },
-    { title: "Sign your terms", sub: signed ? `Signed ${dayShort(j.signed[0].signedAt)}` : signUrl ? "Ready to read and sign" : `${agentName ?? "Your agent"} will send them over`, done: signed, href: signUrl, icon: "file-contract" },
-    { title: "Photo ID and proof of ownership", sub: "Send them below and we file them", done: false, href: "#ready", icon: "user" },
-    { title: "Safety certificates", sub: "Gas, electrical, EPC · send what you have", done: false, href: "#ready", icon: "shield" },
+  const deckLabel = latest ? (DECK_KINDS.find((k) => k.id === latest.kind)?.label ?? latest.kind) : null;
+
+  /* What we need from them. Recorded facts first, then the certificates the
+     law wants, which we cannot see until they send them. */
+  const needs: LandlordView["needs"] = [
+    { title: "Sign your terms", sub: signed ? `Signed ${dayShort(j.signed[0].signedAt)}` : signUrl ? "Ready to read and sign" : `${agentName ?? "Your agent"} will send them over`, done: signed },
+    { title: "Photo ID and proof you own the property", sub: "Send them here and we file them", done: false },
+    { title: "Gas safety certificate (CP12)", sub: "Annual, if there is any gas appliance", done: false },
+    { title: "Electrical safety report (EICR)", sub: "Every five years", done: false },
+    { title: "Energy performance certificate (EPC)", sub: a.valuation != null ? "Send it if you have one" : "We check for one before the visit", done: false },
   ];
-  const done = todos.filter((t) => t.done).length;
+
+  /* The one next step, in order of the journey. */
+  const next: LandlordView["next"] =
+    signUrl && !signed
+      ? { label: "Read and sign your terms", hint: j.serviceLabel ? `${j.serviceLabel}${a.feePct != null ? ` at ${a.feePct}%` : ""}` : undefined, href: signUrl, external: true }
+      : latest && !latest.firstOpenedAt
+        ? { label: `Read your ${deckLabel?.toLowerCase() ?? "presentation"}`, hint: `From ${latest.authorName || agentName || "your agent"}`, href: `/present/${latest.token}`, external: true }
+        : a.valuation == null
+          ? { label: when && !visitPassed ? `Your visit is on ${when}` : "Your figure is being written up", hint: "Nothing to do until then", href: null }
+          : signed
+            ? { label: "Send us what we still need", hint: "Ownership and the safety certificates", href: "#ready" }
+            : { label: "Your terms are on their way", hint: `${agentName ?? "Your agent"} will send them for signing`, href: null };
 
   return {
     greeting: `Hello, ${first}`,
@@ -160,15 +165,13 @@ async function appraisalView(j: AppraisalJourney, first: string): Promise<Landlo
     beats: JOURNEY.map((b) => b.label.replace(/^Your /, "").replace(/^The /, "")).map((s) => s[0].toUpperCase() + s.slice(1)),
     at: Math.max(0, at),
     status,
+    next,
     actions: [
-      { label: "View presentation", hint: latest ? DECK_KINDS.find((k) => k.id === latest.kind)?.label : "Not yet", href: latest ? `/present/${latest.token}` : null, icon: "doc", tone: latest ? "dark" : "light", external: true },
-      { label: "Sign contracts", hint: signed ? "Signed" : signUrl ? "Ready" : "Not yet", href: signUrl, icon: "file-contract", tone: signUrl && !signed ? "dark" : "light", external: true },
-      { label: "Compliance", hint: "What we need", href: "#ready", icon: "shield", tone: "dark" },
-      { label: "Documents", hint: "Send us files", href: "#ready", icon: "folder", tone: "light" },
-      { label: "Your agent", hint: agentName ?? undefined, href: deckAgent?.email ? `mailto:${deckAgent.email}` : null, icon: "user", tone: "light", external: true },
-      { label: "My details", href: "/landlord/profile", icon: "setting", tone: "light" },
+      { label: "View presentation", hint: deckLabel ?? "Not yet", href: latest ? `/present/${latest.token}` : null, icon: "doc", tone: latest ? "dark" : "light", external: true },
+      { label: "Sign terms", hint: signed ? "Signed" : signUrl ? "Ready to sign" : "Not yet", href: signUrl, icon: "file-contract", tone: signUrl && !signed ? "dark" : "light", external: true },
+      { label: "What we need", hint: `${needs.filter((n) => !n.done).length} things`, href: "#ready", icon: "shield", tone: "light" },
     ],
-    todos,
+    needs,
     valuation: {
       figure: a.valuation != null ? money(a.valuation) : null,
       unit: "a month",
@@ -179,11 +182,6 @@ async function appraisalView(j: AppraisalJourney, first: string): Promise<Landlo
         ["Set-up", a.setupFee != null ? money(a.setupFee) : "To be agreed"],
       ],
     },
-    readiness: {
-      pct: Math.round((done / todos.length) * 100),
-      title: "Ready to let",
-      note: done === todos.length ? "Everything we need is in" : `${todos.length - done} of ${todos.length} things still to do`,
-    },
     deck: latest
       ? {
           title: DECK_KINDS.find((k) => k.id === latest.kind)?.label ?? "Your presentation",
@@ -193,7 +191,7 @@ async function appraisalView(j: AppraisalJourney, first: string): Promise<Landlo
         }
       : null,
     agent: deckAgent
-      ? { name: deckAgent.name, title: deckAgent.title, phone: deckAgent.phone, email: deckAgent.email, photo: deckAgent.photo }
+      ? { name: deckAgent.name, title: deckAgent.title, phone: deckAgent.phone, email: deckAgent.email, photo: deckAgent.photo, bio: deckAgent.bio }
       : agentName
         ? { name: agentName }
         : null,
@@ -217,14 +215,13 @@ function managedView(p: ManagedProperty, first: string): LandlordView {
     beats: ["Visit", "Valuation", "Presentation", "Terms", "Marketing", "Offers", "Let", "Looked after"],
     at: 7,
     status: tenant ? `${p.tenants.map((t) => t.name).join(", ")} in since ${dayShort(p.letSince)}.` : "Let, and looked after by us.",
+    next: { label: "Nothing waiting on you", hint: "Certificates and statements are coming to this file", href: null },
     actions: [
       { label: "Certificates", hint: "Coming", href: null, icon: "shield", tone: "light" },
       { label: "Statements", hint: "Coming", href: null, icon: "wallet", tone: "light" },
       { label: "Documents", hint: "Coming", href: null, icon: "folder", tone: "light" },
-      { label: "Your agent", hint: p.agent?.name, href: null, icon: "user", tone: "light" },
-      { label: "My details", href: "/landlord/profile", icon: "setting", tone: "light" },
     ],
-    todos: [],
+    needs: [],
     valuation: {
       figure: p.rent == null ? null : money(p.rent),
       unit: p.rentPeriod === "week" ? "a week" : "a month",
@@ -235,7 +232,6 @@ function managedView(p: ManagedProperty, first: string): LandlordView {
         ["Tenant", tenant?.name ?? "Not on record"],
       ],
     },
-    readiness: { pct: 100, title: "Let", note: "Nothing waiting on you" },
     deck: null,
     agent: p.agent ? { name: p.agent.name } : null,
   };
