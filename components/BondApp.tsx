@@ -26,13 +26,14 @@ import { PressButton } from "@/components/Bits";
  * ever shows a placeholder as if it were a fact.
  */
 
-type Room = "today" | "map" | "prospects" | "landlords" | "lookup" | "owners" | "postcards";
+type Room = "today" | "map" | "prospects" | "landlords" | "competitors" | "lookup" | "owners" | "postcards";
 
 const ROOMS: { key: Room; label: string; icon: string }[] = [
   { key: "today", label: "Today", icon: "dashboard" },
   { key: "map", label: "Map", icon: "search" },
   { key: "prospects", label: "Prospects", icon: "list" },
   { key: "landlords", label: "Landlords", icon: "user" },
+  { key: "competitors", label: "Competitors", icon: "target" },
   { key: "lookup", label: "Look up", icon: "home" },
   { key: "owners", label: "Owners", icon: "key" },
   { key: "postcards", label: "Postcards", icon: "mail" },
@@ -104,6 +105,7 @@ export default function BondApp() {
   const [quick, setQuick] = useState("");
   const [nearPreset, setNearPreset] = useState<string | undefined>(undefined);
   const [filterPreset, setFilterPreset] = useState<string | undefined>(undefined);
+  const [lookupPreset, setLookupPreset] = useState<string | undefined>(undefined);
 
   /* THE PATCH. James, 3 Sep: "when they sign in for the app, they'll select
      their areas that they cover... it will then cordon off the rest." The
@@ -299,8 +301,18 @@ export default function BondApp() {
                 }}
               />
             )}
+            {room === "competitors" && (
+              <Competitors
+                districts={patch ?? []}
+                lookUp={(address) => {
+                  setLookupPreset(address);
+                  setRoom("lookup");
+                }}
+              />
+            )}
             {room === "lookup" && (
               <Lookup
+                preset={lookupPreset}
                 openOnBoard={(address) => {
                   setFilterPreset(address);
                   setRoom("prospects");
@@ -636,8 +648,8 @@ interface DossierData {
  * hand. The search goes to the property register; the answer is everything
  * Bond already holds about that door.
  */
-function Lookup({ openOnBoard }: { openOnBoard: (address: string) => void }) {
-  const [query, setQuery] = useState("");
+function Lookup({ openOnBoard, preset }: { openOnBoard: (address: string) => void; preset?: string }) {
+  const [query, setQuery] = useState(preset ?? "");
   const [busy, setBusy] = useState(false);
   const [candidates, setCandidates] = useState<Array<{ hs_id: string; label: string }>>([]);
   const [note, setNote] = useState<string | null>(null);
@@ -646,15 +658,25 @@ function Lookup({ openOnBoard }: { openOnBoard: (address: string) => void }) {
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
-  async function search(e?: React.FormEvent) {
+  /* Arriving from another room with an address in hand: search it at once. */
+  useEffect(() => {
+    if (preset && preset.trim()) {
+      setQuery(preset);
+      void search(undefined, preset);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preset]);
+
+  async function search(e?: React.FormEvent, presetQuery?: string) {
     e?.preventDefault();
-    if (!query.trim()) return;
+    const q0 = (presetQuery ?? query).trim();
+    if (!q0) return;
     setBusy(true);
     setNote(null);
     setDossier(null);
     setCandidates([]);
     try {
-      const r = await fetch(`/api/bond/property?q=${encodeURIComponent(query.trim())}`, { cache: "no-store" });
+      const r = await fetch(`/api/bond/property?q=${encodeURIComponent(q0)}`, { cache: "no-store" });
       const j = await r.json();
       if (!j.ok) {
         setNote(j.error ?? "Could not search.");
@@ -785,9 +807,15 @@ function Lookup({ openOnBoard }: { openOnBoard: (address: string) => void }) {
             <div className="mt-4 flex flex-wrap items-center gap-2">
               {dossier.prospect ? (
                 <>
-                  <span className="rounded-full border border-accent-dark bg-accent-soft/40 px-3 py-1 text-[11.5px] text-accent-dark">
-                    On the list · score {dossier.prospect.score} · {dossier.prospect.stage}
-                  </span>
+                  {dossier.prospect.score > 0 || dossier.prospect.stage !== "new" ? (
+                    <span className="rounded-full border border-accent-dark bg-accent-soft/40 px-3 py-1 text-[11.5px] text-accent-dark">
+                      On the list · score {dossier.prospect.score} · {dossier.prospect.stage}
+                    </span>
+                  ) : (
+                    <span className="rounded-full border border-line/80 px-3 py-1 text-[11.5px] text-muted">
+                      Known door, not flagged
+                    </span>
+                  )}
                   <button type="button" onClick={() => openOnBoard(f.address.split(",")[0])} className="rounded-full border border-ink/80 px-4 py-1.5 text-[11.5px] font-semibold">
                     Open on the board
                   </button>
@@ -1347,6 +1375,152 @@ function LandlordPanel({ landlordKey, onClose, onPatched, openDoor }: { landlord
           )}
         </div>
       </aside>
+    </div>
+  );
+}
+
+
+interface CompetitorAgentRow { agent: string; stock: number; tenanted: number; on_market: number; anniversaries_90: number }
+interface CompetitorDoorRow {
+  property_key: string; address: string; postcode: string; district: string | null; agent: string;
+  state: "tenanted" | "on_market" | "withdrawn" | "other"; status: string; rent: number | null; beds: number | null;
+  listed_on: string | null; let_agreed_at: string | null; tenancy_start: string | null; next_anniversary: string | null;
+  tenancy_basis: string | null; photo: string | null; flagged_score: number;
+}
+
+const STATE_LABEL: Record<CompetitorDoorRow["state"], string> = { tenanted: "Tenanted", on_market: "On market", withdrawn: "Withdrawn", other: "Unknown" };
+
+/**
+ * Who manages what. The agents in the patch with their stock, then the doors
+ * behind any one of them, with the anniversary the predictor puts on each.
+ */
+function Competitors({ districts, lookUp }: { districts: string[]; lookUp: (address: string) => void }) {
+  const [agents, setAgents] = useState<CompetitorAgentRow[] | null>(null);
+  const [agent, setAgent] = useState<string | null>(null);
+  const [doors, setDoors] = useState<CompetitorDoorRow[] | null>(null);
+  const [state, setState] = useState<"all" | "tenanted" | "on_market" | "withdrawn">("all");
+  const [q, setQ] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const key = districts.join(",");
+
+  useEffect(() => {
+    let gone = false;
+    setAgents(null);
+    fetch(`/api/bond/competitors?districts=${encodeURIComponent(key)}`, { cache: "no-store" })
+      .then(async (r) => { const j = await r.json(); if (!gone) { if (j.ok) setAgents(j.agents); else setError(j.reason ?? "Could not read the agents."); } })
+      .catch(() => { if (!gone) setError("Could not read the agents."); });
+    return () => { gone = true; };
+  }, [key]);
+
+  useEffect(() => {
+    let gone = false;
+    setDoors(null);
+    fetch(`/api/bond/competitors?doors=1&districts=${encodeURIComponent(key)}&agent=${encodeURIComponent(agent ?? "")}`, { cache: "no-store" })
+      .then(async (r) => { const j = await r.json(); if (!gone) { if (j.ok) setDoors(j.doors); else setError(j.reason ?? "Could not read the stock."); } })
+      .catch(() => { if (!gone) setError("Could not read the stock."); });
+    return () => { gone = true; };
+  }, [key, agent]);
+
+  const shown = (doors ?? []).filter((d) => {
+    if (state !== "all" && d.state !== state) return false;
+    if (q.trim() && !`${d.address} ${d.postcode} ${d.agent}`.toLowerCase().includes(q.trim().toLowerCase())) return false;
+    return true;
+  });
+  const totals = agents ? agents.reduce((a, r) => ({ stock: a.stock + r.stock, tenanted: a.tenanted + r.tenanted, ann: a.ann + r.anniversaries_90 }), { stock: 0, tenanted: 0, ann: 0 }) : null;
+
+  return (
+    <div className="fade-up">
+      {error && <p className="text-[12.5px] text-red-700">{error}</p>}
+      {totals && (
+        <p className="text-[12px] text-muted">
+          {agents!.length} agents let {totals.stock.toLocaleString("en-GB")} properties in the patch in the last two years, {totals.tenanted.toLocaleString("en-GB")} tenanted now, {totals.ann.toLocaleString("en-GB")} with an anniversary in the next 90 days.
+        </p>
+      )}
+
+      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+        <button type="button" onClick={() => setAgent(null)} className={`shrink-0 rounded-2xl border px-4 py-3 text-left transition-colors ${agent == null ? "border-ink bg-panel" : "border-line/80 hover:border-ink/40"}`}>
+          <p className="text-[12.5px]">All agents</p>
+          <p className="figures text-[18px]">{totals ? totals.stock.toLocaleString("en-GB") : "-"}</p>
+        </button>
+        {(agents ?? []).slice(0, 12).map((a) => (
+          <button key={a.agent} type="button" onClick={() => setAgent(a.agent)} className={`w-44 shrink-0 rounded-2xl border px-4 py-3 text-left transition-colors ${agent === a.agent ? "border-ink bg-panel" : "border-line/80 hover:border-ink/40"}`}>
+            <p className="truncate text-[12.5px]" title={a.agent}>{a.agent}</p>
+            <p className="figures text-[18px]">{a.stock}</p>
+            <p className="text-[10.5px] text-muted">{a.tenanted} tenanted · {a.on_market} on market{a.anniversaries_90 ? ` · ${a.anniversaries_90} due` : ""}</p>
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2.5">
+        <label className="flex min-w-64 flex-1 items-center gap-2.5 rounded-full border border-line/80 bg-panel px-4 py-2.5 focus-within:border-ink">
+          <DoodleIcon name="search" size={15} className="shrink-0 text-muted" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter by address, postcode or agent..." className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted/70" />
+        </label>
+        {agents && agents.length > 12 && (
+          <select value={agent ?? ""} onChange={(e) => setAgent(e.target.value || null)} className="rounded-full border border-line/80 bg-transparent px-3 py-2 text-[12px] outline-none">
+            <option value="">All agents</option>
+            {agents.map((a) => <option key={a.agent} value={a.agent}>{a.agent} ({a.stock})</option>)}
+          </select>
+        )}
+        <span className="flex items-center gap-1 rounded-full border border-line/80 p-0.5">
+          {(["all", "tenanted", "on_market", "withdrawn"] as const).map((k) => (
+            <button key={k} type="button" onClick={() => setState(k)} className={`rounded-full px-3.5 py-1.5 text-[12px] transition-colors ${state === k ? "bg-ink text-page" : "text-muted hover:text-ink"}`}>
+              {k === "all" ? "All" : STATE_LABEL[k]}
+            </button>
+          ))}
+        </span>
+      </div>
+
+      {doors == null ? (
+        <p className="mt-6 flex items-center gap-3 text-[12.5px] text-muted"><span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-line border-t-ink" />Reading the stock...</p>
+      ) : shown.length === 0 ? (
+        <p className="mt-4 rounded-2xl border border-dashed border-line/80 p-6 text-[12.5px] text-muted">Nothing matches.</p>
+      ) : (
+        <div className="mt-4 overflow-x-auto rounded-2xl border border-line/80 bg-panel">
+          <table className="w-full text-left text-[12.5px]">
+            <thead className="text-[10.5px] uppercase tracking-wider text-muted">
+              <tr className="border-b border-line/70">
+                <th className="px-4 py-3">Property</th>
+                <th className="px-4 py-3">Managed by</th>
+                <th className="px-4 py-3">Tenanted</th>
+                <th className="px-4 py-3">Rent</th>
+                <th className="px-4 py-3">Anniversary</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line/60">
+              {shown.slice(0, 300).map((d) => (
+                <tr key={d.property_key} className="transition-colors hover:bg-page">
+                  <td className="px-4 py-2.5">
+                    <span className="flex items-center gap-3">
+                      {d.photo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={d.photo} alt="" className="h-10 w-14 shrink-0 rounded-lg object-cover" />
+                      ) : (
+                        <span className="h-10 w-14 shrink-0 rounded-lg border border-line/70 bg-page" />
+                      )}
+                      <span className="min-w-0">
+                        <span className="hand block truncate text-[13px]">{d.address || d.postcode}</span>
+                        <span className="block text-[11px] text-muted">{d.postcode}{d.beds != null ? ` · ${d.beds} bed` : ""}</span>
+                      </span>
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5">{d.agent}</td>
+                  <td className="px-4 py-2.5">
+                    <span className={`rounded-full border px-2 py-0.5 text-[10.5px] ${d.state === "tenanted" ? "border-accent-dark/60 bg-accent-soft text-accent-dark" : "border-line/70 text-muted"}`}>{STATE_LABEL[d.state]}</span>
+                  </td>
+                  <td className="figures px-4 py-2.5">{d.rent != null ? `£${d.rent.toLocaleString("en-GB")} pcm` : "-"}</td>
+                  <td className="px-4 py-2.5 text-muted">{d.next_anniversary ? `${when(d.next_anniversary)}${d.tenancy_basis === "estimated" ? " (est.)" : ""}` : "-"}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <button type="button" onClick={() => lookUp(`${(d.address || "").split(",")[0]} ${d.postcode}`.trim())} className="rounded-full border border-line/80 px-3 py-1 text-[11px] text-muted hover:text-ink">Look up</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="border-t border-line/70 px-4 py-2.5 text-[11px] text-muted">{shown.length.toLocaleString("en-GB")} properties{shown.length > 300 ? ", first 300 shown" : ""}</p>
+        </div>
+      )}
     </div>
   );
 }

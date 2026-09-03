@@ -475,3 +475,18 @@ profile URL must be on linkedin.com), the doors with photos and signals, and not
 Verified locally with the company fixture and two recorded owners: four landlords, the two
 with live flagged doors scoring 100 (Very high), the two whose adverts have since gone
 scoring 0 (Low); Do not send and LinkedIn saved and refused correctly.
+
+---
+
+## Competitor stock, 3 Sep 2026
+
+`lib/competitors.ts`: the latest lettings listing per property in the last two years, other
+agents only (ours and the private listers excluded), with a state - tenanted (let agreed,
+or gone without being withdrawn), on market, withdrawn - joined to the prospect row for the
+tenancy estimate, the next anniversary and the photo. `/api/bond/competitors` gives the
+agents with stock, tenanted, on market and anniversaries in 90 days, and the doors for one
+agent. The Competitors room: agent cards that filter the table, the doors with photo,
+tenanted pill, rent and anniversary, and Look up straight into the dossier. Scoped to the
+person's patch. Measured locally: 200 agents, 3,476 doors, 758 tenanted now; Your Move top
+with 163. Anniversaries in the next 90 days are few today because the feed's let-agreed
+rows are mostly this summer's; that column fills as the predictor ages.
