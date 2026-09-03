@@ -6,6 +6,7 @@ import { sendEmail } from "@/lib/resend";
 import { record } from "@/lib/audit";
 import { ensureDemoAppraisal } from "@/lib/demo-appraisal";
 import { buildVideoChase } from "@/lib/video-chase";
+import { publicOrigin } from "@/lib/origin";
 
 /**
  * Send one catalogue email to the person asking for it.
@@ -77,7 +78,7 @@ export async function POST(req: NextRequest) {
       /* Not the catalogue sample: a real nudge for a demo appraisal that
          exists, addressed to the person testing, so the button in the inbox
          opens a file where the recorder can be run through to the end. */
-      const origin = (process.env.NEXT_PUBLIC_OS_ORIGIN ?? "").replace(/\/+$/, "") || req.nextUrl.origin;
+      const origin = publicOrigin(req);
       const ma = await ensureDemoAppraisal(me);
       const built = await buildVideoChase({ ma, me, origin });
       subject = built.subject;

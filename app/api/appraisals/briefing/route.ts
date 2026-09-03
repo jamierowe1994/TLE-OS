@@ -13,6 +13,7 @@ import {
   type AgentBriefing,
 } from "@/lib/agent-briefing";
 import { recipientFor } from "@/lib/agent-recipient";
+import { publicOrigin } from "@/lib/origin";
 
 /**
  * Tell the AGENT their pre-appraisal is going out.
@@ -39,10 +40,7 @@ import { recipientFor } from "@/lib/agent-recipient";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function origin(req: NextRequest): string {
-  const configured = (process.env.NEXT_PUBLIC_OS_ORIGIN ?? "").replace(/\/+$/, "");
-  return configured || req.nextUrl.origin;
-}
+const origin = publicOrigin;
 
 const pretty = (iso: string | null) =>
   iso

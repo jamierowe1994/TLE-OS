@@ -12,6 +12,7 @@ import {
   sendVideoChaseNow,
   videoRecorded,
 } from "@/lib/video-chase";
+import { publicOrigin } from "@/lib/origin";
 
 /**
  * The video nudge for one appraisal.
@@ -29,10 +30,7 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function origin(req: NextRequest): string {
-  const configured = (process.env.NEXT_PUBLIC_OS_ORIGIN ?? "").replace(/\/+$/, "");
-  return configured || req.nextUrl.origin;
-}
+const origin = publicOrigin;
 
 async function who(req: NextRequest) {
   const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);

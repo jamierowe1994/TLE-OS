@@ -3,6 +3,7 @@ import { createSessionToken, SESSION_COOKIE, sessionCookieOptions, verifySession
 import { findUserByEmail } from "@/lib/users";
 import { consumeVerification } from "@/lib/verification";
 import { recordPagePath } from "@/lib/record-link";
+import { publicOrigin } from "@/lib/origin";
 
 /**
  * The door the video nudge opens.
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
   const token = (req.nextUrl.searchParams.get("k") ?? "").trim();
   const appraisalId = (req.nextUrl.searchParams.get("a") ?? "").trim();
   const path = appraisalId ? recordPagePath(appraisalId) : "/market-appraisals";
-  const to = new URL(path, req.nextUrl.origin);
+  const to = new URL(path, publicOrigin(req));
 
   const already = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
 
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
 
   const user = email ? await findUserByEmail(email) : null;
   if (!user) {
-    const signIn = new URL("/sign-in", req.nextUrl.origin);
+    const signIn = new URL("/sign-in", publicOrigin(req));
     signIn.searchParams.set("next", path);
     return NextResponse.redirect(signIn);
   }

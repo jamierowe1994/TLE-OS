@@ -5,6 +5,7 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { appraisalIdForLead, getAppraisal } from "@/lib/appraisal-store";
 import { queueVideoChase } from "@/lib/video-chase";
+import { publicOrigin } from "@/lib/origin";
 
 /**
  * The queue: emails written now and sent later.
@@ -115,7 +116,7 @@ export async function POST(req: NextRequest) {
     try {
       const ma = await getAppraisal(appraisalIdForLead(ref));
       if (ma) {
-        const origin = (process.env.NEXT_PUBLIC_OS_ORIGIN ?? "").replace(/\/+$/, "") || req.nextUrl.origin;
+        const origin = publicOrigin(req);
         videoChase = await queueVideoChase({ ma, me, origin });
       }
     } catch (e) {

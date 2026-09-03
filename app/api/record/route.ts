@@ -8,6 +8,7 @@ import { hasDb, q } from "@/lib/db";
 import { PRE_APPRAISAL_LEAD_DAYS } from "@/lib/appraisal-email";
 import { mintRecordLink } from "@/lib/record-link";
 import { firstNameOf } from "@/lib/present";
+import { publicOrigin } from "@/lib/origin";
 
 /**
  * What the recording page needs, and a code to carry on by phone.
@@ -25,10 +26,7 @@ import { firstNameOf } from "@/lib/present";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function origin(req: NextRequest): string {
-  const configured = (process.env.NEXT_PUBLIC_OS_ORIGIN ?? "").replace(/\/+$/, "");
-  return configured || req.nextUrl.origin;
-}
+const origin = publicOrigin;
 
 async function who(req: NextRequest) {
   const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);

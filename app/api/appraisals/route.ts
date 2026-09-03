@@ -5,6 +5,7 @@ import { findUserById } from "@/lib/users";
 import { SERVICE_LEVELS, type ServiceLevel } from "@/lib/market-appraisal";
 import type { NextRequest } from "next/server";
 import { queueVideoChase } from "@/lib/video-chase";
+import { publicOrigin } from "@/lib/origin";
 
 /**
  * The appraisals the OS has booked.
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
         const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
         const me = userId ? await findUserById(userId) : null;
         if (me) {
-          const origin = (process.env.NEXT_PUBLIC_OS_ORIGIN ?? "").replace(/\/+$/, "") || req.nextUrl.origin;
+          const origin = publicOrigin(req);
           videoChase = await queueVideoChase({ ma: appraisal, me, origin });
         }
       } catch {

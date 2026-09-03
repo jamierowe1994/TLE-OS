@@ -13,6 +13,7 @@ import {
   type PresentTerms,
 } from "@/lib/present";
 import { hasDb, q } from "@/lib/db";
+import { publicOrigin } from "@/lib/origin";
 
 /**
  * Minting a deck — one of three, chosen by `kind`.
@@ -33,14 +34,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /** Where the landlord's browser should be sent. Set on Railway. */
-function origin(req: NextRequest): string {
-  const configured = (process.env.NEXT_PUBLIC_OS_ORIGIN ?? "").replace(/\/+$/, "");
-  if (configured) return configured;
-  // Local dev, and a genuinely useful fallback: whatever host this request
-  // arrived on. Never guessed from a header we don't control in production,
-  // because the URL ends up in an email.
-  return req.nextUrl.origin;
-}
+const origin = publicOrigin;
 
 type Body = {
   ref?: string;
