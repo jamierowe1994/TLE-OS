@@ -44,6 +44,13 @@ const reasonLabel = (k: string) => REASONS.find((r) => r.key === k)?.label ?? k;
 export function QrModal({ token, onClose }: { token: string; onClose: () => void }) {
   const [data, setData] = useState<{ svg: string; url: string; link: QrLinkRow } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [test, setTest] = useState<string | null>(null);
+  async function sendTest() {
+    setTest("Sending...");
+    const r = await fetch("/api/bond/qr", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ test_email: true, token }) });
+    const j = await r.json();
+    setTest(j.ok ? `Sent to ${j.to}` : j.error ?? "Not sent");
+  }
   useEffect(() => {
     fetch(`/api/bond/qr?token=${encodeURIComponent(token)}`, { cache: "no-store" })
       .then(async (r) => {
@@ -75,6 +82,15 @@ export function QrModal({ token, onClose }: { token: string; onClose: () => void
             <p className="mt-3 text-[11px] leading-relaxed text-muted">
               {data.link.scans} scan{data.link.scans === 1 ? "" : "s"} · {data.link.responses} response{data.link.responses === 1 ? "" : "s"}. Right-click the code to save it for the print file; it reads at 20mm and up.
             </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11.5px]">
+              <a href={`/api/bond/qr?token=${encodeURIComponent(token)}&preview=email`} target="_blank" rel="noreferrer" className="rounded-full border border-line px-3 py-1 text-muted hover:border-ink hover:text-ink">
+                Preview the email
+              </a>
+              <button type="button" onClick={sendTest} className="rounded-full border border-line px-3 py-1 text-muted hover:border-ink hover:text-ink">
+                Send me a test
+              </button>
+              {test && <span className="text-muted">{test}</span>}
+            </div>
           </>
         )}
       </div>

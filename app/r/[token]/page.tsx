@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { landingPage, recordScan, REASON_LABEL } from "@/lib/bond-qr";
 import RentCheckForm from "@/components/RentCheckForm";
+import BookValuation from "@/components/BookValuation";
 
 /**
  * The page a landlord lands on when they scan a card.
@@ -28,8 +29,9 @@ const HEADLINE: Record<string, (addr: string) => string> = {
 const pounds = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
 const monthName = (ym: string) => (ym ? new Date(`${ym}-01T00:00:00Z`).toLocaleDateString("en-GB", { month: "short", year: "numeric" }) : "");
 
-export default async function RentCheckPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function RentCheckPage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ book?: string }> }) {
   const { token } = await params;
+  const { book } = await searchParams;
   const data = await landingPage(token);
   const h = await headers();
   if (data) await recordScan(token, h.get("user-agent") ?? "");
@@ -98,6 +100,8 @@ export default async function RentCheckPage({ params }: { params: Promise<{ toke
               </ul>
             </div>
           )}
+
+          {book === "1" && <BookValuation token={token} />}
 
           <div className="mt-8">
             <h2 className="hand text-[20px]">Get the full check, free</h2>

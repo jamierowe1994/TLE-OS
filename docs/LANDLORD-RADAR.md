@@ -603,3 +603,12 @@ the door, the reason and the consent in the enquiry, so it shows in Leads at onc
 responses are counted on the link and kept as events (`os_bond_qr_events`) with the reason,
 which is the attribution the learned weights need. The Postcards room shows the totals by
 reason, each card's code with its scans and replies, and the by-hand form.
+
+**The email, 3 Sep 2026.** `lib/rent-check-email.ts`. Whoever leaves their details gets the rent
+check in their inbox at once, on the public sender (audience "customer", so the Admin switch and
+`RESEND_FROM_PUBLIC` apply): the same figures as the page, the comparables, and one button, "Book my
+free valuation", which lands back on the page with `?book=1`; a tap there is a `book` event, a
+note on the contact and a line in Today's feed. It is the thing they asked for, so it goes whether
+or not they ticked the updates box; the tick is recorded for later marketing. A shut door (no key,
+switch off) is written on the response as `email_error` and never fails the page. The QR modal has
+"Preview the email" and "Send me a test", which only ever sends to the person signed in.

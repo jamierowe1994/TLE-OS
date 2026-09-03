@@ -6,6 +6,7 @@ import { getProspect } from "@/lib/radar";
 import { saveContact } from "@/lib/contacts-store";
 import { logActivity } from "@/lib/bond";
 import { rentCheck, type RentCheck } from "@/lib/rent-check";
+import { sendRentCheck } from "@/lib/rent-check-email";
 
 /**
  * The QR loop: letterbox to inbox.
@@ -241,8 +242,8 @@ export async function recordResponse(p: {
   } catch (e) {
     console.error("[bond-qr] contact not saved", e);
   }
-  await q(
-    `INSERT INTO os_bond_qr_responses (token, name, email, phone, consent, message, contact_id) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+  const [resp] = await q<{ id: number }>(
+    `INSERT INTO os_bond_qr_responses (token, name, email, phone, consent, message, contact_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
     [p.token, name, email, (p.phone ?? "").trim().slice(0, 40), p.consent, (p.message ?? "").trim().slice(0, 1000), contactId]
   );
   await q(`UPDATE os_bond_qr_links SET responses = responses + 1, contact_id = coalesce(contact_id, $2) WHERE token = $1`, [p.token, contactId]);
@@ -255,6 +256,43 @@ export async function recordResponse(p: {
     address: link.address,
     detail: `Scanned the card and asked for a rent check${p.consent ? ", opted in to email" : ""} · ${REASON_LABEL[link.reason]}`,
   });
+  /* The thing they asked for, straight away. A shut door (no key, the
+     switch off) is recorded on the response and never fails the page. */
+  try {
+    const page = await landingPage(p.token);
+    if (page) {
+      await sendRentCheck(page, { email, firstName: name.split(/\s+/)[0] }, qrOrigin());
+      await q(`UPDATE os_bond_qr_responses SET email_sent_at = NOW() WHERE id = $1`, [resp.id]);
+    }
+  } catch (e) {
+    const why = e instanceof Error ? e.message : "send failed";
+    await q(`UPDATE os_bond_qr_responses SET email_error = $2 WHERE id = $1`, [resp.id, why.slice(0, 300)]);
+    console.error("[bond-qr] rent check email not sent:", why);
+  }
+  return { ok: true };
+}
+
+/** The button in the email: they want the valuation. Told to the office, marked on the contact. */
+export async function recordBooking(token: string): Promise<{ ok: boolean; reason?: string }> {
+  if (!hasDb()) return { ok: false, reason: "no database" };
+  const link = await getLink(token);
+  if (!link) return { ok: false, reason: "That link is not one of ours." };
+  const [resp] = await q<{ id: number; name: string; contact_id: string | null }>(
+    `SELECT id, name, contact_id FROM os_bond_qr_responses WHERE token = $1 ORDER BY created_at DESC LIMIT 1`,
+    [token]
+  );
+  if (resp) await q(`UPDATE os_bond_qr_responses SET booked_at = coalesce(booked_at, NOW()) WHERE id = $1`, [resp.id]);
+  await q(`INSERT INTO os_bond_qr_events (token, kind) VALUES ($1, 'book')`, [token]);
+  if (resp?.contact_id) {
+    try {
+      const { updateContact, getContact } = await import("@/lib/contacts-store");
+      const c = await getContact(resp.contact_id);
+      if (c && !c.notes.includes("Asked to book")) await updateContact(resp.contact_id, { notes: `${c.notes ? `${c.notes}\n` : ""}Asked to book a free valuation from the rent-check email.` });
+    } catch (e) {
+      console.error("[bond-qr] contact not updated", e);
+    }
+  }
+  await logActivity({ actor: resp?.name ?? "A landlord", kind: "appraisal", property_key: link.property_key, address: link.address, detail: "Asked to book a free valuation from the rent-check email" });
   return { ok: true };
 }
 

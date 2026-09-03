@@ -1566,6 +1566,9 @@ CREATE TABLE IF NOT EXISTS os_bond_qr_responses (
   contact_id  TEXT,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE os_bond_qr_responses ADD COLUMN IF NOT EXISTS email_sent_at TIMESTAMPTZ;
+ALTER TABLE os_bond_qr_responses ADD COLUMN IF NOT EXISTS email_error TEXT;
+ALTER TABLE os_bond_qr_responses ADD COLUMN IF NOT EXISTS booked_at TIMESTAMPTZ;
 
 -- Ask Bond: the consult panel's conversation, both halves, per person. Its own
 -- table rather than Steve's, so the two histories never bleed into each

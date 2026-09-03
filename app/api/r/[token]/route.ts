@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { recordResponse } from "@/lib/bond-qr";
+import { recordBooking, recordResponse } from "@/lib/bond-qr";
 
 /**
  * The rent-check form, from the public page. No sign-in; the token is the key.
@@ -13,6 +13,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const str = (v: unknown) => (typeof v === "string" ? v : "");
   if (str(b.company).trim()) return NextResponse.json({ ok: true });
+  if (b.book === true) {
+    const r = await recordBooking(token);
+    return NextResponse.json(r, { status: r.ok ? 200 : 400 });
+  }
   const r = await recordResponse({
     token,
     name: str(b.name),
