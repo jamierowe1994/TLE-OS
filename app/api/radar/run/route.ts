@@ -56,10 +56,19 @@ export async function GET() {
     `SELECT id, status, swept, skipped, seen, new_rows, events, active, quiet, digest, photos, error, started_at, finished_at
        FROM os_radar_runs ORDER BY started_at DESC LIMIT 3`
   );
+  const [queue] = await q<{ queued: string; held: string; sent: string }>(
+    `SELECT count(*) FILTER (WHERE status = 'queued') AS queued,
+            count(*) FILTER (WHERE status = 'held') AS held,
+            count(*) FILTER (WHERE status = 'sent') AS sent
+       FROM os_bond_campaign_sends`
+  );
   return NextResponse.json({
     ok: true,
     dryRun: true,
     runs,
+    /* The card queue, so a scheduler's summary and a curl from a laptop
+       can see it without a session. */
+    queue: { queued: Number(queue?.queued ?? 0), held: Number(queue?.held ?? 0), sent: Number(queue?.sent ?? 0) },
     capability: ["district-sweep", "events", "prospects", "digest"],
     watching: districts.length,
     districts,
