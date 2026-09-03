@@ -121,6 +121,35 @@ export const SIGNALS: Record<SignalKey, { label: string; weight: number; why: st
 
 export const SIGNAL_ORDER = Object.keys(SIGNALS) as SignalKey[];
 
+/**
+ * One colour per signal, the same everywhere. When signals are switched on,
+ * a pin takes the colour of the strongest switched-on signal it carries; the
+ * legend shows the same swatches. Chosen to stay apart from each other and
+ * to read on a pale map; `ink` says whether the number on the pin is dark.
+ */
+export const SIGNAL_COLOUR: Record<SignalKey, { fill: string; ink?: boolean }> = {
+  self_managing: { fill: "#b5453c" },
+  withdrawn: { fill: "#6b4c9a" },
+  switched_agent: { fill: "#2f6f9f" },
+  fallen_through: { fill: "#c0392b" },
+  stale_90: { fill: "#7a5230" },
+  stale_60: { fill: "#a9783a" },
+  stale_30: { fill: "#d9b46a", ink: true },
+  relisted: { fill: "#2a8a7a" },
+  reduced: { fill: "#d97b2b" },
+  competitor_new: { fill: "#8a8a8a" },
+  company_owned: { fill: "#1f5f8b" },
+  let_to_sale: { fill: "#8d3b72" },
+  sale_stuck: { fill: "#5c5c8a" },
+  sale_to_let: { fill: "#2e7d4f" },
+  just_bought: { fill: "#1b9e77" },
+  anniversary_due: { fill: "#e6b422", ink: true },
+  added_by_hand: { fill: "#3d3d3d" },
+  hmo_licence_expiring: { fill: "#9c6b00" },
+  epc_below_c: { fill: "#6a994e" },
+  epc_expiring: { fill: "#386641" },
+};
+
 export interface Signal {
   key: SignalKey;
   /** One line, in an agent's words, on what was seen. "64 days on the market with Leaders". */

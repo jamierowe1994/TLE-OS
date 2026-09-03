@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { loadGoogle } from "@/components/MarketMap";
-import { SIGNALS, type Prospect } from "@/lib/radar-signals";
+import { SIGNALS, SIGNAL_COLOUR, type Prospect, type SignalKey } from "@/lib/radar-signals";
 
 /**
  * Landlord Radar on a map.
@@ -42,12 +42,15 @@ export default function RadarMap({
   openId,
   onOpen,
   onInView,
+  colourBy = [],
 }: {
   prospects: Prospect[];
   openId: string | null;
   onOpen: (key: string) => void;
   /** The keys currently inside the map, whenever it moves. */
   onInView: (keys: string[]) => void;
+  /** The switched-on signals, strongest first. Empty means colour by score. */
+  colourBy?: SignalKey[];
 }) {
   const holder = useRef<HTMLDivElement | null>(null);
   const map = useRef<google.maps.Map | null>(null);
@@ -63,6 +66,15 @@ export default function RadarMap({
 
   const placed = prospects.filter((p) => p.lat != null && p.lon != null);
   const placedSig = placed.map((p) => p.property_key).join("|");
+
+  /* THE HANDLERS READ THE LATEST LIST. Google's draw and bounds_changed
+     callbacks are bound once, when the map is made. The first version bound
+     them to the first `project`, whose closure held the first list, so every
+     pan - including the fitBounds after a filter - redrew the pins from the
+     unfiltered book. James, 3 Sep: "if I click Withdrawn... it's not showing
+     me anything." The ref is what the handlers call; it always points at the
+     `project` of the latest render. */
+  const projectRef = useRef<() => void>(() => {});
 
   const project = useCallback(() => {
     const pr = overlay.current?.getProjection?.();
@@ -84,6 +96,7 @@ export default function RadarMap({
     onInView(inView);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prospects]);
+  projectRef.current = project;
 
   useEffect(() => {
     let dead = false;
@@ -119,10 +132,10 @@ export default function RadarMap({
           const ov = new google.maps.OverlayView();
           ov.onAdd = () => {};
           ov.onRemove = () => {};
-          ov.draw = () => project();
+          ov.draw = () => projectRef.current();
           ov.setMap(map.current);
           overlay.current = ov;
-          map.current.addListener("bounds_changed", () => project());
+          map.current.addListener("bounds_changed", () => projectRef.current());
           map.current.addListener("click", () => setCard(null));
         }
         setReady(true);
@@ -183,6 +196,39 @@ export default function RadarMap({
     }
   };
 
+  /* Colour by the switched-on signals: the strongest one the pin carries.
+     Inline styles rather than classes, because the palette is data. */
+  const signalOf = (p: Prospect): SignalKey | null => {
+    for (const k of colourBy) if (p.signals.some((s) => s.key === k)) return k;
+    return null;
+  };
+  const pinStyle = (p: Prospect, isOpen: boolean): React.CSSProperties | undefined => {
+    if (isOpen || colourBy.length === 0) return undefined;
+    const k = signalOf(p);
+    if (!k) return { background: "var(--page)", color: "var(--ink)", borderColor: "var(--line)" };
+    const c = SIGNAL_COLOUR[k];
+    return { background: c.fill, borderColor: c.fill, color: c.ink ? "#1a1a1a" : "#ffffff" };
+  };
+
+  /* The number on the pin is the days on the market - the date, in James's
+     words - with the score kept for the card. A property with no current
+     listing (an anniversary, a hand-added door) shows its score instead. */
+  const pinLabel = (p: Prospect): string => {
+    if (!p.listed_on) return String(p.score);
+    const d = Math.max(0, Math.floor((Date.now() - new Date(p.listed_on).getTime()) / 86_400_000));
+    return String(d);
+  };
+
+  const inViewCounts = (() => {
+    const m = new Map<SignalKey, number>();
+    if (colourBy.length === 0) return m;
+    for (const { p } of pts) {
+      const k = signalOf(p);
+      if (k) m.set(k, (m.get(k) ?? 0) + 1);
+    }
+    return m;
+  })();
+
   return (
     <div className="relative h-full">
       <div ref={holder} className="h-full w-full overflow-hidden rounded-2xl border border-line/70 bg-line/10" />
@@ -223,10 +269,26 @@ export default function RadarMap({
       )}
 
       {ready && (
-        <div className="pointer-events-none absolute left-3 top-3 z-[5] flex flex-wrap items-center gap-2 rounded-full border border-line/70 bg-page/95 px-3 py-1.5 text-[11px] text-muted shadow-sm">
-          <span className="inline-block h-2.5 w-2.5 rounded-full bg-accent-dark" /> 60 and up
-          <span className="ml-1 inline-block h-2.5 w-2.5 rounded-full border border-accent-dark/60 bg-accent-soft" /> 30 to 59
-          <span className="ml-1 inline-block h-2.5 w-2.5 rounded-full border border-line/70 bg-page" /> under 30
+        <div className="pointer-events-none absolute left-3 top-3 z-[5] flex max-w-[calc(100%-6rem)] flex-wrap items-center gap-x-2 gap-y-1 rounded-2xl border border-line/70 bg-page/95 px-3 py-1.5 text-[11px] text-muted shadow-sm">
+          {colourBy.length === 0 ? (
+            <>
+              <span className="inline-block h-2.5 w-2.5 rounded-full bg-accent-dark" /> score 60 and up
+              <span className="ml-1 inline-block h-2.5 w-2.5 rounded-full border border-accent-dark/60 bg-accent-soft" /> 30 to 59
+              <span className="ml-1 inline-block h-2.5 w-2.5 rounded-full border border-line/70 bg-page" /> under 30
+              <span className="ml-1">· number is days on the market</span>
+            </>
+          ) : (
+            <>
+              {colourBy.map((k) => (
+                <span key={k} className="flex items-center gap-1.5">
+                  <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: SIGNAL_COLOUR[k].fill }} />
+                  {SIGNALS[k].label}
+                  <span className="figures">{inViewCounts.get(k) ?? 0}</span>
+                </span>
+              ))}
+              <span className="ml-1">· number is days on the market</span>
+            </>
+          )}
           {placed.length < prospects.length && (
             <span className="ml-1">· {prospects.length - placed.length} without a location</span>
           )}
@@ -243,9 +305,9 @@ export default function RadarMap({
               onClick={() => setCard(p)}
               title={p.address || p.street || p.postcode}
               className={`figures absolute whitespace-nowrap rounded-full border px-1.5 py-0.5 text-[10.5px] font-semibold shadow-sm transition-transform hover:scale-110 ${pinClass(p, isOpen)}`}
-              style={{ left: x, top: y, transform: "translate(-50%,-50%)" }}
+              style={{ left: x, top: y, transform: "translate(-50%,-50%)", ...pinStyle(p, isOpen) }}
             >
-              {p.score}
+              {pinLabel(p)}
             </button>
           );
         })}
@@ -273,7 +335,7 @@ export default function RadarMap({
                   </button>
                 </div>
                 <p className="mt-0.5 text-[11px] text-muted">
-                  {[card.postcode, card.agent, card.rent != null ? `£${card.rent.toLocaleString("en-GB")} pcm` : null]
+                  {[card.postcode, card.agent, card.rent != null ? `£${card.rent.toLocaleString("en-GB")} pcm` : null, `score ${card.score}`]
                     .filter(Boolean)
                     .join(" · ")}
                 </p>

@@ -158,6 +158,7 @@ export default function RadarBoard({
   view: viewProp,
   nearPreset,
   filterPreset,
+  districts: districtsProp,
 }: {
   /** Inside Bond: no page header, the workspace supplies its own. */
   embedded?: boolean;
@@ -167,6 +168,8 @@ export default function RadarBoard({
   nearPreset?: string;
   /** Text to put in the filter box on arrival - "open this door on the board". */
   filterPreset?: string;
+  /** The districts this person covers. Empty or absent means the whole patch. */
+  districts?: string[];
 } = {}) {
   const [rows, setRows] = useState<Row[]>([]);
   const [summary, setSummary] = useState<RadarSummary | null>(null);
@@ -293,16 +296,22 @@ export default function RadarBoard({
     return () => { gone = true; };
   }, []);
 
-  const districts = useMemo(() => [...new Set(rows.map((r) => r.district).filter(Boolean) as string[])].sort(), [rows]);
+  /* The person's own patch, when they have chosen one. */
+  const mine = useMemo(() => (districtsProp && districtsProp.length ? new Set(districtsProp) : null), [districtsProp]);
+  const districts = useMemo(
+    () => [...new Set(rows.map((r) => r.district).filter((d): d is string => Boolean(d) && (!mine || mine.has(d as string))))].sort(),
+    [rows, mine]
+  );
   const agents = useMemo(() => [...new Set(rows.map((r) => r.agent).filter(Boolean) as string[])].sort(), [rows]);
   const signalCounts = useMemo(() => {
     const m = new Map<SignalKey, number>();
     for (const r of rows) {
       if (r.score === 0) continue;
+      if (mine && r.district && !mine.has(r.district)) continue;
       for (const s of r.signals) m.set(s.key, (m.get(s.key) ?? 0) + 1);
     }
     return m;
-  }, [rows]);
+  }, [rows, mine]);
 
   const book = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -311,6 +320,7 @@ export default function RadarBoard({
       if (!fStage && r.score === 0) return false;
       if (signalsOn.size > 0 && !r.signals.some((s) => signalsOn.has(s.key))) return false;
       if (fDistrict && r.district !== fDistrict) return false;
+      if (mine && r.district && !mine.has(r.district)) return false;
       if (fAgent && r.agent !== fAgent) return false;
       if (area && !area.has(r.property_key)) return false;
       if (near) {
@@ -323,7 +333,7 @@ export default function RadarBoard({
       }
       return true;
     });
-  }, [rows, q, signalsOn, fDistrict, fAgent, fStage, area, near, radius]);
+  }, [rows, q, signalsOn, fDistrict, fAgent, fStage, area, near, radius, mine]);
 
   useEffect(() => { setPage(0); }, [q, signalsOn, fDistrict, fAgent, fStage, perPage, area, near, radius]);
 
@@ -564,7 +574,13 @@ export default function RadarBoard({
           ) : view === "map" ? (
             <>
               <div className={`mt-4 min-h-[420px] ${embedded ? "h-[calc(100vh-330px)]" : "h-[calc(100vh-380px)]"}`}>
-                <RadarMap prospects={mapList} openId={openId} onOpen={setOpenId} onInView={onInView} />
+                <RadarMap
+                  prospects={mapList}
+                  openId={openId}
+                  onOpen={setOpenId}
+                  onInView={onInView}
+                  colourBy={SIGNAL_ORDER.filter((k) => signalsOn.has(k)).sort((a, b) => SIGNALS[b].weight - SIGNALS[a].weight)}
+                />
               </div>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[11.5px] text-muted">
                 <span>

@@ -1416,6 +1416,16 @@ CREATE TABLE IF NOT EXISTS os_epc_sync (
 ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS epc_band TEXT;
 ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS epc_registered_on DATE;
 
+-- What each person covers in Bond: the districts they chose on first
+-- entry. The board, the map and the look-up narrow to these; the whole
+-- patch is one press away. Keyed on the OS user; a browser without a
+-- session keeps the same choice in localStorage.
+CREATE TABLE IF NOT EXISTS os_bond_prefs (
+  user_id    TEXT PRIMARY KEY,
+  districts  JSONB NOT NULL DEFAULT '[]'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- One row per Radar run. The run takes minutes now that both feeds are read
 -- and the edge closes a request at 100 seconds, so the route answers at once
 -- and this is where the answer goes.

@@ -104,6 +104,59 @@ export default function BondApp() {
   const [nearPreset, setNearPreset] = useState<string | undefined>(undefined);
   const [filterPreset, setFilterPreset] = useState<string | undefined>(undefined);
 
+  /* THE PATCH. James, 3 Sep: "when they sign in for the app, they'll select
+     their areas that they cover... it will then cordon off the rest." The
+     choice lives on the server against the person, and in this browser as
+     well so it holds before the answer arrives and on a laptop with no
+     session. `null` means not asked yet; [] means they chose the whole patch. */
+  const [patch, setPatch] = useState<string[] | null>(null);
+  const [allDistricts, setAllDistricts] = useState<string[]>([]);
+  const [choosing, setChoosing] = useState(false);
+
+  useEffect(() => {
+    let gone = false;
+    let local: string[] | null = null;
+    try {
+      const raw = localStorage.getItem("bond.patch");
+      if (raw) local = JSON.parse(raw) as string[];
+    } catch {
+      /* no memory in this browser */
+    }
+    fetch("/api/bond/prefs", { cache: "no-store" })
+      .then(async (r) => {
+        const j = await r.json();
+        if (gone || !j.ok) return;
+        setAllDistricts(j.all ?? []);
+        /* The server's answer wins for a signed-in person; the browser's
+           memory stands in otherwise. Neither means the chooser opens. */
+        const chosen: string[] | null = j.signedIn ? (j.districts?.length ? j.districts : local) : local;
+        setPatch(chosen);
+        if (chosen == null) setChoosing(true);
+      })
+      .catch(() => {
+        if (!gone) {
+          setPatch(local);
+          if (local == null) setChoosing(true);
+        }
+      });
+    return () => { gone = true; };
+  }, []);
+
+  async function savePatch(districts: string[]) {
+    setPatch(districts);
+    setChoosing(false);
+    try {
+      localStorage.setItem("bond.patch", JSON.stringify(districts));
+    } catch {
+      /* fine */
+    }
+    try {
+      await fetch("/api/bond/prefs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ districts }) });
+    } catch {
+      /* the browser keeps it; the server catches up next time */
+    }
+  }
+
   useEffect(() => {
     const t = setTimeout(() => setPhase("in"), 1400);
     return () => clearTimeout(t);
@@ -172,6 +225,16 @@ export default function BondApp() {
               </button>
             ))}
           </nav>
+          <div className="mt-4 rounded-xl border border-line/70 px-3 py-2.5">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Your patch</p>
+            <p className="mt-1 text-[12px]">
+              {patch == null ? "Not chosen" : patch.length === 0 ? "The whole patch" : `${patch.length} district${patch.length === 1 ? "" : "s"}`}
+            </p>
+            {patch && patch.length > 0 && <p className="truncate text-[10.5px] text-muted">{patch.join(", ")}</p>}
+            <button type="button" onClick={() => setChoosing(true)} className="mt-1.5 text-[11px] text-accent-dark underline-offset-2 hover:underline">
+              Change
+            </button>
+          </div>
           <p className="mt-auto px-1 pb-9 text-[10.5px] leading-relaxed text-muted">
             Properties, never people. The owner lookup and the postcard are the two doors still to open.
           </p>
@@ -218,7 +281,13 @@ export default function BondApp() {
                 would then be clipped to this box instead of covering the
                 screen. Measured, not guessed. */}
             {(room === "map" || room === "prospects") && (
-              <RadarBoard embedded view={room === "map" ? "map" : "list"} nearPreset={nearPreset} filterPreset={filterPreset} />
+              <RadarBoard
+                embedded
+                view={room === "map" ? "map" : "list"}
+                nearPreset={nearPreset}
+                filterPreset={filterPreset}
+                districts={patch ?? []}
+              />
             )}
             {room === "lookup" && (
               <Lookup
@@ -233,6 +302,10 @@ export default function BondApp() {
           </main>
         </div>
       </div>
+
+      {choosing && phase === "in" && (
+        <PatchChooser all={allDistricts} current={patch ?? []} onDone={savePatch} onClose={patch == null ? undefined : () => setChoosing(false)} />
+      )}
     </div>
   );
 }
@@ -887,6 +960,115 @@ function EpcCard() {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+
+/** Area names for the outcodes Bond watches, for the chooser's groups. */
+const AREA_NAME: Record<string, string> = { NN: "Northamptonshire", MK: "Milton Keynes and Bedford" };
+
+/**
+ * Which districts do you cover? Asked once on first entry, changeable from
+ * the rail. Groups by postcode area with a select-all per group; "the whole
+ * patch" is a real choice, saved as an empty list.
+ */
+function PatchChooser({
+  all,
+  current,
+  onDone,
+  onClose,
+}: {
+  all: string[];
+  current: string[];
+  onDone: (districts: string[]) => void;
+  onClose?: () => void;
+}) {
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(current));
+  const groups = (() => {
+    const m = new Map<string, string[]>();
+    for (const d of all) {
+      const area = d.replace(/\d.*$/, "");
+      const list = m.get(area) ?? [];
+      list.push(d);
+      m.set(area, list);
+    }
+    for (const list of m.values()) list.sort((a, b) => Number(a.replace(/\D/g, "")) - Number(b.replace(/\D/g, "")));
+    return [...m.entries()];
+  })();
+  const toggle = (d: string) =>
+    setPicked((cur) => {
+      const n = new Set(cur);
+      if (n.has(d)) n.delete(d);
+      else n.add(d);
+      return n;
+    });
+  const toggleGroup = (list: string[]) =>
+    setPicked((cur) => {
+      const n = new Set(cur);
+      const allOn = list.every((d) => n.has(d));
+      for (const d of list) {
+        if (allOn) n.delete(d);
+        else n.add(d);
+      }
+      return n;
+    });
+
+  return (
+    <div className="absolute inset-0 z-[110] flex items-center justify-center bg-ink/35 p-4">
+      <div className="fade-up max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-line/80 bg-page p-6 shadow-[0_24px_60px_-24px_rgba(0,0,0,0.45)]">
+        <p className="text-[11px] uppercase tracking-wider text-muted">Bond</p>
+        <h2 className="hand mt-1 text-[26px]">Which areas do you cover?</h2>
+        <p className="mt-1 text-[12.5px] text-muted">
+          The map, the list and the look-up stay inside these. Change it any time from the rail. Pick nothing to see the whole patch.
+        </p>
+        {all.length === 0 ? (
+          <p className="mt-4 text-[12.5px] text-muted">Bond is not watching any districts yet.</p>
+        ) : (
+          <div className="mt-5 space-y-5">
+            {groups.map(([area, list]) => {
+              const allOn = list.every((d) => picked.has(d));
+              return (
+                <section key={area}>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-[13px]">{AREA_NAME[area] ?? area}</h3>
+                    <button type="button" onClick={() => toggleGroup(list)} className="text-[11.5px] text-accent-dark underline-offset-2 hover:underline">
+                      {allOn ? "Clear all" : "Select all"}
+                    </button>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {list.map((d) => {
+                      const on = picked.has(d);
+                      return (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => toggle(d)}
+                          className={`rounded-full border px-3 py-1.5 text-[12px] transition-colors ${
+                            on ? "border-ink bg-ink text-page" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
+                          }`}
+                        >
+                          {d}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        )}
+        <div className="mt-6 flex flex-wrap items-center gap-2.5">
+          <button type="button" onClick={() => onDone([...picked])} className="press-wobble rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page">
+            {picked.size === 0 ? "Show me the whole patch" : `Cover ${picked.size} district${picked.size === 1 ? "" : "s"}`}
+          </button>
+          {onClose && (
+            <button type="button" onClick={onClose} className="rounded-full border border-line/80 px-4 py-2.5 text-[12.5px] text-muted">
+              Cancel
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

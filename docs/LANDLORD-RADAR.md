@@ -415,3 +415,26 @@ UPRN or postcode and house number. **EPC below C** (10) and **EPC expiring** (15
 year). Untested against the live API for want of a token; the field names follow the
 documentation read on 3 Sep. `/api/bond/epc-sync`, `.github/workflows/epc-register.yml`
 on the 8th, one council per call ten minutes apart.
+
+---
+
+## The map, fixed and recoloured; a patch per person, 3 Sep 2026
+
+**The map bug.** James: "if I click Withdrawn... it's not showing me anything." Google's
+draw and bounds_changed handlers are bound once when the map is made, and they were bound
+to the first `project` closure, which held the first list. Every pan - including the
+fitBounds after a filter - redrew the pins from the unfiltered book. The handlers now call
+through a ref to the latest `project`. PortfolioMap had the same defect and got the same fix.
+
+**Colour by signal.** With signals switched on, a pin takes the colour of the strongest
+switched-on signal it carries (`SIGNAL_COLOUR` in lib/radar-signals, one fixed colour per
+signal) and the legend lists the switched-on signals with their swatches and in-view counts.
+With none on, the pins colour by score band as before. The number on the pin is now the
+days on the market; the score is on the card. James: "use numbers for the dates, and then
+we'll colour-code based on the tab that they click."
+
+**Your patch.** On first entry Bond asks which districts the person covers, grouped by
+area with select-all per group; nothing chosen means the whole patch. Saved to
+`os_bond_prefs` against the OS user and mirrored in the browser, changeable from the rail.
+The board, the map, the signal counts and the district filter narrow to it. Verified
+locally: NN1 and NN2 chosen, 1,738 properties became 306, only those postcodes on the list.

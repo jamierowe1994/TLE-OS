@@ -41,6 +41,9 @@ export default function PortfolioMap({
   const [open, setOpen] = useState<ManagedProperty | null>(null);
 
   const placed = properties.filter((p) => p.lat != null && p.lng != null);
+  /* The map's own handlers call through this ref, so a pan after the list
+     changes projects the new list, not the one the handlers were born with. */
+  const projectRef = useRef<() => void>(() => {});
 
   const project = useCallback(() => {
     const pr = overlay.current?.getProjection?.();
@@ -53,6 +56,7 @@ export default function PortfolioMap({
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [properties]);
+  projectRef.current = project;
 
   useEffect(() => {
     let dead = false;
@@ -91,10 +95,10 @@ export default function PortfolioMap({
           const ov = new google.maps.OverlayView();
           ov.onAdd = () => {};
           ov.onRemove = () => {};
-          ov.draw = () => project();
+          ov.draw = () => projectRef.current();
           ov.setMap(map.current);
           overlay.current = ov;
-          map.current.addListener("bounds_changed", () => project());
+          map.current.addListener("bounds_changed", () => projectRef.current());
         }
         setReady(true);
       })
