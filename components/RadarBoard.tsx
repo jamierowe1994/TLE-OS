@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
+import PropertyPhoto from "@/components/PropertyPhoto";
 import NewLeadPanel from "@/components/NewLeadPanel";
 import RadarMap from "@/components/RadarMap";
 import { PressButton } from "@/components/Bits";
@@ -356,8 +357,11 @@ export default function RadarBoard({
       {
         key: "address", label: "Property", required: true,
         render: (r) => (
-          <span className="hand block max-w-[26rem] truncate text-[13px]" title={fullAddress(r)}>
-            {r.address || r.street || r.postcode}
+          <span className="flex items-center gap-3">
+            <PropertyPhoto src={r.photo} className="h-10 w-14 shrink-0 rounded-lg" />
+            <span className="hand block max-w-[24rem] truncate text-[13px]" title={fullAddress(r)}>
+              {r.address || r.street || r.postcode}
+            </span>
           </span>
         ),
       },
@@ -743,6 +747,7 @@ function ProspectPanel({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-4">
+          {prospect.photo && <PropertyPhoto src={prospect.photo} className="mb-4 h-44 w-full rounded-2xl" />}
           <p className="text-[11px] uppercase tracking-wider text-muted">Property</p>
           <h2 className="mt-1 text-[20px] leading-snug">{address}</h2>
           <p className="mt-1 text-[12.5px] text-muted">

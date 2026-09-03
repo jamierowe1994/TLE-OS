@@ -54,6 +54,8 @@ interface HsRow {
   link?: string | null;
   uprn?: number | string | null;
   hs_id?: number | string | null;
+  /** The advert's lead photo. */
+  image?: string | null;
 }
 
 /** Same identity rule the cards use — the Homesearch listing id where there is one.
@@ -340,10 +342,11 @@ export async function sweepScope(
       `INSERT INTO os_listing_capture
          (listing_key, sector, district, postcode, address, street, beds, property_type,
           rent, agent, lat, lon, status, listed_on, reduced_at, uprn, hs_id, property_key,
-          let_agreed_at, market)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18, NULL, $20)
+          let_agreed_at, market, image_url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18, NULL, $20, $21)
        ON CONFLICT (listing_key) DO UPDATE SET
          market        = EXCLUDED.market,
+         image_url     = COALESCE(EXCLUDED.image_url, os_listing_capture.image_url),
          status        = EXCLUDED.status,
          rent          = EXCLUDED.rent,
          agent         = EXCLUDED.agent,
@@ -383,6 +386,7 @@ export async function sweepScope(
         propertyKey,
         isLetAgreed,
         market,
+        textOrNull(r.image),
       ]
     );
 

@@ -1426,6 +1426,16 @@ CREATE TABLE IF NOT EXISTS os_bond_prefs (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- The photo. The feed gives one image link per listing; it is kept, and a
+-- copy goes to R2 when there is one, so the picture outlives the advert.
+-- James, 3 Sep: "every time that we see a photo of a property, we save it."
+ALTER TABLE os_listing_capture ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE os_listing_capture ADD COLUMN IF NOT EXISTS image_key TEXT;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS image_url TEXT;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS image_key TEXT;
+CREATE INDEX IF NOT EXISTS os_listing_capture_photo_todo_idx
+  ON os_listing_capture (first_seen) WHERE image_url IS NOT NULL AND image_key IS NULL;
+
 -- One row per Radar run. The run takes minutes now that both feeds are read
 -- and the edge closes a request at 100 seconds, so the route answers at once
 -- and this is where the answer goes.

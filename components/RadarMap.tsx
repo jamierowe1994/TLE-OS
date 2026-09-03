@@ -323,6 +323,10 @@ export default function RadarMap({
               style={{ left: at.x, top: at.y, transform: "translate(-50%, calc(-100% - 16px))" }}
             >
               <div className="pointer-events-auto w-[260px] overflow-hidden rounded-2xl border border-line/70 bg-page p-3 shadow-[0_18px_40px_-12px_rgba(0,0,0,0.35)]">
+                {card.photo && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={card.photo} alt="" className="mb-2 h-[120px] w-full rounded-xl object-cover" />
+                )}
                 <div className="flex items-start justify-between gap-2">
                   <p className="text-[12.5px] leading-snug">{card.address || card.street || card.postcode}</p>
                   <button

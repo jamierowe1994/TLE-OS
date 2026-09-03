@@ -438,3 +438,17 @@ area with select-all per group; nothing chosen means the whole patch. Saved to
 `os_bond_prefs` against the OS user and mirrored in the browser, changeable from the rail.
 The board, the map, the signal counts and the district filter narrow to it. Verified
 locally: NN1 and NN2 chosen, 1,738 properties became 306, only those postcodes on the list.
+
+---
+
+## Photos, 3 Sep 2026
+
+The sweep keeps the advert's lead photo link on every listing (`image_url`), the prospect
+carries the newest one, and the board, the panel and the map card show it. After each
+daily run `lib/photos.ts` copies a few hundred of the oldest un-archived pictures into R2
+under `bond/photos/<listing_key>.jpg` and records the key; `/api/bond/photo/<key>` serves
+them, cached for a year. A door shows the archived copy once it has one, the feed's link
+until then. Measured locally on 3 Sep: 27,612 of 28,187 listings carry a photo; 1,768 of
+1,782 flagged doors. The pictures are the listing agents' and are internal reference only;
+nothing Bond sends will carry them. R2 is not configured on the laptop, so the archive
+step reports "stays as links" locally and runs for real on Railway.

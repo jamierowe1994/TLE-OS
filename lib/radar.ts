@@ -144,6 +144,8 @@ interface Lite extends Record<string, unknown> {
   reduced_at: Date | string | null;
   lat: number | null;
   lon: number | null;
+  image_url: string | null;
+  image_key: string | null;
   first_seen: Date | string;
   last_seen: Date | string;
   let_agreed_at: Date | string | null;
@@ -422,7 +424,7 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
   const rows = await q<Lite>(
     `SELECT listing_key, property_key, uprn, address, street, postcode, sector, district,
             beds, property_type, rent, agent, status, market, listed_on, reduced_at, lat, lon,
-            first_seen, last_seen, let_agreed_at, gone_at
+            image_url, image_key, first_seen, last_seen, let_agreed_at, gone_at
        FROM os_listing_capture
       WHERE district = ANY($1::text[]) AND property_key IS NOT NULL`,
     [districts]
@@ -476,8 +478,8 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
          (property_key, listing_key, uprn, address, street, postcode, sector, district,
           beds, property_type, rent, agent, status, listed_on, signals, score,
           lat, lon, market, asking_price, tenancy_start, next_anniversary, tenancy_basis,
-          last_signal_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$17,$18,$19,$20,$21,$22,$23,
+          image_url, image_key, last_signal_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,
                CASE WHEN $16 > 0 THEN NOW() ELSE NULL END, NOW())
        ON CONFLICT (property_key) DO UPDATE SET
          listing_key   = EXCLUDED.listing_key,
@@ -502,6 +504,8 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
          tenancy_start = EXCLUDED.tenancy_start,
          next_anniversary = EXCLUDED.next_anniversary,
          tenancy_basis = EXCLUDED.tenancy_basis,
+         image_url     = COALESCE(EXCLUDED.image_url, os_radar_prospects.image_url),
+         image_key     = COALESCE(EXCLUDED.image_key, os_radar_prospects.image_key),
          /* Moves only when the signals actually changed, so "new today" and
             the sort by recency mean something. */
          last_signal_at = CASE
@@ -532,6 +536,9 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
         tenancy ? ymdOf(tenancy.start) : null,
         tenancy ? ymdOf(tenancy.next) : null,
         tenancy?.basis ?? null,
+        /* The newest listing's photo, or any earlier one's when the newest has none. */
+        group.find((r) => r.image_url)?.image_url ?? null,
+        group.find((r) => r.image_key)?.image_key ?? null,
       ]
     );
   }
@@ -599,6 +606,8 @@ interface ProspectRow extends Record<string, unknown> {
   hmo_expires_on: Date | string | null;
   epc_band: string | null;
   epc_registered_on: Date | string | null;
+  image_url: string | null;
+  image_key: string | null;
   signals: Signal[];
   score: number;
   stage: string;
@@ -665,6 +674,7 @@ function toProspect(r: ProspectRow): Prospect {
     hmo_expires_on: ymd(r.hmo_expires_on),
     epc_band: r.epc_band ?? null,
     epc_registered_on: ymd(r.epc_registered_on),
+    photo: r.image_key ? `/api/bond/photo/${encodeURIComponent(r.image_key)}` : r.image_url ?? null,
     signals: Array.isArray(r.signals) ? r.signals : [],
     score: r.score,
     stage: isStage(r.stage) ? r.stage : "new",

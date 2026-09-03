@@ -111,6 +111,9 @@ export async function POST(req: NextRequest) {
       const results = await sweepPatch();
       const skipped = results.filter((r) => r.skipped);
       const prospects = await refreshProspects();
+      /* The pictures, a few hundred a day, after everything that matters. */
+      const { archivePhotos } = await import("@/lib/photos");
+      await archivePhotos(600).catch(() => ({ copied: 0, failed: 0, skipped: "archive failed" }));
       let digest: { sent: string[]; skipped: string | null };
       try {
         digest = await sendDigest();
