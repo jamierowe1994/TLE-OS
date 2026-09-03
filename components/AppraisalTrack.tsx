@@ -17,6 +17,7 @@ import {
 import EmailPopout from "@/components/EmailPopout";
 import SendHandoff from "@/components/SendHandoff";
 import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
+import VideoChaseControl from "@/components/VideoChaseControl";
 import { campaignsFor, CAMPAIGNS, lastDay, type Campaign } from "@/lib/campaigns";
 import {
   APPRAISAL_STEPS,
@@ -645,6 +646,7 @@ export default function AppraisalTrack({
               {c.state === "booked" && (
                 <div className="mt-4 space-y-3">
                   <Appointment c={c} />
+                  {appraisalId && <VideoChaseControl appraisalId={appraisalId} />}
                   <div className="grid gap-2.5 sm:grid-cols-2">
                     <Choice
                       icon="mail"
@@ -687,6 +689,7 @@ export default function AppraisalTrack({
               {c.state === "pre" && (
                 <div className="mt-4 space-y-3">
                   <Appointment c={c} />
+                  {appraisalId && <VideoChaseControl appraisalId={appraisalId} />}
                   {c.preScheduledFor ? (
                     <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-emerald-600/40 bg-card p-4">
                       <DoodleIcon name="clock" size={16} className="text-emerald-700" />

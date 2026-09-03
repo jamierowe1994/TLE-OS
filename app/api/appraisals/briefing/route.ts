@@ -12,7 +12,7 @@ import {
   briefingText,
   type AgentBriefing,
 } from "@/lib/agent-briefing";
-import { hasDb, q } from "@/lib/db";
+import { recipientFor } from "@/lib/agent-recipient";
 
 /**
  * Tell the AGENT their pre-appraisal is going out.
@@ -57,38 +57,6 @@ const pretty = (iso: string | null) =>
 
 const prettyDay = (d: Date) =>
   d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
-
-/**
- * WHO TO WRITE TO, and why it is not simply the signed-in user.
- *
- * The appraisal names an agent, and that agent is who needs to know — an
- * office manager minting a deck on somebody's behalf must not be the only
- * person told. The name is matched against os_users the same way the
- * compliance chases do it, because that is the only link between the two.
- *
- * When the name cannot be matched the signed-in user is used INSTEAD, and the
- * response says so. Silently writing to the wrong colleague would be worse
- * than not writing at all; silently writing to nobody would be worse still.
- */
-async function recipientFor(
-  agentName: string | null,
-  me: { email: string; name: string }
-): Promise<{ email: string; name: string; matched: boolean }> {
-  const key = (agentName ?? "").trim().toLowerCase();
-  if (key && hasDb()) {
-    try {
-      const rows = await q<{ email: string; name: string }>(
-        `SELECT email, name FROM os_users WHERE lower(trim(name)) = $1 AND email <> '' LIMIT 1`,
-        [key]
-      );
-      if (rows[0]) return { email: rows[0].email, name: rows[0].name, matched: true };
-    } catch {
-      /* Unreadable is not a reason to write to the wrong person — fall through
-         to the signed-in user, which the caller is told about. */
-    }
-  }
-  return { email: me.email, name: me.name, matched: false };
-}
 
 async function build(req: NextRequest, id: string) {
   const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);

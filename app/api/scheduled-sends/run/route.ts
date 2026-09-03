@@ -6,6 +6,9 @@ import { rexConfigured, RexWriteBlocked } from "@/lib/rex";
 import { sendMerge } from "@/lib/rex-mailmerge";
 import { rexTokenFor } from "@/lib/rex-user";
 import { renderPlain } from "@/lib/campaign-mail";
+import { getAppraisal } from "@/lib/appraisal-store";
+import { ResendBlocked, sendEmail } from "@/lib/resend";
+import { VIDEO_CHASE_KIND, videoRecorded } from "@/lib/video-chase";
 
 /**
  * Send what's due.
@@ -46,11 +49,13 @@ function authorised(req: NextRequest): boolean {
 
 type Due = {
   id: string;
+  kind: string;
   ref: string;
   to_email: string;
   contact_id: string | null;
   subject: string;
   body: string;
+  html: string | null;
   queued_by: string;
 };
 
@@ -71,10 +76,6 @@ export async function POST(req: NextRequest) {
   if (!hasDb()) {
     return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
   }
-  if (!rexConfigured()) {
-    return NextResponse.json({ ok: false, error: "REX isn't connected here." }, { status: 503 });
-  }
-
   /* Claim and select in ONE statement. Two overlapping cron runs — a slow one
      and its successor — would otherwise both read the same due rows and send
      the landlord two copies. */
@@ -88,14 +89,62 @@ export async function POST(req: NextRequest) {
          LIMIT 25
          FOR UPDATE SKIP LOCKED
       )
-      RETURNING id, ref, to_email, contact_id, subject, body, queued_by`
+      RETURNING id, kind, ref, to_email, contact_id, subject, body, html, queued_by`
   ).catch(() => []);
 
   const sent: string[] = [];
+  const skipped: string[] = [];
   const failed: { id: string; error: string }[] = [];
 
   for (const row of due) {
+    /* ── The agent's video nudge: a colleague, by Resend, and checked again
+       before it goes. Somebody who recorded on Monday must not be nagged on
+       Tuesday for something already done - that check is the whole email. ── */
+    if (row.kind === VIDEO_CHASE_KIND) {
+      try {
+        const ma = await getAppraisal(row.ref);
+        if (!ma || (await videoRecorded(ma))) {
+          await q(`UPDATE os_scheduled_sends SET state = 'cancelled', error = $2 WHERE id = $1`, [
+            row.id,
+            ma ? "A video was recorded before this was due, so it was not sent." : "The appraisal no longer exists.",
+          ]);
+          skipped.push(row.id);
+          continue;
+        }
+        const mail = row.html ? { subject: row.subject, html: row.html } : renderPlain(row.subject, row.body);
+        await sendEmail({ to: row.to_email, subject: mail.subject, html: mail.html, text: row.body });
+        await q(
+          `UPDATE os_scheduled_sends SET state = 'sent', sent_at = NOW(), error = NULL WHERE id = $1`,
+          [row.id]
+        );
+        sent.push(row.id);
+      } catch (e) {
+        /* Back to 'queued' when sending is switched off here: that is the
+           environment, not this email, and it will be true again next run. */
+        const locked = e instanceof ResendBlocked;
+        const message = e instanceof Error ? e.message : "Send failed.";
+        await q(`UPDATE os_scheduled_sends SET state = $2, error = $3 WHERE id = $1`, [
+          row.id,
+          locked ? "queued" : "failed",
+          message,
+        ]).catch(() => []);
+        failed.push({ id: row.id, error: message });
+      }
+      continue;
+    }
+
     try {
+      /* Landlord sends go by REX so they land on the timeline. Without REX
+         the row waits rather than fails: that is the environment, not the
+         email, and the video nudge above does not need it. */
+      if (!rexConfigured()) {
+        await q(`UPDATE os_scheduled_sends SET state = 'queued', error = $2 WHERE id = $1`, [
+          row.id,
+          "REX isn't connected here, so this waits.",
+        ]).catch(() => []);
+        failed.push({ id: row.id, error: "REX isn't connected here." });
+        continue;
+      }
       const mail = renderPlain(row.subject, row.body);
       // By RECORD — that is what puts the send on the landlord's REX timeline
       // rather than nowhere anyone will look. A queued send with no contact id
@@ -140,7 +189,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, failed });
+  return NextResponse.json({ ok: true, claimed: due.length, sent: sent.length, skipped: skipped.length, failed });
 }
 
 /** A dry read: what is due, without sending it. */

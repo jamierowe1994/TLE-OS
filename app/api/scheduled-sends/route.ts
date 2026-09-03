@@ -3,6 +3,8 @@ import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
+import { appraisalIdForLead, getAppraisal } from "@/lib/appraisal-store";
+import { queueVideoChase } from "@/lib/video-chase";
 
 /**
  * The queue: emails written now and sent later.
@@ -103,7 +105,25 @@ export async function POST(req: NextRequest) {
     ]
   );
 
-  return NextResponse.json({ ok: true, id, sendAt: when.toISOString() });
+  /* The pre-appraisal carries the deck the video sits on, so queuing it is
+     the moment to make sure the agent gets asked for the video first. Once,
+     and never in the way: a nudge that cannot be queued is reported in the
+     response, not thrown at the landlord's email. */
+  let videoChase: { queued: boolean; sendAt?: string; reason?: string } | null = null;
+  const ref = (body.ref ?? "").trim();
+  if ((body.kind ?? "pre-appraisal") === "pre-appraisal" && ref) {
+    try {
+      const ma = await getAppraisal(appraisalIdForLead(ref));
+      if (ma) {
+        const origin = (process.env.NEXT_PUBLIC_OS_ORIGIN ?? "").replace(/\/+$/, "") || req.nextUrl.origin;
+        videoChase = await queueVideoChase({ ma, me, origin });
+      }
+    } catch (e) {
+      videoChase = { queued: false, reason: e instanceof Error ? e.message : "Couldn't queue the video nudge." };
+    }
+  }
+
+  return NextResponse.json({ ok: true, id, sendAt: when.toISOString(), videoChase });
 }
 
 /** What's queued — for a record, or everything still to go. */

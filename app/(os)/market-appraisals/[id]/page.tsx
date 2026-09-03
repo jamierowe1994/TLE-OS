@@ -7,6 +7,7 @@ import ResearchPanel from "@/components/ResearchPanel";
 import DeckRail from "@/components/DeckRail";
 import ValuationForm from "@/components/ValuationForm";
 import RexPropertyPicker from "@/components/RexPropertyPicker";
+import VideoChaseControl from "@/components/VideoChaseControl";
 import {
   MA_STAGES,
   effectiveStage,
@@ -350,6 +351,16 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
         <p className="mt-3 flex items-center gap-2 text-[11px] text-muted">
           Waiting on <Pill tone="accent">{missingFigure ? "Us" : (next?.who ?? "Us")}</Pill>
         </p>
+
+        {/* The video nudge, while there is still time for one: who it goes
+            to and when, with "send it to me now" for checking the email
+            lands. This page is where that email's button points, so the
+            recorder (in the pre-appraisal card below) is one scroll away. */}
+        {(live === "booked" || live === "pre_appraisal") && (
+          <div className="mt-4">
+            <VideoChaseControl appraisalId={ma.id} />
+          </div>
+        )}
 
         {/* "Record the valuation" USED TO LIVE HERE and it was a redirect
             loop: it pointed at /market-appraisals?open=<id>, whose open

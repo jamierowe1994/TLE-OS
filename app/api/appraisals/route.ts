@@ -4,6 +4,7 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { SERVICE_LEVELS, type ServiceLevel } from "@/lib/market-appraisal";
 import type { NextRequest } from "next/server";
+import { queueVideoChase } from "@/lib/video-chase";
 
 /**
  * The appraisals the OS has booked.
@@ -41,7 +42,7 @@ export async function GET() {
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const b = (await req.json().catch(() => ({}))) as {
     leadId?: string | null;
     landlord?: string;
@@ -67,7 +68,25 @@ export async function POST(req: Request) {
       agent: b.agent ?? null,
       appointmentAt: b.appointmentAt ?? null,
     });
-    return NextResponse.json({ appraisal });
+
+    /* A dated booking is the first moment the video nudge can be scheduled.
+       Best effort, after the booking is safe: a nudge that cannot be queued
+       must never cost the appointment (see the header). Needs a signed-in
+       person, because a queued email still goes out in somebody's name. */
+    let videoChase: { queued: boolean; sendAt?: string; reason?: string } | null = null;
+    if (appraisal.appointmentAt) {
+      try {
+        const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
+        const me = userId ? await findUserById(userId) : null;
+        if (me) {
+          const origin = (process.env.NEXT_PUBLIC_OS_ORIGIN ?? "").replace(/\/+$/, "") || req.nextUrl.origin;
+          videoChase = await queueVideoChase({ ma: appraisal, me, origin });
+        }
+      } catch {
+        videoChase = { queued: false, reason: "Couldn't queue the video nudge." };
+      }
+    }
+    return NextResponse.json({ appraisal, videoChase });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Could not save the appraisal." },

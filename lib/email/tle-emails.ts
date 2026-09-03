@@ -285,9 +285,8 @@ export const TLE_EMAILS: CatalogEntry[] = [
     trigger:
       "Two days before an appraisal, when no video has been recorded for it. The landlord's pre-appraisal email goes the day after this one.",
     fires:
-      "NOT WIRED YET — nothing schedules this, and Flow is not switched on either (FLOW_API_KEY unset in production, so the recorder refuses). The copy and the button are real; the trigger and the recorder are not.",
+      "Queued on os_scheduled_sends for two days before the visit when the appraisal is booked with a date, or when the pre-appraisal email is queued (lib/video-chase.ts). The runner checks the deck again before sending and cancels it if a video is already there. Also on the appraisal screen: Send it to me now.",
     to: "The agent whose appraisal it is",
-    draft: true,
     summary:
       "A nudge, not a notification. Names the property because an agent may have three that week, says it takes a minute, and says plainly that ignoring it changes nothing — a chase that cannot be declined is one everybody learns to delete. The button goes to the appraisal in the OS, which is where the recorder is mounted; there is no Flow page to link to.",
     render: () => {

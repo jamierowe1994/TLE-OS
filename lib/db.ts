@@ -924,6 +924,9 @@ CREATE TABLE IF NOT EXISTS os_scheduled_sends (
 CREATE INDEX IF NOT EXISTS os_scheduled_sends_due
   ON os_scheduled_sends (send_at) WHERE state = 'queued';
 CREATE INDEX IF NOT EXISTS os_scheduled_sends_ref ON os_scheduled_sends (ref);
+-- The finished HTML for sends that do not go through REX (the agent's video
+-- nudge goes by Resend). NULL means render the plain body at send time.
+ALTER TABLE os_scheduled_sends ADD COLUMN IF NOT EXISTS html TEXT;
 
 -- Results of slow REX/PayProp walks, so a deploy doesn't cost minutes of
 -- empty screens before the first figure appears.

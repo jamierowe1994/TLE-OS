@@ -257,7 +257,7 @@ export const PORTAL_FOLDERS: PortalFolder[] = [
           "Two days before an appraisal, when they have not recorded a personalised video for it. The landlord's pre-appraisal email goes the day after this one, carrying the deck the video sits on.",
         emailId: "appraisal-video-chase",
         caveat:
-          "Written and rendering, but nothing schedules it, and Flow is not switched on either - so the button reaches the appraisal screen rather than a recorder. On the to-do list.",
+          "Queued automatically when an appraisal is booked with a date, and skipped at send time if a video is already on the page. Flow is connected, so the button reaches the appraisal where the recorder is.",
       },
       {
         kind: "open",
