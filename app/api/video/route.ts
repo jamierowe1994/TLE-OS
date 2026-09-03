@@ -26,9 +26,9 @@ export async function POST(req: NextRequest) {
       { status: 503 }
     );
   }
-  let body: { token?: string };
+  let body: { token?: string; replace?: boolean };
   try {
-    body = (await req.json()) as { token?: string };
+    body = (await req.json()) as { token?: string; replace?: boolean };
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
@@ -41,7 +41,10 @@ export async function POST(req: NextRequest) {
   // Already has one that is going somewhere? Hand back what exists rather than
   // stranding a recording on Flow's side that nothing will ever reference.
   const held = row.deck.welcomeVideo;
-  if (held && held.status === "ready") {
+  /* `replace` is the re-record: a fresh slot over the top of a finished one.
+     The old recording is left on Flow's side to expire with its retention -
+     deleting it here would race the landlord who has the page open. */
+  if (held && held.status === "ready" && !body.replace) {
     return NextResponse.json({ ok: true, video: held, alreadyRecorded: true });
   }
 

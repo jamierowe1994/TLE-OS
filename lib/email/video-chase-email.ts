@@ -29,15 +29,13 @@ import type { VerifyEmail } from "@/lib/verify-email";
  *
  * ── The button ────────────────────────────────────────────────────────────
  *
- * Points at the appraisal in the OS, because that is where the recorder
- * actually lives - `WelcomeVideoRecorder` is mounted inside AppraisalTrack and
- * DeckRail, not on a page of its own, so there is no Flow URL to send anybody
- * to and inventing one would be a dead link.
+ * Opens the recorder, signed in. The link is a single-use key minted for
+ * the recipient (lib/record-link) that /api/record/enter swaps for a
+ * session before landing them on /record/<appraisal> - camera, "Saving to
+ * 12 Dover Close valuation…", "All done". James, 3 Sep: "when they click
+ * that button, it launches us directly into a recording session."
  *
- * Flow itself is NOT switched on: FLOW_API_KEY and FLOW_API_BASE are unset in
- * production (checked 1 Sep 2026), so `flowConfigured()` is false and the
- * recorder refuses. Getting them there is the right destination either way -
- * it is the screen that will hold the working button the moment the key lands.
+ * Flow has been connected and proven since 3 Sep 2026 (see lib/flow-video).
  */
 export function videoChaseEmail(opts: {
   /** Where the recorder lives: the appraisal's own page in the OS. */

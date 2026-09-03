@@ -55,6 +55,10 @@ const TTL_BY_PURPOSE: Record<Purpose, number> = {
   /* A landlord opens email when they open email. An hour would expire on
      most of them before they saw it; single use is what keeps it safe. */
   landlord: 24 * 60 * 60 * 1000,
+  /* The link in the video nudge. Minted two days before a visit, and the
+     agent may not open the email until the evening before, so it lives a
+     week; still single use, and it only ever opens the recorder. */
+  record: 7 * 24 * 60 * 60 * 1000,
 };
 
 /** Long enough that guessing is hopeless: 32 bytes, url-safe. */
@@ -72,7 +76,7 @@ const hashToken = (t: string) => createHash("sha256").update(t).digest("hex");
  * same reason those are kept apart from each other: a token for one must
  * never be spendable on another.
  */
-export type Purpose = "join" | "reset" | "landlord";
+export type Purpose = "join" | "reset" | "landlord" | "record";
 
 export interface Verification {
   email: string;
@@ -95,7 +99,16 @@ export class VerificationError extends Error {}
  */
 export async function startVerification(
   rawEmail: string,
-  purpose: Purpose = "join"
+  purpose: Purpose = "join",
+  opts: {
+    /**
+     * Leave earlier tokens for the same address alive. Right for the record
+     * link, where one agent may hold links for three appraisals at once and
+     * the newest must not kill the others; wrong for join and reset, where
+     * "the most recent link is the one that works" is the whole point.
+     */
+    keepOthers?: boolean;
+  } = {}
 ): Promise<{ token: string; email: string }> {
   const email = normaliseEmail(rawEmail);
   if (!email.includes("@")) throw new VerificationError("That isn't an email address.");
@@ -114,7 +127,9 @@ export async function startVerification(
   const token = mintToken();
   const expires = new Date(Date.now() + TTL_BY_PURPOSE[purpose]).toISOString();
 
-  await q(`delete from os_email_verifications where email = $1 and purpose = $2`, [email, purpose]);
+  if (!opts.keepOthers) {
+    await q(`delete from os_email_verifications where email = $1 and purpose = $2`, [email, purpose]);
+  }
   await q(
     `insert into os_email_verifications (email, token_hash, purpose, expires_at, created_at)
      values ($1, $2, $3, $4, now())`,

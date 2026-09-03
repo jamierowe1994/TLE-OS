@@ -161,6 +161,11 @@ const MACHINE_ROUTES = [
      than accepting anything, and with one it verifies an HMAC over the RAW
      body before reading a single field. The redirect was never the guard. */
   "/api/video/webhook",               // Flow: recording ready / failed
+  /* The button in the video nudge. Carries a single-use token that signs the
+     agent in and lands them on the recorder; it has to be reachable without
+     a session because getting the session is what it is for. Refuses without
+     a valid token, so the redirect was never the guard here either. */
+  "/api/record/enter",
 ];
 
 export async function middleware(req: NextRequest) {

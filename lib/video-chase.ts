@@ -5,6 +5,7 @@ import { recipientFor } from "@/lib/agent-recipient";
 import { videoChaseEmail } from "@/lib/email/video-chase-email";
 import { sendEmail } from "@/lib/resend";
 import type { MarketAppraisal } from "@/lib/market-appraisal";
+import { mintRecordLink } from "@/lib/record-link";
 
 /**
  * The video nudge: "you haven't recorded a video for this one yet."
@@ -86,7 +87,10 @@ export async function buildVideoChase(opts: {
   origin: string;
 }): Promise<BuiltChase> {
   const to = await recipientFor(opts.ma.agent, { email: opts.me.email, name: opts.me.name || opts.me.email });
-  const link = `${opts.origin.replace(/\/+$/, "")}/market-appraisals/${opts.ma.id}`;
+  /* Straight into the recorder, signed in by the link itself. The recipient
+     is the one who gets signed in, so the link is minted for their address,
+     not the address of whoever queued it. */
+  const link = await mintRecordLink({ email: to.email, appraisalId: opts.ma.id, origin: opts.origin });
   const m = videoChaseEmail({
     link,
     address: opts.ma.address,
@@ -206,7 +210,11 @@ export async function sendVideoChaseNow(opts: {
   origin: string;
   toMe?: boolean;
 }): Promise<{ to: string; subject: string }> {
-  const built = await buildVideoChase(opts);
+  /* Sent to me: built for me too, so the link signs ME in rather than the
+     agent it would otherwise have been addressed to. */
+  const built = opts.toMe
+    ? await buildVideoChase({ ...opts, ma: { ...opts.ma, agent: opts.me.name || opts.me.email } })
+    : await buildVideoChase(opts);
   const to = opts.toMe ? opts.me.email : built.to.email;
   await sendEmail({ to, subject: built.subject, html: built.html, text: built.text });
   return { to, subject: built.subject };
