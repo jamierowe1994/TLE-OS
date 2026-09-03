@@ -97,6 +97,14 @@ export async function POST(req: NextRequest) {
      and the caller was told it failed. So the work is detached, the row in
      os_radar_runs is the answer, and GET reports it. ?wait=1 keeps the old
      synchronous shape for a laptop. */
+  /* A deploy restarts the container and takes any run in flight with it,
+     leaving a row that says running for ever. Measured 3 Sep: run 3 started
+     at 11:02, the next build landed at 11:08, and the row never closed.
+     Anything still "running" after half an hour is called what it is. */
+  await q(
+    `UPDATE os_radar_runs SET status = 'failed', error = 'interrupted, most likely by a deploy', finished_at = NOW()
+      WHERE status = 'running' AND started_at < NOW() - INTERVAL '30 minutes'`
+  );
   const running = await q<{ id: number }>(
     `SELECT id FROM os_radar_runs WHERE status = 'running' AND started_at > NOW() - INTERVAL '30 minutes'`
   );
