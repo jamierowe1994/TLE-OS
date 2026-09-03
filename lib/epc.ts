@@ -85,6 +85,7 @@ interface Row {
   postcode?: string;
   uprn?: string | number | null;
   currentEnergyEfficiencyBand?: string;
+  potentialEnergyEfficiencyBand?: string;
   registrationDate?: string;
   council?: string;
 }
@@ -131,16 +132,17 @@ export async function syncEpc(council: string): Promise<{ ok: boolean; reason?: 
           if (!district || !wanted.has(district)) continue;
           const address = [row.addressLine1, row.addressLine2].filter(Boolean).join(", ").trim();
           const band = (row.currentEnergyEfficiencyBand ?? "").toUpperCase().trim();
+          const potential = (row.potentialEnergyEfficiencyBand ?? "").toUpperCase().trim();
           const registered = (row.registrationDate ?? "").slice(0, 10);
           if (!row.certificateNumber || !/^\d{4}-\d{2}-\d{2}$/.test(registered)) continue;
           await q(
-            `INSERT INTO os_epc (certificate, council, address, postcode, district, house_number, uprn, band, registered_on, updated_at)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
+            `INSERT INTO os_epc (certificate, council, address, postcode, district, house_number, uprn, band, potential_band, registered_on, updated_at)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
              ON CONFLICT (certificate) DO UPDATE SET
                address = EXCLUDED.address, postcode = EXCLUDED.postcode, district = EXCLUDED.district,
                house_number = EXCLUDED.house_number, uprn = EXCLUDED.uprn, band = EXCLUDED.band,
-               registered_on = EXCLUDED.registered_on, updated_at = NOW()`,
-            [row.certificateNumber, council, address, postcode, district, numberIn(address), row.uprn == null ? null : String(row.uprn), band || null, registered]
+               potential_band = EXCLUDED.potential_band, registered_on = EXCLUDED.registered_on, updated_at = NOW()`,
+            [row.certificateNumber, council, address, postcode, district, numberIn(address), row.uprn == null ? null : String(row.uprn), band || null, potential || null, registered]
           );
           kept++;
         }
@@ -182,6 +184,29 @@ export async function matchEpc(): Promise<{ matched: number }> {
         SET epc_band = m.band, epc_registered_on = m.registered_on, updated_at = NOW()
        FROM m WHERE r.property_key = m.property_key
       RETURNING r.property_key`
+  );
+  /* THE CONDITION SCORE. The band is most of it: A 95, B 85, C 70, D 55,
+     E 40, F 25, G 10. A certificate over eight years old takes five off,
+     because the house has had eight years to drift from it. A big gap to
+     the potential band takes a little more off: it means the fabric is
+     poor and the fixes are known. Spectre shows a "portfolio condition
+     score" out of 100; this is ours, and it is arithmetic, not a feeling. */
+  await q(
+    `WITH e AS (
+       SELECT DISTINCT ON (p.property_key) p.property_key, x.band, x.potential_band, x.registered_on
+         FROM os_radar_prospects p
+         JOIN os_epc x ON (p.uprn IS NOT NULL AND x.uprn = p.uprn)
+                       OR (upper(x.postcode) = upper(p.postcode)
+                           AND x.house_number = upper((regexp_match(coalesce(p.resolved_address, p.address), '\\d+[A-Za-z]?'))[1]))
+        ORDER BY p.property_key, x.registered_on DESC
+     )
+     UPDATE os_radar_prospects r
+        SET condition_score = GREATEST(0, LEAST(100,
+              CASE e.band WHEN 'A' THEN 95 WHEN 'B' THEN 85 WHEN 'C' THEN 70 WHEN 'D' THEN 55 WHEN 'E' THEN 40 WHEN 'F' THEN 25 WHEN 'G' THEN 10 ELSE NULL END
+              - CASE WHEN e.registered_on < CURRENT_DATE - INTERVAL '8 years' THEN 5 ELSE 0 END
+              - CASE WHEN e.potential_band IS NOT NULL AND e.band IS NOT NULL
+                     AND (ascii(e.band) - ascii(e.potential_band)) >= 3 THEN 5 ELSE 0 END))
+       FROM e WHERE e.property_key = r.property_key`
   );
   await q(
     `UPDATE os_radar_prospects

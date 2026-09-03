@@ -490,3 +490,17 @@ tenanted pill, rent and anniversary, and Look up straight into the dossier. Scop
 person's patch. Measured locally: 200 agents, 3,476 doors, 758 tenanted now; Your Move top
 with 163. Anniversaries in the next 90 days are few today because the feed's let-agreed
 rows are mostly this summer's; that column fills as the predictor ages.
+
+---
+
+## Condition score, 3 Sep 2026
+
+Spectre shows a "portfolio condition score" out of 100. Ours is arithmetic from the
+certificate: A 95, B 85, C 70, D 55, E 40, F 25, G 10; five off when the certificate is
+over eight years old; five off when the potential band is three or more bands better than
+the current one (the fabric is poor and the fixes are known). Set on the door in `matchEpc`
+after every rescore; averaged per landlord over the doors that have a certificate, with the
+count shown so an average of one door reads as one door. The panel shows a bar and the
+score; the Landlords list has a Condition column; the profile has a Portfolio condition tile.
+The register search only returns the current band, so the potential band fills in as the
+monthly reads pick it up where the API supplies it.

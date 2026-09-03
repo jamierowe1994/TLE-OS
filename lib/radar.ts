@@ -161,9 +161,15 @@ function daysSince(d: Date | string | null | undefined, now: number): number | n
   return t == null ? null : Math.floor((now - t) / DAY);
 }
 
+/** A DATE column as YYYY-MM-DD. pg hands a DATE back as a JS Date at local
+ *  midnight, so it is formatted from its local parts rather than through
+ *  toISOString, which on a laptop in BST reads it as the day before.
+ *  Production runs in UTC and never saw it; the laptop did, on 3 Sep. */
 function ymd(d: Date | string | null | undefined): string | null {
-  const t = ms(d);
-  return t == null ? null : new Date(t).toISOString().slice(0, 10);
+  if (d == null) return null;
+  if (typeof d === "string") return d.slice(0, 10);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 /** "11 Aug" this year, "6 Oct 2021" for any other year: a date without its
@@ -608,6 +614,7 @@ interface ProspectRow extends Record<string, unknown> {
   hmo_expires_on: Date | string | null;
   epc_band: string | null;
   epc_registered_on: Date | string | null;
+  condition_score: number | null;
   image_url: string | null;
   image_key: string | null;
   signals: Signal[];
@@ -676,6 +683,7 @@ function toProspect(r: ProspectRow): Prospect {
     hmo_expires_on: ymd(r.hmo_expires_on),
     epc_band: r.epc_band ?? null,
     epc_registered_on: ymd(r.epc_registered_on),
+    condition_score: r.condition_score == null ? null : Number(r.condition_score),
     photo: r.image_key ? `/api/bond/photo/${encodeURIComponent(r.image_key)}` : r.image_url ?? null,
     signals: Array.isArray(r.signals) ? r.signals : [],
     score: r.score,

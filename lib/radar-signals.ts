@@ -218,6 +218,8 @@ export interface Prospect {
   hmo_expires_on: string | null;
   epc_band: string | null;
   epc_registered_on: string | null;
+  /** 0 to 100 from the certificate; null without one. */
+  condition_score: number | null;
   /** The advert's photo: our archived copy when there is one, else the feed's link. */
   photo: string | null;
   agent: string | null;

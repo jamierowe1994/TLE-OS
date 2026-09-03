@@ -47,6 +47,9 @@ export interface Landlord {
   notes: string;
   last_written_at: string | null;
   first_seen: string;
+  /** Average condition over the doors with a certificate, and how many that is. */
+  condition_score: number | null;
+  condition_doors: number;
 }
 
 export interface LandlordDoor {
@@ -146,6 +149,15 @@ export async function rebuildLandlords(): Promise<{ landlords: number; doors: nu
        FROM f WHERE f.landlord_key = l.landlord_key
      RETURNING l.landlord_key`
   );
+  /* Portfolio condition: the average over the doors that have a certificate. */
+  await q(
+    `UPDATE os_bond_landlords l
+        SET condition_score = c.avg, condition_doors = c.n
+       FROM (SELECT d.landlord_key, round(avg(p.condition_score))::int AS avg, count(p.condition_score)::int AS n
+               FROM os_bond_landlord_doors d JOIN os_radar_prospects p ON p.property_key = d.property_key
+              WHERE p.condition_score IS NOT NULL GROUP BY d.landlord_key) c
+      WHERE c.landlord_key = l.landlord_key`
+  );
   const [d] = await q<{ n: string }>(`SELECT count(*) AS n FROM os_bond_landlord_doors`);
   return { landlords: rows.length, doors: Number(d?.n ?? 0) };
 }
@@ -168,6 +180,8 @@ function toLandlord(r: Record<string, unknown>): Landlord {
     notes: String(r.notes ?? ""),
     last_written_at: r.last_written_at ? new Date(r.last_written_at as string).toISOString() : null,
     first_seen: new Date(r.first_seen as string).toISOString(),
+    condition_score: r.condition_score == null ? null : Number(r.condition_score),
+    condition_doors: Number(r.condition_doors ?? 0),
   };
 }
 

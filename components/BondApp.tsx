@@ -1127,6 +1127,8 @@ interface LandlordRow {
   linkedin_url: string | null;
   notes: string;
   last_written_at: string | null;
+  condition_score: number | null;
+  condition_doors: number;
 }
 interface LandlordDoorRow {
   property_key: string;
@@ -1213,6 +1215,7 @@ function Landlords({ districts, openDoor }: { districts: string[]; openDoor: (ad
                 <th className="px-4 py-3">Opportunity</th>
                 <th className="px-4 py-3 text-right">Properties</th>
                 <th className="px-4 py-3 text-right">Flagged</th>
+                <th className="px-4 py-3">Condition</th>
                 <th className="px-4 py-3">Marketing</th>
               </tr>
             </thead>
@@ -1227,6 +1230,7 @@ function Landlords({ districts, openDoor }: { districts: string[]; openDoor: (ad
                   <td className="px-4 py-3"><span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${BAND_TONE[l.band]}`}>{l.band}</span></td>
                   <td className="figures px-4 py-3 text-right">{l.portfolio_size}</td>
                   <td className="figures px-4 py-3 text-right">{l.flagged}</td>
+                  <td className="px-4 py-3"><ConditionMark score={l.condition_score} doors={l.condition_doors} /></td>
                   <td className="px-4 py-3">{l.marketing_status === "do_not_send" ? <span className="rounded-full border border-red-700/40 bg-red-50 px-2 py-0.5 text-[10.5px] font-semibold text-red-700">Do not send</span> : <span className="text-muted">Active</span>}</td>
                 </tr>
               ))}
@@ -1325,9 +1329,14 @@ function LandlordPanel({ landlordKey, onClose, onPatched, openDoor }: { landlord
                 <a href={searchUrl} target="_blank" rel="noreferrer" className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] text-muted hover:text-ink">Find on LinkedIn</a>
               </div>
 
-              <dl className="mt-5 grid grid-cols-3 gap-3 text-[12.5px]">
+              <dl className="mt-5 grid grid-cols-2 gap-3 text-[12.5px] sm:grid-cols-4">
                 <div className="rounded-xl border border-line/80 bg-panel p-3"><dt className="text-[10.5px] uppercase tracking-wider text-muted">Properties</dt><dd className="figures mt-1 text-[20px]">{l.portfolio_size}</dd></div>
                 <div className="rounded-xl border border-line/80 bg-panel p-3"><dt className="text-[10.5px] uppercase tracking-wider text-muted">Flagged</dt><dd className="figures mt-1 text-[20px]">{l.flagged}</dd></div>
+                <div className="rounded-xl border border-line/80 bg-panel p-3">
+                  <dt className="text-[10.5px] uppercase tracking-wider text-muted">Portfolio condition</dt>
+                  <dd className="figures mt-1 text-[20px]">{l.condition_score ?? "-"}</dd>
+                  <p className="text-[10.5px] text-muted">{l.condition_doors ? `${l.condition_doors} of ${l.portfolio_size} with a certificate` : "no certificates on file"}</p>
+                </div>
                 <div className="rounded-xl border border-line/80 bg-panel p-3"><dt className="text-[10.5px] uppercase tracking-wider text-muted">Last written</dt><dd className="mt-1 text-[13px]">{l.last_written_at ? when(l.last_written_at) : "never"}</dd></div>
               </dl>
 
@@ -1522,5 +1531,18 @@ function Competitors({ districts, lookUp }: { districts: string[]; lookUp: (addr
         </div>
       )}
     </div>
+  );
+}
+
+
+/** A condition score out of 100 as a short bar, or a dash when no door has a certificate. */
+function ConditionMark({ score, doors }: { score: number | null; doors: number }) {
+  if (score == null) return <span className="text-[11px] text-muted">-</span>;
+  const colour = score >= 70 ? "#2e7d4f" : score >= 45 ? "#d9b46a" : "#b5453c";
+  return (
+    <span className="flex items-center gap-2" title={`${doors} door${doors === 1 ? "" : "s"} with a certificate`}>
+      <span className="h-1.5 w-16 overflow-hidden rounded-full bg-line/40"><span className="block h-full rounded-full" style={{ width: `${score}%`, background: colour }} /></span>
+      <span className="figures text-[12px]">{score}</span>
+    </span>
   );
 }

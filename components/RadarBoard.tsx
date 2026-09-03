@@ -796,6 +796,24 @@ function ProspectPanel({
                 <dd>{prospect.epc_band}{prospect.epc_registered_on ? <span className="text-muted"> · {when(prospect.epc_registered_on)}</span> : null}</dd>
               </div>
             )}
+            {prospect.condition_score != null && (
+              <div className="col-span-2">
+                <dt className="text-[11px] text-muted">Condition</dt>
+                <dd className="mt-1 flex items-center gap-3">
+                  <span className="h-2 flex-1 overflow-hidden rounded-full bg-line/40">
+                    <span
+                      className="block h-full rounded-full"
+                      style={{
+                        width: `${prospect.condition_score}%`,
+                        background: prospect.condition_score >= 70 ? "#2e7d4f" : prospect.condition_score >= 45 ? "#d9b46a" : "#b5453c",
+                      }}
+                    />
+                  </span>
+                  <span className="figures w-8 text-right text-[13px] font-semibold">{prospect.condition_score}</span>
+                </dd>
+                <p className="mt-0.5 text-[10.5px] text-muted">From the energy certificate: the band, its age, and how far it could improve.</p>
+              </div>
+            )}
             {prospect.hmo_licence_ref && (
               <div className="col-span-2">
                 <dt className="text-[11px] text-muted">HMO licence</dt>

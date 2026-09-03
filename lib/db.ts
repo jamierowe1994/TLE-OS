@@ -1415,6 +1415,10 @@ CREATE TABLE IF NOT EXISTS os_epc_sync (
 );
 ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS epc_band TEXT;
 ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS epc_registered_on DATE;
+-- Condition, 0 to 100, from the certificate: the band sets it, the age of
+-- the certificate and how far it could improve nudge it. Null without one.
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS condition_score INTEGER;
+ALTER TABLE os_epc ADD COLUMN IF NOT EXISTS potential_band TEXT;
 
 -- What each person covers in Bond: the districts they chose on first
 -- entry. The board, the map and the look-up narrow to these; the whole
@@ -1458,6 +1462,8 @@ CREATE TABLE IF NOT EXISTS os_bond_landlords (
   first_seen       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE os_bond_landlords ADD COLUMN IF NOT EXISTS condition_score INTEGER;
+ALTER TABLE os_bond_landlords ADD COLUMN IF NOT EXISTS condition_doors INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS os_bond_landlords_score_idx ON os_bond_landlords (score DESC, portfolio_size DESC);
 CREATE TABLE IF NOT EXISTS os_bond_landlord_doors (
   landlord_key TEXT NOT NULL,
