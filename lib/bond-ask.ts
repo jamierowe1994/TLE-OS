@@ -8,6 +8,7 @@ import { competitorAgents } from "@/lib/competitors";
 import { listCampaigns } from "@/lib/bond-campaigns";
 import { bondSummary, recentActivity } from "@/lib/bond";
 import { saleMatches, type RecentSale } from "@/lib/sales";
+import { listNudges, NUDGE_LABEL } from "@/lib/bond-nudges";
 
 /**
  * Ask Bond: Claude, with Bond's data in front of it.
@@ -406,7 +407,28 @@ const activityTool: Tool = {
   run: async (input) => ({ activity: await recentActivity(Math.min(40, Math.max(1, Number(input.limit) || 20))) }),
 };
 
-const TOOLS: Tool[] = [patchOverview, topProspects, door, landlord, competitors, campaigns, activityTool];
+const nudgesTool: Tool = {
+  name: "nudges",
+  description:
+    "The call list: people who have dealt with us (we valued, let or listed their property) whose door the sweep has just seen move - back on the market with another agent, a year since we valued it. These are existing contacts, so a phone call is lawful. Use it for 'who should I ring', and read it before 'what should I do first'.",
+  input_schema: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 40 } }, additionalProperties: false },
+  label: () => "Reading the call list",
+  run: async (input, ctx) => {
+    const list = await listNudges({ districts: ctx.districts, status: "open" });
+    const limit = Math.min(40, Math.max(1, Number(input.limit) || 20));
+    return {
+      to_call: list.counts.open,
+      by_kind: list.byKind,
+      nudges: list.nudges.slice(0, limit).map((n) => ({
+        id: n.id, kind: NUDGE_LABEL[n.kind]?.label ?? n.kind, why_this_kind: NUDGE_LABEL[n.kind]?.why ?? "", contact: n.contact_name ?? "not on the record",
+        has_phone: Boolean(n.contact_phone), address: n.address, headline: n.headline, reason: n.reason, was_with: n.our_agent, score: n.score, property_key: n.property_key,
+      })),
+      book_read_at: list.rex.synced_at,
+    };
+  },
+};
+
+const TOOLS: Tool[] = [patchOverview, topProspects, door, landlord, competitors, campaigns, activityTool, nudgesTool];
 const BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 const TOOL_SCHEMAS: Anthropic.Tool[] = TOOLS.map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema }));
 
@@ -425,7 +447,7 @@ ${signalCatalogue()}
 
 A door's SCORE is the sum of the weights of the signals on it. It is a ranking, not a probability. The anniversary predictor takes the date a let was agreed (observed) or the advert's date plus a few weeks (estimated) and adds a year. The CONDITION SCORE is 0 to 100 from the EPC band (A 95, B 85, C 70, D 55, E 40, F 25, G 10), a little lower when the certificate is over eight years old or the potential band is much better than the current one. A LANDLORD'S opportunity score is their strongest flagged door plus a little for each further flagged door and a little for portfolio size; the bands are Very high 70+, High 45+, Medium 25+.
 
-THE ROOMS, so you can say where to go: Today (the figures and what colleagues did), Map (pins coloured by signal, numbers are days on the market), Prospects (the same book as a list), Landlords, Competitors, Look up (any address on the register, and add a door by hand), Campaigns (the sequences and their copy), Owners (owner lookups) and Postcards (the queue of cards). Name the room in plain words; there are no links.
+THE ROOMS, so you can say where to go: Today (the figures and what colleagues did), Nudges (the call list: landlords who have dealt with us whose door has just moved; phone, reason and an opening line on each), Map (pins coloured by signal, numbers are days on the market), Prospects (the same book as a list), Landlords, Competitors, Look up (any address on the register, and add a door by hand), Campaigns (the sequences and their copy), Owners (owner lookups) and Postcards (the queue of cards). Name the room in plain words; there are no links.
 
 STAGES a door moves through: New, Queued, Contacted, Appraisal booked, Won, Not interested, Do not contact. A door marked Do not contact is never written to.
 

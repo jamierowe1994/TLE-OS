@@ -1,0 +1,32 @@
+# Nudges: our own book out of REX, crossed with this morning's sweep.
+#
+# Runs after Landlord Radar (06:40) so the rescore is done. The route answers
+# at once and reads on in the background; the second call ten minutes later
+# reports how it went. REX is only ever read.
+
+name: REX nudges
+
+on:
+  schedule:
+    - cron: "10 7 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read the book and build the call list
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "CRON_SECRET is not set on this repository - nothing was read."
+            exit 1
+          fi
+          curl -sS -f -X POST -H "x-cron-key: ${CRON_SECRET}" --max-time 60 \
+            "https://tle-os.co.uk/api/bond/nudges-sync" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          sleep 600
+          curl -sS -f -H "x-cron-key: ${CRON_SECRET}" --max-time 60 \
+            "https://tle-os.co.uk/api/bond/nudges-sync" | tee -a "$GITHUB_STEP_SUMMARY"

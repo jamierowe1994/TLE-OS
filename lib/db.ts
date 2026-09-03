@@ -1537,6 +1537,88 @@ CREATE TABLE IF NOT EXISTS os_bond_ask (
 CREATE INDEX IF NOT EXISTS os_bond_ask_user_idx ON os_bond_ask (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS os_bond_ask_time_idx ON os_bond_ask (created_at DESC);
 
+-- Nudges. Our own book out of REX (read only): the listings we withdrew, the
+-- tenancies we let, the lettings appraisals, and the landlord on each. One
+-- row per REX door; property_key is the Bond door it was matched to.
+CREATE TABLE IF NOT EXISTS os_bond_rex_doors (
+  id              BIGSERIAL PRIMARY KEY,
+  -- withdrawn | leased | appraisal
+  source          TEXT NOT NULL,
+  rex_ref         TEXT NOT NULL,
+  rex_property_id TEXT,
+  address         TEXT NOT NULL DEFAULT '',
+  postcode        TEXT NOT NULL DEFAULT '',
+  district        TEXT,
+  event_on        DATE,
+  reason          TEXT,
+  lost_agency     TEXT,
+  agent           TEXT,
+  rent            INTEGER,
+  state           TEXT,
+  contact_name    TEXT,
+  contact_phone   TEXT,
+  contact_email   TEXT,
+  rex_contact_id  TEXT,
+  contacts_read   BOOLEAN NOT NULL DEFAULT FALSE,
+  property_key    TEXT,
+  matched_at      TIMESTAMPTZ,
+  synced_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (source, rex_ref)
+);
+CREATE INDEX IF NOT EXISTS os_bond_rex_doors_district_idx ON os_bond_rex_doors (district);
+CREATE INDEX IF NOT EXISTS os_bond_rex_doors_key_idx ON os_bond_rex_doors (property_key);
+
+-- The call list itself. Status is the human side and survives rebuilds;
+-- 'gone' means the reason went away (the advert came down).
+CREATE TABLE IF NOT EXISTS os_bond_nudges (
+  id              BIGSERIAL PRIMARY KEY,
+  nudge_key       TEXT NOT NULL UNIQUE,
+  kind            TEXT NOT NULL,
+  source          TEXT NOT NULL,
+  rex_ref         TEXT NOT NULL,
+  rex_property_id TEXT,
+  property_key    TEXT,
+  address         TEXT NOT NULL DEFAULT '',
+  postcode        TEXT NOT NULL DEFAULT '',
+  district        TEXT,
+  contact_name    TEXT,
+  contact_phone   TEXT,
+  contact_email   TEXT,
+  rex_contact_id  TEXT,
+  our_agent       TEXT,
+  headline        TEXT NOT NULL DEFAULT '',
+  reason          TEXT NOT NULL DEFAULT '',
+  opener          TEXT NOT NULL DEFAULT '',
+  detail          JSONB NOT NULL DEFAULT '{}'::jsonb,
+  score           INTEGER NOT NULL DEFAULT 0,
+  -- open | snoozed | done | dismissed | gone
+  status          TEXT NOT NULL DEFAULT 'open',
+  snoozed_until   DATE,
+  notes           TEXT NOT NULL DEFAULT '',
+  done_by         TEXT,
+  done_at         TIMESTAMPTZ,
+  first_seen      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_bond_nudges_status_idx ON os_bond_nudges (status, district, score DESC);
+
+-- One row per REX read, so the cron can say how it went.
+CREATE TABLE IF NOT EXISTS os_bond_rex_sync (
+  id            BIGSERIAL PRIMARY KEY,
+  status        TEXT NOT NULL DEFAULT 'running',
+  withdrawn     INTEGER NOT NULL DEFAULT 0,
+  leased        INTEGER NOT NULL DEFAULT 0,
+  appraisals    INTEGER NOT NULL DEFAULT 0,
+  contacts_read INTEGER NOT NULL DEFAULT 0,
+  contacts_left INTEGER NOT NULL DEFAULT 0,
+  nudges        INTEGER NOT NULL DEFAULT 0,
+  matched       INTEGER NOT NULL DEFAULT 0,
+  error         TEXT,
+  started_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finished_at   TIMESTAMPTZ
+);
+
 -- One row per Radar run. The run takes minutes now that both feeds are read
 -- and the edge closes a request at 100 seconds, so the route answers at once
 -- and this is where the answer goes.

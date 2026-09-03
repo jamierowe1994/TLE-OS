@@ -65,7 +65,8 @@ export type ActivityKind =
   | "appraisal"
   | "address"
   | "owner"
-  | "postcard";
+  | "postcard"
+  | "nudge";
 
 export interface Activity extends Record<string, unknown> {
   id: number;
@@ -111,13 +112,15 @@ export interface BondSummary {
   postcardsSent: number;
   /** Tenancies whose anniversary falls in the next 60 days. */
   anniversariesSoon: number;
+  /** Open nudges on the call list. */
+  nudgesOpen: number;
   lastSweep: string | null;
   districts: number;
 }
 
 export async function bondSummary(): Promise<BondSummary> {
   const empty: BondSummary = {
-    flagged: 0, newToday: 0, workedThisWeek: 0, appraisalsBooked: 0, ownersFound: 0, postcardsSent: 0, anniversariesSoon: 0, lastSweep: null, districts: 0,
+    flagged: 0, newToday: 0, workedThisWeek: 0, appraisalsBooked: 0, ownersFound: 0, postcardsSent: 0, anniversariesSoon: 0, nudgesOpen: 0, lastSweep: null, districts: 0,
   };
   if (!hasDb()) return empty;
   const [p] = await q<{ flagged: string; new_today: string; booked: string }>(
@@ -138,7 +141,9 @@ export async function bondSummary(): Promise<BondSummary> {
     `SELECT count(*) AS n FROM os_radar_prospects
       WHERE next_anniversary BETWEEN CURRENT_DATE AND CURRENT_DATE + 60`
   );
+  const [n] = await q<{ n: string }>(`SELECT count(*) AS n FROM os_bond_nudges WHERE status = 'open'`);
   return {
+    nudgesOpen: Number(n?.n ?? 0),
     flagged: Number(p?.flagged ?? 0),
     newToday: Number(p?.new_today ?? 0),
     workedThisWeek: Number(w?.n ?? 0),

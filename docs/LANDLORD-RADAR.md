@@ -557,3 +557,26 @@ Its own log (`os_bond_ask`, per person, both halves, a `cleared` marker rather t
 delete) and its own daily ceiling (`BOND_ASK_DAILY_TOKEN_CAP`, 300,000 output tokens),
 separate from Steve's so one cannot silence the other. The system prompt is stable and
 cached; the date, the patch and the focus travel in the user turn.
+
+---
+
+## Nudges, 3 Sep 2026
+
+`lib/bond-nudges.ts`, `app/api/bond/nudges` and `nudges-sync`, `components/BondNudges.tsx`,
+the `REX nudges` workflow at 07:10. The call list: our own book out of REX (read only, through
+the allowlist) crossed with what the sweep saw next. Three REX sources, kept one row per door
+in `os_bond_rex_doors`: lettings listings we withdrew (with the reason and the landlord inline),
+tenancies we let, and lettings appraisals in the last two years (the landlord sits on the
+property, read a batch of 80 a run, watched districts first). The OS's own appraisals join in.
+
+Each REX door is matched to a Bond property key by postcode plus house number and a street
+word. Then, per door: back on the market with another agent after we withdrew it (Win back),
+after we let it (Former landlord), after we valued it (Valued, listed elsewhere); a year since
+the valuation with nothing seen (A year since we valued it); withdrawn from us this year with
+nothing seen (Lost this year). Every nudge carries the landlord's name and number from REX,
+the reason in an agent's words with the door's signals folded in, and an opening line.
+
+Statuses are the human side and survive rebuilds: Called, Snooze 30 days, Not now, a note.
+When the reason goes away the nudge is marked gone, not deleted. The list rebuilds at the end
+of every rescore (database only); the REX read is its own cron after the sweep. Nudges are a
+room, a tile on Today, an activity kind, and a tool in Ask Bond.

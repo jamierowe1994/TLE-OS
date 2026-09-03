@@ -6,6 +6,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import RadarBoard from "@/components/RadarBoard";
 import { PressButton } from "@/components/Bits";
 import BondAsk, { type AskFocus } from "@/components/BondAsk";
+import BondNudges from "@/components/BondNudges";
 
 /**
  * Bond — the prospecting workspace.
@@ -27,10 +28,11 @@ import BondAsk, { type AskFocus } from "@/components/BondAsk";
  * ever shows a placeholder as if it were a fact.
  */
 
-type Room = "today" | "map" | "prospects" | "landlords" | "competitors" | "lookup" | "campaigns" | "owners" | "postcards";
+type Room = "today" | "nudges" | "map" | "prospects" | "landlords" | "competitors" | "lookup" | "campaigns" | "owners" | "postcards";
 
 const ROOMS: { key: Room; label: string; icon: string }[] = [
   { key: "today", label: "Today", icon: "dashboard" },
+  { key: "nudges", label: "Nudges", icon: "call" },
   { key: "map", label: "Map", icon: "search" },
   { key: "prospects", label: "Prospects", icon: "list" },
   { key: "landlords", label: "Landlords", icon: "user" },
@@ -49,6 +51,7 @@ interface Summary {
   ownersFound: number;
   postcardsSent: number;
   anniversariesSoon: number;
+  nudgesOpen: number;
   lastSweep: string | null;
   districts: number;
 }
@@ -95,6 +98,7 @@ const KIND_ICON: Record<string, string> = {
   address: "home",
   owner: "key",
   postcard: "mail",
+  nudge: "call",
 };
 
 export default function BondApp() {
@@ -353,6 +357,16 @@ export default function BondApp() {
                 }}
               />
             )}
+            {room === "nudges" && (
+              <BondNudges
+                districts={patch ?? []}
+                openDoor={(address) => {
+                  setFilterPreset(address);
+                  setRoom("prospects");
+                }}
+                onAsk={askAbout}
+              />
+            )}
             {room === "campaigns" && <Campaigns />}
             {room === "owners" && <Owners />}
             {room === "postcards" && <Postcards />}
@@ -435,7 +449,8 @@ function Today({
         </button>
       </form>
 
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+        <Tile label="Nudges" value={s.nudgesOpen.toLocaleString("en-GB")} hint="to call today" onClick={() => go("nudges")} />
         <Tile label="Flagged" value={s.flagged.toLocaleString("en-GB")} hint={`across ${s.districts} districts`} onClick={() => go("map")} />
         <Tile label="New today" value={s.newToday.toLocaleString("en-GB")} hint={s.lastSweep ? `swept ${when(s.lastSweep)}` : "not swept yet"} onClick={() => go("prospects")} />
         <Tile label="Anniversaries" value={s.anniversariesSoon.toLocaleString("en-GB")} hint="in the next 60 days" onClick={() => go("prospects")} />
