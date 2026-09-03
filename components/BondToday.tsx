@@ -192,7 +192,7 @@ export default function BondToday({
       <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-[1.3fr_1.1fr_0.85fr]">
         <Card title="Opportunity" icon="magic-wand" delay="0.3s">
           {pic ? <Gauge o={pic.opportunity} /> : <Loading />}
-          <div className="mt-3 grid grid-cols-3 gap-3 xl:grid-cols-1 2xl:grid-cols-3">
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Mini tone="lilac" label="Landlords" value={pic ? pic.opportunity.landlords.toLocaleString("en-GB") : "…"} hint="with a door in the patch" />
             <Mini tone="mint" label="Advertised rent" value={pic ? short(pic.opportunity.rentRoll) : "…"} hint={pic ? `pcm across ${pic.opportunity.rentDoors.toLocaleString("en-GB")} lets` : ""} />
             <Mini tone="butter" label="Doors flagged" value={pic ? pic.opportunity.flagged.toLocaleString("en-GB") : "…"} hint="in the patch" />
@@ -211,19 +211,20 @@ export default function BondToday({
           ) : (
             <ul className="space-y-1">
               {pic.top.map((t) => (
-                <li key={t.property_key}>
-                  <button type="button" onClick={() => search(t.address)} className="flex w-full items-center gap-3 rounded-xl px-1.5 py-1.5 text-left transition-colors hover:bg-box">
+                <li key={t.property_key} className="min-w-0">
+                  <button type="button" onClick={() => search(t.address)} className="flex w-full min-w-0 items-center gap-3 rounded-xl px-1.5 py-1.5 text-left transition-colors hover:bg-box">
                     <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl" style={{ background: TONES.peach.wash }}>
                       {t.photo ? <img src={t.photo} alt="" className="h-full w-full object-cover" /> : <DoodleIcon name="home-1" size={20} />}
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[12.5px] font-semibold">{t.address.replace(new RegExp(`,?\\s*${t.postcode}$`, "i"), "")}</span>
-                      <span className="block text-[11px] text-muted">{t.postcode}</span>
-                    </span>
-                    <Pill tone={BAND_TONE[t.band] ?? "lilac"}>{t.band}</Pill>
-                    <span className="w-[84px] shrink-0 whitespace-nowrap text-right">
-                      <span className="block text-[10px] text-muted">{t.market === "sale" ? "Asking" : "Rent"}</span>
-                      <span className="figures block text-[13px]">{t.market === "sale" ? (t.asking_price != null ? pounds(t.asking_price) : "-") : t.rent != null ? `${pounds(t.rent)} pcm` : "-"}</span>
+                      <span className="mt-1 flex items-center gap-2">
+                        <span className="shrink-0 text-[11px] text-muted">{t.postcode}</span>
+                        <Pill tone={BAND_TONE[t.band] ?? "lilac"}>{t.band}</Pill>
+                        <span className="figures ml-auto shrink-0 whitespace-nowrap text-[12.5px]">
+                          {t.market === "sale" ? (t.asking_price != null ? pounds(t.asking_price) : "-") : t.rent != null ? `${pounds(t.rent)} pcm` : "-"}
+                        </span>
+                      </span>
                     </span>
                   </button>
                 </li>
@@ -237,7 +238,7 @@ export default function BondToday({
       </div>
 
       {/* The feed, with company. */}
-      <section className="fade-up mt-4 overflow-hidden rounded-2xl border border-line bg-panel" style={{ animationDelay: "0.55s" }}>
+      <section className="fade-up mt-4 min-w-0 overflow-hidden rounded-2xl border border-line bg-panel" style={{ animationDelay: "0.55s" }}>
         <div className="grid lg:grid-cols-[1fr_260px]">
           <div className="p-6">
             <h2 className="hand flex items-center gap-2 text-[17px]">
@@ -290,12 +291,12 @@ function Loading() {
 
 function Card({ title, icon, delay, children }: { title: string; icon: string; delay: string; children: React.ReactNode }) {
   return (
-    <section className="fade-up rounded-2xl border border-line bg-panel p-6" style={{ animationDelay: delay }}>
+    <section className="fade-up min-w-0 rounded-2xl border border-line bg-panel p-6" style={{ animationDelay: delay }}>
       <h2 className="hand flex items-center gap-2 text-[17px]">
         <DoodleIcon name={icon} size={16} />
         {title}
       </h2>
-      <div className="mt-4">{children}</div>
+      <div className="mt-4 min-w-0">{children}</div>
     </section>
   );
 }
