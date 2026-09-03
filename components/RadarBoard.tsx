@@ -160,6 +160,7 @@ export default function RadarBoard({
   nearPreset,
   filterPreset,
   districts: districtsProp,
+  onAsk,
 }: {
   /** Inside Bond: no page header, the workspace supplies its own. */
   embedded?: boolean;
@@ -171,6 +172,8 @@ export default function RadarBoard({
   filterPreset?: string;
   /** The districts this person covers. Empty or absent means the whole patch. */
   districts?: string[];
+  /** Bond: open Ask Bond with this door in focus. Absent standalone. */
+  onAsk?: (p: Prospect) => void;
 } = {}) {
   const [rows, setRows] = useState<Row[]>([]);
   const [summary, setSummary] = useState<RadarSummary | null>(null);
@@ -657,7 +660,7 @@ export default function RadarBoard({
         </div>
       </div>
 
-      {open && <ProspectPanel key={open.id} prospect={open} onClose={() => setOpenId(null)} onPatched={patched} />}
+      {open && <ProspectPanel key={open.id} prospect={open} onClose={() => setOpenId(null)} onPatched={patched} onAsk={onAsk} />}
     </>
   );
 }
@@ -666,10 +669,12 @@ function ProspectPanel({
   prospect,
   onClose,
   onPatched,
+  onAsk,
 }: {
   prospect: Row;
   onClose: () => void;
   onPatched: (p: Prospect) => void;
+  onAsk?: (p: Prospect) => void;
 }) {
   const [shown, setShown] = useState(false);
   const [stage, setStage] = useState<Stage>(prospect.stage);
@@ -743,7 +748,19 @@ function ProspectPanel({
           >
             ✕
           </button>
-          <Pill tone={STAGE_TONE[stage]}>{STAGE_LABEL[stage]}</Pill>
+          <div className="flex items-center gap-2">
+            {onAsk && (
+              <button
+                type="button"
+                onClick={() => onAsk(prospect)}
+                className="rounded-full border border-line/80 px-3 py-1 text-[11.5px] text-muted transition-colors hover:border-ink hover:text-ink"
+                title="Open Ask Bond with this door in front of it"
+              >
+                Ask Bond
+              </button>
+            )}
+            <Pill tone={STAGE_TONE[stage]}>{STAGE_LABEL[stage]}</Pill>
+          </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-4">

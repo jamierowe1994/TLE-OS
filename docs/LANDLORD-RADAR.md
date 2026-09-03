@@ -532,3 +532,28 @@ the queued rows are exactly what would have gone.
 Verified locally: 19 cards judged on the first build, all held for want of an owner address;
 an owner recorded on 34 Sharman Road freed its Just Bought letter to queued; a second build
 added nothing.
+
+---
+
+## Ask Bond, 3 Sep 2026
+
+`lib/bond-ask.ts`, `app/api/bond/ask/route.ts`, `components/BondAsk.tsx`. Claude (Opus 5)
+with Bond's data in front of it, in a drawer that opens over any room from the rail, the
+header, the property panel ("Ask Bond" beside the stage) and the landlord panel. The door
+or landlord that was open becomes the focus chip, so "why is this one flagged" and "draft
+the letter" resolve without naming the address; the chip comes off without closing.
+
+Seven read-only tools, all scoped to the person's patch: the patch overview, the top
+prospects (filter by signal, stage, market; sort by score, newest, anniversary, days on
+market), one door (signals and why each matters, listing history across both feeds, price
+paid sales at the address, tenancy estimate, certificate, recorded owner, colleagues'
+activity, campaign cards), one landlord with their portfolio, the competitors, the
+campaigns with their copy, and recent activity. The brief carries the whole signal
+catalogue, the score formulas, the rooms, and the rules: nothing that a tool did not
+return, individuals by post only, no social media or tracing, never a supplier's name, drafts
+only and never "I have sent it". Em dashes are stripped after the fact, as Steve's are.
+
+Its own log (`os_bond_ask`, per person, both halves, a `cleared` marker rather than a
+delete) and its own daily ceiling (`BOND_ASK_DAILY_TOKEN_CAP`, 300,000 output tokens),
+separate from Steve's so one cannot silence the other. The system prompt is stable and
+cached; the date, the patch and the focus travel in the user turn.

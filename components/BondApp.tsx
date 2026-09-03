@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
 import RadarBoard from "@/components/RadarBoard";
 import { PressButton } from "@/components/Bits";
+import BondAsk, { type AskFocus } from "@/components/BondAsk";
 
 /**
  * Bond — the prospecting workspace.
@@ -116,6 +117,15 @@ export default function BondApp() {
   const [patch, setPatch] = useState<string[] | null>(null);
   const [allDistricts, setAllDistricts] = useState<string[]>([]);
   const [choosing, setChoosing] = useState(false);
+
+  /* ASK BOND. The consult drawer, open over any room, with the door or
+     landlord in front of the person as its focus. */
+  const [ask, setAsk] = useState(false);
+  const [askFocus, setAskFocus] = useState<AskFocus | null>(null);
+  function askAbout(f: AskFocus | null) {
+    setAskFocus(f);
+    setAsk(true);
+  }
 
   useEffect(() => {
     let gone = false;
@@ -229,6 +239,14 @@ export default function BondApp() {
               </button>
             ))}
           </nav>
+          <button
+            type="button"
+            onClick={() => askAbout(null)}
+            className="hand mt-3 flex items-center rounded-xl border border-dashed border-line/80 px-3 py-2.5 text-left text-[13.5px] text-muted transition-colors hover:border-ink hover:text-ink"
+          >
+            <DoodleIcon name="magic-wand" size={16} className="mr-2.5 shrink-0" />
+            Ask Bond
+          </button>
           <div className="mt-4 rounded-xl border border-line/70 px-3 py-2.5">
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Your patch</p>
             <p className="mt-1 text-[12px]">
@@ -250,13 +268,23 @@ export default function BondApp() {
               <span className="hand text-[22px] leading-none lg:hidden">Bond</span>
               <h1 className="hidden text-[22px] leading-none lg:block">{ROOMS.find((r) => r.key === room)?.label}</h1>
             </div>
-            <PressButton
-              onClick={() => router.push("/tools")}
-              className="rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] text-muted hover:text-ink"
-              title="Back to the OS"
-            >
-              Back to OS
-            </PressButton>
+            <div className="flex items-center gap-2">
+              <PressButton
+                onClick={() => askAbout(null)}
+                className="flex items-center rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] text-muted hover:text-ink"
+                title="Ask Bond about the patch"
+              >
+                <DoodleIcon name="magic-wand" size={13} className="mr-1.5" />
+                Ask Bond
+              </PressButton>
+              <PressButton
+                onClick={() => router.push("/tools")}
+                className="rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] text-muted hover:text-ink"
+                title="Back to the OS"
+              >
+                Back to OS
+              </PressButton>
+            </div>
           </header>
 
           {/* Small screens: the rooms as a scrolling row under the title. */}
@@ -291,6 +319,10 @@ export default function BondApp() {
                 nearPreset={nearPreset}
                 filterPreset={filterPreset}
                 districts={patch ?? []}
+                onAsk={(p) => {
+                  const a = (p.address || p.street || "").trim();
+                  askAbout({ kind: "door", key: p.property_key, label: a.toUpperCase().includes(p.postcode.toUpperCase()) ? a : `${a}, ${p.postcode}` });
+                }}
               />
             )}
             {room === "landlords" && (
@@ -300,6 +332,7 @@ export default function BondApp() {
                   setFilterPreset(address);
                   setRoom("prospects");
                 }}
+                onAsk={(key, label) => askAbout({ kind: "landlord", key, label })}
               />
             )}
             {room === "competitors" && (
@@ -326,6 +359,8 @@ export default function BondApp() {
           </main>
         </div>
       </div>
+
+      <BondAsk open={ask} onClose={() => setAsk(false)} districts={patch ?? []} focus={askFocus} onClearFocus={() => setAskFocus(null)} />
 
       {choosing && phase === "in" && (
         <PatchChooser all={allDistricts} current={patch ?? []} onDone={savePatch} onClose={patch == null ? undefined : () => setChoosing(false)} />
@@ -1176,7 +1211,7 @@ const BAND_TONE: Record<LandlordRow["band"], string> = {
  * a score and a marketing status. What Spectre lists; ours is built from
  * the company files, the owners recorded on doors, and later REX.
  */
-function Landlords({ districts, openDoor }: { districts: string[]; openDoor: (address: string) => void }) {
+function Landlords({ districts, openDoor, onAsk }: { districts: string[]; openDoor: (address: string) => void; onAsk: (key: string, label: string) => void }) {
   const [rows, setRows] = useState<LandlordRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
@@ -1268,12 +1303,12 @@ function Landlords({ districts, openDoor }: { districts: string[]; openDoor: (ad
         </div>
       )}
 
-      {openKey && <LandlordPanel landlordKey={openKey} onClose={() => setOpenKey(null)} onPatched={patched} openDoor={openDoor} />}
+      {openKey && <LandlordPanel landlordKey={openKey} onClose={() => setOpenKey(null)} onPatched={patched} openDoor={openDoor} onAsk={onAsk} />}
     </div>
   );
 }
 
-function LandlordPanel({ landlordKey, onClose, onPatched, openDoor }: { landlordKey: string; onClose: () => void; onPatched: (l: LandlordRow) => void; openDoor: (address: string) => void }) {
+function LandlordPanel({ landlordKey, onClose, onPatched, openDoor, onAsk }: { landlordKey: string; onClose: () => void; onPatched: (l: LandlordRow) => void; openDoor: (address: string) => void; onAsk: (key: string, label: string) => void }) {
   const [data, setData] = useState<{ landlord: LandlordRow; doors: LandlordDoorRow[] } | null>(null);
   const [shown, setShown] = useState(false);
   const [linkedin, setLinkedin] = useState("");
@@ -1326,7 +1361,19 @@ function LandlordPanel({ landlordKey, onClose, onPatched, openDoor }: { landlord
       >
         <div className="flex shrink-0 items-center justify-between gap-3 px-6 pt-5">
           <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink" title="Close (Esc)">✕</button>
-          {l && <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${BAND_TONE[l.band]}`}>{l.band} opportunity · {l.score}</span>}
+          <div className="flex items-center gap-2">
+            {l && (
+              <button
+                type="button"
+                onClick={() => onAsk(l.landlord_key, l.name)}
+                className="rounded-full border border-line/80 px-3 py-1 text-[11.5px] text-muted transition-colors hover:border-ink hover:text-ink"
+                title="Open Ask Bond with this landlord in front of it"
+              >
+                Ask Bond
+              </button>
+            )}
+            {l && <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${BAND_TONE[l.band]}`}>{l.band} opportunity · {l.score}</span>}
+          </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-4">
           {err && <p className="text-[12.5px] text-red-700">{err}</p>}
