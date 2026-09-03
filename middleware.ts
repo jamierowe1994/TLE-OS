@@ -166,6 +166,10 @@ const MACHINE_ROUTES = [
      a session because getting the session is what it is for. Refuses without
      a valid token, so the redirect was never the guard here either. */
   "/api/record/enter",
+  /* The handover rehearsal, on a cron. Authenticates itself with CRON_SECRET
+     in x-cron-key and fails shut without one, like the other crons. It only
+     ever runs in shadow: live reads, nothing written. */
+  "/api/handover/scan",
 ];
 
 export async function middleware(req: NextRequest) {
