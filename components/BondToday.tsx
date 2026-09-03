@@ -189,7 +189,7 @@ export default function BondToday({
       </div>
 
       {/* The picture. */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-[1.2fr_1fr_1fr]">
+      <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-[1.3fr_1.1fr_0.85fr]">
         <Card title="Opportunity" icon="magic-wand" delay="0.3s">
           {pic ? <Gauge o={pic.opportunity} /> : <Loading />}
           <div className="mt-3 grid grid-cols-3 gap-3 xl:grid-cols-1 2xl:grid-cols-3">
@@ -221,7 +221,7 @@ export default function BondToday({
                       <span className="block text-[11px] text-muted">{t.postcode}</span>
                     </span>
                     <Pill tone={BAND_TONE[t.band] ?? "lilac"}>{t.band}</Pill>
-                    <span className="w-20 shrink-0 text-right">
+                    <span className="w-[84px] shrink-0 whitespace-nowrap text-right">
                       <span className="block text-[10px] text-muted">{t.market === "sale" ? "Asking" : "Rent"}</span>
                       <span className="figures block text-[13px]">{t.market === "sale" ? (t.asking_price != null ? pounds(t.asking_price) : "-") : t.rent != null ? `${pounds(t.rent)} pcm` : "-"}</span>
                     </span>
