@@ -60,6 +60,19 @@ const dayWords = (iso: string | null | undefined) =>
 /** The street, as an agent would say it: "12 Dover Close", not the postcode. */
 const shortAddress = (address: string) => address.split(",")[0]?.trim() || address;
 
+/** "Tue 8 Sep · 2:00pm" - the visit on one short line. */
+const visitShort = (iso: string | null | undefined) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.valueOf())) return null;
+  const day = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  const time = d
+    .toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit", hour12: true })
+    .replace(" ", "")
+    .toLowerCase();
+  return `${day} · ${time}`;
+};
+
 export default function RecordSession({ appraisalId }: { appraisalId: string }) {
   const [phase, setPhase] = useState<Phase>("loading");
   const [note, setNote] = useState<string>("Getting things ready…");
@@ -312,20 +325,23 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
   const outWords = dayWords(goesOut);
 
   return (
-    <main className="mx-auto flex min-h-[100dvh] w-full max-w-5xl flex-col px-4 py-5 sm:px-8 sm:py-8">
+    <main className="mx-auto flex min-h-[100dvh] w-full max-w-5xl flex-col px-3 py-3 sm:px-8 sm:py-8">
       {/* ── Head: what this is, in a line ─────────────────────────────── */}
-      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+      {/* On a phone this is three short lines, because the camera below
+          needs every pixel of height; the date the page goes out waits for
+          the "All done" screen, where it means something. */}
+      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Welcome video</p>
-          <h1 className="hand mt-1 text-[24px] leading-tight sm:text-[28px]">
-            {ctx ? `Record your welcome for ${street}` : "Record your welcome"}
-          </h1>
+          <h1 className="hand text-[22px] leading-tight sm:text-[28px]">Record your welcome</h1>
           {ctx && (
-            <p className="mt-1 text-[12.5px] text-muted">
-              {ctx.landlord}
-              {ctx.appointmentAt ? ` · visit ${dayWords(ctx.appointmentAt)}` : ""}
-              {outWords ? ` · their page goes out ${outWords}` : ""}
-            </p>
+            <>
+              <p className="mt-0.5 text-[14px] font-semibold leading-snug sm:text-[15px]">{street}</p>
+              <p className="mt-0.5 text-[12px] text-muted">
+                {ctx.landlord.replace(/\s*\(demo\)\s*$/, "")}
+                {visitShort(ctx.appointmentAt) ? ` · ${visitShort(ctx.appointmentAt)}` : ""}
+                {!phone && outWords ? ` · page goes out ${outWords}` : ""}
+              </p>
+            </>
           )}
         </div>
         {ctx && (
@@ -339,7 +355,7 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
       </header>
 
       {/* ── Body ─────────────────────────────────────────────────────── */}
-      <section className="fade-up mt-5 flex-1">
+      <section className="fade-up mt-3 flex-1 sm:mt-5">
         {phase === "loading" && (
           <div className="flex items-center gap-3 rounded-2xl border border-line/80 bg-panel px-5 py-6 text-[13px] text-muted">
             <span className="inline-block h-3 w-3 animate-pulse rounded-full bg-accent-dark" />
@@ -365,17 +381,19 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
         {phase === "ready" && recorderUrl && (
           <div className={phone ? "" : "grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]"}>
             <div className="overflow-hidden rounded-2xl border border-line/80 bg-panel">
-              <div className="flex items-center justify-between gap-3 border-b border-line/70 px-4 py-3">
-                <p className="text-[12.5px] text-muted">
-                  {frameSays ?? "Say who you are and one thing you already know about the place. A minute is plenty."}
-                </p>
-              </div>
+              {(!phone || frameSays) && (
+                <div className="flex items-center justify-between gap-3 border-b border-line/70 px-4 py-3">
+                  <p className="text-[12.5px] text-muted">
+                    {frameSays ?? "Say who you are and one thing you already know about the place. A minute is plenty."}
+                  </p>
+                </div>
+              )}
               {/* `allow` is REQUIRED - without it the browser refuses the
                   camera inside the frame and the recorder cannot recover. */}
               <iframe
                 src={recorderUrl}
                 allow="camera; microphone; display-capture"
-                className={phone ? "h-[calc(100dvh-150px)] min-h-[480px] w-full border-0" : "h-[560px] w-full border-0"}
+                className={phone ? "h-[calc(100dvh-132px)] min-h-[520px] w-full border-0" : "h-[560px] w-full border-0"}
                 title="Flow recorder"
               />
             </div>
