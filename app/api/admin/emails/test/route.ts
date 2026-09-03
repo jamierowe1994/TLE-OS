@@ -4,6 +4,8 @@ import { TLE_EMAILS } from "@/lib/email/tle-emails";
 import { hasDb, q } from "@/lib/db";
 import { sendEmail } from "@/lib/resend";
 import { record } from "@/lib/audit";
+import { ensureDemoAppraisal } from "@/lib/demo-appraisal";
+import { buildVideoChase } from "@/lib/video-chase";
 
 /**
  * Send one catalogue email to the person asking for it.
@@ -71,9 +73,20 @@ export async function POST(req: NextRequest) {
   let subject: string;
   let html: string;
   try {
-    ({ subject, html } = entry.render(
-      saved ? ({ ...entry.doc!, ...saved } as typeof entry.doc) : undefined
-    ));
+    if (entry.id === "appraisal-video-chase") {
+      /* Not the catalogue sample: a real nudge for a demo appraisal that
+         exists, addressed to the person testing, so the button in the inbox
+         opens a file where the recorder can be run through to the end. */
+      const origin = (process.env.NEXT_PUBLIC_OS_ORIGIN ?? "").replace(/\/+$/, "") || req.nextUrl.origin;
+      const ma = await ensureDemoAppraisal(me);
+      const built = await buildVideoChase({ ma, me, origin });
+      subject = built.subject;
+      html = built.html;
+    } else {
+      ({ subject, html } = entry.render(
+        saved ? ({ ...entry.doc!, ...saved } as typeof entry.doc) : undefined
+      ));
+    }
   } catch (e) {
     return NextResponse.json(
       { ok: false, error: `That template failed to render: ${e instanceof Error ? e.message : "unknown"}` },

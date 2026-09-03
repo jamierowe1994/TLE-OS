@@ -27,6 +27,32 @@ export default function EmailCard({ emailId }: { emailId: string }) {
   const [html, setHtml] = useState("");
   const [error, setError] = useState("");
   const asked = useRef(false);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
+
+  /* The same test send Admin → Emails has: this exact email, to the person
+     pressing the button and nobody else - the route reads the recipient from
+     the session, not the request. For the video nudge it links to a demo
+     appraisal that exists, so the button in the inbox goes somewhere real
+     and the recorder can be run through end to end. */
+  async function sendToMe() {
+    setSending(true);
+    setSent(null);
+    try {
+      const r = await fetch("/api/admin/emails/test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: emailId }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; to?: string; error?: string };
+      if (j.ok) setSent({ tone: "ok", text: `Sent to ${j.to}. Check your inbox.` });
+      else setSent({ tone: "err", text: j.error ?? `That didn't send (${r.status}).` });
+    } catch {
+      setSent({ tone: "err", text: "That didn't send. Try again in a moment." });
+    } finally {
+      setSending(false);
+    }
+  }
 
   useEffect(() => {
     if (!open || asked.current) return;
@@ -74,9 +100,27 @@ export default function EmailCard({ emailId }: { emailId: string }) {
             <>
               {/* The subject line, which preview panes usually hide and which is
                   half of whether an email gets opened at all. */}
-              <p className="mb-2 text-[11.5px] text-muted">
-                Subject: <span className="text-ink">{subject}</span>
-              </p>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
+                <p className="text-[11.5px] text-muted">
+                  Subject: <span className="text-ink">{subject}</span>
+                </p>
+                <div className="flex items-center gap-2.5">
+                  {sent && (
+                    <span className={`text-[11.5px] ${sent.tone === "err" ? "font-semibold text-accent-dark" : "text-muted"}`}>
+                      {sent.text}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={sendToMe}
+                    disabled={sending}
+                    className="rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] font-semibold transition-colors hover:border-ink/40 disabled:opacity-50"
+                    title="A test copy, to your own inbox"
+                  >
+                    {sending ? "Sending…" : "Send it to myself"}
+                  </button>
+                </div>
+              </div>
               <iframe
                 srcDoc={html}
                 sandbox=""
