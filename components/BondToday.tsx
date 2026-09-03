@@ -29,6 +29,8 @@ export interface TodaySummary {
 export interface TodayPicture {
   opportunity: {
     landlords: number;
+    landlordsEstimate: number | null;
+    doorsSeen: number;
     avgScore: number | null;
     score: number | null;
     parts: { strong: number; timing: number; contactable: number; warm: number };
@@ -189,11 +191,20 @@ export default function BondToday({
       </div>
 
       {/* The picture. */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-[1.15fr_0.95fr_1.1fr]">
+      <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-[1.08fr_0.9fr_1.22fr]">
         <Card title="Opportunity" icon="magic-wand" delay="0.3s">
           {pic ? <Gauge o={pic.opportunity} /> : <Loading />}
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <Mini tone="lilac" label="Landlords" value={pic ? pic.opportunity.landlords.toLocaleString("en-GB") : "…"} hint="with a door in the patch" />
+            <Mini
+              tone="lilac"
+              label={pic?.opportunity.landlordsEstimate != null ? "Landlords (est.)" : "Landlords"}
+              value={pic ? (pic.opportunity.landlordsEstimate ?? pic.opportunity.landlords).toLocaleString("en-GB") : "…"}
+              hint={
+                pic?.opportunity.landlordsEstimate != null
+                  ? `estimate: ${pic.opportunity.doorsSeen.toLocaleString("en-GB")} doors seen to let in two years, about three each${pic.opportunity.landlords ? `; ${pic.opportunity.landlords.toLocaleString("en-GB")} known by name` : ""}`
+                  : "known by name in the patch"
+              }
+            />
             <Mini tone="mint" label="Advertised rent" value={pic ? short(pic.opportunity.rentRoll) : "…"} hint={pic ? `pcm across ${pic.opportunity.rentDoors.toLocaleString("en-GB")} lets` : ""} />
             <Mini tone="butter" label="Doors flagged" value={pic ? pic.opportunity.flagged.toLocaleString("en-GB") : "…"} hint="in the patch" />
           </div>

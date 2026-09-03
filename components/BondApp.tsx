@@ -31,17 +31,17 @@ import BondToday, { rememberSearch, type TodayData } from "@/components/BondToda
 
 type Room = "today" | "nudges" | "map" | "prospects" | "landlords" | "competitors" | "lookup" | "campaigns" | "owners" | "postcards";
 
-const ROOMS: { key: Room; label: string; icon: string }[] = [
-  { key: "today", label: "Today", icon: "dashboard" },
-  { key: "nudges", label: "Nudges", icon: "call" },
-  { key: "map", label: "Map", icon: "search" },
-  { key: "prospects", label: "Prospects", icon: "list" },
-  { key: "landlords", label: "Landlords", icon: "user" },
-  { key: "competitors", label: "Competitors", icon: "target" },
-  { key: "lookup", label: "Look up", icon: "home" },
-  { key: "campaigns", label: "Campaigns", icon: "megaphone" },
-  { key: "owners", label: "Owners", icon: "key" },
-  { key: "postcards", label: "Postcards", icon: "mail" },
+const ROOMS: { key: Room; label: string; icon: string; blurb: string }[] = [
+  { key: "today", label: "Today", icon: "dashboard", blurb: "" },
+  { key: "nudges", label: "Nudges", icon: "call", blurb: "Landlords who have dealt with us, whose door has just moved. Ring them." },
+  { key: "map", label: "Map", icon: "search", blurb: "Explore opportunities across your patch and beyond." },
+  { key: "prospects", label: "Prospects", icon: "list", blurb: "Every flagged door in the patch, strongest first." },
+  { key: "landlords", label: "Landlords", icon: "user", blurb: "The people and companies behind the doors, scored by opportunity." },
+  { key: "competitors", label: "Competitors", icon: "target", blurb: "Who holds the stock in your patch, and when their tenancies come round." },
+  { key: "lookup", label: "Look up", icon: "home", blurb: "Any address on the register, and add a door by hand." },
+  { key: "campaigns", label: "Campaigns", icon: "megaphone", blurb: "The sequences that write to landlords, and their copy." },
+  { key: "owners", label: "Owners", icon: "key", blurb: "Who owns what, from the Land Registry." },
+  { key: "postcards", label: "Postcards", icon: "mail", blurb: "The queue of cards and letters: queued, held, sent." },
 ];
 
 interface Provider {
@@ -248,18 +248,20 @@ export default function BondApp() {
               Change
             </button>
           </div>
-          <p className="mt-auto px-1 pb-9 text-[10.5px] leading-relaxed text-muted">
-            Properties, never people. The owner lookup and the postcard are the two doors still to open.
-          </p>
+          {/* The dog and the house keep the rail company. */}
+          <img src="/bond/dog-and-house.png" alt="" className="bond-float mt-auto mb-6 h-40 w-40 self-center object-contain" />
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex shrink-0 items-center justify-between gap-3 px-4 pt-4 sm:px-6">
             <div className="flex items-center gap-3">
               <span className="hand text-[22px] leading-none lg:hidden">Bond</span>
-              <h1 className="hidden text-[22px] leading-none lg:block">
-                {room === "today" ? `${greeting()}${today?.name ? `, ${today.name}` : ""}` : ROOMS.find((r) => r.key === room)?.label}
-              </h1>
+              <div className="hidden lg:block">
+                <h1 className="text-[22px] leading-none">
+                  {room === "today" ? `${greeting()}${today?.name ? `, ${today.name}` : ""}` : ROOMS.find((r) => r.key === room)?.label}
+                </h1>
+                {ROOMS.find((r) => r.key === room)?.blurb && <p className="mt-1.5 text-[12.5px] text-muted">{ROOMS.find((r) => r.key === room)?.blurb}</p>}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <PressButton

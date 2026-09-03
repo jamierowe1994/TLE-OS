@@ -420,6 +420,16 @@ export interface TodayPicture {
   opportunity: {
     /** Landlords with a door in the patch, and their average opportunity score. */
     landlords: number;
+    /**
+     * How many landlords there probably are: the doors seen advertised to let
+     * in the patch over two years, at about three per landlord. The English
+     * Private Landlord Survey has roughly two in five landlords with one
+     * property and about one in six with five or more, which averages out
+     * near three. An estimate, labelled as one on the screen, with the count
+     * it came from beside it. Null until the sweep has seen anything.
+     */
+    landlordsEstimate: number | null;
+    doorsSeen: number;
     avgScore: number | null;
     /**
      * The patch opportunity score, 0 to 100, from four counted things:
@@ -459,7 +469,7 @@ export interface TodayPicture {
 /** Every figure here is counted from the tables; nothing is estimated. */
 export async function todayPicture(districts: string[] = []): Promise<TodayPicture> {
   const empty: TodayPicture = {
-    opportunity: { landlords: 0, avgScore: null, score: null, parts: { strong: 0, timing: 0, contactable: 0, warm: 0 }, counts: { strong: 0, timing: 0, contactable: 0, warm: 0 }, bands: { very_high: 0, high: 0, medium: 0, low: 0 }, rentRoll: 0, rentDoors: 0, flagged: 0 },
+    opportunity: { landlords: 0, landlordsEstimate: null, doorsSeen: 0, avgScore: null, score: null, parts: { strong: 0, timing: 0, contactable: 0, warm: 0 }, counts: { strong: 0, timing: 0, contactable: 0, warm: 0 }, bands: { very_high: 0, high: 0, medium: 0, low: 0 }, rentRoll: 0, rentDoors: 0, flagged: 0 },
     condition: { score: null, doors: 0, excellent: 0, average: 0, poor: 0 },
     top: [],
   };
@@ -488,6 +498,15 @@ export async function todayPicture(districts: string[] = []): Promise<TodayPictu
     [districts]
   );
   const [w] = await q<{ n: string }>(`SELECT count(*) AS n FROM os_bond_nudges WHERE status = 'open' AND ($1::text[] = '{}' OR district = ANY($1::text[]))`, [districts]);
+  const [seen] = await q<{ n: string }>(
+    `SELECT count(DISTINCT property_key) AS n FROM os_listing_capture
+      WHERE market = 'let' AND property_key IS NOT NULL
+        AND coalesce(listed_on, first_seen::date) > CURRENT_DATE - INTERVAL '24 months'
+        AND ($1::text[] = '{}' OR district = ANY($1::text[]))`,
+    [districts]
+  );
+  const doorsSeen = Number(seen?.n ?? 0);
+  const DOORS_PER_LANDLORD = 3;
   const flagged = Number(r?.flagged ?? 0);
   const counts = { strong: Number(r?.strong ?? 0), timing: Number(r?.timing ?? 0), contactable: Number(r?.contactable ?? 0), warm: Number(w?.n ?? 0) };
   const share = (n: number) => (flagged ? n / flagged : 0);
@@ -517,6 +536,8 @@ export async function todayPicture(districts: string[] = []): Promise<TodayPictu
   return {
     opportunity: {
       landlords: Number(l?.n ?? 0),
+      landlordsEstimate: doorsSeen ? Math.round(doorsSeen / DOORS_PER_LANDLORD) : null,
+      doorsSeen,
       avgScore: l?.avg == null ? null : Number(l.avg),
       score,
       parts,

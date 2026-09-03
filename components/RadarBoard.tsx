@@ -10,6 +10,7 @@ import { PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
 import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
 import {
+  SIGNAL_COLOUR,
   SIGNALS,
   SIGNAL_ORDER,
   STAGES,
@@ -38,6 +39,71 @@ type Row = Prospect & { id: string };
 
 /** Stages still being worked. The default view; the rest are a filter away. */
 const OPEN_STAGES: Stage[] = ["new", "queued", "contacted", "appraisal_booked"];
+
+/**
+ * The opportunity types, folded into one picker. Tick the signals you work;
+ * none ticked is all of them. Each carries its count in the patch and the
+ * colour its pins take on the map.
+ */
+function TypesPicker({
+  counts,
+  on,
+  toggle,
+  clear,
+}: {
+  counts: Map<SignalKey, number>;
+  on: Set<SignalKey>;
+  toggle: (k: SignalKey) => void;
+  clear: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const keys = SIGNAL_ORDER.filter((k) => (counts.get(k) ?? 0) > 0);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-3.5 py-2.5 text-[12px] transition-colors ${
+          on.size ? "border-accent-dark bg-accent-soft/50 font-semibold text-accent-dark" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
+        }`}
+      >
+        <DoodleIcon name="target" size={14} className="shrink-0" />
+        {on.size === 0 ? "All opportunity types" : on.size === 1 ? SIGNALS[[...on][0]].label : `${on.size} opportunity types`}
+        <span className="text-[10px]">▾</span>
+      </button>
+      {open && (
+        <>
+          <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="fixed inset-0 z-10 cursor-default" />
+          <div className="absolute left-0 top-full z-20 mt-2 w-72 rounded-2xl border border-line/80 bg-panel p-2 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.25)]">
+            <div className="flex items-center justify-between px-2 pb-1.5 pt-1">
+              <p className="text-[10.5px] font-bold uppercase tracking-wider text-muted">Opportunity types</p>
+              {on.size > 0 && (
+                <button type="button" onClick={clear} className="text-[11px] text-accent-dark underline-offset-2 hover:underline">
+                  Show all
+                </button>
+              )}
+            </div>
+            <ul className="max-h-80 overflow-y-auto">
+              {keys.map((k) => {
+                const checked = on.has(k);
+                return (
+                  <li key={k}>
+                    <label className="flex cursor-pointer items-center gap-2.5 rounded-xl px-2 py-1.5 text-[12px] hover:bg-box" title={SIGNALS[k].why}>
+                      <input type="checkbox" checked={checked} onChange={() => toggle(k)} className="h-3.5 w-3.5 accent-[var(--accent-dark)]" />
+                      <span className="inline-block h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: SIGNAL_COLOUR[k].fill }} />
+                      <span className="flex-1">{SIGNALS[k].label}</span>
+                      <span className="figures text-[11px] text-muted">{(counts.get(k) ?? 0).toLocaleString("en-GB")}</span>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function Filter({
   label,
@@ -199,6 +265,7 @@ export default function RadarBoard({
   useEffect(() => {
     if (filterPreset != null) {
       setQ(filterPreset);
+      setNearQuery(filterPreset);
       setSignalsOn(new Set());
       setNear(null);
       setArea(null);
@@ -243,6 +310,11 @@ export default function RadarBoard({
     });
   }
 
+  function clearSignals() {
+    setSignalsOn(new Set());
+    try { localStorage.removeItem("radar.signals"); } catch { /* fine */ }
+  }
+
   useEffect(() => {
     if (nearPreset && nearPreset.trim()) {
       setNearQuery(nearPreset);
@@ -269,6 +341,7 @@ export default function RadarBoard({
       }
       setNear({ label: j.label, lat: j.lat, lon: j.lon });
       setArea(null);
+      setQ("");
     } catch {
       setNearError("Could not place that address.");
     } finally {
@@ -318,7 +391,7 @@ export default function RadarBoard({
   }, [rows, mine]);
 
   const book = useMemo(() => {
-    const needle = q.trim().toLowerCase();
+    const needle = near ? "" : q.trim().toLowerCase();
     return rows.filter((r) => {
       if (fStage ? r.stage !== fStage : !OPEN_STAGES.includes(r.stage)) return false;
       if (!fStage && r.score === 0) return false;
@@ -430,139 +503,91 @@ export default function RadarBoard({
       )}
 
       <div className={embedded ? "mt-3" : "mt-4"}>
-        <div className="fade-up min-w-0 rounded-2xl border border-line/80 bg-panel p-5">
-          {/* The signals, as switches. Pick the ones you work; none picked is all. */}
-          <div className="flex flex-wrap items-center gap-1.5">
-            {SIGNAL_ORDER.filter((k) => (signalCounts.get(k) ?? 0) > 0).map((k) => {
-              const on = signalsOn.has(k);
-              return (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => toggleSignal(k)}
-                  title={SIGNALS[k].why}
-                  className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11.5px] transition-colors ${
-                    on
-                      ? "border-ink bg-ink text-page"
-                      : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
-                  }`}
-                >
-                  {SIGNALS[k].label}
-                  <span className={`figures text-[10px] ${on ? "text-page/70" : "text-muted/80"}`}>
-                    {(signalCounts.get(k) ?? 0).toLocaleString("en-GB")}
-                  </span>
-                </button>
-              );
-            })}
-            {signalsOn.size > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSignalsOn(new Set());
-                  try { localStorage.removeItem("radar.signals"); } catch { /* fine */ }
-                }}
-                className="rounded-full px-2.5 py-1.5 text-[11px] text-muted underline-offset-2 hover:underline"
-              >
-                Show all
-              </button>
-            )}
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2.5">
-            <form onSubmit={lookUpNear} className="flex min-w-64 flex-1 items-center gap-2">
-              <label className="flex flex-1 items-center gap-2.5 rounded-full border border-line/80 px-3.5 py-2 focus-within:border-ink">
-                <DoodleIcon name="search" size={14} className="shrink-0 text-muted" />
-                <input
-                  type="text"
-                  placeholder="Address or postcode to search around..."
-                  value={nearQuery}
-                  onChange={(e) => setNearQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void lookUpNear(e);
-                  }}
-                  className="w-full bg-transparent text-[12px] outline-none placeholder:text-muted/70"
-                />
-              </label>
-              <select
-                value={radius}
-                onChange={(e) => setRadius(Number(e.target.value))}
-                title="Radius"
-                className="rounded-full border border-line/80 bg-transparent px-2.5 py-2 text-[12px] outline-none"
-              >
-                {[0.25, 0.5, 1, 2, 3, 5].map((m) => (
-                  <option key={m} value={m}>{m} mile{m === 1 ? "" : "s"}</option>
-                ))}
-              </select>
-              {/* A real submit, so Return in the box and a press on the button
-                  are the same action. PressButton is type=button by design. */}
-              <button
-                type="submit"
-                disabled={nearBusy}
-                className="press-wobble rounded-full bg-ink px-4 py-2 text-[12px] font-semibold text-page disabled:opacity-40"
-              >
-                {nearBusy ? "Placing..." : "Search"}
-              </button>
-            </form>
-            {near && (
-              <button
-                type="button"
-                onClick={() => { setNear(null); setNearQuery(""); }}
-                title="Clear the address search"
-                className="flex items-center gap-2 whitespace-nowrap rounded-full border border-accent-dark bg-accent-soft/50 px-3.5 py-2 text-[12px] font-semibold text-accent-dark"
-              >
-                Within {radius} mile{radius === 1 ? "" : "s"} of {near.label} <span className="text-[10px]">✕</span>
-              </button>
-            )}
-            {nearError && <span className="text-[11.5px] text-red-700">{nearError}</span>}
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2.5">
-            <label className="flex min-w-44 flex-1 items-center gap-2.5 rounded-full border border-line/80 px-3.5 py-2 focus-within:border-ink">
+        {/* One bar, as James's sketch of 3 Sep: the opportunity types folded
+            into a picker, one search box, the radius, the districts and the
+            agents, and a Search button. Typing filters the list as you go;
+            Search places the address and shows everything around it. */}
+        <div className="fade-up relative z-30 min-w-0 rounded-2xl border border-line/80 bg-panel p-3">
+          <form onSubmit={lookUpNear} className="flex flex-wrap items-center gap-2.5">
+            <TypesPicker counts={signalCounts} on={signalsOn} toggle={toggleSignal} clear={clearSignals} />
+            <label className="flex min-w-56 flex-1 items-center gap-2.5 rounded-full border border-line/80 px-3.5 py-2.5 focus-within:border-ink">
               <DoodleIcon name="search" size={14} className="shrink-0 text-muted" />
               <input
                 type="text"
-                placeholder="Filter by address, postcode or agent..."
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                className="w-full bg-transparent text-[12px] outline-none placeholder:text-muted/70"
+                placeholder="Search by address, postcode or agent..."
+                value={nearQuery}
+                onChange={(e) => {
+                  setNearQuery(e.target.value);
+                  setQ(e.target.value);
+                  if (near) setNear(null);
+                }}
+                className="w-full bg-transparent text-[12.5px] outline-none placeholder:text-muted/70"
               />
             </label>
+            <select
+              value={radius}
+              onChange={(e) => setRadius(Number(e.target.value))}
+              title="Radius around the address"
+              className="rounded-full border border-line/80 bg-transparent px-3 py-2.5 text-[12px] text-muted outline-none hover:text-ink"
+            >
+              {[0.25, 0.5, 1, 2, 3, 5].map((m) => (
+                <option key={m} value={m}>{m} mile{m === 1 ? "" : "s"}</option>
+              ))}
+            </select>
             <Filter label="All districts" options={districts} value={fDistrict} onChange={setFDistrict} />
             <Filter label="All agents" options={agents} value={fAgent} onChange={setFAgent} />
-            <Filter
-              label="Open"
-              options={[...STAGES]}
-              value={fStage}
-              onChange={setFStage}
-              render={(s) => STAGE_LABEL[s as Stage]}
-            />
-            {area && (
-              <button
-                type="button"
-                onClick={() => setArea(null)}
-                title="Clear the map area"
-                className="flex items-center gap-2 whitespace-nowrap rounded-full border border-accent-dark bg-accent-soft/50 px-3.5 py-2 text-[12px] font-semibold text-accent-dark"
-              >
-                Map area · {area.size} <span className="text-[10px]">✕</span>
-              </button>
+            {view === "list" && (
+              <Filter label="Open" options={[...STAGES]} value={fStage} onChange={setFStage} render={(st) => STAGE_LABEL[st as Stage]} />
             )}
-            <span className={`ml-auto flex items-center gap-1 rounded-full border border-line/80 p-0.5 ${embedded ? "hidden" : ""}`}>
+            <button
+              type="submit"
+              disabled={nearBusy}
+              className="press-wobble rounded-full bg-ink px-5 py-2.5 text-[12.5px] font-semibold text-page disabled:opacity-40"
+            >
+              {nearBusy ? "Placing..." : "Search"}
+            </button>
+            <span className={`flex items-center gap-1 rounded-full border border-line/80 p-0.5 ${embedded ? "hidden" : ""}`}>
               {(["map", "list"] as const).map((v) => (
                 <button
                   key={v}
                   type="button"
                   onClick={() => setView(v)}
-                  className={`rounded-full px-3.5 py-1.5 text-[12px] transition-colors ${
-                    view === v ? "bg-ink text-page" : "text-muted hover:text-ink"
-                  }`}
+                  className={`rounded-full px-3.5 py-1.5 text-[12px] transition-colors ${view === v ? "bg-ink text-page" : "text-muted hover:text-ink"}`}
                 >
                   {v === "map" ? "Map" : "List"}
                 </button>
               ))}
             </span>
             {view === "list" && <ColumnCustomiser cols={cols} />}
-          </div>
+          </form>
+          {(near || area || nearError) && (
+            <div className="mt-2.5 flex flex-wrap items-center gap-2 px-1">
+              {near && (
+                <button
+                  type="button"
+                  onClick={() => { setNear(null); setNearQuery(""); setQ(""); }}
+                  title="Clear the address search"
+                  className="flex items-center gap-2 whitespace-nowrap rounded-full border border-accent-dark bg-accent-soft/50 px-3.5 py-1.5 text-[12px] font-semibold text-accent-dark"
+                >
+                  Within {radius} mile{radius === 1 ? "" : "s"} of {near.label} <span className="text-[10px]">✕</span>
+                </button>
+              )}
+              {area && (
+                <button
+                  type="button"
+                  onClick={() => setArea(null)}
+                  title="Clear the map area"
+                  className="flex items-center gap-2 whitespace-nowrap rounded-full border border-accent-dark bg-accent-soft/50 px-3.5 py-1.5 text-[12px] font-semibold text-accent-dark"
+                >
+                  Map area · {area.size} <span className="text-[10px]">✕</span>
+                </button>
+              )}
+              {nearError && <span className="text-[11.5px] text-red-700">{nearError}</span>}
+            </div>
+          )}
+        </div>
 
+        <div className="fade-up mt-3 min-w-0 rounded-2xl border border-line/80 bg-panel p-3" style={{ animationDelay: "0.1s" }}>
           {loading ? (
             <div className="flex items-center gap-3 py-16 text-[12.5px] text-muted">
               <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-line border-t-ink" />
@@ -580,7 +605,7 @@ export default function RadarBoard({
             </div>
           ) : view === "map" ? (
             <>
-              <div className={`mt-4 min-h-[420px] ${embedded ? "h-[calc(100vh-330px)]" : "h-[calc(100vh-380px)]"}`}>
+              <div className={`min-h-[420px] overflow-hidden rounded-xl ${embedded ? "h-[calc(100vh-300px)]" : "h-[calc(100vh-380px)]"}`}>
                 <RadarMap
                   prospects={mapList}
                   openId={openId}
@@ -589,7 +614,7 @@ export default function RadarBoard({
                   colourBy={SIGNAL_ORDER.filter((k) => signalsOn.has(k)).sort((a, b) => SIGNALS[b].weight - SIGNALS[a].weight)}
                 />
               </div>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-[11.5px] text-muted">
+              <div className="mt-2.5 flex flex-wrap items-center justify-between gap-3 px-1 pb-0.5 text-[11.5px] text-muted">
                 <span>
                   {mapList.length < book.length
                     ? `Showing the ${MAP_CAP} strongest of ${book.length.toLocaleString("en-GB")}. Search an address to see everything around it.`
@@ -612,7 +637,7 @@ export default function RadarBoard({
             </>
           ) : (
             <>
-              <div className="mt-4">
+              <div>
                 <DataTable
                   cols={cols}
                   rows={visible}
