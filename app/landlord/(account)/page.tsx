@@ -2,7 +2,16 @@ import LandlordDashboard from "@/components/landlord/Dashboard";
 import LandlordDocuments from "@/components/LandlordDocuments";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { Pill } from "@/components/Wire";
-import { currentLandlord, landlordJourneys, landlordProperties, type AppraisalJourney } from "@/lib/landlord-account";
+import {
+  currentLandlord,
+  landlordDocuments,
+  landlordJourneys,
+  landlordMessages,
+  landlordProperties,
+  type AppraisalJourney,
+  type LandlordDocument,
+  type LandlordMessage,
+} from "@/lib/landlord-account";
 import { geocode } from "@/lib/geocode";
 import { DECK_KINDS } from "@/lib/present";
 import { STAGES, stepsForStage, type LandlordView, type Stage } from "@/lib/landlord-view";
@@ -22,14 +31,19 @@ const dayLong = (iso: string | null | undefined) =>
  */
 export default async function LandlordHome() {
   const me = (await currentLandlord())!;
-  const [journeys, managed] = await Promise.all([landlordJourneys(me), landlordProperties(me)]);
+  const [journeys, managed, docs, msgs] = await Promise.all([
+    landlordJourneys(me),
+    landlordProperties(me),
+    landlordDocuments(me.id),
+    landlordMessages(me.id),
+  ]);
   const first = me.name.split(/\s+/)[0] || me.name;
 
   const open = journeys
     .filter((j) => j.stage !== "lost")
     .sort((a, b) => Number(a.stage === "won") - Number(b.stage === "won") || b.appraisal.createdAt.localeCompare(a.appraisal.createdAt));
 
-  const view = open[0] ? await appraisalView(open[0], first) : managed[0] ? managedView(managed[0], first) : null;
+  const view = open[0] ? await appraisalView(open[0], first, docs, msgs) : managed[0] ? managedView(managed[0], first) : null;
   const rest = open[0] ? managed : managed.slice(1);
 
   if (!view) {
@@ -53,9 +67,8 @@ export default async function LandlordHome() {
       upload={
         open[0] ? (
           <LandlordDocuments
-            accountId={me.id}
-            wanted={view.documents.filter((d) => d.state === "missing").map((d) => d.title)}
-            compact
+            appraisalId={open[0].appraisal.id}
+            wanted={(["id", "ownership", "gas", "eicr", "epc"] as const).filter((k) => !docs.some((d) => d.kind === k))}
           />
         ) : undefined
       }
@@ -85,7 +98,16 @@ function stageOf(j: AppraisalJourney): Stage {
   return "valuation";
 }
 
-async function appraisalView(j: AppraisalJourney, first: string): Promise<LandlordView> {
+/** The documents a let needs, in the order we ask for them. */
+const REQUIRED: Array<{ kind: LandlordDocument["kind"]; title: string; missing: string }> = [
+  { kind: "id", title: "Photo ID", missing: "Missing" },
+  { kind: "ownership", title: "Proof of ownership", missing: "Missing  •  a title register or mortgage statement" },
+  { kind: "gas", title: "Gas safety certificate (CP12)", missing: "Missing, if there is gas" },
+  { kind: "eicr", title: "Electrical safety report (EICR)", missing: "Missing" },
+  { kind: "epc", title: "Energy Performance Certificate (EPC)", missing: "Missing" },
+];
+
+async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordDocument[], msgs: LandlordMessage[]): Promise<LandlordView> {
   const a = j.appraisal;
   const latest = j.decks[0] ?? null;
   const post = j.decks.find((d) => d.kind === "post-appraisal") ?? null;
@@ -94,7 +116,6 @@ async function appraisalView(j: AppraisalJourney, first: string): Promise<Landlo
   const signUrl = post?.deck.terms?.signUrl ?? null;
   const signed = j.signed.length > 0;
   const agentName = a.agent ?? deckAgent?.name ?? null;
-  const agentEmail = deckAgent?.email ?? null;
   const stage = stageOf(j);
   const at = STAGES.findIndex((s) => s.id === stage);
   const visitDay = dayLong(a.appointmentAt);
@@ -119,17 +140,33 @@ async function appraisalView(j: AppraisalJourney, first: string): Promise<Landlo
     state: i < at ? "done" : i === at ? "current" : "upcoming",
   }));
 
+  /* What is on the file. An upload of a kind ticks that row and links to the
+     file; the EPC also counts as in if the deck found one on the register. */
+  const mine = docs.filter((d) => !d.appraisalId || d.appraisalId === a.id);
+  const uploaded = (kind: LandlordDocument["kind"]) => mine.find((d) => d.kind === kind) ?? null;
   const documents: LandlordView["documents"] = [
-    { title: "Terms of business", sub: signed ? `Signed  •  ${day(j.signed[0].signedAt) ?? ""}` : signUrl ? "Ready to sign" : "On its way from your agent", state: signed ? "uploaded" : "pending" },
-    { title: "Photo ID and proof of ownership", sub: "Missing", state: "missing" },
-    { title: "Gas safety certificate (CP12)", sub: "Missing, if there is gas", state: "missing" },
-    { title: "Electrical safety report (EICR)", sub: "Missing", state: "missing" },
-    { title: "Energy Performance Certificate (EPC)", sub: property?.epc ? `On record  •  rating ${property.epc}` : "Missing", state: property?.epc ? "uploaded" : "missing" },
+    {
+      title: "Terms of business",
+      sub: signed ? `Signed  •  ${day(j.signed[0].signedAt) ?? ""}` : signUrl ? "Ready to sign" : "On its way from your agent",
+      state: signed ? "uploaded" : "pending",
+      href: signed ? `/api/landlord/signed/${j.signed[0].submitterId}` : null,
+    },
+    ...REQUIRED.map((r) => {
+      const u = uploaded(r.kind);
+      if (u) return { title: r.title, sub: `Uploaded  •  ${day(u.uploadedAt) ?? ""}`, state: "uploaded" as const, href: `/api/landlord/documents/${u.id}` };
+      if (r.kind === "epc" && property?.epc) return { title: r.title, sub: `On record  •  rating ${property.epc}`, state: "uploaded" as const, href: null };
+      return { title: r.title, sub: r.missing, state: "missing" as const, href: null };
+    }),
+    ...mine.filter((d) => d.kind === "other").map((d) => ({ title: d.name, sub: `Uploaded  •  ${day(d.uploadedAt) ?? ""}`, state: "uploaded" as const, href: `/api/landlord/documents/${d.id}` })),
   ];
-  const have = documents.filter((d) => d.state === "uploaded").length;
-  const readiness = Math.round(((at + have / documents.length) / STAGES.length) * 100);
+  const required = documents.filter((d) => REQUIRED.some((r) => r.title === d.title));
+  const have = required.filter((d) => d.state === "uploaded").length;
+  const allIn = have === required.length;
+  const readiness = Math.round(((at + have / required.length) / STAGES.length) * 100);
 
   const activity: LandlordView["activity"] = [
+    ...mine.map((d) => ({ title: `${REQUIRED.find((r) => r.kind === d.kind)?.title ?? d.name} received`, sub: "Filed on your property", date: day(d.uploadedAt) ?? "", icon: "upload" })),
+    ...msgs.filter((m) => m.direction === "landlord").slice(-2).map((m) => ({ title: "Message sent", sub: m.body.length > 60 ? `${m.body.slice(0, 60)}…` : m.body, date: day(m.sentAt) ?? "", icon: "message" })),
     ...j.signed.map((s) => ({ title: "Terms signed", sub: s.name, date: day(s.signedAt) ?? "", icon: "pencil" })),
     ...j.decks.map((d) => ({
       title: `${DECK_KINDS.find((k) => k.id === d.kind)?.label ?? "Presentation"} shared`,
@@ -139,11 +176,14 @@ async function appraisalView(j: AppraisalJourney, first: string): Promise<Landlo
     })),
     ...(a.valuation != null ? [{ title: "Property valued", sub: `We agreed ${money(a.valuation)} a month`, date: day(a.valuedAt) ?? "", icon: "coin" }] : []),
     ...(a.appointmentAt ? [{ title: "Visit booked", sub: `${agentName ?? "Your agent"} came round`, date: day(a.appointmentAt) ?? "", icon: "calendar" }] : []),
-  ].slice(0, 5);
+  ]
+    .sort((x, y) => y.date.localeCompare(x.date))
+    .slice(0, 6);
 
   return {
     greeting: `Hello, ${first}`,
     intro: "Your property journey is underway. Here's what you need to know.",
+    appraisalId: a.id,
     stage,
     journey,
     property: {
@@ -160,16 +200,18 @@ async function appraisalView(j: AppraisalJourney, first: string): Promise<Landlo
     },
     steps: stepsForStage(stage, {
       presentation: { id: "presentation", label: "View presentation", sub: latest ? `${deckLabel}, from ${latest.authorName || agentName || "your agent"}` : "Lands here before the visit", href: latest ? `/present/${latest.token}` : null, icon: "analytics", external: true },
-      sign: { id: "sign", label: signed ? "Your contract" : "Sign your contract", sub: signed ? "Signed. It lives in Documents" : signUrl ? "Review and sign your management terms" : "On its way from your agent", href: signUrl, icon: "pencil", external: true },
-      compliance: { id: "compliance", label: "Upload compliance documents", sub: "Add EICR, EPC and other essentials", href: "#documents", icon: "upload" },
-      message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: agentEmail ? `mailto:${agentEmail}?subject=${encodeURIComponent(`About ${a.address}`)}` : null, icon: "message", external: true },
+      /* Signed: off the list. Not yet: the tile opens the signing here. */
+      sign: { id: "sign", label: "Sign your contract", sub: a.valuation != null ? "Review and sign your management terms" : "Follows the valuation", href: null, icon: "pencil", action: "sign", done: signed },
+      /* Everything in: off the list. */
+      compliance: { id: "compliance", label: "Upload compliance documents", sub: `${required.length - have} of ${required.length} still to send`, href: "#documents", icon: "upload", done: allIn },
+      message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: null, icon: "message", action: "message" },
       listing: { id: "listing", label: "See your listing", sub: "Live on the portals", href: null, icon: "home" },
       viewings: { id: "viewings", label: "Viewings and offers", sub: "Who has been, and what they said", href: null, icon: "key" },
     }),
     documents,
     snapshot: {
       readinessPct: readiness,
-      note: at === 0 ? "It starts with the visit." : `${documents.length - have} document${documents.length - have === 1 ? "" : "s"} still to send.`,
+      note: at === 0 ? "It starts with the visit." : allIn ? "Everything we need is in." : `${required.length - have} document${required.length - have === 1 ? "" : "s"} still to send.`,
       lines: [
         ["Asking rent", a.valuation != null ? `${money(a.valuation)} / month` : "After the visit"],
         ["Service", j.serviceLabel ?? "To be agreed"],
@@ -179,6 +221,7 @@ async function appraisalView(j: AppraisalJourney, first: string): Promise<Landlo
       ],
     },
     activity,
+    messages: msgs.map((m) => ({ id: m.id, from: m.direction, body: m.body, sentAt: m.sentAt, emailed: Boolean(m.emailedAt) })),
     agent: deckAgent
       ? { name: deckAgent.name, title: deckAgent.title, phone: deckAgent.phone, email: deckAgent.email, photo: deckAgent.photo }
       : agentName

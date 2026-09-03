@@ -181,6 +181,7 @@ export const JOURNEY: Array<{ id: JourneyBeat; label: string }> = [
 ];
 
 export interface SignedTerms {
+  submitterId: string;
   name: string;
   signedAt: string | null;
 }
@@ -222,7 +223,7 @@ export async function landlordJourneys(a: LandlordAccount): Promise<AppraisalJou
       decks.sort((x, y) => y.createdAt.localeCompare(x.createdAt));
       const signed: SignedTerms[] = signedRows
         .filter((r) => r.completed_at)
-        .map((r) => ({ name: r.template_name, signedAt: r.completed_at }));
+        .map((r) => ({ submitterId: String(r.submitter_id), name: r.template_name, signedAt: r.completed_at }));
       const stage = effectiveStage(ap, now);
       return {
         appraisal: ap,
@@ -234,4 +235,169 @@ export async function landlordJourneys(a: LandlordAccount): Promise<AppraisalJou
       };
     })
   );
+}
+
+/** Does this appraisal belong to the signed-in landlord? Checked before any read or write on it. */
+export async function landlordOwnsAppraisal(a: LandlordAccount, appraisalId: string): Promise<boolean> {
+  if (!appraisalId) return false;
+  const mine = await appraisalsFor(normaliseEmail(a.email));
+  return mine.some((x) => x.id === appraisalId);
+}
+
+/* ----------------------------------------------------------- documents -- */
+
+export type DocKind = "id" | "ownership" | "gas" | "eicr" | "epc" | "other";
+
+export const DOC_KINDS: Array<{ id: DocKind; label: string }> = [
+  { id: "id", label: "Photo ID" },
+  { id: "ownership", label: "Proof of ownership" },
+  { id: "gas", label: "Gas safety certificate (CP12)" },
+  { id: "eicr", label: "Electrical safety report (EICR)" },
+  { id: "epc", label: "Energy Performance Certificate (EPC)" },
+  { id: "other", label: "Something else" },
+];
+
+export const isDocKind = (v: string): v is DocKind => DOC_KINDS.some((k) => k.id === v);
+
+export interface LandlordDocument {
+  id: string;
+  accountId: string;
+  appraisalId: string | null;
+  kind: DocKind;
+  name: string;
+  r2Key: string;
+  bytes: number | null;
+  contentType: string;
+  uploadedAt: string;
+}
+
+type DocRow = {
+  id: string;
+  account_id: string;
+  appraisal_id: string | null;
+  kind: string;
+  name: string;
+  r2_key: string;
+  bytes: number | null;
+  content_type: string;
+  uploaded_at: Date | string;
+};
+
+const docShape = (r: DocRow): LandlordDocument => ({
+  id: r.id,
+  accountId: r.account_id,
+  appraisalId: r.appraisal_id,
+  kind: isDocKind(r.kind) ? r.kind : "other",
+  name: r.name,
+  r2Key: r.r2_key,
+  bytes: r.bytes,
+  contentType: r.content_type,
+  uploadedAt: new Date(r.uploaded_at).toISOString(),
+});
+
+export async function landlordDocuments(accountId: string): Promise<LandlordDocument[]> {
+  if (!hasDb()) return [];
+  const rows = await q<DocRow>(
+    `SELECT id, account_id, appraisal_id, kind, name, r2_key, bytes, content_type, uploaded_at
+       FROM os_landlord_documents WHERE account_id = $1 ORDER BY uploaded_at DESC`,
+    [accountId]
+  ).catch(() => [] as DocRow[]);
+  return rows.map(docShape);
+}
+
+export async function landlordDocument(accountId: string, id: string): Promise<LandlordDocument | null> {
+  if (!hasDb()) return null;
+  const rows = await q<DocRow>(
+    `SELECT id, account_id, appraisal_id, kind, name, r2_key, bytes, content_type, uploaded_at
+       FROM os_landlord_documents WHERE account_id = $1 AND id = $2`,
+    [accountId, id]
+  ).catch(() => [] as DocRow[]);
+  return rows[0] ? docShape(rows[0]) : null;
+}
+
+export async function recordLandlordDocument(d: {
+  accountId: string;
+  appraisalId: string | null;
+  kind: DocKind;
+  name: string;
+  r2Key: string;
+  bytes: number;
+  contentType: string;
+}): Promise<LandlordDocument> {
+  const rows = await q<DocRow>(
+    `INSERT INTO os_landlord_documents (id, account_id, appraisal_id, kind, name, r2_key, bytes, content_type)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+     RETURNING id, account_id, appraisal_id, kind, name, r2_key, bytes, content_type, uploaded_at`,
+    [uid(), d.accountId, d.appraisalId, d.kind, d.name, d.r2Key, d.bytes, d.contentType]
+  );
+  return docShape(rows[0]);
+}
+
+/* ------------------------------------------------------------ messages -- */
+
+export interface LandlordMessage {
+  id: string;
+  appraisalId: string | null;
+  direction: "landlord" | "agent";
+  body: string;
+  toEmail: string;
+  sentAt: string;
+  emailedAt: string | null;
+  emailError: string;
+}
+
+type MsgRow = {
+  id: string;
+  appraisal_id: string | null;
+  direction: string;
+  body: string;
+  to_email: string;
+  sent_at: Date | string;
+  emailed_at: Date | string | null;
+  email_error: string;
+};
+
+const msgShape = (r: MsgRow): LandlordMessage => ({
+  id: r.id,
+  appraisalId: r.appraisal_id,
+  direction: r.direction === "agent" ? "agent" : "landlord",
+  body: r.body,
+  toEmail: r.to_email,
+  sentAt: new Date(r.sent_at).toISOString(),
+  emailedAt: r.emailed_at ? new Date(r.emailed_at).toISOString() : null,
+  emailError: r.email_error ?? "",
+});
+
+export async function landlordMessages(accountId: string): Promise<LandlordMessage[]> {
+  if (!hasDb()) return [];
+  const rows = await q<MsgRow>(
+    `SELECT id, appraisal_id, direction, body, to_email, sent_at, emailed_at, email_error
+       FROM os_landlord_messages WHERE account_id = $1 ORDER BY sent_at ASC LIMIT 200`,
+    [accountId]
+  ).catch(() => [] as MsgRow[]);
+  return rows.map(msgShape);
+}
+
+export async function recordLandlordMessage(m: {
+  accountId: string;
+  appraisalId: string | null;
+  body: string;
+  toEmail: string;
+}): Promise<LandlordMessage> {
+  const rows = await q<MsgRow>(
+    `INSERT INTO os_landlord_messages (id, account_id, appraisal_id, direction, body, to_email)
+     VALUES ($1,$2,$3,'landlord',$4,$5)
+     RETURNING id, appraisal_id, direction, body, to_email, sent_at, emailed_at, email_error`,
+    [uid(), m.accountId, m.appraisalId, m.body, m.toEmail]
+  );
+  return msgShape(rows[0]);
+}
+
+export async function markMessageEmailed(id: string, error: string | null): Promise<void> {
+  await q(
+    error
+      ? `UPDATE os_landlord_messages SET email_error = $2 WHERE id = $1`
+      : `UPDATE os_landlord_messages SET emailed_at = NOW(), email_error = '' WHERE id = $1`,
+    error ? [id, error.slice(0, 500)] : [id]
+  ).catch(() => {});
 }

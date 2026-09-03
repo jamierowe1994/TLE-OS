@@ -42,12 +42,34 @@ export interface ViewStep {
   href: string | null;
   icon: string;
   external?: boolean;
+  /**
+   * Done steps come OFF the list. James, 2 Sep: "if they do it, it will take
+   * it off the list... it will just show what's left."
+   */
+  done?: boolean;
+  /**
+   * A step that does something here rather than linking away: "sign" opens
+   * a DocuSeal session for this landlord, "message" opens the thread with
+   * their agent. The live home sets these; the sample links.
+   */
+  action?: "sign" | "message";
 }
 
 export interface ViewDocument {
   title: string;
   sub: string;
   state: "uploaded" | "missing" | "pending";
+  /** Where to open it, once it is ours to open. */
+  href?: string | null;
+}
+
+export interface ViewMessage {
+  id: string;
+  from: "landlord" | "agent";
+  body: string;
+  sentAt: string;
+  /** Reached the agent's inbox. False means stored on the file, not yet emailed. */
+  emailed: boolean;
 }
 
 export interface ViewActivity {
@@ -60,6 +82,8 @@ export interface ViewActivity {
 export interface LandlordView {
   greeting: string;
   intro: string;
+  /** The OS appraisal this file is about, for the tiles that act on it. */
+  appraisalId?: string | null;
   stage: Stage;
   journey: JourneyStop[];
   property: {
@@ -81,6 +105,7 @@ export interface LandlordView {
   documents: ViewDocument[];
   snapshot: { readinessPct: number; note: string; lines: Array<[string, string]> };
   activity: ViewActivity[];
+  messages?: ViewMessage[];
   agent: { name: string; title?: string | null; phone?: string | null; email?: string | null; photo?: string | null } | null;
 }
 
@@ -100,5 +125,8 @@ export function stepsForStage(stage: Stage, all: Record<ViewStep["id"], ViewStep
     viewings: ["viewings", "listing", "message", "compliance"],
     let: ["viewings", "message", "compliance", "listing"],
   };
-  return order[stage].map((id) => all[id]).filter(Boolean).slice(0, 4);
+  return order[stage]
+    .map((id) => all[id])
+    .filter((s): s is ViewStep => Boolean(s) && !s.done)
+    .slice(0, 4);
 }

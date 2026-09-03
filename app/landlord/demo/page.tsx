@@ -51,7 +51,7 @@ const RAJ: LandlordView = {
     presentation: { id: "presentation", label: "View presentation", sub: "See how we'll let your property for you", href: "#", icon: "analytics", external: true },
     sign: { id: "sign", label: "Sign your contract", sub: "Review and sign your management terms", href: "#", icon: "pencil", external: true },
     compliance: { id: "compliance", label: "Upload compliance documents", sub: "Add EICR, EPC and other essentials", href: "#documents", icon: "upload" },
-    message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: "mailto:sam@thelettingexperts.co.uk", icon: "message", external: true },
+    message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: null, icon: "message", action: "message" },
     listing: { id: "listing", label: "See your listing", sub: "Live on Rightmove and Zoopla", href: null, icon: "home" },
     viewings: { id: "viewings", label: "Viewings and offers", sub: "Who has been, and what they said", href: null, icon: "key" },
   }),
@@ -77,6 +77,10 @@ const RAJ: LandlordView = {
     { title: "Instruction started", sub: "Let's get everything in place", date: "12 May 2026", icon: "note" },
     { title: "Property valued", sub: "We've agreed your asking rent", date: "12 May 2026", icon: "pencil" },
   ],
+  messages: [
+    { id: "m1", from: "landlord", body: "Hi Sam, is the EPC from 2023 still fine to use?", sentAt: "2026-05-12T10:12:00Z", emailed: true },
+    { id: "m2", from: "agent", body: "It is, Raj. Valid until 2033, so nothing to do there. The EICR is the one we need.", sentAt: "2026-05-12T10:40:00Z", emailed: true },
+  ],
   agent: { name: "Sam Whitaker", title: "Property Expert, Nottingham", phone: "0115 123 4567", email: "sam@thelettingexperts.co.uk", photo: null },
 };
 
@@ -85,11 +89,7 @@ export default function LandlordDemo() {
     <LandlordDashboard
       view={RAJ}
       upload={
-        <LandlordDocuments
-          accountId="raj-chauhan"
-          wanted={["Energy Performance Certificate (EPC)", "Right to rent ID"]}
-          compact
-        />
+        <LandlordDocuments sample wanted={["epc", "id"]} />
       }
       managed={
         <section className="rounded-[20px] border border-line/70 bg-panel p-5" data-search>

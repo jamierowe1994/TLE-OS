@@ -1,6 +1,8 @@
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyHero from "@/components/landlord/PropertyHero";
+import SignTile from "@/components/landlord/SignTile";
+import MessageTile from "@/components/landlord/MessageTile";
 import type { LandlordView, ViewStep } from "@/lib/landlord-view";
 
 /**
@@ -122,9 +124,23 @@ export default function LandlordDashboard({
         <section className="rounded-[20px] border border-line/70 bg-panel p-5" data-search>
           <h2 className="text-[17px]">Next steps</h2>
           <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
-            {v.steps.map((s) => (
-              <StepTile key={s.id} s={s} />
-            ))}
+            {v.steps.map((s) =>
+              s.action === "sign" && v.appraisalId ? (
+                <SignTile key={s.id} appraisalId={v.appraisalId} label={s.label} sub={s.sub} icon={s.icon} />
+              ) : s.action === "message" ? (
+                <MessageTile
+                  key={s.id}
+                  appraisalId={v.appraisalId ?? null}
+                  agentName={v.agent?.name ?? null}
+                  messages={v.messages ?? []}
+                  label={s.label}
+                  sub={s.sub}
+                  icon={s.icon}
+                />
+              ) : (
+                <StepTile key={s.id} s={s} />
+              )
+            )}
           </div>
         </section>
       </div>
@@ -178,7 +194,11 @@ export default function LandlordDashboard({
                   <DoodleIcon name={d.state === "uploaded" ? "shield" : "doc"} size={13} />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-semibold">{d.title}</span>
+                  {d.href ? (
+                    <a href={d.href} target="_blank" rel="noreferrer" className="block truncate text-[13px] font-semibold hover:underline">{d.title}</a>
+                  ) : (
+                    <span className="block truncate text-[13px] font-semibold">{d.title}</span>
+                  )}
                   <span className="block truncate text-[11.5px] text-muted">{d.sub}</span>
                 </span>
                 <span

@@ -1442,6 +1442,46 @@ CREATE TABLE IF NOT EXISTS os_sales_sync (
   started_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   finished_at TIMESTAMPTZ
 );
+
+-- ── THE LANDLORD'S OWN RECORDS, added 2 Sep 2026 ─────────────────────────
+--
+-- What a landlord does from their file: the documents they upload and the
+-- messages they send. Keyed on os_portal_accounts, never on os_users - a
+-- customer's file must never be one join away from an office login.
+--
+-- Documents carry a KIND (id, ownership, gas, eicr, epc, other) because the
+-- point of recording them is that the file can say "the EPC is in" and take
+-- the ask off the landlord's list. The bytes live in R2 under
+-- documents/landlord/<account>/; the row is the index.
+CREATE TABLE IF NOT EXISTS os_landlord_documents (
+  id             TEXT PRIMARY KEY,
+  account_id     TEXT NOT NULL,
+  appraisal_id   TEXT,
+  kind           TEXT NOT NULL DEFAULT 'other',
+  name           TEXT NOT NULL DEFAULT '',
+  r2_key         TEXT NOT NULL,
+  bytes          INTEGER,
+  content_type   TEXT NOT NULL DEFAULT '',
+  uploaded_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_landlord_documents_account
+  ON os_landlord_documents (account_id, uploaded_at DESC);
+
+-- A message is stored first and emailed second, so a refused or failed email
+-- never loses what the landlord wrote. emailed_at / email_error say which.
+CREATE TABLE IF NOT EXISTS os_landlord_messages (
+  id             TEXT PRIMARY KEY,
+  account_id     TEXT NOT NULL,
+  appraisal_id   TEXT,
+  direction      TEXT NOT NULL DEFAULT 'landlord',
+  body           TEXT NOT NULL,
+  to_email       TEXT NOT NULL DEFAULT '',
+  sent_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  emailed_at     TIMESTAMPTZ,
+  email_error    TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS os_landlord_messages_account
+  ON os_landlord_messages (account_id, sent_at DESC);
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a
