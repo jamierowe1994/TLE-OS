@@ -105,7 +105,7 @@ function when(iso: string | null): string {
 }
 const pounds = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
 /** Big sums read better short: £2.16m. The exact figure sits in the tooltip. */
-const short = (n: number) => (n >= 1_000_000 ? `£${(n / 1_000_000).toFixed(2)}m` : pounds(n));
+const short = (n: number) => (n >= 1_000_000 ? `£${(n / 1_000_000).toFixed(2)}m` : n >= 100_000 ? `£${Math.round(n / 1000)}k` : pounds(n));
 
 export default function BondToday({
   data,
@@ -144,7 +144,7 @@ export default function BondToday({
   const pic = data?.picture;
 
   return (
-    <div className="mx-auto max-w-6xl pb-6">
+    <div className="w-full pb-6">
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -176,22 +176,20 @@ export default function BondToday({
       </form>
 
       {/* The tiles. */}
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 2xl:grid-cols-8">
+      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-6">
         <Tile tone="peach" icon="call" label="Nudges" value={s ? s.nudgesOpen : null} hint="to call today" onClick={() => go("nudges")} />
         <Tile tone="rose" icon="target" label="Flagged" value={s ? s.flagged : null} hint={s ? `across ${s.districts} districts` : ""} onClick={() => go("map")} />
         <Tile tone="butter" icon="star" label="New today" value={s ? s.newToday : null} hint={s?.lastSweep ? `swept ${when(s.lastSweep)}` : "not swept yet"} onClick={() => go("prospects")} />
         <Tile tone="lilac" icon="calendar" label="Anniversaries" value={s ? s.anniversariesSoon : null} hint="in the next 60 days" onClick={() => go("prospects")} />
         <Tile tone="mint" icon="home" label="Worked this week" value={s ? s.workedThisWeek : null} hint="properties touched" />
         <Tile tone="sky" icon="checklist" label="Appraisals booked" value={s ? s.appraisalsBooked : null} hint="from Bond" />
-        <Tile tone="butter" icon="user" label="Owners found" value={s ? s.ownersFound : null} hint={data?.providers.owner.connected ? "Land Registry" : "not connected"} onClick={() => go("owners")} />
-        <Tile tone="peach" icon="mail" label="Postcards sent" value={s ? s.postcardsSent : null} hint={data?.providers.postcard.connected ? "connected" : "not connected"} onClick={() => go("postcards")} />
       </div>
 
       {/* The picture. */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-[1.15fr_0.85fr_1.2fr]">
+      <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-[1.1fr_0.8fr_1.25fr]">
         <Card title="Opportunity" icon="magic-wand" delay="0.3s">
           {pic ? <Gauge score={pic.opportunity.avgScore} /> : <Loading />}
-          <div className="mt-2 grid grid-cols-3 gap-2">
+          <div className="mt-3 grid grid-cols-3 gap-3 xl:grid-cols-1 2xl:grid-cols-3">
             <Mini tone="lilac" label="Landlords" value={pic ? pic.opportunity.landlords.toLocaleString("en-GB") : "…"} hint="with a door in the patch" />
             <Mini tone="mint" label="Advertised rent" value={pic ? short(pic.opportunity.rentRoll) : "…"} hint={pic ? `pcm across ${pic.opportunity.rentDoors.toLocaleString("en-GB")} lets` : ""} />
             <Mini tone="butter" label="Doors flagged" value={pic ? pic.opportunity.flagged.toLocaleString("en-GB") : "…"} hint="in the patch" />
@@ -238,8 +236,8 @@ export default function BondToday({
       {/* The feed, with company. */}
       <section className="fade-up mt-4 overflow-hidden rounded-2xl border border-line bg-panel" style={{ animationDelay: "0.55s" }}>
         <div className="grid lg:grid-cols-[1fr_260px]">
-          <div className="p-5">
-            <h2 className="hand flex items-center gap-2 text-[16px]">
+          <div className="p-6">
+            <h2 className="hand flex items-center gap-2 text-[17px]">
               <DoodleIcon name="magic-wand" size={16} />
               What has happened
             </h2>
@@ -289,12 +287,12 @@ function Loading() {
 
 function Card({ title, icon, delay, children }: { title: string; icon: string; delay: string; children: React.ReactNode }) {
   return (
-    <section className="fade-up rounded-2xl border border-line bg-panel p-5" style={{ animationDelay: delay }}>
-      <h2 className="hand flex items-center gap-2 text-[16px]">
+    <section className="fade-up rounded-2xl border border-line bg-panel p-6" style={{ animationDelay: delay }}>
+      <h2 className="hand flex items-center gap-2 text-[17px]">
         <DoodleIcon name={icon} size={16} />
         {title}
       </h2>
-      <div className="mt-3">{children}</div>
+      <div className="mt-4">{children}</div>
     </section>
   );
 }
@@ -310,19 +308,19 @@ function Pill({ tone, children }: { tone: Tone; children: React.ReactNode }) {
 function Tile({ tone, icon, label, value, hint, onClick }: { tone: Tone; icon: string; label: string; value: number | null; hint?: string; onClick?: () => void }) {
   const inner = (
     <>
-      <div className="flex items-center gap-2.5">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl" style={{ background: TONES[tone].wash, color: TONES[tone].ink }}>
-          <DoodleIcon name={icon} size={15} />
+      <div className="flex min-w-0 flex-col items-start gap-2 2xl:flex-row 2xl:items-center 2xl:gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: TONES[tone].wash, color: TONES[tone].ink }}>
+          <DoodleIcon name={icon} size={16} />
         </span>
-        <p className="hand text-[13px] leading-tight">{label}</p>
+        <p className="hand line-clamp-2 min-w-0 text-[13.5px] leading-tight">{label}</p>
       </div>
-      <p className="figures mt-2.5 text-[28px] leading-none">
-        {value == null ? <span className="inline-block h-6 w-10 animate-pulse rounded bg-box" /> : value.toLocaleString("en-GB")}
+      <p className="figures mt-3 text-[34px] leading-none">
+        {value == null ? <span className="inline-block h-7 w-12 animate-pulse rounded bg-box" /> : value.toLocaleString("en-GB")}
       </p>
-      {hint ? <p className="mt-1.5 text-[11px] leading-snug text-muted">{hint}</p> : null}
+      {hint ? <p className="mt-2 text-[11.5px] leading-snug text-muted">{hint}</p> : null}
     </>
   );
-  const cls = "bond-tile fade-up rounded-2xl border border-line bg-panel p-4 text-left transition-[transform,border-color] hover:-translate-y-0.5 hover:border-ink";
+  const cls = "bond-tile fade-up min-w-0 rounded-2xl border border-line bg-panel p-4 text-left 2xl:p-5 transition-[transform,border-color] hover:-translate-y-0.5 hover:border-ink";
   return onClick ? (
     <button type="button" onClick={onClick} className={cls}>
       {inner}
@@ -334,10 +332,10 @@ function Tile({ tone, icon, label, value, hint, onClick }: { tone: Tone; icon: s
 
 function Mini({ tone, label, value, hint }: { tone: Tone; label: string; value: string; hint: string }) {
   return (
-    <div className="rounded-xl px-3 py-3" style={{ background: TONES[tone].wash }}>
-      <p className="text-[10.5px] font-semibold" style={{ color: TONES[tone].ink }}>{label}</p>
-      <p className="figures mt-1 text-[19px] leading-none" title={value}>{value}</p>
-      {hint && <p className="mt-1 text-[10px] leading-snug text-muted">{hint}</p>}
+    <div className="min-w-0 rounded-xl px-3 py-3 2xl:px-3.5" style={{ background: TONES[tone].wash }}>
+      <p className="truncate text-[10.5px] font-semibold" style={{ color: TONES[tone].ink }}>{label}</p>
+      <p className="figures mt-1.5 truncate text-[19px] leading-none 2xl:text-[22px]" title={value}>{value}</p>
+      {hint && <p className="mt-1 line-clamp-2 text-[10px] leading-snug text-muted">{hint}</p>}
     </div>
   );
 }
@@ -359,7 +357,7 @@ function Gauge({ score }: { score: number | null }) {
   const at = Math.max(0, Math.min(100, score ?? 0));
   const [mx, my] = polar(100, 96, 78, (at / 100) * 180);
   return (
-    <div className="relative mx-auto max-w-[300px]">
+    <div className="relative mx-auto max-w-[360px]">
       <svg viewBox="0 0 200 110" className="w-full">
         <path d={arc(0, 100, 62)} fill="none" stroke="var(--line)" strokeWidth="1" strokeDasharray="2 4" />
         <path d={arc(0, 34)} fill="none" stroke="var(--bond-lilac-ink)" strokeOpacity="0.55" strokeWidth="18" strokeLinecap="round" className="bond-draw" pathLength={1} />
@@ -378,7 +376,7 @@ function Gauge({ score }: { score: number | null }) {
       </svg>
       <div className="-mt-3 flex items-center justify-between px-3 text-[11px] text-muted">
         <span>Low</span>
-        <span className="rounded-full border border-line bg-panel px-2.5 py-0.5 text-[10.5px] text-ink">Patch opportunity</span>
+        <span className="whitespace-nowrap rounded-full border border-line bg-panel px-2.5 py-0.5 text-[10.5px] text-ink">Patch opportunity</span>
         <span>High</span>
       </div>
       <p className="mt-1.5 text-center text-[10.5px] text-muted">{score == null ? "No landlords scored in the patch yet" : "Average opportunity score of the landlords in the patch"}</p>
@@ -405,9 +403,9 @@ function Condition({ c }: { c: TodayPicture["condition"] }) {
   return (
     <div>
       <div className="flex items-stretch gap-5">
-        <div className="relative flex w-20 flex-col justify-between gap-1.5">
+        <div className="relative flex w-24 flex-col justify-between gap-2">
           {stack.map((b, i) => (
-            <span key={i} className="fade-up h-4 rounded-md" style={{ background: b.tone, opacity: b.tone.includes("box") ? 1 : 0.75, animationDelay: `${0.05 * i}s` }} />
+            <span key={i} className="fade-up h-5 rounded-md" style={{ background: b.tone, opacity: b.tone.includes("box") ? 1 : 0.75, animationDelay: `${0.05 * i}s` }} />
           ))}
         </div>
         <div className="flex flex-col justify-between py-0.5 text-[10.5px] text-muted">
@@ -416,7 +414,7 @@ function Condition({ c }: { c: TodayPicture["condition"] }) {
         </div>
         <div className="flex flex-1 flex-col items-center justify-center text-center">
           <p className="text-[11px] text-muted">Condition score</p>
-          <p className="figures mt-1 text-[48px] leading-none">{c.score == null ? "-" : c.score}</p>
+          <p className="figures mt-2 text-[64px] leading-none">{c.score == null ? "-" : c.score}</p>
           <p className="mt-2 text-[10.5px] text-muted">{c.doors ? `${c.doors.toLocaleString("en-GB")} doors with a certificate` : "no certificates matched yet"}</p>
         </div>
       </div>

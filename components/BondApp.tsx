@@ -209,7 +209,7 @@ export default function BondApp() {
       <div
         className={`flex h-full transition-opacity duration-700 ${phase === "in" ? "opacity-100" : "pointer-events-none opacity-0"}`}
       >
-        <aside className="sticky top-3 mb-3 ml-3 mt-3 hidden h-[calc(100vh-24px)] w-60 shrink-0 flex-col overflow-hidden rounded-3xl border border-line/80 bg-panel px-4 py-5 lg:flex">
+        <aside className="sticky top-3 mb-3 ml-3 mt-3 hidden h-[calc(100vh-24px)] w-60 shrink-0 flex-col overflow-hidden rounded-3xl border border-line/80 bg-box px-4 py-5 lg:flex">
           <div className="flex items-center gap-2 px-1">
             <span className="hand text-[26px] leading-none">Bond</span>
           </div>
@@ -317,7 +317,7 @@ export default function BondApp() {
             ))}
           </nav>
 
-          <main className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+          <main className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
             {room === "today" && (
               <BondToday data={today} error={todayError} quick={quick} setQuick={setQuick} search={runSearch} go={setRoom} />
             )}

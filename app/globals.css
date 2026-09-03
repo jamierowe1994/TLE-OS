@@ -820,11 +820,13 @@ h1, h2, h3, h4, h5 {
 .bond-skin {
   --ink: #2b2a28;
   --muted: #7a776f;
-  --line: #e8e3da;
-  --page: #faf8f4;
+  --line: #e6e3dd;
+  /* Just off white, as the OS. The rail sits on --box, a shade warmer, so
+     the two read as different surfaces without a beige page. */
+  --page: #fbfbfa;
   --card: #ffffff;
   --panel: #ffffff;
-  --box: #f6f3ee;
+  --box: #f4f3f0;
   --accent: #e8a08d;
   --accent-dark: #c2664f;
   --accent-soft: #fbe4dc;
