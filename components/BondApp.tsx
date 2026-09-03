@@ -7,6 +7,7 @@ import RadarBoard from "@/components/RadarBoard";
 import { PressButton } from "@/components/Bits";
 import BondAsk, { type AskFocus } from "@/components/BondAsk";
 import BondNudges from "@/components/BondNudges";
+import BondToday, { rememberSearch, type TodayData } from "@/components/BondToday";
 
 /**
  * Bond — the prospecting workspace.
@@ -43,37 +44,11 @@ const ROOMS: { key: Room; label: string; icon: string }[] = [
   { key: "postcards", label: "Postcards", icon: "mail" },
 ];
 
-interface Summary {
-  flagged: number;
-  newToday: number;
-  workedThisWeek: number;
-  appraisalsBooked: number;
-  ownersFound: number;
-  postcardsSent: number;
-  anniversariesSoon: number;
-  nudgesOpen: number;
-  lastSweep: string | null;
-  districts: number;
-}
-interface Activity {
-  id: number;
-  actor: string;
-  kind: string;
-  property_key: string | null;
-  address: string;
-  detail: string;
-  at: string;
-}
 interface Provider {
   connected: boolean;
   name: string | null;
   cost: string;
   needs: string[];
-}
-interface TodayData {
-  summary: Summary;
-  activity: Activity[];
-  providers: { owner: Provider; postcard: Provider };
 }
 
 function ago(iso: string): string {
@@ -83,6 +58,11 @@ function ago(iso: string): string {
   if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
   const d = Math.floor(s / 86400);
   return d === 1 ? "yesterday" : `${d} days ago`;
+}
+
+function greeting(): string {
+  const h = new Date().getHours();
+  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
 }
 
 function when(iso: string | null): string {
@@ -181,8 +161,10 @@ export default function BondApp() {
   }, []);
 
   useEffect(() => {
+    if (patch == null) return;
     let gone = false;
-    fetch("/api/bond/summary", { cache: "no-store" })
+    setToday(null);
+    fetch(`/api/bond/summary?districts=${encodeURIComponent(patch.join(","))}`, { cache: "no-store" })
       .then(async (r) => {
         const j = await r.json();
         if (gone) return;
@@ -193,7 +175,7 @@ export default function BondApp() {
         if (!gone) setTodayError("Bond did not answer.");
       });
     return () => { gone = true; };
-  }, [room === "today"]);
+  }, [room === "today", patch]);
 
   /* No Escape-to-leave. The property panel and the new-lead panel both close
      on Escape, and a second listener here took people out of Bond when they
@@ -202,12 +184,17 @@ export default function BondApp() {
   function quickSearch(e: React.FormEvent) {
     e.preventDefault();
     if (!quick.trim()) return;
-    setNearPreset(quick.trim());
+    runSearch(quick.trim());
+  }
+  function runSearch(term: string) {
+    rememberSearch(term);
+    setQuick(term);
+    setNearPreset(term);
     setRoom("map");
   }
 
   return (
-    <div className="fixed inset-0 z-[105] overflow-hidden bg-page text-ink">
+    <div className="bond-skin fixed inset-0 z-[105] overflow-hidden bg-page text-ink">
       {/* The word. */}
       <div
         className={`pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-700 ${
@@ -235,7 +222,7 @@ export default function BondApp() {
                 type="button"
                 onClick={() => setRoom(r.key)}
                 className={`hand flex items-center rounded-xl px-3 py-2.5 text-left text-[13.5px] transition-colors ${
-                  room === r.key ? "bg-accent-soft/50 font-medium" : "text-muted hover:bg-page hover:text-ink"
+                  room === r.key ? "bg-accent-soft font-medium text-ink" : "text-muted hover:bg-box hover:text-ink"
                 }`}
               >
                 <DoodleIcon name={r.icon} size={16} className="mr-2.5 shrink-0" />
@@ -270,9 +257,19 @@ export default function BondApp() {
           <header className="flex shrink-0 items-center justify-between gap-3 px-4 pt-4 sm:px-6">
             <div className="flex items-center gap-3">
               <span className="hand text-[22px] leading-none lg:hidden">Bond</span>
-              <h1 className="hidden text-[22px] leading-none lg:block">{ROOMS.find((r) => r.key === room)?.label}</h1>
+              <h1 className="hidden text-[22px] leading-none lg:block">
+                {room === "today" ? `${greeting()}${today?.name ? `, ${today.name}` : ""}` : ROOMS.find((r) => r.key === room)?.label}
+              </h1>
             </div>
             <div className="flex items-center gap-2">
+              <PressButton
+                onClick={() => setRoom("lookup")}
+                className="hidden items-center rounded-full bg-accent-soft px-3.5 py-1.5 text-[12px] font-medium text-ink sm:flex"
+                title="Look up any address and add it by hand"
+              >
+                <span className="mr-1.5 text-[15px] leading-none">+</span>
+                Add prospect
+              </PressButton>
               <PressButton
                 onClick={() => askAbout(null)}
                 className="flex items-center rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] text-muted hover:text-ink"
@@ -288,6 +285,19 @@ export default function BondApp() {
               >
                 Back to OS
               </PressButton>
+              <button
+                type="button"
+                onClick={() => setRoom("nudges")}
+                className="relative flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-muted transition-colors hover:text-ink"
+                title="Nudges: who to call today"
+              >
+                <DoodleIcon name="bell" size={15} />
+                {today && today.summary.nudgesOpen > 0 && (
+                  <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent-dark px-1 text-[9.5px] font-bold text-white">
+                    {today.summary.nudgesOpen}
+                  </span>
+                )}
+              </button>
             </div>
           </header>
 
@@ -309,7 +319,7 @@ export default function BondApp() {
 
           <main className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
             {room === "today" && (
-              <Today data={today} error={todayError} quick={quick} setQuick={setQuick} onQuick={quickSearch} go={setRoom} />
+              <BondToday data={today} error={todayError} quick={quick} setQuick={setQuick} search={runSearch} go={setRoom} />
             )}
             {/* No fade-up wrapper here: its animation leaves a transform on the
                 element, and a transform turns an ancestor into the containing
@@ -379,113 +389,6 @@ export default function BondApp() {
       {choosing && phase === "in" && (
         <PatchChooser all={allDistricts} current={patch ?? []} onDone={savePatch} onClose={patch == null ? undefined : () => setChoosing(false)} />
       )}
-    </div>
-  );
-}
-
-function Tile({ label, value, hint, onClick }: { label: string; value: string; hint?: string; onClick?: () => void }) {
-  const inner = (
-    <>
-      <p className="text-[10.5px] font-bold uppercase tracking-wider text-muted">{label}</p>
-      <p className="figures mt-2 text-[26px] leading-none">{value}</p>
-      {hint ? <p className="mt-1.5 text-[11px] text-muted">{hint}</p> : null}
-    </>
-  );
-  return onClick ? (
-    <button type="button" onClick={onClick} className="bond-tile fade-up rounded-2xl border border-line/80 bg-panel p-4 text-left transition-colors hover:border-ink">
-      {inner}
-    </button>
-  ) : (
-    <div className="bond-tile fade-up rounded-2xl border border-line/80 bg-panel p-4">{inner}</div>
-  );
-}
-
-function Today({
-  data,
-  error,
-  quick,
-  setQuick,
-  onQuick,
-  go,
-}: {
-  data: TodayData | null;
-  error: string | null;
-  quick: string;
-  setQuick: (v: string) => void;
-  onQuick: (e: React.FormEvent) => void;
-  go: (r: Room) => void;
-}) {
-  if (error) {
-    return (
-      <div className="rounded-2xl border border-dashed border-line/80 p-6 text-[12.5px]">
-        <p>Bond could not read its data.</p>
-        <p className="mt-1 text-muted">{error}</p>
-      </div>
-    );
-  }
-  if (!data) {
-    return (
-      <div className="flex items-center gap-3 py-16 text-[12.5px] text-muted">
-        <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-line border-t-ink" />
-        Reading today...
-      </div>
-    );
-  }
-  const s = data.summary;
-  return (
-    <div className="mx-auto max-w-6xl">
-      <form onSubmit={onQuick} className="fade-up flex flex-wrap items-center gap-2">
-        <label className="flex min-w-64 flex-1 items-center gap-2.5 rounded-full border border-line/80 bg-panel px-4 py-2.5 focus-within:border-ink">
-          <DoodleIcon name="search" size={15} className="shrink-0 text-muted" />
-          <input
-            value={quick}
-            onChange={(e) => setQuick(e.target.value)}
-            placeholder="Where are you prospecting today? A postcode or an address..."
-            className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted/70"
-          />
-        </label>
-        <button type="submit" className="press-wobble rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page">
-          Show me
-        </button>
-      </form>
-
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-        <Tile label="Nudges" value={s.nudgesOpen.toLocaleString("en-GB")} hint="to call today" onClick={() => go("nudges")} />
-        <Tile label="Flagged" value={s.flagged.toLocaleString("en-GB")} hint={`across ${s.districts} districts`} onClick={() => go("map")} />
-        <Tile label="New today" value={s.newToday.toLocaleString("en-GB")} hint={s.lastSweep ? `swept ${when(s.lastSweep)}` : "not swept yet"} onClick={() => go("prospects")} />
-        <Tile label="Anniversaries" value={s.anniversariesSoon.toLocaleString("en-GB")} hint="in the next 60 days" onClick={() => go("prospects")} />
-        <Tile label="Worked this week" value={s.workedThisWeek.toLocaleString("en-GB")} hint="properties touched" />
-        <Tile label="Appraisals booked" value={s.appraisalsBooked.toLocaleString("en-GB")} hint="from Bond" />
-        <Tile label="Owners found" value={s.ownersFound.toLocaleString("en-GB")} hint={data.providers.owner.connected ? "Land Registry" : "not connected"} onClick={() => go("owners")} />
-        <Tile label="Postcards sent" value={s.postcardsSent.toLocaleString("en-GB")} hint={data.providers.postcard.connected ? data.providers.postcard.name ?? "" : "not connected"} onClick={() => go("postcards")} />
-      </div>
-
-      <section className="fade-up mt-5 rounded-2xl border border-line/80 bg-panel p-5" style={{ animationDelay: "0.45s" }}>
-        <h2 className="text-[14px]">What has happened</h2>
-        {data.activity.length === 0 ? (
-          <p className="mt-2 text-[12.5px] text-muted">
-            Nothing yet. Open a property from the map or the list, set its stage or write a note, and it shows here for everyone.
-          </p>
-        ) : (
-          <ul className="mt-3 divide-y divide-line/60">
-            {data.activity.map((a) => (
-              <li key={a.id} className="flex items-start gap-3 py-2.5 text-[12.5px]">
-                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line/70 text-muted">
-                  <DoodleIcon name={KIND_ICON[a.kind] ?? "note"} size={13} />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p>
-                    <span className="font-semibold">{a.actor}</span>
-                    <span className="text-muted"> · {a.address}</span>
-                  </p>
-                  <p className="text-muted">{a.detail}</p>
-                </div>
-                <span className="shrink-0 text-[11px] text-muted">{ago(a.at)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
     </div>
   );
 }

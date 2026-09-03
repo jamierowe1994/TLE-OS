@@ -809,3 +809,51 @@ h1, h2, h3, h4, h5 {
 .bond-tile:nth-child(4) { animation-delay: 0.26s; }
 .bond-tile:nth-child(5) { animation-delay: 0.33s; }
 .bond-tile:nth-child(6) { animation-delay: 0.4s; }
+
+/* ---------------------------------------------------------------------------
+   Bond's own skin. James, 3 Sep: "we're not limited by brand guidelines any
+   more". Warm cream, soft lines, and a handful of pastels the charts share.
+   Scoped to the Bond root so the rest of the OS keeps its theme; Bond stays
+   light in dark mode on purpose - the illustrations and the pastels are the
+   point of it.
+--------------------------------------------------------------------------- */
+.bond-skin {
+  --ink: #2b2a28;
+  --muted: #7a776f;
+  --line: #e8e3da;
+  --page: #faf8f4;
+  --card: #ffffff;
+  --panel: #ffffff;
+  --box: #f6f3ee;
+  --accent: #e8a08d;
+  --accent-dark: #c2664f;
+  --accent-soft: #fbe4dc;
+  --bond-peach: #fbdccf;
+  --bond-peach-ink: #d9694c;
+  --bond-lilac: #ddd6f6;
+  --bond-lilac-ink: #7a6bc9;
+  --bond-butter: #fdedb5;
+  --bond-butter-ink: #b98a12;
+  --bond-mint: #d7efe1;
+  --bond-mint-ink: #3f8f66;
+  --bond-sky: #d9e8f8;
+  --bond-sky-ink: #4a7cb8;
+  --bond-rose: #f9d8e2;
+  --bond-rose-ink: #bf5a80;
+  --bond-coral: #f5a48e;
+  color: var(--ink);
+  background: var(--page);
+}
+@keyframes bond-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+.bond-float { animation: bond-float 5s ease-in-out infinite; }
+@keyframes bond-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+.bond-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: bond-draw 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .bond-float, .bond-draw { animation: none; stroke-dashoffset: 0; }
+}

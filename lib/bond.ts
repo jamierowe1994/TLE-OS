@@ -118,16 +118,18 @@ export interface BondSummary {
   districts: number;
 }
 
-export async function bondSummary(): Promise<BondSummary> {
+export async function bondSummary(districts: string[] = []): Promise<BondSummary> {
   const empty: BondSummary = {
     flagged: 0, newToday: 0, workedThisWeek: 0, appraisalsBooked: 0, ownersFound: 0, postcardsSent: 0, anniversariesSoon: 0, nudgesOpen: 0, lastSweep: null, districts: 0,
   };
   if (!hasDb()) return empty;
+  /* Scoped to the person's patch when they have one; the whole book otherwise. */
   const [p] = await q<{ flagged: string; new_today: string; booked: string }>(
     `SELECT count(*) FILTER (WHERE score > 0) AS flagged,
             count(*) FILTER (WHERE score > 0 AND first_flagged >= date_trunc('day', NOW())) AS new_today,
             count(*) FILTER (WHERE stage = 'appraisal_booked') AS booked
-       FROM os_radar_prospects`
+       FROM os_radar_prospects WHERE ($1::text[] = '{}' OR district = ANY($1::text[]))`,
+    [districts]
   );
   const [w] = await q<{ n: string }>(
     `SELECT count(DISTINCT property_key) AS n FROM os_bond_activity WHERE at > NOW() - INTERVAL '7 days'`
@@ -139,9 +141,10 @@ export async function bondSummary(): Promise<BondSummary> {
   );
   const [a] = await q<{ n: string }>(
     `SELECT count(*) AS n FROM os_radar_prospects
-      WHERE next_anniversary BETWEEN CURRENT_DATE AND CURRENT_DATE + 60`
+      WHERE next_anniversary BETWEEN CURRENT_DATE AND CURRENT_DATE + 60 AND ($1::text[] = '{}' OR district = ANY($1::text[]))`,
+    [districts]
   );
-  const [n] = await q<{ n: string }>(`SELECT count(*) AS n FROM os_bond_nudges WHERE status = 'open'`);
+  const [n] = await q<{ n: string }>(`SELECT count(*) AS n FROM os_bond_nudges WHERE status = 'open' AND ($1::text[] = '{}' OR district = ANY($1::text[]))`, [districts]);
   return {
     nudgesOpen: Number(n?.n ?? 0),
     flagged: Number(p?.flagged ?? 0),
@@ -409,4 +412,102 @@ export async function postcards(limit = 100): Promise<Postcard[]> {
     requested_at: new Date(r.requested_at).toISOString(),
     sent_at: r.sent_at ? new Date(r.sent_at).toISOString() : null,
   }));
+}
+
+/* ── Today's picture: the three cards under the tiles ────────────────────── */
+
+export interface TodayPicture {
+  opportunity: {
+    /** Landlords with a door in the patch, and their average opportunity score. */
+    landlords: number;
+    avgScore: number | null;
+    bands: { very_high: number; high: number; medium: number; low: number };
+    /** Advertised rent across the flagged lets, £ pcm, and how many carry a rent. */
+    rentRoll: number;
+    rentDoors: number;
+    flagged: number;
+  };
+  condition: {
+    score: number | null;
+    doors: number;
+    excellent: number;
+    average: number;
+    poor: number;
+  };
+  top: Array<{
+    property_key: string;
+    address: string;
+    postcode: string;
+    score: number;
+    band: "Very high" | "High" | "Medium" | "Low";
+    market: "let" | "sale";
+    rent: number | null;
+    asking_price: number | null;
+    photo: string | null;
+  }>;
+}
+
+/** Every figure here is counted from the tables; nothing is estimated. */
+export async function todayPicture(districts: string[] = []): Promise<TodayPicture> {
+  const empty: TodayPicture = {
+    opportunity: { landlords: 0, avgScore: null, bands: { very_high: 0, high: 0, medium: 0, low: 0 }, rentRoll: 0, rentDoors: 0, flagged: 0 },
+    condition: { score: null, doors: 0, excellent: 0, average: 0, poor: 0 },
+    top: [],
+  };
+  if (!hasDb()) return empty;
+  const [l] = await q<{ n: string; avg: string | null; vh: string; h: string; m: string; lo: string }>(
+    `WITH mine AS (
+       SELECT DISTINCT l.landlord_key, l.score FROM os_bond_landlords l
+         JOIN os_bond_landlord_doors d ON d.landlord_key = l.landlord_key
+        WHERE ($1::text[] = '{}' OR upper(split_part(d.postcode, ' ', 1)) = ANY($1::text[]))
+     )
+     SELECT count(*) AS n, round(avg(score))::text AS avg,
+            count(*) FILTER (WHERE score >= 70) AS vh, count(*) FILTER (WHERE score >= 45 AND score < 70) AS h,
+            count(*) FILTER (WHERE score >= 25 AND score < 45) AS m, count(*) FILTER (WHERE score < 25) AS lo
+       FROM mine`,
+    [districts]
+  );
+  const [r] = await q<{ flagged: string; rent_doors: string; rent_roll: string | null }>(
+    `SELECT count(*) AS flagged, count(rent) FILTER (WHERE market = 'let') AS rent_doors, sum(rent) FILTER (WHERE market = 'let') AS rent_roll
+       FROM os_radar_prospects WHERE score > 0 AND ($1::text[] = '{}' OR district = ANY($1::text[]))`,
+    [districts]
+  );
+  const [c] = await q<{ score: string | null; doors: string; ex: string; av: string; po: string }>(
+    `SELECT round(avg(condition_score))::text AS score, count(condition_score) AS doors,
+            count(*) FILTER (WHERE condition_score >= 70) AS ex,
+            count(*) FILTER (WHERE condition_score >= 40 AND condition_score < 70) AS av,
+            count(*) FILTER (WHERE condition_score < 40) AS po
+       FROM os_radar_prospects WHERE score > 0 AND condition_score IS NOT NULL AND ($1::text[] = '{}' OR district = ANY($1::text[]))`,
+    [districts]
+  );
+  const top = await q<Record<string, unknown>>(
+    `SELECT property_key, coalesce(nullif(address, ''), street, '') AS address, postcode, score, market, rent, asking_price, image_key, image_url
+       FROM os_radar_prospects
+      WHERE score > 0 AND stage IN ('new', 'queued') AND ($1::text[] = '{}' OR district = ANY($1::text[]))
+      ORDER BY score DESC, last_signal_at DESC NULLS LAST LIMIT 5`,
+    [districts]
+  );
+  const band = (score: number): TodayPicture["top"][number]["band"] => (score >= 70 ? "Very high" : score >= 45 ? "High" : score >= 25 ? "Medium" : "Low");
+  return {
+    opportunity: {
+      landlords: Number(l?.n ?? 0),
+      avgScore: l?.avg == null ? null : Number(l.avg),
+      bands: { very_high: Number(l?.vh ?? 0), high: Number(l?.h ?? 0), medium: Number(l?.m ?? 0), low: Number(l?.lo ?? 0) },
+      rentRoll: Number(r?.rent_roll ?? 0),
+      rentDoors: Number(r?.rent_doors ?? 0),
+      flagged: Number(r?.flagged ?? 0),
+    },
+    condition: { score: c?.score == null ? null : Number(c.score), doors: Number(c?.doors ?? 0), excellent: Number(c?.ex ?? 0), average: Number(c?.av ?? 0), poor: Number(c?.po ?? 0) },
+    top: top.map((t) => ({
+      property_key: String(t.property_key),
+      address: String(t.address ?? ""),
+      postcode: String(t.postcode ?? ""),
+      score: Number(t.score ?? 0),
+      band: band(Number(t.score ?? 0)),
+      market: t.market === "sale" ? "sale" : "let",
+      rent: (t.rent as number) ?? null,
+      asking_price: (t.asking_price as number) ?? null,
+      photo: t.image_key ? `/api/bond/photo/${encodeURIComponent(String(t.image_key))}` : ((t.image_url as string) ?? null),
+    })),
+  };
 }
