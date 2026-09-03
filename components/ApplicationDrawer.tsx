@@ -23,6 +23,16 @@ import { Pill } from "@/components/Wire";
  * the way a conversation reads rather than the way a log prints.
  */
 
+/** "Today 14:02", "Tue 2 Sep" - how a comment's time reads in the thread. */
+function whenWords(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.valueOf())) return "";
+  const today = new Date();
+  const sameDay = d.toDateString() === today.toDateString();
+  const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return sameDay ? `Today ${time}` : `${d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} ${time}`;
+}
+
 export interface AppActivity {
   when: string;
   what: string;
@@ -98,7 +108,27 @@ export default function ApplicationDrawer({
 }) {
   const [shown, setShown] = useState(false);
   const [draft, setDraft] = useState("");
-  const [added, setAdded] = useState<AppActivity[]>([]);
+  /* The thread, from the OS. REX gives the milestones above; this is what
+     people typed, and it comes back on every open rather than living and
+     dying in this component. */
+  const [comments, setComments] = useState<AppActivity[] | null>(null);
+  const [posting, setPosting] = useState(false);
+  const [postError, setPostError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    setComments(null);
+    fetch(`/api/applications/${encodeURIComponent(app.id)}/comments`)
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; comments?: { body: string; authorName: string; createdAt: string }[] }) => {
+        if (!live) return;
+        setComments((j.comments ?? []).map((c) => ({ when: whenWords(c.createdAt), what: c.body, by: c.authorName, note: true })));
+      })
+      .catch(() => live && setComments([]));
+    return () => {
+      live = false;
+    };
+  }, [app.id]);
 
   useEffect(() => {
     const t = requestAnimationFrame(() => setShown(true));
@@ -112,15 +142,34 @@ export default function ApplicationDrawer({
 
   const cur = stages.findIndex((s) => s.key === app.stageKey);
   const action = NEXT_ACTION[app.stageKey];
-  const thread = [...(app.activity ?? []), ...added];
+  const thread = [...(app.activity ?? []), ...(comments ?? [])];
   const ticked = checklist.filter((c) => c.done).length;
   const outstanding = checklist.length - ticked;
 
-  function post() {
+  async function post() {
     const text = draft.trim();
-    if (!text) return;
-    setAdded((a) => [...a, { when: "just now", what: text, by: "You", note: true }]);
-    setDraft("");
+    if (!text || posting) return;
+    setPosting(true);
+    setPostError(null);
+    try {
+      const r = await fetch(`/api/applications/${encodeURIComponent(app.id)}/comments`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const j = (await r.json()) as { ok?: boolean; error?: string; comment?: { body: string; authorName: string; createdAt: string } };
+      if (!j.ok || !j.comment) {
+        setPostError(j.error ?? "That didn't save.");
+        return;
+      }
+      const c = j.comment;
+      setComments((cs) => [...(cs ?? []), { when: whenWords(c.createdAt), what: c.body, by: c.authorName, note: true }]);
+      setDraft("");
+    } catch {
+      setPostError("That didn't save. Try again in a moment.");
+    } finally {
+      setPosting(false);
+    }
   }
 
   return (
@@ -297,12 +346,13 @@ export default function ApplicationDrawer({
                   <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
                     Activity &amp; comments
                   </p>
-                  <p className="text-[11px] text-muted">{thread.length} entries</p>
+                  <p className="text-[11px] text-muted">{comments === null ? "Loading…" : `${thread.length} entries`}</p>
                 </div>
 
                 {thread.length === 0 ? (
                   <p className="mt-4 text-[12.5px] text-muted">
-                    Nothing recorded yet. Anything typed here stays on the deal.
+                    Nothing recorded yet. A comment here is kept on the application and shows for
+                    everyone who opens it.
                   </p>
                 ) : (
                   <ul className="mt-4 space-y-3.5">
@@ -344,14 +394,14 @@ export default function ApplicationDrawer({
                     className="w-full resize-y rounded-xl border border-line bg-page px-3 py-2.5 text-[12.5px] text-ink placeholder:text-muted focus:border-accent-dark focus:outline-none"
                   />
                   <div className="mt-2.5 flex items-center justify-between gap-3">
-                    <p className="text-[10.5px] text-muted">⌘↵ to post</p>
+                    <p className="text-[10.5px] text-muted">{postError ? <span className="font-semibold text-accent-dark">{postError}</span> : "⌘↵ to post"}</p>
                     <button
                       type="button"
-                      onClick={post}
-                      disabled={!draft.trim()}
+                      onClick={() => void post()}
+                      disabled={!draft.trim() || posting}
                       className="rounded-lg bg-accent-dark px-3.5 py-2 text-[12px] font-semibold text-white transition-opacity disabled:opacity-40"
                     >
-                      Post comment
+                      {posting ? "Posting…" : "Post comment"}
                     </button>
                   </div>
                 </div>

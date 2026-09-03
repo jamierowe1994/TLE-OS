@@ -1475,6 +1475,48 @@ CREATE TABLE IF NOT EXISTS os_bond_landlord_doors (
 );
 CREATE INDEX IF NOT EXISTS os_bond_landlord_doors_property_idx ON os_bond_landlord_doors (property_key);
 
+-- Campaigns: a sequence of cards and letters around a moment, and the
+-- queue the morning run builds from them. A send is one card to one door
+-- for one step; held rows carry the reason so nothing disappears quietly.
+CREATE TABLE IF NOT EXISTS os_bond_campaigns (
+  id                   BIGSERIAL PRIMARY KEY,
+  key                  TEXT UNIQUE NOT NULL,
+  name                 TEXT NOT NULL,
+  trigger              TEXT NOT NULL,
+  active               BOOLEAN NOT NULL DEFAULT TRUE,
+  fallback_to_property BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS os_bond_campaign_steps (
+  id          BIGSERIAL PRIMARY KEY,
+  campaign_id BIGINT NOT NULL REFERENCES os_bond_campaigns(id) ON DELETE CASCADE,
+  title       TEXT NOT NULL,
+  offset_days INTEGER NOT NULL,
+  mail_type   TEXT NOT NULL DEFAULT 'postcard',
+  active      BOOLEAN NOT NULL DEFAULT TRUE,
+  copy        TEXT NOT NULL DEFAULT '',
+  sort        INTEGER NOT NULL DEFAULT 0,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS os_bond_campaign_sends (
+  id           BIGSERIAL PRIMARY KEY,
+  campaign_id  BIGINT NOT NULL,
+  step_id      BIGINT NOT NULL,
+  property_key TEXT NOT NULL,
+  address      TEXT NOT NULL DEFAULT '',
+  to_name      TEXT,
+  to_address   TEXT,
+  due_on       DATE NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'queued',
+  reason       TEXT,
+  provider_ref TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  sent_at      TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS os_bond_campaign_sends_once_idx ON os_bond_campaign_sends (step_id, property_key, due_on);
+CREATE INDEX IF NOT EXISTS os_bond_campaign_sends_status_idx ON os_bond_campaign_sends (status, due_on);
+
 -- One row per Radar run. The run takes minutes now that both feeds are read
 -- and the edge closes a request at 100 seconds, so the route answers at once
 -- and this is where the answer goes.
@@ -1545,6 +1587,21 @@ CREATE TABLE IF NOT EXISTS os_landlord_messages (
 );
 CREATE INDEX IF NOT EXISTS os_landlord_messages_account
   ON os_landlord_messages (account_id, sent_at DESC);
+
+-- What a person typed on an application. REX holds the application; the OS
+-- holds the conversation about it, keyed on the REX id, because writing notes
+-- into REX is behind the write allowlist and a comment must never be lost to
+-- that. When writes are allowed these can be pushed as REX notes as well.
+CREATE TABLE IF NOT EXISTS os_application_comments (
+  id             TEXT PRIMARY KEY,
+  application_id TEXT NOT NULL,
+  body           TEXT NOT NULL,
+  author_id      TEXT,
+  author_name    TEXT NOT NULL DEFAULT '',
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_application_comments_app
+  ON os_application_comments (application_id, created_at);
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

@@ -98,6 +98,12 @@ export default function Applications() {
   const [apps, setApps] = useState<Application[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  /* ?open=<id>: the PLC wizard sends people back here to a named
+     application, and this is what opens it. Read once, on arrival. */
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("open");
+    if (wanted) setOpenId(wanted);
+  }, []);
   const [showClosed, setShowClosed] = useState(false);
   /* Whose book this is - "the whole business" for an owner, the agent's own
      name otherwise - so the page can say so rather than leave somebody to
