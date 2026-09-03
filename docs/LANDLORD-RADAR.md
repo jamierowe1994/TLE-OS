@@ -580,3 +580,26 @@ Statuses are the human side and survive rebuilds: Called, Snooze 30 days, Not no
 When the reason goes away the nudge is marked gone, not deleted. The list rebuilds at the end
 of every rescore (database only); the REX read is its own cron after the sweep. Nudges are a
 room, a tile on Today, an activity kind, and a tool in Ask Bond.
+
+---
+
+## The QR loop, 3 Sep 2026
+
+`lib/bond-qr.ts`, `lib/rent-check.ts`, `app/r/[token]`, `app/api/r/[token]`, `app/api/bond/qr`,
+`components/BondQr.tsx`, `components/RentCheckForm.tsx`. Every card in the queue gets a code
+of its own after each morning's build (`ensureLinksForSends`), and a code can be made by hand
+in Postcards for a one-off card with its own reason. The URL is `/r/<token>`: ten characters
+from a safe alphabet, nothing about the person or the door in it. Public, no sign-in.
+
+The page knows the door and the reason (the campaign trigger, or the note typed by hand), and
+opens with a line that fits: a year on, congratulations, letting it yourself. Then the rent
+check from our own sweep: the median advertised rent of the same kind of home with the same
+bedrooms in the district over twelve months, the middle half as the range, five comparables
+by street and outward postcode, and the basis in words. Under eight matches it widens a
+bedroom either side and says so; under four it gives no figure. It always says "advertised".
+
+Leaving a name and email makes an OS contact of kind landlord, source "Bond postcard", with
+the door, the reason and the consent in the enquiry, so it shows in Leads at once. Scans and
+responses are counted on the link and kept as events (`os_bond_qr_events`) with the reason,
+which is the attribution the learned weights need. The Postcards room shows the totals by
+reason, each card's code with its scans and replies, and the by-hand form.

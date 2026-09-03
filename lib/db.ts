@@ -1516,6 +1516,56 @@ CREATE TABLE IF NOT EXISTS os_bond_campaign_sends (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS os_bond_campaign_sends_once_idx ON os_bond_campaign_sends (step_id, property_key, due_on);
 CREATE INDEX IF NOT EXISTS os_bond_campaign_sends_status_idx ON os_bond_campaign_sends (status, due_on);
+ALTER TABLE os_bond_campaign_sends ADD COLUMN IF NOT EXISTS qr_token TEXT;
+
+-- The QR loop. One link per card (or per hand-made code), a token in the
+-- URL, the reason the card went so the page can speak to it. Scans and
+-- responses are counted on the link and kept as events, because which cards
+-- worked is what the learned weights will be trained on.
+CREATE TABLE IF NOT EXISTS os_bond_qr_links (
+  token         TEXT PRIMARY KEY,
+  property_key  TEXT,
+  address       TEXT NOT NULL DEFAULT '',
+  postcode      TEXT NOT NULL DEFAULT '',
+  district      TEXT,
+  -- anniversary | just_bought | self_managing | custom
+  reason        TEXT NOT NULL DEFAULT 'custom',
+  reason_note   TEXT NOT NULL DEFAULT '',
+  send_id       BIGINT,
+  campaign_name TEXT,
+  step_title    TEXT,
+  created_by    TEXT NOT NULL DEFAULT '',
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  scans         INTEGER NOT NULL DEFAULT 0,
+  first_scan_at TIMESTAMPTZ,
+  last_scan_at  TIMESTAMPTZ,
+  responses     INTEGER NOT NULL DEFAULT 0,
+  contact_id    TEXT
+);
+CREATE INDEX IF NOT EXISTS os_bond_qr_links_send_idx ON os_bond_qr_links (send_id);
+CREATE INDEX IF NOT EXISTS os_bond_qr_links_key_idx ON os_bond_qr_links (property_key);
+CREATE TABLE IF NOT EXISTS os_bond_qr_events (
+  id         BIGSERIAL PRIMARY KEY,
+  token      TEXT NOT NULL,
+  -- scan | submit
+  kind       TEXT NOT NULL,
+  agent      TEXT NOT NULL DEFAULT '',
+  at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_bond_qr_events_token_idx ON os_bond_qr_events (token, at DESC);
+-- What the landlord typed on the page. Their own words about their own
+-- property, with the consent they gave, kept beside the contact it became.
+CREATE TABLE IF NOT EXISTS os_bond_qr_responses (
+  id          BIGSERIAL PRIMARY KEY,
+  token       TEXT NOT NULL,
+  name        TEXT NOT NULL,
+  email       TEXT NOT NULL,
+  phone       TEXT NOT NULL DEFAULT '',
+  consent     BOOLEAN NOT NULL DEFAULT FALSE,
+  message     TEXT NOT NULL DEFAULT '',
+  contact_id  TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- Ask Bond: the consult panel's conversation, both halves, per person. Its own
 -- table rather than Steve's, so the two histories never bleed into each

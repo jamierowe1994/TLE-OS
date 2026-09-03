@@ -63,6 +63,10 @@ export interface Send extends Record<string, unknown> {
   reason: string | null;
   created_at: string;
   sent_at: string | null;
+  /** The card's QR code, and what came of it. */
+  qr_token: string | null;
+  scans: number;
+  responses: number;
 }
 
 const TRIGGER_LABEL: Record<Trigger, string> = {
@@ -297,10 +301,11 @@ export async function queueSends(): Promise<{ queued: number; held: number }> {
 export async function listSends(limit = 300): Promise<Send[]> {
   if (!hasDb()) return [];
   const rows = await q<Send>(
-    `SELECT s.*, c.name AS campaign_name, st.title AS step_title, st.mail_type
+    `SELECT s.*, c.name AS campaign_name, st.title AS step_title, st.mail_type, coalesce(l.scans, 0) AS scans, coalesce(l.responses, 0) AS responses
        FROM os_bond_campaign_sends s
        JOIN os_bond_campaigns c ON c.id = s.campaign_id
        JOIN os_bond_campaign_steps st ON st.id = s.step_id
+       LEFT JOIN os_bond_qr_links l ON l.send_id = s.id
       ORDER BY CASE s.status WHEN 'queued' THEN 0 WHEN 'held' THEN 1 ELSE 2 END, s.due_on, s.id DESC
       LIMIT $1`,
     [limit]
@@ -310,6 +315,9 @@ export async function listSends(limit = 300): Promise<Send[]> {
     due_on: String(r.due_on).slice(0, 10),
     created_at: new Date(r.created_at as string).toISOString(),
     sent_at: r.sent_at ? new Date(r.sent_at as string).toISOString() : null,
+    qr_token: (r.qr_token as string) ?? null,
+    scans: Number(r.scans ?? 0),
+    responses: Number(r.responses ?? 0),
   }));
 }
 

@@ -583,6 +583,9 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
   await rebuildLandlords();
   const { queueSends } = await import("@/lib/bond-campaigns");
   await queueSends();
+  /* Every card in the queue gets its own QR code. */
+  const { ensureLinksForSends } = await import("@/lib/bond-qr");
+  await ensureLinksForSends().catch((e) => console.error("[radar] qr links", e));
   /* The call list: our REX doors against what the sweep saw. Database only
      here; the REX read itself is the nudges-sync cron. */
   const { buildNudges } = await import("@/lib/bond-nudges");

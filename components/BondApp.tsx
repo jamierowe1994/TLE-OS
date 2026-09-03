@@ -8,6 +8,7 @@ import { PressButton } from "@/components/Bits";
 import BondAsk, { type AskFocus } from "@/components/BondAsk";
 import BondNudges from "@/components/BondNudges";
 import BondToday, { rememberSearch, type TodayData } from "@/components/BondToday";
+import { QrModal, QrPanel } from "@/components/BondQr";
 
 /**
  * Bond — the prospecting workspace.
@@ -520,6 +521,7 @@ function Postcards() {
   const [queue, setQueue] = useState<SendRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<"queued" | "held" | "sent" | "all">("queued");
+  const [qr, setQr] = useState<string | null>(null);
   useEffect(() => {
     fetch("/api/bond/postcards", { cache: "no-store" })
       .then(async (r) => { const j = await r.json(); if (j.ok) setData(j); else setError(j.reason ?? "Could not read the postcards."); })
@@ -535,6 +537,7 @@ function Postcards() {
   return (
     <div className="fade-up mx-auto max-w-5xl space-y-4">
       <ProviderCard p={data.provider} title="Postcards and letters" />
+      <QrPanel />
       <section className="rounded-2xl border border-line/80 bg-panel p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-[14px]">The queue</h2>
@@ -554,7 +557,7 @@ function Postcards() {
         ) : (
           <table className="mt-3 w-full text-left text-[12.5px]">
             <thead className="text-[10.5px] uppercase tracking-wider text-muted">
-              <tr className="border-b border-line/70"><th className="py-2 pr-3">Due</th><th className="py-2 pr-3">Door</th><th className="py-2 pr-3">To</th><th className="py-2 pr-3">Step</th><th className="py-2">Status</th></tr>
+              <tr className="border-b border-line/70"><th className="py-2 pr-3">Due</th><th className="py-2 pr-3">Door</th><th className="py-2 pr-3">To</th><th className="py-2 pr-3">Step</th><th className="py-2 pr-3">Status</th><th className="py-2">Code</th></tr>
             </thead>
             <tbody className="divide-y divide-line/60">
               {shown.slice(0, 200).map((s) => (
@@ -567,12 +570,23 @@ function Postcards() {
                     <span className={`rounded-full border px-2 py-0.5 text-[10.5px] ${s.status === "queued" ? "border-accent-dark/60 bg-accent-soft text-accent-dark" : s.status === "sent" ? "border-line/70 text-ink" : "border-line/70 text-muted"}`}>{s.status}</span>
                     {s.reason && <span className="ml-2 text-[11px] text-muted">{s.reason}</span>}
                   </td>
+                  <td className="py-2 whitespace-nowrap">
+                    {s.qr_token ? (
+                      <button type="button" onClick={() => setQr(s.qr_token)} className="inline-flex items-center gap-1.5 rounded-full border border-line/80 px-2.5 py-1 text-[11px] text-muted hover:border-ink hover:text-ink" title="Show this card's QR code">
+                        <DoodleIcon name="grid" size={12} />
+                        {s.scans > 0 ? `${s.scans} scan${s.scans === 1 ? "" : "s"}${s.responses ? ` · ${s.responses} replied` : ""}` : "QR"}
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-muted">-</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </section>
+      {qr && <QrModal token={qr} onClose={() => setQr(null)} />}
     </div>
   );
 }
@@ -1543,7 +1557,7 @@ function ConditionMark({ score, doors }: { score: number | null; doors: number }
 
 interface StepRow { id: number; campaign_id: number; title: string; offset_days: number; mail_type: "postcard" | "letter"; active: boolean; copy: string; sort: number }
 interface CampaignRow { id: number; key: string; name: string; trigger: string; active: boolean; fallback_to_property: boolean; steps: StepRow[]; stats: { queued: number; held: number; sent: number; due_7: number } }
-interface SendRow { id: number; campaign_name: string; step_title: string; mail_type: string; property_key: string; address: string; to_name: string | null; to_address: string | null; due_on: string; status: "queued" | "held" | "sent" | "skipped" | "cancelled"; reason: string | null }
+interface SendRow { id: number; campaign_name: string; step_title: string; mail_type: string; property_key: string; address: string; to_name: string | null; to_address: string | null; due_on: string; status: "queued" | "held" | "sent" | "skipped" | "cancelled"; reason: string | null; qr_token: string | null; scans: number; responses: number }
 
 const TRIGGER_WORDS: Record<string, string> = { anniversary: "the tenancy anniversary", just_bought: "the day we first see the purchase", self_managing: "the day we first see the private listing" };
 
