@@ -20,7 +20,7 @@ import { currentLandlord } from "@/lib/landlord-account";
 
 export const metadata = { title: "The Letting Experts — Your property file" };
 
-const pill = "rounded-full bg-white px-3.5 py-2 text-[12.5px] transition-colors hover:text-ink";
+const pill = "rounded-full border border-line/70 bg-panel px-3.5 py-2 text-[12.5px] transition-colors hover:border-ink/40 hover:text-ink";
 
 export default async function LandlordLayout({ children }: { children: React.ReactNode }) {
   const me = await currentLandlord();
@@ -28,13 +28,13 @@ export default async function LandlordLayout({ children }: { children: React.Rea
     /* The reference: a grey page, a thin margin, and white panels that pop
        against it. #e8e8e6 rather than the OS's eggshell wash - James asked
        for it a shade darker so the white reads as white. */
-    <div className="min-h-screen bg-[#e8e8e6] text-ink">
+    <div className="min-h-screen bg-white text-ink">
       <header>
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-3 pb-1 pt-3 sm:px-4 sm:pt-4">
-          {/* The pin alone, top left, as the reference has its marque. */}
-          <Link href="/landlord" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white" aria-label="The Letting Experts">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 pt-5 sm:px-10">
+          {/* The pin and the name in spaced small caps, as the reference. */}
+          <Link href="/landlord" className="flex shrink-0 items-center gap-3" aria-label="The Letting Experts">
             <span
-              className="block h-7 w-[17px]"
+              className="block h-8 w-[19px]"
               style={{
                 backgroundImage: "url(/brand/tle-logo.png)",
                 backgroundRepeat: "no-repeat",
@@ -42,8 +42,9 @@ export default async function LandlordLayout({ children }: { children: React.Rea
                 backgroundSize: "auto 100%",
               }}
             />
+            <span className="hidden text-[13px] font-semibold uppercase tracking-[0.28em] sm:inline">The Letting Experts</span>
           </Link>
-          <div className="order-last w-full sm:order-none sm:w-auto sm:max-w-sm sm:flex-1">
+          <div className="order-last w-full sm:order-none sm:mx-auto sm:w-auto sm:max-w-md sm:flex-1">
             <FileSearch />
           </div>
           <nav className="ml-auto flex flex-wrap items-center gap-2 text-muted">
@@ -61,10 +62,10 @@ export default async function LandlordLayout({ children }: { children: React.Rea
         </div>
       </header>
 
-      <main className="px-3 pb-10 sm:px-4">{children}</main>
+      <main className="px-5 pb-10 pt-16 sm:px-10 sm:pt-20">{children}</main>
 
       <footer>
-        <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-5 text-[11.5px] text-muted sm:px-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-5 text-[11.5px] text-muted sm:px-10">
           <span>The Letting Experts · thelettingexperts.co.uk</span>
           <span className="flex gap-4">
             <a href="#" className="transition-colors hover:text-ink">Privacy and your data</a>

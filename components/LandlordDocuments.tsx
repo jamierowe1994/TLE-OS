@@ -9,7 +9,16 @@ import DoodleIcon from "@/components/DoodleIcon";
  * listed beside it, so a landlord knows what to send without being told on
  * the phone.
  */
-export default function LandlordDocuments({ accountId, wanted }: { accountId: string; wanted: string[] }) {
+export default function LandlordDocuments({
+  accountId,
+  wanted,
+  compact = false,
+}: {
+  accountId: string;
+  wanted: string[];
+  /** Just the button and what arrives - for a panel that already lists what is wanted. */
+  compact?: boolean;
+}) {
   const [uploads, setUploads] = useState<{ name: string; url: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -31,6 +40,44 @@ export default function LandlordDocuments({ accountId, wanted }: { accountId: st
     } finally {
       setBusy(false);
     }
+  }
+
+  if (compact) {
+    return (
+      <div>
+        <div className="flex flex-wrap items-center gap-4">
+          <label className={`inline-flex cursor-pointer items-center gap-2 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 ${busy ? "opacity-60" : ""}`}>
+            {busy ? "Uploading…" : "Upload documents"}
+            <DoodleIcon name="upload" size={13} className="text-white" />
+            <input
+              type="file"
+              className="hidden"
+              accept="image/*,application/pdf"
+              disabled={busy}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void upload(f);
+                e.currentTarget.value = "";
+              }}
+            />
+          </label>
+          <a href="#documents" className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-muted transition-colors hover:text-ink">
+            View all documents <span className="text-[11px]">›</span>
+          </a>
+        </div>
+        {err && <p className="mt-2 text-[12px] font-semibold text-accent-dark">{err}</p>}
+        {uploads.length > 0 && (
+          <ul className="mt-3 space-y-1.5 text-[12.5px]">
+            {uploads.map((u) => (
+              <li key={u.url} className="flex items-center justify-between gap-3 rounded-xl border border-line/60 bg-white px-3 py-2">
+                <span className="truncate">{u.name}</span>
+                <span className="shrink-0 text-[11px] font-semibold text-accent-dark">Received</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
   }
 
   return (

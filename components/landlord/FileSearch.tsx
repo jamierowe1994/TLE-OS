@@ -29,7 +29,7 @@ export default function FileSearch() {
   }, [q]);
 
   return (
-    <label className="flex min-w-0 flex-1 items-center gap-2.5 rounded-full bg-white px-4 py-2.5 text-[12.5px] ring-1 ring-transparent transition-shadow focus-within:ring-ink/20">
+    <label className="flex min-w-0 flex-1 items-center gap-2.5 rounded-full border border-line/70 bg-panel px-4 py-2.5 text-[12.5px] transition-colors focus-within:border-ink/40">
       <DoodleIcon name="search" size={15} className="shrink-0 text-muted" />
       <input
         value={q}

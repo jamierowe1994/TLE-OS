@@ -3,65 +3,102 @@
  *
  * One shape, two feeders: the live home builds it from the appraisal journey
  * and the managed book (lib/landlord-account.ts), and the Raj sample builds
- * it by hand. The dashboard itself knows nothing about REX or appraisals -
- * it is a layout, and the layout is the thing Susan is deciding on.
+ * it by hand. The dashboard itself knows nothing about REX or appraisals.
  *
- * ── The simpler shape, James 2 Sep ───────────────────────────────────────
+ * ── The spine drives the page, James 2 Sep ──────────────────────────────
  *
- * "It feels complicated... a lot of buttons... we just want a really simple
- * process." So: ONE next step above everything, then five panels. The map
- * with three tiles under it - view the presentation, sign the terms, what
- * we need. The agent, properly, with the message box inside their card. The
- * presentation. The property. And what we need from them, under the grid,
- * as the only place documents are asked for.
+ * "The landlord will have his own timeline and spine going through the
+ * middle, and that will then determine what the page looks like." So the
+ * view carries a STAGE and a JOURNEY, and everything else - which next
+ * steps show and in what order, what the activity says, what the documents
+ * panel asks for - is derived from where they are. Six stops, in a
+ * landlord's words: valuation, instruction signed, compliance, marketing,
+ * viewings and offers, let agreed.
  */
 
-export interface ViewAction {
+export type Stage = "valuation" | "instruction" | "compliance" | "marketing" | "viewings" | "let";
+
+export const STAGES: Array<{ id: Stage; label: string }> = [
+  { id: "valuation", label: "Valuation" },
+  { id: "instruction", label: "Instruction signed" },
+  { id: "compliance", label: "Compliance" },
+  { id: "marketing", label: "Marketing" },
+  { id: "viewings", label: "Viewings / Offers" },
+  { id: "let", label: "Let agreed" },
+];
+
+export interface JourneyStop {
+  id: Stage;
   label: string;
-  hint?: string;
+  /** "12 May 2026", "In progress", "Upcoming". */
+  sub: string;
+  state: "done" | "current" | "upcoming";
+}
+
+export interface ViewStep {
+  id: "presentation" | "sign" | "compliance" | "message" | "listing" | "viewings";
+  label: string;
+  sub: string;
   href: string | null;
   icon: string;
-  /** Dark tiles are the ones that do something now; light ones wait. */
-  tone: "dark" | "light";
-  /** Opens in a new tab (a presentation, a signing page). */
   external?: boolean;
 }
 
-export interface ViewNeed {
+export interface ViewDocument {
   title: string;
-  sub?: string;
-  done: boolean;
+  sub: string;
+  state: "uploaded" | "missing" | "pending";
+}
+
+export interface ViewActivity {
+  title: string;
+  sub: string;
+  date: string;
+  icon: string;
 }
 
 export interface LandlordView {
   greeting: string;
   intro: string;
-  /** The one thing to do now. A landlord who reads only this line does the right thing. */
-  next: { label: string; hint?: string; href: string | null; external?: boolean };
+  stage: Stage;
+  journey: JourneyStop[];
   property: {
     address: string;
     postcode: string;
-    /** Our photograph, once take-on has happened. Null before that. */
+    /** "Being let", "Tenanted". */
+    state: string;
+    /** "Terraced house · 2 bed · 1 bath", or what we know. */
+    facts: string[];
+    rent: { figure: string | null; unit: string; caption: string };
+    valuedOn: string | null;
+    reference: string | null;
+    /** Our photograph, once take-on has happened. Null before that, and the drawing stands in. */
     image: string | null;
     lat: number | null;
     lng: number | null;
-    /** Under the address in the details panel: "Valued 31 August by Rhiannon Dodge". */
-    subtitle: string;
-    /** The pill beside the panel title: "Being let", "Tenanted". */
-    state: string;
   };
-  beats: string[];
-  at: number;
-  status: string;
-  /** Exactly three: the presentation, the terms, what we need. */
-  actions: ViewAction[];
-  needs: ViewNeed[];
-  valuation: {
-    figure: string | null;
-    unit: string;
-    caption: string;
-    lines: Array<[string, string]>;
+  steps: ViewStep[];
+  documents: ViewDocument[];
+  snapshot: { readinessPct: number; note: string; lines: Array<[string, string]> };
+  activity: ViewActivity[];
+  agent: { name: string; title?: string | null; phone?: string | null; email?: string | null; photo?: string | null } | null;
+}
+
+/**
+ * The next steps, in the order that matters at each stage. James's order for
+ * the instruction stage: presentation, contract, compliance, agent. After the
+ * contract is signed the compliance moves to the front; once marketing is
+ * live, the listing and viewings take over. Steps without a link still show,
+ * greyed, so the shape of the page holds from one stage to the next.
+ */
+export function stepsForStage(stage: Stage, all: Record<ViewStep["id"], ViewStep>): ViewStep[] {
+  const order: Record<Stage, ViewStep["id"][]> = {
+    valuation: ["presentation", "message", "compliance", "sign"],
+    instruction: ["presentation", "sign", "compliance", "message"],
+    compliance: ["compliance", "presentation", "message", "sign"],
+    marketing: ["listing", "compliance", "message", "presentation"],
+    viewings: ["viewings", "listing", "message", "compliance"],
+    let: ["viewings", "message", "compliance", "listing"],
   };
-  deck: { title: string; sub: string; href: string | null; image: string | null } | null;
-  agent: { name: string; title?: string | null; phone?: string | null; email?: string | null; photo?: string | null; bio?: string | null } | null;
+  return order[stage].map((id) => all[id]).filter(Boolean).slice(0, 4);
 }

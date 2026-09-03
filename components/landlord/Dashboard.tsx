@@ -1,249 +1,290 @@
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
-import PropertyPhoto from "@/components/PropertyPhoto";
 import PropertyHero from "@/components/landlord/PropertyHero";
-import PropertyMap from "@/components/landlord/PropertyMap";
-import AskAgent from "@/components/landlord/AskAgent";
-import type { LandlordView, ViewAction } from "@/lib/landlord-view";
+import type { LandlordView, ViewStep } from "@/lib/landlord-view";
 
 /**
- * The landlord dashboard. See lib/landlord-view.ts for the shape and the
- * reference it was drawn from, and for why it got simpler.
+ * The landlord dashboard, to James's reference of 2 Sep.
  *
- * ── The rows line up ─────────────────────────────────────────────────────
- *
- * Two grid rows. The property panel on the right spans both; the map and
- * the agent fill row one and stretch to the same height; the three tiles
- * and the presentation sit in row two. So every horizontal edge meets its
- * neighbour, which the first version's free-stacking columns never did.
+ * Top: the greeting, and the agent top right. Then the property beside the
+ * next steps. Then the journey - the spine - across the middle, which is the
+ * thing that decides what the rest of the page says. Then documents, the
+ * snapshot and recent activity. Everything is derived from the view; the
+ * sample and the live home feed the same shape.
  */
+
+const panel = "rounded-[20px] border border-line/70 bg-panel p-5";
+const label = "text-[10.5px] font-semibold uppercase tracking-wide text-muted";
+
 export default function LandlordDashboard({
   view: v,
-  documents,
+  upload,
+  managed,
 }: {
   view: LandlordView;
-  /** The upload, from the page - the sample and the live home file to different places. */
-  documents?: React.ReactNode;
+  /** The upload control, from the page - the sample and the live home file to different places. */
+  upload?: React.ReactNode;
+  /** Properties we already look after, from the page. */
+  managed?: React.ReactNode;
 }) {
-  const left = v.needs.filter((n) => !n.done);
-  const done = v.needs.length - left.length;
+  const first = v.greeting;
+  const agentFirst = v.agent?.name.split(/\s+/)[0] ?? "your agent";
 
   return (
-    <>
-      {/* ── the one next step ── */}
-      <div className="flex flex-wrap items-center gap-4 rounded-[20px] bg-ink px-5 py-4 text-white" data-search>
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10">
-          <DoodleIcon name="rocket" size={16} className="text-white" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-white/60">Next</p>
-          <p className="text-[15px] font-semibold leading-tight">{v.next.label}</p>
-          {v.next.hint && <p className="text-[12px] text-white/60">{v.next.hint}</p>}
+    <div className="space-y-4">
+      {/* ── greeting and the agent ── */}
+      <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
+        <div className="px-1 pt-1">
+          <h1 className="text-[36px] leading-none">{first}</h1>
+          <p className="mt-2 text-[13.5px] text-muted">{v.intro}</p>
         </div>
-        {v.next.href ? (
-          v.next.external ? (
-            <a href={v.next.href} target="_blank" rel="noreferrer" className="rounded-full bg-white px-4 py-2 text-[12.5px] font-semibold text-ink">
-              Open
-            </a>
-          ) : (
-            <Link href={v.next.href} className="rounded-full bg-white px-4 py-2 text-[12.5px] font-semibold text-ink">
-              Open
-            </Link>
-          )
-        ) : (
-          <span className="text-[12px] text-white/60">Nothing to press yet</span>
-        )}
-      </div>
-
-      <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1fr_1.35fr] lg:grid-rows-[minmax(0,1fr)_auto]">
-        {/* ── row 1, left: the map ── */}
-        <section className="flex min-w-0 flex-col rounded-[20px] bg-white p-4" data-search>
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[13px] font-semibold">Location</p>
-            <DoodleIcon name="search" size={15} className="text-muted" />
-          </div>
-          <div className="mt-3 min-h-[260px] flex-1">
-            <PropertyMap lat={v.property.lat} lng={v.property.lng} address={v.property.address} postcode={v.property.postcode} line={v.property.subtitle} />
-          </div>
-        </section>
-
-        {/* ── row 1, middle: the agent, properly ── */}
-        <section className="flex min-w-0 flex-col rounded-[20px] bg-white p-4" data-search>
-          <p className="text-[13px] font-semibold">Looking after you</p>
-          {v.agent ? (
-            <div className="mt-4 flex items-start gap-4">
-              {v.agent.photo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={v.agent.photo} alt="" className="h-16 w-16 shrink-0 rounded-2xl object-cover" />
-              ) : (
-                <span className="hand flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[#f3f3f1] text-[24px] text-muted">
-                  {v.agent.name[0]}
-                </span>
-              )}
-              <div className="min-w-0">
-                <p className="text-[16px] font-semibold leading-tight">{v.agent.name}</p>
-                {v.agent.title && <p className="text-[12px] text-muted">{v.agent.title}</p>}
-                <div className="mt-2.5 flex flex-wrap gap-2">
-                  {v.agent.phone && (
-                    <a href={`tel:${v.agent.phone.replace(/\s+/g, "")}`} className="inline-flex items-center gap-1.5 rounded-full bg-[#f3f3f1] px-3 py-1.5 text-[12px] font-semibold">
-                      <DoodleIcon name="call" size={12} /> {v.agent.phone}
-                    </a>
-                  )}
-                  {v.agent.email && (
-                    <a href={`mailto:${v.agent.email}`} className="inline-flex items-center gap-1.5 rounded-full bg-[#f3f3f1] px-3 py-1.5 text-[12px] font-semibold">
-                      <DoodleIcon name="mail" size={12} /> Email
-                    </a>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="mt-3 text-[13px] text-muted">Your agent will be in touch.</p>
-          )}
-          {v.agent?.bio && (
-            <p className="mt-4 text-[12.5px] leading-relaxed text-muted">{v.agent.bio}</p>
-          )}
-          <div className="mt-auto pt-4">
-            <AskAgent to={v.agent?.email ?? null} name={v.agent?.name ?? null} property={v.property.address} />
-          </div>
-        </section>
-
-        {/* ── both rows, right: the property ── */}
-        <div className="min-w-0 rounded-[20px] bg-white p-5 lg:row-span-2" data-search>
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[13px] font-semibold">Property details</p>
-            <span className="rounded-full bg-[#f3f3f1] px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wide text-muted">{v.property.state}</span>
-          </div>
-
-          <div className="mt-5 text-center">
-            <h2 className="text-[28px] leading-tight">{v.property.address}</h2>
-            <p className="mt-1 text-[13px] text-muted">{v.property.subtitle}</p>
-          </div>
-
-          <div className="mt-5 overflow-hidden rounded-2xl bg-[#f3f3f1]">
-            <PropertyHero image={v.property.image} lat={v.property.lat} lng={v.property.lng} className="h-[240px] w-full object-cover sm:h-[300px]" />
-          </div>
-
-          <div className="mt-5 flex min-w-0 gap-1 overflow-x-auto rounded-full bg-[#f3f3f1] p-1">
-            {v.beats.map((b, i) => (
-              <span
-                key={b}
-                className={`flex-1 whitespace-nowrap rounded-full px-3 py-2 text-center text-[11.5px] ${
-                  i === v.at ? "bg-ink font-semibold text-white" : i < v.at ? "text-ink" : "text-muted"
-                }`}
-              >
-                {b}
-              </span>
-            ))}
-          </div>
-          <p className="mt-3 text-center text-[12.5px] text-muted">{v.status}</p>
-
-          <div className="mt-5 rounded-2xl bg-[#f3f3f1] p-4">
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <p className="text-[13px] font-semibold">Valuation</p>
-                <p className="mt-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted">{v.valuation.caption}</p>
-                <p className="figures mt-3 text-[36px] leading-none">
-                  {v.valuation.figure ?? "—"}
-                  {v.valuation.figure && <span className="text-[12px] font-normal text-muted"> {v.valuation.unit}</span>}
-                </p>
-              </div>
-              <dl className="space-y-1.5">
-                {v.valuation.lines.map(([k, val]) => (
-                  <div key={k} className="flex items-baseline justify-between gap-6 text-[11.5px]">
-                    <dt className="uppercase tracking-wide text-muted">{k}</dt>
-                    <dd className="font-semibold">{val}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          </div>
-          {v.needs.length > 0 && (
-            <p className="mt-3 text-center text-[12px] text-muted">
-              {left.length === 0 ? "Everything we need is in." : `${done} of ${v.needs.length} things done · ${left.length} still to do, listed below`}
-            </p>
-          )}
-        </div>
-
-        {/* ── row 2, left: three tiles ── */}
-        <div className="grid grid-cols-3 gap-2.5" data-search>
-          {v.actions.slice(0, 3).map((a) => (
-            <ActionTile key={a.label} a={a} />
-          ))}
-        </div>
-
-        {/* ── row 2, middle: the presentation ── */}
-        {v.deck ? (
-          <div className="flex min-w-0 items-center gap-4 rounded-[20px] bg-white p-4" data-search>
-            <div className="h-[92px] w-[132px] shrink-0 overflow-hidden rounded-2xl bg-[#f3f3f1]">
-              <PropertyPhoto src={v.deck.image} alt="" className="h-full w-full object-cover" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">Presentation</p>
-              <p className="mt-0.5 truncate text-[13.5px] font-semibold">{v.deck.title}</p>
-              <p className="truncate text-[11.5px] text-muted">{v.deck.sub}</p>
-            </div>
-            {v.deck.href ? (
-              <a href={v.deck.href} target="_blank" rel="noreferrer" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-ink text-white">
-                <DoodleIcon name="link" size={14} className="text-white" />
-              </a>
+        {v.agent && (
+          <div className="flex flex-wrap items-center gap-3 rounded-[20px] border border-line/70 bg-panel px-4 py-3 lg:self-start" data-search>
+            {v.agent.photo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={v.agent.photo} alt="" className="h-11 w-11 shrink-0 rounded-full object-cover" />
             ) : (
-              <span className="text-[11.5px] text-muted">Coming</span>
+              <span className="hand flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[20px] text-accent-dark">
+                {v.agent.name[0]}
+              </span>
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="whitespace-nowrap text-[13.5px] leading-tight">
+                <span className="text-muted">Your letting agent</span>{" "}
+                <span className="font-semibold">{v.agent.name}</span>
+              </p>
+              <p className="mt-0.5 truncate text-[10.5px] text-muted">
+                {[v.agent.email, v.agent.phone].filter(Boolean).join("  •  ")}
+              </p>
+            </div>
+            {v.agent.email && (
+              <a
+                href={`mailto:${v.agent.email}?subject=${encodeURIComponent(`About ${v.property.address}`)}`}
+                className="inline-flex shrink-0 items-center gap-2 rounded-full border border-line/70 px-3.5 py-1.5 text-[12px] font-semibold transition-colors hover:border-ink/40"
+              >
+                Message {agentFirst}
+                <DoodleIcon name="message" size={12} />
+              </a>
             )}
           </div>
-        ) : (
-          <div className="flex min-w-0 items-center gap-4 rounded-[20px] bg-white p-4 text-[12.5px] text-muted" data-search>
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#f3f3f1]"><DoodleIcon name="doc" size={15} /></span>
-            Your presentation lands here before the visit.
-          </div>
         )}
       </div>
 
-      {/* ── what we need, the only place documents are asked for ── */}
-      {(v.needs.length > 0 || documents) && (
-        <section id="ready" className="mt-3 rounded-[20px] bg-white p-5" data-search>
-          <div className="flex items-center gap-2.5">
-            <DoodleIcon name="shield" size={16} className="text-accent-dark" />
-            <h2 className="text-[19px]">What we need from you</h2>
+      {/* ── the property, and the next steps ── */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.55fr)]">
+        <section className={`${panel} flex min-w-0 flex-col`} data-search>
+          {/* The address keeps at least 60% of the row, so on a phone the
+              drawing drops beneath it rather than squeezing it into one word
+              a line. */}
+          <div className="flex flex-wrap items-start gap-4">
+            <div className="min-w-[60%] flex-1">
+              <span className="inline-block rounded-full bg-accent-soft px-3 py-1 text-[10.5px] font-semibold uppercase tracking-wide text-accent-dark">
+                {v.property.state}
+              </span>
+              <h2 className="mt-3 text-[28px] leading-tight">{v.property.address}</h2>
+              {v.property.facts.length > 0 && (
+                <p className="mt-2.5 flex flex-wrap items-center gap-x-2 text-[12.5px] text-muted">
+                  <DoodleIcon name="home" size={14} />
+                  {v.property.facts.map((f, i) => (
+                    <span key={f} className="flex items-center gap-2">
+                      {i > 0 && <span className="text-line">•</span>}
+                      {f}
+                    </span>
+                  ))}
+                </p>
+              )}
+            </div>
+            <div className="flex h-[128px] w-[128px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent-soft/60">
+              <PropertyHero image={v.property.image} lat={v.property.lat} lng={v.property.lng} className="h-full w-full object-cover" />
+            </div>
           </div>
-          <div className="mt-4 grid gap-6 md:grid-cols-2">
-            <ul className="space-y-2">
-              {v.needs.map((n) => (
-                <li key={n.title} className="flex items-center gap-3 rounded-2xl bg-[#f3f3f1] px-3.5 py-3">
-                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${n.done ? "bg-ink text-white" : "bg-white text-ink"}`}>
-                    <DoodleIcon name={n.done ? "checklist" : "doc"} size={13} />
-                  </span>
-                  <span className="min-w-0">
-                    <span className={`block text-[13px] font-semibold ${n.done ? "text-muted line-through" : ""}`}>{n.title}</span>
-                    {n.sub && <span className="block text-[11.5px] text-muted">{n.sub}</span>}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <div>{documents}</div>
+
+          <div className="mt-5 flex flex-wrap items-end gap-x-8 gap-y-4">
+            <div>
+              <p className={label}>{v.property.rent.caption}</p>
+              <p className="figures mt-1 text-[28px] leading-none">
+                {v.property.rent.figure ?? "—"}
+                {v.property.rent.figure && <span className="text-[11px] font-normal text-muted"> {v.property.rent.unit}</span>}
+              </p>
+            </div>
+            {v.property.valuedOn && (
+              <div className="border-l border-line/60 pl-8">
+                <p className={label}>Valued on</p>
+                <p className="mt-1 text-[15px] font-semibold">{v.property.valuedOn}</p>
+              </div>
+            )}
+            <span className="ml-auto inline-flex items-center gap-2 rounded-full border border-line/70 px-4 py-2 text-[12.5px] font-semibold text-muted">
+              View property details <span className="text-[11px]">›</span>
+            </span>
           </div>
         </section>
-      )}
-    </>
+
+        <section className="rounded-[20px] border border-line/70 bg-panel p-5" data-search>
+          <h2 className="text-[17px]">Next steps</h2>
+          <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
+            {v.steps.map((s) => (
+              <StepTile key={s.id} s={s} />
+            ))}
+          </div>
+        </section>
+      </div>
+
+      {/* ── the spine ── */}
+      <section className={panel} data-search>
+        <h2 className="text-[17px]">Your letting journey</h2>
+        <ol className="mt-6 grid grid-cols-3 gap-y-6 sm:grid-cols-6">
+          {v.journey.map((s, i) => {
+            const prevDone = i > 0 && v.journey[i - 1].state === "done";
+            return (
+              <li key={s.id} className="relative flex flex-col items-center text-center">
+                {/* The line into this stop. None into the first, and none
+                    into the first of the second row on a phone, where three
+                    stops sit per row and a line would run in from nowhere. */}
+                {i > 0 && (
+                  <span
+                    className={`absolute left-[-50%] right-[50%] top-[13px] ${i === 3 ? "hidden sm:block" : ""} ${
+                      prevDone && s.state !== "upcoming" ? "h-0.5 bg-accent-dark" : "h-0 border-t-2 border-dashed border-line"
+                    }`}
+                  />
+                )}
+                <span
+                  className={`relative z-[1] flex h-7 w-7 items-center justify-center rounded-full ${
+                    s.state === "done"
+                      ? "bg-accent-dark text-white"
+                      : s.state === "current"
+                        ? "border-[3px] border-accent-dark bg-panel"
+                        : "border-2 border-dashed border-line bg-panel"
+                  }`}
+                >
+                  {s.state === "done" && <DoodleIcon name="checklist" size={12} className="text-white" />}
+                  {s.state === "current" && <span className="h-2.5 w-2.5 rounded-full bg-accent-dark" />}
+                </span>
+                <p className={`mt-2.5 text-[12px] ${s.state === "upcoming" ? "text-muted" : "font-semibold"}`}>{s.label}</p>
+                <p className="text-[11px] text-muted">{s.sub}</p>
+              </li>
+            );
+          })}
+        </ol>
+      </section>
+
+      {/* ── documents, snapshot, activity ── */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <section className={`${panel} flex flex-col`} id="documents" data-search>
+          <h2 className="text-[17px]">Documents</h2>
+          <ul className="mt-3 space-y-2.5">
+            {v.documents.map((d) => (
+              <li key={d.title} className="flex items-center gap-3">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-line/60 bg-white text-muted">
+                  <DoodleIcon name={d.state === "uploaded" ? "shield" : "doc"} size={13} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-semibold">{d.title}</span>
+                  <span className="block truncate text-[11.5px] text-muted">{d.sub}</span>
+                </span>
+                <span
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] ${
+                    d.state === "uploaded" ? "bg-[#e8f5ec] text-[#1e7a3c]" : d.state === "missing" ? "bg-[#fff1e6] text-[#b4610d]" : "bg-[#f3f3f1] text-muted"
+                  }`}
+                >
+                  {d.state === "uploaded" ? "✓" : d.state === "missing" ? "!" : "…"}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="mt-auto pt-4">{upload}</div>
+        </section>
+
+        <section className={panel} data-search>
+          <h2 className="text-[17px]">Property snapshot</h2>
+          <div className="mt-3 flex items-center gap-6">
+            <div className="flex shrink-0 flex-col items-center">
+              <p className={label}>Readiness</p>
+              <Ring pct={v.snapshot.readinessPct} />
+            </div>
+            <dl className="min-w-0 flex-1 space-y-2">
+              {v.snapshot.lines.map(([k, val]) => (
+                <div key={k} className="flex items-baseline justify-between gap-3 text-[12.5px]">
+                  <dt className="text-muted">{k}</dt>
+                  <dd className="text-right font-semibold">{val}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+          <p className="mt-3 text-[12px] text-muted">{v.snapshot.note}</p>
+        </section>
+
+        <section className={panel} data-search>
+          <h2 className="text-[17px]">Recent activity</h2>
+          {v.activity.length ? (
+            <ol className="mt-3 space-y-3">
+              {v.activity.map((a, i) => (
+                <li key={`${a.title}-${i}`} className="relative flex gap-3">
+                  {i < v.activity.length - 1 && <span className="absolute left-[15px] top-8 h-[calc(100%-8px)] w-px bg-line/60" />}
+                  <span className="relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+                    <DoodleIcon name={a.icon} size={13} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[13px] font-semibold">{a.title}</span>
+                    <span className="block text-[11.5px] text-muted">{a.sub}</span>
+                  </span>
+                  <span className="shrink-0 text-[11px] text-muted">{a.date}</span>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="mt-4 text-[12.5px] text-muted">Nothing yet. What happens on the property shows up here.</p>
+          )}
+        </section>
+      </div>
+
+      {managed}
+    </div>
   );
 }
 
-function ActionTile({ a }: { a: ViewAction }) {
-  const dark = a.tone === "dark";
-  const cls = `flex min-h-[112px] flex-col items-center justify-center gap-2 rounded-[20px] p-3 text-center transition-transform hover:scale-[1.02] ${
-    dark ? "bg-ink text-white" : "bg-white text-ink"
-  } ${a.href ? "" : "opacity-60"}`;
+function StepTile({ s }: { s: ViewStep }) {
+  const cls = `flex flex-col items-center rounded-2xl border border-line/60 bg-white px-3 py-4 text-center transition-colors ${
+    s.href ? "hover:border-ink/40" : "opacity-50"
+  }`;
   const inner = (
     <>
-      <DoodleIcon name={a.icon} size={20} className={dark ? "text-white" : "text-ink"} />
-      <span className="text-[12px] font-semibold leading-tight">{a.label}</span>
-      {a.hint && <span className={`text-[10px] leading-tight ${dark ? "text-white/60" : "text-muted"}`}>{a.hint}</span>}
+      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+        <DoodleIcon name={s.icon} size={18} />
+      </span>
+      <span className="mt-3 text-[13px] font-semibold leading-tight">{s.label}</span>
+      <span className="mt-1 text-[11.5px] leading-snug text-muted">{s.sub}</span>
+      <span className="mt-2.5 text-[13px] text-muted">›</span>
     </>
   );
-  if (!a.href) return <div className={cls}>{inner}</div>;
-  return a.external ? (
-    <a href={a.href} target="_blank" rel="noreferrer" className={cls}>{inner}</a>
+  if (!s.href) return <div className={cls}>{inner}</div>;
+  return s.external ? (
+    <a href={s.href} target="_blank" rel="noreferrer" className={cls}>{inner}</a>
   ) : (
-    <Link href={a.href} className={cls}>{inner}</Link>
+    <Link href={s.href} className={cls}>{inner}</Link>
+  );
+}
+
+/** The readiness ring, the figure inside it. */
+function Ring({ pct }: { pct: number }) {
+  const p = Math.max(0, Math.min(100, Math.round(pct)));
+  const r = 40;
+  const c = 2 * Math.PI * r;
+  return (
+    <div className="relative mt-1.5 h-[96px] w-[96px]">
+      <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
+        <circle cx="50" cy="50" r={r} fill="none" stroke="var(--line)" strokeOpacity="0.45" strokeWidth="8" />
+        <circle
+          cx="50"
+          cy="50"
+          r={r}
+          fill="none"
+          stroke="var(--accent-dark)"
+          strokeWidth="8"
+          strokeLinecap="round"
+          strokeDasharray={`${(p / 100) * c} ${c}`}
+        />
+      </svg>
+      <p className="figures absolute inset-0 flex items-center justify-center text-[22px]">{p}%</p>
+    </div>
   );
 }
