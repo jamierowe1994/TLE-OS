@@ -218,6 +218,36 @@ export default function RecordSession({ appraisalId }: { appraisalId: string }) 
     };
   }, [appraisalId, openRecorder, stopPolling]);
 
+  /* WHILE THE RECORDER IS OPEN, WATCH THE SLOT ANYWAY. The take may be
+     happening on the other device - the phone that scanned this laptop's
+     code - and this page only hears the frame in front of it. A slow look
+     at our own API every few seconds is what lets the laptop flip to
+     "Saving…" and "All done" for a take it never saw. */
+  useEffect(() => {
+    if (phase !== "ready" || !deck) return;
+    const token = deck.token;
+    const tick = setInterval(async () => {
+      try {
+        const d = (await fetch(`/api/video?token=${encodeURIComponent(token)}`).then((r) => r.json())) as {
+          video?: WelcomeVideo | null;
+        };
+        const v = d.video;
+        if (!v) return;
+        if (v.status === "ready") {
+          setVideo(v);
+          setPhase("done");
+        } else if (v.status === "uploading" || v.status === "processing") {
+          setVideo(v);
+          setPhase("saving");
+          watch(token);
+        }
+      } catch {
+        /* Transient. Next tick. */
+      }
+    }, 5000);
+    return () => clearInterval(tick);
+  }, [phase, deck, watch]);
+
   /* The code for carrying on by phone - only where there is a laptop to
      hold it up to. */
   useEffect(() => {
