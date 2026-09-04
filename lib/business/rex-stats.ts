@@ -1,6 +1,7 @@
 import "server-only";
 import type { FunnelStats } from "./types";
 import { rexCall, rexRows, rexConfigured, rexLettingsAgents } from "./rex";
+import { readCache, writeCache } from "./integration-cache";
 
 // Per-agent funnel stats from REX — live pulls confirmed against the live
 // account (3517, "The Property Experts" — Property + Lettings share it) via the
@@ -2380,6 +2381,21 @@ const BUSINESS_LISTINGS_MAX_PAGES = 20;
 const LETTINGS_CATEGORIES = ["residential_rental", "rental", "commercial_rental"];
 let businessListings: { at: number; data: AgentListing[] } | null = null;
 let businessListingsInflight: Promise<AgentListing[] | null> | null = null;
+/* The same index, in the database, so a deploy does not throw it away.
+   James, 4 Sep: ten deploys in a day and the board had no photos all day -
+   every fresh process paid the ten-second walk, missed the board's deadline,
+   and rendered nothing. A fresh process now reads the last good walk from
+   here in milliseconds and refreshes it behind the request. */
+const BUSINESS_LISTINGS_CACHE_KEY = "rex:business-listings:v1";
+let businessListingsDurableRead: Promise<void> | null = null;
+
+async function seedBusinessListingsFromDurable(): Promise<void> {
+  if (businessListings) return;
+  const kept = await readCache<AgentListing[]>(BUSINESS_LISTINGS_CACHE_KEY).catch(() => null);
+  if (kept && Array.isArray(kept.data) && kept.data.length > 0 && !businessListings) {
+    businessListings = { at: kept.at, data: kept.data };
+  }
+}
 
 /**
  * Timed 2 Aug 2026: eight pages, one after another, 10.6 SECONDS — and it sat
@@ -2405,6 +2421,12 @@ const LISTINGS_PAGE_TIMEOUT_MS = 45_000;
 
 export async function getBusinessListings(): Promise<AgentListing[] | null> {
   if (!rexConfigured()) return null;
+  if (!businessListings) {
+    /* Once per process: the last good walk, from the database. Shared so
+       eight concurrent first requests do not each read it. */
+    businessListingsDurableRead ??= seedBusinessListingsFromDurable().catch(() => undefined);
+    await businessListingsDurableRead;
+  }
   const cached = businessListings;
   if (cached && Date.now() - cached.at < BUSINESS_LISTINGS_TTL_MS) return cached.data;
 
@@ -2505,6 +2527,9 @@ function startBusinessListingsRefresh(): Promise<AgentListing[] | null> {
     if (rows.length === 0) return null;
     const data = rows.map(toListing);
     businessListings = { at: Date.now(), data };
+    /* Kept for the next process. Never written empty: an empty walk returned
+       null above, so a bad night at REX cannot overwrite a good index. */
+    void writeCache(BUSINESS_LISTINGS_CACHE_KEY, data);
     return data;
   })();
 
@@ -2528,7 +2553,9 @@ function startBusinessListingsRefresh(): Promise<AgentListing[] | null> {
  * with them. Giving up does NOT cancel the walk — it carries on filling the
  * cache, so the next load has the pictures.
  */
-export async function getBusinessPhotoIndex(deadlineMs?: number): Promise<PhotoIndex> {
+let lastGoodPhotoIndex: PhotoIndex | null = null;
+
+export async function getBusinessPhotoIndex(deadlineMs?: number): Promise<PhotoIndex | null> {
   const work = getBusinessListings().catch(() => null);
   const listings = deadlineMs
     ? await Promise.race([
@@ -2536,8 +2563,14 @@ export async function getBusinessPhotoIndex(deadlineMs?: number): Promise<PhotoI
         new Promise<null>((resolve) => setTimeout(() => resolve(null), deadlineMs)),
       ])
     : await work;
+  /* NULL, NOT AN EMPTY MAP, when nothing came back in time. An empty Map is
+     truthy, and the board could not tell "never loaded" from "nothing
+     matched" - it rendered a house doodle on every tile and hid the
+     compliance column with it. And a good index is never replaced by an
+     empty one: the last one built is handed back instead. */
+  if (!listings || listings.length === 0) return lastGoodPhotoIndex;
   const index: PhotoIndex = new Map();
-  for (const l of listings ?? []) {
+  for (const l of listings) {
     const pc = postcodeOf(l.name, l.locality);
     if (!pc || !l.image) continue;
     const { numbers, words } = tokensOf(l.name);
@@ -2560,7 +2593,8 @@ export async function getBusinessPhotoIndex(deadlineMs?: number): Promise<PhotoI
   for (const bucket of index.values()) {
     bucket.sort((a, b) => b.images.length - a.images.length);
   }
-  return index;
+  if (index.size > 0) lastGoodPhotoIndex = index;
+  return index.size > 0 ? index : lastGoodPhotoIndex;
 }
 
 export async function getAgentPhotoIndex(rexUserId: string): Promise<PhotoIndex> {
