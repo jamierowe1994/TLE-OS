@@ -2026,7 +2026,11 @@ function DealWorkspace({
                               NOW
                             </span>
                           ) : null}
-                          {!cancelled && state !== "current" ? (
+                          {/* Only Move day moves by hand (4 Sep). The other
+                              seven are read from the PLC pack, the deposit and
+                              PayProp, so a button here would be overruled on
+                              the next load. */}
+                          {!cancelled && state !== "current" && s.key === "move_day" ? (
                             <button
                               type="button"
                               disabled={busy}

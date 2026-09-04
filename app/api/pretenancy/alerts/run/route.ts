@@ -3,7 +3,9 @@ import { timingSafeEqual } from "node:crypto";
 import { requireCapability } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
 import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
-import { effectivePortalStage, getOverlays } from "@/lib/business/deal-store";
+import { getOverlays } from "@/lib/business/deal-store";
+import { derivePortalStage, stageFactsFor } from "@/lib/business/deal-stage";
+import { listCases } from "@/lib/plc-store";
 import { loadMoneyContext, moneyForDeal } from "@/lib/business/deal-money";
 import { dealAlerts, digestText, type AlertDeal, type DealAlert } from "@/lib/business/deal-alerts";
 import { alreadySent, markSent, clearResolved } from "@/lib/business/alert-store";
@@ -75,13 +77,16 @@ async function collect(): Promise<{ alerts: DealAlert[]; loaded: boolean; deals:
   ]);
   if (!deals || !money) return { alerts: [], loaded: false, deals: 0 };
 
-  const overlays = await getOverlays(deals.map((d) => d.app.id)).catch(() => new Map());
+  const [overlays, cases] = await Promise.all([
+    getOverlays(deals.map((d) => d.app.id)).catch(() => new Map()),
+    listCases().catch(() => []),
+  ]);
   const rows: AlertDeal[] = deals.map((d) => {
     const meta = overlays.get(d.app.id)?.meta ?? null;
     const m = moneyForDeal(money, d.app.propertyName, d.app.startDate);
     return {
       app: { id: d.app.id, propertyName: d.app.propertyName },
-      effectiveStatusKey: effectivePortalStage(d.statusKey, meta),
+      effectiveStatusKey: derivePortalStage(d.statusKey, stageFactsFor(d, meta, cases, money), meta),
       statusKey: d.statusKey,
       agentName: d.managerName ?? null,
       startDate: d.app.startDate,

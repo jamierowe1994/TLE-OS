@@ -8,7 +8,8 @@ import {
   getComplianceForProperties,
   type DealCompliance,
 } from "@/lib/business/rex-stats";
-import { effectivePortalStage, getOverlays } from "@/lib/business/deal-store";
+import { getOverlays } from "@/lib/business/deal-store";
+import { derivePortalStage, loadStageSources, stageFactsFor } from "@/lib/business/deal-stage";
 import { getPortfolioBook, propertyKey } from "@/lib/business/payprop-portfolio";
 import { getTobRegister, type TobStatus } from "@/lib/business/rex-esign";
 import { loadMoneyContext, moneyForDeal } from "@/lib/business/deal-money";
@@ -159,6 +160,8 @@ export async function GET(req: NextRequest) {
   }
 
   const overlays = await getOverlays(deals.map((d) => d.app.id));
+  /* The records seven of the eight stages are read from. See deal-stage. */
+  const stageSources = await loadStageSources();
   const today = new Date().toISOString().slice(0, 10);
   const THIRTY_DAYS_AGO = new Date(Date.now() - 30 * 86_400_000)
     .toISOString()
@@ -208,7 +211,11 @@ export async function GET(req: NextRequest) {
   const out: PreTenancyDeal[] = deals.map((d) => {
     const entry = overlays.get(d.app.id);
     const meta = entry?.meta ?? null;
-    const effective = effectivePortalStage(d.statusKey, meta);
+    const effective = derivePortalStage(
+      d.statusKey,
+      stageFactsFor(d, meta, stageSources.cases, stageSources.money),
+      meta
+    );
     const overlay: DealPortalOverlay = entry
       ? {
           ...entry.overlay,

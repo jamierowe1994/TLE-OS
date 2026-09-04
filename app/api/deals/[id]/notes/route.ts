@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDealAccess } from "@/lib/business/deal-access";
-import { addNote, effectivePortalStage, getMeta, listNotes } from "@/lib/business/deal-store";
+import { addNote, getMeta, listNotes } from "@/lib/business/deal-store";
+import { derivedStageFor } from "@/lib/business/deal-stage";
 
 // One deal's activity + notes, plus the portal meta the drawers need.
 // Kirstie/admin reach any deal; an agent only their own.
@@ -30,7 +31,7 @@ export async function GET(
     privateNotes,
     meta,
     statusKey: access.deal.statusKey,
-    effectiveStatusKey: effectivePortalStage(access.deal.statusKey, meta),
+    effectiveStatusKey: await derivedStageFor(access.deal, meta),
   });
 }
 

@@ -4,7 +4,8 @@ import { latestHandover } from "@/lib/handover";
 import { getCase } from "@/lib/plc-store";
 import { PLC_STATES } from "@/lib/plc";
 import { getAllPropolyDeals, type BusinessDeal } from "@/lib/business/propoly-deals";
-import { effectivePortalStage, getOverlays, getMeta } from "@/lib/business/deal-store";
+import { getOverlays, getMeta } from "@/lib/business/deal-store";
+import { derivePortalStage } from "@/lib/business/deal-stage";
 import { loadMoneyContext, moneyForDeal, type MoneyContext } from "@/lib/business/deal-money";
 import { stageEvidence } from "@/lib/business/stage-evidence";
 import { PORTAL_STAGES, PROPOLY_APP_URL } from "@/lib/business/propoly-stages";
@@ -209,7 +210,24 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
   if (deal) {
     const [overlays, m] = await Promise.all([getOverlays([deal.app.id]).catch(() => new Map()), money()]);
     const meta = overlays.get(deal.app.id)?.meta ?? null;
-    const stageKey = effectivePortalStage(deal.statusKey, meta);
+    /* The same derivation Kirstie's board uses, from the same records, so
+       the agent's spine and her board never disagree about where a deal is.
+       The PLC case here is the application's own rather than an address
+       match, which is the truer of the two. */
+    const journeyMoney = m ? moneyForDeal(m, deal.app.propertyName, deal.app.startDate) : null;
+    const stageKey = derivePortalStage(
+      deal.statusKey,
+      {
+        plcState: plcCase?.state ?? null,
+        plcCaseId: plcCase?.id ?? null,
+        depositDone:
+          meta?.checklist?.deposit_registered?.done === true ||
+          Boolean(meta?.depositScheme) ||
+          Boolean(journeyMoney?.tenancy?.depositId),
+        rentIn: Boolean(journeyMoney?.rentReceived),
+      },
+      meta
+    );
     const currentIdx = Math.max(0, PORTAL_STAGES.findIndex((s) => s.key === stageKey));
     const evidenceDeal = m ? { ...moneyForDeal(m, deal.app.propertyName, deal.app.startDate), startDate: deal.app.startDate } : { startDate: deal.app.startDate };
     dealInfo = { id: deal.app.id, stage: stageKey, url: `${PROPOLY_APP_URL}/deals/${deal.app.id}` };

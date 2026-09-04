@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveDealAccess } from "@/lib/business/deal-access";
 import {
-  effectivePortalStage,
   logSystemEvent,
   setChecklistItem,
   setStageOverride,
@@ -9,6 +8,7 @@ import {
   setDepositScheme,
 } from "@/lib/business/deal-store";
 import { CHECKLIST_ITEMS, DEPOSIT_SCHEMES, PORTAL_STAGE_BY_KEY } from "@/lib/business/propoly-stages";
+import { derivedStageFor } from "@/lib/business/deal-stage";
 
 // Pre-tenancy actions on one deal — Kirstie (or an admin) only:
 //   POST { stage: "references" }        move the deal's displayed stage
@@ -50,6 +50,15 @@ export async function POST(
     if (stage !== null && (typeof stage !== "string" || !PORTAL_STAGE_BY_KEY[stage])) {
       return NextResponse.json({ error: "Unknown stage." }, { status: 400 });
     }
+    /* Only Move day moves by hand now (4 Sep). Every other stage is read from
+       a record - the PLC case, the deposit, PayProp's rent - and the way to
+       change it is to change the record. */
+    if (stage !== null && stage !== "move_day") {
+      return NextResponse.json(
+        { error: "Stages move on their own now. Only Move day is moved by hand; the rest follow the PLC pack, the deposit and PayProp." },
+        { status: 400 }
+      );
+    }
     const meta = await setStageOverride(
       id,
       stage as string | null,
@@ -66,7 +75,7 @@ export async function POST(
     return NextResponse.json({
       meta,
       statusKey: access.deal.statusKey,
-      effectiveStatusKey: effectivePortalStage(access.deal.statusKey, meta),
+      effectiveStatusKey: await derivedStageFor(access.deal, meta),
     });
   }
 
@@ -85,7 +94,7 @@ export async function POST(
     return NextResponse.json({
       meta,
       statusKey: access.deal.statusKey,
-      effectiveStatusKey: effectivePortalStage(access.deal.statusKey, meta),
+      effectiveStatusKey: await derivedStageFor(access.deal, meta),
     });
   }
 
@@ -105,7 +114,7 @@ export async function POST(
     return NextResponse.json({
       meta,
       statusKey: access.deal.statusKey,
-      effectiveStatusKey: effectivePortalStage(access.deal.statusKey, meta),
+      effectiveStatusKey: await derivedStageFor(access.deal, meta),
     });
   }
 
@@ -124,7 +133,7 @@ export async function POST(
     return NextResponse.json({
       meta,
       statusKey: access.deal.statusKey,
-      effectiveStatusKey: effectivePortalStage(access.deal.statusKey, meta),
+      effectiveStatusKey: await derivedStageFor(access.deal, meta),
     });
   }
 
