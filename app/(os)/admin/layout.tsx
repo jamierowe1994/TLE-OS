@@ -99,6 +99,11 @@ const GROUPS: Array<{
          need to see that. That's for my referencing and testing." An agent's
          connections page is a different thing — theirs, and further down. */
       { href: "/admin/connections", label: "Wiring", needs: "see:wiring" },
+      /* Wiring says what the OS is connected to. Testing says whether the
+         processes built on those connections have been walked by a person -
+         the red, amber, green James asked for on 4 Sep so that the run-up to
+         agents being let in is a list of walks, not a feeling. */
+      { href: "/admin/testing", label: "Testing", needs: "see:wiring" },
       /* Separate from Wiring on purpose. Wiring reports and never changes
          anything - its own note says a page that could arm a send is a page
          that can arm one by accident. This is the one that arms, and it is
