@@ -69,6 +69,9 @@ import {
   Slide,
   TINTS,
   ACCENT_HEX,
+  Art,
+  DeckStyleCtx,
+  useIsPhoto,
   themeVars,
   isCream,
   type IconName,
@@ -106,6 +109,7 @@ import * as S from "@/components/PresentSlides";
  */
 function Welcome({ deck, show }: { deck: Deck; show: boolean }) {
   const { property, recipientName } = deck;
+  const isPhoto = useIsPhoto();
 
   return (
     <section
@@ -200,14 +204,17 @@ function Welcome({ deck, show }: { deck: Deck; show: boolean }) {
             promises off a phone screen, and the promises are the argument. */}
         <Rise show={show} i={2} className="relative hidden lg:block">
           <div className="relative">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/brand/sitting-chair.png"
-              alt=""
-              aria-hidden
-              className="ml-auto w-full max-w-[620px]"
+            <Art
+              slot="welcome"
+              drawing="/brand/sitting-chair.png"
+              className="ml-auto max-w-[620px]"
+              photoClassName="!max-w-[420px]"
             />
-            <Aside show={show} />
+            {/* The margin note is a DRAWN flourish - handwriting with a
+                pen-stroke arrow, pointing into artwork. Over a photograph it
+                is illegible and looks like a mistake, so the photographic
+                style does without it. */}
+            {!isPhoto && <Aside show={show} />}
           </div>
         </Rise>
       </div>
@@ -1495,12 +1502,11 @@ function Questions({ deck, show }: { deck: Deck; show: boolean }) {
         </div>
 
         <Rise show={show} i={3} className="hidden lg:block">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/brand/art/keys-handover.png"
-            alt=""
-            aria-hidden
-            className="ml-auto w-full max-w-[470px]"
+          <Art
+            slot="close"
+            drawing="/brand/art/keys-handover.png"
+            className="ml-auto max-w-[470px]"
+            photoClassName="!max-w-[380px]"
           />
         </Rise>
       </div>
@@ -1832,6 +1838,7 @@ export default function PresentDeck({
        `var(--p-display)` or `var(--p-accent)` without knowing a choice exists,
        so switching look is one attribute on one element - no remount, nothing
        to keep in step. See themeVars in present-kit. */
+    <DeckStyleCtx.Provider value={asStyle(deck.style)}>
     <div
       className="relative h-[100dvh] w-full overflow-hidden"
       style={themeVars(asStyle(deck.style))}
@@ -2012,5 +2019,6 @@ export default function PresentDeck({
         </div>
       </div>
     </div>
+    </DeckStyleCtx.Provider>
   );
 }

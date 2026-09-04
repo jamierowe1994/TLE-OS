@@ -35,8 +35,10 @@ import {
   HandHead,
   INK,
   Line,
+  Art,
   Mark,
   PropertyDetail,
+  useIsPhoto,
   MIST,
   PAPER,
   RED,
@@ -361,6 +363,7 @@ export function PropertyDivider({ deck, show }: { deck: Deck; show: boolean }) {
      line above it already, and a handwritten note is a note — repeating the
      town and the postcode in it turns a scribble into a label. */
   const short = (p.address || "").split(",")[0].trim();
+  const isPhoto = useIsPhoto();
 
   return (
     <CreamSlide id="property">
@@ -394,19 +397,19 @@ export function PropertyDivider({ deck, show }: { deck: Deck; show: boolean }) {
 
         {/* ── the street ── */}
         <Rise show={show} i={3}>
-          <div className="relative mx-auto mt-6 w-full max-w-[660px]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/illustrations/houses-still.png"
-              alt=""
-              aria-hidden
-              className="w-full"
-            />
+          <div className="relative mx-auto mt-6 w-full max-w-[720px]">
+            <Art slot="property" drawing="/illustrations/houses-still.png" ratio="16 / 7" />
 
             {/* The note, and the point of the slide. Positioned against the
                 DRAWING rather than the slide, so it keeps pointing at the red
-                house however the picture scales. */}
-            {short && (
+                house however the picture scales.
+
+                GONE in the photographic style, and it has to be: the joke is
+                an arrow pointing at the one house picked out in red, and there
+                is no red house in a photograph. An arrow aimed at a random
+                window is not a quieter version of the joke, it is a mistake.
+                The address is already on the line above. */}
+            {short && !isPhoto && (
               <div
                 className="pointer-events-none absolute left-[6%] top-[-6%] w-[46%] text-left"
                 style={{
@@ -866,9 +869,12 @@ export function MarketingDivider({ show }: { show: boolean }) {
         </Rise>
 
         <Rise show={show} i={3}>
-          <div className="relative mx-auto mt-7 w-full max-w-[620px]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/illustrations/buildings-street.png" alt="" aria-hidden className="w-full" />
+          <div className="relative mx-auto mt-7 w-full max-w-[720px]">
+            <Art
+              slot="marketing"
+              drawing="/illustrations/buildings-street.png"
+              ratio="16 / 7"
+            />
           </div>
         </Rise>
       </div>
@@ -1576,12 +1582,11 @@ export function Protection({ show }: { show: boolean }) {
         {/* Hidden below lg, like the entrance. Stacked it pushes three
             paragraphs off a phone, and the paragraphs are the argument. */}
         <Rise show={show} i={2} className="hidden lg:block">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/brand/art/landlord-sofa.png"
-            alt=""
-            aria-hidden
-            className="ml-auto w-full max-w-[500px]"
+          <Art
+            slot="protection"
+            drawing="/brand/art/landlord-sofa.png"
+            className="ml-auto max-w-[500px]"
+            photoClassName="!max-w-[400px]"
           />
         </Rise>
       </div>

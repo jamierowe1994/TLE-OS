@@ -785,3 +785,78 @@ export function PropertyDetail({
     </div>
   );
 }
+
+/* ───────────────────────── artwork per style ───────────────────────── */
+
+/**
+ * WHICH LOOK IS ON, as React can see it.
+ *
+ * The theme itself travels as CSS variables, which is what keeps the diff
+ * small - but swapping a drawing for a photograph is not a colour, it is a
+ * different `src` and a different treatment, and no variable can do that. So
+ * the style is ALSO in context. The variables still do the styling; this only
+ * answers "drawn or photographed?".
+ */
+export const DeckStyleCtx = React.createContext<PresentStyle>("hand");
+
+/**
+ * One picture, in whichever medium the deck is wearing.
+ *
+ * ── Why the two are not interchangeable ───────────────────────────────────
+ *
+ * An illustration is a transparent PNG that sits ON the page: no frame, no
+ * crop, the ground shows through it. A photograph is a rectangle and needs a
+ * corner radius and a fixed aspect or it reads as a stock image dropped into a
+ * document. Rendering both from one <img> tag would have meant one of them
+ * looking wrong, so the component branches.
+ *
+ * A slot with no photograph falls back to its drawing rather than rendering a
+ * hole - which is also what makes adding photographs incremental: five exist
+ * today, and a sixth slot works the moment a file lands next to them.
+ */
+const PHOTO_SLOTS = new Set(["welcome", "property", "marketing", "protection", "close"]);
+
+export function Art({
+  slot,
+  drawing,
+  className = "",
+  /** Photographs only: the shape to crop into. */
+  ratio = "4 / 5",
+  /** Photographs only: a tighter cap, because a 4:5 portrait at the width an
+   *  illustration wants is taller than the slide it sits on. */
+  photoClassName = "",
+}: {
+  /** The file stem under /brand/photo, and the identity of the slot. */
+  slot: string;
+  /** The illustration this slot uses in the drawn styles. */
+  drawing: string;
+  className?: string;
+  ratio?: string;
+  photoClassName?: string;
+}) {
+  const style = React.useContext(DeckStyleCtx);
+  const asPhoto = THEMES[style]?.art === "photo" && PHOTO_SLOTS.has(slot);
+
+  if (asPhoto) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={`/brand/photo/${slot}.jpg`}
+        alt=""
+        aria-hidden
+        className={`w-full rounded-[20px] object-cover ${className} ${photoClassName}`}
+        style={{ aspectRatio: ratio }}
+      />
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={drawing} alt="" aria-hidden className={`w-full ${className}`} />
+  );
+}
+
+/** Whether the deck is wearing photographs — for the handful of places that
+ *  need to drop a hand-drawn flourish rather than swap a picture. */
+export function useIsPhoto(): boolean {
+  return THEMES[React.useContext(DeckStyleCtx)]?.art === "photo";
+}
