@@ -339,13 +339,24 @@ const PATHS: Record<IconName, React.ReactNode> = {
   ),
 };
 
-export function Line({ name, size = 24 }: { name: IconName; size?: number }) {
+export function Line({
+  name,
+  size = 24,
+  filled = false,
+}: {
+  name: IconName;
+  size?: number;
+  /** Solid rather than outlined. Only the star needs it, and it needs it
+   *  badly: five outlined stars beside a five-star review read as five EMPTY
+   *  stars, which says the opposite of what the slide is for. */
+  filled?: boolean;
+}) {
   return (
     <svg
       width={size}
       height={size}
       viewBox="0 0 24 24"
-      fill="none"
+      fill={filled ? "currentColor" : "none"}
       stroke="currentColor"
       strokeWidth={1.4}
       strokeLinecap="round"

@@ -1053,32 +1053,28 @@ export function Video({ deck, show }: { deck: Deck; show: boolean }) {
  * most agencies photograph a property and write the rooms. Saying out loud
  * that we interview the OWNER about living there is the thing a landlord
  * repeats to whoever else decides.
+ *
+ * It had a drawing beside it and lost it (James, 4 Sep: "these mostly need to
+ * be text-based"). A desk with a laptop on it said nothing this paragraph does
+ * not, and an illustration that only fills space spends the licence the four
+ * that earn it are relying on.
  */
 export function Brochure({ show }: { show: boolean }) {
   return (
     <CreamSlide id="brochure">
-      <div className="mx-auto grid w-full max-w-[1200px] items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
-        <div className="max-w-[580px]">
+      <div className="mx-auto w-full max-w-[980px]">
+        <div className="max-w-[720px]">
           <HandHead eyebrow="The brochure" show={show} lines={2}>
             We sell the life,
             <br />
             not the <Emphasis show={show}>floorplan</Emphasis>
           </HandHead>
           <Rise show={show} i={2}>
-            <p className="mt-7 text-[14.5px] font-light leading-[1.75] text-black/65">
+            <p className="mt-7 max-w-[640px] text-[15px] font-light leading-[1.8] text-black/65">
               {BROCHURE_COPY.body}
             </p>
           </Rise>
         </div>
-        <Rise show={show} i={2} className="hidden lg:block">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/brand/art/agent-desk.png"
-            alt=""
-            aria-hidden
-            className="ml-auto w-full max-w-[440px]"
-          />
-        </Rise>
       </div>
     </CreamSlide>
   );
@@ -1744,58 +1740,50 @@ export function Network({ show }: { show: boolean }) {
 /**
  * One review, with a real name on it. Never a composite.
  *
- * Set at display size because it is the only slide in the deck where somebody
- * else is doing the talking, and that is worth hearing rather than skimming.
+ * The only slide where somebody other than us is talking, which is exactly why
+ * it is set large and given the page to itself. It had a drawing beside it and
+ * lost it: a picture next to a quotation competes with the one voice on the
+ * slide that is not ours, and that voice is the entire reason the slide is
+ * here.
  */
 export function Testimonial({ deck, show }: { deck: Deck; show: boolean }) {
   const t = deck.testimonial;
   if (!t?.quote) return null;
   return (
     <CreamSlide id="testimonial">
-      <div className="mx-auto grid w-full max-w-[1200px] items-center gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16">
-        <div className="max-w-[640px]">
-          <Rise show={show} i={0}>
-            <span className="block text-[11px] font-semibold uppercase tracking-[0.3em] text-black/40">
-              What landlords say
-            </span>
-          </Rise>
-          <Rise show={show} i={1}>
-            <blockquote
-              className="mt-5 leading-[1.3]"
-              style={{ fontFamily: HAND, fontWeight: 700, fontSize: "clamp(22px, 2.6vw, 34px)" }}
-            >
-              &ldquo;{t.quote}&rdquo;
-            </blockquote>
-          </Rise>
-          <Rise show={show} i={2}>
-            <div className="mt-6 flex items-center gap-3 border-t border-black/10 pt-4">
-              {t.rating != null && (
-                <span
-                  className="flex gap-[3px]"
-                  style={{ color: CORAL }}
-                  aria-label={`${t.rating} out of 5`}
-                >
-                  {Array.from({ length: Math.max(0, Math.min(5, Math.round(t.rating))) }).map(
-                    (_, n) => (
-                      <Line key={n} name="star" size={15} />
-                    )
-                  )}
-                </span>
-              )}
-              <span className="text-[13.5px]" style={{ fontFamily: HAND, fontWeight: 700 }}>
-                {t.author}
+      <div className="mx-auto w-full max-w-[900px]">
+        <Rise show={show} i={0}>
+          <span className="block text-[11px] font-semibold uppercase tracking-[0.3em] text-black/40">
+            What landlords say
+          </span>
+        </Rise>
+        <Rise show={show} i={1}>
+          <blockquote
+            className="mt-6 leading-[1.28]"
+            style={{ fontFamily: HAND, fontWeight: 700, fontSize: "clamp(24px, 3.2vw, 42px)" }}
+          >
+            &ldquo;{t.quote}&rdquo;
+          </blockquote>
+        </Rise>
+        <Rise show={show} i={2}>
+          <div className="mt-8 flex items-center gap-3 border-t border-black/10 pt-4">
+            {t.rating != null && (
+              <span
+                className="flex gap-[3px]"
+                style={{ color: CORAL }}
+                aria-label={`${t.rating} out of 5`}
+              >
+                {Array.from({ length: Math.max(0, Math.min(5, Math.round(t.rating))) }).map(
+                  (_, n) => (
+                    <Line key={n} name="star" size={16} filled />
+                  )
+                )}
               </span>
-            </div>
-          </Rise>
-        </div>
-        <Rise show={show} i={2} className="hidden lg:block">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/brand/art/family-home.png"
-            alt=""
-            aria-hidden
-            className="ml-auto w-full max-w-[420px]"
-          />
+            )}
+            <span className="text-[14px]" style={{ fontFamily: HAND, fontWeight: 700 }}>
+              {t.author}
+            </span>
+          </div>
         </Rise>
       </div>
     </CreamSlide>
