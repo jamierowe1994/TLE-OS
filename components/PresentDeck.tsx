@@ -15,6 +15,7 @@ import {
   type SectionId,
   type SlideId,
 } from "@/lib/present";
+import { NEXT_STEPS } from "@/lib/present-copy";
 import { icsFor } from "@/lib/appraisal-email";
 import HandWord from "@/components/HandWord";
 
@@ -1159,91 +1160,83 @@ function Market({ deck, show }: { deck: Deck; show: boolean }) {
  * THE FIGURE, on its own slide.
  *
  * The one thing a landlord opens a post-appraisal deck for. It leads with the
- * rent at full size and puts what it costs underneath, in that order and on
- * one screen — a landlord who has to hunt for the fee assumes it is being
- * hidden, and an agent who has to explain why it wasn't there has lost the
+ * rent at full size and the terms of it underneath, in that order and on one
+ * screen - a landlord who has to hunt for the figure assumes it is being
+ * hidden, and an agent who has to explain why it was not there has lost the
  * conversation before it started.
  *
- * The note is the agent's own words from the visit, shown verbatim. It is
- * usually the conditional bit ("subject to the EPC being redone"), and
- * dropping it would turn a qualified figure into an unqualified promise.
+ * Everything except the rent is optional and the slide reads without it. See
+ * PresentValuation: an agent who agreed a rent and left the fee to the office
+ * must still be able to send the figure, or they will send nothing.
  */
 function Valuation({ deck, show }: { deck: Deck; show: boolean }) {
   const v = deck.valuation;
   if (!v?.rent) return null;
   const money = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
-
-  /* Only the terms that were actually agreed. A row reading "Fee —" invites
-     the question the slide exists to answer. */
+  /* Only the terms actually agreed. A row reading "Fee -" invites the
+     question it fails to answer. */
   const terms = [
-    v.serviceLevel ? { k: "Our service", v: v.serviceLevel } : null,
-    v.feePct != null ? { k: "Management fee", v: `${v.feePct}% of rent` } : null,
-    v.setupFee != null ? { k: "Set-up fee", v: `${money(v.setupFee)} one-off` } : null,
-  ].filter((x): x is { k: string; v: string } => x != null);
+    v.serviceLevel ? { label: "Our service", value: v.serviceLevel } : null,
+    v.feePct != null ? { label: "Management fee", value: `${v.feePct}% of rent` } : null,
+    v.setupFee != null ? { label: "Set-up fee", value: `${money(v.setupFee)} one-off` } : null,
+  ].filter(Boolean) as { label: string; value: string }[];
 
   return (
-    <section
-      data-slide="valuation"
-      className="relative flex min-h-full w-full shrink-0 flex-col pb-24"
-      style={{ background: PAPER, color: INK }}
-    >
-      <header className="px-6 pt-8 sm:px-12 sm:pt-10 lg:px-16">
-        <Mark className="h-10 sm:h-11" />
-      </header>
+    <CreamSlide id="valuation">
+      <div className="mx-auto w-full max-w-[1040px]">
+        <Rise show={show} i={0}>
+          <span className="block text-[11px] font-semibold uppercase tracking-[0.3em] text-black/40">
+            What we&rsquo;d put it on at
+          </span>
+        </Rise>
+        <Rise show={show} i={1}>
+          <h2
+            className="mt-4 leading-[1] tracking-[-0.015em]"
+            style={{ fontFamily: HAND, fontWeight: 700, fontSize: "clamp(48px, 6.4vw, 96px)" }}
+          >
+            <span style={{ color: CORAL }}>{money(v.rent)}</span>
+            <span className="text-[0.3em] font-normal text-black/45"> pcm</span>
+          </h2>
+        </Rise>
 
-      <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-12 lg:px-16">
-        <div className="mx-auto w-full max-w-4xl">
-          <Rise show={show} i={0}>
-            <Eyebrow>What we&rsquo;d put it on at</Eyebrow>
-            <h2
-              className="mt-3 text-[48px] leading-[0.95] sm:text-[76px]"
-              style={{ fontFamily: DISPLAY }}
-            >
-              {money(v.rent)}
-              <span className="text-[20px] font-light sm:text-[28px]"> pcm</span>
-            </h2>
-            <span className="mt-5 block h-[3px] w-[34px] rounded-full" style={{ background: RED }} />
+        {terms.length > 0 && (
+          <Rise show={show} i={2}>
+            <dl className="mt-9 flex flex-wrap gap-x-14 gap-y-5 border-t border-black/10 pt-5">
+              {terms.map((t) => (
+                <div key={t.label}>
+                  <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/40">
+                    {t.label}
+                  </dt>
+                  <dd className="mt-1 text-[17px]" style={{ fontFamily: HAND, fontWeight: 700 }}>
+                    {t.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
           </Rise>
+        )}
 
-          {terms.length > 0 && (
-            <Rise show={show} i={1}>
-              <ul className="mt-8 divide-y divide-black/8 border-y border-black/8">
-                {terms.map((t) => (
-                  <li key={t.k} className="flex items-baseline justify-between gap-4 py-3">
-                    <span className="text-[14px] font-light text-black/60">{t.k}</span>
-                    <span className="text-[15px] font-medium">{t.v}</span>
-                  </li>
-                ))}
-              </ul>
-            </Rise>
-          )}
-
-          {v.note && (
-            <Rise show={show} i={2}>
-              <p className="mt-6 max-w-2xl text-[13.5px] font-light leading-relaxed text-black/60">
-                {v.note}
-              </p>
-            </Rise>
-          )}
-        </div>
+        {v.note && (
+          <Rise show={show} i={3}>
+            <p className="mt-7 max-w-[640px] text-[13px] font-light leading-relaxed text-black/55">
+              {v.note}
+            </p>
+          </Rise>
+        )}
       </div>
-    </section>
+    </CreamSlide>
   );
 }
 
 /**
- * GETTING STARTED — the ask.
+ * The terms, and the button that signs them.
  *
- * ── The button is deliberately conditional ────────────────────────────────
- *
- * DocuSeal is not connected yet, so `signUrl` is null on every deck built
- * today. When it is null this slide shows NO button at all and says the
- * paperwork is coming instead. A "Sign now" that goes nowhere, in front of a
- * landlord who has just agreed a rent, is the single worst thing this slide
- * could do — it converts a yes into a support call.
- *
- * When DocuSeal is wired, one field on the deck fills and the button appears.
- * Nothing else here changes.
+ * `signUrl` is NULL until DocuSeal is connected, and that is the normal state
+ * rather than a defect. The slide still renders - it says what happens next
+ * and who to reply to - because a landlord reading "here is your figure" and
+ * then nothing is worse than one reading "your agent will send the paperwork
+ * over". What it must never do is show a button that goes nowhere: a dead
+ * "Sign now" in front of a landlord is the one outcome worth avoiding.
  */
 function Terms({ deck, show }: { deck: Deck; show: boolean }) {
   const t = deck.terms;
@@ -1251,224 +1244,264 @@ function Terms({ deck, show }: { deck: Deck; show: boolean }) {
   const first = deck.agent.firstName || deck.agent.name;
 
   return (
-    <section
-      data-slide="terms"
-      className="relative flex min-h-full w-full shrink-0 flex-col pb-24"
-      style={{ background: PAPER, color: INK }}
-    >
-      <header className="px-6 pt-8 sm:px-12 sm:pt-10 lg:px-16">
-        <Mark className="h-10 sm:h-11" />
-      </header>
-
-      <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-12 lg:px-16">
-        <div className="mx-auto w-full max-w-3xl">
-          <Rise show={show} i={0}>
-            <Eyebrow>Getting started</Eyebrow>
-            <h2
-              className="mt-3 text-[30px] leading-[1.1] sm:text-[42px]"
-              style={{ fontFamily: DISPLAY }}
-            >
-              Ready when you are
-            </h2>
-            <p className="mt-3 max-w-xl text-[15px] font-light leading-relaxed text-black/60">
+    <CreamSlide id="terms">
+      <div className="mx-auto w-full max-w-[1040px]">
+        <div className="max-w-[680px]">
+          <HandHead eyebrow="Getting started" show={show} lines={2}>
+            Ready when
+            <br />
+            <Emphasis show={show}>you are</Emphasis>
+          </HandHead>
+          <Rise show={show} i={2}>
+            <p className="mt-6 max-w-[560px] text-[15px] font-light leading-[1.65] text-black/60">
               {t.summary ??
                 "The terms of business set out what we do, what it costs and how either of us can bring it to an end. Nothing starts until they are signed."}
             </p>
-            <span className="mt-5 block h-[3px] w-[34px] rounded-full" style={{ background: RED }} />
-          </Rise>
-
-          <Rise show={show} i={1}>
-            {t.signUrl ? (
-              <a
-                href={t.signUrl}
-                className="mt-8 inline-block rounded-full px-7 py-3.5 text-[15px] font-medium text-white"
-                style={{ background: RED }}
-              >
-                Read and sign the terms
-              </a>
-            ) : (
-              /* No dead button. The sentence does the job the link would. */
-              <p className="mt-8 max-w-xl text-[14px] font-light leading-relaxed text-black/70">
-                {first} will send the terms of business across to sign
-                electronically - it takes a couple of minutes and nothing needs printing.
-                Reply to this and we&rsquo;ll get them straight over.
-              </p>
-            )}
-          </Rise>
-
-          <Rise show={show} i={2}>
-            <div className="mt-9 border-t border-black/8 pt-5">
-              <p className="text-[12px] uppercase tracking-[0.14em] text-black/40">
-                What happens next
-              </p>
-              <ol className="mt-3 space-y-2.5">
-                {[
-                  "Terms signed, and we get the photographs and details booked in.",
-                  "The property goes live on Rightmove and the portals, usually within a week.",
-                  "We handle the viewings, the referencing and the paperwork.",
-                ].map((s, i) => (
-                  <li key={s} className="flex gap-3 text-[14px] font-light leading-relaxed">
-                    <span
-                      className="mt-[3px] flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full text-[10px] font-medium text-white"
-                      style={{ background: RED }}
-                    >
-                      {i + 1}
-                    </span>
-                    <span className="text-black/70">{s}</span>
-                  </li>
-                ))}
-              </ol>
-            </div>
           </Rise>
         </div>
+
+        <Rise show={show} i={3}>
+          {t.signUrl ? (
+            <a
+              href={t.signUrl}
+              className="mt-7 inline-block rounded-full px-7 py-3.5 text-[15px] font-semibold text-white transition-opacity hover:opacity-90"
+              style={{ background: CORAL }}
+            >
+              Read and sign the terms
+            </a>
+          ) : (
+            /* No dead button. The sentence does the job the link would. */
+            <p className="mt-7 max-w-[560px] text-[14px] font-light leading-relaxed text-black/65">
+              {first} will send the terms of business across to sign electronically - it takes a
+              couple of minutes and nothing needs printing. Reply to this and we&rsquo;ll get them
+              straight over.
+            </p>
+          )}
+        </Rise>
+
+        <Rise show={show} i={4}>
+          <ol className="mt-9 grid gap-x-12 gap-y-5 border-t border-black/10 pt-6 sm:grid-cols-3">
+            {NEXT_STEPS.map((n, i) => (
+              <li key={n.title} className="flex gap-4">
+                <span
+                  className="shrink-0 text-[22px] leading-none"
+                  style={{ fontFamily: HAND, fontWeight: 700, color: CORAL, opacity: 0.32 }}
+                >
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span>
+                  <span
+                    className="block text-[14.5px] leading-snug"
+                    style={{ fontFamily: HAND, fontWeight: 700 }}
+                  >
+                    {n.title}
+                  </span>
+                  <span className="mt-1.5 block text-[12.5px] font-light leading-[1.55] text-black/55">
+                    {n.body}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </Rise>
       </div>
-    </section>
+    </CreamSlide>
   );
 }
 
-function Why() {
+/**
+ * Why us. Arguments, not statistics - see decision 3 at the top of lib/present.
+ *
+ * Four promises, each one something the office can be held to on the day. It
+ * sits here rather than near the front on purpose: by this point a landlord
+ * has seen the evidence, the marketing and the fee, so these read as a summary
+ * of what they have just been shown rather than as claims made in advance.
+ */
+function Why({ show }: { show: boolean }) {
   return (
-    <Slide id="why">
-      <div className="mx-auto w-full max-w-5xl">
-        <Eyebrow>Why The Letting Experts</Eyebrow>
-        <h2 className="mt-3 max-w-2xl text-[26px] font-light leading-[1.15] tracking-[-0.01em] sm:text-[36px]">
-          Four things you can hold us to
-        </h2>
-        <div className="mt-9 grid gap-x-12 gap-y-7 sm:grid-cols-2">
-          {WHY_TLE.map((w) => (
-            <div key={w.title} className="border-t border-black/10 pt-4">
-              <h3 className="text-[15px] font-semibold leading-snug">{w.title}</h3>
-              <p className="mt-2 text-[12.5px] font-light leading-relaxed text-black/60">{w.body}</p>
-            </div>
+    <CreamSlide id="why">
+      <div className="mx-auto w-full max-w-[1120px]">
+        <div className="max-w-[680px]">
+          <HandHead eyebrow="Why The Letting Experts" show={show} lines={2}>
+            Four things you can
+            <br />
+            <Emphasis show={show}>hold us to</Emphasis>
+          </HandHead>
+        </div>
+        <div className="mt-9 grid gap-x-14 gap-y-7 sm:grid-cols-2 lg:mt-10">
+          {WHY_TLE.map((w, n) => (
+            <Rise key={w.title} show={show} i={2 + Math.floor(n / 2)}>
+              <div className="border-t border-black/10 pt-4">
+                <h3
+                  className="text-[15.5px] leading-snug sm:text-[16px]"
+                  style={{ fontFamily: HAND, fontWeight: 700 }}
+                >
+                  {w.title}
+                </h3>
+                <p className="mt-2 text-[13px] font-light leading-[1.6] text-black/60">{w.body}</p>
+              </div>
+            </Rise>
           ))}
         </div>
       </div>
-    </Slide>
+    </CreamSlide>
   );
 }
 
 /**
  * The close, and it is three different closes.
  *
- * ── Why this slide is kind-aware when almost nothing else is ────────────────
- *
- * James, 4 Sep: the deck that gets SENT to a landlord after the visit "will
- * have an actual call to action at the end of it". Everything above this point
- * is genuinely the same deck in both directions — that was the whole design —
- * but the last screen cannot be, because the three decks are asking for three
- * different things:
+ * James, 4 Sep: the deck that gets SENT after the visit "will have an actual
+ * call to action at the end of it". Everything above this point is genuinely
+ * the same deck in both directions - that was the design - but the last screen
+ * cannot be, because the three decks are asking for three different things:
  *
  *   pre-appraisal   we have not met. Ask me anything before I arrive.
  *   appraisal       we have just met. I will send the figure across.
  *   post-appraisal  you have the figure and the fee. Sign, or ring me.
  *
  * A single "any questions?" ending would waste the one screen a landlord is
- * guaranteed to reach — and on the post deck it would end the whole argument
- * on a shrug rather than on an ask.
+ * guaranteed to reach, and on the post deck it would end the whole argument on
+ * a shrug rather than on an ask.
+ *
+ * The drawing is the third and last in the deck - James, on the artwork: "the
+ * odd occasion". Keys changing hands is the only picture that belongs on the
+ * page where somebody decides.
  */
-function Questions({ deck }: { deck: Deck }) {
+function Questions({ deck, show }: { deck: Deck; show: boolean }) {
   const a = deck.agent;
   const tel = a.phone.replace(/\s+/g, "");
   const kind = deckKind(deck);
   const post = kind === "post-appraisal";
   const subject = post
-    ? `Getting started - ${deck.property.address}`
-    : `About my appraisal - ${deck.property.address}`;
+    ? `Getting started — ${deck.property.address}`
+    : `About my appraisal — ${deck.property.address}`;
   /* Repeated from the terms slide on purpose. A landlord who has scrolled the
-     whole deck should not have to scroll back up to act on it, and the button
-     is the same button - one signing session, reached from two places. */
+     whole deck should not have to go back up to act on it, and it is the same
+     signing session reached from two places. */
   const signUrl = post ? deck.terms?.signUrl ?? null : null;
 
   const eyebrow = post ? "The next step" : kind === "appraisal" ? "Before we go" : "Before we meet";
-  const heading = post
-    ? "Shall we get it on the market?"
-    : kind === "appraisal"
-      ? "Anything we didn’t cover?"
-      : "Anything you want to ask first?";
 
   return (
-    <Slide id="questions" dark>
-      <div className="mx-auto w-full max-w-3xl">
-        <Eyebrow on="dark">{eyebrow}</Eyebrow>
-        <h2 className="mt-4 text-[28px] font-light leading-[1.12] tracking-[-0.01em] sm:text-[42px]">
-          {heading}
-        </h2>
-        <p className="mt-5 max-w-xl text-[14px] font-light leading-relaxed text-white/80">
-          {post ? (
-            <>
-              You have the figure, what it costs and what we do for it. Sign the terms and{" "}
-              {a.firstName || "your agent"} will get the photographs booked this week - or
-              ring first if there is anything you want to go over again.
-            </>
-          ) : kind === "appraisal" ? (
-            <>
-              {a.firstName || "Your agent"} will send the figure and the terms across shortly. If
-              anything came to mind after we left - about the rent, the timing, or what&rsquo;s
-              worth doing first - ask now rather than wondering.
-            </>
-          ) : (
-            <>
-              If something comes to mind before {deck.whenPretty ? "we meet" : "the visit"} -
-              about the rent, the paperwork, or what the market&rsquo;s doing -{" "}
-              {a.firstName || "your agent"} would much rather hear it now than on the doorstep.
-            </>
-          )}
-        </p>
+    <CreamSlide id="questions">
+      <div className="mx-auto grid w-full max-w-[1200px] items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
+        <div className="max-w-[600px]">
+          <HandHead eyebrow={eyebrow} show={show} lines={2}>
+            {post ? (
+              <>
+                Shall we get it on
+                <br />
+                the <Emphasis show={show}>market</Emphasis>
+              </>
+            ) : kind === "appraisal" ? (
+              <>
+                Anything we
+                <br />
+                didn&rsquo;t <Emphasis show={show}>cover</Emphasis>
+              </>
+            ) : (
+              <>
+                Anything you want
+                <br />
+                to <Emphasis show={show}>ask first</Emphasis>
+              </>
+            )}
+          </HandHead>
 
-        {signUrl && (
-          <a
-            href={signUrl}
-            className="mt-8 inline-block rounded-full bg-white px-7 py-3.5 text-[15px] font-medium transition-opacity hover:opacity-90"
-            style={{ color: RED }}
-          >
-            Read and sign the terms
-          </a>
-        )}
+          <Rise show={show} i={2}>
+            <p className="mt-6 max-w-[520px] text-[14.5px] font-light leading-[1.7] text-black/60">
+              {post ? (
+                <>
+                  You have the figure, what it costs and what we do for it. Sign the terms and{" "}
+                  {a.firstName || "your agent"} will get the photographs booked this week - or ring
+                  first if there is anything you want to go over again.
+                </>
+              ) : kind === "appraisal" ? (
+                <>
+                  {a.firstName || "Your agent"} will send the figure and the terms across shortly.
+                  If anything came to mind after we left - about the rent, the timing, or
+                  what&rsquo;s worth doing first - ask now rather than wondering.
+                </>
+              ) : (
+                <>
+                  If something comes to mind before {deck.whenPretty ? "we meet" : "the visit"} -
+                  about the rent, the paperwork, or what the market&rsquo;s doing -{" "}
+                  {a.firstName || "your agent"} would much rather hear it now than on the doorstep.
+                </>
+              )}
+            </p>
+          </Rise>
 
-        <div className={`${signUrl ? "mt-5" : "mt-9"} flex flex-wrap gap-2.5`}>
-          {/* Outlined once the signing button is on the slide. Two solid white
-              pills side by side is two primary actions, and the one we are
-              actually asking for loses. */}
-          {a.phone && (
-            <a
-              href={`tel:${tel}`}
-              className={
-                signUrl
-                  ? "rounded-full border border-white/35 px-5 py-3 text-[13px] font-medium transition-colors hover:border-white"
-                  : "rounded-full bg-white px-5 py-3 text-[13px] font-medium transition-opacity hover:opacity-90"
-              }
-              style={signUrl ? undefined : { color: RED }}
-            >
-              {a.phone}
-            </a>
+          {signUrl && (
+            <Rise show={show} i={3}>
+              <a
+                href={signUrl}
+                className="mt-7 inline-block rounded-full px-7 py-3.5 text-[15px] font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ background: CORAL }}
+              >
+                Read and sign the terms
+              </a>
+            </Rise>
           )}
-          {a.email && (
-            <a
-              href={`mailto:${a.email}?subject=${encodeURIComponent(subject)}`}
-              className="rounded-full border border-white/35 px-5 py-3 text-[13px] font-medium transition-colors hover:border-white"
-            >
-              {a.email}
-            </a>
-          )}
+
+          <Rise show={show} i={4}>
+            <div className={`${signUrl ? "mt-5" : "mt-8"} flex flex-wrap gap-2.5`}>
+              {a.phone && (
+                <a
+                  href={`tel:${tel}`}
+                  className={
+                    signUrl
+                      ? "rounded-full border px-5 py-2.5 text-[13px] font-medium transition-colors hover:border-black/40"
+                      : "rounded-full px-5 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+                  }
+                  style={signUrl ? { borderColor: "rgba(59,59,60,0.18)" } : { background: CORAL }}
+                >
+                  {a.phone}
+                </a>
+              )}
+              {a.email && (
+                <a
+                  href={`mailto:${a.email}?subject=${encodeURIComponent(subject)}`}
+                  className="rounded-full border px-5 py-2.5 text-[13px] font-medium transition-colors hover:border-black/40"
+                  style={{ borderColor: "rgba(59,59,60,0.18)" }}
+                >
+                  {a.email}
+                </a>
+              )}
+            </div>
+          </Rise>
+
+          <Rise show={show} i={5}>
+            <div className="mt-9 flex items-center gap-4 border-t border-black/10 pt-5">
+              <Mark className="h-7" />
+              {/* "See you Tuesday" is right the day before and wrong the day
+                  after. Once the visit has happened the sign-off has to look
+                  forwards, not at an appointment already in the past. */}
+              <p className="text-[12.5px] text-black/50" style={{ fontFamily: HAND }}>
+                {post
+                  ? "Thank you for your time."
+                  : kind === "appraisal"
+                    ? "Thanks for having us round."
+                    : deck.whenPretty
+                      ? `See you ${firstWord(deck.whenPretty)}.`
+                      : "We look forward to meeting you."}
+              </p>
+            </div>
+          </Rise>
         </div>
 
-        <div className="mt-14 border-t border-white/20 pt-6">
-          <Mark on="dark" className="h-8" />
-          {/* "See you Tuesday" is right the day before and wrong the day
-              after. Once the visit has happened the sign-off has to look
-              forwards, not at an appointment already in the past. */}
-          <p className="mt-4 text-[12px] font-light text-white/65">
-            {post
-              ? "Thank you for your time."
-              : kind === "appraisal"
-                ? "Thanks for having us round."
-                : deck.whenPretty
-                  ? `See you ${firstWord(deck.whenPretty)}.`
-                  : "We look forward to meeting you."}
-          </p>
-        </div>
+        <Rise show={show} i={3} className="hidden lg:block">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/art/keys-handover.png"
+            alt=""
+            aria-hidden
+            className="ml-auto w-full max-w-[470px]"
+          />
+        </Rise>
       </div>
-    </Slide>
+    </CreamSlide>
   );
 }
 
@@ -1664,9 +1697,9 @@ export default function PresentDeck({
       case "terms":
         return <Terms deck={deck} show={show(i)} />;
       case "why":
-        return <Why />;
+        return <Why show={show(i)} />;
       case "questions":
-        return <Questions deck={deck} />;
+        return <Questions deck={deck} show={show(i)} />;
 
       /* The market-appraisal middle. See components/PresentSlides. */
       case "agenda":

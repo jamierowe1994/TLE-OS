@@ -1046,18 +1046,41 @@ export function Video({ deck, show }: { deck: Deck; show: boolean }) {
 }
 
 
+/**
+ * The brochure.
+ *
+ * The lifestyle interview is the argument, and it is a genuinely unusual one -
+ * most agencies photograph a property and write the rooms. Saying out loud
+ * that we interview the OWNER about living there is the thing a landlord
+ * repeats to whoever else decides.
+ */
 export function Brochure({ show }: { show: boolean }) {
   return (
-    <Slide id="brochure">
-      <div className="mx-auto w-full max-w-4xl">
-        <Head eyebrow="The brochure" title={BROCHURE_COPY.heading} show={show} />
-        <Rise show={show} i={1}>
-          <p className="mt-8 max-w-2xl text-[14px] font-light leading-[1.8] text-black/70">
-            {BROCHURE_COPY.body}
-          </p>
+    <CreamSlide id="brochure">
+      <div className="mx-auto grid w-full max-w-[1200px] items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
+        <div className="max-w-[580px]">
+          <HandHead eyebrow="The brochure" show={show} lines={2}>
+            We sell the life,
+            <br />
+            not the <Emphasis show={show}>floorplan</Emphasis>
+          </HandHead>
+          <Rise show={show} i={2}>
+            <p className="mt-7 text-[14.5px] font-light leading-[1.75] text-black/65">
+              {BROCHURE_COPY.body}
+            </p>
+          </Rise>
+        </div>
+        <Rise show={show} i={2} className="hidden lg:block">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/art/agent-desk.png"
+            alt=""
+            aria-hidden
+            className="ml-auto w-full max-w-[440px]"
+          />
         </Rise>
       </div>
-    </Slide>
+    </CreamSlide>
   );
 }
 
@@ -1065,8 +1088,8 @@ export function Brochure({ show }: { show: boolean }) {
  * Where it appears.
  *
  * Only Rightmove and Zoopla have artwork in the repo, so the other two are set
- * in type rather than shown as broken tiles. A named portal in the brand's own
- * face reads as deliberate; a missing logo never does.
+ * in the brand's own type rather than shown as broken tiles. A named portal in
+ * type reads as deliberate; a missing logo never does.
  */
 export function Portals({ show }: { show: boolean }) {
   const LOGOS: Record<string, string> = {
@@ -1074,22 +1097,32 @@ export function Portals({ show }: { show: boolean }) {
     Zoopla: "/brand/zoopla.png",
   };
   return (
-    <Slide id="portals">
-      <div className="mx-auto w-full max-w-5xl">
-        <Head eyebrow="Where it appears" title={PORTALS_COPY.heading} show={show} />
-        <Rise show={show} i={1}>
-          <p className="mt-8 max-w-2xl text-[13.5px] font-light leading-[1.75] text-black/70">
-            {PORTALS_COPY.body}
-          </p>
-        </Rise>
-        <Rise show={show} i={2}>
-          <div className="mt-9 flex flex-wrap items-center gap-x-10 gap-y-6 border-t border-black/10 pt-7">
+    <CreamSlide id="portals">
+      <div className="mx-auto w-full max-w-[1080px]">
+        <div className="max-w-[700px]">
+          <HandHead eyebrow="Where it appears" show={show} lines={2}>
+            Everywhere a tenant
+            <br />
+            is <Emphasis show={show}>looking</Emphasis>
+          </HandHead>
+          <Rise show={show} i={2}>
+            <p className="mt-6 max-w-[600px] text-[14.5px] font-light leading-[1.7] text-black/60">
+              {PORTALS_COPY.body}
+            </p>
+          </Rise>
+        </div>
+        <Rise show={show} i={3}>
+          <div className="mt-9 flex flex-wrap items-center gap-x-12 gap-y-6 border-t border-black/10 pt-7">
             {PORTALS_COPY.portals.map((p) =>
               LOGOS[p] ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img key={p} src={LOGOS[p]} alt={p} className="h-6 w-auto opacity-75 sm:h-7" />
+                <img key={p} src={LOGOS[p]} alt={p} className="h-6 w-auto opacity-70 sm:h-7" />
               ) : (
-                <span key={p} className="text-[15px] font-medium text-black/45">
+                <span
+                  key={p}
+                  className="text-[16px] text-black/40"
+                  style={{ fontFamily: HAND, fontWeight: 700 }}
+                >
                   {p}
                 </span>
               )
@@ -1097,24 +1130,39 @@ export function Portals({ show }: { show: boolean }) {
           </div>
         </Rise>
       </div>
-    </Slide>
+    </CreamSlide>
   );
 }
 
+/**
+ * Reaching the tenants who are not looking yet.
+ *
+ * The claim that used to carry this slide - "only 2-3% are actively looking" -
+ * had no source and is gone. The argument stands without it: portal search
+ * catches people already hunting, paid social reaches people who would move
+ * for the right property and have not started.
+ */
 export function Social({ show }: { show: boolean }) {
   return (
-    <Slide id="social">
-      <div className="mx-auto w-full max-w-4xl">
-        <Head eyebrow="Social advertising" title={SOCIAL_COPY.heading} show={show} />
-        <Rise show={show} i={1}>
-          <p className="mt-8 max-w-2xl text-[14px] font-light leading-[1.8] text-black/70">
-            {SOCIAL_COPY.body}
-          </p>
-        </Rise>
+    <CreamSlide id="social">
+      <div className="mx-auto w-full max-w-[980px]">
+        <div className="max-w-[720px]">
+          <HandHead eyebrow="Social advertising" show={show} lines={2}>
+            The tenants who are
+            <br />
+            not looking <Emphasis show={show}>yet</Emphasis>
+          </HandHead>
+          <Rise show={show} i={2}>
+            <p className="mt-7 max-w-[640px] text-[15px] font-light leading-[1.8] text-black/65">
+              {SOCIAL_COPY.body}
+            </p>
+          </Rise>
+        </div>
       </div>
-    </Slide>
+    </CreamSlide>
   );
 }
+
 
 /* ───────────────────────── compliance ───────────────────────── */
 
@@ -1659,16 +1707,27 @@ export function Regulated({ show }: { show: boolean }) {
 
 export function Network({ show }: { show: boolean }) {
   return (
-    <Slide id="network">
-      <div className="mx-auto w-full max-w-4xl">
-        <Head eyebrow="The Experts Group" title={NETWORK.heading} lead={NETWORK.body} show={show} />
-        <Rise show={show} i={1}>
+    <CreamSlide id="network">
+      <div className="mx-auto w-full max-w-[980px]">
+        <div className="max-w-[720px]">
+          <HandHead eyebrow="The Experts Group" show={show} lines={2}>
+            Letting it is one part
+            <br />
+            of <Emphasis show={show}>owning</Emphasis> it
+          </HandHead>
+          <Rise show={show} i={2}>
+            <p className="mt-6 max-w-[620px] text-[14.5px] font-light leading-[1.7] text-black/60">
+              {NETWORK.body}
+            </p>
+          </Rise>
+        </div>
+        <Rise show={show} i={3}>
           <ul className="mt-8 flex flex-wrap gap-2.5">
             {NETWORK.brands.map((b) => (
               <li
                 key={b}
-                className="rounded-full px-4 py-2 text-[12.5px] font-medium"
-                style={{ background: MIST, color: INK }}
+                className="rounded-full px-4 py-2 text-[13px]"
+                style={{ background: TINTS[0], color: INK, fontFamily: HAND, fontWeight: 700 }}
               >
                 {b}
               </li>
@@ -1676,44 +1735,70 @@ export function Network({ show }: { show: boolean }) {
           </ul>
         </Rise>
       </div>
-    </Slide>
+    </CreamSlide>
   );
 }
 
 /* ───────────────────────── the close ───────────────────────── */
 
-/** One review, with a real name on it. Never a composite. */
+/**
+ * One review, with a real name on it. Never a composite.
+ *
+ * Set at display size because it is the only slide in the deck where somebody
+ * else is doing the talking, and that is worth hearing rather than skimming.
+ */
 export function Testimonial({ deck, show }: { deck: Deck; show: boolean }) {
   const t = deck.testimonial;
   if (!t?.quote) return null;
   return (
-    <Slide id="testimonial">
-      <div className="mx-auto w-full max-w-3xl">
-        <Rise show={show} i={0}>
-          <Eyebrow>What landlords say</Eyebrow>
-        </Rise>
-        <Rise show={show} i={1}>
-          <blockquote
-            className="mt-6 text-[22px] leading-[1.35] sm:text-[30px]"
-            style={{ fontFamily: DISPLAY }}
-          >
-            &ldquo;{t.quote}&rdquo;
-          </blockquote>
-        </Rise>
-        <Rise show={show} i={2}>
-          <div className="mt-7 flex items-center gap-3 border-t border-black/10 pt-4">
-            {t.rating != null && (
-              <span className="flex gap-[3px]" style={{ color: RED }} aria-label={`${t.rating} out of 5`}>
-                {Array.from({ length: Math.max(0, Math.min(5, Math.round(t.rating))) }).map((_, n) => (
-                  <Line key={n} name="star" size={15} />
-                ))}
+    <CreamSlide id="testimonial">
+      <div className="mx-auto grid w-full max-w-[1200px] items-center gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16">
+        <div className="max-w-[640px]">
+          <Rise show={show} i={0}>
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.3em] text-black/40">
+              What landlords say
+            </span>
+          </Rise>
+          <Rise show={show} i={1}>
+            <blockquote
+              className="mt-5 leading-[1.3]"
+              style={{ fontFamily: HAND, fontWeight: 700, fontSize: "clamp(22px, 2.6vw, 34px)" }}
+            >
+              &ldquo;{t.quote}&rdquo;
+            </blockquote>
+          </Rise>
+          <Rise show={show} i={2}>
+            <div className="mt-6 flex items-center gap-3 border-t border-black/10 pt-4">
+              {t.rating != null && (
+                <span
+                  className="flex gap-[3px]"
+                  style={{ color: CORAL }}
+                  aria-label={`${t.rating} out of 5`}
+                >
+                  {Array.from({ length: Math.max(0, Math.min(5, Math.round(t.rating))) }).map(
+                    (_, n) => (
+                      <Line key={n} name="star" size={15} />
+                    )
+                  )}
+                </span>
+              )}
+              <span className="text-[13.5px]" style={{ fontFamily: HAND, fontWeight: 700 }}>
+                {t.author}
               </span>
-            )}
-            <span className="text-[13px] font-medium">{t.author}</span>
-          </div>
+            </div>
+          </Rise>
+        </div>
+        <Rise show={show} i={2} className="hidden lg:block">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/art/family-home.png"
+            alt=""
+            aria-hidden
+            className="ml-auto w-full max-w-[420px]"
+          />
         </Rise>
       </div>
-    </Slide>
+    </CreamSlide>
   );
 }
 
@@ -1722,60 +1807,73 @@ export function Testimonial({ deck, show }: { deck: Deck; show: boolean }) {
  *
  * James, 4 Sep: the fee gets a page of its own. The agreed source deck showed
  * a landlord a fourteen-row service comparison with no price anywhere on it,
- * which does not read as discretion — it reads as something being held back,
- * and it leaves them doing sums instead of listening.
+ * which does not read as discretion - it reads as something held back, and it
+ * leaves them doing sums instead of listening.
  *
- * So: the headline first and large, the levels under it, and then what is NOT
- * included. The exclusions are the reason to trust the headline. A fee page
+ * The headline first and large, the levels under it, and then what is NOT
+ * included. The exclusions are the reason to trust the headline: a fee page
  * that only lists what you get is the one a landlord re-reads later feeling
- * misled, and every deck before this one on the "straight about the fee"
- * promise has to actually be straight about the fee.
+ * misled, and every slide before this one promising we are "straight about the
+ * fee" has to be paid for here.
+ *
+ * It was the last slide in the deck to overflow a laptop - 127px - so the
+ * exclusions sit BESIDE the levels rather than under them.
  */
 export function Fees({ deck, show }: { deck: Deck; show: boolean }) {
   const f = deck.fees;
   if (!f || (!f.rows.length && !f.headline)) return null;
 
   return (
-    <section
-      data-slide="fees"
-      className="relative flex min-h-full w-full shrink-0 flex-col pb-24"
-      style={{ background: PAPER, color: INK }}
-    >
-      <header className="px-6 pt-8 sm:px-12 sm:pt-10 lg:px-16">
-        <Mark className="h-10 sm:h-11" />
-      </header>
-      <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-12 lg:px-16">
-        <div className="mx-auto w-full max-w-4xl">
-          <Rise show={show} i={0}>
-            <Eyebrow>What it costs</Eyebrow>
-            {f.headline && (
-              <h2
-                className="mt-3 text-[38px] leading-[1.02] sm:text-[58px]"
-                style={{ fontFamily: DISPLAY }}
-              >
-                {f.headline}
-              </h2>
-            )}
-            {f.headlineFor && (
-              <p className="mt-2 text-[15px] font-light text-black/55">
-                on {f.headlineFor}. Everything below is what that includes, and what it does not.
-              </p>
-            )}
-            <span className="mt-6 block h-[3px] w-[34px] rounded-full" style={{ background: RED }} />
+    <CreamSlide id="fees">
+      <div className="mx-auto w-full max-w-[1160px]">
+        <Rise show={show} i={0}>
+          <span className="block text-[11px] font-semibold uppercase tracking-[0.3em] text-black/40">
+            What it costs
+          </span>
+        </Rise>
+        {f.headline && (
+          <Rise show={show} i={1}>
+            <h2
+              className="mt-4 leading-[1.02] tracking-[-0.015em]"
+              style={{ fontFamily: HAND, fontWeight: 700, fontSize: "clamp(32px, 3.8vw, 54px)" }}
+            >
+              <span style={{ color: CORAL }}>{f.headline}</span>
+            </h2>
           </Rise>
+        )}
+        {f.headlineFor && (
+          <Rise show={show} i={2}>
+            <p className="mt-3 text-[14.5px] font-light text-black/55">
+              on {f.headlineFor}. Everything below is what that includes, and what it does not.
+            </p>
+          </Rise>
+        )}
 
+        <div className="mt-7 grid gap-x-14 gap-y-7 lg:grid-cols-[1.15fr_0.85fr]">
           {f.rows.length > 0 && (
-            <Rise show={show} i={1}>
-              <ul className="mt-8 divide-y divide-black/8 border-y border-black/8">
-                {f.rows.map((r) => (
-                  <li key={r.label} className="flex items-baseline justify-between gap-4 py-3">
+            <Rise show={show} i={3}>
+              <ul>
+                {f.rows.map((r, n) => (
+                  <li
+                    key={r.label}
+                    className="flex items-baseline justify-between gap-6 py-2.5"
+                    style={{ borderTop: n === 0 ? "none" : "1px solid rgba(0,0,0,0.07)" }}
+                  >
                     <span className="min-w-0">
-                      <span className="block text-[14px] font-medium">{r.label}</span>
+                      <span
+                        className="block text-[14.5px]"
+                        style={{ fontFamily: HAND, fontWeight: 700 }}
+                      >
+                        {r.label}
+                      </span>
                       {r.note && (
-                        <span className="block text-[12px] font-light text-black/50">{r.note}</span>
+                        <span className="block text-[12px] font-light text-black/45">{r.note}</span>
                       )}
                     </span>
-                    <span className="shrink-0 text-[16px] font-medium" style={{ color: RED }}>
+                    <span
+                      className="shrink-0 text-[16px]"
+                      style={{ fontFamily: HAND, fontWeight: 700, color: CORAL }}
+                    >
                       {r.amount}
                     </span>
                   </li>
@@ -1785,32 +1883,34 @@ export function Fees({ deck, show }: { deck: Deck; show: boolean }) {
           )}
 
           {f.excluded.length > 0 && (
-            <Rise show={show} i={2}>
-              <div className="mt-7">
+            <Rise show={show} i={4}>
+              <div className="rounded-2xl px-5 py-4" style={{ background: TINTS[0] }}>
                 <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-black/45">
                   Not included
                 </h3>
-                <ul className="mt-3 grid gap-x-12 gap-y-1.5 sm:grid-cols-2">
+                <ul className="mt-2.5 space-y-1.5">
                   {f.excluded.map((e) => (
                     <li key={e} className="flex items-start gap-2.5">
                       <span className="mt-[7px] h-[3px] w-[3px] shrink-0 rounded-full bg-black/30" />
-                      <span className="text-[12.5px] font-light leading-relaxed text-black/60">{e}</span>
+                      <span className="text-[12.5px] font-light leading-[1.5] text-black/60">
+                        {e}
+                      </span>
                     </li>
                   ))}
                 </ul>
               </div>
             </Rise>
           )}
-
-          {f.note && (
-            <Rise show={show} i={3}>
-              <p className="mt-6 border-t border-black/10 pt-4 text-[12px] font-light leading-relaxed text-black/55">
-                {f.note}
-              </p>
-            </Rise>
-          )}
         </div>
+
+        {f.note && (
+          <Rise show={show} i={5}>
+            <p className="mt-6 border-t border-black/10 pt-3.5 text-[12px] font-light leading-relaxed text-black/50">
+              {f.note}
+            </p>
+          </Rise>
+        )}
       </div>
-    </section>
+    </CreamSlide>
   );
 }
