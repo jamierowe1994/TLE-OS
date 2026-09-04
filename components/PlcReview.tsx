@@ -398,6 +398,53 @@ export function ComplianceSide({
           {c.decisionNote && <p className="mt-1 text-muted">{c.decisionNote}</p>}
         </section>
       )}
+
+      {/* ── Into Propoly ──
+          The approved pack's files, placed in the deal's document slots so
+          Kirstie generates the agreement without uploading them again. Runs
+          on approval when the switch is on; this is the by-hand run and the
+          record of the last one, file by file. */}
+      {c.state === "approved" && (
+        <section className="rounded-xl border border-line p-4 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base tracking-normal text-ink">Into Propoly</h2>
+              <p className="mt-0.5 text-xs text-muted">
+                {c.propolyPush
+                  ? `Last pushed by ${c.propolyPush.by} on ${prettyWhen(c.propolyPush.at)}${c.propolyPush.dealId ? "" : " - no deal matched"}.`
+                  : "Not pushed yet. Each file goes into the deal's matching document slot."}
+              </p>
+            </div>
+            <Btn onClick={() => act("push-propoly")} busy={busy === "push-propoly"}>
+              {c.propolyPush ? "Push again" : "Push documents to Propoly"}
+            </Btn>
+          </div>
+          {c.propolyPush && c.propolyPush.results.length > 0 && (
+            <ul className="mt-3 divide-y divide-line">
+              {c.propolyPush.results.map((r, i) => (
+                <li key={i} className="flex items-start gap-3 py-2 text-xs">
+                  <span
+                    className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 ${
+                      r.outcome === "uploaded" || r.outcome === "already"
+                        ? "bg-emerald-50 text-emerald-800"
+                        : r.outcome === "failed"
+                          ? "bg-rose-50 text-rose-800"
+                          : "bg-box text-muted"
+                    }`}
+                  >
+                    {r.outcome === "uploaded" ? "uploaded" : r.outcome === "already" ? "already there" : r.outcome}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="text-ink">{r.name}</span>
+                    {r.type && <span className="text-muted"> · {r.type.replace(/^Deal|Attachment$/g, "")}</span>}
+                    <span className="block text-muted">{r.note}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
     </div>
   );
 }

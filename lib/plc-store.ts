@@ -13,6 +13,7 @@ import {
   type PlcCase,
   type PlcDocument,
   type PlcState,
+  type PropolyPush,
   type Waiver,
 } from "@/lib/plc";
 
@@ -53,6 +54,7 @@ interface Row extends Record<string, unknown> {
   documents: PlcDocument[] | null;
   findings: Finding[] | null;
   waivers: Waiver[] | null;
+  propoly_push: PropolyPush | null;
   submitted_at: string | Date | null;
   scanned_at: string | Date | null;
   decided_at: string | Date | null;
@@ -90,6 +92,7 @@ function rowTo(r: Row): PlcCase {
     documents: Array.isArray(r.documents) ? r.documents : [],
     findings: Array.isArray(r.findings) ? r.findings : [],
     waivers: Array.isArray(r.waivers) ? r.waivers : [],
+    propolyPush: r.propoly_push ?? null,
     submittedAt: iso(r.submitted_at),
     scannedAt: iso(r.scanned_at),
     decidedAt: iso(r.decided_at),
@@ -100,7 +103,7 @@ function rowTo(r: Row): PlcCase {
 }
 
 const COLS = `id, application_ref, address, agent_name, agent_email, state,
-              move_in_date, agent_note, documents, findings, waivers, submitted_at,
+              move_in_date, agent_note, documents, findings, waivers, propoly_push, submitted_at,
               scanned_at, decided_at, decided_by, decision_note, created_at`;
 
 /* ──────────────────────────── the file backend ──────────────────────────── */
@@ -138,7 +141,7 @@ async function mutate(id: string, fn: (c: PlcCase) => PlcCase): Promise<PlcCase>
               documents = $5::jsonb, findings = $6::jsonb,
               submitted_at = $7, scanned_at = $8,
               decided_at = $9, decided_by = $10, decision_note = $11,
-              waivers = $12::jsonb,
+              waivers = $12::jsonb, propoly_push = $13::jsonb,
               updated_at = NOW()
         WHERE id = $1
         RETURNING ${COLS}`,
@@ -155,6 +158,7 @@ async function mutate(id: string, fn: (c: PlcCase) => PlcCase): Promise<PlcCase>
         next.decidedBy,
         next.decisionNote,
         JSON.stringify(next.waivers ?? []),
+        next.propolyPush ? JSON.stringify(next.propolyPush) : null,
       ]
     );
     return rowTo(saved[0]);
@@ -259,6 +263,7 @@ export async function createCase(input: NewCase): Promise<PlcCase> {
     documents: [],
     findings: [],
     waivers: [],
+    propolyPush: null,
     submittedAt: null,
     scannedAt: null,
     decidedAt: null,
@@ -447,6 +452,12 @@ export async function unwaiveCheck(id: string, checkId: CheckId): Promise<PlcCas
  * waiting to be charged for. The findings sit on the case so the agent sees
  * the exact line, fixes the document, and tries again.
  */
+/** What happened when the pack was pushed into Propoly. Any state: a push
+ *  can be re-run on an approved case as often as it needs. */
+export async function recordPropolyPush(id: string, push: PropolyPush): Promise<PlcCase> {
+  return mutate(id, (c) => ({ ...c, propolyPush: push }));
+}
+
 export async function recordPreflight(id: string, findings: Finding[]): Promise<PlcCase> {
   return mutate(id, (c) => {
     if (c.state !== "assembling") throw new PlcRefused("That pack isn't with the agent.");

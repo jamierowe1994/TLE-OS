@@ -16,6 +16,8 @@ import { gateFor, missingDocuments, PLC_CHECKS, scanSummary, sortFindings, type 
 import { scanCase, scanConfigured, type ScanOutcome } from "@/lib/plc-scan";
 import { actorName } from "@/lib/plc-actor";
 import { recordDecision, recordRecommendation } from "@/lib/plc-shadow";
+import { pushCaseToPropoly } from "@/lib/plc-propoly";
+import { switchOn } from "@/lib/switches";
 
 /**
  * GET   /api/plc/<id>  → the case, its findings in reading order, what's short
@@ -168,6 +170,19 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         return NextResponse.json({ ok: true, ...payload(scanned) });
       }
 
+      case "push-propoly": {
+        /* By hand, on an approved pack: the first push after the switch goes
+           on, or a retry after a slot failed. */
+        const by = await actorName(req, "Compliance");
+        try {
+          await pushCaseToPropoly(id, by);
+        } catch (e) {
+          return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "push failed" }, { status: 409 });
+        }
+        const pushed = await getCase(id);
+        return NextResponse.json({ ok: true, ...payload(pushed!) });
+      }
+
       case "waive": {
         const by = await actorName(req, "Agent");
         const waived = await waiveCheck(id, (body.checkId ?? "") as CheckId, body.reason ?? "", by);
@@ -248,6 +263,19 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         /* After the decision lands, never before. Recording cannot throw, so a
            log failure can never cost Kirstie an approval. */
         await recordDecision({ caseId: id, decision, decidedBy: by, note: body.note ?? "" });
+        /* Approved, and the switch is on: the pack goes into Propoly's slots
+           now, so she can generate the agreement without uploading anything.
+           A push that fails is recorded on the case and never undoes the
+           approval - the decision is hers, the upload is a courtesy. */
+        if (decision === "approved" && (await switchOn("propoly_documents"))) {
+          try {
+            await pushCaseToPropoly(id, by);
+          } catch {
+            /* recorded on the case where it could be; the approval stands */
+          }
+          const after = await getCase(id);
+          return NextResponse.json({ ok: true, ...payload(after ?? decided) });
+        }
         return NextResponse.json({ ok: true, ...payload(decided) });
       }
 

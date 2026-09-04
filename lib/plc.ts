@@ -342,6 +342,24 @@ export type Waiver = {
   at: string;
 };
 
+/** One document's fate in a push to Propoly. */
+export type PushResult = {
+  checkId: CheckId;
+  name: string;
+  /** Propoly's document type key, or null when nothing fits. */
+  type: string | null;
+  outcome: "uploaded" | "already" | "skipped" | "failed";
+  note: string;
+};
+
+export type PropolyPush = {
+  at: string;
+  by: string;
+  /** The Propoly deal the files went to, or null when none matched. */
+  dealId: string | null;
+  results: PushResult[];
+};
+
 export type PlcCase = {
   id: string;
   /** The application this came from. */
@@ -359,6 +377,8 @@ export type PlcCase = {
   agentNote: string;
   /** Conditional checks declared not needed, each with its reason. */
   waivers: Waiver[];
+  /** The last push of the approved pack into Propoly. Null until one runs. */
+  propolyPush?: PropolyPush | null;
   scannedAt: string | null;
   findings: Finding[];
   /** Kirstie's decision, her words, and her name against it. */

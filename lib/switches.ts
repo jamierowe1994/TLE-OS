@@ -197,6 +197,22 @@ export const SWITCHES: Switch[] = [
     legacyOn: "on",
   },
   {
+    /**
+     * The second Propoly write, separate from the handover on purpose. The
+     * handover creates people and properties; this attaches the approved PLC
+     * pack's files to the deal's document slots, so Kirstie can generate
+     * the agreement without uploading them again (her ask, 4 Sep). Each is
+     * its own decision, so each is its own switch.
+     */
+    key: "propoly_documents",
+    label: "Push approved PLC documents into Propoly",
+    what: "When Kirstie approves a PLC pack, uploads each file into the matching Propoly deal's document slot (gas, EPC, EICR, landlord ID, reference report and so on). Can also be pressed by hand on the pack.",
+    who: "Propoly is WRITTEN TO: one document per slot on the deal. Nobody is emailed.",
+    confirm: "PUSH DOCUMENTS",
+    legacyEnv: "PROPOLY_DOCUMENTS",
+    legacyOn: "on",
+  },
+  {
     key: "campaign_sending",
     label: "Nurture campaigns",
     what: "Lets the scheduler send campaign steps as they fall due.",

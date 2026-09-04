@@ -230,6 +230,36 @@ async function propolyWrite(method: "POST" | "PATCH", path: string, payload: unk
 }
 
 export const propolyPost = (path: string, payload: unknown) => propolyWrite("POST", path, payload);
+
+/**
+ * A multipart upload, behind ITS OWN switch. Documents are the second kind of
+ * Propoly write and are armed separately from the handover: attaching a gas
+ * certificate to a deal is not the same decision as creating a landlord.
+ * Content-Type is left to fetch, which sets the boundary.
+ */
+export async function propolyUpload(path: string, form: FormData): Promise<PropolyResult> {
+  const { switchOn } = await import("@/lib/switches");
+  if (!(await switchOn("propoly_documents"))) {
+    throw new PropolyWriteBlocked("POST (multipart)", path);
+  }
+  const keyHeaders = { "x-api-key": apiKey(), "agent-name": agentName() };
+  const send = async (token: string) =>
+    fetch(`${BASE}${path}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json", ...keyHeaders },
+      body: form,
+      cache: "no-store",
+    });
+  let res = await send(await getToken());
+  if (res.status === 401) res = await send(await getToken(true));
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    body = null;
+  }
+  return { status: res.status, body };
+}
 export const propolyPatch = (path: string, payload: unknown) => propolyWrite("PATCH", path, payload);
 
 export function propolyClientName(): string | null {
