@@ -6,6 +6,8 @@ import { PLC_STATES } from "@/lib/plc";
 import { getAllPropolyDeals, type BusinessDeal } from "@/lib/business/propoly-deals";
 import { getOverlays, getMeta } from "@/lib/business/deal-store";
 import { derivePortalStage } from "@/lib/business/deal-stage";
+import { eventsForDeal } from "@/lib/business/deal-watch";
+import type { DealEvent } from "@/lib/business/deal-events";
 import { loadMoneyContext, moneyForDeal, type MoneyContext } from "@/lib/business/deal-money";
 import { stageEvidence } from "@/lib/business/stage-evidence";
 import { PORTAL_STAGES, PROPOLY_APP_URL } from "@/lib/business/propoly-stages";
@@ -64,6 +66,8 @@ export interface ApplicationJourney {
   deal: { id: string; stage: string; url: string } | null;
   plc: { id: string; state: string; who: string } | null;
   handover: { mode: "shadow" | "live"; status: string; at: string } | null;
+  /** Every move the watcher recorded on the deal, newest first. */
+  history: DealEvent[];
 }
 
 /* ── the slow parts, kept for five minutes ─────────────────────────────── */
@@ -293,5 +297,10 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     actions.push({ id: "plc-start", label: "Start the PLC check", detail: "The pre-let compliance pack has not been started for this let.", href: `/plc/start?application=${encodeURIComponent(app.id)}`, who: "you" });
   }
 
-  return { stops, actions, flags, deal: dealInfo, plc: plcInfo, handover: run ? { mode: run.mode, status: run.status, at: run.startedAt } : null };
+  /* The deal's own history, from the watcher. The same rows Kirstie's feed
+     shows, scoped to this one deal, so "where's this up to" is answered on
+     the application itself rather than by asking her. */
+  const history = deal ? await eventsForDeal(deal.app.id).catch(() => []) : [];
+
+  return { stops, actions, flags, deal: dealInfo, plc: plcInfo, handover: run ? { mode: run.mode, status: run.status, at: run.startedAt } : null, history };
 }

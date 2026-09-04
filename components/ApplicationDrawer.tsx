@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { Pill } from "@/components/Wire";
 import StageSpine, { type SpineStop } from "@/components/StageSpine";
+import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
 
 type JourneyAction = { id: string; label: string; detail: string; href: string | null; who: "you" | "kirstie" | "landlord" | "tenant" };
 type Journey = {
@@ -14,6 +15,7 @@ type Journey = {
   flags?: string[];
   deal?: { id: string; stage: string; url: string } | null;
   plc?: { id: string; state: string; who: string } | null;
+  history?: DealEvent[];
 };
 
 /**
@@ -370,6 +372,36 @@ export default function ApplicationDrawer({
                       open in Propoly
                     </a>
                   </p>
+                )}
+                {/* What moved, on this deal alone. The same rows as Kirstie's
+                    feed, so the agent reads "references came back Tuesday"
+                    here instead of asking her. Newest first, five by default. */}
+                {journey?.ok && journey.history && journey.history.length > 0 && (
+                  <details className="mt-3 group">
+                    <summary className="cursor-pointer list-none text-[11px] font-semibold uppercase tracking-wide text-muted">
+                      What moved
+                      <span className="ml-1.5 font-normal normal-case tracking-normal">
+                        · {journey.history.length} {journey.history.length === 1 ? "move" : "moves"}, last {whenWords(journey.history[0].at)}
+                      </span>
+                    </summary>
+                    <ol className="mt-2 space-y-1.5">
+                      {journey.history.slice(0, 8).map((e) => {
+                        const tone = eventTone(e.event);
+                        return (
+                          <li key={e.id} className="flex items-start gap-2 text-[12px] leading-snug">
+                            <span
+                              aria-hidden
+                              className={`mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full ${
+                                tone === "ok" ? "bg-emerald-600" : tone === "warn" ? "bg-amber-500" : "bg-line"
+                              }`}
+                            />
+                            <span className="min-w-0 flex-1">{eventSentence(e)}</span>
+                            <span className="shrink-0 text-[10.5px] tabular-nums text-muted">{whenWords(e.at)}</span>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  </details>
                 )}
                 {journey && !journey.ok && (
                   <p className="mt-2 text-[11px] text-muted">{journey.error ?? "The journey could not be read."} Showing REX&apos;s stages.</p>
