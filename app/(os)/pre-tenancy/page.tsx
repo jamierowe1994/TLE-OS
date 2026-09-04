@@ -54,6 +54,8 @@ interface BoardDeal {
   app: AgentApplication;
   statusKey: string;
   effectiveStatusKey: string;
+  /** The OS's PLC pack for this address - what the PLC stage now reads. */
+  plc?: { id: string; state: string; label: string; who: string; decidedBy: string | null; decidedAt: string | null } | null;
   agentName: string | null;
   agentEmail: string | null;
   portal: DealPortalOverlay;
@@ -2059,11 +2061,26 @@ function DealWorkspace({
                             need chasing, and the checks would all read as
                             failures. */}
                         {!cancelled ? (() => {
-                          const ev = stageEvidence(
-                            s.key,
-                            { ...deal, startDate: deal.app.startDate },
-                            { reached: i <= currentIdx, moneyLoaded }
-                          );
+                          /* PLC reads the OS's own pack, which is what now
+                             moves the stage. The RLP line it used to show was
+                             about a different thing (rent protection) and sat
+                             under the wrong heading. */
+                          const ev =
+                            s.key === "plc"
+                              ? deal.plc
+                                ? {
+                                    tone: (deal.plc.state === "approved" ? "ok" : deal.plc.state === "declined" ? "warn" : "none") as "ok" | "warn" | "none",
+                                    text:
+                                      deal.plc.state === "approved"
+                                        ? `Pack approved${deal.plc.decidedBy ? ` by ${deal.plc.decidedBy}` : ""}${deal.plc.decidedAt ? ` · ${fmtDate(deal.plc.decidedAt)}` : ""}.`
+                                        : `Pack ${deal.plc.label.toLowerCase()} · ${deal.plc.who}.`,
+                                  }
+                                : { tone: "none" as const, text: "No PLC pack in the OS yet. The agent starts it from the application." }
+                              : stageEvidence(
+                                  s.key,
+                                  { ...deal, startDate: deal.app.startDate },
+                                  { reached: i <= currentIdx, moneyLoaded }
+                                );
                           return (
                             <p
                               className={`mt-1 flex items-start gap-1.5 text-[11.5px] leading-relaxed ${

@@ -9,7 +9,8 @@ import {
   type DealCompliance,
 } from "@/lib/business/rex-stats";
 import { getOverlays } from "@/lib/business/deal-store";
-import { derivePortalStage, loadStageSources, stageFactsFor } from "@/lib/business/deal-stage";
+import { derivePortalStage, loadStageSources, plcCaseForAddress, stageFactsFor } from "@/lib/business/deal-stage";
+import { PLC_STATES } from "@/lib/plc";
 import { getPortfolioBook, propertyKey } from "@/lib/business/payprop-portfolio";
 import { getTobRegister, type TobStatus } from "@/lib/business/rex-esign";
 import { loadMoneyContext, moneyForDeal } from "@/lib/business/deal-money";
@@ -43,8 +44,10 @@ export interface PreTenancyDeal {
   statusKey: string;
   /** Move-in slipped 30+ days and not reactivated — hidden from the stages. */
   archived: boolean;
-  /** PORTAL stage (8-stage pipeline) after any still-valid stage move. */
+  /** PORTAL stage (8-stage pipeline), derived from the records (deal-stage). */
   effectiveStatusKey: string;
+  /** The OS's PLC pack for this address, which is what the PLC stage reads. */
+  plc: { id: string; state: string; label: string; who: string; decidedBy: string | null; decidedAt: string | null } | null;
   agentName: string | null;
   agentEmail: string | null;
   portal: DealPortalOverlay;
@@ -216,6 +219,11 @@ export async function GET(req: NextRequest) {
       stageFactsFor(d, meta, stageSources.cases, stageSources.money),
       meta
     );
+    const plcCase = plcCaseForAddress(stageSources.cases, d.app.propertyName);
+    const plcState = plcCase ? PLC_STATES.find((x) => x.id === plcCase.state) : null;
+    const plc = plcCase
+      ? { id: plcCase.id, state: plcCase.state, label: plcState?.label ?? plcCase.state, who: plcState?.who ?? "", decidedBy: plcCase.decidedBy, decidedAt: plcCase.decidedAt }
+      : null;
     const overlay: DealPortalOverlay = entry
       ? {
           ...entry.overlay,
@@ -326,6 +334,7 @@ export async function GET(req: NextRequest) {
         : d.app,
       statusKey: d.statusKey,
       effectiveStatusKey: effective,
+      plc,
       agentName: d.managerName,
       agentEmail: d.managerEmail,
       portal: overlay,
