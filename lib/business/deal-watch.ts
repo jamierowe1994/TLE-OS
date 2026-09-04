@@ -255,6 +255,11 @@ export async function watchDeals(opts: { origin: string }): Promise<WatchResult>
     await q(`UPDATE os_deal_states SET status_key = $2, seen_at = NOW() WHERE deal_id = $1`, [dealId, now]);
   }
 
+  /* Every deal we looked at is stamped, changed or not, so "last checked" on
+     the feed means the last time the watcher ran and not the last time
+     anything happened. A quiet fortnight must still read as watched. */
+  await q(`UPDATE os_deal_states SET seen_at = NOW() WHERE deal_id = ANY($1::text[])`, [[...seen]]);
+
   const told = await tellAgents(events, opts.origin);
   return { ok: true, deals: deals.length, events, told };
 }
