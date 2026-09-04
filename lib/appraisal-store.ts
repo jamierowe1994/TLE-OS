@@ -254,6 +254,18 @@ export async function getAppraisal(id: string): Promise<MarketAppraisal | null> 
  * somebody recorded or a deck they built.
  */
 /** What an agent can write after the visit. Every field optional — see below. */
+/**
+ * The two hand moves. Won and lost are outcomes somebody declares; null
+ * reopens the file and the derived stage takes over again.
+ */
+export async function setOutcome(id: string, outcome: "won" | "lost" | null): Promise<MarketAppraisal | null> {
+  const stage = outcome ?? "booked";
+  if (hasDb()) {
+    await q(`UPDATE os_market_appraisals SET stage = $2, updated_at = NOW() WHERE id = $1`, [id, stage]);
+  }
+  return getAppraisal(id);
+}
+
 export interface ValuationPatch {
   valuation?: number | null;
   serviceLevel?: MarketAppraisal["serviceLevel"];

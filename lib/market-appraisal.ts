@@ -109,6 +109,10 @@ export interface MarketAppraisal {
   /** Presentation token, once one has been minted. */
   presentToken: string | null;
   createdAt: string;
+  /** Attached by the list API: the stage read from the record (lib/appraisal-stage)
+   *  and one line saying why. Absent on a bare row. */
+  liveStage?: MaStage;
+  stageWhy?: string;
 }
 
 /**
@@ -139,6 +143,9 @@ export const SERVICE_LEVELS: { id: ServiceLevel; label: string }[] = [
  * nothing to forget. `won` and `lost` are terminal and never re-derived.
  */
 export function effectiveStage(ma: MarketAppraisal, now = new Date()): MaStage {
+  /* The server worked it out from the record (decks, terms, documents, the
+     REX listing). Every screen that calls this gets that for free. */
+  if (ma.liveStage) return ma.liveStage;
   if (ma.stage === "won" || ma.stage === "lost") return ma.stage;
   // A recorded figure means the visit produced something, so the record has
   // moved past the appraisal whatever anyone remembered to click.

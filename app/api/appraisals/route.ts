@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { listAppraisals, createAppraisal, recordValuation } from "@/lib/appraisal-store";
+import { listAppraisals, createAppraisal, recordValuation, setOutcome } from "@/lib/appraisal-store";
+import { withLiveStages } from "@/lib/appraisal-stage";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { SERVICE_LEVELS, type ServiceLevel } from "@/lib/market-appraisal";
@@ -32,7 +33,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    return NextResponse.json({ appraisals: await listAppraisals() });
+    return NextResponse.json({ appraisals: await withLiveStages(await listAppraisals()) });
   } catch (e) {
     /* An empty list with a reason, not a 500. The screen renders the error
        rather than a stale or invented row, which is the honest state. */
@@ -132,10 +133,23 @@ export async function PATCH(req: NextRequest) {
     valuationNote?: unknown;
     /** The REX property an agent picked. "" clears it. */
     rexPropertyId?: unknown;
+    /** The two hand moves: "won", "lost", or null to reopen. */
+    outcome?: unknown;
   };
 
   const id = (b.id ?? "").trim();
   if (!id) return NextResponse.json({ error: "Which appraisal?" }, { status: 400 });
+
+  if ("outcome" in b) {
+    const outcome = b.outcome === "won" || b.outcome === "lost" ? b.outcome : b.outcome === null ? null : undefined;
+    if (outcome === undefined) {
+      return NextResponse.json({ error: "An outcome is won, lost, or null to reopen." }, { status: 400 });
+    }
+    const ma = await setOutcome(id, outcome);
+    if (!ma) return NextResponse.json({ error: "No such appraisal." }, { status: 404 });
+    const [withStage] = await withLiveStages([ma]);
+    return NextResponse.json({ ok: true, appraisal: withStage });
+  }
 
   /* "" and null both mean CLEAR IT; undefined means leave it alone. Number("")
      is 0, so an empty box would otherwise store a real £0 rent and satisfy
@@ -197,3 +211,4 @@ export async function PATCH(req: NextRequest) {
     );
   }
 }
+

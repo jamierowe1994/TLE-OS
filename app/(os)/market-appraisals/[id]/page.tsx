@@ -8,6 +8,7 @@ import DeckRail from "@/components/DeckRail";
 import ValuationForm from "@/components/ValuationForm";
 import RexPropertyPicker from "@/components/RexPropertyPicker";
 import VideoChaseControl from "@/components/VideoChaseControl";
+import AppraisalOutcome from "@/components/AppraisalOutcome";
 import {
   MA_STAGES,
   effectiveStage,
@@ -152,6 +153,8 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           {ma.postcode}
           {ma.valuation ? ` · valued ${gbp(ma.valuation)} pcm` : ""}
         </p>
+        {/* The stage is read from the record; these are the two hand moves. */}
+        <AppraisalOutcome id={ma.id} stage={live} why={ma.stageWhy ?? null} />
       </header>
 
       {/* ── 1b. how to reach them ───────────────────────────────────────── */}
