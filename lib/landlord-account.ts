@@ -9,6 +9,8 @@ import { presentationsFor, readPresentation, type PresentationRow } from "@/lib/
 import { signedFor } from "@/lib/signed-documents";
 import { effectiveStage, SERVICE_LEVELS, type MarketAppraisal, type MaStage } from "@/lib/market-appraisal";
 import type { ManagedProperty } from "@/lib/portfolio-types";
+import { certificatesFor } from "@/lib/rex-compliance";
+import { CERT_META, requiredCerts, statusOf, type CertKey, type CertStatus, type CompProperty } from "@/lib/compliance";
 
 /**
  * Who a landlord is, and what is theirs.
@@ -155,6 +157,95 @@ export async function currentLandlord(): Promise<LandlordAccount | null> {
 /** Their managed properties, live from the book. */
 export async function landlordProperties(a: LandlordAccount): Promise<ManagedProperty[]> {
   return managedFor(normaliseEmail(a.email), a.contactIds);
+}
+
+/* -------------------------------------------------------- certificates -- */
+
+/** One certificate as the landlord reads it. */
+export interface LandlordCert {
+  key: CertKey;
+  label: string;
+  status: CertStatus;
+  /** Days until expiry; negative when expired; null with no record. */
+  daysLeft: number | null;
+  /** ISO date of expiry, worked back from daysLeft. */
+  expires: string | null;
+  /** The certificate file is on the REX record, not just a date. */
+  attached: boolean;
+  /** "Expires 12 March 2027", "Expired 40 days ago", "No record". */
+  line: string;
+  /** Alarms and legionella: no fixed expiry, so "no record" is not a fault. */
+  quiet: boolean;
+}
+
+export interface LandlordCompliance {
+  propertyId: string;
+  certs: LandlordCert[];
+  /** Everything required is in date. */
+  allInDate: boolean;
+  /** "All in date", "Gas due in 12 days", "EICR: no record". Worst first. */
+  headline: string;
+}
+
+const RANK: Record<CertStatus, number> = { expired: 0, missing: 1, urgent: 2, watch: 3, ok: 4 };
+
+function certLine(status: CertStatus, daysLeft: number | null, expires: string | null): string {
+  const when = expires
+    ? new Date(expires).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
+    : null;
+  if (status === "missing" || daysLeft == null) return "No record with us";
+  if (status === "expired") return `Expired ${Math.abs(daysLeft)} day${Math.abs(daysLeft) === 1 ? "" : "s"} ago${when ? ` (${when})` : ""}`;
+  if (daysLeft === 0) return "Expires today";
+  return `Expires ${when ?? `in ${daysLeft} days`}${daysLeft <= 90 ? ` - ${daysLeft} days` : ""}`;
+}
+
+function summarise(p: CompProperty): LandlordCompliance {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const certs: LandlordCert[] = requiredCerts(p).map((key) => {
+    const c = p.certs[key];
+    const status = statusOf(c);
+    const daysLeft = c?.expires ?? null;
+    const expires = daysLeft == null ? null : new Date(today.getTime() + daysLeft * 86400000).toISOString().slice(0, 10);
+    const quiet = key === "alarms" || key === "legionella";
+    const line = quiet && status === "missing" ? "Checked at each visit - no dated record" : certLine(status, daysLeft, expires);
+    return { key, label: CERT_META[key].label, status, daysLeft, expires, attached: Boolean(c?.attached), line, quiet };
+  });
+  /* The quiet duties have no fixed expiry, so "no record" on alarms or
+     legionella is not a fault the landlord can act on. The headline reads
+     the ones with a date. */
+  const dated = certs.filter((c) => !["alarms", "legionella"].includes(c.key));
+  const worst = [...dated].sort((a, b) => RANK[a.status] - RANK[b.status])[0];
+  const allInDate = dated.every((c) => c.status === "ok" || c.status === "watch");
+  const headline = !worst || allInDate
+    ? "All in date"
+    : worst.status === "missing"
+      ? `${CERT_META[worst.key].short}: no record`
+      : worst.status === "expired"
+        ? `${CERT_META[worst.key].short} expired`
+        : `${CERT_META[worst.key].short} due in ${worst.daysLeft} day${worst.daysLeft === 1 ? "" : "s"}`;
+  return { propertyId: p.id, certs, allInDate, headline };
+}
+
+/**
+ * The certificates on the landlord's managed properties, from REX, by
+ * property id. The same read and the same rules as the Compliance screen,
+ * so what the landlord sees is what Michael sees. Empty on any failure: a
+ * portal must render without it rather than hang on REX.
+ */
+export async function landlordCompliance(props: ManagedProperty[]): Promise<Map<string, LandlordCompliance>> {
+  const out = new Map<string, LandlordCompliance>();
+  const subjects = props
+    .filter((p) => p.propertyId)
+    .map((p) => ({ propertyId: p.propertyId as string, name: p.name, locality: p.locality, epcExpiry: null }));
+  if (!subjects.length) return out;
+  try {
+    const book = await certificatesFor(subjects);
+    for (const cp of book.properties) out.set(cp.id, summarise(cp));
+  } catch {
+    /* the portal shows the property without certificates rather than nothing */
+  }
+  return out;
 }
 
 /* ------------------------------------------------------------- journey -- */

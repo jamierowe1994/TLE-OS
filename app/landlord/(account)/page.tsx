@@ -16,6 +16,7 @@ import { geocode } from "@/lib/geocode";
 import { DECK_KINDS } from "@/lib/present";
 import { STAGES, stepsForStage, type LandlordView, type Stage } from "@/lib/landlord-view";
 import type { ManagedProperty } from "@/lib/portfolio-types";
+import { landlordCompliance, type LandlordCompliance } from "@/lib/landlord-account";
 
 const money = (n: number | null | undefined) => (n == null ? "—" : `£${Math.round(n).toLocaleString("en-GB")}`);
 const day = (iso: string | null | undefined) =>
@@ -37,13 +38,20 @@ export default async function LandlordHome() {
     landlordDocuments(me.id),
     landlordMessages(me.id),
   ]);
+  /* Certificates after the properties, because they are read by property
+     id. Same read as the Compliance screen. */
+  const compliance = await landlordCompliance(managed);
   const first = me.name.split(/\s+/)[0] || me.name;
 
   const open = journeys
     .filter((j) => j.stage !== "lost")
     .sort((a, b) => Number(a.stage === "won") - Number(b.stage === "won") || b.appraisal.createdAt.localeCompare(a.appraisal.createdAt));
 
-  const view = open[0] ? await appraisalView(open[0], first, docs, msgs) : managed[0] ? managedView(managed[0], first) : null;
+  const view = open[0]
+    ? await appraisalView(open[0], first, docs, msgs)
+    : managed[0]
+      ? managedView(managed[0], first, compliance.get(managed[0].propertyId ?? "") ?? null)
+      : null;
   const rest = open[0] ? managed : managed.slice(1);
 
   if (!view) {
@@ -78,7 +86,7 @@ export default async function LandlordHome() {
             <h2 className="text-[17px]">{open[0] ? "Already looked after" : "Your other properties"}</h2>
             <div className="mt-4 space-y-3">
               {rest.map((p) => (
-                <ManagedRow key={p.listingId} p={p} />
+                <ManagedRow key={p.listingId} p={p} compliance={compliance.get(p.propertyId ?? "") ?? null} />
               ))}
             </div>
           </section>
@@ -230,8 +238,27 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
   };
 }
 
-function managedView(p: ManagedProperty, first: string): LandlordView {
+function managedView(p: ManagedProperty, first: string, comp: LandlordCompliance | null): LandlordView {
   const tenant = p.tenants[0];
+  /* The certificates, as documents. A landlord reads "Gas safety - expires
+     12 March 2027" the way they read "Contract - signed": a thing on the
+     file, with a state. No file to open yet: REX holds the certificate and
+     the portal does not serve REX's files, so the line says ask your agent. */
+  const certDocs = (comp?.certs ?? []).map((c) => {
+    const fault = !c.quiet && (c.status === "missing" || c.status === "expired");
+    return {
+      title: c.label,
+      sub: c.line + (fault ? "  •  Ask your agent" : ""),
+      state: (c.status === "ok" || c.status === "watch" ? "uploaded" : fault ? "missing" : "pending") as "uploaded" | "missing" | "pending",
+      href: null,
+    };
+  });
+  const dated = (comp?.certs ?? []).filter((c) => !c.quiet);
+  const certsSub = comp
+    ? comp.allInDate
+      ? `All in date  •  ${dated.length} on record`
+      : comp.headline
+    : "Being read from your file";
   return {
     greeting: `Hello, ${first}`,
     intro: "Your property with us, and everything we hold on it.",
@@ -252,21 +279,22 @@ function managedView(p: ManagedProperty, first: string): LandlordView {
     steps: stepsForStage("let", {
       presentation: { id: "presentation", label: "View presentation", sub: "From when we valued it", href: null, icon: "analytics" },
       sign: { id: "sign", label: "Your contract", sub: "Coming to this file", href: null, icon: "pencil" },
-      compliance: { id: "compliance", label: "Certificates", sub: "Coming to this file", href: null, icon: "shield" },
+      compliance: { id: "compliance", label: "Certificates", sub: certsSub, href: comp ? "#documents" : null, icon: "shield" },
       message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: null, icon: "message" },
       listing: { id: "listing", label: "Your listing", sub: "Let", href: null, icon: "home" },
       viewings: { id: "viewings", label: "Your tenancy", sub: tenant ? `${tenant.name}, since ${day(p.letSince) ?? "—"}` : "Let", href: null, icon: "key" },
     }),
-    documents: [],
+    documents: certDocs,
     snapshot: {
-      readinessPct: 100,
-      note: "Nothing waiting on you.",
+      readinessPct: comp ? Math.round((100 * dated.filter((c) => c.status === "ok" || c.status === "watch").length) / Math.max(1, dated.length)) : 100,
+      note: comp && !comp.allInDate ? `${comp.headline}. Your agent will be in touch about it.` : "Nothing waiting on you.",
       lines: [
         ["Rent", p.rent == null ? "Not set" : `${money(p.rent)} / ${p.rentPeriod === "week" ? "week" : "month"}`],
         ["Service", p.service ?? "Not set"],
         ["Let type", p.letType ?? "—"],
         ["Tenant", tenant?.name ?? "Not on record"],
         ["Let since", day(p.letSince) ?? "—"],
+        ["Certificates", certsSub],
       ],
     },
     activity: p.letSince ? [{ title: "Let", sub: tenant ? `${tenant.name} moved in` : "Tenancy started", date: day(p.letSince) ?? "", icon: "key" }] : [],
@@ -274,7 +302,7 @@ function managedView(p: ManagedProperty, first: string): LandlordView {
   };
 }
 
-function ManagedRow({ p }: { p: ManagedProperty }) {
+function ManagedRow({ p, compliance }: { p: ManagedProperty; compliance: LandlordCompliance | null }) {
   const tenant = p.tenants[0];
   return (
     <div className="flex flex-wrap items-center gap-4 [&>div]:min-w-[55%]">
@@ -289,6 +317,7 @@ function ManagedRow({ p }: { p: ManagedProperty }) {
             .join("  •  ")}
         </p>
       </div>
+      {compliance && !compliance.allInDate && <Pill tone="accent">{compliance.headline}</Pill>}
       <Pill tone={tenant ? "good" : "accent"}>{tenant ? "Tenanted" : "Let"}</Pill>
     </div>
   );
