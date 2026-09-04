@@ -46,6 +46,7 @@ import {
   TENANT_PASSPORT_INVITE,
   LANDLORD_DECK_INVITE,
   LANDLORD_SIGN_IN,
+  TENANT_SIGN_IN,
   SITE,
   type EmailDoc,
 } from "@/lib/email/tle-documents";
@@ -424,6 +425,26 @@ The Letting Experts`
       )(),
   },
   {
+    id: "tenant-sign-in",
+    group: "Doorways",
+    name: "Tenant Sign-in Link",
+    audience: "tenant",
+    trigger: "A tenant asks for their link on /tenant/sign-in",
+    fires: "Wired 4 Sep 2026. Goes on the public sender to the email Propoly holds for the tenant on a deal.",
+    to: "The tenant, at the address on their Propoly deal",
+    draft: false,
+    summary:
+      "The landlord link, for tenants. Only ever goes to an address that is a tenant on a Propoly deal, so a stranger typing an email gets the same on-screen answer and no email.",
+    doc: TENANT_SIGN_IN,
+    render: (o) =>
+      blocks(
+        withSample(o ?? TENANT_SIGN_IN, {
+          firstName: "Sophie",
+          link: `${SITE}/tenant/enter?token=sample`,
+        })
+      )(),
+  },
+  {
     id: "landlord-deck-invite",
     group: "Doorways",
     name: "Appraisal Booked - Open Your Property File",
@@ -488,6 +509,11 @@ export function renderComplianceAgentChase(input: {
 }
 
 /** The sign-in link email, filled for one landlord and ready to send. */
+export function renderTenantSignIn(input: { firstName: string; link: string }): { subject: string; html: string; text: string } {
+  const { subject, html } = renderTleEmail("tenant-sign-in", { firstName: input.firstName, link: input.link });
+  return { subject, html, text: `Hi ${input.firstName},\n\nHere is your link to your account with The Letting Experts. It works once and lasts 24 hours.\n\n${input.link}\n\nIf you didn't ask for this, you can ignore it.\n\nThe Letting Experts` };
+}
+
 export function renderLandlordSignIn(input: { firstName: string; link: string }): {
   subject: string;
   html: string;

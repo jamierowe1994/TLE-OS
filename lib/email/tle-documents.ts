@@ -394,6 +394,28 @@ export const LANDLORD_SIGN_IN = {
   branding: { showSignoff: false },
 } as const;
 
+export const TENANT_SIGN_IN = {
+  subject: "Your link to your tenancy",
+  preheader: "One click and you are in. The link works once and lasts a day.",
+  mode: "blocks",
+  blocks: [
+    H("ts1", "Here is your link"),
+    T(
+      "ts2",
+      "Hi {{firstName}},<br><br>Open the button below and you are into your account with The Letting Experts: where your tenancy is up to, what happens next, and your passport."
+    ),
+    SP("ts3", 8),
+    BTN("ts4", "Open my account", "{{link}}"),
+    SP("ts5", 8),
+    T("ts6", "The link works once and lasts 24 hours. If it has run out, ask for another from the sign-in page."),
+    T("ts7", "If you didn't ask for this, you can ignore it. Nothing happens unless the link is opened."),
+    SP("ts8", 8),
+    T("ts9", "The Letting Experts"),
+    FOOT("ts10", "You're getting this because a sign-in was requested for this address at The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 export const LANDLORD_DECK_INVITE = {
   subject: "Your appraisal is booked. Here is your property file",
   preheader: "See what we already know about the property, and correct it before we visit.",

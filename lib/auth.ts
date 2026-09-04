@@ -88,6 +88,7 @@ export function createSessionToken(userId: string): string {
  * away from an office login.
  */
 export const LANDLORD_COOKIE = "tle_landlord";
+export const TENANT_COOKIE = "tle_tenant";
 const PORTAL_DAYS = 30;
 
 export function createPortalToken(kind: string, accountId: string): string {

@@ -55,6 +55,8 @@ const TTL_BY_PURPOSE: Record<Purpose, number> = {
   /* A landlord opens email when they open email. An hour would expire on
      most of them before they saw it; single use is what keeps it safe. */
   landlord: 24 * 60 * 60 * 1000,
+  /* A tenant, the same as a landlord: opened when they open email. */
+  tenant: 24 * 60 * 60 * 1000,
   /* The link in the video nudge. Minted two days before a visit, and the
      agent may not open the email until the evening before, so it lives a
      week; still single use, and it only ever opens the recorder. */
@@ -76,7 +78,7 @@ const hashToken = (t: string) => createHash("sha256").update(t).digest("hex");
  * same reason those are kept apart from each other: a token for one must
  * never be spendable on another.
  */
-export type Purpose = "join" | "reset" | "landlord" | "record";
+export type Purpose = "join" | "reset" | "landlord" | "record" | "tenant";
 
 export interface Verification {
   email: string;
@@ -116,7 +118,7 @@ export async function startVerification(
      will mint tokens for any address is a way to use our sending domain to
      mail strangers, and the refusal should happen before anything is written
      to the database, not after. */
-  if (purpose !== "landlord") assertInternalRecipient(email);
+  if (purpose !== "landlord" && purpose !== "tenant") assertInternalRecipient(email);
 
   if (!hasDb()) {
     throw new VerificationError(

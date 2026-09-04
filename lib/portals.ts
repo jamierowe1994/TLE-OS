@@ -64,7 +64,7 @@ export type PortalFolder = {
    used by nothing, so the link is the credential exactly as the pre-appraisal
    deck already works. Saying so on each card stops a demo implying a login
    that is not there. */
-const SAMPLE_TENANT = "Runs on a sample tenant, Sophie. There is no tenant sign-in yet, so the password screen is a wireframe.";
+const SAMPLE_TENANT = "Runs on a sample tenant, Sophie, at /tenant/demo. The real portal at /tenant signs a tenant in by a link to the email on their Propoly deal (4 Sep).";
 const SAMPLE_LANDLORD = "The sample landlord, Raj, kept for walking people through. The live portal at /landlord shows a real landlord their real properties once they have signed in.";
 
 export const PORTAL_FOLDERS: PortalFolder[] = [
@@ -82,7 +82,7 @@ export const PORTAL_FOLDERS: PortalFolder[] = [
         blurb:
           "Goes out when a viewing is booked, and asks them to start their passport. This is the front door to everything else on this page.",
         emailId: "tenant-passport-invite",
-        caveat: "Written and rendering, but no send path is wired yet.",
+        caveat: "Sent from a booked viewing on /viewings, on the public sender (4 Sep).",
       },
       {
         kind: "open",

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import PreviewReturnBar from "@/components/PreviewReturnBar";
+import TenantSignOut from "@/components/TenantSignOut";
+import { currentTenant } from "@/lib/tenant-account";
 
 /**
  * The tenant portal's shell — THE LETTINGS EXPERTS, customer-facing.
@@ -18,7 +20,8 @@ export const metadata = { title: "The Letting Experts — My Account" };
 
 const RED = "#e31f36";
 
-export default function TenantLayout({ children }: { children: React.ReactNode }) {
+export default async function TenantLayout({ children }: { children: React.ReactNode }) {
+  const me = await currentTenant();
   return (
     // The heading override matters: the OS gives every h1–h3 the hand face
     // globally, and one handwritten headline would out the portal as the
@@ -42,10 +45,16 @@ export default function TenantLayout({ children }: { children: React.ReactNode }
             />
           </Link>
           <nav className="flex items-center gap-5 text-[12.5px] font-medium text-black/60">
-            <Link href="/tenant" className="transition-colors hover:text-black">Home</Link>
-            <Link href="/tenant/profile" className="transition-colors hover:text-black">My profile</Link>
-            <span className="hidden text-black/30 sm:inline">·</span>
-            <span className="hidden text-black/40 sm:inline">Sophie Turner</span>
+            {me ? (
+              <>
+                <Link href="/tenant" className="transition-colors hover:text-black">Home</Link>
+                <span className="hidden text-black/30 sm:inline">·</span>
+                <span className="hidden text-black/40 sm:inline">{me.name}</span>
+                <TenantSignOut />
+              </>
+            ) : (
+              <Link href="/tenant/sign-in" className="transition-colors hover:text-black">Sign in</Link>
+            )}
           </nav>
         </div>
       </header>
