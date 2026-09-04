@@ -51,6 +51,8 @@ export type Listing = {
   availableFrom: string | null;
   epcExpiry: string | null;
   daysOnMarket: number | null;
+  /** The day it went live, ISO date. Null for drafts. */
+  publishedAt?: string | null;
   lastUpdated: string | null;
   imageCount: number;
   image: string | null;
@@ -590,6 +592,16 @@ export default function ListingDrawer({
                       <DoodleIcon name="link" size={11} />
                       Live advert
                     </p>
+                    {/* When, as well as where. The go-live day is REX's
+                        publication time. The portals themselves are the chips
+                        below: a chip is a feed that is running. REX keeps no
+                        date per portal (probed 4 Sep). Item 20 on the list. */}
+                    {listing.publishedAt && (
+                      <p className="mt-1 text-[11px] text-muted">
+                        Live since{" "}
+                        {new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                      </p>
+                    )}
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                       {portalsLoading && portals.length === 0 ? (
                         <span className="rounded-full border border-line px-2.5 py-1 text-[11.5px] text-muted">

@@ -48,6 +48,8 @@ export interface OsListing {
   /** Days since it went live on the portals. Only the published half has a
    *  publication time, so this is null for drafts — which is the truth. */
   daysOnMarket: number | null;
+  /** The day it went live, ISO date. Same source as daysOnMarket. */
+  publishedAt: string | null;
   lastUpdated: string;
   imageCount: number;
   image: string | null;
@@ -242,6 +244,7 @@ function toListing(l: RexListing): OsListing {
     epcExpiry: l.epc_expiry_date ?? null,
     epcRating: l.epc_rating ?? null,
     daysOnMarket: published ? Math.floor((Date.now() / 1000 - published) / 86400) : null,
+    publishedAt: published ? new Date(published * 1000).toISOString().slice(0, 10) : null,
     lastUpdated: ago(num(l.system_modtime)),
     imageCount: l.related?.listing_images?.length ?? (l.listing_primary_image ? 1 : 0),
     image: https(l.listing_primary_image?.url ?? l.related?.listing_images?.[0]?.url),

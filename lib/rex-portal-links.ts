@@ -80,6 +80,8 @@ export async function portalLinksFor(listingId: string | number): Promise<Portal
     if (!url.startsWith("http")) continue;
     const portal = String(row.portal_profile?.portal_definition?.portal_name ?? "").trim();
     if (!portal) continue;
+    /* No per-portal date: REX's upload rows carry no timestamp, even as
+       extra fields (probed 4 Sep 2026). The go-live day lives on the listing. */
     links.push({
       portal,
       url,

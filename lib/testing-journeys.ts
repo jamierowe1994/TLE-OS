@@ -169,11 +169,12 @@ export const JOURNEYS: Journey[] = [
       {
         id: "golive",
         title: "Go-live date and which portals, on the file",
-        what: "The file records when the property went live and on which portals.",
-        how: [],
-        state: "notbuilt",
-        todo: "REX holds the dates; nothing reads them onto the file yet.",
-        since: "2026-08-29",
+        what: "The listing shows the day it went live, and the portals it is feeding as the advert chips.",
+        how: ["Open a published listing. Under Live advert it should read Live since <date>.", "Check the date against REX's publication time on the same listing.", "A draft should show no date."],
+        where: "/listings",
+        state: "built",
+        since: "2026-09-04",
+        notes: ["REX keeps no date per portal, so there is one go-live day, not one per chip."],
       },
       {
         id: "certs",
