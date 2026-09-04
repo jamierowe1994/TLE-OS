@@ -1,4 +1,4 @@
-import type React from "react";
+import * as React from "react";
 import type { SlideId } from "@/lib/present";
 
 /**
@@ -106,7 +106,7 @@ export const TINTS = ["#fbe7e2", "#e9eee4", "#fdf2da"] as const;
  * Converting a slide is: build it on `CreamSlide`, add its id here. The rest
  * of the deck is still Expert Red on white and stays that way until its turn.
  */
-export const CREAM_SLIDES: SlideId[] = ["welcome", "agenda", "agent", "approach", "property", "material", "listings", "comparables", "market", "history", "marketing", "offer", "maxprice", "video", "compliance", "legal", "screening", "management", "levels", "collection"];
+export const CREAM_SLIDES: SlideId[] = ["welcome", "agenda", "agent", "approach", "property", "material", "listings", "comparables", "market", "history", "marketing", "offer", "maxprice", "video", "compliance", "legal", "screening", "management", "levels", "collection", "protection", "rentlegal", "regulated"];
 
 export const isCream = (id: SlideId | undefined) => !!id && CREAM_SLIDES.includes(id);
 
@@ -478,5 +478,193 @@ export function HandHead({
         </h2>
       </Rise>
     </>
+  );
+}
+
+/* ───────────────────────── the property detail ───────────────────────── */
+
+/**
+ * What a landlord sees when they tap a comparable.
+ *
+ * James, 4 Sep: the comparison slides were "just listing out some random
+ * properties with nothing attached to them", and he wanted photographs, the
+ * agent, the price and the rest behind a click. He is right, and the reason is
+ * sharper than "it looks better": a landlord cannot judge whether the flat at
+ * £1,150 is better or worse than theirs from an address and a number. With the
+ * photographs they can, and judging it is the entire job of the slide.
+ *
+ * ── An overlay rather than a slide of its own ──────────────────────────────
+ *
+ * Twelve comparables cannot each have a slide, and a deck that grows a slide
+ * per property stops being a deck. This is the standard answer - the list
+ * stays the argument, the detail is available on demand, and closing it puts
+ * you back exactly where you were rather than somewhere further along.
+ *
+ * ── Three things it must not do ────────────────────────────────────────────
+ *
+ *  • NEVER open on a row with no photographs. A gallery that opens empty is
+ *    worse than a row that does not respond: the first looks broken, the
+ *    second looks like a list. The caller checks before it offers the click.
+ *  • Never trap anybody. Escape, the backdrop and a visible close button, and
+ *    the arrow keys page the photographs rather than the deck while it is up.
+ *  • Never scroll the deck underneath. The slide behind it holds still.
+ */
+export function PropertyDetail({
+  open,
+  onClose,
+  title,
+  locality,
+  rent,
+  photos,
+  facts,
+  advert,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  locality: string;
+  rent: string;
+  photos: string[];
+  /** Short pairs - beds, type, status, how long, who it is with. */
+  facts: { label: string; value: string }[];
+  advert?: string | null;
+}) {
+  const [at, setAt] = React.useState(0);
+  const count = photos.length;
+
+  /* Back to the first photograph whenever a DIFFERENT property is opened.
+     Keyed on the title rather than on `open`, so re-opening the same one where
+     you left it is deliberate and opening the next one is not confusing. */
+  React.useEffect(() => setAt(0), [title]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      /* The arrows belong to the GALLERY while this is up. Without stopping
+         them the deck moves sideways behind the overlay, and closing it lands
+         the landlord on a slide they never chose. */
+      if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+        e.preventDefault();
+        e.stopPropagation();
+        if (count > 1) {
+          setAt((i) => (e.key === "ArrowRight" ? (i + 1) % count : (i - 1 + count) % count));
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open, onClose, count]);
+
+  if (!open || count === 0) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6"
+      style={{ background: "rgba(32,28,26,0.55)" }}
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      <div
+        className="relative flex max-h-full w-full max-w-[860px] flex-col overflow-hidden rounded-[20px]"
+        style={{ background: CREAM }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="relative bg-black/5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photos[at]}
+            alt={title}
+            className="max-h-[52vh] w-full object-cover"
+            style={{ aspectRatio: "3 / 2" }}
+          />
+
+          {count > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setAt((i) => (i - 1 + count) % count)}
+                aria-label="Previous photograph"
+                className="absolute left-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 transition-opacity hover:opacity-100"
+                style={{ color: INK }}
+              >
+                <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden style={{ transform: "scaleX(-1)" }}>
+                  <path d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAt((i) => (i + 1) % count)}
+                aria-label="Next photograph"
+                className="absolute right-3 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90"
+                style={{ color: INK }}
+              >
+                <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+              <span
+                className="absolute bottom-3 right-3 rounded-full px-2.5 py-1 text-[11px] tabular-nums text-white"
+                style={{ background: "rgba(0,0,0,0.45)" }}
+              >
+                {at + 1} / {count}
+              </span>
+            </>
+          )}
+
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-white/90 text-[18px] leading-none"
+            style={{ color: INK }}
+          >
+            &times;
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-6 py-5 sm:px-7">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
+            <h3 className="text-[19px] leading-snug" style={{ fontFamily: HAND, fontWeight: 700 }}>
+              {title}
+            </h3>
+            <span className="text-[20px]" style={{ fontFamily: HAND, fontWeight: 700, color: CORAL }}>
+              {rent}
+            </span>
+          </div>
+          {locality && <p className="mt-0.5 text-[12.5px] font-light text-black/50">{locality}</p>}
+
+          {facts.length > 0 && (
+            <dl className="mt-4 flex flex-wrap gap-x-8 gap-y-2 border-t border-black/10 pt-3.5">
+              {facts.map((f) => (
+                <div key={f.label}>
+                  <dt className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-black/40">
+                    {f.label}
+                  </dt>
+                  <dd className="mt-0.5 text-[13.5px]">{f.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
+          {advert && (
+            <a
+              href={advert}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-4 inline-block text-[12.5px] underline"
+              style={{ color: CORAL }}
+            >
+              See the full advert
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

@@ -23,6 +23,7 @@ import {
   VIDEO_COPY,
   WHAT_WE_OFFER,
 } from "@/lib/present-copy";
+import { useState } from "react";
 import type { PresentDeck as Deck } from "@/lib/present";
 import {
   CORAL,
@@ -35,6 +36,7 @@ import {
   INK,
   Line,
   Mark,
+  PropertyDetail,
   MIST,
   PAPER,
   RED,
@@ -560,67 +562,128 @@ export function Material({ deck, show }: { deck: Deck; show: boolean }) {
  *
  * Ours are marked, and there are deliberately others on the list. A slide
  * carrying only our own stock is a brochure, and a landlord can tell.
+ *
+ * ── The rows open ──────────────────────────────────────────────────────────
+ *
+ * James, 4 Sep. A row that is only an address and a number is not evidence a
+ * landlord can weigh: they cannot tell whether the flat at £1,150 is better or
+ * worse than theirs. The photographs, the agent, the status and how long it
+ * has sat are what make it weighable, and they sit behind a click rather than
+ * on the slide because twelve properties cannot each have a slide.
+ *
+ * Only rows with photographs open. A row without them stays a row - a gallery
+ * that opens empty looks broken, where a list that does not respond just looks
+ * like a list.
  */
 export function Listings({ deck, show }: { deck: Deck; show: boolean }) {
   const rows = deck.listings ?? [];
+  const [openAt, setOpenAt] = useState<number | null>(null);
   if (!rows.length) return null;
   const ours = rows.filter((r) => r.ours).length;
+  const shown = rows.slice(0, 6);
+  const galleryOf = (r: (typeof rows)[number]) =>
+    (r.photos?.length ? r.photos : r.image ? [r.image] : []).filter(Boolean);
+  const active = openAt != null ? shown[openAt] : null;
 
   return (
     <CreamSlide id="listings">
       <div className="mx-auto w-full max-w-[1180px]">
         <div className="max-w-[660px]">
           <HandHead eyebrow="What&rsquo;s on the market" show={show} lines={2}>
-            Who you&rsquo;re up
+            What&rsquo;s on the market
             <br />
-            against <Emphasis show={show}>today</Emphasis>
+            near you <Emphasis show={show}>today</Emphasis>
           </HandHead>
           <Rise show={show} i={2}>
-            <p className="mt-6 max-w-[540px] text-[15px] font-light leading-[1.6] text-black/55">
-              A tenant looking at your street is looking at these at the same time. What they
-              choose between is the price, the photographs, and how quickly somebody answers the
-              phone.
+            <p className="mt-6 max-w-[560px] text-[15px] font-light leading-[1.6] text-black/55">
+              A tenant looking at your street is looking at these at the same time. Tap any of
+              them for the photographs, the asking rent and who it is with.
             </p>
           </Rise>
         </div>
 
         <Rise show={show} i={3}>
           <ul className="mt-7 lg:mt-8">
-            {rows.slice(0, 6).map((r, n) => (
-              <li
-                key={`${r.address}-${r.rent}`}
-                className="flex items-baseline justify-between gap-6 py-2.5"
-                style={{ borderTop: n === 0 ? "none" : "1px solid rgba(0,0,0,0.07)" }}
-              >
-                <span className="min-w-0">
-                  <span
-                    className="block truncate text-[15px] leading-snug sm:text-[16px]"
-                    style={{ fontFamily: HAND, fontWeight: 700 }}
-                  >
-                    {r.address}
-                    {r.ours && (
-                      <span
-                        className="ml-2.5 rounded-full px-2.5 py-[3px] align-middle text-[10px] font-semibold uppercase tracking-[0.12em]"
-                        style={{ background: TINTS[0], color: CORAL, fontFamily: "inherit" }}
-                      >
-                        Ours
-                      </span>
-                    )}
-                  </span>
-                  <span className="mt-0.5 block text-[12.5px] font-light text-black/45">
-                    {[r.locality, r.beds != null ? `${r.beds} bed` : null, r.agent]
-                      .filter(Boolean)
-                      .join("  ·  ")}
-                  </span>
-                </span>
-                <span
-                  className="shrink-0 text-[17px]"
-                  style={{ fontFamily: HAND, fontWeight: 700 }}
+            {shown.map((r, n) => {
+              const gallery = galleryOf(r);
+              const openable = gallery.length > 0;
+              return (
+                <li
+                  key={`${r.address}-${r.rent}`}
+                  style={{ borderTop: n === 0 ? "none" : "1px solid rgba(0,0,0,0.07)" }}
                 >
-                  {r.rent}
-                </span>
-              </li>
-            ))}
+                  <button
+                    type="button"
+                    disabled={!openable}
+                    onClick={() => setOpenAt(n)}
+                    className="flex w-full items-center gap-4 py-2.5 text-left transition-opacity disabled:cursor-default"
+                  >
+                    {/* The thumbnail is the invitation. Without it the row is a
+                        line of text that happens to be clickable, which nobody
+                        discovers. */}
+                    {r.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={r.image}
+                        alt=""
+                        aria-hidden
+                        className="h-[46px] w-[62px] shrink-0 rounded-[7px] object-cover"
+                      />
+                    ) : (
+                      <span
+                        className="h-[46px] w-[62px] shrink-0 rounded-[7px]"
+                        style={{ background: TINTS[0] }}
+                      />
+                    )}
+
+                    <span className="min-w-0 flex-1">
+                      <span
+                        className="block truncate text-[15px] leading-snug sm:text-[16px]"
+                        style={{ fontFamily: HAND, fontWeight: 700 }}
+                      >
+                        {r.address}
+                        {r.ours && (
+                          <span
+                            className="ml-2.5 rounded-full px-2.5 py-[3px] align-middle text-[10px] font-semibold uppercase tracking-[0.12em]"
+                            style={{ background: TINTS[0], color: CORAL, fontFamily: "inherit" }}
+                          >
+                            Ours
+                          </span>
+                        )}
+                        {r.status === "let agreed" && (
+                          <span className="ml-2 align-middle text-[11px] font-normal text-black/40">
+                            let agreed
+                          </span>
+                        )}
+                      </span>
+                      <span className="mt-0.5 block truncate text-[12.5px] font-light text-black/45">
+                        {[
+                          r.locality,
+                          r.beds != null ? `${r.beds} bed` : null,
+                          r.type,
+                          r.agent,
+                        ]
+                          .filter(Boolean)
+                          .join("  ·  ")}
+                      </span>
+                    </span>
+
+                    <span className="flex shrink-0 items-center gap-3">
+                      <span className="text-[17px]" style={{ fontFamily: HAND, fontWeight: 700 }}>
+                        {r.rent}
+                      </span>
+                      {openable && (
+                        <span className="text-black/25" aria-hidden>
+                          <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M9 5l7 7-7 7" />
+                          </svg>
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </Rise>
 
@@ -633,6 +696,31 @@ export function Listings({ deck, show }: { deck: Deck; show: boolean }) {
           </Rise>
         )}
       </div>
+
+      <PropertyDetail
+        open={active != null}
+        onClose={() => setOpenAt(null)}
+        title={active?.address ?? ""}
+        locality={active?.locality ?? ""}
+        rent={active?.rent ?? ""}
+        photos={active ? galleryOf(active) : []}
+        advert={active?.advert ?? null}
+        facts={
+          active
+            ? ([
+                active.beds != null ? { label: "Bedrooms", value: String(active.beds) } : null,
+                active.type ? { label: "Type", value: active.type } : null,
+                active.status
+                  ? { label: "Status", value: active.status === "let agreed" ? "Let agreed" : "On the market" }
+                  : null,
+                active.days != null
+                  ? { label: "Advertised", value: `${active.days} days` }
+                  : null,
+                active.agent ? { label: "With", value: active.agent } : null,
+              ].filter(Boolean) as { label: string; value: string }[])
+            : []
+        }
+      />
     </CreamSlide>
   );
 }
@@ -1410,94 +1498,154 @@ export function Collection({ show }: { show: boolean }) {
 
 /* ───────────────────────── protecting the income ───────────────────────── */
 
+/**
+ * Protecting you and your rental income.
+ *
+ * The one slide in this block that gets an illustration, and it gets it
+ * because of what the block is ABOUT: everything either side of it is a list
+ * of things that can go wrong, and this is the page that says the point of all
+ * of it is that you stop thinking about the property. A drawing of somebody
+ * not worrying makes that argument faster than the paragraph does.
+ *
+ * James, 4 Sep: the artwork is for "the odd occasion", not every slide. This
+ * is the occasion - three of the four slides around it stay plain.
+ */
 export function Protection({ show }: { show: boolean }) {
   return (
-    <Slide id="protection">
-      <div className="mx-auto w-full max-w-4xl">
-        <Head eyebrow="Protecting your income" title={PROTECTION.heading} show={show} />
-        <div className="mt-8 max-w-2xl space-y-5">
-          {PROTECTION.paragraphs.map((p, n) => (
-            <Rise key={p.slice(0, 24)} show={show} i={1 + n}>
-              <p className="text-[14px] font-light leading-[1.8] text-black/70">{p}</p>
-            </Rise>
-          ))}
+    <CreamSlide id="protection">
+      <div className="mx-auto grid w-full max-w-[1260px] items-center gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-14">
+        <div className="max-w-[600px]">
+          <HandHead eyebrow="Protecting your income" show={show} lines={2}>
+            The point is that you
+            <br />
+            stop <Emphasis show={show}>thinking</Emphasis> about it
+          </HandHead>
+          <div className="mt-7 space-y-4">
+            {PROTECTION.paragraphs.map((p, n) => (
+              <Rise key={p.slice(0, 24)} show={show} i={2 + n}>
+                <p className="text-[14px] font-light leading-[1.7] text-black/65">{p}</p>
+              </Rise>
+            ))}
+          </div>
         </div>
+
+        {/* Hidden below lg, like the entrance. Stacked it pushes three
+            paragraphs off a phone, and the paragraphs are the argument. */}
+        <Rise show={show} i={2} className="hidden lg:block">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/art/landlord-sofa.png"
+            alt=""
+            aria-hidden
+            className="ml-auto w-full max-w-[500px]"
+          />
+        </Rise>
       </div>
-    </Slide>
+    </CreamSlide>
   );
 }
 
 /**
  * Rent & Legal Protection.
  *
- * The one slide in the deck that makes a financial promise, which is why the
+ * The one slide in the deck that makes a FINANCIAL promise, which is why the
  * disclaimer is on it rather than at the end. Nine points is too many to read
- * as prose, so they are a grid of short pairs — and the standfirst does the
- * arguing so that the grid only has to do the listing.
+ * as prose, so they are short pairs on a grid and the standfirst does the
+ * arguing - the grid only has to do the listing.
  */
 export function RentLegal({ show }: { show: boolean }) {
   return (
-    <Slide id="rentlegal">
-      <div className="mx-auto w-full max-w-5xl">
-        <Head
-          eyebrow={RENT_LEGAL.eyebrow}
-          title={RENT_LEGAL.heading}
-          lead={RENT_LEGAL.standfirst}
-          show={show}
-        />
-        <div className="mt-8 grid gap-x-10 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+    <CreamSlide id="rentlegal">
+      <div className="mx-auto w-full max-w-[1180px]">
+        <div className="max-w-[760px]">
+          <HandHead eyebrow={RENT_LEGAL.eyebrow} show={show} lines={2}>
+            More than management.
+            <br />
+            Real <Emphasis show={show}>protection</Emphasis>
+          </HandHead>
+          <Rise show={show} i={2}>
+            <p className="mt-5 max-w-[680px] text-[14.5px] font-light leading-[1.6] text-black/55">
+              {RENT_LEGAL.standfirst}
+            </p>
+          </Rise>
+        </div>
+
+        <div className="mt-7 grid gap-x-10 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
           {RENT_LEGAL.points.map((p, n) => (
-            <Rise key={p.title} show={show} i={1 + Math.floor(n / 4)}>
+            <Rise key={p.title} show={show} i={3 + Math.floor(n / 4)}>
               <div className="border-t border-black/10 pt-3">
-                <h3 className="text-[13px] font-semibold leading-snug">{p.title}</h3>
-                <p className="mt-1.5 text-[11.5px] font-light leading-relaxed text-black/60">
+                <h3
+                  className="text-[13.5px] leading-snug"
+                  style={{ fontFamily: HAND, fontWeight: 700 }}
+                >
+                  {p.title}
+                </h3>
+                <p className="mt-1.5 text-[11.5px] font-light leading-[1.55] text-black/55">
                   {p.body}
                 </p>
               </div>
             </Rise>
           ))}
         </div>
-        <Rise show={show} i={3}>
-          <p className="mt-7 max-w-3xl border-t border-black/10 pt-4 text-[11.5px] font-light leading-relaxed text-black/50">
+
+        <Rise show={show} i={5}>
+          <p className="mt-6 max-w-[860px] border-t border-black/10 pt-3.5 text-[11.5px] font-light leading-relaxed text-black/45">
             {RENT_LEGAL.disclaimer}
           </p>
         </Rise>
       </div>
-    </Slide>
+    </CreamSlide>
   );
 }
 
 /**
  * The schemes we answer to.
  *
- * None of the artwork is in the repo, so every tile renders as a name in the
- * brand's own type with its caption under it. That is not a placeholder — a
- * regulator's name set properly says the same thing its logo does, and eight
- * broken image boxes on the slide about being accountable would say the
- * opposite. Drop the files into /public/brand and set `logo` in
- * lib/present-copy to switch any one of them over.
+ * None of the artwork is in the repo, so every tile is the regulator's NAME in
+ * the brand's own type with its caption under it. That is not a placeholder: a
+ * regulator's name set properly says what its logo says, and eight broken
+ * image boxes on the slide about being accountable would say the opposite.
+ * Drop the files into /public/brand and set `logo` in lib/present-copy to
+ * switch any one of them over.
+ *
+ * The heading is the honest framing of what these are. "Regulated and
+ * protected" is a boast; "who we answer to when you have a complaint" is the
+ * thing a landlord actually wants to know, and it is the same fact.
  */
 export function Regulated({ show }: { show: boolean }) {
   return (
-    <Slide id="regulated">
-      <div className="mx-auto w-full max-w-5xl">
-        <Head
-          eyebrow="Regulated and protected"
-          title="Who we answer to when you have a complaint"
-          lead="Every one of these is somebody you can go to about us, or a scheme that holds your money where we cannot reach it."
-          show={show}
-        />
-        <div className="mt-9 grid gap-x-10 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
+    <CreamSlide id="regulated">
+      <div className="mx-auto w-full max-w-[1180px]">
+        <div className="max-w-[720px]">
+          <HandHead eyebrow="Regulated and protected" show={show} lines={2}>
+            Who we answer to when
+            <br />
+            you have a <Emphasis show={show}>complaint</Emphasis>
+          </HandHead>
+          <Rise show={show} i={2}>
+            <p className="mt-5 max-w-[600px] text-[14.5px] font-light leading-[1.6] text-black/55">
+              Every one of these is somebody you can go to about us, or a scheme that holds your
+              money where we cannot reach it.
+            </p>
+          </Rise>
+        </div>
+
+        <div className="mt-8 grid gap-x-10 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
           {REGULATED.map((r, n) => (
-            <Rise key={r.name} show={show} i={1 + Math.floor(n / 4)}>
+            <Rise key={r.name} show={show} i={3 + Math.floor(n / 4)}>
               <div className="border-t border-black/10 pt-3">
                 {r.logo ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={r.logo} alt={r.name} className="h-7 w-auto" />
                 ) : (
-                  <span className="block text-[13px] font-semibold leading-snug">{r.name}</span>
+                  <span
+                    className="block text-[13.5px] leading-snug"
+                    style={{ fontFamily: HAND, fontWeight: 700 }}
+                  >
+                    {r.name}
+                  </span>
                 )}
-                <span className="mt-1.5 block text-[11.5px] font-light leading-relaxed text-black/55">
+                <span className="mt-1.5 block text-[11.5px] font-light leading-[1.55] text-black/50">
                   {r.caption}
                 </span>
               </div>
@@ -1505,7 +1653,7 @@ export function Regulated({ show }: { show: boolean }) {
           ))}
         </div>
       </div>
-    </Slide>
+    </CreamSlide>
   );
 }
 

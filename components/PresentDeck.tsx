@@ -63,6 +63,7 @@ import {
   STEP_ICONS,
   CreamSlide,
   HandHead,
+  PropertyDetail,
   Slide,
   TINTS,
   isCream,
@@ -770,8 +771,10 @@ function Agent({ deck, show }: { deck: Deck; show: boolean }) {
  * the second thing on the page.
  *
  * The evidence sits underneath it, and it has to: a range with no working
- * shown is a guess with a serif on it. Every row here is a real property we
- * are letting, with what it asked and how long it took.
+ * shown is a guess with a serif on it. Every row is a real property we let,
+ * with what it asked and how long it took - and, where our book has them, the
+ * photographs behind a click. James, 4 Sep: a row that is only an address and
+ * a number is not something a landlord can weigh against their own house.
  *
  * Gated at three rows in slidesFor - below that the slide argues AGAINST us,
  * because a landlord counting two properties concludes we do not know their
@@ -779,8 +782,13 @@ function Agent({ deck, show }: { deck: Deck; show: boolean }) {
  */
 function Comparables({ deck, show }: { deck: Deck; show: boolean }) {
   const c = deck.comparables;
+  const [openAt, setOpenAt] = useState<number | null>(null);
   if (!c) return null;
-  const money = (n: number) => `\u00a3${Math.round(n).toLocaleString("en-GB")}`;
+  const money = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
+  const shown = c.rows.slice(0, 6);
+  const galleryOf = (r: (typeof shown)[number]) =>
+    (r.photos?.length ? r.photos : r.image ? [r.image] : []).filter(Boolean) as string[];
+  const active = openAt != null ? shown[openAt] : null;
 
   return (
     <CreamSlide id="comparables">
@@ -794,10 +802,6 @@ function Comparables({ deck, show }: { deck: Deck; show: boolean }) {
           <Rise show={show} i={1}>
             <h2
               className="mt-4 leading-[1.02] tracking-[-0.015em]"
-              /* Capped at 54, not 62. Six evidence rows plus this headline is the
-                  tallest thing in the section, and at 62 the sixth row fell
-                  under the fold on a 720px laptop - which on the one slide
-                  that exists to show our working reads as us hiding a row. */
               style={{ fontFamily: HAND, fontWeight: 700, fontSize: "clamp(32px, 3.8vw, 54px)" }}
             >
               <span style={{ color: CORAL }}>
@@ -807,55 +811,113 @@ function Comparables({ deck, show }: { deck: Deck; show: boolean }) {
             </h2>
           </Rise>
           <Rise show={show} i={2}>
-            <p className="mt-4 max-w-[520px] text-[15px] font-light leading-[1.6] text-black/55">
+            <p className="mt-4 max-w-[540px] text-[15px] font-light leading-[1.6] text-black/55">
               Based on {c.basedOn} propert{c.basedOn === 1 ? "y" : "ies"} we are letting near you.
-              We&rsquo;ll land on the figure together on the day.
+              Tap any of them to see it. We&rsquo;ll land on the figure together on the day.
             </p>
           </Rise>
         </div>
 
         <Rise show={show} i={3}>
           <ul className="mt-7 lg:mt-8">
-            {c.rows.slice(0, 6).map((r, n) => (
-              <li
-                key={`${r.name}-${r.rent}`}
-                className="flex items-baseline justify-between gap-6 py-2.5"
-                style={{ borderTop: n === 0 ? "none" : "1px solid rgba(0,0,0,0.07)" }}
-              >
-                <span className="min-w-0">
-                  <span
-                    className="block truncate text-[15px] leading-snug sm:text-[16px]"
-                    style={{ fontFamily: HAND, fontWeight: 700 }}
+            {shown.map((r, n) => {
+              const gallery = galleryOf(r);
+              const openable = gallery.length > 0;
+              return (
+                <li
+                  key={`${r.name}-${r.rent}`}
+                  style={{ borderTop: n === 0 ? "none" : "1px solid rgba(0,0,0,0.07)" }}
+                >
+                  <button
+                    type="button"
+                    disabled={!openable}
+                    onClick={() => setOpenAt(n)}
+                    className="flex w-full items-center gap-4 py-2 text-left disabled:cursor-default"
                   >
-                    {r.name}
-                  </span>
-                  <span className="mt-0.5 block text-[12.5px] font-light text-black/45">
-                    {r.locality}
-                  </span>
-                </span>
-                <span className="flex shrink-0 items-baseline gap-4">
-                  {r.days != null && (
-                    <span className="text-[12.5px] font-light text-black/45">
-                      {r.letAgreed ? `let in ${r.days} days` : `${r.days} days`}
+                    {r.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={r.image}
+                        alt=""
+                        aria-hidden
+                        className="h-[42px] w-[58px] shrink-0 rounded-[7px] object-cover"
+                      />
+                    ) : (
+                      <span
+                        className="h-[42px] w-[58px] shrink-0 rounded-[7px]"
+                        style={{ background: TINTS[0] }}
+                      />
+                    )}
+                    <span className="min-w-0 flex-1">
+                      <span
+                        className="block truncate text-[15px] leading-snug sm:text-[16px]"
+                        style={{ fontFamily: HAND, fontWeight: 700 }}
+                      >
+                        {r.name}
+                      </span>
+                      <span className="mt-0.5 block truncate text-[12.5px] font-light text-black/45">
+                        {[r.locality, r.beds != null ? `${r.beds} bed` : null, r.type]
+                          .filter(Boolean)
+                          .join("  ·  ")}
+                      </span>
                     </span>
-                  )}
-                  <span className="text-[17px]" style={{ fontFamily: HAND, fontWeight: 700 }}>
-                    {r.rent}
-                  </span>
-                </span>
-              </li>
-            ))}
+                    <span className="flex shrink-0 items-center gap-4">
+                      {r.days != null && (
+                        <span className="hidden text-[12.5px] font-light text-black/45 sm:inline">
+                          {r.letAgreed ? `let in ${r.days} days` : `${r.days} days`}
+                        </span>
+                      )}
+                      <span className="text-[17px]" style={{ fontFamily: HAND, fontWeight: 700 }}>
+                        {r.rent}
+                      </span>
+                      {openable && (
+                        <span className="text-black/25" aria-hidden>
+                          <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M9 5l7 7-7 7" />
+                          </svg>
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </Rise>
 
         {c.caveat && (
           <Rise show={show} i={4}>
-            <p className="mt-6 max-w-[640px] text-[12.5px] font-light leading-relaxed text-black/45">
+            <p className="mt-5 max-w-[640px] text-[12.5px] font-light leading-relaxed text-black/45">
               {c.caveat}
             </p>
           </Rise>
         )}
       </div>
+
+      <PropertyDetail
+        open={active != null}
+        onClose={() => setOpenAt(null)}
+        title={active?.name ?? ""}
+        locality={active?.locality ?? ""}
+        rent={active?.rent ?? ""}
+        photos={active ? galleryOf(active) : []}
+        facts={
+          active
+            ? ([
+                active.beds != null ? { label: "Bedrooms", value: String(active.beds) } : null,
+                active.type ? { label: "Type", value: active.type } : null,
+                { label: "Status", value: active.letAgreed ? "Let agreed" : "Advertised" },
+                active.days != null
+                  ? {
+                      label: active.letAgreed ? "Took to let" : "Advertised",
+                      value: `${active.days} days`,
+                    }
+                  : null,
+                { label: "With", value: "The Letting Experts" },
+              ].filter(Boolean) as { label: string; value: string }[])
+            : []
+        }
+      />
     </CreamSlide>
   );
 }

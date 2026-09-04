@@ -94,8 +94,24 @@ export type PresentComparables = {
   guideMid: number;
   guideHigh: number;
   basedOn: number;
-  /** Shown so the landlord can see the working, not just the answer. */
-  rows: { name: string; locality: string; rent: string; days: number | null; letAgreed: boolean }[];
+  /** Shown so the landlord can see the working, not just the answer.
+   *
+   *  The photographs and the extra detail are OPTIONAL, and that is not
+   *  laziness: these come from our own book rather than from Homesearch, and
+   *  REX does not always have images on a let property. A row without them is
+   *  still evidence - it is a real property at a real rent - it just does not
+   *  open. See PresentListing for why they are here at all. */
+  rows: {
+    name: string;
+    locality: string;
+    rent: string;
+    days: number | null;
+    letAgreed: boolean;
+    beds?: number | null;
+    type?: string | null;
+    image?: string | null;
+    photos?: string[];
+  }[];
   /** Any caveat the research produced. Shown to the LANDLORD too — a range we
    *  would qualify to an agent is a range we must qualify to them. */
   caveat: string | null;
@@ -207,14 +223,43 @@ export type PresentFees = {
   note: string | null;
 };
 
-/** One property on the "what's on the market" slide. */
+/**
+ * One property on the "what's on the market" slide.
+ *
+ * ── Why this carries a gallery ─────────────────────────────────────────────
+ *
+ * James, 4 Sep: the comparison slides were "just listing out some random
+ * properties with nothing attached to them". He is right, and it is the
+ * difference between evidence and a list of names: a landlord cannot judge
+ * whether the flat at £1,150 is better or worse than theirs from an address.
+ * With the photographs, the agent, the status and how long it has sat, they
+ * can - and that is the whole job of the slide.
+ *
+ * Everything here is SNAPSHOTTED at send, photographs included, for the reason
+ * at the top of this file: a landlord opening the link on Sunday must not
+ * depend on Homesearch being up. The URLs are its public S3 media, which
+ * survives without a token (measured).
+ *
+ * The optional fields are optional so that decks minted before 4 Sep still
+ * parse. A row with no photographs simply does not open.
+ */
 export type PresentListing = {
   address: string;
   locality: string;
   rent: string;
   beds: number | null;
+  type?: string | null;
+  /** The lead photograph. 95% of Homesearch rows carry one. */
   image: string | null;
+  /** The rest of the gallery, from `current_listings/<id>`. */
+  photos?: string[];
   agent: string | null;
+  /** The real advert, so a landlord can check us rather than trust us. */
+  advert?: string | null;
+  /** "let agreed" is the rental STC - the freshest evidence of what the market
+   *  PAYS as opposed to what it asks, so it is labelled rather than dropped. */
+  status?: "on market" | "let agreed";
+  days?: number | null;
   /** Ours, so the slide can say so without a separate list. */
   ours: boolean;
 };
@@ -788,10 +833,23 @@ export const SAMPLE_DECK: PresentDeck = {
     guideHigh: 1200,
     basedOn: 6,
     rows: [
-      { name: "Apartment 2, 11 Station Road", locality: "Liverpool L34 5SN", rent: "\u00a3695 pcm", days: 13, letAgreed: true },
+      {
+        name: "Apartment 2, 11 Station Road", locality: "Liverpool L34 5SN",
+        rent: "\u00a3695 pcm", days: 13, letAgreed: true, beds: 1, type: "Flat",
+        image: "https://hs-pt-media.s3.eu-west-2.amazonaws.com/I/897BEA0623F24D2316A416706858EF5BC21170FB.jpg",
+        photos: [
+          "https://hs-pt-media.s3.eu-west-2.amazonaws.com/I/897BEA0623F24D2316A416706858EF5BC21170FB.jpg",
+          "https://hs-pt-media.s3.eu-west-2.amazonaws.com/I/219E20077D133E46D54AC1CC8AE7919C95D2EB59.jpg",
+        ],
+      },
       { name: "Apartment 2, 10 Cardiff Grove", locality: "Luton LU1 1QH", rent: "\u00a3750 pcm", days: null, letAgreed: false },
       { name: "Apartment 28, 21 Wheatsheaf Court", locality: "Leicester LE2 6EY", rent: "\u00a3795 pcm", days: 2, letAgreed: false },
-      { name: "14 Marchmont Road", locality: "Liverpool L34 5PQ", rent: "\u00a31,050 pcm", days: 21, letAgreed: true },
+      {
+        name: "14 Marchmont Road", locality: "Liverpool L34 5PQ", rent: "\u00a31,050 pcm",
+        days: 21, letAgreed: true, beds: 3, type: "Terraced house",
+        image: "https://hs-pt-media.s3.eu-west-2.amazonaws.com/I/219E20077D133E46D54AC1CC8AE7919C95D2EB59.jpg",
+        photos: ["https://hs-pt-media.s3.eu-west-2.amazonaws.com/I/219E20077D133E46D54AC1CC8AE7919C95D2EB59.jpg"],
+      },
       { name: "3 Beechwood Gardens", locality: "Liverpool L34 6TR", rent: "\u00a31,200 pcm", days: null, letAgreed: false },
       { name: "9 Duntreath Avenue", locality: "Liverpool L34 5AB", rent: "\u00a31,250 pcm", days: 34, letAgreed: true },
     ],
@@ -869,11 +927,40 @@ export const SAMPLE_DECK: PresentDeck = {
   /* What is advertised near them today. Deliberately includes one of ours and
      several that are not: a slide showing only our own stock is a brochure,
      not a market. */
+  /* The photographs are Homesearch's own public S3 media, which is what a real
+     deck snapshots (measured: 200 image/jpeg, no token). They are here so the
+     gallery can actually be reviewed before an agent sends one - the rows that
+     carry none stay shut, which is the other half of the behaviour and just as
+     worth seeing. If one of these ever 404s the row simply stops opening. */
   listings: [
-    { address: "24 Harlestone Road", locality: "NN5 6AA", rent: "£1,095 pcm", beds: 2, image: null, agent: "The Letting Experts", ours: true },
-    { address: "8 Larkhall Lane", locality: "NN5 7BB", rent: "£1,150 pcm", beds: 2, image: null, agent: "O'Riordan Bond", ours: false },
-    { address: "112 Bants Lane", locality: "NN5 6DE", rent: "£1,250 pcm", beds: 3, image: null, agent: "Connells Lettings", ours: false },
-    { address: "3 Wilby Way", locality: "NN5 4QT", rent: "£1,395 pcm", beds: 3, image: null, agent: "Lomond", ours: false },
+    {
+      address: "24 Harlestone Road", locality: "NN5 6AA", rent: "£1,095 pcm", beds: 2,
+      type: "Terraced house", agent: "The Letting Experts", ours: true,
+      status: "on market", days: 9,
+      image: "https://hs-pt-media.s3.eu-west-2.amazonaws.com/I/219E20077D133E46D54AC1CC8AE7919C95D2EB59.jpg",
+      photos: [
+        "https://hs-pt-media.s3.eu-west-2.amazonaws.com/I/219E20077D133E46D54AC1CC8AE7919C95D2EB59.jpg",
+        "https://hs-pt-media.s3.eu-west-2.amazonaws.com/I/897BEA0623F24D2316A416706858EF5BC21170FB.jpg",
+      ],
+    },
+    {
+      address: "8 Larkhall Lane", locality: "NN5 7BB", rent: "£1,150 pcm", beds: 2,
+      type: "Flat", agent: "O'Riordan Bond", ours: false, status: "on market", days: 24,
+      image: "https://hs-pt-media.s3.eu-west-2.amazonaws.com/I/897BEA0623F24D2316A416706858EF5BC21170FB.jpg",
+      photos: [
+        "https://hs-pt-media.s3.eu-west-2.amazonaws.com/I/897BEA0623F24D2316A416706858EF5BC21170FB.jpg",
+      ],
+    },
+    {
+      address: "112 Bants Lane", locality: "NN5 6DE", rent: "£1,250 pcm", beds: 3,
+      type: "Semi-detached house", agent: "Connells Lettings", ours: false,
+      status: "let agreed", days: 16, image: null,
+    },
+    {
+      address: "3 Wilby Way", locality: "NN5 4QT", rent: "£1,395 pcm", beds: 3,
+      type: "Detached house", agent: "Lomond", ours: false, status: "on market", days: 41,
+      image: null,
+    },
   ],
   /* The point of this slide is that the landlord CORRECTS it, so the sample
      carries a blank the way a real record does — nobody has the tenure. */
