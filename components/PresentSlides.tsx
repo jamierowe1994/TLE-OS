@@ -111,64 +111,6 @@ function Head({
   );
 }
 
-/**
- * A section divider.
- *
- * Full-bleed red with the property photograph behind it where there is one.
- * It carries no argument — it exists so that the landlord knows the subject
- * has changed, which is the one thing a long deck cannot say in words without
- * sounding like a filing system.
- */
-function Divider({
-  id,
-  eyebrow,
-  title,
-  lead,
-  image,
-  show,
-}: {
-  id: "property" | "marketing";
-  eyebrow: string;
-  title: string;
-  lead: string;
-  image: string | null;
-  show: boolean;
-}) {
-  return (
-    <section
-      data-slide={id}
-      className="relative flex min-h-full w-full shrink-0 flex-col justify-center overflow-hidden px-6 pb-28 pt-20 sm:px-10 lg:px-20 lg:pb-24"
-      style={{ background: RED, color: "#ffffff" }}
-    >
-      {image && (
-        <>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image} alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover" />
-          {/* Left-to-right rather than a flat dim: the type sits left, and
-              darkening the whole frame throws away the half of the photograph
-              worth showing. Same reasoning as the entrance screen. */}
-          <div
-            className="absolute inset-0"
-            style={{ background: `linear-gradient(100deg, ${RED} 30%, rgba(227,31,54,0.72) 62%, rgba(227,31,54,0.35) 100%)` }}
-          />
-        </>
-      )}
-      <div className="relative mx-auto w-full max-w-5xl">
-        <Rise show={show} i={0}>
-          <Eyebrow on="dark">{eyebrow}</Eyebrow>
-          <h2
-            className="mt-4 max-w-2xl text-[38px] leading-[1.02] sm:text-[62px]"
-            style={{ fontFamily: DISPLAY }}
-          >
-            {title}
-          </h2>
-          <p className="mt-5 max-w-lg text-[14px] font-light leading-relaxed text-white/80">{lead}</p>
-        </Rise>
-      </div>
-    </section>
-  );
-}
-
 /** The tick and the dash on the service table. A dash, never a cross — a cross
  *  reads as a failure and these are simply levels somebody did not buy. */
 function Tick({ on }: { on: boolean }) {
@@ -699,9 +641,13 @@ export function Listings({ deck, show }: { deck: Deck; show: boolean }) {
  * How the area has moved, month by month.
  *
  * Counts, not a y-axis. A landlord reading a chart with a scale on it has to
- * do arithmetic to get to the point, and the point here is a shape: whether
- * more is coming to the market than is letting. So the bars carry their own
- * numbers and the axis is gone.
+ * do arithmetic to reach the point, and the point is a SHAPE: whether more is
+ * coming to the market than is letting. So the bars carry their own numbers
+ * and the axis is gone.
+ *
+ * The headline states the answer rather than leaving it to be inferred. A
+ * chart that makes somebody work out the conclusion is a chart half the room
+ * gets wrong, and this one decides how confidently we price.
  */
 export function History({ deck, show }: { deck: Deck; show: boolean }) {
   const h = deck.history;
@@ -718,77 +664,127 @@ export function History({ deck, show }: { deck: Deck; show: boolean }) {
   };
 
   return (
-    <section
-      data-slide="history"
-      className="relative flex min-h-full w-full shrink-0 flex-col pb-24"
-      style={{ background: PAPER, color: INK }}
-    >
-      <header className="px-6 pt-8 sm:px-12 sm:pt-10 lg:px-16">
-        <Mark className="h-10 sm:h-11" />
-      </header>
-      <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-12 lg:px-16">
-        <div className="mx-auto w-full max-w-4xl">
-          <Head
-            eyebrow={`How ${h.area} has moved`}
-            title={
-              letted >= listed
-                ? "More has let than has come to the market"
-                : "More is coming to the market than is letting"
-            }
-            lead={`${listed} advertised and ${letted} let across the last ${points.length} months. What matters to you is the gap between the two: it decides whether you are pricing into a queue or into a choice.`}
-            show={show}
-          />
-          <Rise show={show} i={1}>
-            <div className="mt-9 flex items-end justify-between gap-2 border-b border-black/10 pb-3 sm:gap-5">
-              {points.map((p) => (
-                <div key={p.month} className="flex flex-1 flex-col items-center gap-1.5">
-                  <div className="flex h-[132px] w-full items-end justify-center gap-[3px] sm:gap-1.5">
-                    <span
-                      className="w-1/2 max-w-[22px] rounded-t-[3px]"
-                      style={{ height: `${(p.listed / peak) * 100}%`, background: "rgba(0,0,0,0.14)" }}
-                      title={`${p.listed} advertised`}
-                    />
-                    <span
-                      className="w-1/2 max-w-[22px] rounded-t-[3px]"
-                      style={{ height: `${(p.let / peak) * 100}%`, background: RED }}
-                      title={`${p.let} let`}
-                    />
-                  </div>
-                  <span className="text-[11px] font-light text-black/50">{monthLabel(p.month)}</span>
-                </div>
-              ))}
-            </div>
-          </Rise>
+    <CreamSlide id="history">
+      <div className="mx-auto w-full max-w-[1080px]">
+        <div className="max-w-[680px]">
+          <HandHead eyebrow={`How ${h.area} has moved`} show={show} lines={2}>
+            {/* Two lines, and the second one has to be SHORT. The first draft
+                read "to the market than is letting", which wrapped to a third
+                line and pushed the chart down the page. The full sentence is
+                in the standfirst underneath; this is the conclusion. */}
+            {letted >= listed ? (
+              <>
+                More is <Emphasis show={show}>letting</Emphasis>
+                <br />
+                than arriving
+              </>
+            ) : (
+              <>
+                More is <Emphasis show={show}>arriving</Emphasis>
+                <br />
+                than letting
+              </>
+            )}
+          </HandHead>
           <Rise show={show} i={2}>
-            <div className="mt-4 flex gap-6 text-[12px] font-light text-black/55">
-              <span className="flex items-center gap-2">
-                <span className="h-[9px] w-[9px] rounded-[2px]" style={{ background: "rgba(0,0,0,0.14)" }} />
-                Came to the market
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="h-[9px] w-[9px] rounded-[2px]" style={{ background: RED }} />
-                Let
-              </span>
-            </div>
+            <p className="mt-6 max-w-[560px] text-[15px] font-light leading-[1.6] text-black/55">
+              {listed} advertised and {letted} let across the last {points.length} months. What
+              matters to you is the gap between the two: it decides whether you are pricing into
+              a queue or into a choice.
+            </p>
           </Rise>
         </div>
+
+        <Rise show={show} i={3}>
+          <div className="mt-9 flex items-end justify-between gap-2 border-b border-black/10 pb-3 sm:gap-6">
+            {points.map((p) => (
+              <div key={p.month} className="flex flex-1 flex-col items-center gap-1.5">
+                <div className="flex h-[128px] w-full items-end justify-center gap-[3px] sm:gap-1.5">
+                  <span
+                    className="w-1/2 max-w-[22px] rounded-t-[3px]"
+                    style={{ height: `${(p.listed / peak) * 100}%`, background: "rgba(0,0,0,0.13)" }}
+                    title={`${p.listed} advertised`}
+                  />
+                  <span
+                    className="w-1/2 max-w-[22px] rounded-t-[3px]"
+                    style={{ height: `${(p.let / peak) * 100}%`, background: CORAL }}
+                    title={`${p.let} let`}
+                  />
+                </div>
+                <span
+                  className="text-[12px] text-black/50"
+                  style={{ fontFamily: HAND, fontWeight: 700 }}
+                >
+                  {monthLabel(p.month)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Rise>
+
+        <Rise show={show} i={4}>
+          <div className="mt-4 flex gap-7 text-[12.5px] font-light text-black/50">
+            <span className="flex items-center gap-2">
+              <span className="h-[9px] w-[9px] rounded-[2px]" style={{ background: "rgba(0,0,0,0.13)" }} />
+              Came to the market
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="h-[9px] w-[9px] rounded-[2px]" style={{ background: CORAL }} />
+              Let
+            </span>
+          </div>
+        </Rise>
       </div>
-    </section>
+    </CreamSlide>
   );
 }
 
 /* ───────────────────────── marketing ───────────────────────── */
 
+/**
+ * MARKETING - the second section divider, and the last red slide to go.
+ *
+ * Built on the same idea as Your Property: a divider carries no argument, so
+ * it can afford to be a moment. Where that one pointed at a house and said
+ * "that one", this one is about reach, so the drawing is a street of them and
+ * the type sits over it rather than beside it.
+ *
+ * Centred like its sibling. Two dividers, one shape, so a landlord recognises
+ * the second as the same kind of pause as the first rather than reading it as
+ * a new sort of page.
+ */
 export function MarketingDivider({ show }: { show: boolean }) {
   return (
-    <Divider
-      id="marketing"
-      eyebrow="Marketing"
-      title="Getting it in front of the right tenant"
-      lead="The best rent and the shortest void come from the same thing: reaching people who would move for your property, not just the ones already searching."
-      image={null}
-      show={show}
-    />
+    <CreamSlide id="marketing">
+      <div className="mx-auto w-full max-w-[1080px] text-center">
+        <Rise show={show} i={0}>
+          <span className="block text-[11px] font-semibold uppercase tracking-[0.3em] text-black/40">
+            Marketing
+          </span>
+        </Rise>
+        <Rise show={show} i={1}>
+          <h2
+            className="mt-4 leading-[1.04] tracking-[-0.015em]"
+            style={{ fontFamily: HAND, fontWeight: 700, fontSize: "clamp(30px, 3.4vw, 50px)" }}
+          >
+            Now, how we find <Emphasis show={show}>the one</Emphasis>
+          </h2>
+        </Rise>
+        <Rise show={show} i={2}>
+          <p className="mx-auto mt-5 max-w-[520px] text-[15px] font-light leading-[1.6] text-black/55">
+            The best rent and the shortest void come from the same thing: reaching people who
+            would move for your property, not just the ones already searching for one.
+          </p>
+        </Rise>
+
+        <Rise show={show} i={3}>
+          <div className="relative mx-auto mt-7 w-full max-w-[620px]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/illustrations/buildings-street.png" alt="" aria-hidden className="w-full" />
+          </div>
+        </Rise>
+      </div>
+    </CreamSlide>
   );
 }
 
