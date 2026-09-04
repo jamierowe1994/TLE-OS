@@ -78,6 +78,10 @@ export const metadata: Metadata = {
   description: "The Letting Experts — operations overlay (internal preview)",
   // Not for crawlers: this is a private preview behind an access code.
   robots: { index: false, follow: false },
+  /* Installable. Kirstie keeps the feed open in its own window (Chrome:
+     Install app; Safari: Add to Dock) and it pings her when a deal moves -
+     the desktop app she asked for on 4 Sep, without the unsigned download. */
+  manifest: "/manifest.webmanifest",
 };
 
 export default function RootLayout({

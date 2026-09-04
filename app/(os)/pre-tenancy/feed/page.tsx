@@ -28,7 +28,7 @@ export default function PreTenancyFeedPage() {
         }
       />
       <div className="max-w-2xl rounded-2xl border border-line bg-card p-5">
-        <DealFeed />
+        <DealFeed desktop />
       </div>
     </>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
 
 /**
@@ -16,6 +16,16 @@ import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-ev
  */
 
 const REFRESH_MS = 60_000;
+const LAST_SEEN_KEY = "tle-feed-last-seen-id";
+
+/**
+ * The install prompt Chrome hands a page whose manifest qualifies. Kept so
+ * the "Install" button can call it; Safari never fires it, so that button
+ * says "Add to Dock" and points at the share menu instead.
+ */
+interface InstallPrompt extends Event {
+  prompt: () => Promise<void>;
+}
 
 function when(iso: string): string {
   const d = new Date(iso);
@@ -40,14 +50,55 @@ function lastLooked(iso: string | null): string {
 export default function DealFeed({
   compact = false,
   limit,
+  desktop = false,
 }: {
   compact?: boolean;
   limit?: number;
+  /** The full page: offers install and desktop alerts, and pings on new rows. */
+  desktop?: boolean;
 }) {
   const [events, setEvents] = useState<DealEvent[] | null>(null);
   const [lastSeenAt, setLastSeenAt] = useState<string | null>(null);
   const [scope, setScope] = useState<"all" | "mine">("mine");
   const [error, setError] = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<"unsupported" | "default" | "granted" | "denied">("default");
+  const [installPrompt, setInstallPrompt] = useState<InstallPrompt | null>(null);
+  const [installed, setInstalled] = useState(false);
+  /* The newest row id this browser has already seen. Anything newer on a
+     later poll is news and gets a notification; the first load never does. */
+  const seenId = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!desktop) return;
+    setAlerts(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
+    setInstalled(window.matchMedia("(display-mode: standalone)").matches);
+    try {
+      const v = localStorage.getItem(LAST_SEEN_KEY);
+      if (v) seenId.current = Number(v);
+    } catch {
+      /* private window; the first poll seeds it */
+    }
+    const onPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e as InstallPrompt);
+    };
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
+  }, [desktop]);
+
+  const ping = useCallback((fresh: DealEvent[]) => {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    /* One notification per move, newest last so they stack in order. More
+       than four at once collapses to a single count: a burst after a quiet
+       spell is a summary, not a drumroll. */
+    if (fresh.length > 4) {
+      new Notification(`${fresh.length} deals moved`, { body: "Open the feed to see them.", icon: "/icons/app/icon-192.png", tag: "tle-feed-burst" });
+      return;
+    }
+    for (const e of [...fresh].reverse()) {
+      new Notification(e.property || "A deal moved", { body: eventSentence(e), icon: "/icons/app/icon-192.png", tag: `tle-feed-${e.id}` });
+    }
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -60,14 +111,27 @@ export default function DealFeed({
         events?: DealEvent[];
       };
       if (!data.ok) throw new Error(data.error ?? "Could not load the feed.");
-      setEvents(data.events ?? []);
+      const rows = data.events ?? [];
+      if (desktop && rows.length) {
+        const newest = rows[0].id;
+        if (seenId.current != null && newest > seenId.current) {
+          ping(rows.filter((e) => e.id > (seenId.current as number)));
+        }
+        seenId.current = Math.max(newest, seenId.current ?? 0);
+        try {
+          localStorage.setItem(LAST_SEEN_KEY, String(seenId.current));
+        } catch {
+          /* fine */
+        }
+      }
+      setEvents(rows);
       setLastSeenAt(data.lastSeenAt ?? null);
       setScope(data.scope ?? "mine");
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not load the feed.");
     }
-  }, [compact, limit]);
+  }, [compact, limit, desktop, ping]);
 
   useEffect(() => {
     void load();
@@ -95,6 +159,41 @@ export default function DealFeed({
           {lastLooked(lastSeenAt)}
           {scope === "all" ? " · every deal on the book" : " · your deals"}
         </p>
+      )}
+      {desktop && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {alerts === "granted" ? (
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11.5px] text-emerald-800">
+              Desktop alerts on
+            </span>
+          ) : alerts === "denied" ? (
+            <span className="rounded-full border border-line px-3 py-1 text-[11.5px] text-muted" title="Allow notifications for this site in the browser's settings">
+              Alerts blocked in the browser
+            </span>
+          ) : alerts === "default" ? (
+            <button
+              type="button"
+              onClick={() => void Notification.requestPermission().then((p) => setAlerts(p))}
+              className="rounded-full border border-ink px-3 py-1 text-[11.5px] font-medium transition hover:bg-ink hover:text-white"
+            >
+              Turn on desktop alerts
+            </button>
+          ) : null}
+          {!installed && installPrompt && (
+            <button
+              type="button"
+              onClick={() => void installPrompt.prompt().then(() => setInstallPrompt(null))}
+              className="rounded-full border border-line px-3 py-1 text-[11.5px] text-muted transition hover:border-ink hover:text-ink"
+            >
+              Install as an app
+            </button>
+          )}
+          {!installed && !installPrompt && (
+            <span className="text-[11px] text-muted">
+              To keep this in your Dock: Chrome, the install icon in the address bar. Safari, File, Add to Dock.
+            </span>
+          )}
+        </div>
       )}
       {events.length === 0 ? (
         <p className="text-[12.5px] text-muted">
