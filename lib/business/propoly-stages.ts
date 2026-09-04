@@ -102,6 +102,11 @@ export const PROPOLY_APP_URL = "https://prod.propoly.com";
 export const CHECKLIST_ITEMS: { key: string; label: string }[] = [
   { key: "holding_fee", label: "Holding fee received" },
   { key: "references", label: "References passed" },
+  /* For a deal whose PLC was done by email before the pack existed. Only
+     Kirstie's side can tick it (the meta route refuses agents), and the
+     stage derivation treats it as an approved pack. Added 4 Sep for the
+     deals in flight when the OS went live; new deals go through the pack. */
+  { key: "plc_outside", label: "PLC checked outside the OS" },
   { key: "right_to_rent", label: "Right to Rent verified" },
   { key: "agreement_sent", label: "Tenancy agreement sent" },
   { key: "agreement_signed", label: "Agreement signed by all parties" },

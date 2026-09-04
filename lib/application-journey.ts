@@ -224,6 +224,7 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
       {
         plcState: plcCase?.state ?? null,
         plcCaseId: plcCase?.id ?? null,
+        plcOutside: meta?.checklist?.plc_outside?.done === true,
         depositDone:
           meta?.checklist?.deposit_registered?.done === true ||
           Boolean(meta?.depositScheme) ||

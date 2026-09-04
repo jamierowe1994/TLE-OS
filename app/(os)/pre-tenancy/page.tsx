@@ -2075,7 +2075,9 @@ function DealWorkspace({
                                         ? `Pack approved${deal.plc.decidedBy ? ` by ${deal.plc.decidedBy}` : ""}${deal.plc.decidedAt ? ` · ${fmtDate(deal.plc.decidedAt)}` : ""}.`
                                         : `Pack ${deal.plc.label.toLowerCase()} · ${deal.plc.who}.`,
                                   }
-                                : { tone: "none" as const, text: "No PLC pack in the OS yet. The agent starts it from the application." }
+                                : meta?.checklist?.plc_outside?.done
+                                  ? { tone: "ok" as const, text: `Checked outside the OS by ${meta.checklist.plc_outside.by}${meta.checklist.plc_outside.at ? ` · ${fmtDate(meta.checklist.plc_outside.at)}` : ""}.` }
+                                  : { tone: "none" as const, text: "No PLC pack in the OS yet. The agent starts it from the application, or tick \"PLC checked outside the OS\" on the checklist." }
                               : stageEvidence(
                                   s.key,
                                   { ...deal, startDate: deal.app.startDate },

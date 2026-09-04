@@ -47,13 +47,15 @@ export interface StageFacts {
   /** The OS's PLC case state for this deal's address, or null when none. */
   plcState: PlcCase["state"] | null;
   plcCaseId: string | null;
+  /** Kirstie's tick for a PLC done by email, outside the pack. */
+  plcOutside: boolean;
   /** Flatfair set up, PayProp deposit registered, or a scheme on file. */
   depositDone: boolean;
   /** First rent received in PayProp for this tenancy. */
   rentIn: boolean;
 }
 
-const NO_FACTS: StageFacts = { plcState: null, plcCaseId: null, depositDone: false, rentIn: false };
+const NO_FACTS: StageFacts = { plcState: null, plcCaseId: null, plcOutside: false, depositDone: false, rentIn: false };
 
 export function derivePortalStage(live: string, facts: StageFacts, meta: Pick<DealMeta, "stageOverride" | "stageBasedOn"> | null): string {
   if (live === "cancelled") return "cancelled";
@@ -69,7 +71,7 @@ export function derivePortalStage(live: string, facts: StageFacts, meta: Pick<De
     case "references":
       return "referencing";
     case "tenancy_generation":
-      if (facts.plcState !== "approved") return "plc";
+      if (facts.plcState !== "approved" && !facts.plcOutside) return "plc";
       if (!facts.depositDone) return "deposit";
       return "tenancy_agreement";
     case "signing_and_move_in_monies":
@@ -115,6 +117,7 @@ export function stageFactsFor(
   return {
     plcState: plc?.state ?? null,
     plcCaseId: plc?.id ?? null,
+    plcOutside: meta?.checklist?.plc_outside?.done === true,
     depositDone,
     rentIn: Boolean(m?.rentReceived),
   };
