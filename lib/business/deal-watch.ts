@@ -309,7 +309,7 @@ async function tellAgents(events: DealEvent[], origin: string): Promise<number> 
     if (!e.agentEmail) {
       note = "Not told - no manager on the property in Propoly.";
     } else if (!armed) {
-      note = "Not told - agent emails are off (Admin → Switches).";
+      note = "Not told - agent emails are off in Admin, Switches.";
     } else {
       try {
         const { text, html } = bodyFor(e, origin);
