@@ -146,6 +146,33 @@ const withSample = (doc: EmailDoc, extra?: Record<string, string>): EmailDoc => 
 /* An override replaces the WORDS, never the branding: the document in code
    keeps ownership of showSignoff and the rest, so an edit in the builder
    cannot accidentally reinstate the duplicate sign-off. */
+/**
+ * A catalogue email rendered for a REAL recipient: every {{placeholder}} in
+ * the document filled from `vars`, then rendered on the TLE brand. Used by
+ * the send paths; the catalogue's own `render` is the sample for reading.
+ * A placeholder with no value is left visible rather than blanked, so a
+ * missing variable is seen on the first test and not shipped as a gap.
+ */
+export function renderTleEmail(id: string, vars: Record<string, string>): { subject: string; html: string } {
+  const entry = TLE_EMAILS.find((e) => e.id === id);
+  if (!entry?.doc) throw new Error(`No email document for ${id}.`);
+  const fill = (t: string) => t.replace(/\{\{(\w+)\}\}/g, (m, k: string) => vars[k] ?? m);
+  const doc = entry.doc;
+  const filled: EmailDoc = {
+    ...doc,
+    subject: fill(doc.subject),
+    blocks: doc.blocks.map((b) => {
+      const anyB = b as unknown as Record<string, unknown>;
+      const next: Record<string, unknown> = { ...anyB };
+      for (const key of ["text", "label", "href", "url"]) {
+        if (typeof anyB[key] === "string") next[key] = fill(anyB[key] as string);
+      }
+      return next as unknown as EmailDoc["blocks"][number];
+    }),
+  };
+  return blocks(filled)();
+}
+
 const blocks = (doc: EmailDoc) => (override?: EmailDoc) =>
   renderTemplate(
     { ...doc, ...(override ?? {}), branding: doc.branding },
@@ -359,7 +386,7 @@ The Letting Experts`
     name: "Viewing Booked - Start Your Passport",
     audience: "tenant",
     trigger: "A viewing is booked for a tenant",
-    fires: "NOT WIRED YET - no send path, and the passport screen does not exist",
+    fires: "Wired 4 Sep 2026. Sent from a viewing on /viewings (Invite to the passport) on the public sender; mints the passport and links to it.",
     to: "The tenant who booked the viewing",
     draft: true,
     summary:

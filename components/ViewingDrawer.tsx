@@ -143,6 +143,10 @@ export default function ViewingDrawer({
   const [pushingOffer, setPushingOffer] = useState(false);
   const [offerPushed, setOfferPushed] = useState(false);
   const [extraActivity, setExtraActivity] = useState<{ when: string; what: string; by: string }[]>([]);
+  /* The passport invite: the one email a viewing sends that opens a door
+     rather than confirming a time. Sent from here because this is where the
+     tenant's email is, and the viewing is what the email talks about. */
+  const [invite, setInvite] = useState<{ state: "idle" | "sending" | "sent" | "already" | "failed"; text: string }>({ state: "idle", text: "" });
 
   useEffect(() => {
     if (!appt) { setShown(false); return; }
@@ -220,6 +224,35 @@ export default function ViewingDrawer({
 
   const log = (what: string) =>
     setExtraActivity((cur) => [...cur, { when: "Just now", what, by: "You" }]);
+
+  const sendPassportInvite = async (again = false) => {
+    if (!appt.contact?.email) return;
+    setInvite({ state: "sending", text: "" });
+    try {
+      const res = await fetch("/api/tenant/passport/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: appt.who,
+          email: appt.contact.email,
+          address: property,
+          whenPretty: `${dayLabel(appt.day)} at ${appt.start}`,
+          again,
+        }),
+      });
+      const j = (await res.json()) as { ok: boolean; error?: string; alreadySent?: boolean; invitedAt?: string };
+      if (!j.ok) throw new Error(j.error ?? "The invite did not send.");
+      if (j.alreadySent) {
+        const when = j.invitedAt ? new Date(j.invitedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "";
+        setInvite({ state: "already", text: `Sent already${when ? ` on ${when}` : ""}.` });
+      } else {
+        setInvite({ state: "sent", text: "Passport invite sent." });
+        log(`Sent: passport invite to ${appt.contact.email}`);
+      }
+    } catch (e) {
+      setInvite({ state: "failed", text: e instanceof Error ? e.message : "The invite did not send." });
+    }
+  };
 
   /* Where this applicant stands on the tenant spine. */
   const spineIndex =
@@ -492,6 +525,26 @@ export default function ViewingDrawer({
                     <p className="flex items-center gap-2 truncate text-[11.5px] text-muted">
                       <DoodleIcon name="mail" size={13} /> {appt.contact.email}
                     </p>
+                  </div>
+                )}
+                {appt.contact?.email && !past && !cancelled && (
+                  <div className="mt-3">
+                    <PressButton
+                      onClick={() => void sendPassportInvite(invite.state === "already")}
+                      className="press-ring flex items-center gap-2 rounded-full border border-ink/25 px-3 py-1.5 text-[11.5px] font-semibold disabled:opacity-50"
+                    >
+                      <DoodleIcon name="mail" size={13} />
+                      {invite.state === "sending"
+                        ? "Sending…"
+                        : invite.state === "already"
+                          ? "Send the passport invite again"
+                          : "Invite to the passport"}
+                    </PressButton>
+                    {invite.text && (
+                      <p className={`mt-1.5 text-[11px] ${invite.state === "failed" ? "text-red-600" : "text-muted"}`}>
+                        {invite.text}
+                      </p>
+                    )}
                   </div>
                 )}
               </Card>

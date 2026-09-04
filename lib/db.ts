@@ -647,6 +647,9 @@ CREATE INDEX IF NOT EXISTS os_tenant_passports_contact ON os_tenant_passports (c
 -- passport minted before this column existed has no agent, and the honest
 -- answer for those is "none" rather than a guess.
 ALTER TABLE os_tenant_passports ADD COLUMN IF NOT EXISTS agent_id TEXT;
+-- When and by whom the invite email went (4 Sep 2026). Null = minted, never sent.
+ALTER TABLE os_tenant_passports ADD COLUMN IF NOT EXISTS invited_at TIMESTAMPTZ;
+ALTER TABLE os_tenant_passports ADD COLUMN IF NOT EXISTS invited_by TEXT;
 
 -- Who is on which campaign.
 --

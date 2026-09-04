@@ -115,6 +115,25 @@ export async function createPassport(opts: {
  * to every tenant's financial disclosures to anyone who could see the page,
  * or a screen-share of it.
  */
+/** The invite email went. Recorded so a second press says "sent already". */
+export async function markInvited(token: string, by: string): Promise<void> {
+  if (!hasDb()) return;
+  await q(`UPDATE os_tenant_passports SET invited_at = NOW(), invited_by = $2, updated_at = NOW() WHERE token = $1`, [token, by]);
+}
+
+/** A passport already minted for this email by this agent, if one exists. */
+export async function findPassportByEmail(email: string, agentId: string | null): Promise<{ token: string; invitedAt: string | null } | null> {
+  if (!hasDb() || !email) return null;
+  const rows = await q<{ token: string; invited_at: string | Date | null }>(
+    `SELECT token, invited_at FROM os_tenant_passports
+      WHERE lower(email) = lower($1) AND contact_id IS DISTINCT FROM 'demo' AND ($2::text IS NULL OR agent_id = $2)
+      ORDER BY created_at DESC LIMIT 1`,
+    [email.trim(), agentId]
+  );
+  const r = rows[0];
+  return r ? { token: r.token, invitedAt: r.invited_at ? new Date(r.invited_at).toISOString() : null } : null;
+}
+
 export const DEMO_CONTACT_ID = "demo";
 
 /** Throwaway passports only. Never returns a real tenant's row. */
