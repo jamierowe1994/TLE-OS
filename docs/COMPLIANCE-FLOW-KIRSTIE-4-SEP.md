@@ -33,16 +33,16 @@ Source: Wispr Flow recording "Properly Payment and PLC Process" (16 min, 13:00).
 - [ ] Ask Kirstie which Propoly document categories must be full before a PLC request may be sent.
 
 ### Build (Claude)
-- [ ] Referencing back: watch the Propoly deal status leave "references" and notify Kirstie, the agent and the portals. Start the PLC step automatically from that signal.
-- [ ] PLC gate: block "request PLC check" until every required Propoly document category on the deal has a file. Show the agent what is missing. This removes the £60 fails TLE pays for.
-- [ ] PLC pass: when Kirstie marks the pack passed, hand the agent the Flatfair step with the deal details ready to copy, until the Flatfair API exists. Then automate it.
+- [x] (4 Sep) Referencing back: watch the Propoly deal status leave "references" and notify Kirstie, the agent and the portals. Start the PLC step automatically from that signal.
+- [x] (4 Sep) PLC gate: block "request PLC check" until every required Propoly document category on the deal has a file. Show the agent what is missing. This removes the £60 fails TLE pays for.
+- [x] (4 Sep) PLC pass: when Kirstie marks the pack passed, hand the agent the Flatfair step with the deal details ready to copy, until the Flatfair API exists. Then automate it.
 - [ ] Push PLC pack documents into Propoly's document slots (once the write is approved), so Kirstie can generate the agreement without re-uploading.
-- [ ] Signed detection: read the deal payload for signing dates and move the stage; tell Kirstie when both parties have signed.
-- [ ] Rent payment: match the incoming PayProp payment to the deal ourselves and mark rent paid, rather than relying on Propoly's recognition.
-- [ ] Activity feed on Kirstie's dashboard: one stream of every stage change, payment, PLC event and document arrival across her deals.
+- [ ] (no source in Propoly; waits on their answer) Signed detection: read the deal payload for signing dates and move the stage; tell Kirstie when both parties have signed.
+- [x] (4 Sep) Rent payment: match the incoming PayProp payment to the deal ourselves and mark rent paid, rather than relying on Propoly's recognition.
+- [x] (4 Sep) Activity feed on Kirstie's dashboard: one stream of every stage change, payment, PLC event and document arrival across her deals.
 - [ ] Desktop live feed app for Kirstie (small Mac app reading the same feed; download from her account page).
-- [ ] Portal stage list: retire the Kanban drag except Move day; stages derive from Propoly status, PLC state, Flatfair, signing and PayProp.
-- [ ] Every Kirstie notification also reaches the agent and the landlord and tenant portals, with a per-step "hold before sending" switch ready for when she wants one.
+- [x] (4 Sep) Portal stage list: retire the Kanban drag except Move day; stages derive from Propoly status, PLC state, Flatfair, signing and PayProp.
+- [x] (4 Sep, feed + switch) Every Kirstie notification also reaches the agent and the landlord and tenant portals, with a per-step "hold before sending" switch ready for when she wants one.
 
 ## Side note
 
@@ -75,3 +75,12 @@ Source: the production OpenAPI spec (TLE-portal/docs/propoly-openapi.yaml) plus 
 - Flatfair: nothing in Propoly. Needs the Flatfair meeting.
 
 **Questions for Propoly** (James): a webhook or at least an events feed; GET documents per deal; reference outcome; signing state; holding fee and rent received. Without the first two the OS is polling and blind on documents.
+
+## Built on 4 Sep, after the call
+
+- Propoly watcher every 5 minutes (Railway service `os-cron-propoly-watch`); feed at /pre-tenancy/feed and the agent's "What moved" tile; "Tell agents" switch.
+- Money from PayProp: holding fee, deposit registered, first rent, announced once each.
+- PLC gate with required and conditional checks, written reasons, reader runs before submit.
+- Flatfair hand-off screen at /applications/flatfair?deal=<uuid>, ticking "deposit registered".
+- Stages derived (lib/business/deal-stage.ts); Move day is the only manual move.
+- Daily cron `os-cron-daily` at 07:00 UTC: handover shadow scan and the pre-tenancy digest (digest still behind its switch).
