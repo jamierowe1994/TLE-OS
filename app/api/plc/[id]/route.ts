@@ -17,6 +17,7 @@ import { scanCase, scanConfigured, type ScanOutcome } from "@/lib/plc-scan";
 import { actorName } from "@/lib/plc-actor";
 import { recordDecision, recordRecommendation } from "@/lib/plc-shadow";
 import { pushCaseToPropoly } from "@/lib/plc-propoly";
+import { recordActivity } from "@/lib/business/deal-watch";
 import { switchOn } from "@/lib/switches";
 
 /**
@@ -153,6 +154,15 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         }
 
         const submitted = await submitCase(id);
+        await recordActivity({
+          id: submitted.id,
+          property: submitted.address,
+          agentEmail: submitted.agentEmail || null,
+          agentName: submitted.agentName,
+          event: "plc_submitted",
+          from: current.decidedAt ? "deferred" : null,
+          to: "submitted",
+        });
         if (!outcome) return NextResponse.json({ ok: true, ...payload(submitted) });
 
         await markScanning(id);
@@ -263,6 +273,15 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         /* After the decision lands, never before. Recording cannot throw, so a
            log failure can never cost Kirstie an approval. */
         await recordDecision({ caseId: id, decision, decidedBy: by, note: body.note ?? "" });
+        await recordActivity({
+          id: decided.id,
+          property: decided.address,
+          agentEmail: decided.agentEmail || null,
+          agentName: decided.agentName,
+          event: "plc_decided",
+          from: "reviewing",
+          to: decision,
+        });
         /* Approved, and the switch is on: the pack goes into Propoly's slots
            now, so she can generate the agreement without uploading anything.
            A push that fails is recorded on the case and never undoes the

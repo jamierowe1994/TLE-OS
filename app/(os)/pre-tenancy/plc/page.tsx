@@ -71,6 +71,13 @@ export default function PlcQueuePage() {
 
   useEffect(() => {
     void loadQueue();
+    /* ?case=<id> opens that pack on arrival, from the feed. */
+    try {
+      const asked = new URLSearchParams(window.location.search).get("case");
+      if (asked) setOpenId(asked);
+    } catch {
+      /* fine */
+    }
   }, [loadQueue]);
   useEffect(() => {
     void loadOpen();

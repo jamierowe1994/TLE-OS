@@ -84,3 +84,5 @@ Source: the production OpenAPI spec (TLE-portal/docs/propoly-openapi.yaml) plus 
 - Flatfair hand-off screen at /applications/flatfair?deal=<uuid>, ticking "deposit registered".
 - Stages derived (lib/business/deal-stage.ts); Move day is the only manual move.
 - Daily cron `os-cron-daily` at 07:00 UTC: handover shadow scan and the pre-tenancy digest (digest still behind its switch).
+- Activity log (4 Sep, evening): PLC packs submitted and decided join the feed; every row opens the file (board `?deal=`, queue `?case=`); Pop out opens /feed in a small window; Download desktop shortcut gives a .webloc/.url that opens it; Kirstie lands on the feed at sign-in. No emails to her.
+- Missed on the first pass and now on Testing: Flatfair hook (red, James's conversation) and "portals show the deal moving" (grey).

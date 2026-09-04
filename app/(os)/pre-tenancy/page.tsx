@@ -461,6 +461,17 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
         return false;
       }
       setDeals(d.deals ?? []);
+      /* ?deal=<uuid> opens that file on arrival: the feed's rows and the
+         desktop alerts both land here. Only on the first load, so a later
+         refresh does not yank a closed file back open. */
+      try {
+        const asked = new URLSearchParams(window.location.search).get("deal");
+        if (asked && (d.deals ?? []).some((x: BoardDeal) => x.app.id === asked)) {
+          setOpenId((cur) => cur ?? asked);
+        }
+      } catch {
+        /* fine */
+      }
       setSummary(d.summary);
       setError(null);
       return true;

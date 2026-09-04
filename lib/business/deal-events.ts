@@ -24,7 +24,11 @@ export type DealEventKind =
      confirms by hand. These are the OS confirming instead. */
   | "holding_in"
   | "deposit_registered"
-  | "rent_in";
+  | "rent_in"
+  /* The PLC pack, the other thing that lands on Kirstie's desk. dealId on
+     these rows is the case id, not a Propoly uuid; hrefFor knows. */
+  | "plc_submitted"
+  | "plc_decided";
 
 export interface DealEvent {
   id: number;
@@ -103,7 +107,28 @@ export function eventSentence(e: Pick<DealEvent, "event" | "toStatus" | "fromSta
       return "Deposit registered with the scheme";
     case "rent_in":
       return `First rent ${pounds(e.amount)}received in PayProp`;
+    case "plc_submitted":
+      return e.fromStatus === "deferred" ? "PLC pack back with you, resubmitted" : "PLC pack sent to you for checking";
+    case "plc_decided":
+      return e.toStatus === "approved"
+        ? "PLC pack approved"
+        : e.toStatus === "deferred"
+          ? "PLC pack sent back to the agent"
+          : "PLC pack declined";
   }
+}
+
+/**
+ * Where a row opens. Every line on the feed is a door: a deal opens on the
+ * board, a pack opens in the queue. Null only for a deal Propoly no longer
+ * has.
+ */
+export function hrefFor(e: Pick<DealEvent, "event" | "dealId">): string | null {
+  if (e.event === "plc_submitted" || e.event === "plc_decided") {
+    return `/pre-tenancy/plc?case=${encodeURIComponent(e.dealId)}`;
+  }
+  if (e.event === "gone") return null;
+  return `/pre-tenancy?deal=${encodeURIComponent(e.dealId)}`;
 }
 
 function pounds(n: number | null | undefined): string {
@@ -127,7 +152,8 @@ export function eventTone(kind: DealEventKind): "ok" | "warn" | "none" {
     kind === "complete" ||
     kind === "holding_in" ||
     kind === "deposit_registered" ||
-    kind === "rent_in"
+    kind === "rent_in" ||
+    kind === "plc_decided"
   )
     return "ok";
   if (kind === "cancelled" || kind === "moved_back" || kind === "gone") return "warn";

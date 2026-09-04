@@ -421,6 +421,35 @@ async function tellAgents(events: DealEvent[], origin: string): Promise<number> 
   return told;
 }
 
+/* ──────────────────────── other things that happen ─────────────────────── */
+
+/**
+ * A row on the feed that did not come from the watcher: a PLC pack landing on
+ * Kirstie's desk, or leaving it. Same table, same feed, same tile - so the
+ * feed is everything she needs to know, not just what Propoly did. Never
+ * throws: a feed row is a courtesy to the thing that just happened.
+ */
+export async function recordActivity(e: {
+  id: string;
+  property: string;
+  agentEmail: string | null;
+  agentName: string | null;
+  event: DealEventKind;
+  from?: string | null;
+  to?: string | null;
+}): Promise<void> {
+  if (!hasDb()) return;
+  try {
+    await q(
+      `INSERT INTO os_deal_events (deal_id, property, agent_email, agent_name, event, from_status, to_status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [e.id, e.property, e.agentEmail, e.agentName, e.event, e.from ?? null, e.to ?? null]
+    );
+  } catch {
+    /* the pack moved; the feed missing a line is the smaller failure */
+  }
+}
+
 /* ───────────────────────────── reading ─────────────────────────────────── */
 
 export async function listDealEvents(opts: { agentEmail?: string | null; limit?: number } = {}): Promise<DealEvent[]> {

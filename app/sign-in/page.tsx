@@ -59,11 +59,16 @@ function SignIn() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email, password, remember }),
       });
-      const j = (await r.json()) as { ok?: boolean; error?: string };
+      const j = (await r.json()) as { ok?: boolean; error?: string; user?: { role?: string } };
       if (j.ok) {
         // replace, not push: the back button should not return to a login form
         // that is now pointless and looks broken when it re-submits.
-        router.replace(next);
+        /* Kirstie lands on the activity feed, not the agents' dashboard.
+           James, 4 Sep: "when she logs in... the first thing that she sees
+           will be the activity log." Only when nothing asked for a
+           particular page: a link she followed still goes where it said. */
+        const asked = new URLSearchParams(window.location.search).get("next");
+        router.replace(!asked && j.user?.role === "pretenancy" ? "/pre-tenancy/feed" : next);
       } else {
         setError(j.error ?? "That didn't work.");
       }

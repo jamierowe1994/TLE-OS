@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
+import Link from "next/link";
+import { eventSentence, eventTone, hrefFor, type DealEvent } from "@/lib/business/deal-events";
 
 /**
  * The activity feed: every deal move Propoly made, newest first.
@@ -47,15 +48,23 @@ function lastLooked(iso: string | null): string {
   return `Checked ${when(iso)}`;
 }
 
+/** The feed in its own small window, chrome-free. */
+export function popOutFeed(): void {
+  window.open("/feed", "tle-feed", "popup=yes,width=440,height=760,top=80,left=80");
+}
+
 export default function DealFeed({
   compact = false,
   limit,
   desktop = false,
+  popout = false,
 }: {
   compact?: boolean;
   limit?: number;
   /** The full page: offers install and desktop alerts, and pings on new rows. */
   desktop?: boolean;
+  /** Already in its own window: no pop-out button, links open in the main window. */
+  popout?: boolean;
 }) {
   const [events, setEvents] = useState<DealEvent[] | null>(null);
   const [lastSeenAt, setLastSeenAt] = useState<string | null>(null);
@@ -188,9 +197,28 @@ export default function DealFeed({
               Install as an app
             </button>
           )}
-          {!installed && !installPrompt && (
+          {!popout && (
+            <button
+              type="button"
+              onClick={popOutFeed}
+              className="rounded-full border border-line px-3 py-1 text-[11.5px] text-muted transition hover:border-ink hover:text-ink"
+              title="Open the feed in a small window you can leave to one side"
+            >
+              Pop out
+            </button>
+          )}
+          {!popout && (
+            <a
+              href="/api/pretenancy/feed/shortcut"
+              className="rounded-full border border-line px-3 py-1 text-[11.5px] text-muted transition hover:border-ink hover:text-ink"
+              title="A shortcut for your desktop that opens the feed in its own window"
+            >
+              Download desktop shortcut
+            </a>
+          )}
+          {!installed && !installPrompt && !popout && (
             <span className="text-[11px] text-muted">
-              To keep this in your Dock: Chrome, the install icon in the address bar. Safari, File, Add to Dock.
+              Or keep it in your Dock: Chrome, the install icon in the address bar. Safari, File, Add to Dock.
             </span>
           )}
         </div>
@@ -203,8 +231,9 @@ export default function DealFeed({
         <ol className={compact ? "space-y-2" : "space-y-3"}>
           {events.map((e) => {
             const tone = eventTone(e.event);
-            return (
-              <li key={e.id} className="flex items-start gap-2.5">
+            const href = hrefFor(e);
+            const inner = (
+              <>
                 <span
                   aria-hidden
                   className={`mt-[7px] h-2 w-2 shrink-0 rounded-full ${
@@ -226,6 +255,23 @@ export default function DealFeed({
                     <p className="mt-0.5 text-[11px] leading-snug text-muted/80">{e.toldNote}</p>
                   )}
                 </div>
+              </>
+            );
+            /* Every row is a door. In the pop-out the door opens in the main
+               window, so the small one stays where she left it. */
+            return (
+              <li key={e.id}>
+                {href ? (
+                  <Link
+                    href={href}
+                    target={popout ? "tle-os" : undefined}
+                    className="-mx-2 flex items-start gap-2.5 rounded-lg px-2 py-1 transition hover:bg-line/30"
+                  >
+                    {inner}
+                  </Link>
+                ) : (
+                  <div className="flex items-start gap-2.5">{inner}</div>
+                )}
               </li>
             );
           })}
