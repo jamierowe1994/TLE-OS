@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { readPresentation } from "@/lib/present-store";
-import { SAMPLE_DECK, DECK_KINDS, slidesFor } from "@/lib/present";
+import { SAMPLE_DECK, DECK_KINDS, asStyle, slidesFor } from "@/lib/present";
+import StylePicker from "@/components/StylePicker";
 import PresentDeck from "@/components/PresentDeck";
 
 /**
@@ -26,7 +27,7 @@ export default async function PresentPage({
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ kind?: string }>;
+  searchParams: Promise<{ kind?: string; style?: string }>;
 }) {
   const { token } = await params;
 
@@ -41,10 +42,21 @@ export default async function PresentPage({
      when reviewing the comparables and market slides — the pre-appraisal deck
      deliberately carries neither. */
   if (token === "sample") {
-    const { kind } = await searchParams;
+    const { kind, style } = await searchParams;
     const asked = DECK_KINDS.find((k) => k.id === kind)?.id ?? "pre-appraisal";
-    const deck = { ...SAMPLE_DECK, kind: asked };
-    return <PresentDeck token="sample" deck={deck} slides={slidesFor(deck)} />;
+    /* ?style= SWITCHES THE LOOK, and the picker below makes it clickable.
+       James, 4 Sep: the team are split on the drawn style, so rather than
+       argue it they get all three side by side and choose. The picker is on
+       the SAMPLE only - a landlord opening a real deck sees the one look the
+       agent sent, with no controls on it. */
+    const chosen = asStyle(style);
+    const deck = { ...SAMPLE_DECK, kind: asked, style: chosen };
+    return (
+      <>
+        <PresentDeck token="sample" deck={deck} slides={slidesFor(deck)} />
+        <StylePicker kind={asked} style={chosen} />
+      </>
+    );
   }
 
   const row = await readPresentation(token);

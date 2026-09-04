@@ -1,5 +1,5 @@
 import * as React from "react";
-import type { SlideId } from "@/lib/present";
+import type { PresentStyle, SlideId } from "@/lib/present";
 
 /**
  * The deck's shared parts — colours, the reveal, the slide shell, the icons.
@@ -78,22 +78,128 @@ export const BADGE = "#fdeaec";
  * either whole one, so the rest follow slide by slide.
  */
 
-/** The page. Warm, not grey — sampled off the mock-up. */
-export const CREAM = "#faf7f3";
+/* ── THE THEME, as CSS variables ────────────────────────────────────────────
+ *
+ * James, 4 Sep: the team are split on the drawn style, so the deck offers
+ * three looks and the room picks one. See PresentStyle in lib/present.
+ *
+ * The mechanism matters more than it looks. These four constants are used 121
+ * times across the three slide files - `fontFamily: HAND`, `color: CORAL`,
+ * `background: TINTS[0]` - and making each of those read a theme object would
+ * have meant a hook in thirty components and a diff nobody could review.
+ *
+ * As CSS variables they cost nothing: the deck root stamps a value, every
+ * existing usage picks it up, and not one slide has to know a choice exists.
+ * It also means the theme can change on a click with no remount, which is what
+ * makes the picker on /present/sample worth having.
+ *
+ * The names stay HAND and CORAL rather than becoming DISPLAY and ACCENT. They
+ * were named after the thing they were, the rename would touch every line they
+ * appear on, and a 121-line diff that changes nothing is a worse artefact than
+ * two slightly historical names.
+ */
 
-/** The accent in the illustration, and the word it underlines. Warmer and a
- *  touch more saturated than Warm Clay: on cream the brand pink goes chalky,
- *  and this has to hold its own against a coral jumper two inches away. */
-export const CORAL = "#e08a73";
+/** The page. */
+export const CREAM = "var(--p-ground)";
+/** The one accent: the script word, the figures, the bars, the buttons. */
+export const CORAL = "var(--p-accent)";
+/** The display face - the headline on every slide. */
+export const HAND = "var(--p-display)";
+/** The emphasised word inside a headline. */
+export const FLOW_EM = "var(--p-script)";
+/** The soft fill: badges, blobs, the "on all three levels" panel. */
+export const TINTS = ["var(--p-tint)", "var(--p-tint-2)", "var(--p-tint-3)"] as const;
 
-/** The marker hand. Shantell Sans, already the OS's heading face — which is
- *  why the illustration and the headline look like one drawing rather than a
- *  picture with type next to it. */
-export const HAND = "var(--font-shantell), 'Trebuchet MS', sans-serif";
+/**
+ * The accent as a real hex, for the one place a CSS variable cannot go: Flow's
+ * embed takes its accent as a query-string colour, and `var(--p-accent)` in a
+ * URL is just a broken parameter.
+ */
+export const ACCENT_HEX: Record<PresentStyle, string> = {
+  hand: "#e08a73",
+  brand: "#e31f36",
+  photo: "#e31f36",
+};
 
-/** The three icon badges. Pale enough that the line icon inside stays the
- *  darkest thing in the circle. */
-export const TINTS = ["#fbe7e2", "#e9eee4", "#fdf2da"] as const;
+/**
+ * What each look is made of.
+ *
+ * `brand` and `photo` share their typography and differ only in artwork, which
+ * is exactly what James asked for: the halfway house keeps the illustrations,
+ * the fully branded one swaps them for photographs.
+ *
+ * The type comes from TLE Branding 3, which specifies Unitext Bold for titles
+ * and subheadings, Unitext for body and Lora Italic for supporting text.
+ * Unitext is licensed and not on any machine here; James chose Inter in its
+ * place (4 Sep) rather than shipping a fallback that pretends to be it.
+ * Lora Italic is the guidelines' own supporting face and carries the
+ * emphasised word, which is the nearest brand-sanctioned thing to the script.
+ */
+export type DeckTheme = {
+  ground: string;
+  accent: string;
+  tint: string;
+  tint2: string;
+  tint3: string;
+  display: string;
+  script: string;
+  /** Drawn illustrations, or photographs where we have them. */
+  art: "drawn" | "photo";
+};
+
+const INTER = "var(--font-inter), system-ui, -apple-system, sans-serif";
+const LORA_IT = "var(--font-display), Georgia, serif";
+
+export const THEMES: Record<PresentStyle, DeckTheme> = {
+  /* Untouched, deliberately. This is the one somebody already likes, and the
+     whole point of adding the other two was to avoid changing it. */
+  hand: {
+    ground: "#faf7f3",
+    accent: "#e08a73",
+    tint: "#fbe7e2",
+    tint2: "#e9eee4",
+    tint3: "#fdf2da",
+    display: "var(--font-shantell), 'Trebuchet MS', sans-serif",
+    script: "var(--font-script), 'Snell Roundhand', cursive",
+    art: "drawn",
+  },
+  /* Anti Flash White and Expert Red - a colourway the guidelines name, so the
+     halfway house is not a compromise anybody has to defend. */
+  brand: {
+    ground: "#f4f4f3",
+    accent: "#e31f36",
+    tint: "#ffe4df",
+    tint2: "#eceeea",
+    tint3: "#f7f1e4",
+    display: INTER,
+    script: LORA_IT,
+    art: "drawn",
+  },
+  photo: {
+    ground: "#ffffff",
+    accent: "#e31f36",
+    tint: "#ffe4df",
+    tint2: "#f1f1f1",
+    tint3: "#f7f1e4",
+    display: INTER,
+    script: LORA_IT,
+    art: "photo",
+  },
+};
+
+/** The variables a theme stamps. Spread onto the deck root's `style`. */
+export function themeVars(style: PresentStyle): React.CSSProperties {
+  const t = THEMES[style] ?? THEMES.hand;
+  return {
+    ["--p-ground" as string]: t.ground,
+    ["--p-accent" as string]: t.accent,
+    ["--p-tint" as string]: t.tint,
+    ["--p-tint-2" as string]: t.tint2,
+    ["--p-tint-3" as string]: t.tint3,
+    ["--p-display" as string]: t.display,
+    ["--p-script" as string]: t.script,
+  };
+}
 
 /**
  * Which slides have been converted to the cream style.
@@ -414,7 +520,7 @@ export function Emphasis({ show, children }: { show: boolean; children: React.Re
       <span
         className="relative"
         style={{
-          fontFamily: FLOW,
+          fontFamily: FLOW_EM,
           color: CORAL,
           fontSize: "1.22em",
           lineHeight: 1,

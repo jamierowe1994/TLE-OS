@@ -276,6 +276,9 @@ export type PresentHistory = {
 export type PresentDeck = {
   /** Which of the three decks this is — see DeckKind. */
   kind: DeckKind;
+  /** Which look it wears. Absent means "hand", so every deck minted before
+   *  4 Sep keeps exactly the appearance it was approved with. */
+  style?: PresentStyle;
   /** Post-appraisal only. See PresentValuation. */
   valuation?: PresentValuation | null;
   /** Post-appraisal only. See PresentTerms. */
@@ -636,6 +639,44 @@ export const SLIDES: { id: SlideId; title: string; removable: boolean; section: 
  * comparables chosen, no valuation written — and the viewer should already be
  * built against a list it doesn't control.
  */
+/**
+ * WHICH LOOK THIS DECK WEARS.
+ *
+ * James, 4 Sep: "some of the guys have concerns over the styling… it's not
+ * that they're not keen on it, it's just a lot different." So rather than
+ * argue it, the deck offers three and lets the room choose.
+ *
+ *   hand    What we built. Warm off-white, the marker hand, the coral script
+ *           word, the drawn illustrations. Unchanged and NOT to be touched -
+ *           it is the one somebody already likes.
+ *   brand   The halfway house. The brand's own typography on the brand's own
+ *           quiet surface, keeping the illustrations. Same deck, same shape,
+ *           read in the voice the guidelines specify.
+ *   photo   Fully branded. Brand typography, and photographs where the
+ *           illustrations were.
+ *
+ * ── Why this is one deck and three themes, not three decks ────────────────
+ *
+ * Every argument, every figure and every empty-state rule is the same in all
+ * three. Only the type, the ground and the artwork differ. Three decks would
+ * mean three places to fix a typo and three chances to drift, which is the
+ * same reasoning that made the appraisal and post-appraisal decks one list.
+ *
+ * The theme is carried as CSS variables at the deck root, so a slide asking
+ * for the display face gets whichever one the deck is wearing without
+ * knowing there is a choice. See components/present-kit.
+ */
+export type PresentStyle = "hand" | "brand" | "photo";
+
+export const PRESENT_STYLES: { id: PresentStyle; label: string; blurb: string }[] = [
+  { id: "hand", label: "Drawn", blurb: "The marker hand and the illustrations." },
+  { id: "brand", label: "Brand", blurb: "Brand typography, same illustrations." },
+  { id: "photo", label: "Photographic", blurb: "Brand typography, photographs." },
+];
+
+export const asStyle = (v: string | null | undefined): PresentStyle =>
+  PRESENT_STYLES.some((s) => s.id === v) ? (v as PresentStyle) : "hand";
+
 /**
  * THE THREE DECKS, and why they are one component rather than three.
  *

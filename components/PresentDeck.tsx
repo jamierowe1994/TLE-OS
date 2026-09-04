@@ -5,6 +5,7 @@ import {
   AGENT_CHIPS,
   BANNER,
   BRING_ALONG,
+  asStyle,
   deckKind,
   defaultBio,
   sectionLabel,
@@ -67,6 +68,8 @@ import {
   PropertyDetail,
   Slide,
   TINTS,
+  ACCENT_HEX,
+  themeVars,
   isCream,
   type IconName,
 } from "@/components/present-kit";
@@ -629,7 +632,7 @@ function Agent({ deck, show }: { deck: Deck; show: boolean }) {
             <Rise show={show} i={4}>
               <div className="mt-7 max-w-[440px] overflow-hidden rounded-[18px]">
                 <iframe
-                  src={`${video.embedUrl}?theme=light&accent=${CORAL.replace("#", "")}`}
+                  src={`${video.embedUrl}?theme=light&accent=${ACCENT_HEX[asStyle(deck.style)].replace("#", "")}`}
                   allow="autoplay; fullscreen; picture-in-picture"
                   className="w-full border-0"
                   style={{ aspectRatio: "16 / 9" }}
@@ -1825,7 +1828,15 @@ export default function PresentDeck({
   void move;
 
   return (
-    <div className="relative h-[100dvh] w-full overflow-hidden">
+    /* THE THEME LIVES HERE and nowhere else. Every slide asks for
+       `var(--p-display)` or `var(--p-accent)` without knowing a choice exists,
+       so switching look is one attribute on one element - no remount, nothing
+       to keep in step. See themeVars in present-kit. */
+    <div
+      className="relative h-[100dvh] w-full overflow-hidden"
+      style={themeVars(asStyle(deck.style))}
+      data-present-style={asStyle(deck.style)}
+    >
       {/**
        * THE DECK MOVES ACROSS, NOT DOWN. James, 4 Sep: "more like a
        * presentation".
