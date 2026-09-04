@@ -1,15 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AGENT_CHIPS,
   BANNER,
   BRING_ALONG,
+  deckKind,
   defaultBio,
+  sectionLabel,
   VISIT_STEPS,
   WHY_TLE,
   initialsOf,
   type PresentDeck as Deck,
+  type SectionId,
   type SlideId,
 } from "@/lib/present";
 import { icsFor } from "@/lib/appraisal-email";
@@ -39,464 +42,220 @@ import HandWord from "@/components/HandWord";
  * plain scrolling page if the snap never applies.
  */
 
-/**
- * Straight out of TLE Branding 3 — no approximations, no eyedroppered guesses.
- *
- *   Expert Red      #E31F36   the brand
- *   Expert Grey     #3B3B3C   type on light
- *   Anti Flash White #F1F1F1  the quiet surface
- *   Warm Clay       #DE968F   the darker of the two pinks — the banner
- *   Mist            #FFE4DF   the lighter pink
- *
- * The guidelines list "White #000000", which is a typo in the deck rather
- * than an instruction; white is white.
- */
-const RED = "#e31f36";
-const INK = "#3b3b3c";
+import {
+  BADGE,
+  CLAY,
+  CORAL,
+  CREAM,
+  DEEP,
+  Emphasis,
+  DISPLAY,
+  Eyebrow,
+  FLOW,
+  INK,
+  Line,
+  MIST,
+  Mark,
+  PAPER,
+  RED,
+  Rise,
+  HAND,
+  STEP_ICONS,
+  CreamSlide,
+  HandHead,
+  Slide,
+  TINTS,
+  isCream,
+  type IconName,
+} from "@/components/present-kit";
+import * as S from "@/components/PresentSlides";
 
-/**
- * ── THE COLOURWAY SWITCH ────────────────────────────────────────────────────
- *
- * The deck was first built on the guidelines' warm colourway — Warm Clay
- * banners and Mist cards. It looked good and read FEMININE (James, 13 Aug),
- * which for a landlord audience is the wrong signal however pretty it is.
- *
- * So it now runs on the guidelines' other sanctioned pairing: Expert Red ×
- * White, grounded on Anti Flash White. Same brand, different temperature —
- * the pinks were doing all the softening, and red does none of it.
- *
- * Both sets are kept side by side rather than one being deleted, because
- * this is a judgement about tone that may well be revisited. Swapping the
- * two blocks below puts the warm version back in one edit.
- */
-const CLAY = RED;
-/** WAS Warm Clay #de968f — the entrance banner, the chips, the card badges. */
-const MIST = "#f1f1f1";
-/** WAS Mist #ffe4df — the appointment card and the footer band. */
-/** Deep enough to carry white type, still in the clay family rather than grey.
- *  Used only for the scrim over the hero photograph. */
-const DEEP = "#4a3a35";
-
-/**
- * The flourish hand — see app/layout.tsx for why a script is here at all when
- * the guidelines name Lora Italic. One display word, never body copy.
- */
-const FLOW = "var(--font-script), 'Snell Roundhand', cursive";
-
-/** Lora — the guidelines' own serif, carrying the display headings. */
-const DISPLAY = "var(--font-display), Georgia, serif";
-
-/** The interior page ground. Neutral now rather than warm-cast: a grey card
- *  on pink paper reads as a mistake, and the paper was half the softness. */
-const PAPER = "#fbfbfb";
-/** The step badges. Red at a whisper — enough to hold an icon, not enough to
- *  compete with the card. */
-const BADGE = "#fdeaec";
-
-/* ───────────────────────── the reveal ───────────────────────── */
-
-/**
- * Slides don't arrive, they surface.
- *
- * James's note: landing on a slide "feels like getting jolted into a bunch of
- * information". True, and it was structural rather than cosmetic — every
- * element of a slide painted at the same instant, so a heading, four numbered
- * steps and a card all demanded attention simultaneously and the eye had
- * nowhere to start.
- *
- * So each block rises in turn, top down, and the order IS the reading order.
- * Roughly 90ms apart: enough to feel choreographed, not enough that anyone
- * waits for it.
- *
- * Two details that matter more than they look:
- *
- *  • The easing is a strong ease-OUT (fast, then settling). Anything with
- *    acceleration in it reads as a slide transition; this reads as focus.
- *
- *  • It respects prefers-reduced-motion — for some people this kind of thing
- *    is genuinely unpleasant, and a landlord can't ask us to turn it off.
- */
-function Rise({
-  show,
-  i = 0,
-  className = "",
-  style,
-  children,
-}: {
-  show: boolean;
-  /** Position in the stagger, not in the DOM. */
-  i?: number;
-  className?: string;
-  style?: React.CSSProperties;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      className={`present-rise ${className}`}
-      style={{
-        ...style,
-        opacity: show ? 1 : 0,
-        transform: show ? "none" : "translateY(18px)",
-        transitionDelay: `${i * 90}ms`,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-/* ───────────────────────── small parts ───────────────────────── */
-
-function Eyebrow({ children, on = "light" }: { children: React.ReactNode; on?: "light" | "dark" }) {
-  return (
-    <span
-      className="block text-[10px] font-semibold uppercase tracking-[0.22em]"
-      style={{ color: on === "dark" ? "rgba(255,255,255,0.72)" : RED }}
-    >
-      {children}
-    </span>
-  );
-}
-
-/** The wordmark. Two files exist because one of them has to sit on red. */
-function Mark({ on = "light", className = "h-9" }: { on?: "light" | "dark"; className?: string }) {
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={on === "dark" ? "/brand/tle-logo-white.png" : "/brand/tle-logo.png"}
-      alt="The Letting Experts"
-      className={`${className} w-auto`}
-    />
-  );
-}
-
-/**
- * A slide. `dark` flips the whole thing to red, which is used exactly twice —
- * the opening and the closing — so the deck has a shape rather than a rhythm
- * of alternating panels nobody asked for.
- */
-function Slide({
-  id,
-  dark = false,
-  children,
-}: {
-  id: SlideId;
-  dark?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <section
-      data-slide={id}
-      // min-h rather than h, and no overflow-hidden on the section itself.
-      //
-      // This was h-[100dvh] with the overflow clipped, which is the right
-      // shape for a deck and the wrong one for a phone: the appointment slide
-      // is genuinely taller than 812px, and clipping meant the heading was
-      // cut off the top and the calendar button off the bottom with nothing
-      // to say so. A slide that quietly loses half its content is worse than
-      // one that scrolls.
-      //
-      // pb-24 on small screens keeps the last line clear of the bottom bar.
-      // pr-48 on desktop keeps the copy clear of the contents rail, which
-      // floats over the slide — without it a hovered title prints straight
-      // across a paragraph.
-      //
-      // MEASURED, and it was 12px short. The rail is fixed 32px from the right
-      // and runs 156px wide, so it reaches 188px in; pr-44 is 176px, and the
-      // Why slide's fourth heading printed under it. Every slide built on this
-      // helper inherited the same near-miss.
-      className="relative flex min-h-[100dvh] w-full shrink-0 snap-start flex-col justify-center px-6 pb-24 pt-16 sm:px-10 lg:px-20 lg:pb-16 lg:pr-48"
-      style={{ background: dark ? RED : "#ffffff", color: dark ? "#ffffff" : INK }}
-    >
-      {children}
-    </section>
-  );
-}
-
-/* ───────────────────────── the slides ───────────────────────── */
-
-/**
- * The line icons.
- *
- * Inline SVG rather than a font or a sprite: the deck must render with no
- * network beyond its own page, because a landlord opens this standing in a
- * kitchen on one bar of signal, and an icon set that arrives late is worse
- * than one that never existed.
- *
- * One stroke weight, one grid, currentColor throughout — so a badge sets the
- * colour once and every icon inside it obeys.
- */
-type IconName =
-  | "people"
-  | "shield"
-  | "trend"
-  | "home"
-  | "chart"
-  | "star"
-  | "calendar"
-  | "pin"
-  | "person"
-  | "check"
-  | "phone"
-  | "chat"
-  | "heart"
-  | "whatsapp"
-  | "mail";
-
-/** Which icon belongs to which beat of the visit, in order. */
-const STEP_ICONS: IconName[] = ["home", "chart", "people", "star"];
-
-const PATHS: Record<IconName, React.ReactNode> = {
-  people: (
-    <>
-      <circle cx="9" cy="8" r="3" />
-      <path d="M3.5 19a5.5 5.5 0 0 1 11 0" />
-      <path d="M16 5.5a3 3 0 0 1 0 5.6M17 14.4a5.5 5.5 0 0 1 3.5 4.6" />
-    </>
-  ),
-  shield: (
-    <>
-      <path d="M12 3l7 3v5.5c0 4.3-2.9 7.9-7 9.5-4.1-1.6-7-5.2-7-9.5V6l7-3z" />
-      <path d="M9 12l2 2 4-4" />
-    </>
-  ),
-  trend: (
-    <>
-      <path d="M3 17l5.5-5.5 3.5 3.5L21 6" />
-      <path d="M15.5 6H21v5.5" />
-    </>
-  ),
-  home: (
-    <>
-      <path d="M4 10.5L12 4l8 6.5" />
-      <path d="M6 9.8V20h12V9.8" />
-    </>
-  ),
-  chart: (
-    <>
-      <path d="M5 20V12M10 20V6M15 20v-5M20 20v-9" />
-    </>
-  ),
-  star: (
-    <path d="M12 4l2.5 5.1 5.5.8-4 3.9.9 5.6-4.9-2.6-4.9 2.6.9-5.6-4-3.9 5.5-.8z" />
-  ),
-  calendar: (
-    <>
-      <rect x="3.5" y="5" width="17" height="15" rx="2.5" />
-      <path d="M3.5 10h17M8 3.5v3M16 3.5v3" />
-    </>
-  ),
-  pin: (
-    <>
-      <path d="M12 21s7-5.8 7-11a7 7 0 1 0-14 0c0 5.2 7 11 7 11z" />
-      <circle cx="12" cy="10" r="2.6" />
-    </>
-  ),
-  person: (
-    <>
-      <circle cx="12" cy="8.5" r="3.4" />
-      <path d="M5.5 20a6.5 6.5 0 0 1 13 0" />
-    </>
-  ),
-  check: <path d="M4 12.5l5 5L20 6.5" />,
-  phone: (
-    <path d="M6.5 3.5h3l1.5 4-2 1.4a12 12 0 0 0 6.1 6.1l1.4-2 4 1.5v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.5 5.7 2 2 0 0 1 6.5 3.5z" />
-  ),
-  chat: (
-    <path d="M20 12.5a7 7 0 0 1-7 7H8l-4 2.5.9-3.6A7 7 0 0 1 4 12.5a7 7 0 0 1 7-7h2a7 7 0 0 1 7 7z" />
-  ),
-  heart: (
-    <path d="M12 20s-7-4.4-7-9.3A4 4 0 0 1 12 8a4 4 0 0 1 7-2.7c0 4.9-7 14.7-7 14.7z" />
-  ),
-  whatsapp: (
-    <>
-      <path d="M20 11.6a8 8 0 0 1-11.9 7L3.5 20.5l2-4.5A8 8 0 1 1 20 11.6z" />
-      <path d="M9 8.7c.3-.1.6 0 .8.3l.7 1.2c.1.3.1.6-.1.8l-.5.5a5.4 5.4 0 0 0 2.6 2.6l.5-.5c.2-.2.5-.2.8-.1l1.2.7c.3.2.4.5.3.8-.2.7-.9 1.2-1.7 1.1a7.6 7.6 0 0 1-5.7-5.7c-.1-.8.4-1.5 1.1-1.7z" />
-    </>
-  ),
-  mail: (
-    <>
-      <rect x="3" y="5.5" width="18" height="13" rx="2.5" />
-      <path d="M3.6 7L12 13l8.4-6" />
-    </>
-  ),
-};
-
-function Line({ name, size = 24 }: { name: IconName; size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.4}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      {PATHS[name]}
-    </svg>
-  );
-}
 
 /**
  * The entrance screen.
  *
- * Built from James's mock-up rather than from the pattern of the other
- * slides, which is why it doesn't use <Slide>: the photograph and the clay
- * banner both go edge to edge, and a slide that centres its content inside
- * padding can't do that.
+ * Rebuilt 4 Sep from James's mock-up, which moves the opening off a
+ * photograph and onto the OS's own house style: warm off-white, the Notioly
+ * line, and the marker hand the rest of TLE-OS is set in.
  *
- * Two departures from the mock-up, both deliberate:
+ * ── What the mock-up got right, and is worth writing down ──────────────────
  *
- *  • The scrim runs LEFT to RIGHT rather than darkening the whole frame. The
- *    photograph's left third is a bare wall — it was composed for type — and
- *    dimming the whole room to carry white text throws away the light coming
- *    through the window, which is the best thing in the picture.
+ * The old entrance argued with a photograph and a scrim. This one argues with
+ * a drawing of somebody who has already stopped worrying about their rental,
+ * which is the actual proposition. It also means the whole slide is OURS —
+ * type, line and colour drawn by the same hand — rather than our type sitting
+ * on top of a stock interior.
  *
- *  • It stays personal. The mock-up's headline is generic; this one still
- *    names the property and who it was prepared for, because that is the
- *    entire reason a landlord opens the link rather than closing it.
+ * ── Two departures from the mock-up ────────────────────────────────────────
+ *
+ *  • IT STAYS PERSONAL. The mock-up's copy is generic and the deck's third
+ *    rule is not: a landlord opens this link because it is about their
+ *    property, and a first screen that could have been sent to anybody throws
+ *    that away on the one slide guaranteed to be read. So the address and who
+ *    it was prepared for sit under the paragraph, quietly, in the mock-up's
+ *    own type rather than as a badge bolted onto it.
+ *
+ *  • THE ILLUSTRATION IS DECORATIVE, AND SAYS SO. It carries no information,
+ *    so it is aria-hidden and it is the first thing to go when the viewport
+ *    cannot hold both columns. A phone gets the argument, not the artwork.
  */
 function Welcome({ deck, show }: { deck: Deck; show: boolean }) {
-  const { property, recipientName, whenPretty } = deck;
-  /* Their own property when the dossier found a photograph of it, the styled
-     room otherwise. A stock interior is a far better opening than a badly
-     cropped estate-agent shot of a front door — but their house, when we have
-     it, beats both. */
-  const hero = property.image ?? "/brand/living-room.jpg";
+  const { property, recipientName } = deck;
 
   return (
     <section
       data-slide="welcome"
-      className="relative flex min-h-[100dvh] w-full shrink-0 snap-start flex-col overflow-hidden text-white"
+      className="relative flex min-h-full w-full shrink-0 flex-col justify-center px-6 pb-28 pt-20 sm:px-10 lg:px-14 lg:pb-24 lg:pt-14"
+      style={{ background: CREAM, color: INK }}
     >
-      <div className="pointer-events-none absolute inset-0">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={hero} alt="" className="h-full w-full object-cover" />
-        {/* Warm, not grey. A neutral black scrim over this photograph turns
-            the clay and terracotta in it to mud. */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background: `linear-gradient(100deg, ${DEEP}e0 0%, ${DEEP}b8 40%, ${DEEP}47 72%, transparent 100%)`,
-          }}
-        />
-      </div>
-
-      {/* Top left, on the same left margin as the headline, so the logo and
-          the type share one edge rather than floating independently. Smaller
-          than a centred mark can afford to be: off to the side it reads as a
-          signature on the page instead of a title above it. */}
-      <header className="relative flex px-6 pt-8 sm:px-12 sm:pt-10 lg:px-20">
-        <Rise show={show} i={0}>
-          <Mark on="dark" className="h-11 sm:h-12" />
-        </Rise>
-      </header>
-
-      <div className="relative flex flex-1 flex-col justify-center px-6 py-6 sm:px-12 sm:py-12 lg:px-20">
-        <div className="w-full max-w-3xl">
-          {/* The flowing hand, and the biggest thing on the page.
-              A script's letterforms sit inside a fraction of their em box —
-              the capital swash reaches high, the x-height is tiny — so it
-              needs to be set MUCH larger than a sans to read at the same
-              visual weight, and then pulled back in with tight leading and a
-              negative margin or it floats half a line above its own baseline. */}
-          {/* Not a Rise — this one is WRITTEN. See components/WelcomeMark:
-              the letterforms clip a fat stroke that travels the pen path, so
-              the word fills in the order a hand would form it. Sized by width
-              rather than font-size because it is artwork now, not text. */}
-          <HandWord
-            word="welcome"
-            written={show}
-            color={CLAY}
-            size="clamp(69px, 13vw, 134px)"
-          />
-
-          <Rise show={show} i={2}>
-            {/* Serif, matching the reference and the interior slides — one
-                document, not two. */}
-            <h1
-              className="-mt-2 text-[52px] leading-[1.0] tracking-[-0.01em] sm:-mt-5 sm:text-[104px]"
-              style={{ fontFamily: DISPLAY }}
-            >
-              Let&rsquo;s get started
-            </h1>
-            <span className="mt-6 block h-[3px] w-[110px] rounded-full" style={{ background: CLAY }} />
+      <div className="mx-auto grid w-full max-w-[1340px] items-center gap-10 lg:grid-cols-[1.08fr_0.92fr] lg:gap-12">
+        {/* ── the argument ── */}
+        <div className="max-w-[720px]">
+          <Rise show={show} i={0}>
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.3em] text-black/40">
+              Welcome
+            </span>
           </Rise>
 
-          {/* Brought up with the headline. Against 92px type a 14px line reads
-              as a caption rather than a sentence, and this one carries the
-              only personalised words on the slide. */}
-          <Rise show={show} i={3}>
-            <p className="mt-7 max-w-xl text-[15px] font-light leading-relaxed text-white/90 sm:text-[18px]">
-              We&rsquo;re excited to show you how we can help you get the most from{" "}
-              <span className="text-white">{property.address}</span>.
+          <Rise show={show} i={1}>
+            {/* Set in the marker hand at a size the drawing can stand up to.
+                clamp rather than breakpoints, and the ceiling is set by the
+                LONGEST line rather than by what looks biggest: "from your
+                property." is nineteen characters, and the first size that let
+                it wrap to a fourth line pushed the three promises underneath
+                the bottom bar on a laptop. The headline is the one thing here
+                that must hold three lines at every width. */}
+            <h1
+              className="mt-4 leading-[1.04] tracking-[-0.015em]"
+              style={{
+                fontFamily: HAND,
+                fontWeight: 700,
+                fontSize: "clamp(34px, 4.35vw, 66px)",
+              }}
+            >
+              Let&rsquo;s get
+              <br />
+              you <Emphasis show={show}>more</Emphasis>
+              <br />
+              from your property.
+            </h1>
+          </Rise>
+
+          <Rise show={show} i={2}>
+            <p className="mt-6 max-w-[470px] text-[15.5px] font-light leading-[1.6] text-black/60">
+              We&rsquo;re The Letting Experts. A local team with the tools, experience and market
+              insight to help you get the most from your investment.
             </p>
           </Rise>
 
-          <Rise show={show} i={4} className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2.5">
-            {whenPretty && (
-              <span
-                className="rounded-full px-5 py-2.5 text-[13px] font-medium"
-                style={{ background: CLAY, color: "#ffffff" }}
-              >
-                {whenPretty}
-              </span>
-            )}
-            {recipientName && (
-              <span className="text-[13px] font-light text-white/75">
-                Prepared for {recipientName}
-              </span>
-            )}
+          {/* The personalisation the mock-up leaves out. Small, because it is
+              a fact rather than a claim - but present, because it is the whole
+              reason this link got opened. */}
+          {(property.address || recipientName) && (
+            <Rise show={show} i={3}>
+              <p className="mt-3.5 text-[12.5px] font-light text-black/45">
+                Prepared for{recipientName ? ` ${recipientName}` : " you"}
+                {property.address && (
+                  <>
+                    {" · "}
+                    <span className="font-normal text-black/70">{property.address}</span>
+                  </>
+                )}
+              </p>
+            </Rise>
+          )}
+
+          <Rise show={show} i={4}>
+            <ul className="mt-8 grid grid-cols-3 gap-x-5 sm:gap-x-7">
+              {BANNER.map((b, n) => (
+                <li key={b.title}>
+                  <span
+                    className="flex h-[52px] w-[52px] items-center justify-center rounded-full sm:h-[58px] sm:w-[58px]"
+                    style={{ background: TINTS[n % TINTS.length], color: INK }}
+                  >
+                    <Line name={b.icon} size={23} />
+                  </span>
+                  <span
+                    className="mt-3.5 block text-[14px] font-semibold leading-snug sm:text-[15px]"
+                    style={{ fontFamily: HAND }}
+                  >
+                    {b.title}
+                  </span>
+                  <span className="mt-1 block text-[12.5px] font-light leading-[1.5] text-black/50">
+                    {b.body}
+                  </span>
+                </li>
+              ))}
+            </ul>
           </Rise>
         </div>
+
+        {/* ── the drawing ──
+            Hidden below lg rather than stacked. Stacked, it pushes the three
+            promises off a phone screen, and the promises are the argument. */}
+        <Rise show={show} i={2} className="relative hidden lg:block">
+          <div className="relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/sitting-chair.png"
+              alt=""
+              aria-hidden
+              className="ml-auto w-full max-w-[620px]"
+            />
+            <Aside show={show} />
+          </div>
+        </Rise>
       </div>
-
-      {/* The three promises, sitting ON the photograph rather than on a bar.
-          A solid band cut the room off at the knees; a fade keeps the sofa
-          and the rug in the picture and still carries white type.
-
-          The blur is doing real work, not decoration: the gradient alone is
-          fine over the flat rug and fails over the busy patterned edge, and
-          legibility can't depend on which part of a photograph a word lands
-          on. It is deliberately slight — enough to quiet the texture, not
-          enough to read as frosted glass. */}
-      <Rise
-        show={show}
-        i={5}
-        className="relative pb-14 pt-10 backdrop-blur-[3px] sm:pb-24 sm:pt-24 lg:pb-20 lg:pt-20"
-        style={{
-          background: `linear-gradient(to top, ${DEEP}f2 0%, ${DEEP}d9 42%, ${DEEP}66 76%, transparent 100%)`,
-          maskImage: "linear-gradient(to top, #000 76%, transparent 100%)",
-          WebkitMaskImage: "linear-gradient(to top, #000 76%, transparent 100%)",
-        }}
-      >
-        <div className="mx-auto grid max-w-6xl gap-y-4 px-6 sm:grid-cols-3 sm:gap-x-10 sm:gap-y-6 lg:px-12">
-          {BANNER.map((b) => (
-            <div key={b.title} className="flex items-center gap-4">
-              {/* Full height of the pair it sits beside — an icon scaled to
-                  the title alone reads as a bullet point. */}
-              <span className="shrink-0 text-white/85">
-                <Line name={b.icon} size={40} />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-[12.5px] font-semibold uppercase tracking-[0.12em] text-white">
-                  {b.title}
-                </span>
-                {/* One line, always. The copy was shortened to fit rather
-                    than the type shrunk — a promise that wraps to two lines
-                    stops looking like a promise. */}
-                <span className="mt-1 block whitespace-nowrap text-[12.5px] font-light leading-snug text-white/85">
-                  {b.body}
-                </span>
-              </span>
-            </div>
-          ))}
-        </div>
-      </Rise>
     </section>
+  );
+}
+
+/**
+ * The margin note, in the same hand as the headline.
+ *
+ * Positioned against the illustration rather than the column, so it always
+ * lands in the artwork's empty top-right corner however the picture scales.
+ * The arrow is drawn separately and points at the woman, not at the words —
+ * it is her the note is about.
+ */
+function Aside({ show }: { show: boolean }) {
+  return (
+    <div
+      className="pointer-events-none absolute right-[2%] top-[6%] w-[190px] text-right"
+      style={{
+        opacity: show ? 1 : 0,
+        transform: show ? "none" : "translateY(10px)",
+        transition: "opacity 620ms ease-out 620ms, transform 620ms cubic-bezier(0.22,1,0.36,1) 620ms",
+      }}
+    >
+      <p
+        className="text-[16px] leading-[1.45] text-black/70"
+        style={{ fontFamily: HAND, transform: "rotate(-3.5deg)" }}
+      >
+        Less stress.
+        <br />
+        More from
+        <br />
+        your investment.
+      </p>
+      <svg viewBox="0 0 60 46" aria-hidden className="mt-1 ml-auto mr-6 h-[42px] w-[54px]">
+        <path
+          d="M54 3C50 18 41 31 26 38"
+          fill="none"
+          stroke={CORAL}
+          strokeWidth={2.2}
+          strokeLinecap="round"
+        />
+        <path
+          d="M33 39.5L24.5 38.5L28.5 31"
+          fill="none"
+          stroke={CORAL}
+          strokeWidth={2.2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
   );
 }
 
@@ -555,7 +314,7 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
   return (
     <section
       data-slide="appointment"
-      className="relative flex min-h-[100dvh] w-full shrink-0 snap-start flex-col"
+      className="relative flex min-h-full w-full shrink-0 flex-col pb-24"
       style={{ background: PAPER, color: INK }}
     >
       <header className="px-6 pt-8 sm:px-12 sm:pt-10 lg:px-16">
@@ -565,19 +324,19 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
       {/* THE RIGHT PADDING IS LOAD-BEARING, not spacing taste.
 
           The panel below is absolutely positioned so it can run the full
-          height of the slide, which takes it out of the grid — and the moment
+          height of the slide, which takes it out of the grid - and the moment
           it did, the left column stretched underneath it and the last words of
           two of the four beats ("...to win the instruction", "...we'll tell
           you which") were printed under pink. Nothing may collide.
 
           So the text column is stopped short by hand: 400px of panel, 192px of
           gutter beyond it, and room to breathe between the two. On lg the grid
-          is ONE column for the same reason — a reserved 400px track for a
+          is ONE column for the same reason - a reserved 400px track for a
           child that is no longer in flow would narrow the text twice over.
 
           THE 192px GUTTER IS MEASURED, not chosen. The contents rail is fixed
           32px from the right and runs 156px wide, so its labels reach 188px in
-          — at the 96px this started on, "Welcome" printed on top of the pink.
+          - at the 96px this started on, "Welcome" printed on top of the pink.
           Because both are anchored to the right edge, 192 clears it at every
           viewport width rather than only at the one I happened to test. */}
       <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-12 lg:px-16 lg:py-8 lg:pr-[616px]">
@@ -604,7 +363,7 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
                   what it{" "}
                   {/* Written, like the entrance. Sized in em so it tracks the
                       headline at every breakpoint, and a touch bigger than the
-                      serif around it — a script's x-height is far smaller, so
+                      serif around it - a script's x-height is far smaller, so
                       matched sizes make it look shrunken. */}
                   <HandWord
                     word="lets"
@@ -778,6 +537,27 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
   );
 }
 
+/**
+ * Who you will be meeting.
+ *
+ * The third slide in the cream style, and the first one where the style has to
+ * carry a PHOTOGRAPH rather than a drawing. The entrance and the agenda are
+ * both ink and line; a headshot dropped onto cream between them would read as
+ * a passport photo stapled to a sketchbook.
+ *
+ * The answer is the blob. The entrance illustration sits on a soft pink
+ * organic shape, and putting the portrait on the same shape — overlapping it,
+ * not centred in it — makes the photograph part of the drawing rather than an
+ * object placed on top of it. Same trick the artwork already uses, applied to
+ * something that is not artwork.
+ *
+ * ── What survives from the red version ─────────────────────────────────────
+ *
+ * Every empty rule, because none of them was cosmetic. Four of the fourteen
+ * TLE people have no photo on their REX record, nobody on the account has
+ * written a bio, half have no job title, and the welcome video is usually
+ * absent. All four still have to look deliberate.
+ */
 function Agent({ deck, show }: { deck: Deck; show: boolean }) {
   const a = deck.agent;
   const video = deck.welcomeVideo ?? null;
@@ -785,202 +565,217 @@ function Agent({ deck, show }: { deck: Deck; show: boolean }) {
   /** wa.me wants an international number with no punctuation. UK mobiles are
    *  stored as 07…, so the leading zero becomes 44. */
   const wa = /^0\d{10}$/.test(tel) ? `44${tel.slice(1)}` : null;
+  const first = a.firstName || "";
 
   /* Their own words when they've written them; otherwise a real introduction
-     rather than a placeholder — see defaultBio, and note that nobody on the
+     rather than a placeholder - see defaultBio, and note that nobody on the
      REX account has a bio, so this is the usual case. */
-  const paragraphs = (a.bio.trim() || defaultBio(a.firstName)).split(/\n{2,}/);
+  const paragraphs = (a.bio.trim() || defaultBio(first)).split(/\n{2,}/);
 
   const OUTLINE =
-    "flex items-center gap-2.5 rounded-full border px-5 py-3 text-[13px] font-medium transition-colors";
+    "flex items-center gap-2 rounded-full border px-4.5 py-2.5 text-[13px] font-medium transition-colors hover:border-black/35";
 
   return (
-    <section
-      data-slide="agent"
-      className="relative flex min-h-[100dvh] w-full shrink-0 snap-start flex-col"
-      style={{ background: PAPER, color: INK }}
-    >
-      <header className="px-6 pt-8 sm:px-12 sm:pt-10 lg:px-16">
-        <Mark className="h-10 sm:h-11" />
-      </header>
+    <CreamSlide id="agent">
+      {/* Indented on wide screens, James 4 Sep. Flush to the left margin the
+          column sat against the edge of the page with a lake of cream between
+          it and the portrait; pushing it in closes the gap and gives the two
+          halves something to sit between rather than at either end of. */}
+      <div className="mx-auto grid w-full max-w-[1300px] items-center gap-10 lg:grid-cols-[1fr_0.82fr] lg:gap-16 lg:pl-16 xl:pl-24">
+        <div className="max-w-[620px]">
+          <HandHead eyebrow="Who you&rsquo;ll be meeting" show={show} lines={2}>
+            {first ? (
+              <>
+                You&rsquo;ll be dealing
+                <br />
+                with <Emphasis show={show}>{first}</Emphasis>
+              </>
+            ) : (
+              <>
+                One person,
+                <br />
+                <Emphasis show={show}>start to finish</Emphasis>
+              </>
+            )}
+          </HandHead>
 
-      {/* pr-48, not pr-40. The contents rail is fixed 32px from the right and
-          runs 156px wide, so it reaches 188px in — at 160px the bio and the
-          agent's name printed underneath it. Measured, not guessed, and the
-          same figure the appointment slide uses. */}
-      <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-12 lg:px-16 lg:py-12 lg:pr-48">
-        <div className="mx-auto grid w-full max-w-6xl items-center gap-9 lg:grid-cols-[420px_1fr] lg:gap-14">
-          {/* The portrait leads, and it is the point of the slide — this is
-              the one moment before the visit where the landlord sees a face.
-              Capped on a phone so the name still lands above the fold. */}
-          <Rise show={show} i={0}>
+          {(a.name || a.title) && (
+            <Rise show={show} i={2}>
+              <p className="mt-4 text-[13px] font-light text-black/45">
+                {a.name}
+                {a.name && a.title ? " · " : ""}
+                <span className={a.name ? "" : "text-black/70"}>{a.title}</span>
+              </p>
+            </Rise>
+          )}
+
+          <Rise show={show} i={3}>
+            <div className="mt-6 max-w-[520px] space-y-4">
+              {paragraphs.map((p, i) => (
+                <p key={i} className="text-[14.5px] font-light leading-[1.65] text-black/65">
+                  {p}
+                </p>
+              ))}
+            </div>
+          </Rise>
+
+          {/* The agent's own welcome, if they recorded one. Only ever rendered
+              when it is genuinely playable: a recording still processing shows
+              NOTHING, because a landlord has no idea a video was coming and an
+              empty player can only read as something broken. */}
+          {video?.status === "ready" && video.embedUrl && (
+            <Rise show={show} i={4}>
+              <div className="mt-7 max-w-[440px] overflow-hidden rounded-[18px]">
+                <iframe
+                  src={`${video.embedUrl}?theme=light&accent=${CORAL.replace("#", "")}`}
+                  allow="autoplay; fullscreen; picture-in-picture"
+                  className="w-full border-0"
+                  style={{ aspectRatio: "16 / 9" }}
+                  title={`Welcome from ${a.name}`}
+                />
+              </div>
+            </Rise>
+          )}
+
+          <Rise show={show} i={5}>
+            <div className="mt-7 flex flex-wrap gap-2.5">
+              {a.phone && (
+                <a
+                  href={`tel:${tel}`}
+                  className="flex items-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+                  style={{ background: CORAL }}
+                >
+                  <Line name="phone" size={16} />
+                  Call {first || "them"}
+                </a>
+              )}
+              {wa && (
+                <a
+                  href={`https://wa.me/${wa}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={OUTLINE}
+                  style={{ borderColor: "rgba(59,59,60,0.18)" }}
+                >
+                  <Line name="whatsapp" size={16} />
+                  WhatsApp
+                </a>
+              )}
+              {a.email && (
+                <a
+                  href={`mailto:${a.email}`}
+                  className={OUTLINE}
+                  style={{ borderColor: "rgba(59,59,60,0.18)" }}
+                >
+                  <Line name="mail" size={16} />
+                  Email
+                </a>
+              )}
+            </div>
+          </Rise>
+
+          {/* Three promises about conduct, never statistics. Rules rather than
+              a tinted panel: the dividing line does the separating a fill was
+              doing, and without the fill they sit on the page as part of what
+              the agent is saying rather than as a widget bolted underneath. */}
+          <Rise show={show} i={6}>
+            <div className="mt-8 grid max-w-[620px] gap-y-5 sm:grid-cols-3 sm:gap-x-0">
+              {AGENT_CHIPS.map((c, i) => (
+                <div
+                  key={c.title}
+                  className={`flex items-start gap-2.5 ${i === 0 ? "sm:pr-5" : "sm:border-l sm:px-5"}`}
+                  style={{ borderColor: "rgba(59,59,60,0.12)" }}
+                >
+                  <span className="mt-[1px] shrink-0" style={{ color: CORAL }}>
+                    <Line name={c.icon} size={19} />
+                  </span>
+                  <span className="min-w-0">
+                    <span
+                      className="block text-[13px] leading-snug"
+                      style={{ fontFamily: HAND, fontWeight: 700 }}
+                    >
+                      {c.title}
+                    </span>
+                    <span className="mt-1 block text-[11.5px] font-light leading-snug text-black/50">
+                      {c.body}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Rise>
+        </div>
+
+        {/* ── the portrait ── */}
+        <Rise show={show} i={2} className="relative hidden lg:block">
+          <div className="relative mx-auto w-full max-w-[380px]">
+            {/* The blob, borrowed from the entrance artwork. Deliberately
+                bigger than the portrait and off-centre, so the photograph sits
+                ON it rather than inside it. */}
+            {/* preserveAspectRatio="none" on purpose. Uniform scaling made the
+                path resolve to a near-circle inside the 4:5 box, which reads
+                as a coloured disc rather than as a shape somebody drew. Let it
+                distort to the container and it becomes a blob again. */}
+            <svg
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+              aria-hidden
+              className="absolute -left-[8%] -top-[6%] h-[112%] w-[112%]"
+            >
+              <path
+                d="M52 4C74 2 96 18 98 42C100 66 88 84 66 93C44 102 20 96 8 78C-4 60 2 34 18 18C30 6 40 5 52 4Z"
+                fill={TINTS[0]}
+              />
+            </svg>
+
             {a.photo ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={a.photo}
                 alt={a.name}
-                className="max-h-[38vh] w-full rounded-[18px] object-cover object-[center_18%] lg:max-h-none lg:aspect-[3/4]"
+                className="relative w-full rounded-[26px] object-cover object-[center_18%]"
+                style={{ aspectRatio: "4 / 5" }}
               />
             ) : (
-              /* Four of the fourteen TLE people have no photo on their REX
-                 record (measured). A monogram in the brand red reads as a
-                 design choice; an empty rectangle reads as a fault. */
+              /* Four of the fourteen have no photo on their REX record
+                 (measured). Initials in the marker hand on the blob reads as
+                 a drawing; an empty rectangle reads as a fault. */
               <div
-                className="flex h-[38vh] w-full items-center justify-center rounded-[18px] text-[68px] font-light text-white lg:aspect-[3/4] lg:h-auto"
-                style={{ background: RED }}
+                className="relative flex w-full items-center justify-center"
+                style={{ aspectRatio: "4 / 5" }}
               >
-                {initialsOf(a.name)}
+                <span
+                  className="text-[86px] leading-none"
+                  style={{ fontFamily: HAND, fontWeight: 700, color: CORAL }}
+                >
+                  {initialsOf(a.name)}
+                </span>
               </div>
             )}
-          </Rise>
-
-          <div className="min-w-0">
-            <Rise show={show} i={1}>
-              <Eyebrow>Who you&rsquo;ll be meeting</Eyebrow>
-              <h2
-                className="mt-3 text-[34px] leading-[1.05] sm:text-[50px]"
-                style={{ fontFamily: DISPLAY }}
-              >
-                {a.name || "Your agent"}
-              </h2>
-              {a.title && (
-                <p className="mt-2 text-[15px] font-light text-black/55">{a.title}</p>
-              )}
-              <span
-                className="mt-5 block h-[3px] w-[34px] rounded-full"
-                style={{ background: RED }}
-              />
-            </Rise>
-
-            <Rise show={show} i={2}>
-              <div className="mt-6 max-w-xl space-y-4">
-                {paragraphs.map((p, i) => (
-                  <p key={i} className="text-[14px] font-light leading-relaxed text-black/70">
-                    {p}
-                  </p>
-                ))}
-              </div>
-            </Rise>
-
-            {/* The agent's own welcome, if they recorded one.
-                Here rather than on the opening slide: this is the slide about
-                the person, and a video of them talking belongs beside their
-                face and their words, not over the hero photograph.
-
-                Only ever rendered when it is genuinely playable. A recording
-                that is still processing shows NOTHING — a landlord opening
-                this page has no idea a video was coming, so an empty player or
-                a spinner can only read as something broken. */}
-            {video?.status === "ready" && video.embedUrl && (
-              <Rise show={show} i={3}>
-                <div className="mt-8 max-w-xl">
-                  <Eyebrow>A message from {a.firstName || "your agent"}</Eyebrow>
-                  <iframe
-                    src={`${video.embedUrl}?theme=light&accent=${RED.replace("#", "")}`}
-                    allow="autoplay; fullscreen; picture-in-picture"
-                    className="mt-3 w-full rounded-[14px] border-0"
-                    style={{ aspectRatio: "16 / 9" }}
-                    title={`Welcome from ${a.name}`}
-                  />
-                </div>
-              </Rise>
-            )}
-
-            <Rise show={show} i={3}>
-              <div className="mt-8 flex flex-wrap gap-3">
-                {a.phone && (
-                  <a
-                    href={`tel:${tel}`}
-                    className="flex items-center gap-2.5 rounded-full px-5 py-3 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
-                    style={{ background: RED }}
-                  >
-                    <Line name="phone" size={17} />
-                    Call {a.firstName || "them"} · {a.phone}
-                  </a>
-                )}
-                {wa && (
-                  <a
-                    href={`https://wa.me/${wa}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className={`${OUTLINE} hover:border-black/40`}
-                    style={{ borderColor: "rgba(59,59,60,0.20)" }}
-                  >
-                    <Line name="whatsapp" size={17} />
-                    WhatsApp
-                  </a>
-                )}
-                {a.email && (
-                  <a
-                    href={`mailto:${a.email}`}
-                    className={`${OUTLINE} hover:border-black/40`}
-                    style={{ borderColor: "rgba(59,59,60,0.20)" }}
-                  >
-                    <Line name="mail" size={17} />
-                    Email
-                  </a>
-                )}
-              </div>
-            </Rise>
-
-            <Rise show={show} i={4}>
-              {/* NO GREY PANEL — James, 31 Aug. It was a tinted box holding
-                  three things that are not a group of controls, and it read as
-                  a widget bolted under the introduction. The dividing lines
-                  already do the separating a fill was doing, and without the
-                  fill the three promises sit on the page as part of what the
-                  agent is saying rather than as a component.
-
-                  The first item loses its left padding so its icon starts on
-                  the SAME vertical line as the buttons above it. The box's own
-                  px-6 plus the item's px-5 had it inset 44px from a column
-                  everything else on the slide starts flush with. */}
-              <div className="mt-8 grid max-w-2xl gap-y-5 py-1 sm:grid-cols-3 sm:gap-x-0">
-                {AGENT_CHIPS.map((c, i) => (
-                  <div
-                    key={c.title}
-                    className={`flex items-start gap-3 ${
-                      i === 0 ? "sm:pr-5" : "sm:border-l sm:px-5"
-                    }`}
-                    style={{ borderColor: "rgba(59,59,60,0.14)" }}
-                  >
-                    <span className="mt-0.5 shrink-0" style={{ color: RED }}>
-                      <Line name={c.icon} size={21} />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-[12.5px] font-semibold leading-snug">
-                        {c.title}
-                      </span>
-                      <span className="mt-1 block text-[11.5px] font-light leading-snug text-black/55">
-                        {c.body}
-                      </span>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </Rise>
           </div>
-        </div>
+        </Rise>
       </div>
-    </section>
+    </CreamSlide>
   );
 }
 
 
 /**
- * What's letting nearby — the working, not just the answer.
+ * What has let nearby, and the range it puts this property in.
  *
- * A landlord's first question about a valuation is "says who". So the range
- * comes with the properties it was built from, named, with how long they took
- * to let. That is the difference between a number and an argument.
+ * The one slide in this section where a NUMBER is the argument, so the number
+ * is the headline - set in the marker hand at the size the address gets on the
+ * divider, rather than as a figure introduced by a heading. A landlord opened
+ * this deck for a rent; when we finally have one to show them it should not be
+ * the second thing on the page.
  *
- * The caveat, when the research produced one, is shown HERE TOO. A range we
- * would qualify to our own agent is a range we must qualify to the landlord —
- * quoting it unqualified to the person it affects is the dishonest half of a
- * disclosure.
+ * The evidence sits underneath it, and it has to: a range with no working
+ * shown is a guess with a serif on it. Every row here is a real property we
+ * are letting, with what it asked and how long it took.
  *
- * Snapshotted at send, never live. The figure a landlord opens on Sunday must
- * be the figure the agent approved on Friday.
+ * Gated at three rows in slidesFor - below that the slide argues AGAINST us,
+ * because a landlord counting two properties concludes we do not know their
+ * street and re-reads everything else with that in mind.
  */
 function Comparables({ deck, show }: { deck: Deck; show: boolean }) {
   const c = deck.comparables;
@@ -988,61 +783,80 @@ function Comparables({ deck, show }: { deck: Deck; show: boolean }) {
   const money = (n: number) => `\u00a3${Math.round(n).toLocaleString("en-GB")}`;
 
   return (
-    <section
-      data-slide="comparables"
-      className="relative flex min-h-[100dvh] w-full shrink-0 snap-start flex-col"
-      style={{ background: PAPER, color: INK }}
-    >
-      <header className="px-6 pt-8 sm:px-12 sm:pt-10 lg:px-16">
-        <Mark className="h-10 sm:h-11" />
-      </header>
-
-      <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-12 lg:px-16">
-        <div className="mx-auto w-full max-w-4xl">
+    <CreamSlide id="comparables">
+      <div className="mx-auto w-full max-w-[1180px]">
+        <div className="max-w-[680px]">
           <Rise show={show} i={0}>
-            <Eyebrow>What&rsquo;s letting nearby</Eyebrow>
-            <h2 className="mt-3 text-[34px] leading-[1.05] sm:text-[50px]" style={{ fontFamily: DISPLAY }}>
-              {money(c.guideLow)}&ndash;{money(c.guideHigh)}
-              <span className="text-[18px] font-light sm:text-[24px]"> pcm</span>
+            <span className="block text-[11px] font-semibold uppercase tracking-[0.3em] text-black/40">
+              What&rsquo;s letting nearby
+            </span>
+          </Rise>
+          <Rise show={show} i={1}>
+            <h2
+              className="mt-4 leading-[1.02] tracking-[-0.015em]"
+              /* Capped at 54, not 62. Six evidence rows plus this headline is the
+                  tallest thing in the section, and at 62 the sixth row fell
+                  under the fold on a 720px laptop - which on the one slide
+                  that exists to show our working reads as us hiding a row. */
+              style={{ fontFamily: HAND, fontWeight: 700, fontSize: "clamp(32px, 3.8vw, 54px)" }}
+            >
+              <span style={{ color: CORAL }}>
+                {money(c.guideLow)}&ndash;{money(c.guideHigh)}
+              </span>
+              <span className="text-[0.42em] font-normal text-black/45"> pcm</span>
             </h2>
-            <p className="mt-2 text-[15px] font-light text-black/55">
+          </Rise>
+          <Rise show={show} i={2}>
+            <p className="mt-4 max-w-[520px] text-[15px] font-light leading-[1.6] text-black/55">
               Based on {c.basedOn} propert{c.basedOn === 1 ? "y" : "ies"} we are letting near you.
               We&rsquo;ll land on the figure together on the day.
             </p>
-            <span className="mt-5 block h-[3px] w-[34px] rounded-full" style={{ background: RED }} />
           </Rise>
-
-          <Rise show={show} i={1}>
-            <ul className="mt-7 divide-y divide-black/8 border-y border-black/8">
-              {c.rows.slice(0, 6).map((r) => (
-                <li key={`${r.name}-${r.rent}`} className="flex items-baseline justify-between gap-4 py-3">
-                  <span className="min-w-0">
-                    <span className="block truncate text-[14px]">{r.name}</span>
-                    <span className="block text-[12px] font-light text-black/50">{r.locality}</span>
-                  </span>
-                  <span className="flex shrink-0 items-baseline gap-3">
-                    {r.days != null && (
-                      <span className="text-[12px] font-light text-black/50">
-                        {r.letAgreed ? `let in ${r.days} days` : `${r.days} days`}
-                      </span>
-                    )}
-                    <span className="text-[15px] font-medium">{r.rent}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Rise>
-
-          {c.caveat && (
-            <Rise show={show} i={2}>
-              <p className="mt-5 max-w-2xl text-[12.5px] font-light leading-relaxed text-black/55">
-                {c.caveat}
-              </p>
-            </Rise>
-          )}
         </div>
+
+        <Rise show={show} i={3}>
+          <ul className="mt-7 lg:mt-8">
+            {c.rows.slice(0, 6).map((r, n) => (
+              <li
+                key={`${r.name}-${r.rent}`}
+                className="flex items-baseline justify-between gap-6 py-2.5"
+                style={{ borderTop: n === 0 ? "none" : "1px solid rgba(0,0,0,0.07)" }}
+              >
+                <span className="min-w-0">
+                  <span
+                    className="block truncate text-[15px] leading-snug sm:text-[16px]"
+                    style={{ fontFamily: HAND, fontWeight: 700 }}
+                  >
+                    {r.name}
+                  </span>
+                  <span className="mt-0.5 block text-[12.5px] font-light text-black/45">
+                    {r.locality}
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-baseline gap-4">
+                  {r.days != null && (
+                    <span className="text-[12.5px] font-light text-black/45">
+                      {r.letAgreed ? `let in ${r.days} days` : `${r.days} days`}
+                    </span>
+                  )}
+                  <span className="text-[17px]" style={{ fontFamily: HAND, fontWeight: 700 }}>
+                    {r.rent}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Rise>
+
+        {c.caveat && (
+          <Rise show={show} i={4}>
+            <p className="mt-6 max-w-[640px] text-[12.5px] font-light leading-relaxed text-black/45">
+              {c.caveat}
+            </p>
+          </Rise>
+        )}
       </div>
-    </section>
+    </CreamSlide>
   );
 }
 
@@ -1070,7 +884,7 @@ function Market({ deck, show }: { deck: Deck; show: boolean }) {
   const pct = (n: number) => (m.advertised > 0 ? Math.round((n / m.advertised) * 100) : 0);
 
   /* One bar row. Width is a share of the biggest bar in its own group, so a
-     group of small numbers still reads — but a genuine zero draws nothing
+     group of small numbers still reads - but a genuine zero draws nothing
      rather than a stub, because a stub reads as "a few". */
   const Row = ({
     label,
@@ -1089,7 +903,7 @@ function Market({ deck, show }: { deck: Deck; show: boolean }) {
     <li className="flex items-center gap-2.5 py-[3px]">
       <span
         /* Wide enough for "Over 3 months" and "Under 2 weeks" to survive at
-           12px — measured, they were clipping to "Over 3 mont…" on the slide a
+           12px - measured, they were clipping to "Over 3 mont…" on the slide a
            landlord reads. Agency names get more still and truncate anyway. */
         className={`${wide ? "w-[152px]" : "w-[104px]"} shrink-0 truncate text-[12px] font-light text-black/60`}
       >
@@ -1097,7 +911,7 @@ function Market({ deck, show }: { deck: Deck; show: boolean }) {
       </span>
       <span className="relative h-[5px] flex-1 overflow-hidden rounded-full bg-black/8">
         {/* Softened deliberately. At full strength twelve of these read as a
-            warning panel rather than a market — the bar's job is to carry the
+            warning panel rather than a market - the bar's job is to carry the
             eye down a column, and length already does that. The brand red is
             kept for the headline rule and the one figure that is about us. */}
         <span
@@ -1129,7 +943,7 @@ function Market({ deck, show }: { deck: Deck; show: boolean }) {
   return (
     <section
       data-slide="market"
-      className="relative flex min-h-[100dvh] w-full shrink-0 snap-start flex-col"
+      className="relative flex min-h-full w-full shrink-0 flex-col pb-24"
       style={{ background: PAPER, color: INK }}
     >
       <header className="px-6 pt-8 sm:px-12 sm:pt-10 lg:px-16">
@@ -1165,7 +979,7 @@ function Market({ deck, show }: { deck: Deck; show: boolean }) {
           </Rise>
 
           {/* Pace. The two figures are deliberately given different words —
-              "has been advertised" against "took to let" — because they are
+              "has been advertised" against "took to let" - because they are
               different measurements and a landlord who later works that out
               unaided stops believing the rest of the deck. */}
           {(m.marketDays != null || m.ourDays != null) && (
@@ -1217,7 +1031,7 @@ function Market({ deck, show }: { deck: Deck; show: boolean }) {
                       label={b.label}
                       n={b.n}
                       max={bedMax}
-                      right={b.rent ? money(b.rent) : "—"}
+                      right={b.rent ? money(b.rent) : "-"}
                     />
                   ))}
                 </Block>
@@ -1299,7 +1113,7 @@ function Valuation({ deck, show }: { deck: Deck; show: boolean }) {
   return (
     <section
       data-slide="valuation"
-      className="relative flex min-h-[100dvh] w-full shrink-0 snap-start flex-col"
+      className="relative flex min-h-full w-full shrink-0 flex-col pb-24"
       style={{ background: PAPER, color: INK }}
     >
       <header className="px-6 pt-8 sm:px-12 sm:pt-10 lg:px-16">
@@ -1368,7 +1182,7 @@ function Terms({ deck, show }: { deck: Deck; show: boolean }) {
   return (
     <section
       data-slide="terms"
-      className="relative flex min-h-[100dvh] w-full shrink-0 snap-start flex-col"
+      className="relative flex min-h-full w-full shrink-0 flex-col pb-24"
       style={{ background: PAPER, color: INK }}
     >
       <header className="px-6 pt-8 sm:px-12 sm:pt-10 lg:px-16">
@@ -1405,7 +1219,7 @@ function Terms({ deck, show }: { deck: Deck; show: boolean }) {
               /* No dead button. The sentence does the job the link would. */
               <p className="mt-8 max-w-xl text-[14px] font-light leading-relaxed text-black/70">
                 {first} will send the terms of business across to sign
-                electronically &mdash; it takes a couple of minutes and nothing needs printing.
+                electronically - it takes a couple of minutes and nothing needs printing.
                 Reply to this and we&rsquo;ll get them straight over.
               </p>
             )}
@@ -1462,29 +1276,97 @@ function Why() {
   );
 }
 
+/**
+ * The close, and it is three different closes.
+ *
+ * ── Why this slide is kind-aware when almost nothing else is ────────────────
+ *
+ * James, 4 Sep: the deck that gets SENT to a landlord after the visit "will
+ * have an actual call to action at the end of it". Everything above this point
+ * is genuinely the same deck in both directions — that was the whole design —
+ * but the last screen cannot be, because the three decks are asking for three
+ * different things:
+ *
+ *   pre-appraisal   we have not met. Ask me anything before I arrive.
+ *   appraisal       we have just met. I will send the figure across.
+ *   post-appraisal  you have the figure and the fee. Sign, or ring me.
+ *
+ * A single "any questions?" ending would waste the one screen a landlord is
+ * guaranteed to reach — and on the post deck it would end the whole argument
+ * on a shrug rather than on an ask.
+ */
 function Questions({ deck }: { deck: Deck }) {
   const a = deck.agent;
   const tel = a.phone.replace(/\s+/g, "");
-  const subject = `About my appraisal — ${deck.property.address}`;
+  const kind = deckKind(deck);
+  const post = kind === "post-appraisal";
+  const subject = post
+    ? `Getting started - ${deck.property.address}`
+    : `About my appraisal - ${deck.property.address}`;
+  /* Repeated from the terms slide on purpose. A landlord who has scrolled the
+     whole deck should not have to scroll back up to act on it, and the button
+     is the same button - one signing session, reached from two places. */
+  const signUrl = post ? deck.terms?.signUrl ?? null : null;
+
+  const eyebrow = post ? "The next step" : kind === "appraisal" ? "Before we go" : "Before we meet";
+  const heading = post
+    ? "Shall we get it on the market?"
+    : kind === "appraisal"
+      ? "Anything we didn’t cover?"
+      : "Anything you want to ask first?";
+
   return (
     <Slide id="questions" dark>
       <div className="mx-auto w-full max-w-3xl">
-        <Eyebrow on="dark">Before we meet</Eyebrow>
+        <Eyebrow on="dark">{eyebrow}</Eyebrow>
         <h2 className="mt-4 text-[28px] font-light leading-[1.12] tracking-[-0.01em] sm:text-[42px]">
-          Anything you want to ask first?
+          {heading}
         </h2>
         <p className="mt-5 max-w-xl text-[14px] font-light leading-relaxed text-white/80">
-          If something comes to mind before {deck.whenPretty ? "we meet" : "the visit"} — about the
-          rent, the paperwork, or what the market&rsquo;s doing — {a.firstName || "your agent"} would
-          much rather hear it now than on the doorstep.
+          {post ? (
+            <>
+              You have the figure, what it costs and what we do for it. Sign the terms and{" "}
+              {a.firstName || "your agent"} will get the photographs booked this week - or
+              ring first if there is anything you want to go over again.
+            </>
+          ) : kind === "appraisal" ? (
+            <>
+              {a.firstName || "Your agent"} will send the figure and the terms across shortly. If
+              anything came to mind after we left - about the rent, the timing, or what&rsquo;s
+              worth doing first - ask now rather than wondering.
+            </>
+          ) : (
+            <>
+              If something comes to mind before {deck.whenPretty ? "we meet" : "the visit"} -
+              about the rent, the paperwork, or what the market&rsquo;s doing -{" "}
+              {a.firstName || "your agent"} would much rather hear it now than on the doorstep.
+            </>
+          )}
         </p>
 
-        <div className="mt-9 flex flex-wrap gap-2.5">
+        {signUrl && (
+          <a
+            href={signUrl}
+            className="mt-8 inline-block rounded-full bg-white px-7 py-3.5 text-[15px] font-medium transition-opacity hover:opacity-90"
+            style={{ color: RED }}
+          >
+            Read and sign the terms
+          </a>
+        )}
+
+        <div className={`${signUrl ? "mt-5" : "mt-9"} flex flex-wrap gap-2.5`}>
+          {/* Outlined once the signing button is on the slide. Two solid white
+              pills side by side is two primary actions, and the one we are
+              actually asking for loses. */}
           {a.phone && (
             <a
               href={`tel:${tel}`}
-              className="rounded-full bg-white px-5 py-3 text-[13px] font-medium transition-opacity hover:opacity-90"
-              style={{ color: RED }}
+              className={
+                signUrl
+                  ? "rounded-full border border-white/35 px-5 py-3 text-[13px] font-medium transition-colors hover:border-white"
+                  : "rounded-full bg-white px-5 py-3 text-[13px] font-medium transition-opacity hover:opacity-90"
+              }
+              style={signUrl ? undefined : { color: RED }}
             >
               {a.phone}
             </a>
@@ -1501,12 +1383,42 @@ function Questions({ deck }: { deck: Deck }) {
 
         <div className="mt-14 border-t border-white/20 pt-6">
           <Mark on="dark" className="h-8" />
+          {/* "See you Tuesday" is right the day before and wrong the day
+              after. Once the visit has happened the sign-off has to look
+              forwards, not at an appointment already in the past. */}
           <p className="mt-4 text-[12px] font-light text-white/65">
-            {deck.whenPretty ? `See you ${firstWord(deck.whenPretty)}.` : "We look forward to meeting you."}
+            {post
+              ? "Thank you for your time."
+              : kind === "appraisal"
+                ? "Thanks for having us round."
+                : deck.whenPretty
+                  ? `See you ${firstWord(deck.whenPretty)}.`
+                  : "We look forward to meeting you."}
           </p>
         </div>
       </div>
     </Slide>
+  );
+}
+
+/** The arrow on the Back and Next controls. Its own component only so the two
+ *  buttons cannot drift apart in weight or size. */
+function Chevron({ dir }: { dir: "left" | "right" }) {
+  return (
+    <svg
+      width={15}
+      height={15}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      style={dir === "left" ? { transform: "scaleX(-1)" } : undefined}
+    >
+      <path d="M9 5l7 7-7 7" />
+    </svg>
   );
 }
 
@@ -1525,7 +1437,7 @@ export default function PresentDeck({
 }: {
   token: string;
   deck: Deck;
-  slides: { id: SlideId; title: string }[];
+  slides: { id: SlideId; title: string; section: SectionId }[];
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState(0);
@@ -1568,14 +1480,18 @@ export default function PresentDeck({
    * Two observers, because two different questions are being asked and one
    * answer cannot serve both.
    *
-   * WHICH DOT IS LIT is a precise question: exactly one slide at a time. A
-   * band across the middle of the scrollport answers it for a slide of ANY
-   * height — which a percentage threshold cannot. This was originally
+   * WHICH SLIDE IS CURRENT is a precise question: exactly one at a time. A
+   * band down the middle of the scrollport answers it for a slide of ANY
+   * size — which a percentage threshold cannot. This was originally
    * `threshold: 0.55`, and on a phone the appointment slide is taller than
    * the screen, so 55% of it could never be visible: the slide never became
    * current, and once the reveal depended on that it rendered BLANK. A
    * visibility rule that can be mathematically impossible to satisfy is a
    * rule that will eventually hide the page.
+   *
+   * The margins moved from the vertical axis to the horizontal one when the
+   * deck went across instead of down (4 Sep). Left on the y-axis they would
+   * have shrunk the band to nothing on a slide that scrolls inside itself.
    *
    * WHETHER TO REVEAL is a generous question: as soon as any part of a slide
    * has been on screen, its content should be there. Never gate content on a
@@ -1594,7 +1510,7 @@ export default function PresentDeck({
           if (!Number.isNaN(i)) setAt(i);
         }
       },
-      { root, rootMargin: "-45% 0px -45% 0px", threshold: 0 }
+      { root, rootMargin: "0px -45% 0px -45%", threshold: 0 }
     );
 
     const reveal = new IntersectionObserver(
@@ -1607,8 +1523,10 @@ export default function PresentDeck({
         }
       },
       // A screen of lead-in, so a slide has already begun to settle by the
-      // time it is properly in view rather than starting its rise then.
-      { root, rootMargin: "0px 0px 15% 0px", threshold: 0 }
+      // time it is properly in view rather than starting its rise then. On
+      // the horizontal axis now — the lead-in is to the RIGHT, which is the
+      // direction the deck is read in.
+      { root, rootMargin: "0px 15% 0px 0px", threshold: 0 }
     );
 
     cells.forEach((el) => {
@@ -1625,16 +1543,31 @@ export default function PresentDeck({
     const root = scroller.current;
     if (!root) return;
     const el = root.querySelector<HTMLElement>(`[data-index="${i}"]`);
-    el?.scrollIntoView({ behavior: "smooth", block: "start" });
+    /* `inline`, not `block`: the deck moves across. `block: "nearest"` as
+       well, so a slide that scrolls inside itself is not yanked back to its
+       own top just because somebody pressed Next. */
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
   }, []);
 
-  /* Arrow keys and space, for whoever opens it on a laptop. */
+  /**
+   * The keys, for whoever opens it on a laptop.
+   *
+   * LEFT AND RIGHT ONLY, since the deck went across. Up and Down used to move
+   * between slides and must not any more: a slide can be taller than the
+   * window and scrolls inside itself, so Down has to mean "read further down
+   * this one". Leaving it bound to Next would make the densest slides — the
+   * service table, the legal list — the ones a keyboard cannot read.
+   *
+   * Space is deliberately not bound either. It is Page Down's job on a web
+   * page and it is a presenter remote's Next button, and those two now
+   * disagree; the remote sends Right anyway.
+   */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowDown" || e.key === "ArrowRight" || e.key === "PageDown") {
+      if (e.key === "ArrowRight" || e.key === "PageDown") {
         e.preventDefault();
         go(Math.min(at + 1, slides.length - 1));
-      } else if (e.key === "ArrowUp" || e.key === "ArrowLeft" || e.key === "PageUp") {
+      } else if (e.key === "ArrowLeft" || e.key === "PageUp") {
         e.preventDefault();
         go(Math.max(at - 1, 0));
       }
@@ -1663,109 +1596,304 @@ export default function PresentDeck({
         return <Why />;
       case "questions":
         return <Questions deck={deck} />;
+
+      /* The market-appraisal middle. See components/PresentSlides. */
+      case "agenda":
+        return <S.Agenda deck={deck} show={show(i)} />;
+      case "approach":
+        return <S.Approach show={show(i)} />;
+      case "property":
+        return <S.PropertyDivider deck={deck} show={show(i)} />;
+      case "material":
+        return <S.Material deck={deck} show={show(i)} />;
+      case "listings":
+        return <S.Listings deck={deck} show={show(i)} />;
+      case "history":
+        return <S.History deck={deck} show={show(i)} />;
+      case "marketing":
+        return <S.MarketingDivider show={show(i)} />;
+      case "offer":
+        return <S.Offer show={show(i)} />;
+      case "maxprice":
+        return <S.MaxPrice show={show(i)} />;
+      case "video":
+        return <S.Video deck={deck} show={show(i)} />;
+      case "brochure":
+        return <S.Brochure show={show(i)} />;
+      case "portals":
+        return <S.Portals show={show(i)} />;
+      case "social":
+        return <S.Social show={show(i)} />;
+      case "compliance":
+        return <S.Compliance show={show(i)} />;
+      case "legal":
+        return <S.Legal show={show(i)} />;
+      case "screening":
+        return <S.Screening show={show(i)} />;
+      case "management":
+        return <S.Management show={show(i)} />;
+      case "levels":
+        return <S.Levels show={show(i)} />;
+      case "collection":
+        return <S.Collection show={show(i)} />;
+      case "protection":
+        return <S.Protection show={show(i)} />;
+      case "rentlegal":
+        return <S.RentLegal show={show(i)} />;
+      case "regulated":
+        return <S.Regulated show={show(i)} />;
+      case "network":
+        return <S.Network show={show(i)} />;
+      case "testimonial":
+        return <S.Testimonial deck={deck} show={show(i)} />;
+      case "fees":
+        return <S.Fees deck={deck} show={show(i)} />;
     }
   };
 
   const here = slides[at]?.id;
-  const onDark = here === "welcome" || here === "questions";
-  /* What the phone bar fades into — the colour the slide actually ENDS in.
-     The entrance used to end in a solid banner and now ends in a fade over
-     the photograph, so it takes the scrim colour; a red strip under it read
-     as a stray band across the picture. */
-  const tint = here === "welcome" ? DEEP : here === "questions" ? RED : PAPER;
+  /* Which slides carry white type, so the chrome can invert under them. The
+     list shrinks with every slide converted: the entrance went first, then the
+     Your Property divider. What is left is the closing screen and the one
+     remaining red divider. */
+  const onDark = here === "questions" || here === "marketing";
+  /* The ground the bottom bar sits on: whatever the slide's own ground is, so
+     the bar reads as the foot of the page rather than a panel laid over it.
+     Driven by CREAM_SLIDES rather than a second list of ids here - see the
+     note on it in present-kit. */
+  const cream = isCream(here);
+  const tint = cream ? CREAM : onDark ? RED : PAPER;
+  /* The accent the chrome uses. Coral belongs to the converted slides; the
+     rest of the deck is still Expert Red. */
+  const accent = cream ? CORAL : RED;
+
+  /* The chapters, folded out of the slide list rather than kept as a second
+     list. Consecutive slides sharing a section become one segment, so a
+     section that loses every one of its slides to a missing-data rule simply
+     never appears - no empty chapter, and nothing to keep in step by hand. */
+  const chapters = useMemo(() => {
+    const out: { id: SectionId; label: string; from: number; count: number }[] = [];
+    slides.forEach((s, i) => {
+      const last = out[out.length - 1];
+      if (last && last.id === s.section) last.count += 1;
+      else out.push({ id: s.section, label: sectionLabel(s.section), from: i, count: 1 });
+    });
+    return out;
+  }, [slides]);
+  const chapter = chapters.find((c) => at >= c.from && at < c.from + c.count);
+
+  /**
+   * THE TRANSITION SEAM. Nothing renders here yet, and that is deliberate.
+   *
+   * The first attempt was coral motion streaks crossing the screen, borrowed
+   * from the three dashes above the woman's head in the entrance artwork.
+   * James, 4 Sep: "I like the animation. I don't like the lines. It's very
+   * off-putting, and it doesn't look like whooshing." He is finding a
+   * reference for what it should be instead.
+   *
+   * What is kept is the hard part — knowing that a move happened, and which
+   * way. `dir` matters more than it looks: a transition that always played
+   * forwards would make Back feel like Next, which is worse than none.
+   *
+   * `tick` is the replay trigger, meant to be used as a React key so an effect
+   * remounts and restarts rather than needing to be reset. A boolean would
+   * need a timer to clear it, and a timer that fires while somebody is swiping
+   * fast leaves a stuck overlay on screen.
+   *
+   * A ref for the previous index rather than state, because this must not
+   * cause its own render: the effect runs after `at` has painted, and a second
+   * render at that moment lands in the middle of the browser's scroll.
+   *
+   * Whatever goes here must be pointer-events-none, must render nothing at all
+   * under `prefers-reduced-motion` (not a slower version — a full-width object
+   * crossing the field of view is the pattern that makes people ill), and must
+   * not change the colour mid-move: the deck is one continuous page and James
+   * asked for the colour to stay constant across it.
+   */
+  const was = useRef(at);
+  const [move, setMove] = useState({ tick: 0, dir: 1 as 1 | -1 });
+  useEffect(() => {
+    if (at === was.current) return;
+    const dir: 1 | -1 = at > was.current ? 1 : -1;
+    was.current = at;
+    setMove((m) => ({ tick: m.tick + 1, dir }));
+  }, [at]);
+  void move;
 
   return (
     <div className="relative h-[100dvh] w-full overflow-hidden">
+      {/**
+       * THE DECK MOVES ACROSS, NOT DOWN. James, 4 Sep: "more like a
+       * presentation".
+       *
+       * A row of full-width cells with mandatory snapping on the x-axis. It is
+       * still one CSS property rather than a JS carousel, so a trackpad swipe,
+       * a touch drag and a presenter remote all work without being
+       * reimplemented — and with no JS it degrades to a page you can still
+       * read end to end.
+       *
+       * ── Mandatory everywhere, which it could not be going down ─────────────
+       *
+       * Vertically this was `snap-proximity` on phones, because mandatory
+       * snapping fights a slide taller than the window: the browser keeps
+       * tugging you back to the slide edge as you try to read the middle.
+       * Across, that conflict disappears — the axis you page on and the axis a
+       * long slide grows on are different ones. So the firm snap is free at
+       * every width, and a presentation should always land ON a slide.
+       *
+       * ── Each cell scrolls itself ───────────────────────────────────────────
+       *
+       * `overflow-y-auto` per cell rather than on the row. Seven slides are
+       * taller than a laptop window (the service table by 379px), and without
+       * this they would simply be cut off — which is the one failure this deck
+       * has always refused. Now: swipe across for the next slide, scroll down
+       * inside the dense one.
+       *
+       * `overscroll-contain` stops a flick at the end of a tall slide handing
+       * the gesture to the row and skipping a slide sideways.
+       */}
       <div
         ref={scroller}
-        // PROXIMITY on a phone, MANDATORY on a laptop. Mandatory snapping
-        // fights any slide taller than the viewport — the browser keeps
-        // pulling you back to the slide edge as you try to read the middle of
-        // it. On desktop every slide fits, so the firmer snap is free.
-        className="h-full w-full snap-y snap-proximity overflow-y-auto scroll-smooth lg:snap-mandatory"
-        // The rail and the dots are the navigation; the browser's own bar is
-        // noise over a full-bleed red slide.
+        className="flex h-full w-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden scroll-smooth"
+        // The counter and the two buttons are the navigation; the browser's
+        // own bars are noise across the foot of a slide.
         style={{ scrollbarWidth: "none" }}
       >
         {slides.map((s, i) => (
-          <div key={s.id} data-index={i}>
+          <div
+            key={s.id}
+            data-index={i}
+            className="h-full w-full shrink-0 snap-start overflow-y-auto overscroll-contain"
+            style={{ scrollbarWidth: "none" }}
+          >
             {body(s.id, i)}
           </div>
         ))}
       </div>
 
-      {/* Desktop: the contents down the right, so the landlord can see how
-          long this is. Four dots is a promise that it ends. */}
-      <nav className="pointer-events-none fixed right-8 top-1/2 hidden -translate-y-1/2 flex-col items-end gap-3 lg:flex">
-        {slides.map((s, i) => (
-          <button
-            key={s.id}
-            onClick={() => go(i)}
-            className="pointer-events-auto group flex items-center gap-3 text-right"
-            aria-label={s.title}
-          >
-            <span
-              className={`text-[11px] font-medium transition-opacity ${
-                i === at ? "opacity-100" : "opacity-0 group-hover:opacity-60"
-              }`}
-              style={{ color: onDark ? "#ffffff" : INK }}
-            >
-              {s.title}
-            </span>
-            <span
-              className="block h-1.5 rounded-full transition-all"
-              style={{
-                width: i === at ? 22 : 6,
-                background: onDark
-                  ? i === at
-                    ? "#ffffff"
-                    : "rgba(255,255,255,0.45)"
-                  : i === at
-                    ? RED
-                    : "rgba(0,0,0,0.2)",
-              }}
-            />
-          </button>
-        ))}
-      </nav>
+      {/* ── The chapter rail ──
+          There is no "1 / 29" here and there deliberately never will be again.
+          James, 4 Sep: it "is making me depressed" - which is the correct
+          reaction to being told, on the first screen, that you have
+          twenty-eight more to go. The number was answering a question nobody
+          asked; what a reader actually wants to know is WHICH PART they are
+          in and how long that part is.
 
-      {/* Phone: a thin bar. Title, dots, one arrow — nothing that competes
-          with the slide for the bottom of a small screen. */}
+          So: the section's name, and one segment per section sized by how many
+          slides it holds. Past chapters are filled, the current one fills as
+          you move through it, the rest are waiting. The same seven chapters
+          the agenda promised on slide 2 - so the landlord is watching a shape
+          they were shown, rather than being counted down.
+
+          The segments are buttons. A landlord who wants the fee and not the
+          brochure should be able to get there, and a deck that makes them
+          swipe past nine slides they did not ask for has earned being
+          closed. */}
+      <div className="pointer-events-none fixed inset-x-0 top-0 flex items-center justify-end px-6 pt-7 sm:px-10 lg:px-14">
+        <div className="flex items-center gap-4">
+          {chapter?.label && (
+            <span
+              className="hidden text-[12.5px] sm:block"
+              style={{
+                fontFamily: cream ? HAND : undefined,
+                color: onDark ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.5)",
+              }}
+            >
+              {chapter.label}
+            </span>
+          )}
+          <div className="pointer-events-auto flex items-center gap-1">
+            {chapters
+              .filter((c) => c.label)
+              .map((c) => {
+                const done = at >= c.from + c.count;
+                const now = at >= c.from && !done;
+                /* Width by slide count, so a nine-slide chapter LOOKS longer
+                   than a three-slide one. A row of equal segments would tell
+                   the landlord the deck is evenly paced, which it is not. */
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => go(c.from)}
+                    aria-label={c.label}
+                    title={c.label}
+                    className="h-[3px] overflow-hidden rounded-full transition-opacity hover:opacity-100"
+                    style={{
+                      width: c.count * 9,
+                      background: onDark ? "rgba(255,255,255,0.28)" : "rgba(0,0,0,0.11)",
+                      opacity: now ? 1 : 0.75,
+                    }}
+                  >
+                    <span
+                      className="block h-full rounded-full transition-[width] duration-500 ease-out"
+                      style={{
+                        width: done ? "100%" : now ? `${((at - c.from + 1) / c.count) * 100}%` : "0%",
+                        background: onDark ? "#ffffff" : accent,
+                      }}
+                    />
+                  </button>
+                );
+              })}
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom: the brand on the left, the two controls on the right. A hard
+          rule rather than a fade - the entrance is a flat colour now, and a
+          gradient over a flat ground reads as a smudge. */}
       <div
-        className="fixed inset-x-0 bottom-0 flex items-center justify-between px-5 pb-3.5 pt-8 lg:hidden"
-        // A fade to the slide's own colour rather than a bar. Content now
-        // scrolls under this on the taller slides, and a label floating over
-        // a paragraph is unreadable; a panel across the bottom of a phone
-        // costs a line of copy on every slide that didn't need one.
+        className="fixed inset-x-0 bottom-0 flex items-center justify-between gap-4 px-6 pb-5 pt-4 sm:px-10 lg:px-16"
         style={{
-          background: `linear-gradient(to top, ${tint} 55%, transparent)`,
+          background: tint,
+          borderTop: `1px solid ${onDark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.07)"}`,
         }}
       >
         <span
-          className="text-[11px] font-medium tracking-wide"
-          style={{ color: onDark ? "rgba(255,255,255,0.8)" : "rgba(0,0,0,0.5)" }}
+          className="hidden text-[13px] sm:block"
+          style={{
+            fontFamily: HAND,
+            color: onDark ? "rgba(255,255,255,0.8)" : "rgba(0,0,0,0.5)",
+          }}
         >
-          {slides[at]?.title}
+          The Letting Experts
         </span>
-        <div className="flex items-center gap-1.5">
-          {slides.map((s, i) => (
-            <button
-              key={s.id}
-              onClick={() => go(i)}
-              aria-label={s.title}
-              className="h-1.5 rounded-full transition-all"
-              style={{
-                width: i === at ? 16 : 6,
-                background: onDark
-                  ? i === at
-                    ? "#ffffff"
-                    : "rgba(255,255,255,0.4)"
-                  : i === at
-                    ? RED
-                    : "rgba(0,0,0,0.18)",
-              }}
-            />
-          ))}
+        {/* On a phone the brand gives way to the slide's own title — knowing
+            where you are beats knowing whose deck it is. */}
+        <span
+          className="max-w-[45%] truncate text-[12px] sm:hidden"
+          style={{
+            fontFamily: cream ? HAND : undefined,
+            color: onDark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.45)",
+          }}
+        >
+          {chapter?.label || slides[at]?.title}
+        </span>
+
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => go(at - 1)}
+            disabled={at === 0}
+            className="flex items-center gap-1.5 rounded-full border px-4 py-2.5 text-[13px] transition-opacity disabled:opacity-30 sm:px-5"
+            style={{
+              borderColor: onDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.15)",
+              color: onDark ? "#ffffff" : INK,
+            }}
+          >
+            <Chevron dir="left" />
+            Back
+          </button>
+          <button
+            onClick={() => go(at + 1)}
+            disabled={at === slides.length - 1}
+            className="flex items-center gap-1.5 rounded-full px-5 py-2.5 text-[13px] font-medium transition-opacity disabled:opacity-30 sm:px-6"
+            style={{
+              background: onDark ? "#ffffff" : INK,
+              color: onDark ? accent : "#ffffff",
+            }}
+          >
+            Next
+            <Chevron dir="right" />
+          </button>
         </div>
       </div>
     </div>

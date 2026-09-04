@@ -177,6 +177,57 @@ export type PresentTerms = {
   summary: string | null;
 };
 
+/**
+ * WHAT IT COSTS. Its own slide, on both long decks.
+ *
+ * James, 4 Sep: "I do want a single page for the fees to go in." The agreed
+ * source deck put a fourteen-row service comparison in front of a landlord
+ * with no price anywhere on it — which does not read as discretion, it reads
+ * as something being kept back, and it leaves them doing sums in their head
+ * instead of listening.
+ *
+ * `rows` rather than fixed fields because the shape genuinely varies: some
+ * offices quote one percentage, some quote a percentage and a set-up fee,
+ * some quote per service level. A fixed `feePct` + `setupFee` would force
+ * every office into the middle one.
+ *
+ * `headline` is what the landlord repeats to whoever else decides — "10% of
+ * rent, fully managed". If an agent writes nothing else, the slide still
+ * answers the question it exists to answer.
+ */
+export type PresentFees = {
+  /** "10% of rent collected" — the one line they will remember. */
+  headline: string | null;
+  /** The service level the headline belongs to, when there is more than one. */
+  headlineFor: string | null;
+  rows: { label: string; amount: string; note: string | null }[];
+  /** What is NOT in the fee. Stated here so it is never a surprise later. */
+  excluded: string[];
+  /** VAT, tie-ins, anything a landlord would rightly want in writing. */
+  note: string | null;
+};
+
+/** One property on the "what's on the market" slide. */
+export type PresentListing = {
+  address: string;
+  locality: string;
+  rent: string;
+  beds: number | null;
+  image: string | null;
+  agent: string | null;
+  /** Ours, so the slide can say so without a separate list. */
+  ours: boolean;
+};
+
+/** A row of the "what we have on record" slide — label and value, nothing more. */
+export type PresentMaterialRow = { label: string; value: string };
+
+/** How the area has moved, month by month. */
+export type PresentHistory = {
+  area: string;
+  points: { month: string; listed: number; let: number; withdrawn: number }[];
+};
+
 export type PresentDeck = {
   /** Which of the three decks this is — see DeckKind. */
   kind: DeckKind;
@@ -184,7 +235,18 @@ export type PresentDeck = {
   valuation?: PresentValuation | null;
   /** Post-appraisal only. See PresentTerms. */
   terms?: PresentTerms | null;
+  /** What we charge. On both long decks — see PresentFees. */
+  fees?: PresentFees | null;
   comparables?: PresentComparables | null;
+  /** What is advertised near them right now. */
+  listings?: PresentListing[] | null;
+  /** What we hold about the property, for them to correct. */
+  material?: PresentMaterialRow[] | null;
+  history?: PresentHistory | null;
+  /** A real review, with a real name on it. Never a composite. */
+  testimonial?: { quote: string; author: string; rating: number | null } | null;
+  /** The agent's walk-through of THIS property, if one has been filmed. */
+  propertyVideoUrl?: string | null;
   /** The local market, if the agent chose to include any of it. */
   market?: PresentMarket | null;
   /** Optional throughout. The deck was designed without one and still reads. */
@@ -211,7 +273,7 @@ export type PresentDeck = {
 export const VISIT_STEPS: { title: string; body: string }[] = [
   {
     title: "A proper walk round",
-    body: "Every room, the outside, and the bits people forget — the boiler, the meters, the parking. Ten minutes of it tells us more than any form.",
+    body: "Every room, the outside, and the bits people forget - the boiler, the meters, the parking. Ten minutes of it tells us more than any form.",
   },
   {
     title: "What it should let for",
@@ -223,7 +285,7 @@ export const VISIT_STEPS: { title: string; body: string }[] = [
   },
   {
     title: "What's worth doing first",
-    body: "Sometimes nothing. Sometimes one afternoon's work puts fifty pounds a month on it — we'll tell you which.",
+    body: "Sometimes nothing. Sometimes one afternoon's work puts fifty pounds a month on it - we'll tell you which.",
   },
 ];
 
@@ -232,14 +294,16 @@ export const VISIT_STEPS: { title: string; body: string }[] = [
  * mock-up. They are propositions rather than statistics, which is the same
  * rule the Why slide follows — nothing here is a number we can't stand behind.
  */
-export const BANNER: { icon: "people" | "shield" | "trend"; title: string; body: string }[] = [
+export const BANNER: { icon: "people" | "shield" | "chart"; title: string; body: string }[] = [
   {
     icon: "people",
     title: "Local experts",
-    // Each of these has to hold ONE line at 12.5px in a third of the frame,
-    // so they were cut to fit rather than the type shrunk to fit them. A
-    // promise that wraps stops reading as a promise.
-    body: "Agents who know your streets.",
+    // These used to be cut to ONE line each, because they sat in a third of a
+    // banner across the foot of a photograph. James's 4 Sep entrance moves
+    // them into the body of the slide with a tinted badge above each, where
+    // two lines is the shape that looks right — so the first one goes back to
+    // the fuller sentence it wanted in the first place.
+    body: "People who know your area inside out.",
   },
   {
     icon: "shield",
@@ -247,7 +311,9 @@ export const BANNER: { icon: "people" | "shield" | "trend"; title: string; body:
     body: "Your property and income, safe.",
   },
   {
-    icon: "trend",
+    // A bar chart, not a trend arrow. An arrow going up beside the words
+    // "better returns" is a promise about performance we have not made.
+    icon: "chart",
     title: "Better returns",
     body: "Smarter strategy, stronger rent.",
   },
@@ -310,7 +376,7 @@ export const AGENT_CHIPS: { icon: "pin" | "chat" | "heart"; title: string; body:
 export function defaultBio(firstName: string): string {
   const who = firstName || "Your agent";
   return [
-    `${who} looks after lettings across the area, and will be the one person you deal with — the valuation, the marketing, and the call when there's an offer.`,
+    `${who} looks after lettings across the area, and will be the one person you deal with - the valuation, the marketing, and the call when there's an offer.`,
     `At the appointment ${who} will walk round the property with you, talk through what it should let for and why, answer anything you want to ask, and set out exactly what happens next.`,
   ].join("\n\n");
 }
@@ -350,34 +416,168 @@ export function absoluteUrl(url: string | null | undefined): string | null {
 export type SlideId =
   | "welcome"
   | "appointment"
+  | "agenda"
   | "agent"
-  | "valuation"
-  | "comparables"
+  | "approach"
+  /* — your property — */
+  | "property"
+  | "material"
+  /* — the current market — */
   | "market"
+  | "listings"
+  | "comparables"
+  | "history"
+  /* — marketing — */
+  | "marketing"
+  | "offer"
+  | "maxprice"
+  | "video"
+  | "brochure"
+  | "portals"
+  | "social"
+  /* — compliance — */
+  | "compliance"
+  | "legal"
+  | "screening"
+  /* — service and management — */
+  | "management"
+  | "levels"
+  | "collection"
+  /* — protecting the income — */
+  | "protection"
+  | "rentlegal"
+  | "regulated"
+  | "network"
+  /* — the close — */
   | "why"
+  | "testimonial"
+  | "valuation"
+  | "fees"
   | "terms"
   | "questions";
 
-export const SLIDES: { id: SlideId; title: string; removable: boolean }[] = [
-  { id: "welcome", title: "Welcome", removable: false },
-  { id: "appointment", title: "Your appointment", removable: false },
-  { id: "agent", title: "Who you're meeting", removable: false },
+/**
+ * The slide list, in the one order every deck reads them in.
+ *
+ * ── The running order is the agreed one, with three slides moved ────────────
+ *
+ * The structure comes from the signed-off Base44 deck (captured in
+ * docs/MA-PRESENTATION-MOCKUP.md) and James asked for it copied rather than
+ * re-argued. Three slides did move, and only because that deck contradicted
+ * itself: rent collection, historic listings and social media sat AFTER "Get
+ * In Touch", which is the close, and none of the three appeared on its own
+ * agenda. They now sit with the section each belongs to — collection with
+ * management, history with the market, social with marketing.
+ *
+ * ── `section` groups them, and the group is the contents list ───────────────
+ *
+ * A thirty-slide deck needs to tell a landlord where they are. The dividers
+ * (`property`, `marketing`) and the agenda both read from these groups, so a
+ * slide added to a section appears in the contents without anyone remembering
+ * to add it twice.
+ */
+/**
+ * THE SECTIONS.
+ *
+ * James, 4 Sep: "this is a bit of a mishmash of things being put together…
+ * break it down into chunks" — and, separately, that a "1 / 29" in the corner
+ * "is making me depressed". Those are the same problem. Twenty-nine is only a
+ * frightening number when it is presented as one undifferentiated run; as
+ * seven short chapters it is an evening's reading with obvious places to stop.
+ *
+ * The sections ARE the agenda on slide 2 — same seven, same order, same words.
+ * That is the whole point: a landlord is told the shape at the start and then
+ * watches it happen, rather than being told one thing and shown another.
+ *
+ * `opening` has no label because it is not a chapter, it is the way in. The
+ * chrome shows nothing until the first real section starts, which spares the
+ * landlord a progress indicator on the slide where they are deciding whether
+ * to keep reading at all.
+ */
+export type SectionId =
+  | "opening"
+  | "property"
+  | "marketing"
+  | "next"
+  | "close";
+
+export const SECTIONS: { id: SectionId; label: string }[] = [
+  { id: "opening", label: "" },
+  { id: "property", label: "Your property" },
+  { id: "marketing", label: "Marketing" },
+  { id: "next", label: "The next steps" },
+  { id: "close", label: "Getting started" },
+];
+
+export const sectionLabel = (id: SectionId) =>
+  SECTIONS.find((s) => s.id === id)?.label ?? "";
+
+export const SLIDES: { id: SlideId; title: string; removable: boolean; section: SectionId }[] = [
+  { id: "welcome", title: "Welcome", removable: false, section: "opening" },
+  { id: "appointment", title: "Your appointment", removable: false, section: "opening" },
+  { id: "agenda", title: "What we'll cover", removable: true, section: "opening" },
+  { id: "agent", title: "Who you're meeting", removable: false, section: "opening" },
+  { id: "approach", title: "A different approach", removable: true, section: "opening" },
+
+  /* Your property. The divider earns its slide: it is the moment the deck
+     stops talking about us and starts talking about them. */
+  { id: "property", title: "Your property", removable: true, section: "property" },
+  { id: "material", title: "What we have on record", removable: true, section: "property" },
+
+  /* The current market. Named properties first, then the area they sit in —
+     the specific earns the attention the general then spends. */
+  { id: "listings", title: "What's on the market", removable: true, section: "property" },
   /* Removable, and it MUST be: a comparables slide with two properties on it
      argues against us. Better absent than thin. */
-  /* BEFORE the evidence, not after it. On a post-appraisal deck the landlord
-     has already had the conversation and is opening this for one thing: the
-     number. Making them scroll past comparables to reach it reads as building
-     a case before daring to say it. Figure first, then why. */
-  { id: "valuation", title: "What we'd put it on at", removable: true },
-  { id: "comparables", title: "What's letting nearby", removable: true },
-  /* After comparables on purpose. Named properties first, then the area they
-     sit in — the specific earns the attention that the general then uses. */
-  { id: "market", title: "Your local market", removable: true },
-  { id: "why", title: "Why The Letting Experts", removable: true },
-  /* Last thing before "any questions", because it is the ask. Everything above
-     it is the argument for saying yes to this. */
-  { id: "terms", title: "Getting started", removable: true },
-  { id: "questions", title: "Any questions", removable: false },
+  { id: "comparables", title: "What's letting nearby", removable: true, section: "property" },
+  { id: "market", title: "Your local market", removable: true, section: "property" },
+  { id: "history", title: "How the area has moved", removable: true, section: "property" },
+
+  /* Marketing. */
+  { id: "marketing", title: "Marketing", removable: true, section: "marketing" },
+  { id: "offer", title: "What we do", removable: true, section: "marketing" },
+  /* James, 4 Sep: Marketing is its own chunk, and inside it a landlord needs
+     BOTH halves — how we put it in front of people, and how that turns into a
+     higher rent. The source deck only ever argued the first. */
+  { id: "maxprice", title: "Getting the best rent", removable: true, section: "marketing" },
+  { id: "video", title: "Your property on film", removable: true, section: "marketing" },
+  { id: "brochure", title: "The brochure", removable: true, section: "marketing" },
+  { id: "portals", title: "Where it appears", removable: true, section: "marketing" },
+  { id: "social", title: "Social advertising", removable: true, section: "marketing" },
+
+  /* Compliance. Screening moved up from slide 21 of the source deck: it is
+     the strongest argument in the whole thing and nobody reached it there. */
+  { id: "compliance", title: "Compliance and guidance", removable: true, section: "next" },
+  { id: "legal", title: "What the law asks of you", removable: true, section: "next" },
+  { id: "screening", title: "How we screen tenants", removable: true, section: "next" },
+
+  /* Service and management. */
+  { id: "management", title: "Management and support", removable: true, section: "next" },
+  { id: "levels", title: "Service levels", removable: true, section: "next" },
+  { id: "collection", title: "Rent collection", removable: true, section: "next" },
+
+  /* Protecting the income. */
+  { id: "protection", title: "Protecting your income", removable: true, section: "next" },
+  { id: "rentlegal", title: "Rent and legal protection", removable: true, section: "next" },
+  { id: "regulated", title: "Regulated and protected", removable: true, section: "next" },
+  { id: "network", title: "The Experts Group", removable: true, section: "next" },
+
+  /* The close. */
+  { id: "why", title: "Why The Letting Experts", removable: true, section: "close" },
+  { id: "testimonial", title: "What landlords say", removable: true, section: "close" },
+  /* BEFORE the fee, not after it. On a post-appraisal deck the landlord has
+     already had the conversation and is opening this for one thing: the
+     number. Making them scroll past anything to reach it reads as building a
+     case before daring to say it. Figure first, then what it costs. */
+  { id: "valuation", title: "What we'd put it on at", removable: true, section: "close" },
+  /* James, 4 Sep: the fee gets a page of its own. The source deck put a
+     service comparison in front of a landlord with no price anywhere on it,
+     which leaves them working out the cost in their head while we talk. */
+  { id: "fees", title: "What it costs", removable: true, section: "close" },
+  /* Last thing before the close, because it is the ask. Everything above it
+     is the argument for saying yes to this. */
+  { id: "terms", title: "Getting started", removable: true, section: "close" },
+  { id: "questions", title: "Any questions", removable: false, section: "close" },
 ];
 
 /**
@@ -430,35 +630,84 @@ export const DECK_KINDS: { id: DeckKind; label: string; blurb: string }[] = [
   {
     id: "appraisal",
     label: "Appraisal",
-    blurb: "The full research. Taken on the day, sent afterwards.",
+    blurb: "The full deck. Presented on the day.",
   },
   {
     id: "post-appraisal",
     label: "Post-appraisal",
-    blurb: "The agreed figure and the terms. Needs a valuation first.",
+    blurb: "The same deck, plus the agreed figure and the terms to sign.",
   },
 ];
 
 /**
  * Which slides each kind is made of, in order.
  *
+ * ── The two long decks are ONE deck ─────────────────────────────────────────
+ *
+ * James, 4 Sep: the appraisal and post-appraisal decks are "pretty much the
+ * same deck… from the point of view of everybody else it will just have two
+ * things added to it" — a real call to action, and the terms with a signing
+ * button on them. So `MAIN` is written once and post-appraisal is that list
+ * with three slides spliced in. Writing them out twice would guarantee they
+ * drift, and the drift would be invisible: nobody opens both decks side by
+ * side, so the day one slide went missing from the post version is the day
+ * before somebody noticed.
+ *
  * `appointment` is on the pre-appraisal ONLY. On the day the agent is standing
  * in the hall, and afterwards the visit has happened — a deck that opens by
  * confirming an appointment the landlord has already had reads as a mistake.
+ *
+ * `fees` is on BOTH long decks, and that is deliberate rather than an
+ * oversight of the "post-appraisal only" pattern. What we charge does not
+ * depend on what the property lets for, and a landlord who has sat through a
+ * service comparison has earned the price before they are asked to decide.
+ * What the post-appraisal deck adds is the RENT — the figure that needed the
+ * visit — and the paperwork that follows from it.
  */
+const MAIN: SlideId[] = [
+  "welcome",
+  "agenda",
+  "agent",
+  "approach",
+  "property",
+  "material",
+  "listings",
+  "comparables",
+  "market",
+  "history",
+  "marketing",
+  "offer",
+  "maxprice",
+  "video",
+  "brochure",
+  "portals",
+  "social",
+  "compliance",
+  "legal",
+  "screening",
+  "management",
+  "levels",
+  "collection",
+  "protection",
+  "rentlegal",
+  "regulated",
+  "network",
+  "why",
+  "testimonial",
+  "fees",
+  "questions",
+];
+
+/** The main deck with the figure in front of the fee, and the terms after it. */
+const withValuation = (list: SlideId[]): SlideId[] =>
+  list.flatMap((id) =>
+    id === "fees" ? (["valuation", "fees", "terms"] as SlideId[]) : [id]
+  );
+
 const SLIDES_BY_KIND: Record<DeckKind, SlideId[]> = {
   "pre-appraisal": ["welcome", "appointment", "agent", "why", "questions"],
-  appraisal: ["welcome", "agent", "comparables", "market", "why", "questions"],
-  "post-appraisal": [
-    "welcome",
-    "agent",
-    "valuation",
-    "comparables",
-    "market",
-    "why",
-    "terms",
-    "questions",
-  ],
+  appraisal: MAIN,
+  "post-appraisal": withValuation(MAIN),
 };
 
 /** The kind, tolerant of a row written before kinds existed. */
@@ -484,6 +733,18 @@ export function slidesFor(deck: PresentDeck): typeof SLIDES {
        Market step and nothing is included by default. An unticked deck must not
        carry an empty "Your local market" heading with nothing underneath it. */
     if (s.id === "market") return Boolean(deck.market);
+    /* Everything else that renders a DATA set rather than standing copy. Each
+       is dropped rather than shown empty, for the reason comparables is: a
+       heading over nothing does not read as "we had no data", it reads as a
+       broken page, and it costs us the slide either way. */
+    if (s.id === "listings") return Boolean(deck.listings?.length);
+    if (s.id === "history") return Boolean(deck.history?.points?.length);
+    if (s.id === "material") return Boolean(deck.material?.length);
+    if (s.id === "testimonial") return Boolean(deck.testimonial?.quote);
+    if (s.id === "video") return Boolean(deck.propertyVideoUrl);
+    /* The fee page needs a fee. An agent who has not set one yet gets no slide
+       rather than a page of dashes — and the builder can then tell them so. */
+    if (s.id === "fees") return Boolean(deck.fees && (deck.fees.rows.length || deck.fees.headline));
     /* No rent, no offer slide. A "What we'd put it on at" heading above a dash
        is the worst thing on any of these decks: the landlord opened it for
        exactly that number. */
@@ -579,9 +840,69 @@ export const SAMPLE_DECK: PresentDeck = {
     serviceLevel: "Fully managed",
     feePct: 10,
     setupFee: 600,
-    note: "Subject to the EPC being redone before it goes live — the current one expired in August.",
+    note: "Subject to the EPC being redone before it goes live - the current one expired in August.",
   },
   terms: { signUrl: null, summary: null },
+  /* Shown on BOTH long decks — see PresentFees. Written as an office actually
+     quotes it: one headline percentage, the extras named rather than implied,
+     and the exclusions listed so the slide cannot be read as all-inclusive. */
+  fees: {
+    headline: "10% of rent collected",
+    headlineFor: "Fully managed",
+    rows: [
+      { label: "Fully managed", amount: "10% of rent", note: "Rent & Legal Protection included" },
+      { label: "Rent collection", amount: "7% of rent", note: null },
+      { label: "Tenant find", amount: "£750 one-off", note: "Charged on move-in, not on instruction" },
+      { label: "Set-up fee", amount: "£600 one-off", note: "Referencing, agreement and check-in" },
+    ],
+    excluded: [
+      "Gas and electrical safety certificates, at cost",
+      "An inventory where one is not already held",
+      "Court fees, on the two service levels that do not include legal cover",
+    ],
+    note: "All figures include VAT. No tie-in - one month's notice either way, at any point.",
+  },
+  /* What is advertised near them today. Deliberately includes one of ours and
+     several that are not: a slide showing only our own stock is a brochure,
+     not a market. */
+  listings: [
+    { address: "24 Harlestone Road", locality: "NN5 6AA", rent: "£1,095 pcm", beds: 2, image: null, agent: "The Letting Experts", ours: true },
+    { address: "8 Larkhall Lane", locality: "NN5 7BB", rent: "£1,150 pcm", beds: 2, image: null, agent: "O'Riordan Bond", ours: false },
+    { address: "112 Bants Lane", locality: "NN5 6DE", rent: "£1,250 pcm", beds: 3, image: null, agent: "Connells Lettings", ours: false },
+    { address: "3 Wilby Way", locality: "NN5 4QT", rent: "£1,395 pcm", beds: 3, image: null, agent: "Lomond", ours: false },
+  ],
+  /* The point of this slide is that the landlord CORRECTS it, so the sample
+     carries a blank the way a real record does — nobody has the tenure. */
+  material: [
+    { label: "Type", value: "Semi-detached house" },
+    { label: "Bedrooms", value: "3" },
+    { label: "Bathrooms", value: "1" },
+    { label: "Floor area", value: "912 sq ft" },
+    { label: "EPC", value: "C" },
+    { label: "Council tax", value: "Band C, West Northamptonshire" },
+    { label: "Tenure", value: "-" },
+    { label: "Heating", value: "Gas central heating" },
+  ],
+  history: {
+    area: "NN5 4",
+    points: [
+      { month: "2026-03", listed: 4, let: 3, withdrawn: 0 },
+      { month: "2026-04", listed: 6, let: 5, withdrawn: 1 },
+      { month: "2026-05", listed: 7, let: 6, withdrawn: 1 },
+      { month: "2026-06", listed: 2, let: 4, withdrawn: 0 },
+      { month: "2026-07", listed: 7, let: 2, withdrawn: 0 },
+      { month: "2026-08", listed: 5, let: 6, withdrawn: 1 },
+    ],
+  },
+  /* A real one, with a real name. A composite review on a slide about being
+     straight with people is the wrong thing to invent. */
+  testimonial: {
+    quote:
+      "First time we'd let a property and we had no idea what we were doing. Everything was explained before it happened rather than after, and the tenancy was signed inside a fortnight.",
+    author: "Sarah Davies",
+    rating: 5,
+  },
+  propertyVideoUrl: null,
   property: {
     address: "12 Example Street, Lincoln",
     postcode: "LN5 9AB",
