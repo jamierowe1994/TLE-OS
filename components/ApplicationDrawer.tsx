@@ -3,6 +3,18 @@
 import { useEffect, useState } from "react";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { Pill } from "@/components/Wire";
+import StageSpine, { type SpineStop } from "@/components/StageSpine";
+
+type JourneyAction = { id: string; label: string; detail: string; href: string | null; who: "you" | "kirstie" | "landlord" | "tenant" };
+type Journey = {
+  ok: boolean;
+  error?: string;
+  stops?: SpineStop[];
+  actions?: JourneyAction[];
+  flags?: string[];
+  deal?: { id: string; stage: string; url: string } | null;
+  plc?: { id: string; state: string; who: string } | null;
+};
 
 /**
  * An application, opened out.
@@ -112,6 +124,23 @@ export default function ApplicationDrawer({
      people typed, and it comes back on every open rather than living and
      dying in this component. */
   const [comments, setComments] = useState<AppActivity[] | null>(null);
+  /* The journey: REX's three stops then Kirstie's eight, read from where her
+     board reads them, with what the agent should do about it. Loads after
+     the drawer opens - it touches Propoly and PayProp - so the REX rail
+     stands in until it lands. */
+  const [journey, setJourney] = useState<Journey | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    setJourney(null);
+    fetch(`/api/applications/${encodeURIComponent(app.id)}/journey`)
+      .then((r) => r.json())
+      .then((j: Journey) => live && setJourney(j))
+      .catch(() => live && setJourney({ ok: false, error: "Couldn't read the journey." }));
+    return () => {
+      live = false;
+    };
+  }, [app.id]);
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
 
@@ -244,8 +273,57 @@ export default function ApplicationDrawer({
                   stage rail would put the work below the description. */}
               {aside}
 
-              {/* the one thing that matters on opening */}
-              {action && (
+              {/* the one thing that matters on opening: what the journey says
+                  the agent should do, or REX's stage note until it has loaded */}
+              {journey?.ok && journey.actions ? (
+                <div className="rounded-2xl border border-line/80 bg-panel p-5">
+                  <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
+                    Needs you
+                  </p>
+                  {journey.actions.filter((a) => a.who === "you").length === 0 ? (
+                    <p className="mt-2.5 text-[13px] leading-relaxed text-muted">
+                      Nothing for you right now.
+                      {journey.actions[0] ? ` ${journey.actions[0].label} - ${journey.actions[0].detail}` : ""}
+                    </p>
+                  ) : (
+                    <ul className="mt-2.5 space-y-2.5">
+                      {journey.actions.map((a) => (
+                        <li key={a.id} className="flex items-start gap-2.5">
+                          <Pill tone={a.who === "you" ? "accent" : "neutral"}>
+                            {a.who === "you" ? "You" : a.who === "kirstie" ? "Kirstie" : a.who === "landlord" ? "Landlord" : "Tenant"}
+                          </Pill>
+                          <span className="min-w-0 flex-1">
+                            {a.href ? (
+                              <a href={a.href} className="block text-[13px] font-semibold leading-tight underline-offset-2 hover:underline">
+                                {a.label}
+                              </a>
+                            ) : (
+                              <span className="block text-[13px] font-semibold leading-tight">{a.label}</span>
+                            )}
+                            <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">{a.detail}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {journey.flags && journey.flags.length > 0 && (
+                    <div className="mt-3.5 border-t border-line/70 pt-3">
+                      <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">From Kirstie&apos;s side</p>
+                      <ul className="mt-1.5 space-y-1 text-[12px] leading-snug">
+                        {journey.flags.map((f) => (
+                          <li key={f} className="flex gap-2">
+                            <span aria-hidden className="mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                            <span>{f}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {outstanding > 0 && (
+                    <p className="mt-3 text-[11px] text-muted">{outstanding} of {checklist.length} checks still to tick</p>
+                  )}
+                </div>
+              ) : action ? (
                 <div className="rounded-2xl border border-line/80 bg-panel p-5">
                   <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
                     Needs doing now
@@ -254,54 +332,48 @@ export default function ApplicationDrawer({
                   <p className="mt-3 flex items-center gap-2 text-[11px] text-muted">
                     Waiting on
                     <Pill tone={action.who === "Us" ? "accent" : "neutral"}>{action.who}</Pill>
-                    {outstanding > 0 && (
+                    {journey === null && <span className="ml-auto">Reading the journey…</span>}
+                    {outstanding > 0 && journey !== null && (
                       <span className="ml-auto">
                         {outstanding} of {checklist.length} still to tick
                       </span>
                     )}
                   </p>
                 </div>
-              )}
+              ) : null}
 
               <div className="rounded-2xl border border-line/80 bg-panel p-5">
                 <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
                   Where it&apos;s up to
                 </p>
-                <ol className="mt-3.5 space-y-2.5">
-                  {stages.map((s, i) => {
-                    const done = i < cur;
-                    const here = i === cur;
-                    return (
-                      <li key={s.key} className="flex items-start gap-2.5">
-                        <span
-                          className={`mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[9px] ${
-                            done
-                              ? "border-accent-dark bg-accent-soft text-accent-dark"
-                              : here
-                                ? "border-accent-dark bg-accent-dark text-white"
-                                : "border-line text-muted"
-                          }`}
-                        >
-                          {done ? "✓" : i + 1}
-                        </span>
-                        <span className="min-w-0">
-                          <span
-                            className={`block text-[12.5px] leading-tight ${
-                              here ? "font-semibold" : done ? "text-muted" : "text-muted"
-                            }`}
-                          >
-                            {s.label}
-                          </span>
-                          {here && (
-                            <span className="mt-0.5 block text-[11px] leading-snug text-muted">
-                              {s.blurb}
-                            </span>
-                          )}
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ol>
+                {/* Across, like Kirstie's: REX's three stops, then her eight,
+                    read from the same place her board reads them. Until the
+                    journey lands, REX's own stages stand in. */}
+                <StageSpine
+                  compact
+                  stops={
+                    journey?.ok && journey.stops
+                      ? journey.stops
+                      : stages.map((s, i) => ({
+                          id: s.key,
+                          label: s.label,
+                          sub: i === cur ? s.blurb : null,
+                          tone: "none" as const,
+                          state: i < cur ? ("done" as const) : i === cur ? ("current" as const) : ("upcoming" as const),
+                        }))
+                  }
+                />
+                {journey?.ok && journey.deal && (
+                  <p className="mt-1 text-[11px] text-muted">
+                    Kirstie&apos;s deal:{" "}
+                    <a href={journey.deal.url} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
+                      open in Propoly
+                    </a>
+                  </p>
+                )}
+                {journey && !journey.ok && (
+                  <p className="mt-2 text-[11px] text-muted">{journey.error ?? "The journey could not be read."} Showing REX&apos;s stages.</p>
+                )}
               </div>
 
               <div className="rounded-2xl border border-line/80 bg-panel p-5">
