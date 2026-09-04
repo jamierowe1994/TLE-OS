@@ -282,7 +282,8 @@ function offerOf(a: Application): ViewOffer {
     applicants: a.applicants.map((p) => firstName(p.name)).filter(Boolean).join(" and ") || "An applicant",
     moveIn: a.startDate,
     received: a.dateReceived,
-    conditions: a.conditions?.trim() || null,
+    /* "N/A", "none" and a dash are an agent saying nothing was asked for. */
+    conditions: a.conditions && !/^(n\/?a|none|nil|-|no)\.?$/i.test(a.conditions.trim()) ? a.conditions.trim() : null,
   };
 }
 
