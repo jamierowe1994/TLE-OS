@@ -282,8 +282,16 @@ function offerOf(a: Application): ViewOffer {
     applicants: a.applicants.map((p) => firstName(p.name)).filter(Boolean).join(" and ") || "An applicant",
     moveIn: a.startDate,
     received: a.dateReceived,
-    /* "N/A", "none" and a dash are an agent saying nothing was asked for. */
-    conditions: a.conditions && !/^(n\/?a|none|nil|-|no)\.?$/i.test(a.conditions.trim()) ? a.conditions.trim() : null,
+    /* "N/A", "none" and a dash are an agent saying nothing was asked for.
+       A block starting "Flags:" or carrying "key info" is the agent's own
+       referencing shorthand typed into the wrong field - right to rent,
+       credit, a full name - and is not the landlord's to read here. */
+    conditions:
+      a.conditions &&
+      !/^(n\/?a|none|nil|-|no)\.?$/i.test(a.conditions.trim()) &&
+      !/^flags?\s*:|key info|poor credit|right to rent\s*:/i.test(a.conditions)
+        ? a.conditions.trim()
+        : null,
   };
 }
 
