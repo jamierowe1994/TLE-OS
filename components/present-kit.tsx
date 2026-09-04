@@ -106,7 +106,7 @@ export const TINTS = ["#fbe7e2", "#e9eee4", "#fdf2da"] as const;
  * Converting a slide is: build it on `CreamSlide`, add its id here. The rest
  * of the deck is still Expert Red on white and stays that way until its turn.
  */
-export const CREAM_SLIDES: SlideId[] = ["welcome", "agenda", "agent", "approach", "property", "material", "listings", "comparables", "market", "history", "marketing", "offer", "maxprice", "video"];
+export const CREAM_SLIDES: SlideId[] = ["welcome", "agenda", "agent", "approach", "property", "material", "listings", "comparables", "market", "history", "marketing", "offer", "maxprice", "video", "compliance", "legal", "screening"];
 
 export const isCream = (id: SlideId | undefined) => !!id && CREAM_SLIDES.includes(id);
 

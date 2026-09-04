@@ -1030,48 +1030,91 @@ export function Social({ show }: { show: boolean }) {
 
 /* ───────────────────────── compliance ───────────────────────── */
 
+/**
+ * The part that catches landlords out.
+ *
+ * Four blocks, and the ORDER is the argument: what we do, what the law wants,
+ * how we check a tenant, what we put in writing. Each is a thing that goes
+ * wrong quietly and expensively when nobody owns it, which is the whole case
+ * for handing the property over rather than letting it yourself.
+ */
 export function Compliance({ show }: { show: boolean }) {
   return (
-    <Slide id="compliance">
-      <div className="mx-auto w-full max-w-5xl">
-        <Head
-          eyebrow="Compliance and guidance"
-          title="The part that catches landlords out"
-          show={show}
-        />
-        <Blocks items={COMPLIANCE} show={show} />
+    <CreamSlide id="compliance">
+      <div className="mx-auto w-full max-w-[1120px]">
+        <div className="max-w-[680px]">
+          <HandHead eyebrow="Compliance and guidance" show={show} lines={2}>
+            The part that catches
+            <br />
+            landlords <Emphasis show={show}>out</Emphasis>
+          </HandHead>
+        </div>
+
+        <div className="mt-9 grid gap-x-14 gap-y-7 sm:grid-cols-2 lg:mt-10">
+          {COMPLIANCE.map((c, n) => (
+            <Rise key={c.title} show={show} i={2 + Math.floor(n / 2)}>
+              <div className="border-t border-black/10 pt-4">
+                <h3
+                  className="text-[15.5px] leading-snug sm:text-[16px]"
+                  style={{ fontFamily: HAND, fontWeight: 700 }}
+                >
+                  {c.title}
+                </h3>
+                <p className="mt-2 text-[13px] font-light leading-[1.6] text-black/60">{c.body}</p>
+              </div>
+            </Rise>
+          ))}
+        </div>
       </div>
-    </Slide>
+    </CreamSlide>
   );
 }
 
 /**
- * The obligations.
+ * The obligations, each paired with what we actually do about it.
  *
- * Eight of them and they have to fit one screen, so this is the deck's densest
- * slide by design: a two-column list at a smaller size rather than eight cards
- * that scroll. The caveat about England is on the slide and not in a footnote,
- * because an agent showing this in Cardiff needs the landlord to have seen it.
+ * The PAIRING is the point. A list of legal duties on its own is a list of
+ * reasons to worry; the same list with our half attached is the argument for
+ * handing it over. Neither half works alone, which is why this is the deck's
+ * densest slide and stays that way.
+ *
+ * The England caveat is ON the slide, not in a footnote. An agent showing this
+ * in Cardiff or Glasgow needs the landlord to have seen it at the time, and a
+ * note nobody reads is a note nobody was told.
  */
 export function Legal({ show }: { show: boolean }) {
   return (
-    <Slide id="legal">
-      <div className="mx-auto w-full max-w-5xl">
-        <Head
-          eyebrow="What the law asks of you"
-          title="Eight things, and who keeps track of each one"
-          show={show}
-        />
-        <div className="mt-8 grid gap-x-12 gap-y-4 sm:grid-cols-2">
+    <CreamSlide id="legal">
+      <div className="mx-auto w-full max-w-[1180px]">
+        <div className="max-w-[700px]">
+          <HandHead eyebrow="What the law asks of you" show={show} lines={2}>
+            Eight things, and who
+            <br />
+            keeps <Emphasis show={show}>track</Emphasis> of each
+          </HandHead>
+        </div>
+
+        <div className="mt-7 grid gap-x-14 gap-y-3 sm:grid-cols-2 lg:mt-8">
           {LEGAL_ITEMS.map((l, n) => (
-            <Rise key={l.title} show={show} i={1 + Math.floor(n / 4)}>
-              <div className="flex gap-3 border-t border-black/10 pt-3">
-                <span className="mt-[3px] shrink-0" style={{ color: RED }}>
+            <Rise key={l.title} show={show} i={2 + Math.floor(n / 4)}>
+              <div
+                className="flex gap-3"
+                style={{
+                  borderTop: n < 2 ? "none" : "1px solid rgba(0,0,0,0.07)",
+                  paddingTop: n < 2 ? 0 : 11,
+                }}
+              >
+                <span className="mt-[3px] shrink-0" style={{ color: CORAL }}>
                   <Line name="shield" size={16} />
                 </span>
-                <span>
-                  <span className="block text-[13.5px] font-semibold leading-snug">{l.title}</span>
-                  <span className="mt-1 block text-[12px] font-light leading-relaxed text-black/60">
+                <span className="min-w-0">
+                  <span
+                    className="block text-[13.5px] leading-snug"
+                    style={{ fontFamily: HAND, fontWeight: 700 }}
+                  >
+                    {l.title}
+                  </span>
+                  <span className="mt-1 block text-[12px] font-light leading-[1.5] text-black/55">
                     {l.body}
                   </span>
                 </span>
@@ -1079,30 +1122,46 @@ export function Legal({ show }: { show: boolean }) {
             </Rise>
           ))}
         </div>
-        <Rise show={show} i={3}>
-          <p className="mt-7 max-w-3xl border-t border-black/10 pt-4 text-[11.5px] font-light leading-relaxed text-black/50">
+
+        <Rise show={show} i={4}>
+          <p className="mt-6 max-w-[820px] border-t border-black/10 pt-4 text-[11.5px] font-light leading-relaxed text-black/45">
             {LEGAL_CAVEAT}
           </p>
         </Rise>
       </div>
-    </Slide>
+    </CreamSlide>
   );
 }
 
+/**
+ * How we find and screen every tenant.
+ *
+ * The strongest argument in the deck, and it used to be slide 21 where nobody
+ * reached it. Four paragraphs rather than bullets on purpose: this is the one
+ * place a landlord wants to know HOW, in sentences, and a list of six words
+ * would read as a claim rather than as a process.
+ */
 export function Screening({ show }: { show: boolean }) {
   return (
-    <Slide id="screening">
-      <div className="mx-auto w-full max-w-5xl">
-        <Head eyebrow={SCREENING.eyebrow} title={SCREENING.heading} show={show} />
-        <div className="mt-9 grid gap-x-14 gap-y-6 sm:grid-cols-2">
+    <CreamSlide id="screening">
+      <div className="mx-auto w-full max-w-[1120px]">
+        <div className="max-w-[700px]">
+          <HandHead eyebrow={SCREENING.eyebrow} show={show} lines={2}>
+            Checked before they are
+            <br />
+            through your <Emphasis show={show}>door</Emphasis>
+          </HandHead>
+        </div>
+
+        <div className="mt-9 grid gap-x-16 gap-y-5 sm:grid-cols-2 lg:mt-10">
           {SCREENING.paragraphs.map((p, n) => (
-            <Rise key={p.slice(0, 24)} show={show} i={1 + Math.floor(n / 2)}>
-              <p className="text-[13.5px] font-light leading-[1.75] text-black/70">{p}</p>
+            <Rise key={p.slice(0, 24)} show={show} i={2 + Math.floor(n / 2)}>
+              <p className="text-[13.5px] font-light leading-[1.7] text-black/65">{p}</p>
             </Rise>
           ))}
         </div>
       </div>
-    </Slide>
+    </CreamSlide>
   );
 }
 
