@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { can } from "@/lib/roles";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
@@ -22,6 +23,23 @@ export default function AdminPeople() {
   /* The ping, by hand. Same endpoint the scheduled one hits, so there is only
      one code path to be wrong. */
   const [tegNote, setTegNote] = useState<string | null>(null);
+  /* Whether THIS viewer may act on a person, as opposed to read the census.
+     Susan holds see:people from 4 Sep and not manage:people, so she gets the
+     list and not the reset button - a control that answers 404 reads as a
+     broken page rather than as a boundary. */
+  const [mayManage, setMayManage] = useState(false);
+  useEffect(() => {
+    let gone = false;
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { role?: string | null } | null) => {
+        if (!gone) setMayManage(can(j?.role, "manage:people"));
+      })
+      .catch(() => {});
+    return () => {
+      gone = true;
+    };
+  }, []);
   async function pullTeg() {
     setBusy("teg");
     setTegNote(null);
@@ -201,10 +219,12 @@ export default function AdminPeople() {
                     Open their file
                   </Link>
                 )}
-                <button type="button" disabled={busy !== null} onClick={() => sendReset(p.userId!)}
-                  className="rounded-lg border border-line/80 px-3 py-1.5 text-[11.5px] disabled:opacity-40">
-                  Send a reset link
-                </button>
+                {mayManage && (
+                  <button type="button" disabled={busy !== null} onClick={() => sendReset(p.userId!)}
+                    className="rounded-lg border border-line/80 px-3 py-1.5 text-[11.5px] disabled:opacity-40">
+                    Send a reset link
+                  </button>
+                )}
               </div>
             )}
           </li>

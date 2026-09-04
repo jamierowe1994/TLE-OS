@@ -17,7 +17,7 @@
  * here, where they would be dead weight in every page load.
  */
 
-import { can, type Capability } from "@/lib/roles";
+import { asRole, can, type Capability } from "@/lib/roles";
 
 export type NavItem = {
   href: string;
@@ -109,18 +109,60 @@ export const BACK: NavItem[] = [
  * not been lifted out. Neither role is assigned to anybody, and lib/roles.ts
  * says not to assign one until they are — this is where the absence shows up.
  */
-export type Workspace = NavItem & { needs: Capability };
+export type Workspace = NavItem & {
+  needs: Capability;
+  /**
+   * The roles this screen BELONGS to, as opposed to the roles allowed to look
+   * at it. The distinction did not exist until 4 Sep and now has to, because
+   * Susan holds `see:marketing` and `see:pretenancy` so that her admin rail can
+   * offer her Francesca's and Kirstie's screens. Filtering the main nav on
+   * capability alone would read those as three workspaces of her own and put
+   * all three in her sidebar.
+   *
+   * Access is still decided by `needs` and by each page for itself. This only
+   * answers "whose screen is this?", which is a question about nav shape.
+   */
+  primaryFor?: readonly string[];
+};
 
 const WORKSPACES: Workspace[] = [
   { href: "/admin", label: "Admin", icon: "shield", needs: "admin:open" },
-  { href: "/company-figures", label: "Company figures", icon: "trend-up", needs: "see:business" },
-  { href: "/pre-tenancy", label: "Pre-tenancy", icon: "checklist", needs: "see:pretenancy" },
-  { href: "/marketing-hub", label: "Marketing", icon: "megaphone", needs: "see:marketing" },
+  {
+    href: "/company-figures", label: "Company figures", icon: "trend-up",
+    needs: "see:business", primaryFor: ["super_admin"],
+  },
+  {
+    href: "/pre-tenancy", label: "Pre-tenancy", icon: "checklist",
+    /* `support` too: it is deprecated in favour of `pretenancy` but anybody
+       still carrying it keeps the board they had. */
+    needs: "see:pretenancy", primaryFor: ["pretenancy", "support"],
+  },
+  {
+    href: "/marketing-hub", label: "Marketing", icon: "megaphone",
+    needs: "see:marketing", primaryFor: ["marketing"],
+  },
 ];
 
+/**
+ * The workspaces in somebody's own sidebar.
+ *
+ * Their own screen, plus Admin if they hold it. The OWNER has no screen of his
+ * own here on purpose — Company figures, Pre-tenancy and Marketing are other
+ * people's, and they reach him as named shortcuts on his admin rail instead, so
+ * listing them again would be the same screen twice under two names.
+ *
+ * Susan (4 Sep) is the case that made `primaryFor` necessary: she now holds
+ * every `see:` capability the three views need, and without it her sidebar
+ * would offer her Pre-tenancy and Marketing as though they were hers.
+ */
 export function workspacesFor(role: string | null | undefined): Workspace[] {
-  if (can(role, "admin:open")) return WORKSPACES.filter((w) => w.href === "/admin");
-  return WORKSPACES.filter((w) => w.href !== "/admin" && can(role, w.needs));
+  const r = asRole(role);
+  const mine = WORKSPACES.filter(
+    (w) => w.primaryFor?.includes(r) && can(role, w.needs)
+  );
+  if (!can(role, "admin:open")) return mine;
+  const admin = WORKSPACES.find((w) => w.href === "/admin");
+  return admin ? [...mine, admin] : mine;
 }
 
 /**

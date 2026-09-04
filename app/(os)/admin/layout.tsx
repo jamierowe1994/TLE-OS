@@ -60,8 +60,10 @@ const GROUPS: Array<{
          user with a refusal. */
       { href: "/admin", label: "Overview", exact: true, needs: "see:people" },
       { href: "/admin/people", label: "People", needs: "see:people" },
-      { href: "/admin/permissions", label: "Permissions", needs: "manage:roles" },
-      { href: "/admin/pre-launch", label: "Pre-launch", needs: "see:reports" },
+      /* see:roles, not manage:roles. Susan reads the map; only James
+         redraws it. The page hides its own controls the same way. */
+      { href: "/admin/permissions", label: "Permissions", needs: "see:roles" },
+      { href: "/admin/pre-launch", label: "Pre-launch", needs: "see:prelaunch" },
       /* ONE entry, not four.
          Onboarding, Tenant passport and PLC handover each had their own line
          here, which was three rail entries for one idea - "show me the thing I
@@ -101,8 +103,12 @@ const GROUPS: Array<{
          anything - its own note says a page that could arm a send is a page
          that can arm one by accident. This is the one that arms, and it is
          owner-gated rather than merely admin-gated. */
-      { href: "/admin/switches", label: "Switches", needs: "manage:roles" },
-      { href: "/admin/activity", label: "Activity", needs: "see:people" },
+      { href: "/admin/switches", label: "Switches", needs: "manage:switches" },
+      /* manage:people, not see:people. The audit log records what was done
+         TO people - invites, resets, who viewed as whom - and it is James's
+         record of his own actions rather than a staff list. Susan holds
+         see:people for the census and does not need this. */
+      { href: "/admin/activity", label: "Activity", needs: "manage:people" },
       /* Not beside Kirstie's view, which is where it superficially belongs.
          This is a measurement OF her decisions, and a page that scores
          somebody sitting inside their own screen invites them to read it while
@@ -113,7 +119,10 @@ const GROUPS: Array<{
          that group, and any href in it unmounts this rail. Note /emails also
          exists in the main OS nav — that one is the agent-facing audit of
          what currently sends; this is the catalogue of what we would send. */
-      { href: "/admin/emails", label: "Emails", needs: "see:business" },
+      /* see:reports, not see:business. It was the only System entry Susan's
+         capabilities reached, and a catalogue of every template the OS could
+         send is plumbing rather than a business figure. */
+      { href: "/admin/emails", label: "Emails", needs: "see:reports" },
       /* Where James feeds the assistant. The agent-facing side of it lives in
          the help panel; this is the console behind it. */
       { href: "/admin/assistant", label: "Steve", needs: "see:reports" },

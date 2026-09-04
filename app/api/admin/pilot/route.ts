@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireOwner } from "@/lib/admin";
+import { requireCapability, requireOwner } from "@/lib/admin";
 import { asRole } from "@/lib/roles";
 import { addInvite, invites, markInviteSent, removeInvite, tabUsage, bugs } from "@/lib/pilot";
 import { lettingsAgents } from "@/lib/rex-agents";
@@ -15,7 +15,16 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  if (!(await requireOwner(req))) return new NextResponse(null, { status: 404 });
+  /* READING is `see:prelaunch`, which Susan holds from 4 Sep - the whole point
+     of her Pre-launch tab is knowing what is and is not ready for 14 October,
+     and a tab that renders an empty page is worse than no tab.
+
+     WRITING stays requireOwner below. The POST invites a pilot agent and the
+     DELETE removes one, and neither is a thing to hand over as a side effect
+     of showing somebody a readiness report. */
+  if (!(await requireCapability(req, "see:prelaunch"))) {
+    return new NextResponse(null, { status: 404 });
+  }
 
   const roster = (await lettingsAgents().catch(() => [])).map((a) => ({
     rexId: a.id, name: a.name, email: a.email,

@@ -20,7 +20,7 @@ type Person = { id: string; email: string; name: string; role: string; lastSeenA
    raw string on the screen that exists to explain them. Every capability in
    lib/roles.ts now has a line. */
 const CAP_LABEL: Record<string, string> = {
-  "admin:open": "Open MY admin area",
+  "admin:open": "Open an admin area",
   "staff:internal": "Internal staff, not a partner agent",
   "see:people": "See people",
   "see:business": "Company figures",
@@ -30,7 +30,10 @@ const CAP_LABEL: Record<string, string> = {
   "see:pretenancy": "Pre-tenancy board",
   "see:everything": "All data, not just their own",
   "manage:people": "Invite, reset, view as",
+  "see:roles": "See who holds what",
   "manage:roles": "Hand out roles",
+  "manage:switches": "Arm live sends",
+  "see:prelaunch": "Pre-launch readiness",
 };
 
 /* `developer`'s capabilities are real but its one screen (Wiring) is still
@@ -40,7 +43,7 @@ const CAP_LABEL: Record<string, string> = {
 const NO_SCREEN_YET = new Set(["developer"]);
 
 export default function Permissions() {
-  const [d, setD] = useState<{ roles: RoleDef[]; people: Person[] } | null>(null);
+  const [d, setD] = useState<{ roles: RoleDef[]; people: Person[]; mayEdit?: boolean } | null>(null);
   const [denied, setDenied] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
@@ -97,8 +100,12 @@ export default function Permissions() {
                 </Pill>
               </div>
               <p className="mt-1 text-[11.5px] text-muted">{p.email}</p>
+              {/* Only for somebody who may actually change a role. Susan holds
+                  see:roles and not manage:roles (4 Sep), so she reads the map
+                  and is not offered eleven buttons that would each be refused
+                  - which reads as a broken screen rather than as a boundary. */}
               <div className="mt-2.5 flex flex-wrap gap-1.5">
-                {d.roles
+                {(d.mayEdit ? d.roles : [])
                   .filter((r) => r.id !== p.role)
                   .map((r) => (
                     <button
@@ -117,9 +124,19 @@ export default function Permissions() {
           ))}
         </ul>
         <p className="mt-3 border-t border-line/70 pt-3 text-[11px] leading-relaxed text-muted">
-          The last owner can&apos;t be demoted, and you can&apos;t remove your own owner role —
-          a permissions screen whose worst outcome is &ldquo;nobody can administer this any
-          more&rdquo; is a trap, not a feature.
+          {d.mayEdit ? (
+            <>
+              The last owner can&apos;t be demoted, and you can&apos;t remove your own owner
+              role — a permissions screen whose worst outcome is &ldquo;nobody can administer
+              this any more&rdquo; is a trap, not a feature.
+            </>
+          ) : (
+            <>
+              This is the map, not the controls. Handing out roles stays with the owner, so
+              that nobody can quietly promote themselves — ask James if something here needs
+              changing.
+            </>
+          )}
         </p>
       </section>
 

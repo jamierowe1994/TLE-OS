@@ -2,22 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireCapability } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
 import { findUserById } from "@/lib/users";
-import { ROLES, ROLE_BLURB, ROLE_LABEL, asRole, capabilitiesOf } from "@/lib/roles";
+import { ROLES, ROLE_BLURB, ROLE_LABEL, asRole, can, capabilitiesOf } from "@/lib/roles";
 import { record } from "@/lib/audit";
 
 /**
  * Who holds which role, and changing it.
  *
- * Reading needs `manage:roles` too, not merely `see:people`. A list of who can
- * do what is a map of where the power sits, and support staff have no reason
- * to hold it.
+ * Reading needs `see:roles`, not merely `see:people`. A list of who can do
+ * what is a map of where the power sits, and support staff have no reason to
+ * hold it.
+ *
+ * WRITING still needs `manage:roles`, which is owner-only. Susan holds the
+ * first and not the second (4 Sep), so she can audit the map and cannot
+ * redraw it - a super_admin who could promote herself would not be a lesser
+ * role, she would be the same role with an extra step.
  */
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  if (!(await requireCapability(req, "manage:roles"))) return new NextResponse(null, { status: 404 });
+  const me = await requireCapability(req, "see:roles");
+  if (!me) return new NextResponse(null, { status: 404 });
   if (!hasDb()) return NextResponse.json({ error: "No database." }, { status: 503 });
 
   const rows = await q<{ id: string; email: string; name: string; role: string; last_seen_at: Date | null }>(
@@ -25,6 +31,11 @@ export async function GET(req: NextRequest) {
   );
 
   return NextResponse.json({
+    /* Whether THIS viewer may change anything, so the screen can show the
+       controls or not. The PATCH below is the real guard - this only stops the
+       page offering a button that would be refused, which is a worse
+       experience than not offering it. */
+    mayEdit: can(me.role, "manage:roles"),
     roles: ROLES.map((r) => ({
       id: r, label: ROLE_LABEL[r], blurb: ROLE_BLURB[r], can: capabilitiesOf(r),
     })),

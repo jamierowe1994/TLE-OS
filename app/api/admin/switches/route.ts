@@ -17,7 +17,7 @@ import { record } from "@/lib/audit";
  * phrase travels with the request and is compared on the server, and the UI
  * simply collects it.
  *
- * ── manage:roles, not admin:open ──────────────────────────────────────────
+ * ── manage:switches, not admin:open ───────────────────────────────────────
  *
  * Arming outbound mail is not an administrative convenience; it decides what
  * the system does to other people. `manage:roles` is the nearest existing
@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  if (!(await requireCapability(req, "manage:roles"))) {
+  if (!(await requireCapability(req, "manage:switches"))) {
     return new NextResponse(null, { status: 404 });
   }
   return NextResponse.json({
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const me = await requireCapability(req, "manage:roles");
+  const me = await requireCapability(req, "manage:switches");
   if (!me) return new NextResponse(null, { status: 404 });
 
   const { key, on, typed } = (await req.json().catch(() => ({}))) as {

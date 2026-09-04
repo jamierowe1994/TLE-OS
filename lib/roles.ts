@@ -24,25 +24,40 @@
  *   marketing    Francesca. Campaigns, paid leads, templates, the file store.
  *   agent        The default. Their own book and nothing else.
  *
- * ── The admin area belongs to ONE person ──────────────────────────────────
+ * ── The admin area, and who it belongs to ────────────────────────────────
  *
  * James, 30 Aug, after signing in as Susan: "no one should ever see my admin
- * section. That's not designed for anyone else to see, just me."
+ * section. That's not designed for anyone else to see, just me." So
+ * `admin:open` became owner-only, and everybody else got their OWN workspace
+ * at its own address, named after the work rather than the permission: Susan
+ * opens Company figures, Kirstie opens Pre-tenancy, Francesca opens Marketing.
+ * See `workspacesFor()` in lib/nav.ts.
  *
- * So `admin:open` is owner-only, full stop. It used to be held by five of the
- * six roles, which meant Susan's rail offered her Overview, People, Pre-launch,
- * Activity, PLC checks, To do, Emails and Steve — eight screens of plumbing for
- * somebody who wanted her figures — and Kirstie's offered a door marked Admin
- * that existed to bounce her somewhere else.
+ * James, 4 Sep, relaying Susan: she "doesn't have an admin section" and needs
+ * one — Overview, People, Permissions, Pre-launch, and the three views.
  *
- * What replaces it is not a smaller admin. Everybody who needs a screen beyond
- * an agent's day now has their OWN, at its own address, named after the work
- * rather than after the permission: Susan opens Company figures, Kirstie opens
- * Pre-tenancy, Francesca opens Marketing. See `workspacesFor()` in lib/nav.ts.
+ * Those two instructions are not in conflict, and the difference is the whole
+ * design here. Susan is NOT being given James's admin. She is given a SHORTER
+ * one: seven entries out of his sixteen, with the wiring, the switches, the
+ * audit log, the pilot reports, the email catalogue, Steve and the guides all
+ * still his alone. "No one should ever see my admin section" survives, because
+ * what she opens is not it.
  *
- * `staff:internal` is the gate that `admin:open` was doing a second job as —
- * "an internal person rather than a partner agent". Two API routes were using
- * admin:open to mean that, and would have silently narrowed to James alone.
+ * Making that true needed two capabilities SPLIT, because both were doing
+ * double duty and would have leaked James's screens into Susan's rail:
+ *
+ *   `manage:roles` gated both the Permissions screen and Switches — the page
+ *   that arms live sends. Those are not the same authority. Switches now wants
+ *   `manage:switches`, which is owner-only and says what it means.
+ *
+ *   `see:reports` gated Pre-launch alongside Portals, PLC checks, To do, Steve
+ *   and Guides. Susan needs the first and none of the rest, so Pre-launch now
+ *   wants `see:prelaunch`.
+ *
+ * And one capability was ADDED rather than split: `see:roles` reads the map of
+ * who holds what; `manage:roles` still changes it. Susan can open Permissions
+ * and see where the power sits. She cannot hand it out, which keeps rule 1
+ * below intact.
  *
  * ── What developer and support are left with ──────────────────────────────
  *
@@ -59,7 +74,9 @@
  * ── The two rules that stop this becoming a footgun ───────────────────────
  *
  * 1. Only an owner may CHANGE a role. A super_admin who could promote
- *    themselves is not a lesser role, it is the same role with an extra step.
+ *    themselves is not a lesser role, it is the same role with an extra step —
+ *    which is exactly why Susan's Permissions tab reads and does not write.
+ *    She holds `see:roles`; `manage:roles` stays James's.
  * 2. An owner cannot be demoted through the UI, and the last owner cannot be
  *    removed at all. A permissions screen whose worst outcome is "nobody can
  *    administer this system any more" is a trap, not a feature.
@@ -87,8 +104,8 @@ export const ROLE_LABEL: Record<Role, string> = {
 };
 
 export const ROLE_BLURB: Record<Role, string> = {
-  owner: "Everything, including who gets which role. The admin area is theirs alone.",
-  super_admin: "Company figures — the whole business, unscoped. Not the admin area.",
+  owner: "Everything, including who gets which role. The wiring and the switches are theirs alone.",
+  super_admin: "Company figures, plus a short admin: people, permissions (read-only) and pre-launch.",
   developer: "The wiring: connections, health, diagnostics. Not the money.",
   support: "The pre-tenancy board only. Superseded by Pre-tenancy — use that instead.",
   pretenancy: "The run-up to a move-in, across every agent's deals. Nothing else.",
@@ -98,33 +115,49 @@ export const ROLE_BLURB: Record<Role, string> = {
 
 /** What a screen actually asks about. */
 export type Capability =
-  | "admin:open"        // the OWNER'S admin area. James, and nobody else, ever.
+  | "admin:open"        // an admin area at all. The RAIL decides which entries.
   | "staff:internal"    // an internal person rather than a partner agent
   | "see:people"        // the staff list and their files
   | "see:business"      // Susan's stats — GCI, forecasts, arrears, income
   | "see:marketing"     // Francesca's campaigns, paid leads, templates, files
   | "see:wiring"        // connections, health, environment state
-  | "see:reports"       // bugs and faults from the pilot
+  | "see:reports"       // bugs, the pilot, Steve, the guides, the portals
+  | "see:prelaunch"     // the pre-launch readiness report, and only that
   | "see:pretenancy"    // Kirstie's run-up to a move-in
   | "see:everything"    // unscoped data rather than only your own book
-  | "manage:people"     // invite, reset, view-as
-  | "manage:roles";     // hand out the roles above
+  | "see:roles"         // READ who holds what
+  | "manage:people"     // invite, reset, view-as, the audit log
+  | "manage:roles"      // CHANGE who holds what
+  | "manage:switches";  // arm a live send. Owner only, deliberately.
 
 const MATRIX: Record<Role, Capability[]> = {
   owner: [
     "admin:open", "staff:internal", "see:people", "see:business", "see:marketing",
-    "see:wiring", "see:reports", "see:pretenancy", "see:everything",
-    "manage:people", "manage:roles",
+    "see:wiring", "see:reports", "see:prelaunch", "see:pretenancy", "see:everything",
+    "see:roles", "manage:people", "manage:roles", "manage:switches",
   ],
-  /* Susan runs the business, so she sees all of it, unscoped — and that is the
-     WHOLE of what she sees. She had `admin:open`, `see:people`, `see:reports`
-     and `manage:people` too, which between them handed her the staff census,
-     the pilot bug list, view-as and eight screens of plumbing. Every figure she
-     actually asks for is a tab inside Company figures, Agents among them.
+  /* Susan runs the business, so she sees all of it, unscoped — and since
+     4 Sep she also has a short admin of her own. Seven entries, and the list
+     is worth reading as a whole, because each is here for a reason:
 
-     Not `see:pretenancy` either. She could look into Kirstie's board and never
-     had cause to; the move-in numbers she wants are on her own Move-ins tab. */
-  super_admin: ["staff:internal", "see:business", "see:everything"],
+       Overview + People    who works here, and their files
+       Permissions          WHERE the power sits. Read-only: `see:roles`
+                            without `manage:roles`, so she can audit the map
+                            and cannot redraw it.
+       Pre-launch           what is and is not ready for 14 October
+       the three views      her own figures, Francesca's, Kirstie's
+
+     What she deliberately does NOT hold, each one line away if that changes:
+     see:wiring (connections), manage:switches (arming live sends),
+     manage:people (the audit log, invites, view-as), see:reports (portals,
+     PLC checks, to-do, Steve, guides, the email catalogue).
+
+     `see:pretenancy` is not here for the DATA — she has see:everything
+     already. It is here so the rail can offer her Kirstie's board. */
+  super_admin: [
+    "admin:open", "staff:internal", "see:people", "see:business", "see:marketing",
+    "see:prelaunch", "see:pretenancy", "see:everything", "see:roles",
+  ],
   /* The mirror image. A contractor brought in to debug REX needs the
      connections page and has no business reading anybody's earnings. */
   developer: ["staff:internal", "see:wiring", "see:reports"],
