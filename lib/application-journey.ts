@@ -4,7 +4,7 @@ import { latestHandover } from "@/lib/handover";
 import { getCase } from "@/lib/plc-store";
 import { PLC_STATES } from "@/lib/plc";
 import { getAllPropolyDeals, type BusinessDeal } from "@/lib/business/propoly-deals";
-import { effectivePortalStage, getOverlays } from "@/lib/business/deal-store";
+import { effectivePortalStage, getOverlays, getMeta } from "@/lib/business/deal-store";
 import { loadMoneyContext, moneyForDeal, type MoneyContext } from "@/lib/business/deal-money";
 import { stageEvidence } from "@/lib/business/stage-evidence";
 import { PORTAL_STAGES, PROPOLY_APP_URL } from "@/lib/business/propoly-stages";
@@ -259,6 +259,17 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
       actions.push({ id: "plc-declined", label: "The PLC pack was declined", detail: plcCase.decisionNote || "See Kirstie's note on the pack.", href: `/plc/start?application=${encodeURIComponent(app.id)}`, who: "you" });
     } else if (plcCase.state === "submitted" || plcCase.state === "scanning" || plcCase.state === "reviewing") {
       actions.push({ id: "plc-wait", label: "PLC pack is with compliance", detail: `${st?.label ?? plcCase.state} - nothing for you until Kirstie answers.`, href: null, who: "kirstie" });
+    } else if (plcCase.state === "approved" && deal?.app.propoly?.depositReplacement) {
+      /* PLC passed, and the deal is on Flatfair rather than a cash deposit.
+         Kirstie (4 Sep): the agent keys it into Flatfair by hand and she
+         cannot generate the agreement until it is done. The tick is the
+         deal's "deposit registered" item, read from the same overlay the
+         board reads. Until Flatfair's API exists this is the step. */
+      const meta = await getMeta(deal.app.id).catch(() => null);
+      const tick = meta?.checklist?.deposit_registered;
+      if (!tick?.done) {
+        actions.push({ id: "flatfair", label: "Set the deal up in Flatfair", detail: "PLC passed. Key it into Flatfair, then tick it done so Kirstie can generate the agreement.", href: `/applications/flatfair?deal=${encodeURIComponent(deal.app.id)}`, who: "you" });
+      }
     }
   } else if (accepted) {
     actions.push({ id: "plc-start", label: "Start the PLC check", detail: "The pre-let compliance pack has not been started for this let.", href: `/plc/start?application=${encodeURIComponent(app.id)}`, who: "you" });
