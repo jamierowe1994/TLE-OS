@@ -1836,8 +1836,14 @@ export function Fees({ deck, show }: { deck: Deck; show: boolean }) {
         )}
         {f.headlineFor && (
           <Rise show={show} i={2}>
+            {/* The second clause is CONDITIONAL on there being exclusions.
+                It used to promise "and what it does not" unconditionally, and
+                with the invented exclusions removed that was a promise the
+                slide no longer kept - on the one page where being straight
+                about the fee is the entire argument. */}
             <p className="mt-3 text-[14.5px] font-light text-black/55">
-              on {f.headlineFor}. Everything below is what that includes, and what it does not.
+              on {f.headlineFor}. Everything below is what that includes
+              {f.excluded.length > 0 ? ", and what it does not." : "."}
             </p>
           </Rise>
         )}

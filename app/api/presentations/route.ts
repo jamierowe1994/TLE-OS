@@ -5,10 +5,12 @@ import { presentAgentFor } from "@/lib/rex-agents";
 import { createPresentation, presentationsFor } from "@/lib/present-store";
 import {
   DECK_KINDS,
+  STANDARD_FEES,
   firstNameOf,
   type DeckKind,
   type PresentComparables,
   type PresentDeck,
+  type PresentFees,
   type PresentListing,
   type PresentMarket,
   type PresentMaterialRow,
@@ -53,6 +55,8 @@ type Body = {
   listings?: PresentListing[] | null;
   /** The headline material-information rows, for the landlord to correct. */
   material?: PresentMaterialRow[] | null;
+  /** Overrides the office fee schedule for one landlord. Almost never set. */
+  fees?: PresentFees | null;
   /** The market blocks the agent ticked on the Market step, already reduced to
    *  the figures that were on their screen. Absent means no market slide. */
   market?: PresentMarket | null;
@@ -213,6 +217,15 @@ export async function POST(req: NextRequest) {
        because the whole point of it is that there is something to check. */
     material:
       Array.isArray(body.material) && body.material.length ? body.material : null,
+    /* THE FEE, on every deck, from one schedule.
+       It did not reach a real presentation at all until now - the slide, the
+       type and the sample all existed and nothing carried it, so a landlord
+       sent a genuine deck saw no fee page. It is standing copy rather than
+       something an agent types, because the figure does not depend on the
+       property and retyping it monthly is three chances a month to mistype the
+       thing somebody is being asked to agree to. A caller may still override
+       it for a one-off arrangement. */
+    fees: body.fees ?? STANDARD_FEES,
     /* Gated on a real rent for the same reason slidesFor is: a valuation
        object with no figure in it would mint an offer slide that makes no
        offer. Terms need the figure too — asking somebody to sign before

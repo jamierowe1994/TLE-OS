@@ -847,6 +847,47 @@ export function slidesFor(deck: PresentDeck): typeof SLIDES {
   });
 }
 
+/**
+ * WHAT WE CHARGE. The office's schedule, not a per-property figure.
+ *
+ * James, 4 Sep: 10% managed, 7% rent collection, £750 tenant find.
+ *
+ * ── Why this is standing copy and not a wizard step ───────────────────────
+ *
+ * The fee does not depend on the property, so asking an agent to type it on
+ * every appraisal would be three chances a month to mistype the thing a
+ * landlord is being asked to agree to. One schedule, in one place, on every
+ * deck. `PresentFees` still hangs off the deck so a genuinely different
+ * arrangement can be snapshotted for one landlord, but nobody has to.
+ *
+ * ── What is deliberately NOT here ─────────────────────────────────────────
+ *
+ * An earlier draft carried a £600 set-up fee, three exclusions and a line
+ * saying "all figures include VAT. No tie-in". Every one of those was invented
+ * to make the slide render before there were real numbers, and none of them
+ * has been confirmed. They are gone rather than left in.
+ *
+ * That matters more on this slide than anywhere else in the deck: the whole
+ * argument of "Not included" is that it is the reason to trust the headline,
+ * so a made-up exclusion is worse than no exclusion at all. The panel returns
+ * the moment somebody gives us the real list - see the Fees slide, which drops
+ * it when `excluded` is empty rather than showing an empty heading.
+ */
+export const STANDARD_FEES: PresentFees = {
+  headline: "10% of rent collected",
+  headlineFor: "Fully managed",
+  rows: [
+    /* The only row note that survives, because it is corroborated: the Rent &
+       Legal Protection slide says it is included as standard on the Experts
+       Management Service, at no extra cost. */
+    { label: "Fully managed", amount: "10% of rent", note: "Rent & Legal Protection included" },
+    { label: "Rent collection", amount: "7% of rent", note: null },
+    { label: "Tenant find", amount: "£750 one-off", note: null },
+  ],
+  excluded: [],
+  note: null,
+};
+
 /* ───────────────────────── the sample ───────────────────────── */
 
 /**
@@ -946,25 +987,8 @@ export const SAMPLE_DECK: PresentDeck = {
     note: "Subject to the EPC being redone before it goes live - the current one expired in August.",
   },
   terms: { signUrl: null, summary: null },
-  /* Shown on BOTH long decks — see PresentFees. Written as an office actually
-     quotes it: one headline percentage, the extras named rather than implied,
-     and the exclusions listed so the slide cannot be read as all-inclusive. */
-  fees: {
-    headline: "10% of rent collected",
-    headlineFor: "Fully managed",
-    rows: [
-      { label: "Fully managed", amount: "10% of rent", note: "Rent & Legal Protection included" },
-      { label: "Rent collection", amount: "7% of rent", note: null },
-      { label: "Tenant find", amount: "£750 one-off", note: "Charged on move-in, not on instruction" },
-      { label: "Set-up fee", amount: "£600 one-off", note: "Referencing, agreement and check-in" },
-    ],
-    excluded: [
-      "Gas and electrical safety certificates, at cost",
-      "An inventory where one is not already held",
-      "Court fees, on the two service levels that do not include legal cover",
-    ],
-    note: "All figures include VAT. No tie-in - one month's notice either way, at any point.",
-  },
+  /* The office schedule, same as a real deck gets. See STANDARD_FEES. */
+  fees: STANDARD_FEES,
   /* What is advertised near them today. Deliberately includes one of ours and
      several that are not: a slide showing only our own stock is a brochure,
      not a market. */
