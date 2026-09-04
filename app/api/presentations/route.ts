@@ -4,13 +4,16 @@ import { findUserById } from "@/lib/users";
 import { presentAgentFor } from "@/lib/rex-agents";
 import { createPresentation, presentationsFor } from "@/lib/present-store";
 import {
-  firstNameOf,
   DECK_KINDS,
+  firstNameOf,
   type DeckKind,
+  type PresentComparables,
   type PresentDeck,
+  type PresentListing,
   type PresentMarket,
-  type PresentValuation,
+  type PresentMaterialRow,
   type PresentTerms,
+  type PresentValuation,
 } from "@/lib/present";
 import { hasDb, q } from "@/lib/db";
 import { publicOrigin } from "@/lib/origin";
@@ -44,14 +47,12 @@ type Body = {
   /** Straight from the presentation builder: the comparables the agent
    *  actually ticked, and which sections they kept. Both optional — a deck
    *  minted without the wizard still works exactly as it did. */
-  comparables?: {
-    guideLow: number;
-    guideMid: number;
-    guideHigh: number;
-    basedOn: number;
-    rows: { name: string; locality: string; rent: string; days: number | null; letAgreed: boolean }[];
-    caveat: string | null;
-  } | null;
+  comparables?: PresentComparables | null;
+  /** What is advertised near them, with photographs, as picked on the wizard's
+   *  Available step. See PresentListing for why the gallery travels. */
+  listings?: PresentListing[] | null;
+  /** The headline material-information rows, for the landlord to correct. */
+  material?: PresentMaterialRow[] | null;
   /** The market blocks the agent ticked on the Market step, already reduced to
    *  the figures that were on their screen. Absent means no market slide. */
   market?: PresentMarket | null;
@@ -198,6 +199,20 @@ export async function POST(req: NextRequest) {
        something: an `area` with every block empty would mint a slide headed
        "Your local market" with nothing on it. slidesFor drops a null. */
     market: body.market && body.market.area ? body.market : null,
+    /* WHAT IS ON THE MARKET NEAR THEM, with the photographs, snapshotted for
+       the same reason as everything else on this row: a landlord opening the
+       link on Sunday must not depend on Homesearch being up, and the row then
+       doubles as the record of exactly what we showed them. The image URLs are
+       Homesearch's public S3 media, which resolves with no token.
+
+       Empty means no slide rather than an empty one — slidesFor drops it. */
+    listings:
+      Array.isArray(body.listings) && body.listings.length ? body.listings : null,
+    /* What we hold about the property, for the landlord to correct. Same rule:
+       a "What we have on record" heading over nothing is worse than no slide,
+       because the whole point of it is that there is something to check. */
+    material:
+      Array.isArray(body.material) && body.material.length ? body.material : null,
     /* Gated on a real rent for the same reason slidesFor is: a valuation
        object with no figure in it would mint an offer slide that makes no
        offer. Terms need the figure too — asking somebody to sign before

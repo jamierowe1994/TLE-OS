@@ -284,6 +284,47 @@ export default function PresentationBuilder({
               }
             : null,
           market: marketPayload(),
+          /* WHAT THE AGENT PICKED ON THE AVAILABLE STEP, snapshotted with its
+             photographs. Until now the wizard let somebody choose these and
+             then threw the choice away at send: the slide existed, the type
+             existed, and nothing ever reached a real deck.
+
+             `picks` is already the resolved MarketListing, so the photographs
+             and the advert that /api/ma-photos folded back onto it travel with
+             it. If that fetch has not returned yet the row still goes, with
+             just its lead image - which is the difference between a row that
+             opens a gallery and one that does not, never the difference
+             between a row and no row. */
+          listings: picks.map((l) => ({
+            address: l.address,
+            locality: l.postcode,
+            rent: l.rent != null ? `£${Math.round(l.rent).toLocaleString("en-GB")} pcm` : "",
+            beds: l.beds,
+            type: l.type,
+            image: l.image,
+            photos: l.photos ?? [],
+            /* Homesearch DOES carry the agency, and it is worth having: a
+               landlord recognises the names on their own street, and a list of
+               competitors with nobody's name on it reads as invented. Null
+               where the feed has none, which the row handles. */
+            agent: l.agent ?? null,
+            advert: l.advert ?? null,
+            status: l.status,
+            days: l.daysListed ?? null,
+            /* These come from the whole local market, not our book. Anything
+               of ours in the list is there because a tenant would see it too,
+               so it is not flagged as ours - see the Listings slide. */
+            ours: false,
+          })),
+          /* The headline fields only. The material panel an AGENT reads runs to
+             thirty rows across five groups; a landlord is being asked to
+             correct what goes on the listing, and a thirty-row form is one
+             nobody corrects. */
+          material: (d.material?.groups ?? [])
+            .flatMap((g) => g.fields)
+            .filter((f) => f.headline)
+            .slice(0, 8)
+            .map((f) => ({ label: f.label, value: f.value })),
           ...(await offerPayload()),
         }),
       });
