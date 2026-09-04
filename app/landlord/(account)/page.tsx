@@ -16,7 +16,8 @@ import { geocode } from "@/lib/geocode";
 import { DECK_KINDS } from "@/lib/present";
 import { STAGES, stepsForStage, type LandlordView, type Stage } from "@/lib/landlord-view";
 import type { ManagedProperty } from "@/lib/portfolio-types";
-import { landlordCompliance, type LandlordCompliance } from "@/lib/landlord-account";
+import { landlordCompliance, landlordOffers, type LandlordCompliance } from "@/lib/landlord-account";
+import type { ViewOffer } from "@/lib/landlord-view";
 
 const money = (n: number | null | undefined) => (n == null ? "—" : `£${Math.round(n).toLocaleString("en-GB")}`);
 const day = (iso: string | null | undefined) =>
@@ -47,10 +48,17 @@ export default async function LandlordHome() {
     .filter((j) => j.stage !== "lost")
     .sort((a, b) => Number(a.stage === "won") - Number(b.stage === "won") || b.appraisal.createdAt.localeCompare(a.appraisal.createdAt));
 
+  /* Offers on whichever property the page leads with: the appraisal's REX
+     property once it is picked, or the managed property's own ids. */
+  const lead = open[0] ?? null;
+  const offers = await landlordOffers(
+    lead ? [lead.appraisal.rexPropertyId] : managed[0] ? [managed[0].propertyId] : [],
+    lead ? [] : managed[0] ? [managed[0].listingId] : []
+  );
   const view = open[0]
-    ? await appraisalView(open[0], first, docs, msgs)
+    ? await appraisalView(open[0], first, docs, msgs, offers)
     : managed[0]
-      ? managedView(managed[0], first, compliance.get(managed[0].propertyId ?? "") ?? null)
+      ? managedView(managed[0], first, compliance.get(managed[0].propertyId ?? "") ?? null, offers)
       : null;
   const rest = open[0] ? managed : managed.slice(1);
 
@@ -99,7 +107,11 @@ export default async function LandlordHome() {
 /* --------------------------------------------------------- the feeders -- */
 
 /** The OS's appraisal beats, mapped onto the landlord's six stops. */
-function stageOf(j: AppraisalJourney): Stage {
+function stageOf(j: AppraisalJourney, offers: ViewOffer[] = []): Stage {
+  /* Once it is on the market, the offers say where it is: one accepted is
+     Let agreed, any at all is Viewings / Offers. */
+  if (j.stage === "won" && offers.some((o) => o.status === "accepted")) return "let";
+  if (j.stage === "won" && offers.length) return "viewings";
   if (j.stage === "won") return "marketing";
   if (j.signed.length || j.stage === "takeon" || j.stage === "aml") return "compliance";
   if (j.appraisal.valuation != null) return "instruction";
@@ -115,7 +127,7 @@ const REQUIRED: Array<{ kind: LandlordDocument["kind"]; title: string; missing: 
   { kind: "epc", title: "Energy Performance Certificate (EPC)", missing: "Missing" },
 ];
 
-async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordDocument[], msgs: LandlordMessage[]): Promise<LandlordView> {
+async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordDocument[], msgs: LandlordMessage[], offers: ViewOffer[] = []): Promise<LandlordView> {
   const a = j.appraisal;
   const latest = j.decks[0] ?? null;
   const post = j.decks.find((d) => d.kind === "post-appraisal") ?? null;
@@ -124,9 +136,12 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
   const signUrl = post?.deck.terms?.signUrl ?? null;
   const signed = j.signed.length > 0;
   const agentName = a.agent ?? deckAgent?.name ?? null;
-  const stage = stageOf(j);
+  const stage = stageOf(j, offers);
   const at = STAGES.findIndex((s) => s.id === stage);
   const visitDay = dayLong(a.appointmentAt);
+  const offersSub = offers.length
+    ? `${offers.length} ${offers.length === 1 ? "offer" : "offers"}${offers.some((o) => o.status === "accepted") ? "  •  one accepted" : offers.some((o) => o.status === "with-you") ? "  •  one with you" : ""}`
+    : "Who has been, and what they said";
 
   const geo = await geocode(`${a.address}, ${a.postcode}`).catch(() => null);
 
@@ -214,7 +229,7 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
       compliance: { id: "compliance", label: "Upload compliance documents", sub: `${required.length - have} of ${required.length} still to send`, href: "#documents", icon: "upload", done: allIn },
       message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: null, icon: "message", action: "message" },
       listing: { id: "listing", label: "See your listing", sub: "Live on the portals", href: null, icon: "home" },
-      viewings: { id: "viewings", label: "Viewings and offers", sub: "Who has been, and what they said", href: null, icon: "key" },
+      viewings: { id: "viewings", label: "Viewings and offers", sub: offersSub, href: offers.length ? "#offers" : null, icon: "key" },
     }),
     documents,
     snapshot: {
@@ -229,6 +244,7 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
       ],
     },
     activity,
+    offers,
     messages: msgs.map((m) => ({ id: m.id, from: m.direction, body: m.body, sentAt: m.sentAt, emailed: Boolean(m.emailedAt) })),
     agent: deckAgent
       ? { name: deckAgent.name, title: deckAgent.title, phone: deckAgent.phone, email: deckAgent.email, photo: deckAgent.photo }
@@ -238,7 +254,7 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
   };
 }
 
-function managedView(p: ManagedProperty, first: string, comp: LandlordCompliance | null): LandlordView {
+function managedView(p: ManagedProperty, first: string, comp: LandlordCompliance | null, offers: ViewOffer[] = []): LandlordView {
   const tenant = p.tenants[0];
   /* The certificates, as documents. A landlord reads "Gas safety - expires
      12 March 2027" the way they read "Contract - signed": a thing on the
@@ -285,6 +301,7 @@ function managedView(p: ManagedProperty, first: string, comp: LandlordCompliance
       viewings: { id: "viewings", label: "Your tenancy", sub: tenant ? `${tenant.name}, since ${day(p.letSince) ?? "—"}` : "Let", href: null, icon: "key" },
     }),
     documents: certDocs,
+    offers,
     snapshot: {
       readinessPct: comp ? Math.round((100 * dated.filter((c) => c.status === "ok" || c.status === "watch").length) / Math.max(1, dated.length)) : 100,
       note: comp && !comp.allInDate ? `${comp.headline}. Your agent will be in touch about it.` : "Nothing waiting on you.",

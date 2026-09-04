@@ -183,6 +183,53 @@ export default function LandlordDashboard({
         </ol>
       </section>
 
+      {/* ── offers, once there are any ──
+          Every application on the property, the accepted one first. The
+          landlord reads the amount, who, when they want to move and what they
+          asked for - which is the conversation the agent would otherwise have
+          on the phone, with nothing to look back at. */}
+      {v.offers && v.offers.length > 0 && (
+        <section className={panel} id="offers" data-search>
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-[17px]">Offers</h2>
+            <span className="text-[11.5px] text-muted">
+              {v.offers.length} on your property  •  your agent will talk you through them
+            </span>
+          </div>
+          <ul className="mt-3 divide-y divide-line/60">
+            {v.offers.map((o) => (
+              <li key={o.id} className="flex flex-wrap items-start gap-x-4 gap-y-1 py-3">
+                <span className="w-36 shrink-0 text-[15px] font-semibold">{o.amount}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px]">
+                    {o.applicants}
+                    <span className="text-muted">  •  {o.who}</span>
+                  </span>
+                  <span className="block text-[11.5px] text-muted">
+                    {o.moveIn ? `Wants to move in ${new Date(o.moveIn).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : "Move-in to be agreed"}
+                    {o.received ? `  •  received ${new Date(o.received).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}
+                  </span>
+                  {o.conditions && <span className="mt-1 block text-[12px]">Asked for: {o.conditions}</span>}
+                </span>
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                    o.status === "accepted"
+                      ? "bg-[#e8f5ec] text-[#1e7a3c]"
+                      : o.status === "with-you"
+                        ? "bg-[#fff1e6] text-[#b4610d]"
+                        : o.status === "unsuccessful"
+                          ? "bg-[#f3f3f1] text-muted line-through"
+                          : "bg-[#f3f3f1] text-muted"
+                  }`}
+                >
+                  {o.statusLabel}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* ── documents, snapshot, activity ── */}
       <div className="grid gap-4 lg:grid-cols-3">
         <section className={`${panel} flex flex-col`} id="documents" data-search>

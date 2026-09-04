@@ -10,6 +10,8 @@ import { signedFor } from "@/lib/signed-documents";
 import { effectiveStage, SERVICE_LEVELS, type MarketAppraisal, type MaStage } from "@/lib/market-appraisal";
 import type { ManagedProperty } from "@/lib/portfolio-types";
 import { certificatesFor } from "@/lib/rex-compliance";
+import { getApplications, type Application } from "@/lib/applications";
+import type { ViewOffer } from "@/lib/landlord-view";
 import { CERT_META, requiredCerts, statusOf, type CertKey, type CertStatus, type CompProperty } from "@/lib/compliance";
 
 /**
@@ -246,6 +248,70 @@ export async function landlordCompliance(props: ManagedProperty[]): Promise<Map<
     /* the portal shows the property without certificates rather than nothing */
   }
   return out;
+}
+
+/* -------------------------------------------------------------- offers -- */
+
+const OFFER_WORDS: Record<string, { status: ViewOffer["status"]; label: string }> = {
+  received: { status: "received", label: "Received" },
+  communicated: { status: "with-you", label: "With you" },
+  accepted: { status: "accepted", label: "Accepted" },
+  unsuccessful: { status: "unsuccessful", label: "Unsuccessful" },
+};
+
+function firstName(n: string): string {
+  return n.trim().split(/\s+/)[0] || "Applicant";
+}
+
+function offerOf(a: Application): ViewOffer {
+  const w = OFFER_WORDS[a.status] ?? OFFER_WORDS.received;
+  const people: string[] = [];
+  if (a.occupants != null) people.push(`${a.occupants} ${a.occupants === 1 ? "adult" : "adults"}`);
+  if (a.dependents != null && a.dependents > 0) people.push(`${a.dependents} ${a.dependents === 1 ? "child" : "children"}`);
+  if (a.hasPets != null) people.push(a.hasPets ? "pets" : "no pets");
+  const amount =
+    a.offerAmount != null
+      ? `£${Math.round(a.offerAmount).toLocaleString("en-GB")} per ${a.offerPeriod === "week" ? "week" : "month"}`
+      : "Amount to follow";
+  return {
+    id: a.id,
+    amount,
+    status: w.status,
+    statusLabel: w.label,
+    who: people.join(", ") || "Details to follow",
+    applicants: a.applicants.map((p) => firstName(p.name)).filter(Boolean).join(" and ") || "An applicant",
+    moveIn: a.startDate,
+    received: a.dateReceived,
+    conditions: a.conditions?.trim() || null,
+  };
+}
+
+/**
+ * The offers on a landlord's property, from REX's applications. Matched on
+ * the REX property id (the appraisal's pick, the managed property's record)
+ * and on the listing id where there is one. Newest first; an accepted offer
+ * floats to the top because it is the one the landlord wants to see.
+ * Empty on any failure: a portal must render without REX.
+ */
+export async function landlordOffers(propertyIds: Array<string | null | undefined>, listingIds: Array<string | number | null | undefined> = []): Promise<ViewOffer[]> {
+  const props = new Set(propertyIds.filter((x): x is string => Boolean(x)).map(String));
+  const lists = new Set(listingIds.filter((x): x is string | number => x != null && x !== "").map(String));
+  if (!props.size && !lists.size) return [];
+  let apps: Application[] = [];
+  try {
+    apps = await getApplications(300);
+  } catch {
+    return [];
+  }
+  const mine = apps.filter(
+    (a) => (a.propertyId && props.has(String(a.propertyId))) || (a.listingId != null && lists.has(String(a.listingId)))
+  );
+  mine.sort((a, b) => {
+    const acc = Number(b.status === "accepted") - Number(a.status === "accepted");
+    if (acc) return acc;
+    return (b.dateReceived ?? "").localeCompare(a.dateReceived ?? "");
+  });
+  return mine.map(offerOf);
 }
 
 /* ------------------------------------------------------------- journey -- */

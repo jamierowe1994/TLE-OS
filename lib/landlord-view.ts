@@ -55,6 +55,24 @@ export interface ViewStep {
   action?: "sign" | "message";
 }
 
+/** An offer on the landlord's property, as they should read it. */
+export interface ViewOffer {
+  id: string;
+  /** "£1,250 per month" */
+  amount: string;
+  /** Received, With you, Accepted, Unsuccessful. */
+  status: "received" | "with-you" | "accepted" | "unsuccessful";
+  statusLabel: string;
+  /** "2 adults, 1 child, no pets" */
+  who: string;
+  /** First names only. */
+  applicants: string;
+  moveIn: string | null;
+  received: string | null;
+  /** What the applicant asked for, if anything. */
+  conditions: string | null;
+}
+
 export interface ViewDocument {
   title: string;
   sub: string;
@@ -103,6 +121,8 @@ export interface LandlordView {
   };
   steps: ViewStep[];
   documents: ViewDocument[];
+  /** Offers on the property, newest first. Absent before marketing. */
+  offers?: ViewOffer[];
   snapshot: { readinessPct: number; note: string; lines: Array<[string, string]> };
   activity: ViewActivity[];
   messages?: ViewMessage[];
