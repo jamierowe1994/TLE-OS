@@ -156,6 +156,7 @@ export function eventTone(kind: DealEventKind): "ok" | "warn" | "none" {
     kind === "plc_decided"
   )
     return "ok";
-  if (kind === "cancelled" || kind === "moved_back" || kind === "gone") return "warn";
+  /* A pack landing on her desk is amber: it is the one row that waits on her. */
+  if (kind === "cancelled" || kind === "moved_back" || kind === "gone" || kind === "plc_submitted") return "warn";
   return "none";
 }
