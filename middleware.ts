@@ -137,6 +137,7 @@ const MACHINE_ROUTES = [
   "/api/esign/poll",                  // DocuSeal envelope status
   "/api/scheduled-sends/run",         // queued email
   "/api/pretenancy/alerts/run",       // the pre-tenancy digest
+  "/api/pretenancy/watch",            // the Propoly watcher, every five minutes
   "/api/compliance/reminders/run",    // the 30/14/7 certificate chase
   "/api/lettings-capture/run",        // the daily market sweep
   "/api/radar/run",                   // Landlord Radar: sweep the patch, rescore, digest
