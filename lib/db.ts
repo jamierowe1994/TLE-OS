@@ -1810,6 +1810,14 @@ CREATE TABLE IF NOT EXISTS os_deal_events (
   told_at      TIMESTAMPTZ,
   told_note    TEXT
 );
+-- Money seen in PayProp for the deal, stamped the first time the watcher saw
+-- it. money_checked_at NULL means the money pass has never looked at this
+-- row, so the first look records silently rather than announcing old money.
+ALTER TABLE os_deal_states ADD COLUMN IF NOT EXISTS money_checked_at TIMESTAMPTZ;
+ALTER TABLE os_deal_states ADD COLUMN IF NOT EXISTS holding_seen_at TIMESTAMPTZ;
+ALTER TABLE os_deal_states ADD COLUMN IF NOT EXISTS deposit_seen_at TIMESTAMPTZ;
+ALTER TABLE os_deal_states ADD COLUMN IF NOT EXISTS rent_seen_at TIMESTAMPTZ;
+ALTER TABLE os_deal_events ADD COLUMN IF NOT EXISTS amount NUMERIC(12,2);
 CREATE INDEX IF NOT EXISTS os_deal_events_at ON os_deal_events (at DESC);
 CREATE INDEX IF NOT EXISTS os_deal_events_deal ON os_deal_events (deal_id, at DESC);
 CREATE INDEX IF NOT EXISTS os_deal_events_agent ON os_deal_events (agent_email, at DESC);

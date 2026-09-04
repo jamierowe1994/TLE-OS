@@ -3,6 +3,7 @@ import { hasDb, q } from "@/lib/db";
 import { getAllPropolyDeals, type BusinessDeal } from "@/lib/business/propoly-deals";
 import { getPropolyDeal, propolyConfigured } from "@/lib/business/propoly";
 import { logSystemEvent } from "@/lib/business/deal-store";
+import { loadMoneyContext, moneyForDeal } from "@/lib/business/deal-money";
 import { sendEmail } from "@/lib/resend";
 import { switchOn } from "@/lib/switches";
 import {
@@ -57,6 +58,10 @@ interface StateRow extends Record<string, unknown> {
   property: string;
   agent_email: string | null;
   agent_name: string | null;
+  money_checked_at: string | Date | null;
+  holding_seen_at: string | Date | null;
+  deposit_seen_at: string | Date | null;
+  rent_seen_at: string | Date | null;
 }
 
 interface EventRow extends Record<string, unknown> {
@@ -68,6 +73,7 @@ interface EventRow extends Record<string, unknown> {
   event: string;
   from_status: string | null;
   to_status: string | null;
+  amount: string | number | null;
   at: string | Date;
   told_to: string | null;
   told_at: string | Date | null;
@@ -84,6 +90,7 @@ function rowToEvent(r: EventRow): DealEvent {
     event: r.event as DealEventKind,
     fromStatus: r.from_status,
     toStatus: r.to_status,
+    amount: r.amount == null ? null : Number(r.amount),
     at: new Date(r.at).toISOString(),
     toldTo: r.told_to,
     toldAt: r.told_at ? new Date(r.told_at).toISOString() : null,
@@ -143,11 +150,12 @@ async function record(e: {
   from: string | null;
   to: string | null;
   kind: DealEventKind;
+  amount?: number | null;
 }): Promise<DealEvent> {
   const rows = await q<EventRow>(
-    `INSERT INTO os_deal_events (deal_id, property, agent_email, agent_name, event, from_status, to_status)
-     VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-    [e.dealId, e.property, e.agentEmail, e.agentName, e.kind, e.from, e.to]
+    `INSERT INTO os_deal_events (deal_id, property, agent_email, agent_name, event, from_status, to_status, amount)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [e.dealId, e.property, e.agentEmail, e.agentName, e.kind, e.from, e.to, e.amount ?? null]
   );
   const ev = rowToEvent(rows[0]);
   /* The deal's own thread on the board gets the same line, so opening the
@@ -186,7 +194,11 @@ export async function watchDeals(opts: { origin: string }): Promise<WatchResult>
   if (!deals) return { ok: false, reason: "Propoly did not answer in time.", deals: 0, events: [], told: 0 };
 
   const known = new Map<string, StateRow>();
-  for (const r of await q<StateRow>(`SELECT deal_id, status_key, property, agent_email, agent_name FROM os_deal_states`)) {
+  for (const r of await q<StateRow>(
+    `SELECT deal_id, status_key, property, agent_email, agent_name,
+            money_checked_at, holding_seen_at, deposit_seen_at, rent_seen_at
+       FROM os_deal_states`
+  )) {
     known.set(r.deal_id, r);
   }
 
@@ -260,8 +272,78 @@ export async function watchDeals(opts: { origin: string }): Promise<WatchResult>
      anything happened. A quiet fortnight must still read as watched. */
   await q(`UPDATE os_deal_states SET seen_at = NOW() WHERE deal_id = ANY($1::text[])`, [[...seen]]);
 
+  events.push(...(await watchMoney(deals, known)));
+
   const told = await tellAgents(events, opts.origin);
   return { ok: true, deals: deals.length, events, told };
+}
+
+/* ───────────────────────────── the money ───────────────────────────────── */
+
+/**
+ * Money, seen rather than claimed.
+ *
+ * Kirstie (4 Sep): Propoly "sometimes recognises payment, and sometimes it
+ * doesn't", so she confirms the holding fee and the first rent by looking in
+ * PayProp herself. This looks for her. It reads the same join the board and
+ * the digest read (deal-money), so the feed can never say rent is in while
+ * the board says it is not.
+ *
+ * Three facts per deal, each announced once, the first time it is seen:
+ * the holding fee invoiced, the deposit registered, the first rent received.
+ * A row the money pass has never looked at is recorded silently - the book
+ * is full of deals whose money arrived months ago, and those are history,
+ * not news.
+ *
+ * Cancelled deals are skipped: money on a dead deal is the next tenant's.
+ * A cold PayProp cache (loaded = false) skips the whole pass rather than
+ * treating "not loaded" as "nothing there" - the same rule the digest keeps.
+ */
+async function watchMoney(deals: BusinessDeal[], known: Map<string, StateRow>): Promise<DealEvent[]> {
+  const out: DealEvent[] = [];
+  let ctx: Awaited<ReturnType<typeof loadMoneyContext>>;
+  try {
+    ctx = await loadMoneyContext();
+  } catch {
+    return out;
+  }
+  if (!ctx.loaded) return out;
+
+  for (const d of deals) {
+    if (d.statusKey === "cancelled") continue;
+    const row = known.get(d.app.id);
+    const money = moneyForDeal(ctx, d.app.propertyName, d.app.startDate);
+    const holding = money.holdingInvoice;
+    const deposit = money.tenancy?.depositId ? money.tenancy : null;
+    const rent = money.rentReceived;
+
+    const firstLook = !row || row.money_checked_at == null;
+    const property = propertyOf(d);
+    const who = { agentEmail: d.managerEmail ?? row?.agent_email ?? null, agentName: d.managerName ?? row?.agent_name ?? null };
+
+    if (!firstLook) {
+      if (holding && !row.holding_seen_at) {
+        out.push(await record({ dealId: d.app.id, property, ...who, from: null, to: null, kind: "holding_in", amount: holding.amount }));
+      }
+      if (deposit && !row.deposit_seen_at) {
+        out.push(await record({ dealId: d.app.id, property, ...who, from: null, to: null, kind: "deposit_registered" }));
+      }
+      if (rent && !row.rent_seen_at) {
+        out.push(await record({ dealId: d.app.id, property, ...who, from: null, to: null, kind: "rent_in", amount: rent.amount }));
+      }
+    }
+
+    await q(
+      `UPDATE os_deal_states
+          SET money_checked_at = NOW(),
+              holding_seen_at = CASE WHEN $2 THEN COALESCE(holding_seen_at, NOW()) ELSE holding_seen_at END,
+              deposit_seen_at = CASE WHEN $3 THEN COALESCE(deposit_seen_at, NOW()) ELSE deposit_seen_at END,
+              rent_seen_at    = CASE WHEN $4 THEN COALESCE(rent_seen_at, NOW()) ELSE rent_seen_at END
+        WHERE deal_id = $1`,
+      [d.app.id, Boolean(holding), Boolean(deposit), Boolean(rent)]
+    );
+  }
+  return out;
 }
 
 /* ─────────────────────────── telling people ────────────────────────────── */
@@ -276,6 +358,8 @@ function subjectFor(e: DealEvent): string {
       return `Complete: ${e.property}`;
     case "cancelled":
       return `Cancelled: ${e.property}`;
+    case "rent_in":
+      return `Rent in: ${e.property}`;
     default:
       return `${eventSentence(e)}: ${e.property}`;
   }
@@ -289,7 +373,9 @@ function bodyFor(e: DealEvent, origin: string): { text: string; html: string } {
         ? "Next: nothing until both the landlord and the tenant have signed. Kirstie will mark it complete."
         : e.event === "complete"
           ? "Signed and monies in. Move-in is the last step."
-          : "Propoly has cancelled this deal. If that is a surprise, speak to Kirstie.";
+          : e.event === "rent_in"
+            ? "The first rent has landed in PayProp. Kirstie will close the deal off; you can plan the move-in."
+            : "Propoly has cancelled this deal. If that is a surprise, speak to Kirstie.";
   const link = `${origin}/applications`;
   const text = `${e.property}\n${eventSentence(e)}.\n\n${next}\n\nOpen your applications: ${link}\n`;
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");

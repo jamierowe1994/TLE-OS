@@ -18,10 +18,18 @@ export type DealEventKind =
   | "complete"
   | "cancelled"
   | "moved_back"
-  | "gone";
+  | "gone"
+  /* Money, seen in PayProp rather than claimed in Propoly. Kirstie said
+     Propoly "sometimes recognises payment, and sometimes it doesn't", so she
+     confirms by hand. These are the OS confirming instead. */
+  | "holding_in"
+  | "deposit_registered"
+  | "rent_in";
 
 export interface DealEvent {
   id: number;
+  /** Money events carry the amount in pounds; stage events carry null. */
+  amount?: number | null;
   dealId: string;
   property: string;
   agentEmail: string | null;
@@ -67,7 +75,7 @@ export function kindFor(from: string | null, to: string): DealEventKind {
 }
 
 /** One line for the feed. Property first: that is how Kirstie scans a list. */
-export function eventSentence(e: Pick<DealEvent, "event" | "toStatus" | "fromStatus">): string {
+export function eventSentence(e: Pick<DealEvent, "event" | "toStatus" | "fromStatus" | "amount">): string {
   switch (e.event) {
     case "deal_started":
       return "Deal started in Propoly";
@@ -89,7 +97,18 @@ export function eventSentence(e: Pick<DealEvent, "event" | "toStatus" | "fromSta
       return `Moved back to ${(STATUS_WORDS[e.toStatus ?? ""] ?? e.toStatus ?? "").toLowerCase()}`;
     case "gone":
       return "No longer in Propoly";
+    case "holding_in":
+      return `Holding fee ${pounds(e.amount)}in PayProp`;
+    case "deposit_registered":
+      return "Deposit registered with the scheme";
+    case "rent_in":
+      return `First rent ${pounds(e.amount)}received in PayProp`;
   }
+}
+
+function pounds(n: number | null | undefined): string {
+  if (n == null) return "";
+  return `of £${Math.round(n).toLocaleString("en-GB")} `;
 }
 
 /** The moves worth an email to the agent. The rest are feed-only. */
@@ -98,10 +117,19 @@ export const TELL_AGENT: ReadonlySet<DealEventKind> = new Set([
   "agreement_out",
   "complete",
   "cancelled",
+  "rent_in",
 ]);
 
 export function eventTone(kind: DealEventKind): "ok" | "warn" | "none" {
-  if (kind === "references_back" || kind === "agreement_out" || kind === "complete") return "ok";
+  if (
+    kind === "references_back" ||
+    kind === "agreement_out" ||
+    kind === "complete" ||
+    kind === "holding_in" ||
+    kind === "deposit_registered" ||
+    kind === "rent_in"
+  )
+    return "ok";
   if (kind === "cancelled" || kind === "moved_back" || kind === "gone") return "warn";
   return "none";
 }
