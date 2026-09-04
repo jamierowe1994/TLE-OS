@@ -788,66 +788,94 @@ export function MarketingDivider({ show }: { show: boolean }) {
   );
 }
 
+/**
+ * Everything that happens before a tenant arrives.
+ *
+ * Eight items, and deliberately a LIST rather than eight little arguments with
+ * headings. This is the inventory slide - what you get for the fee - and an
+ * inventory that explains itself item by item stops being scannable, which is
+ * the only thing an inventory is for.
+ *
+ * The slide that does the arguing is the next one.
+ */
 export function Offer({ show }: { show: boolean }) {
   return (
-    <Slide id="offer">
-      <div className="mx-auto w-full max-w-5xl">
-        <Head
-          eyebrow="What we do"
-          title="Everything that happens before a tenant arrives"
-          show={show}
-        />
-        <ul className="mt-9 grid gap-x-12 gap-y-3 sm:grid-cols-2">
+    <CreamSlide id="offer">
+      <div className="mx-auto w-full max-w-[1120px]">
+        <div className="max-w-[680px]">
+          <HandHead eyebrow="What we do" show={show} lines={2}>
+            Everything that happens
+            <br />
+            before a tenant <Emphasis show={show}>arrives</Emphasis>
+          </HandHead>
+        </div>
+
+        <ul className="mt-9 grid gap-x-14 gap-y-3 sm:grid-cols-2 lg:mt-10">
           {WHAT_WE_OFFER.map((w, n) => (
-            <Rise key={w} show={show} i={1 + Math.floor(n / 4)}>
-              <li className="flex items-start gap-3 border-t border-black/10 pt-3">
-                <span className="mt-[3px] shrink-0" style={{ color: RED }}>
+            <Rise key={w} show={show} i={2 + Math.floor(n / 4)}>
+              <li
+                className="flex items-start gap-3"
+                style={{
+                  borderTop: n < 2 ? "none" : "1px solid rgba(0,0,0,0.07)",
+                  paddingTop: n < 2 ? 0 : 12,
+                }}
+              >
+                <span className="mt-[3px] shrink-0" style={{ color: CORAL }}>
                   <Line name="check" size={16} />
                 </span>
-                <span className="text-[13.5px] font-light leading-relaxed">{w}</span>
+                <span className="text-[14px] font-light leading-[1.5]">{w}</span>
               </li>
             </Rise>
           ))}
         </ul>
       </div>
-    </Slide>
+    </CreamSlide>
   );
 }
 
 /**
- * The film.
- *
- * `propertyVideoUrl` is the agent's own walk-through of THIS property when one
- * exists. It usually will not, at which point the slide argues for the film
- * rather than pretending to be one — a player with nothing behind it is worse
- * than a paragraph.
- */
-/**
  * How the marketing becomes a number.
  *
- * Five points and they are the argument, so they get the room a paragraph
- * would have had: a numbered column rather than a grid of cards. The order is
- * chronological - price, present, launch, view, review - because it is a
- * sequence a landlord will live through, not a menu.
+ * The half of Marketing every agency leaves out. A landlord shown photography,
+ * portals and social has been told we will find A tenant; none of it explains
+ * why they should get MORE rent than the flat down the road, which is the only
+ * question they are really asking.
+ *
+ * Five points in the order a landlord lives through them - price, present,
+ * launch, view, review - so it reads as a sequence rather than a menu.
+ * Numbered for that reason, and the numerals sit at a third opacity: they mark
+ * the order without becoming the loudest thing on the slide.
  */
 export function MaxPrice({ show }: { show: boolean }) {
   return (
-    <Slide id="maxprice">
-      <div className="mx-auto w-full max-w-5xl">
-        <Head eyebrow={MAX_PRICE.eyebrow} title={MAX_PRICE.heading} show={show} />
-        <ol className="mt-8 grid gap-x-12 gap-y-4 sm:grid-cols-2">
+    <CreamSlide id="maxprice">
+      <div className="mx-auto w-full max-w-[1180px]">
+        <div className="max-w-[720px]">
+          <HandHead eyebrow={MAX_PRICE.eyebrow} show={show} lines={2}>
+            Marketing finds a tenant.
+            <br />
+            This is what sets the <Emphasis show={show}>rent</Emphasis>
+          </HandHead>
+        </div>
+
+        <ol className="mt-9 grid gap-x-14 gap-y-6 sm:grid-cols-2 lg:mt-10">
           {MAX_PRICE.points.map((p, n) => (
-            <Rise key={p.title} show={show} i={1 + Math.floor(n / 2)}>
-              <li className="flex gap-4 border-t border-black/10 pt-3.5">
+            <Rise key={p.title} show={show} i={2 + Math.floor(n / 2)}>
+              <li className="flex gap-5">
                 <span
-                  className="mt-[2px] shrink-0 text-[12px] font-semibold tabular-nums"
-                  style={{ color: RED }}
+                  className="shrink-0 text-[24px] leading-none"
+                  style={{ fontFamily: HAND, fontWeight: 700, color: CORAL, opacity: 0.32 }}
                 >
                   {String(n + 1).padStart(2, "0")}
                 </span>
-                <span>
-                  <span className="block text-[14.5px] font-semibold leading-snug">{p.title}</span>
-                  <span className="mt-1.5 block text-[12.5px] font-light leading-relaxed text-black/60">
+                <span className="min-w-0">
+                  <span
+                    className="block text-[15.5px] leading-snug sm:text-[16px]"
+                    style={{ fontFamily: HAND, fontWeight: 700 }}
+                  >
+                    {p.title}
+                  </span>
+                  <span className="mt-1.5 block text-[13px] font-light leading-[1.6] text-black/60">
                     {p.body}
                   </span>
                 </span>
@@ -856,54 +884,79 @@ export function MaxPrice({ show }: { show: boolean }) {
           ))}
         </ol>
       </div>
-    </Slide>
+    </CreamSlide>
   );
 }
 
+/**
+ * The film.
+ *
+ * `propertyVideoUrl` is the agent's own walk-through of THIS property when one
+ * exists, and it usually will not - the film is made after the instruction,
+ * and this deck is what wins the instruction.
+ *
+ * So the slide is NOT gated on having one, and it used to be. That was wrong:
+ * the argument for filming a property is worth making to somebody who has not
+ * signed yet, which is exactly who is reading. With no film the frame says
+ * what will go in it and when; with one, it plays.
+ */
 export function Video({ deck, show }: { deck: Deck; show: boolean }) {
   const url = deck.propertyVideoUrl;
   return (
-    <Slide id="video">
-      <div className="mx-auto w-full max-w-5xl">
-        <Head eyebrow="Your property on film" title={VIDEO_COPY.heading} show={show} />
-        <div className="mt-8 grid items-start gap-10 lg:grid-cols-[1fr_1.1fr]">
-          <Rise show={show} i={1}>
-            <p className="text-[13.5px] font-light leading-[1.75] text-black/70">{VIDEO_COPY.body}</p>
-          </Rise>
+    <CreamSlide id="video">
+      <div className="mx-auto grid w-full max-w-[1180px] items-center gap-10 lg:grid-cols-[0.95fr_1.05fr] lg:gap-16">
+        <div className="max-w-[520px]">
+          <HandHead eyebrow="Your property on film" show={show} lines={2}>
+            The bit a photograph
+            <br />
+            cannot <Emphasis show={show}>do</Emphasis>
+          </HandHead>
           <Rise show={show} i={2}>
-            {url ? (
-              <div
-                className="aspect-video w-full overflow-hidden rounded-2xl"
-                style={{ background: MIST }}
-              >
-                <iframe
-                  src={url}
-                  title="Your property"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture"
-                  allowFullScreen
-                  className="h-full w-full border-0"
-                />
-              </div>
-            ) : (
-              <div
-                className="flex aspect-video w-full flex-col items-center justify-center gap-3 rounded-2xl px-6 text-center"
-                style={{ background: MIST }}
-              >
-                <span style={{ color: RED }}>
-                  <Line name="home" size={26} />
-                </span>
-                <p className="text-[12.5px] font-light text-black/60">
-                  Your film is made once the property is ready to photograph. It goes here, and out
-                  across the portals and social on the same day.
-                </p>
-              </div>
-            )}
+            <p className="mt-6 text-[14.5px] font-light leading-[1.7] text-black/60">
+              {VIDEO_COPY.body}
+            </p>
           </Rise>
         </div>
+
+        <Rise show={show} i={3}>
+          {url ? (
+            <div
+              className="aspect-video w-full overflow-hidden rounded-[20px]"
+              style={{ background: TINTS[0] }}
+            >
+              <iframe
+                src={url}
+                title="Your property"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture"
+                allowFullScreen
+                className="h-full w-full border-0"
+              />
+            </div>
+          ) : (
+            /* Not a broken player and not a spinner. A frame that says what
+               goes in it, which is a promise rather than a gap. */
+            <div
+              className="flex aspect-video w-full flex-col items-center justify-center gap-3.5 rounded-[20px] px-10 text-center"
+              style={{ background: TINTS[0] }}
+            >
+              <span style={{ color: CORAL }}>
+                <Line name="home" size={30} />
+              </span>
+              <p className="text-[15px] leading-snug" style={{ fontFamily: HAND, fontWeight: 700 }}>
+                Your film goes here
+              </p>
+              <p className="max-w-[300px] text-[12.5px] font-light leading-relaxed text-black/50">
+                Filmed once the property is ready to photograph, and out across the portals and
+                social on the same day.
+              </p>
+            </div>
+          )}
+        </Rise>
       </div>
-    </Slide>
+    </CreamSlide>
   );
 }
+
 
 export function Brochure({ show }: { show: boolean }) {
   return (

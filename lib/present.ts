@@ -741,7 +741,11 @@ export function slidesFor(deck: PresentDeck): typeof SLIDES {
     if (s.id === "history") return Boolean(deck.history?.points?.length);
     if (s.id === "material") return Boolean(deck.material?.length);
     if (s.id === "testimonial") return Boolean(deck.testimonial?.quote);
-    if (s.id === "video") return Boolean(deck.propertyVideoUrl);
+    /* `video` is NOT gated on having a film, and used to be. The film is made
+       after the instruction and this deck is what wins the instruction, so the
+       argument for filming a property is worth making to precisely the person
+       who has not signed yet. The slide shows a frame saying what will go in
+       it; see components/PresentSlides. */
     /* The fee page needs a fee. An agent who has not set one yet gets no slide
        rather than a page of dashes — and the builder can then tell them so. */
     if (s.id === "fees") return Boolean(deck.fees && (deck.fees.rows.length || deck.fees.headline));
