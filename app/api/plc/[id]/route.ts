@@ -4,13 +4,16 @@ import {
   getCase,
   markScanning,
   PlcRefused,
+  recordPreflight,
   recordScan,
   reopenCase,
   submitCase,
+  unwaiveCheck,
   updateDetails,
+  waiveCheck,
 } from "@/lib/plc-store";
-import { missingDocuments, PLC_CHECKS, scanSummary, sortFindings } from "@/lib/plc";
-import { scanCase, scanConfigured } from "@/lib/plc-scan";
+import { gateFor, missingDocuments, PLC_CHECKS, scanSummary, sortFindings, type CheckId } from "@/lib/plc";
+import { scanCase, scanConfigured, type ScanOutcome } from "@/lib/plc-scan";
 import { actorName } from "@/lib/plc-actor";
 import { recordDecision, recordRecommendation } from "@/lib/plc-shadow";
 
@@ -78,9 +81,10 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
   let body: {
     action?: string;
-    force?: boolean;
     decision?: "approved" | "deferred" | "declined";
     note?: string;
+    checkId?: string;
+    reason?: string;
   };
   try {
     body = await req.json();
@@ -91,8 +95,88 @@ export async function POST(req: NextRequest, ctx: Ctx) {
   try {
     switch (body.action) {
       case "submit": {
-        const submitted = await submitCase(id, { force: Boolean(body.force) });
-        return NextResponse.json({ ok: true, ...payload(submitted) });
+        /* ── The gate, then the preflight, then the send ──────────────────
+           Kirstie, 4 Sep: a pack reaching the check with an empty slot fails
+           it, and the failed check is charged to TLE. So nothing leaves the
+           agent until every required slot is filled, every conditional one
+           is filled or explained, and the reader has found nothing that
+           would fail on the move-in date. The reader's findings then travel
+           with the pack, so Kirstie opens a scanned case rather than pressing
+           scan herself. */
+        const current = await getCase(id);
+        if (!current) {
+          return NextResponse.json({ ok: false, error: "That handover no longer exists." }, { status: 404 });
+        }
+        const gate = gateFor(current);
+        if (!gate.ready) {
+          return NextResponse.json(
+            {
+              ok: false,
+              error: gate.blocked.length
+                ? `Can't send without: ${gate.blocked.map((k) => k.label).join(", ")}.`
+                : `Say why these aren't needed, or attach them: ${gate.askWhy.map((k) => k.label).join(", ")}.`,
+              gate: { blocked: gate.blocked.map((k) => k.id), askWhy: gate.askWhy.map((k) => k.id) },
+              ...payload(current),
+            },
+            { status: 409 }
+          );
+        }
+
+        let outcome: ScanOutcome | null = null;
+        if (scanConfigured() && current.state === "assembling" && current.moveInDate) {
+          try {
+            outcome = await scanCase(current);
+          } catch {
+            /* A reader that fails is not a reason to hold the pack: it goes
+               through unscanned and Kirstie reads it, as before the reader
+               existed. */
+            outcome = null;
+          }
+        }
+        if (outcome) {
+          const blockers = outcome.findings.filter((f) => f.level === "blocker");
+          if (blockers.length) {
+            const held = await recordPreflight(id, outcome.findings);
+            return NextResponse.json(
+              {
+                ok: false,
+                error: `The reader found ${blockers.length} thing${blockers.length === 1 ? "" : "s"} that would fail the check. Fix ${
+                  blockers.length === 1 ? "it" : "them"
+                } and send again.`,
+                ...payload(held),
+              },
+              { status: 409 }
+            );
+          }
+        }
+
+        const submitted = await submitCase(id);
+        if (!outcome) return NextResponse.json({ ok: true, ...payload(submitted) });
+
+        await markScanning(id);
+        const scanned = await recordScan(id, outcome.findings);
+        if (outcome.recommendation) {
+          await recordRecommendation({
+            caseId: id,
+            address: scanned.address,
+            verdict: outcome.recommendation.verdict,
+            headline: outcome.recommendation.headline,
+            perCheck: outcome.recommendation.perCheck,
+            submittedAt: scanned.submittedAt,
+          });
+        }
+        return NextResponse.json({ ok: true, ...payload(scanned) });
+      }
+
+      case "waive": {
+        const by = await actorName(req, "Agent");
+        const waived = await waiveCheck(id, (body.checkId ?? "") as CheckId, body.reason ?? "", by);
+        return NextResponse.json({ ok: true, ...payload(waived) });
+      }
+
+      case "unwaive": {
+        const back = await unwaiveCheck(id, (body.checkId ?? "") as CheckId);
+        return NextResponse.json({ ok: true, ...payload(back) });
       }
 
       case "reopen": {

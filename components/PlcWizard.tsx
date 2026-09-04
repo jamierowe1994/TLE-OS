@@ -8,6 +8,8 @@ import {
   CHECK_GROUPS,
   guessCheck,
   PLC_CHECKS,
+  gateFor,
+  waiverFor,
   type CheckId,
   type PlcCase,
   type PlcDocument,
@@ -448,6 +450,8 @@ export default function PlcWizard({
   const [kase, setKase] = useState<PlcCase | null>(null);
   const [moveIn, setMoveIn] = useState("");
   const [error, setError] = useState<string | null>(null);
+  /** The reason typed against a conditional check, before it is sent. */
+  const [why, setWhy] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [fixing, setFixing] = useState(false);
 
@@ -553,7 +557,7 @@ export default function PlcWizard({
     try {
       const res = await api<{ case: PlcCase }>(`/api/plc/${kase.id}`, {
         method: "POST",
-        body: JSON.stringify({ action: "submit", force: true }),
+        body: JSON.stringify({ action: "submit" }),
       });
       setKase(res.case);
       /* A beat on the spinner before the tick, because a state change with no
@@ -561,7 +565,44 @@ export default function PlcWizard({
       window.setTimeout(() => setStep("done"), 1400);
     } catch (e) {
       setError((e as Error).message);
+      /* A refusal carries findings (the reader's, or the gate's). Re-read the
+         case so the review screen shows the exact lines, not just the sentence. */
+      try {
+        const fresh = await api<{ case: PlcCase }>(`/api/plc/${kase.id}`);
+        setKase(fresh.case);
+      } catch {
+        /* keep what we had */
+      }
       go("review");
+    }
+  };
+
+  /** "Not needed, because…" against one conditional check. */
+  const waive = async (checkId: CheckId, undo = false) => {
+    if (!kase) return;
+    setError(null);
+    if (demo) {
+      setKase({
+        ...kase,
+        waivers: undo
+          ? kase.waivers.filter((w) => w.checkId !== checkId)
+          : [
+              ...kase.waivers.filter((w) => w.checkId !== checkId),
+              { checkId, reason: why[checkId] ?? "", by: kase.agentName, at: new Date().toISOString() },
+            ],
+      });
+      return;
+    }
+    try {
+      const res = await api<{ case: PlcCase }>(`/api/plc/${kase.id}`, {
+        method: "POST",
+        body: JSON.stringify(
+          undo ? { action: "unwaive", checkId } : { action: "waive", checkId, reason: why[checkId] ?? "" }
+        ),
+      });
+      setKase(res.case);
+    } catch (e) {
+      setError((e as Error).message);
     }
   };
 
@@ -750,16 +791,20 @@ export default function PlcWizard({
                 Next
               </button>
               <span className="text-xs text-muted">
-                You can send what you have and add the rest later.
+                Anything missing is shown on the next screen before it goes anywhere.
               </span>
             </div>
           </div>
         )}
 
-        {step === "review" && kase && (
+        {step === "review" && kase && (() => {
+          const gate = gateFor(kase);
+          const blockers = kase.findings.filter((f) => f.level === "blocker");
+          const gated = PLC_CHECKS.filter((c) => c.gate === "required" || c.gate === "conditional");
+          return (
           <div>
             <h1 className="text-2xl tracking-normal text-ink">
-              Ready to Send
+              {gate.ready && blockers.length === 0 ? "Ready to Send" : "Not Ready to Send Yet"}
             </h1>
             <p className="mt-2 text-sm text-muted">
               {kase.address} · moving in {prettyDate(kase.moveInDate) ?? "date not set"}
@@ -771,41 +816,94 @@ export default function PlcWizard({
               </p>
             )}
 
+            {/* ── The £60 rule, said once ──
+                A pack that reaches the check short of a document fails it,
+                and the failed check is charged again. So the empty slot is
+                caught here rather than there. */}
+            {gate.blocked.length > 0 && (
+              <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+                Every let needs {gate.blocked.map((k) => k.label).join(", ")}. A pack that reaches the
+                check without them fails it and the failed check is charged again, so it cannot go until
+                they are attached.
+              </p>
+            )}
+
+            {blockers.length > 0 && (
+              <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <p className="font-medium">The reader found things that would fail the check:</p>
+                <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                  {blockers.map((f, i) => (
+                    <li key={i}>{f.message}</li>
+                  ))}
+                </ul>
+                <p className="mt-1 text-xs text-amber-800">Replace the document, or fix the move-in date if that is what is wrong.</p>
+              </div>
+            )}
+
             <ul className="mt-6 divide-y divide-neutral-100 rounded-xl border border-line">
-              {PLC_CHECKS.map((c) => {
+              {gated.map((c) => {
                 const has = filedFor(c.id);
+                const waiver = waiverFor(kase, c.id);
+                const count = documents.filter((d) => d.checkId === c.id).length;
+                const needsWhy = !has && !waiver && c.gate === "conditional";
+                const blocked = !has && c.gate === "required";
                 return (
-                  <li key={c.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                    {has ? (
-                      <svg
-                        viewBox="0 0 16 16"
-                        className="h-4 w-4 shrink-0 text-emerald-600"
-                        aria-hidden
-                      >
-                        <path
-                          d="M3 8.5 L6.5 12 L13 4.5"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    ) : (
-                      <span className="h-4 w-4 shrink-0 rounded-full border border-line" />
+                  <li key={c.id} className="px-4 py-2.5 text-sm">
+                    <div className="flex items-center gap-3">
+                      {has ? (
+                        <svg viewBox="0 0 16 16" className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden>
+                          <path d="M3 8.5 L6.5 12 L13 4.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      ) : waiver ? (
+                        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-amber-400 text-[10px] text-amber-700">–</span>
+                      ) : (
+                        <span className={`h-4 w-4 shrink-0 rounded-full border ${blocked ? "border-rose-400" : "border-line"}`} />
+                      )}
+                      <span className={has ? "" : blocked ? "text-rose-800" : "text-muted"}>{c.label}</span>
+                      <span className="ml-auto text-xs text-muted">
+                        {has ? (count === 1 ? "1 file" : `${count} files`) : waiver ? "not needed" : blocked ? "needed" : "nothing attached"}
+                      </span>
+                    </div>
+                    {waiver && !has && (
+                      <p className="mt-1.5 flex items-start gap-2 pl-7 text-xs text-muted">
+                        <span className="min-w-0">&ldquo;{waiver.reason}&rdquo;</span>
+                        <button type="button" onClick={() => void waive(c.id, true)} className="shrink-0 underline hover:text-ink">
+                          undo
+                        </button>
+                      </p>
                     )}
-                    <span className={has ? "" : "text-muted"}>{c.label}</span>
-                    <span className="ml-auto text-xs text-muted">
-                      {has
-                        ? documents.filter((d) => d.checkId === c.id).length === 1
-                          ? "1 file"
-                          : `${documents.filter((d) => d.checkId === c.id).length} files`
-                        : "nothing attached"}
-                    </span>
+                    {needsWhy && (
+                      <div className="mt-2 flex flex-wrap items-center gap-2 pl-7">
+                        <input
+                          value={why[c.id] ?? ""}
+                          onChange={(e) => setWhy((w) => ({ ...w, [c.id]: e.target.value }))}
+                          placeholder={
+                            c.id === "gas-safety"
+                              ? "Why not needed? e.g. No gas supply to the property"
+                              : c.id === "guarantor-checks"
+                                ? "Why not needed? e.g. No guarantor on this tenancy"
+                                : "Why not needed? e.g. Council has no licensing scheme here"
+                          }
+                          className="min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-1.5 text-xs outline-none focus:border-ink"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void waive(c.id)}
+                          disabled={(why[c.id] ?? "").trim().length < 8}
+                          className="rounded-lg border border-line px-3 py-1.5 text-xs transition hover:bg-box disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Not needed
+                        </button>
+                      </div>
+                    )}
                   </li>
                 );
               })}
             </ul>
+            <p className="mt-2 text-xs text-muted">
+              Right to Rent is checked separately. The tenancy agreement is generated by compliance
+              once this passes, so it is not asked for here.
+            </p>
 
             {documents.some((d) => d.placeholder) && (
               <p className="mt-3 text-xs text-amber-700">
@@ -818,7 +916,9 @@ export default function PlcWizard({
               <button
                 type="button"
                 onClick={submit}
-                className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white transition hover:bg-box"
+                disabled={!gate.ready}
+                title={gate.ready ? undefined : "Attach what is needed, or say why it is not, first"}
+                className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white transition hover:bg-box disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Send to the compliance team
               </button>
@@ -831,15 +931,17 @@ export default function PlcWizard({
               </button>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {step === "sending" && (
           <div className="py-20 text-center">
             <span className="plc-spinner mx-auto block h-12 w-12 rounded-full border-2 border-line border-t-neutral-900" />
             <p className="mt-6 text-lg text-ink">
-              Sending it over
+              Reading the pack and sending it over
               <Ellipsis />
             </p>
+            <p className="mt-2 text-sm text-muted">Each document is read for its dates first. A minute, usually.</p>
           </div>
         )}
 

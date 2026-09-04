@@ -6,12 +6,14 @@ import { hasDb, q } from "@/lib/db";
 import { DATA_DIR } from "@/lib/business/data-dir";
 import {
   canMove,
-  missingDocuments,
+  checkById,
+  gateFor,
   type CheckId,
   type Finding,
   type PlcCase,
   type PlcDocument,
   type PlcState,
+  type Waiver,
 } from "@/lib/plc";
 
 /**
@@ -50,6 +52,7 @@ interface Row extends Record<string, unknown> {
   agent_note: string;
   documents: PlcDocument[] | null;
   findings: Finding[] | null;
+  waivers: Waiver[] | null;
   submitted_at: string | Date | null;
   scanned_at: string | Date | null;
   decided_at: string | Date | null;
@@ -66,7 +69,12 @@ const iso = (v: string | Date | null | undefined) => (v ? new Date(v).toISOStrin
 function ymd(v: string | Date | null | undefined): string | null {
   if (!v) return null;
   if (typeof v === "string") return v.slice(0, 10);
-  return v.toISOString().slice(0, 10);
+  /* A DATE column comes back as a Date at LOCAL midnight. toISOString would
+     render that in UTC, which on a BST machine is the evening before - and
+     every save would move the move-in date back a day. Read the local parts. */
+  const m = String(v.getMonth() + 1).padStart(2, "0");
+  const d = String(v.getDate()).padStart(2, "0");
+  return `${v.getFullYear()}-${m}-${d}`;
 }
 
 function rowTo(r: Row): PlcCase {
@@ -81,6 +89,7 @@ function rowTo(r: Row): PlcCase {
     agentNote: r.agent_note ?? "",
     documents: Array.isArray(r.documents) ? r.documents : [],
     findings: Array.isArray(r.findings) ? r.findings : [],
+    waivers: Array.isArray(r.waivers) ? r.waivers : [],
     submittedAt: iso(r.submitted_at),
     scannedAt: iso(r.scanned_at),
     decidedAt: iso(r.decided_at),
@@ -91,7 +100,7 @@ function rowTo(r: Row): PlcCase {
 }
 
 const COLS = `id, application_ref, address, agent_name, agent_email, state,
-              move_in_date, agent_note, documents, findings, submitted_at,
+              move_in_date, agent_note, documents, findings, waivers, submitted_at,
               scanned_at, decided_at, decided_by, decision_note, created_at`;
 
 /* ──────────────────────────── the file backend ──────────────────────────── */
@@ -129,6 +138,7 @@ async function mutate(id: string, fn: (c: PlcCase) => PlcCase): Promise<PlcCase>
               documents = $5::jsonb, findings = $6::jsonb,
               submitted_at = $7, scanned_at = $8,
               decided_at = $9, decided_by = $10, decision_note = $11,
+              waivers = $12::jsonb,
               updated_at = NOW()
         WHERE id = $1
         RETURNING ${COLS}`,
@@ -144,6 +154,7 @@ async function mutate(id: string, fn: (c: PlcCase) => PlcCase): Promise<PlcCase>
         next.decidedAt,
         next.decidedBy,
         next.decisionNote,
+        JSON.stringify(next.waivers ?? []),
       ]
     );
     return rowTo(saved[0]);
@@ -247,6 +258,7 @@ export async function createCase(input: NewCase): Promise<PlcCase> {
     agentNote: "",
     documents: [],
     findings: [],
+    waivers: [],
     submittedAt: null,
     scannedAt: null,
     decidedAt: null,
@@ -347,7 +359,7 @@ export async function removeDocument(id: string, key: string): Promise<PlcCase> 
  * document legitimately lives elsewhere; it does not skip the check, it
  * records that the agent overrode it.
  */
-export async function submitCase(id: string, opts: { force?: boolean } = {}): Promise<PlcCase> {
+export async function submitCase(id: string): Promise<PlcCase> {
   return mutate(id, (c) => {
     if (!canMove(c.state, "submitted")) {
       throw new PlcRefused(
@@ -361,23 +373,84 @@ export async function submitCase(id: string, opts: { force?: boolean } = {}): Pr
          without one the scan cannot answer the only question it is good at. */
       throw new PlcRefused("Add the move-in date first — the date checks are measured against it.");
     }
-    const short = missingDocuments(c);
-    if (short.length && !opts.force) {
+    /* THE GATE. There is no force any more. A required slot cannot be talked
+       past, and a conditional one needs its reason recorded first (see
+       waiveCheck). The wizard shows both lists before it ever gets here; this
+       is the same rule applied where it cannot be skipped. */
+    const gate = gateFor(c);
+    if (gate.blocked.length) {
+      throw new PlcRefused(`Can't send without: ${gate.blocked.map((k) => k.label).join(", ")}.`);
+    }
+    if (gate.askWhy.length) {
       throw new PlcRefused(
-        `Still missing: ${short.map((s) => s.label).join(", ")}. Submit anyway if they're held elsewhere.`
+        `Say why these aren't needed, or attach them: ${gate.askWhy.map((k) => k.label).join(", ")}.`
       );
     }
     return {
       ...c,
       state: "submitted",
       submittedAt: new Date().toISOString(),
-      agentNote:
-        short.length && opts.force
-          ? `${c.agentNote}${c.agentNote ? "\n\n" : ""}Submitted without: ${short
-              .map((s) => s.label)
-              .join(", ")}.`.trim()
-          : c.agentNote,
+      agentNote: c.waivers.length
+        ? `${c.agentNote}${c.agentNote ? "\n\n" : ""}Not needed: ${c.waivers
+            .map((w) => `${checkById(w.checkId)?.label ?? w.checkId} (${w.reason})`)
+            .join("; ")}.`.trim()
+        : c.agentNote,
     };
+  });
+}
+
+/**
+ * "This one isn't needed, and here is why."
+ *
+ * Only a conditional check can be waived, only while the pack is the
+ * agent's, and only with a reason. A reason that is one word is not a reason;
+ * Kirstie will read it next to an empty slot and has to be able to agree or
+ * disagree with it. Attaching a file later removes the waiver's purpose but
+ * not its record.
+ */
+export async function waiveCheck(
+  id: string,
+  checkId: CheckId,
+  reason: string,
+  by: string
+): Promise<PlcCase> {
+  const check = checkById(checkId);
+  if (!check) throw new PlcRefused("That isn't one of the checks.");
+  if (check.gate !== "conditional") {
+    throw new PlcRefused(
+      check.gate === "required"
+        ? `${check.label} is needed on every let - it can't be marked not needed.`
+        : `${check.label} isn't part of the pre-let gate.`
+    );
+  }
+  const why = reason.trim();
+  if (why.length < 8) throw new PlcRefused("Say why in a sentence - Kirstie reads this next to the empty slot.");
+  return mutate(id, (c) => {
+    if (c.state !== "assembling") throw new PlcRefused("The pack has left you - reopen it first.");
+    const waiver: Waiver = { checkId, reason: why, by, at: new Date().toISOString() };
+    return { ...c, waivers: [...c.waivers.filter((w) => w.checkId !== checkId), waiver] };
+  });
+}
+
+export async function unwaiveCheck(id: string, checkId: CheckId): Promise<PlcCase> {
+  return mutate(id, (c) => {
+    if (c.state !== "assembling") throw new PlcRefused("The pack has left you - reopen it first.");
+    return { ...c, waivers: c.waivers.filter((w) => w.checkId !== checkId) };
+  });
+}
+
+/**
+ * What the reader found BEFORE the pack was allowed to leave.
+ *
+ * Written on a case that is still assembling, because the scan refused to
+ * let it go: a certificate that expires before move-in is a failed PLC check
+ * waiting to be charged for. The findings sit on the case so the agent sees
+ * the exact line, fixes the document, and tries again.
+ */
+export async function recordPreflight(id: string, findings: Finding[]): Promise<PlcCase> {
+  return mutate(id, (c) => {
+    if (c.state !== "assembling") throw new PlcRefused("That pack isn't with the agent.");
+    return { ...c, findings, scannedAt: new Date().toISOString() };
   });
 }
 

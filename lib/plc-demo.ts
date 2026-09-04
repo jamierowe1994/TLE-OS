@@ -133,6 +133,7 @@ export function demoCase(over: Partial<PlcCase> = {}): PlcCase {
     moveInDate: MOVE_IN,
     agentNote:
       "Landlord is abroad until the 20th, so anything needing a signature will take a couple of days.",
+    waivers: [],
     scannedAt: null,
     findings: [],
     decidedAt: null,

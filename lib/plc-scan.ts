@@ -482,12 +482,36 @@ export async function scanCase(c: PlcCase): Promise<ScanOutcome> {
     if (check.scan === "none") continue;
     const filed = c.documents.filter((d) => d.checkId === check.id);
     if (filed.length) continue;
+    /* Not filed, and the gate says that is fine: the agreement is generated
+       after the check, and a conditional check the agent has waived carries
+       its reason instead of a file. Both are told to Kirstie as a query so
+       she sees the empty slot and the reason side by side. Neither is a
+       blocker - a blocker here would stop the pack at the gate. */
+    const waiver = (c.waivers ?? []).find((w) => w.checkId === check.id) ?? null;
+    if (check.gate === "after") {
+      findings.push({
+        checkId: check.id,
+        level: "query",
+        message: `${check.label} not in the pack - generated after the check passes.`,
+        foundDate: null,
+      });
+      continue;
+    }
+    if (waiver) {
+      findings.push({
+        checkId: check.id,
+        level: "query",
+        message: `${check.label} declared not needed by ${waiver.by}: "${waiver.reason}"`,
+        foundDate: null,
+      });
+      continue;
+    }
     findings.push({
       checkId: check.id,
-      level: check.scan === "presence" ? "query" : "blocker",
-      /* Licensing is the one that is council-by-council: its absence is a
-         question for a human, not an automatic blocker. That distinction is
-         carried by `scan: "presence"` rather than a special case on the id. */
+      level: check.gate === "required" ? "blocker" : "query",
+      /* A required slot left empty is a blocker; a conditional one is a
+         question. The gate normally stops both before the scan ever runs,
+         so this is the belt to that braces. */
       message: `Nothing filed for ${check.label}. ${check.needs}.`,
       foundDate: null,
     });

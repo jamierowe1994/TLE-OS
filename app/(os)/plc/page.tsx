@@ -260,6 +260,16 @@ function AgentSide({
                       )}
                     </p>
                     <p className="mt-0.5 text-xs text-muted">{check.needs}</p>
+                    {(() => {
+                      /* The agent's reason sits where the file would be. It is
+                         a claim with a name on it, for her to agree with or not. */
+                      const w = (c.waivers ?? []).find((x) => x.checkId === check.id);
+                      return w ? (
+                        <p className="mt-2 rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">
+                          Not needed, says {w.by}: &ldquo;{w.reason}&rdquo;
+                        </p>
+                      ) : null;
+                    })()}
                     {filed.length > 0 && (
                       <ul className="mt-2 space-y-1">
                         {filed.map((d) => (

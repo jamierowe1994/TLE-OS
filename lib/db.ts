@@ -1084,6 +1084,8 @@ CREATE TABLE IF NOT EXISTS os_plc_cases (
 -- Kirstie's queue is "everything not finished, oldest first", so it is the
 -- state and the submission time that get indexed rather than the address.
 CREATE INDEX IF NOT EXISTS os_plc_cases_state ON os_plc_cases (state, submitted_at);
+-- Conditional checks the agent declared not needed, with the reason (4 Sep 2026).
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS waivers JSONB NOT NULL DEFAULT '[]'::jsonb;
 CREATE INDEX IF NOT EXISTS os_plc_cases_agent ON os_plc_cases (lower(agent_email), created_at DESC);
 
 -- The shadow log: what the rules recommended, and what the person decided.
