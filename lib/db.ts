@@ -1776,6 +1776,41 @@ CREATE TABLE IF NOT EXISTS os_handovers (
   error          TEXT
 );
 CREATE INDEX IF NOT EXISTS os_handovers_app ON os_handovers (application_id, started_at DESC);
+
+-- The last Propoly status the watcher saw for each deal. Propoly has no
+-- webhooks (measured 4 Sep 2026), so stage moves are found by comparing the
+-- current book against this. One row per deal, overwritten on every run.
+CREATE TABLE IF NOT EXISTS os_deal_states (
+  deal_id      TEXT PRIMARY KEY,
+  status_key   TEXT NOT NULL,
+  property     TEXT NOT NULL DEFAULT '',
+  agent_email  TEXT,
+  agent_name   TEXT,
+  move_in      DATE,
+  propoly_updated_at TIMESTAMPTZ,
+  seen_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Every stage move the watcher noticed: the activity feed Kirstie and the
+-- agents read, and the record of who was told. Rows are never edited except
+-- to stamp told_at.
+CREATE TABLE IF NOT EXISTS os_deal_events (
+  id           BIGSERIAL PRIMARY KEY,
+  deal_id      TEXT NOT NULL,
+  property     TEXT NOT NULL DEFAULT '',
+  agent_email  TEXT,
+  agent_name   TEXT,
+  event        TEXT NOT NULL,
+  from_status  TEXT,
+  to_status    TEXT,
+  at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  told_to      TEXT,
+  told_at      TIMESTAMPTZ,
+  told_note    TEXT
+);
+CREATE INDEX IF NOT EXISTS os_deal_events_at ON os_deal_events (at DESC);
+CREATE INDEX IF NOT EXISTS os_deal_events_deal ON os_deal_events (deal_id, at DESC);
+CREATE INDEX IF NOT EXISTS os_deal_events_agent ON os_deal_events (agent_email, at DESC);
 `;
 
 /** Created lazily on first query; the promise is reset on failure so a

@@ -7,6 +7,7 @@ import DiaryCalendar from "@/components/DiaryCalendar";
 import DiaryGrid from "@/components/DiaryGrid";
 import LeadSourceChart from "@/components/LeadSourceChart";
 import OutstandingTermsWidget from "@/components/OutstandingTerms";
+import DealFeed from "@/components/DealFeed";
 import { FlowTag, Pill } from "@/components/Wire";
 /* `todaysAppts` and `DIARY as SAMPLE_DIARY` used to be imported here. Both are
    gone on purpose: the sample book must not be reachable from the dashboard,
@@ -1081,6 +1082,25 @@ export const WIDGETS: Record<string, WidgetDef> = {
     render: (w, h) => <TodayWidget w={w} h={h} />,
   },
 
+  "deal-moves": {
+    label: "What moved", icon: "bell", hint: "your deals as Propoly moves them - references back, out for signing, complete",
+    defaultW: 1, defaultH: 2,
+    sizes: { s: [1, 2], m: [2, 2], l: [2, 3] },
+    render: () => (
+      <>
+        <div className="flex items-center justify-between gap-2">
+          <Head icon="bell" label="What moved" />
+          <Link href="/applications" className="text-[11px] font-medium text-muted hover:text-ink">
+            Applications
+          </Link>
+        </div>
+        <div className="mt-4">
+          <DealFeed compact />
+        </div>
+      </>
+    ),
+  },
+
   "lead-sources": {
     label: "Lead sources", icon: "pie", hint: "top source → bars → the full chart",
     defaultW: 1, defaultH: 2,
@@ -1449,7 +1469,7 @@ function ViewingsWeekWidget({ w, h }: { w: number; h: number }) {
 }
 
 export const DASH_TRAY_GROUPS = [
-  { key: "performance", label: "Performance", icon: "trend-up", types: ["leads-today", "lead-sources", "pipeline", "earnings", "applications"] },
+  { key: "performance", label: "Performance", icon: "trend-up", types: ["leads-today", "lead-sources", "pipeline", "earnings", "applications", "deal-moves"] },
   { key: "social", label: "Social & ads", icon: "megaphone", types: ["facebook-leads", "instagram-leads", "ads-live"] },
   { key: "book", label: "The book", icon: "folder", types: ["portfolio", "on-market", "occupancy", "recently-listed"] },
   { key: "diary", label: "People & diary", icon: "calendar", types: ["diary", "today", "viewings-week", "attention"] },

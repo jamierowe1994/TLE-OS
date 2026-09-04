@@ -47,3 +47,31 @@ Source: Wispr Flow recording "Properly Payment and PLC Process" (16 min, 13:00).
 ## Side note
 
 Kirstie liked Bond and compared it to PropAlt (was £120 a month, per-letter pricing). James floated about £50 a month including postcards.
+
+## What Propoly's API can and cannot tell us (probed live, read-only, 4 Sep 2026)
+
+Source: the production OpenAPI spec (TLE-portal/docs/propoly-openapi.yaml) plus GET and OPTIONS calls with the agent credential.
+
+**Available**
+- `GET /deals` with `tenancy_status`, `updated_at_from`, `created_at_from` filters. This is the stage signal: poll for deals updated since the last poll and diff the status.
+- Deal payload: `tenancy_status` (start_deal, holding_fee, references, tenancy_generation, signing_and_move_in_monies, complete, cancelled), `move_in_date`, `holding_fee_pence`, `deposit_pence`, `deposit_registered_by`, `standing_order_reference`, tenant, landlord and guarantor uuid, name, email, phone, `property_uuid`, `property_address`, `extra_clauses_details` (carries the Flatfair schedule when used), `updated_at`.
+- `GET /configuration/document_types`: 17 slots, including EPC, EICR, Gas, Council licence, LL ID, LL proof of address, LL proof of ownership, Landlord AML, TT proof of address, TT reference report, TT right to rent, Terms of business, Inventory, General.
+- `POST /documents` (multipart: deal_id, type, file, expiration): uploads one file per type per deal. Compliance types need an expiry. 409 if that type already exists on the deal. 8.5MB max. Gas rejected on a no-gas property.
+- `POST /landlords`, `POST /properties`, `POST /tenants`, `PATCH /landlords/{id}/relationships` (already used by the handover).
+
+**Not available**
+- No webhooks or events of any kind. Everything is polling.
+- No GET for documents. We cannot see which slots on a deal are filled, so the PLC gate cannot be checked against Propoly. It must be checked against the OS's own PLC pack.
+- No reference status or report. Referencing is only visible as the status leaving `references`.
+- No signing state, no per-party signed dates, no agreement generated flag.
+- No payment received flags for holding fee or rent. `holding_fee_pence` is the amount agreed, not paid.
+- No POST or PATCH on deals: we cannot create a deal, move a stage, or start referencing.
+- The detail endpoint returns exactly the list row. Nothing extra.
+
+**What that means for the build**
+- Stage tracking: a 60 second poll on `updated_at_from` catches every Propoly-driven move. References back = status goes `references` -> `tenancy_generation` (confirm with Kirstie that Propoly makes that move itself).
+- Signed and rent paid: `complete` is Kirstie's manual mark. Rent paid comes from PayProp on our side. Signed has no source; the OS asks Kirstie or reads the signed PDF she uploads.
+- PLC gate: enforce inside the OS PLC pack (our slots mirror Propoly's 17 types), then push the pack into Propoly with `POST /documents` once writes are approved. That removes the empty-slot fails.
+- Flatfair: nothing in Propoly. Needs the Flatfair meeting.
+
+**Questions for Propoly** (James): a webhook or at least an events feed; GET documents per deal; reference outcome; signing state; holding fee and rent received. Without the first two the OS is polling and blind on documents.

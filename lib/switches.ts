@@ -181,6 +181,22 @@ export const SWITCHES: Switch[] = [
     legacyOn: "on",
   },
   {
+    /**
+     * The Propoly watcher tells the AGENT when their deal moves. The feed
+     * records every move whether this is on or not; this only decides whether
+     * an email goes out about it. Off until Kirstie has watched the feed agree
+     * with Propoly for a few days - a machine that emails agents about deals
+     * should have been right in silence first.
+     */
+    key: "deal_watch_notify",
+    label: "Tell agents when Propoly moves a deal",
+    what: "Emails the agent when references come back, when the agreement goes out for signing, and when a deal completes or is cancelled.",
+    who: "The agent who manages the property in Propoly. Kirstie reads the feed instead.",
+    confirm: "TELL AGENTS",
+    legacyEnv: "DEAL_WATCH_NOTIFY",
+    legacyOn: "on",
+  },
+  {
     key: "campaign_sending",
     label: "Nurture campaigns",
     what: "Lets the scheduler send campaign steps as they fall due.",

@@ -956,6 +956,18 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
               </span>
               PLC queue
             </Link>
+            {/* The feed is the same board read as time rather than as stages:
+                what Propoly moved, newest first. Kirstie asked for one thing
+                to leave open instead of checking each file (4 Sep). */}
+            <Link
+              href="/pre-tenancy/feed"
+              className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30"
+            >
+              <span className="text-accent">
+                <DoodleIcon name="bell" size={15} />
+              </span>
+              What moved
+            </Link>
             <div className="ml-auto">
               <ProfileMenu
                 user={user}

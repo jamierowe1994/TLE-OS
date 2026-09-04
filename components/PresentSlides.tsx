@@ -1167,69 +1167,138 @@ export function Screening({ show }: { show: boolean }) {
 
 /* ───────────────────────── service and management ───────────────────────── */
 
+/**
+ * How much of the tenancy you want to run yourself.
+ *
+ * Sets up the comparison on the next slide, so it argues in prose rather than
+ * repeating it as a table. Four blocks, and none of them is a feature list -
+ * each names a thing that has to happen whether or not anybody is paid to do
+ * it, which is the question the three levels then answer.
+ */
 export function Management({ show }: { show: boolean }) {
   return (
-    <Slide id="management">
-      <div className="mx-auto w-full max-w-5xl">
-        <Head
-          eyebrow="Management and support"
-          title="How much of it you want to run yourself"
-          show={show}
-        />
-        <Blocks items={MANAGEMENT} show={show} />
+    <CreamSlide id="management">
+      <div className="mx-auto w-full max-w-[1120px]">
+        <div className="max-w-[680px]">
+          <HandHead eyebrow="Management and support" show={show} lines={2}>
+            How much of it you
+            <br />
+            want to run <Emphasis show={show}>yourself</Emphasis>
+          </HandHead>
+        </div>
+
+        <div className="mt-9 grid gap-x-14 gap-y-7 sm:grid-cols-2 lg:mt-10">
+          {MANAGEMENT.map((c, n) => (
+            <Rise key={c.title} show={show} i={2 + Math.floor(n / 2)}>
+              <div className="border-t border-black/10 pt-4">
+                <h3
+                  className="text-[15.5px] leading-snug sm:text-[16px]"
+                  style={{ fontFamily: HAND, fontWeight: 700 }}
+                >
+                  {c.title}
+                </h3>
+                <p className="mt-2 text-[13px] font-light leading-[1.6] text-black/60">{c.body}</p>
+              </div>
+            </Rise>
+          ))}
+        </div>
       </div>
-    </Slide>
+    </CreamSlide>
   );
 }
 
 /**
- * The three levels, side by side.
+ * THE THREE LEVELS — the shared half stated once, then only the differences.
  *
- * Fourteen rows and three columns will not fit a phone as a table, so it is
- * two layouts rather than one that shrinks: a table above `sm`, and below it
- * a card per level listing what that level includes. The same data read two
- * ways, because a fourteen-row table at 9px is not a compromise, it is an
- * unreadable slide with a good excuse.
+ * ── Why this is not a fourteen-row table any more ──────────────────────────
+ *
+ * It was, and it was 379px taller than a 720px laptop: the single tallest
+ * slide in the deck, on a phone three stacked cards of fourteen items each.
+ * James chose this shape on 4 Sep over letting it scroll or splitting it in
+ * two, and it is the right one for a reason beyond height.
+ *
+ * Seven of the fourteen rows are ticked on all three levels. Printed as a
+ * table those seven are twenty-one identical ticks that say nothing, and they
+ * push the seven rows that DO differ to the bottom of the slide - so the part
+ * a landlord is actually choosing between is the part they read last and
+ * least. Stating the shared half once as a floor, then showing only what
+ * separates the levels, is shorter AND it is the argument: everything here is
+ * standard, and this is what more buys you.
+ *
+ * ── The split is derived, never hand-maintained ───────────────────────────
+ *
+ * `every` and `differs` are computed from SERVICE_ROWS. A row added to
+ * lib/present-copy lands in whichever half it belongs to without anybody
+ * remembering to file it, which is the failure this would otherwise invite:
+ * two lists that drift are worse than one long table.
  */
 export function Levels({ show }: { show: boolean }) {
   const cols = SERVICE_LEVELS.length;
-  /* Positional pairing between SERVICE_LEVELS and each row's `included` is
-     the one fragile thing in lib/present-copy. Checked rather than trusted:
-     a mismatch shifts every tick silently, which on a page about what a
-     landlord is buying is the worst kind of wrong. */
+  /* Positional pairing between SERVICE_LEVELS and each row's `included` is the
+     one fragile thing in lib/present-copy. Checked rather than trusted: a
+     mismatch shifts every tick silently, which on a page about what somebody
+     is buying is the worst kind of wrong. */
   const rows = SERVICE_ROWS.filter((r) => r.included.length === cols);
+  const every = rows.filter((r) => r.included.every(Boolean));
+  const differs = rows.filter((r) => !r.included.every(Boolean));
 
   return (
-    <section
-      data-slide="levels"
-      className="relative flex min-h-full w-full shrink-0 flex-col pb-24"
-      style={{ background: PAPER, color: INK }}
-    >
-      <header className="px-6 pt-8 sm:px-12 sm:pt-10 lg:px-16">
-        <Mark className="h-10 sm:h-11" />
-      </header>
-      <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-12 lg:px-16">
-        <div className="mx-auto w-full max-w-4xl">
-          <Head
-            eyebrow="Service levels"
-            title="What each level covers"
-            lead={SERVICE_LEVELS_INTRO}
-            show={show}
-          />
+    <CreamSlide id="levels">
+      <div className="mx-auto w-full max-w-[1180px]">
+        <div className="max-w-[700px]">
+          <HandHead eyebrow="Service levels" show={show} lines={2}>
+            Three levels. This is
+            <br />
+            what <Emphasis show={show}>separates</Emphasis> them
+          </HandHead>
+        </div>
 
-          {/* Table, from sm up. */}
-          <Rise show={show} i={1} className="hidden sm:block">
-            <table className="mt-8 w-full border-collapse text-left">
+        {/* SIDE BY SIDE on a laptop, stacked below it.
+            Stacked everywhere, this slide was still 103px too tall - the
+            shared block is 132px of height saying "none of this is a
+            decision", sitting directly above the part that is. Beside the
+            table it costs nothing, and the reading is better for it: standard
+            on the left, what more buys you on the right. */}
+        <div className="mt-6 grid gap-x-12 gap-y-6 lg:mt-7 lg:grid-cols-[0.78fr_1.22fr]">
+          {every.length > 0 && (
+            <Rise show={show} i={2}>
+              <div className="rounded-2xl px-5 py-4" style={{ background: TINTS[0] }}>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-black/45">
+                  On all three levels
+                </p>
+                <ul className="mt-2.5 grid gap-x-8 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-1">
+                  {every.map((r) => (
+                    <li key={r.service} className="flex items-start gap-2.5">
+                      <span className="mt-[3px] shrink-0" style={{ color: CORAL }}>
+                        <Line name="check" size={14} />
+                      </span>
+                      <span className="text-[12.5px] font-light leading-snug">{r.service}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Rise>
+          )}
+
+          {/* The differences. A table from sm up; a card per level below it,
+              because seven rows across three columns at 375px is a grid of
+              ticks nobody can line up with its own label. */}
+          <Rise show={show} i={3} className="hidden sm:block">
+            <table className="w-full border-collapse text-left">
               <thead>
                 <tr className="border-b border-black/12">
-                  <th className="py-2.5 pr-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-black/45">
-                    Included
+                  <th className="py-2 pr-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-black/40">
+                    What more buys you
                   </th>
                   {SERVICE_LEVELS.map((s, n) => (
                     <th
                       key={s}
-                      className="w-[104px] px-2 py-2.5 text-center text-[11px] font-semibold uppercase leading-tight tracking-[0.1em]"
-                      style={n === 0 ? { color: RED } : { color: "rgba(0,0,0,0.45)" }}
+                      className="w-[104px] px-2 py-2 text-center text-[11px] leading-tight"
+                      style={{
+                        fontFamily: HAND,
+                        fontWeight: 700,
+                        color: n === 0 ? CORAL : "rgba(0,0,0,0.45)",
+                      }}
                     >
                       {s}
                     </th>
@@ -1237,11 +1306,11 @@ export function Levels({ show }: { show: boolean }) {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
+                {differs.map((r) => (
                   <tr key={r.service} className="border-b border-black/8">
-                    <td className="py-[9px] pr-4 text-[12.5px] font-light">{r.service}</td>
+                    <td className="py-[7px] pr-4 text-[12.5px] font-light">{r.service}</td>
                     {r.included.map((on, n) => (
-                      <td key={`${r.service}-${n}`} className="px-2 py-[9px] text-center">
+                      <td key={`${r.service}-${n}`} className="px-2 py-[7px] text-center">
                         <Tick on={on} />
                       </td>
                     ))}
@@ -1250,67 +1319,94 @@ export function Levels({ show }: { show: boolean }) {
               </tbody>
             </table>
           </Rise>
+        </div>
 
-          {/* Cards, on a phone. */}
-          <div className="mt-8 space-y-4 sm:hidden">
-            {SERVICE_LEVELS.map((s, n) => {
-              const has = rows.filter((r) => r.included[n]);
-              return (
-                <Rise key={s} show={show} i={1 + n}>
-                  <div className="rounded-2xl border border-black/10 bg-white p-5">
-                    <h3 className="text-[14px] font-semibold" style={n === 0 ? { color: RED } : undefined}>
-                      {s}
-                    </h3>
-                    <p className="mt-1 text-[11.5px] font-light text-black/50">
-                      {has.length} of {rows.length} included
+        <div className="mt-6 space-y-3 sm:hidden">
+          {SERVICE_LEVELS.map((s, n) => {
+            const adds = differs.filter((r) => r.included[n]);
+            return (
+              <Rise key={s} show={show} i={3 + n}>
+                <div className="rounded-2xl border border-black/10 p-4">
+                  <h3
+                    className="text-[14.5px]"
+                    style={{ fontFamily: HAND, fontWeight: 700, color: n === 0 ? CORAL : undefined }}
+                  >
+                    {s}
+                  </h3>
+                  {adds.length === 0 ? (
+                    <p className="mt-1 text-[12px] font-light text-black/50">
+                      The seven above, and nothing further.
                     </p>
-                    <ul className="mt-3 space-y-1.5">
-                      {has.map((r) => (
+                  ) : (
+                    <ul className="mt-2 space-y-1.5">
+                      {adds.map((r) => (
                         <li key={r.service} className="flex items-start gap-2">
-                          <span className="mt-[3px] shrink-0" style={{ color: RED }}>
+                          <span className="mt-[3px] shrink-0" style={{ color: CORAL }}>
                             <Line name="check" size={13} />
                           </span>
                           <span className="text-[12px] font-light leading-snug">{r.service}</span>
                         </li>
                       ))}
                     </ul>
-                  </div>
-                </Rise>
-              );
-            })}
-          </div>
+                  )}
+                </div>
+              </Rise>
+            );
+          })}
         </div>
       </div>
-    </section>
+    </CreamSlide>
   );
 }
 
+/**
+ * Rent collection, without the chasing.
+ *
+ * The one slide that names a supplier. PayProp is on it because "we reconcile
+ * the day it lands" is a claim, and the name of the system that does it is the
+ * evidence - a landlord who has heard of it stops needing to take our word,
+ * and one who has not can look it up.
+ */
 export function Collection({ show }: { show: boolean }) {
   return (
-    <Slide id="collection">
-      <div className="mx-auto w-full max-w-4xl">
-        <Head
-          eyebrow="Rent collection"
-          title={RENT_COLLECTION.heading}
-          lead={RENT_COLLECTION.body}
-          show={show}
-        />
-        <ul className="mt-8 grid gap-x-12 gap-y-3 sm:grid-cols-2">
+    <CreamSlide id="collection">
+      <div className="mx-auto w-full max-w-[1080px]">
+        <div className="max-w-[680px]">
+          <HandHead eyebrow="Rent collection" show={show} lines={2}>
+            Rent collection, without
+            <br />
+            the <Emphasis show={show}>chasing</Emphasis>
+          </HandHead>
+          <Rise show={show} i={2}>
+            <p className="mt-6 max-w-[560px] text-[15px] font-light leading-[1.6] text-black/55">
+              {RENT_COLLECTION.body}
+            </p>
+          </Rise>
+        </div>
+
+        <ul className="mt-9 grid gap-x-14 gap-y-3 sm:grid-cols-2 lg:mt-10">
           {RENT_COLLECTION.points.map((p, n) => (
-            <Rise key={p} show={show} i={1 + Math.floor(n / 2)}>
-              <li className="flex items-start gap-3 border-t border-black/10 pt-3">
-                <span className="mt-[3px] shrink-0" style={{ color: RED }}>
+            <Rise key={p} show={show} i={3 + Math.floor(n / 2)}>
+              <li
+                className="flex items-start gap-3"
+                style={{
+                  borderTop: n < 2 ? "none" : "1px solid rgba(0,0,0,0.07)",
+                  paddingTop: n < 2 ? 0 : 12,
+                }}
+              >
+                <span className="mt-[3px] shrink-0" style={{ color: CORAL }}>
                   <Line name="check" size={16} />
                 </span>
-                <span className="text-[13.5px] font-light leading-relaxed">{p}</span>
+                <span className="text-[14px] font-light leading-[1.5]">{p}</span>
               </li>
             </Rise>
           ))}
         </ul>
       </div>
-    </Slide>
+    </CreamSlide>
   );
 }
+
 
 /* ───────────────────────── protecting the income ───────────────────────── */
 
