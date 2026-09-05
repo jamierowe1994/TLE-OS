@@ -39,27 +39,23 @@ export default async function LandlordHome() {
     landlordDocuments(me.id),
     landlordMessages(me.id),
   ]);
-  /* Certificates after the properties, because they are read by property
-     id. Same read as the Compliance screen. */
-  const compliance = await landlordCompliance(managed);
-  const first = me.name.split(/\s+/)[0] || me.name;
-
+  /* The three slow reads - certificates, offers, the deal - side by side
+     rather than one after another. Each is REX or Propoly; in series the
+     page took seven seconds, which is a landlord closing the tab. */
   const open = journeys
     .filter((j) => j.stage !== "lost")
     .sort((a, b) => Number(a.stage === "won") - Number(b.stage === "won") || b.appraisal.createdAt.localeCompare(a.appraisal.createdAt));
 
-  /* Offers on whichever property the page leads with: the appraisal's REX
-     property once it is picked, or the managed property's own ids. */
   const lead = open[0] ?? null;
-  const offers = await landlordOffers(
-    lead ? [lead.appraisal.rexPropertyId] : managed[0] ? [managed[0].propertyId] : [],
-    lead ? [] : managed[0] ? [managed[0].listingId] : []
-  );
-  /* The let moving, once an offer is accepted and Kirstie has the deal. */
-  const progress = await landlordProgress(
-    me.email,
-    lead ? [lead.appraisal.address] : managed[0] ? [managed[0].name] : []
-  );
+  const [compliance, offers, progress] = await Promise.all([
+    landlordCompliance(managed),
+    landlordOffers(
+      lead ? [lead.appraisal.rexPropertyId] : managed[0] ? [managed[0].propertyId] : [],
+      lead ? [] : managed[0] ? [managed[0].listingId] : []
+    ),
+    landlordProgress(me.email, lead ? [lead.appraisal.address] : managed[0] ? [managed[0].name] : []),
+  ]);
+  const first = me.name.split(/\s+/)[0] || me.name;
   const base = open[0]
     ? await appraisalView(open[0], first, docs, msgs, offers)
     : managed[0]
