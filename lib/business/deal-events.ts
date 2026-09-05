@@ -28,7 +28,10 @@ export type DealEventKind =
   /* The PLC pack, the other thing that lands on Kirstie's desk. dealId on
      these rows is the case id, not a Propoly uuid; hrefFor knows. */
   | "plc_submitted"
-  | "plc_decided";
+  | "plc_decided"
+  /* Opened by the watcher the moment references come back, so the agent's
+     application already has a pack waiting rather than a button to press. */
+  | "plc_opened";
 
 export interface DealEvent {
   id: number;
@@ -107,6 +110,8 @@ export function eventSentence(e: Pick<DealEvent, "event" | "toStatus" | "fromSta
       return "Deposit registered with the scheme";
     case "rent_in":
       return `First rent ${pounds(e.amount)}received in PayProp`;
+    case "plc_opened":
+      return "References back - PLC pack opened for the agent to fill";
     case "plc_submitted":
       return e.fromStatus === "deferred" ? "PLC pack back with you, resubmitted" : "PLC pack sent to you for checking";
     case "plc_decided":
@@ -126,6 +131,10 @@ export function eventSentence(e: Pick<DealEvent, "event" | "toStatus" | "fromSta
 export function hrefFor(e: Pick<DealEvent, "event" | "dealId">): string | null {
   if (e.event === "plc_submitted" || e.event === "plc_decided") {
     return `/pre-tenancy/plc?case=${encodeURIComponent(e.dealId)}`;
+  }
+  if (e.event === "plc_opened") {
+    /* The case id is plc-<REX application id>; the agent's door is the wizard. */
+    return `/plc/start?application=${encodeURIComponent(e.dealId.replace(/^plc-/, ""))}`;
   }
   if (e.event === "gone") return null;
   return `/pre-tenancy?deal=${encodeURIComponent(e.dealId)}`;

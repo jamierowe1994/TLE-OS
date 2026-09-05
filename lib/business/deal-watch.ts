@@ -4,6 +4,8 @@ import { getAllPropolyDeals, type BusinessDeal } from "@/lib/business/propoly-de
 import { getPropolyDeal, propolyConfigured } from "@/lib/business/propoly";
 import { logSystemEvent } from "@/lib/business/deal-store";
 import { loadMoneyContext, moneyForDeal } from "@/lib/business/deal-money";
+import { getApplications } from "@/lib/applications";
+import { createCase, getCase } from "@/lib/plc-store";
 import { sendEmail } from "@/lib/resend";
 import { switchOn } from "@/lib/switches";
 import {
@@ -273,9 +275,73 @@ export async function watchDeals(opts: { origin: string }): Promise<WatchResult>
   await q(`UPDATE os_deal_states SET seen_at = NOW() WHERE deal_id = ANY($1::text[])`, [[...seen]]);
 
   events.push(...(await watchMoney(deals, known)));
+  events.push(...(await openPacks(events, deals)));
 
   const told = await tellAgents(events, opts.origin);
   return { ok: true, deals: deals.length, events, told };
+}
+
+/* ──────────────────────── the pack, opened for them ────────────────────── */
+
+const normAddr = (s: string | null | undefined) =>
+  (s ?? "").toLowerCase().replace(/\b(apartment|flat|room|unit)\b/g, " ").replace(/[^a-z0-9]+/g, " ").trim();
+const streetOf = (address: string) => {
+  const parts = address.split(",").map((p) => p.trim()).filter(Boolean);
+  return normAddr(parts[parts.length - 1] ?? address);
+};
+
+/**
+ * References back means the PLC check is next, and the agent should find the
+ * pack already open on their application rather than a button. For each
+ * references_back move this finds the accepted REX application on the same
+ * street (the join the applications spine already uses), opens the pack in
+ * the agent's name if none exists, and puts a row on the feed. No match is
+ * silent: the application's own "Start the PLC check" still works.
+ */
+async function openPacks(events: DealEvent[], deals: BusinessDeal[]): Promise<DealEvent[]> {
+  const back = events.filter((e) => e.event === "references_back");
+  if (!back.length) return [];
+  let apps: Awaited<ReturnType<typeof getApplications>> = [];
+  try {
+    apps = (await getApplications(300)).filter((a) => a.status === "accepted");
+  } catch {
+    return [];
+  }
+  const out: DealEvent[] = [];
+  for (const e of back) {
+    const deal = deals.find((d) => d.app.id === e.dealId);
+    if (!deal) continue;
+    const have = normAddr(deal.app.propertyName);
+    const hits = apps.filter((a) => {
+      const want = streetOf(a.property);
+      return want && (have.includes(want) || want.includes(have));
+    });
+    const app =
+      hits.length === 1
+        ? hits[0]
+        : hits.find((a) => a.startDate && deal.app.startDate && a.startDate.slice(0, 10) === deal.app.startDate.slice(0, 10)) ?? hits[0];
+    if (!app) continue;
+    const id = `plc-${app.id.replace(/[^\w-]+/g, "-")}`;
+    try {
+      if (await getCase(id)) continue;
+      const c = await createCase({
+        applicationRef: app.id,
+        address: [app.property, app.locality].filter(Boolean).join(", "),
+        agentName: deal.managerName ?? app.agent ?? "Unassigned",
+        agentEmail: deal.managerEmail ?? "",
+        moveInDate: deal.app.startDate ?? app.startDate ?? null,
+      });
+      const rows = await q<EventRow>(
+        `INSERT INTO os_deal_events (deal_id, property, agent_email, agent_name, event, from_status, to_status)
+         VALUES ($1,$2,$3,$4,'plc_opened',NULL,'assembling') RETURNING *`,
+        [c.id, c.address, deal.managerEmail, deal.managerName]
+      );
+      out.push(rowToEvent(rows[0]));
+    } catch {
+      /* the references_back row already tells the agent; the pack can be started by hand */
+    }
+  }
+  return out;
 }
 
 /* ───────────────────────────── the money ───────────────────────────────── */

@@ -295,7 +295,7 @@ export const JOURNEYS: Journey[] = [
         id: "plc-agent",
         title: "The PLC check from the agent's side",
         what: "Start the pack from the application, attach the documents, be stopped if anything required is missing, send it.",
-        how: ["From an accepted application press Start the PLC check.", "Attach nothing and go to review: the send button must be off and the required list shown in red.", "Declare gas not needed with a reason. Attach the rest. Send.", "The reader runs first. If a certificate expires before move-in it holds the pack and shows the line."],
+        how: ["From an accepted application press Start the PLC check - or, once references are back on the deal, find the pack already opened for you (the feed says PLC pack opened).", "Attach nothing and go to review: the send button must be off and the required list shown in red.", "Declare gas not needed with a reason. Attach the rest. Send.", "The reader runs first. If a certificate expires before move-in it holds the pack and shows the line."],
         where: "/applications",
         state: "built",
         since: "2026-09-04",
@@ -372,7 +372,7 @@ export const JOURNEYS: Journey[] = [
         where: "/pre-tenancy/feed",
         state: "built",
         since: "2026-09-04",
-        notes: ["Seeded 63 deals on 4 Sep and confirmed the cron fired at 14:20. No real move has been observed through it yet."],
+        notes: ["Seeded 63 deals on 4 Sep; the cron fires every five minutes and caught its first two real moves overnight (a completion and an agreement out). When a deal reaches References back the watcher also opens the PLC pack on the matching accepted application, in the agent's name."],
       },
       {
         id: "feed",
