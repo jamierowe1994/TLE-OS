@@ -86,3 +86,10 @@ Source: the production OpenAPI spec (TLE-portal/docs/propoly-openapi.yaml) plus 
 - Daily cron `os-cron-daily` at 07:00 UTC: handover shadow scan and the pre-tenancy digest (digest still behind its switch).
 - Activity log (4 Sep, evening): PLC packs submitted and decided join the feed; every row opens the file (board `?deal=`, queue `?case=`); Pop out opens /feed in a small window; Download desktop shortcut gives a .webloc/.url that opens it; Kirstie lands on the feed at sign-in. No emails to her.
 - Missed on the first pass and now on Testing: Flatfair hook (red, James's conversation) and "portals show the deal moving" (grey).
+
+## 5 Sep: PayProp, found while chasing the holding fee
+
+- The OS had no live PayProp on production. The portal's E&W OAuth refresh token (11 Aug) is rejected, so the bridge lends nothing; the bridge cannot lend Scotland's API key at all.
+- Scotland fixed: `PAYPROP_API_KEY_SCOTLAND` set on TLE-OS by reference to the portal's variable. E&W needs a reconnect on the portal by Susan or James.
+- Holding fees never appear as PayProp invoices (Scotland: 73 invoices, categories Rent, Other, Reimbursement). `holding_in` cannot fire from invoices. Needs PayProp's incoming-funds endpoint or holding fees raised as "Holding deposit" invoices.
+- The PayProp register now writes to `integration_cache` (55KB), so a deploy no longer loses it.
