@@ -46,6 +46,10 @@ function matches(needle: string, ...fields: (string | null | undefined)[]): bool
   });
 }
 
+/** An id only matches when somebody has typed most of it - "07" is a phone
+ *  prefix, not a request for every property whose REX id contains 07. */
+const idMatch = (needle: string, id: string | null | undefined) => /^\d{5,}$/.test(needle.trim()) && Boolean(id && String(id).includes(needle.trim()));
+
 async function cachedLeads(rexUserId: string | null): Promise<Lead[]> {
   if (!hasDb()) return [];
   const key = rexUserId ? `leads:v2:agent:${rexUserId}` : "leads:v2:all";
@@ -66,7 +70,7 @@ export async function GET(req: NextRequest) {
     cachedLeads(rexUserId),
     getComplianceBook().catch(() => null),
     getAllPropolyDeals().catch(() => null),
-    getApplications(300, rexUserId).catch(() => []),
+    getApplications(200, rexUserId).catch(() => []),
   ]);
 
   const hits: Hit[] = [];
@@ -74,8 +78,9 @@ export async function GET(req: NextRequest) {
 
   for (const l of book?.listings ?? []) {
     if (!cap(40)) break;
-    if (matches(needle, l.name, l.locality, l.propertyId)) {
-      hits.push({ kind: "property", title: l.name, sub: `${l.locality} · listing`, href: `/listings?open=${encodeURIComponent(l.id)}` });
+    if (matches(needle, l.name, l.locality) || idMatch(needle, l.propertyId) || idMatch(needle, l.id)) {
+      /* HMO rooms share a name; the listing ref keeps them apart. */
+      hits.push({ kind: "property", title: l.name, sub: `${l.locality} · listing ${l.id}`, href: `/listings?open=${encodeURIComponent(l.id)}` });
     }
   }
   for (const l of leads) {
@@ -102,7 +107,7 @@ export async function GET(req: NextRequest) {
   }
   for (const p of compliance?.book.properties ?? []) {
     if (!cap(120)) break;
-    if (matches(needle, p.name, p.locality, p.id)) {
+    if (matches(needle, p.name, p.locality) || idMatch(needle, p.id)) {
       hits.push({ kind: "compliance", title: p.name, sub: `${p.locality} · certificates`, href: `/compliance?open=${encodeURIComponent(p.id)}` });
     }
   }
