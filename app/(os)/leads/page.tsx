@@ -102,6 +102,11 @@ export default function Leads() {
   // Closed on arrival: the page is the inbox, full width. The panel is a
   // consequence of picking someone, never the state you land in.
   const [openId, setOpenId] = useState<string | null>(null);
+  /* ?open=<lead id> from the search bar: open that record on arrival. */
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("open");
+    if (wanted) setOpenId(wanted);
+  }, []);
   const [page, setPage] = useState(0);
   const [creating, setCreating] = useState(false);
   /** Bumped when a contact is saved, so the strip above the table re-reads. */

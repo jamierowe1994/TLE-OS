@@ -379,6 +379,11 @@ export default function Portfolio() {
   const [lookOnly, setLookOnly] = useState(false);
   const [sort, setSort] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
+  /* ?open=<listing id> from the search bar. */
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("open");
+    if (wanted) setOpenId(wanted);
+  }, []);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const load = useCallback(() => {

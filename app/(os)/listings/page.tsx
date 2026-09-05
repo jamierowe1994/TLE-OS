@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import ListingDrawer from "@/components/ListingDrawer";
@@ -185,6 +185,19 @@ export default function Listings() {
   }, []);
 
   const LISTINGS = book.listings;
+  /* ?open=<listing id> from the search bar or the bell: open that card once
+     the book is here. Once, so closing it does not reopen it. */
+  const openedFromUrl = useRef(false);
+  useEffect(() => {
+    if (openedFromUrl.current || !LISTINGS.length) return;
+    const wanted = new URLSearchParams(window.location.search).get("open");
+    if (!wanted) return;
+    const at = LISTINGS.findIndex((l) => String(l.id) === wanted);
+    if (at >= 0) {
+      setOpenAt(at);
+      openedFromUrl.current = true;
+    }
+  }, [LISTINGS]);
   const C = book.counts;
 
   const localities = useMemo(

@@ -61,6 +61,11 @@ export default function Compliance() {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+  /* ?open=<property id> from the search bar or the bell. */
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("open");
+    if (wanted) setOpenId(wanted);
+  }, []);
   const [ordering, setOrdering] = useState<OrderTarget | null>(null);
   /** key = `${propertyId}:${cert}` */
   const [orders, setOrders] = useState<Record<string, { contractor: string; when: string }>>({});

@@ -1,4 +1,5 @@
 import NotificationBell from "@/components/NotificationBell";
+import GlobalSearch from "@/components/GlobalSearch";
 import DoodleIcon from "@/components/DoodleIcon";
 
 /**
@@ -397,19 +398,23 @@ export default function PageHeader({
           belongs to the work below, not to the masthead above. */}
       {(search || actions) && (
         <div className={`flex flex-wrap items-center justify-between gap-3 ${seated ? seatClass : "mt-5"}`}>
-          {search && (
+          {/* A page that filters its own list (Listings) passes onSearch and
+              keeps its bar. Everywhere else the bar is the one search: any
+              property, lead, application or deal, opened on its screen.
+              It was a read-only drawing until 5 Sep. */}
+          {search && onSearch && (
             <label className="flex w-full max-w-xs items-center gap-2.5 rounded-full border border-line/80 px-4 py-2.5 transition-colors focus-within:border-ink">
               <DoodleIcon name="search" size={15} className="shrink-0 text-muted" />
               <input
                 type="text"
                 placeholder={searchPlaceholder}
                 value={searchValue}
-                onChange={onSearch ? (e) => onSearch(e.target.value) : undefined}
-                readOnly={!onSearch}
+                onChange={(e) => onSearch(e.target.value)}
                 className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted/70"
               />
             </label>
           )}
+          {search && !onSearch && <GlobalSearch placeholder={searchPlaceholder} />}
           {actions}
         </div>
       )}
