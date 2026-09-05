@@ -444,6 +444,16 @@ export const JOURNEYS: Journey[] = [
         notes: ["Verified on production 4 Sep: 37 live deals, every one on a stage its records support."],
       },
       {
+        id: "signoff",
+        title: "Ready to move in: Kirstie's sign-off",
+        what: "The one act that says the property is compliant and the tenant can move in. Her name on it, a feed row, the agent told, the landlord and tenant portals showing Move-in day.",
+        how: ["Open a deal at Rent payment on the board. Press Ready to move in on the Move day stage.", "The panel should read back the pack, the deposit and the rent from the records. Press Sign off.", "The deal moves to Move day with Moved by <name>; the feed says Signed off; the agent's application spine shows Move day.", "Sign in as the landlord and the tenant on that deal: both homes should say Move-in day.", "Reset to live should hand the stage back to the record."],
+        where: "/pre-tenancy",
+        state: "built",
+        since: "2026-09-05",
+        switchKey: "deal_watch_notify",
+      },
+      {
         id: "digest",
         title: "The pre-tenancy digest",
         what: "A daily email to whoever holds see:pretenancy listing where the pipeline and PayProp disagree.",

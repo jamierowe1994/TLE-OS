@@ -476,6 +476,8 @@ function subjectFor(e: DealEvent): string {
       return `Cancelled: ${e.property}`;
     case "rent_in":
       return `Rent in: ${e.property}`;
+    case "move_in_ready":
+      return `Ready to move in: ${e.property}`;
     default:
       return `${eventSentence(e)}: ${e.property}`;
   }
@@ -491,7 +493,9 @@ function bodyFor(e: DealEvent, origin: string): { text: string; html: string } {
           ? "Signed and monies in. Move-in is the last step."
           : e.event === "rent_in"
             ? "The first rent has landed in PayProp. Kirstie will close the deal off; you can plan the move-in."
-            : "Propoly has cancelled this deal. If that is a surprise, speak to Kirstie.";
+            : e.event === "move_in_ready"
+              ? "Kirstie has signed the property off as compliant and the tenant ready to move in. Keys, inventory and check-in are yours to arrange."
+              : "Propoly has cancelled this deal. If that is a surprise, speak to Kirstie.";
   const link = `${origin}/applications`;
   const text = `${e.property}\n${eventSentence(e)}.\n\n${next}\n\nOpen your applications: ${link}\n`;
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
@@ -504,7 +508,7 @@ function bodyFor(e: DealEvent, origin: string): { text: string; html: string } {
   return { text, html };
 }
 
-async function tellAgents(events: DealEvent[], origin: string): Promise<number> {
+export async function tellAgents(events: DealEvent[], origin: string): Promise<number> {
   const worth = events.filter((e) => TELL_AGENT.has(e.event));
   if (worth.length === 0) return 0;
   const armed = await switchOn("deal_watch_notify");
@@ -553,16 +557,18 @@ export async function recordActivity(e: {
   event: DealEventKind;
   from?: string | null;
   to?: string | null;
-}): Promise<void> {
-  if (!hasDb()) return;
+}): Promise<DealEvent | null> {
+  if (!hasDb()) return null;
   try {
-    await q(
+    const rows = await q<EventRow>(
       `INSERT INTO os_deal_events (deal_id, property, agent_email, agent_name, event, from_status, to_status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
       [e.id, e.property, e.agentEmail, e.agentName, e.event, e.from ?? null, e.to ?? null]
     );
+    return rowToEvent(rows[0]);
   } catch {
     /* the pack moved; the feed missing a line is the smaller failure */
+    return null;
   }
 }
 

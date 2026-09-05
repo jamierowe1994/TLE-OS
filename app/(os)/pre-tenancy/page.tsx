@@ -1272,6 +1272,8 @@ function DealWorkspace({
   const [meta, setMeta] = useState<DealMeta | null>(null);
   const [effective, setEffective] = useState(deal.effectiveStatusKey);
   const [busy, setBusy] = useState(false);
+  /* The sign-off panel: what the records say, then her confirm. */
+  const [signingOff, setSigningOff] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   // The checklist drops out of the Outstanding tile rather than living on the
   // page. It is a thing you go and do, not a thing you read.
@@ -2052,13 +2054,65 @@ function DealWorkspace({
                             <button
                               type="button"
                               disabled={busy}
-                              onClick={() => void postMeta({ stage: s.key })}
-                              className="ml-auto shrink-0 text-[11px] font-medium text-muted underline decoration-dotted underline-offset-2 opacity-0 transition hover:text-ink focus-visible:opacity-100 disabled:opacity-50 group-hover/stage:opacity-100"
+                              onClick={() => setSigningOff((v) => !v)}
+                              className="ml-auto shrink-0 rounded-full border border-ink/25 px-2.5 py-0.5 text-[11px] font-semibold text-ink transition hover:bg-ink hover:text-white disabled:opacity-50"
                             >
-                              Move here
+                              Ready to move in
                             </button>
                           ) : null}
                         </p>
+                        {/* ── The sign-off ──
+                            The one act that says compliant and ready. The panel
+                            reads the records back first - the pack, the deposit,
+                            the rent - so she confirms with the facts in front of
+                            her and not from memory. Short of something, it says
+                            so and still lets her: the judgement is hers. */}
+                        {signingOff && s.key === "move_day" && !cancelled ? (
+                          <div className="mt-2 rounded-xl border border-line bg-card p-3 text-[12px]">
+                            <p className="font-semibold">Sign this property off as compliant and ready to move in?</p>
+                            <ul className="mt-2 space-y-1">
+                              {[
+                                deal.plc
+                                  ? [deal.plc.state === "approved", `PLC pack ${deal.plc.state === "approved" ? "approved" : deal.plc.label.toLowerCase()}`]
+                                  : meta?.checklist?.plc_outside?.done
+                                    ? [true, "PLC checked outside the OS"]
+                                    : [false, "No PLC pack in the OS"],
+                                deal.money?.deposit
+                                  ? [deal.money.deposit.status !== "paid", `Deposit ${deal.money.deposit.status} in PayProp`]
+                                  : meta?.checklist?.deposit_registered?.done || meta?.depositScheme
+                                    ? [true, "Deposit recorded on the file"]
+                                    : deal.app.propoly?.depositReplacement
+                                      ? [false, "Flatfair deal - not ticked done"]
+                                      : [false, "No deposit seen"],
+                                deal.rentReceived ? [true, "First rent received in PayProp"] : [false, "No rent seen in PayProp yet"],
+                              ].map(([ok, text], i) => (
+                                <li key={i} className="flex items-center gap-2">
+                                  <span className={`h-2 w-2 shrink-0 rounded-full ${ok ? "bg-emerald-600" : "bg-amber-500"}`} />
+                                  <span className={ok ? "" : "text-amber-800"}>{String(text)}</span>
+                                </li>
+                              ))}
+                            </ul>
+                            <p className="mt-2 text-[11px] text-muted">
+                              Your name goes on it. The agent is told, and the landlord and tenant see Move-in day on their portals.
+                            </p>
+                            <div className="mt-2 flex gap-2">
+                              <button
+                                type="button"
+                                disabled={busy}
+                                onClick={() => {
+                                  setSigningOff(false);
+                                  void postMeta({ stage: "move_day" });
+                                }}
+                                className="rounded-full bg-ink px-3 py-1 text-[11.5px] font-semibold text-white disabled:opacity-50"
+                              >
+                                Sign off
+                              </button>
+                              <button type="button" onClick={() => setSigningOff(false)} className="rounded-full border border-line px-3 py-1 text-[11.5px] text-muted">
+                                Not yet
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
                         {state === "current" ? (
                           <p className="mt-0.5 text-[12px] text-muted">{s.blurb}</p>
                         ) : null}

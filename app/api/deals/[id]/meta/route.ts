@@ -9,6 +9,8 @@ import {
 } from "@/lib/business/deal-store";
 import { CHECKLIST_ITEMS, DEPOSIT_SCHEMES, PORTAL_STAGE_BY_KEY } from "@/lib/business/propoly-stages";
 import { derivedStageFor } from "@/lib/business/deal-stage";
+import { recordActivity, tellAgents } from "@/lib/business/deal-watch";
+import { publicOrigin } from "@/lib/origin";
 
 // Pre-tenancy actions on one deal — Kirstie (or an admin) only:
 //   POST { stage: "references" }        move the deal's displayed stage
@@ -66,6 +68,22 @@ export async function POST(
       byName
     );
     const actor = { id: access.user.id, name: byName, role: access.role };
+    if (stage === "move_day") {
+      /* THE SIGN-OFF. Moving a deal to Move day by hand is Kirstie saying the
+         property is compliant and the tenant can move in. It goes on the feed
+         with her name, and the agent is told (behind the agent-email switch);
+         the landlord's and tenant's portals read the stage and follow. */
+      const ev = await recordActivity({
+        id,
+        property: [access.deal.app.propertyName, access.deal.app.locality].filter(Boolean).join(", "),
+        agentEmail: access.deal.managerEmail,
+        agentName: access.deal.managerName,
+        event: "move_in_ready",
+        from: access.deal.statusKey,
+        to: "move_day",
+      });
+      if (ev) await tellAgents([ev], publicOrigin(req)).catch(() => 0);
+    }
     if (stage === null) {
       await logSystemEvent(id, actor, "reset the stage to Propoly's live status");
     } else {

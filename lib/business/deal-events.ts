@@ -34,7 +34,10 @@ export type DealEventKind =
   | "plc_decided"
   /* Opened by the watcher the moment references come back, so the agent's
      application already has a pack waiting rather than a button to press. */
-  | "plc_opened";
+  | "plc_opened"
+  /* Kirstie's sign-off: the one act that says this property is compliant
+     and this tenant can move in. Her name is on the row. */
+  | "move_in_ready";
 
 export interface DealEvent {
   id: number;
@@ -121,6 +124,8 @@ export function eventSentence(e: Pick<DealEvent, "event" | "toStatus" | "fromSta
       return `First rent ${pounds(e.amount)}received in PayProp`;
     case "plc_opened":
       return "References back - PLC pack opened for the agent to fill";
+    case "move_in_ready":
+      return "Signed off: compliant and ready to move in";
     case "plc_submitted":
       return e.fromStatus === "deferred" ? "PLC pack back with you, resubmitted" : "PLC pack sent to you for checking";
     case "plc_decided":
@@ -161,6 +166,7 @@ export const TELL_AGENT: ReadonlySet<DealEventKind> = new Set([
   "complete",
   "cancelled",
   "rent_in",
+  "move_in_ready",
 ]);
 
 export function eventTone(kind: DealEventKind): "ok" | "warn" | "none" {
@@ -174,7 +180,8 @@ export function eventTone(kind: DealEventKind): "ok" | "warn" | "none" {
     kind === "deposit_reconciled" ||
     kind === "deposit_registered" ||
     kind === "rent_in" ||
-    kind === "plc_decided"
+    kind === "plc_decided" ||
+    kind === "move_in_ready"
   )
     return "ok";
   /* A pack landing on her desk is amber: it is the one row that waits on her. */
