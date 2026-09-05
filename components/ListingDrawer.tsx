@@ -43,6 +43,8 @@ export type Listing = {
    *  fallback export predates the OS keeping more than the first one. */
   images?: string[];
   id: string;
+  /** The REX property behind the listing. Certificates hang off this. */
+  propertyId?: string | null;
   name: string;
   locality: string;
   rent: number | null;
@@ -1143,6 +1145,7 @@ export default function ListingDrawer({
               <ListingDocuments
                 terms={terms}
                 listingId={listing.id}
+                propertyId={listing.propertyId ?? null}
                 contactId={link?.landlord?.contactId ?? null}
                 /* Undefined, deliberately. These prefilled the Terms of
                    Business e-sign from `landlordFor()` — so a contract could

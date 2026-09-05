@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import SendTermsPopout from "@/components/SendTermsPopout";
 import type { TermsState } from "@/lib/use-listing-terms";
@@ -29,9 +29,20 @@ function since(iso: string | null): string {
   return `${d} days ago`;
 }
 
+interface VaultFile {
+  key: string;
+  certKey: string;
+  label: string;
+  name: string;
+  size: number;
+  uploadedAt: string | null;
+  open: string;
+}
+
 export default function ListingDocuments({
   terms,
   listingId,
+  propertyId,
   contactId,
   landlordName,
   landlordEmail,
@@ -39,12 +50,35 @@ export default function ListingDocuments({
 }: {
   terms: TermsState;
   listingId: string | number;
+  /** The REX property: the certificates the OS holds are filed under it. */
+  propertyId?: string | null;
   contactId?: string | number | null;
   landlordName?: string;
   landlordEmail?: string;
   address?: string;
 }) {
   const [sending, setSending] = useState(false);
+
+  /* ── Certificates the OS holds for this property ──────────────────────
+     James, 5 Sep: "we need to be able to see them in documents, not just in
+     the compliance tab." The same vault the Compliance drawer reads, listed
+     here as one shelf: gas, EICR, EPC, licence and the rest, newest first,
+     each opening out of a signed link. */
+  const [certs, setCerts] = useState<VaultFile[] | null>(null);
+  useEffect(() => {
+    if (!propertyId) {
+      setCerts([]);
+      return;
+    }
+    let gone = false;
+    fetch(`/api/compliance/vault?property=${encodeURIComponent(propertyId)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { files?: VaultFile[] } | null) => !gone && setCerts(j?.files ?? []))
+      .catch(() => !gone && setCerts([]));
+    return () => {
+      gone = true;
+    };
+  }, [propertyId]);
 
   return (
     <section className="rounded-2xl border border-line/80 bg-panel p-5">
@@ -62,6 +96,36 @@ export default function ListingDocuments({
         </button>
       </div>
 
+      {/* ── Certificates, before the contracts: the thing most often looked for. ── */}
+      <div className="mb-4">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">Certificates on file</p>
+        {certs === null ? (
+          <p className="mt-1.5 text-[12px] text-muted">Reading the vault…</p>
+        ) : !certs.length ? (
+          <p className="mt-1.5 text-[12px] leading-relaxed text-muted">
+            None held here yet. A certificate dropped in, or in an approved PLC pack, lands here and on
+            Compliance both.
+          </p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {certs.map((f) => (
+              <li key={f.key} className="flex flex-wrap items-center gap-3 rounded-xl border border-line/70 bg-card p-3">
+                <span className="rounded-full border border-line px-2.5 py-0.5 text-[10.5px] font-semibold text-muted">{f.label}</span>
+                <span className="min-w-0 truncate text-[12.5px]">{f.name}</span>
+                <span className="text-[11px] text-muted">
+                  {f.size ? `${(f.size / 1_048_576).toFixed(1)} MB` : ""}
+                  {f.uploadedAt ? ` · ${since(f.uploadedAt)}` : ""}
+                </span>
+                <a href={f.open} target="_blank" rel="noreferrer" className="ml-auto rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] hover:border-ink/40">
+                  Open
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">Contracts</p>
       {terms.status === "loading" && <p className="text-[12px] text-muted">Asking REX…</p>}
 
       {terms.status === "off" && (

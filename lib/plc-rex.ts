@@ -5,6 +5,7 @@ import { rexCall, rexConfigured, rexWritesLocked } from "@/lib/rex";
 import { switchOn } from "@/lib/switches";
 import { getApplications } from "@/lib/applications";
 import { fetchListingBook } from "@/lib/rex-listings";
+import { getListingDocuments } from "@/lib/business/rex-stats";
 import { propertyKey } from "@/lib/business/payprop-portfolio";
 import { refreshComplianceBook } from "@/lib/compliance-cache";
 import { getCase, recordRexPush } from "@/lib/plc-store";
@@ -46,6 +47,25 @@ import { checkById, type CheckId, type PlcCase, type PlcDocument, type PushResul
  * life (EICR five years, gas one, EPC ten) and said so in the entry's notes,
  * so nobody later mistakes a derived date for a read one.
  */
+
+const TYPE_WORDS: Record<string, string> = {
+  gas_safety: "Gas safety (CP12)",
+  eicr: "EICR",
+  epc: "EPC",
+  mandatory_hmo_license: "HMO licence",
+  additional_hmo_license: "HMO licence (additional)",
+  selective_hmo_license: "Selective licence",
+  legionella_risk_assessment: "Legionella risk assessment",
+  portable_appliance_testing: "PAT",
+  smoke_alarms: "Smoke alarms",
+  co_alarms: "CO alarms",
+  emergency_lighting_fire_exit: "Fire safety",
+};
+
+/** "EICR - expires 2028-09-06 - file.pdf": what the document is called in REX. */
+function docDescription(type: string, expiry: string, name: string): string {
+  return `${TYPE_WORDS[type] ?? type} - expires ${expiry} - ${name}`.slice(0, 200);
+}
 
 const LIFE_MONTHS: Partial<Record<string, number>> = { eicr: 60, gas_safety: 12, epc: 120, legionella_risk_assessment: 24, portable_appliance_testing: 12 };
 
@@ -115,6 +135,39 @@ export async function rexWriteBlockedBecause(): Promise<string | null> {
 }
 
 /**
+ * The same file, into REX's Documents on the listing.
+ *
+ * James, 5 Sep: "they need to be saved into the documentation as well." A
+ * compliance entry is what the tracker reads; the listing's Documents is
+ * where a person looks. Same two-step as the signed terms: the upload's
+ * rextmp uri, then Listings/update with a nested listing_documents row.
+ * Skipped, and said, when the property has no listing or the file is
+ * already there by name. Listings/update is on the allowlist already.
+ */
+export async function attachCertificateToListing(input: {
+  propertyId: string;
+  uri: string;
+  name: string;
+  description: string;
+}): Promise<{ ok: boolean; note: string; listingId?: string }> {
+  try {
+    const book = await fetchListingBook().catch(() => null);
+    const listing = book?.listings.find((l) => l.propertyId === input.propertyId);
+    if (!listing) return { ok: false, note: "No listing on this property, so nothing to file the document under." };
+    if (rexWritesLocked("Listings", "update")) return { ok: false, note: "REX_ALLOW_WRITES does not name Listings/update." };
+    const held = await getListingDocuments(String(listing.id)).catch(() => []);
+    if (held.some((d) => d.name === input.description)) return { ok: true, note: "Already in the listing's Documents.", listingId: String(listing.id) };
+    const res = await rexCall("Listings", "update", {
+      data: { id: Number(listing.id), related: { listing_documents: [{ description: input.description, uri: input.uri }] } },
+    });
+    if (!res.ok) return { ok: false, note: res.error ?? `REX answered ${res.status}.` };
+    return { ok: true, note: "Filed in the listing's Documents.", listingId: String(listing.id) };
+  } catch (e) {
+    return { ok: false, note: e instanceof Error ? e.message : "attach failed" };
+  }
+}
+
+/**
  * One certificate, into REX. Shared by the approved pack and the batch
  * intake, so a certificate written either way lands identically.
  */
@@ -161,7 +214,8 @@ export async function writeCertificateToRex(input: {
         return_id: true,
       });
       if (!upd.ok) return { ok: false, note: upd.error ?? `REX answered ${upd.status}.` };
-      return { ok: true, note: `Completed on the property in REX with its file, expires ${input.expiry}.`, entryId: input.existingEntryId };
+      const doc = await attachCertificateToListing({ propertyId: input.propertyId, uri, name: input.name, description: docDescription(input.type, input.expiry, input.name) });
+      return { ok: true, note: `Compliance entry updated, expires ${input.expiry}. Documents: ${doc.note}`, entryId: input.existingEntryId };
     }
     const res = await rexCall("ComplianceEntries", "create", {
       data: {
@@ -174,7 +228,8 @@ export async function writeCertificateToRex(input: {
     });
     if (!res.ok) return { ok: false, note: res.error ?? `REX answered ${res.status}.` };
     const id = typeof res.result === "number" || typeof res.result === "string" ? String(res.result) : String((res.result as { id?: unknown })?.id ?? "");
-    return { ok: true, note: `On the property in REX with its file, expires ${input.expiry}.`, entryId: id || undefined };
+    const doc = await attachCertificateToListing({ propertyId: input.propertyId, uri, name: input.name, description: docDescription(input.type, input.expiry, input.name) });
+    return { ok: true, note: `On the property in REX with its file, expires ${input.expiry}. Documents: ${doc.note}`, entryId: id || undefined };
   } catch (e) {
     return { ok: false, note: e instanceof Error ? e.message : "write failed" };
   }
