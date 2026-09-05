@@ -552,6 +552,30 @@ An agent logging in wants to answer three questions at a glance:
 
 Any stage that cannot be answered yes/no is too big.
 
+## Testing walk against production - 5 Sep 2026
+
+Every Testing-page step probed on tle-os.co.uk with James's session, read-only (no
+records created). 36 of 39 checks pass; the three "fails" are by design (the landlord
+portal wants a landlord login, the handover scan takes the cron key only).
+
+What is live and answering: 236 lettings leads (500 scanned), 3 appraisals all with a
+derived stage, 281 listings with 114 go-live dates, 100 applications, 60 deals on the
+board and 63 in the watcher (last look under five minutes old), 9 feed events, 29 bell
+notices, PayProp on both agencies (1,063 tenants, 1,356 incoming rows; 5 of 35 deals
+money-matched), the compliance tracker refreshing on read (911 outstanding certificates
+across the book), 10 campaigns, the agent-compliance list seeded, Kirstie's dashboard with
+11 move-ins in the fortnight.
+
+What the walk could NOT do, and needs a hand: booking an appraisal from a lead (writes a
+record), the pre-appraisal deck and terms signing (DocuSeal), landlord and tenant sign-in
+(a real email must arrive), a PLC pack end to end (zero cases exist on production - nobody
+has run one), Flatfair hand-off, Move day on the board (none set), the Testing marks
+themselves.
+
+Switches as found: customer email ON, pre-tenancy digest ON (sends to James and Susan,
+14 alerts today), REX contact create ON; certificate chases, agent-compliance reminders,
+handover live, agent deal emails, Propoly documents, campaign sending all OFF.
+
 ## Waiting on someone else
 
 Re-read 2 September 2026.
