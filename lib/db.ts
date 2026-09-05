@@ -1177,6 +1177,8 @@ CREATE INDEX IF NOT EXISTS os_plc_cases_state ON os_plc_cases (state, submitted_
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS waivers JSONB NOT NULL DEFAULT '[]'::jsonb;
 -- The last push of the approved pack into Propoly's document slots (4 Sep 2026).
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS propoly_push JSONB;
+-- The last write of the approved pack's certificates into REX's compliance table (5 Sep 2026).
+ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS rex_push JSONB;
 CREATE INDEX IF NOT EXISTS os_plc_cases_agent ON os_plc_cases (lower(agent_email), created_at DESC);
 
 -- The shadow log: what the rules recommended, and what the person decided.

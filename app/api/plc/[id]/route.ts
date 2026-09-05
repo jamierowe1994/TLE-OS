@@ -17,6 +17,7 @@ import { scanCase, scanConfigured, type ScanOutcome } from "@/lib/plc-scan";
 import { actorName } from "@/lib/plc-actor";
 import { recordDecision, recordRecommendation } from "@/lib/plc-shadow";
 import { pushCaseToPropoly } from "@/lib/plc-propoly";
+import { pushCaseToRex } from "@/lib/plc-rex";
 import { recordActivity } from "@/lib/business/deal-watch";
 import { switchOn } from "@/lib/switches";
 
@@ -180,6 +181,19 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         return NextResponse.json({ ok: true, ...payload(scanned) });
       }
 
+      case "push-rex": {
+        /* By hand, on an approved pack: the supervised first write, or a
+           retry after REX refused one. */
+        const by = await actorName(req, "Compliance");
+        try {
+          await pushCaseToRex(id, by);
+        } catch (e) {
+          return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "push failed" }, { status: 409 });
+        }
+        const pushed = await getCase(id);
+        return NextResponse.json({ ok: true, ...payload(pushed!) });
+      }
+
       case "push-propoly": {
         /* By hand, on an approved pack: the first push after the switch goes
            on, or a retry after a slot failed. */
@@ -286,11 +300,25 @@ export async function POST(req: NextRequest, ctx: Ctx) {
            now, so she can generate the agreement without uploading anything.
            A push that fails is recorded on the case and never undoes the
            approval - the decision is hers, the upload is a courtesy. */
-        if (decision === "approved" && (await switchOn("propoly_documents"))) {
-          try {
-            await pushCaseToPropoly(id, by);
-          } catch {
-            /* recorded on the case where it could be; the approval stands */
+        /* Two pushes, each behind its own switch, each recorded on the case
+           and neither able to undo the approval. Propoly so Kirstie can
+           generate the agreement; REX so the certificates count on the
+           tracker and in REX PM (5 Sep). */
+        const [propoly, rex] = await Promise.all([switchOn("propoly_documents"), switchOn("rex_compliance_write")]);
+        if (decision === "approved" && (propoly || rex)) {
+          if (propoly) {
+            try {
+              await pushCaseToPropoly(id, by);
+            } catch {
+              /* recorded on the case where it could be; the approval stands */
+            }
+          }
+          if (rex) {
+            try {
+              await pushCaseToRex(id, by);
+            } catch {
+              /* as above */
+            }
           }
           const after = await getCase(id);
           return NextResponse.json({ ok: true, ...payload(after ?? decided) });

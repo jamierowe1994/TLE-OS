@@ -86,6 +86,21 @@ export const SWITCHES: Switch[] = [
     legacyOn: "on",
   },
   {
+    /**
+     * The approved PLC pack's certificates, written into REX's compliance
+     * table with the file and the expiry (5 Sep 2026). This is a REX WRITE:
+     * it also needs REX_ALLOW_WRITES to name ComplianceEntries/create and
+     * Upload/uploadFileFromUrl, and it refuses, saying so, until it does.
+     */
+    key: "rex_compliance_write",
+    label: "Certificates into REX",
+    what: "On approval, writes each gas, EICR, EPC, licence, legionella, PAT, fire and alarm certificate in the pack into REX as a compliance entry on the property, with the file and the expiry date. REX PM and the Compliance tracker read the same table.",
+    who: "Nobody is emailed. REX gains records under the office account, marked as written by TLE OS.",
+    confirm: "WRITE CERTIFICATES",
+    legacyEnv: "REX_COMPLIANCE_WRITE",
+    legacyOn: "on",
+  },
+  {
     key: "agent_compliance_chases",
     label: "Agent compliance reminders",
     what: "Emails an agent when something they hold personally is missing or runs out within 30, 14 or 7 days, once per band, and Michael a daily list of who is short.",

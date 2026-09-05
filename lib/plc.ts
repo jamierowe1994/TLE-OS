@@ -360,6 +360,22 @@ export type PropolyPush = {
   results: PushResult[];
 };
 
+/**
+ * The same pack, written into REX as compliance entries (5 Sep 2026).
+ *
+ * James: the certificates agents upload live in Propoly, which cannot be
+ * read back, so REX's compliance table - the one the tracker and REX PM's
+ * own screen read - stays empty. Writing each certificate there on approval,
+ * with the file and the expiry, is what makes one upload count everywhere.
+ */
+export type RexPush = {
+  at: string;
+  by: string;
+  /** The REX property the entries went onto, or null when none matched. */
+  propertyId: string | null;
+  results: PushResult[];
+};
+
 export type PlcCase = {
   id: string;
   /** The application this came from. */
@@ -379,6 +395,7 @@ export type PlcCase = {
   waivers: Waiver[];
   /** The last push of the approved pack into Propoly. Null until one runs. */
   propolyPush?: PropolyPush | null;
+  rexPush?: RexPush | null;
   scannedAt: string | null;
   findings: Finding[];
   /** Kirstie's decision, her words, and her name against it. */

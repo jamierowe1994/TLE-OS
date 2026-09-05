@@ -14,6 +14,7 @@ import {
   type PlcDocument,
   type PlcState,
   type PropolyPush,
+  type RexPush,
   type Waiver,
 } from "@/lib/plc";
 
@@ -55,6 +56,7 @@ interface Row extends Record<string, unknown> {
   findings: Finding[] | null;
   waivers: Waiver[] | null;
   propoly_push: PropolyPush | null;
+  rex_push: RexPush | null;
   submitted_at: string | Date | null;
   scanned_at: string | Date | null;
   decided_at: string | Date | null;
@@ -93,6 +95,7 @@ function rowTo(r: Row): PlcCase {
     findings: Array.isArray(r.findings) ? r.findings : [],
     waivers: Array.isArray(r.waivers) ? r.waivers : [],
     propolyPush: r.propoly_push ?? null,
+    rexPush: r.rex_push ?? null,
     submittedAt: iso(r.submitted_at),
     scannedAt: iso(r.scanned_at),
     decidedAt: iso(r.decided_at),
@@ -103,7 +106,7 @@ function rowTo(r: Row): PlcCase {
 }
 
 const COLS = `id, application_ref, address, agent_name, agent_email, state,
-              move_in_date, agent_note, documents, findings, waivers, propoly_push, submitted_at,
+              move_in_date, agent_note, documents, findings, waivers, propoly_push, rex_push, submitted_at,
               scanned_at, decided_at, decided_by, decision_note, created_at`;
 
 /* ──────────────────────────── the file backend ──────────────────────────── */
@@ -141,7 +144,7 @@ async function mutate(id: string, fn: (c: PlcCase) => PlcCase): Promise<PlcCase>
               documents = $5::jsonb, findings = $6::jsonb,
               submitted_at = $7, scanned_at = $8,
               decided_at = $9, decided_by = $10, decision_note = $11,
-              waivers = $12::jsonb, propoly_push = $13::jsonb,
+              waivers = $12::jsonb, propoly_push = $13::jsonb, rex_push = $14::jsonb,
               updated_at = NOW()
         WHERE id = $1
         RETURNING ${COLS}`,
@@ -159,6 +162,7 @@ async function mutate(id: string, fn: (c: PlcCase) => PlcCase): Promise<PlcCase>
         next.decisionNote,
         JSON.stringify(next.waivers ?? []),
         next.propolyPush ? JSON.stringify(next.propolyPush) : null,
+        next.rexPush ? JSON.stringify(next.rexPush) : null,
       ]
     );
     return rowTo(saved[0]);
@@ -456,6 +460,10 @@ export async function unwaiveCheck(id: string, checkId: CheckId): Promise<PlcCas
  *  can be re-run on an approved case as often as it needs. */
 export async function recordPropolyPush(id: string, push: PropolyPush): Promise<PlcCase> {
   return mutate(id, (c) => ({ ...c, propolyPush: push }));
+}
+
+export async function recordRexPush(id: string, push: RexPush): Promise<PlcCase> {
+  return mutate(id, (c) => ({ ...c, rexPush: push }));
 }
 
 export async function recordPreflight(id: string, findings: Finding[]): Promise<PlcCase> {

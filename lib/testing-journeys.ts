@@ -555,6 +555,22 @@ export const JOURNEYS: Journey[] = [
         notes: ["Never run against Propoly. The first real push should be watched by James.", "A file for a slot Propoly already holds is reported, not replaced."],
       },
       {
+        id: "rex-write",
+        title: "The approved pack's certificates land in REX",
+        what: "On approval, the gas, EICR, EPC and licence in the pack are written into REX as compliance entries on the property, with the file and the expiry. The tracker, the chases and REX PM read that same table, so one upload counts everywhere.",
+        how: [
+          "Admin, Switches, Certificates into REX: arm it. On Railway, REX_ALLOW_WRITES must name ComplianceEntries/create and Upload/uploadFileFromUrl, or the panel says so and writes nothing.",
+          "Approve a pack, or press Write certificates to REX on an approved one. Each certificate reads written, with the expiry.",
+          "Open the property in REX: the certificates are on its compliance tab. Open Compliance in the OS: the property no longer reads missing for those.",
+          "A certificate with no expiry read off it is skipped and says so - it needs a date before REX will take it.",
+        ],
+        where: "/pre-tenancy/plc",
+        state: "built",
+        since: "2026-09-05",
+        switchKey: "rex_compliance_write",
+        notes: ["This is a REX write. Watch the first one: the entry's shape was read from REX's own describeModel and schema, not tried live yet."],
+      },
+      {
         id: "stages",
         title: "The board's stages move on their own",
         what: "Seven of eight stages read from the records; Move day is the only hand move. PLC checked outside the OS is a tick for deals in flight.",

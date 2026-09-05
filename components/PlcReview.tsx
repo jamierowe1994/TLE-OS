@@ -445,6 +445,56 @@ export function ComplianceSide({
           )}
         </section>
       )}
+
+      {/* ── Into REX ──
+          The same certificates, written into REX's compliance table with
+          the file and the expiry, so the tracker, the chases and REX PM
+          stop calling them missing. Runs on approval when its switch is on;
+          this is the by-hand run and the record of the last one. */}
+      {c.state === "approved" && (
+        <section className="rounded-xl border border-line p-4 text-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base tracking-normal text-ink">Into REX</h2>
+              <p className="mt-0.5 text-xs text-muted">
+                {c.rexPush
+                  ? `Last written by ${c.rexPush.by} on ${prettyWhen(c.rexPush.at)}${c.rexPush.propertyId ? "" : " - no property matched"}.`
+                  : "Not written yet. Gas, EICR, EPC and licence go onto the property as compliance entries, with the expiry."}
+              </p>
+            </div>
+            <Btn onClick={() => act("push-rex")} busy={busy === "push-rex"}>
+              {c.rexPush ? "Write again" : "Write certificates to REX"}
+            </Btn>
+          </div>
+          {c.rexPush && c.rexPush.results.length > 0 && (
+            <ul className="mt-3 divide-y divide-line">
+              {c.rexPush.results.map((r, i) => (
+                <li key={i} className="flex items-start gap-3 py-2 text-xs">
+                  <span
+                    className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 ${
+                      r.outcome === "uploaded" || r.outcome === "already"
+                        ? "bg-emerald-50 text-emerald-800"
+                        : r.outcome === "failed"
+                          ? "bg-rose-50 text-rose-800"
+                          : "bg-box text-muted"
+                    }`}
+                  >
+                    {r.outcome === "uploaded" ? "written" : r.outcome}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="text-ink">{r.name}</span>
+                    {r.type && <span className="text-muted"> · {r.type.replace(/_/g, " ")}</span>}
+                    <span className="block text-muted">{r.note}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {c.rexPush && c.rexPush.results.length === 0 && (
+            <p className="mt-2 text-xs text-muted">Nothing in this pack is a certificate REX holds.</p>
+          )}
+        </section>
+      )}
     </div>
   );
 }
