@@ -266,9 +266,9 @@ function managedView(p: ManagedProperty, first: string, comp: LandlordCompliance
     const fault = !c.quiet && (c.status === "missing" || c.status === "expired");
     return {
       title: c.label,
-      sub: c.line + (fault ? "  •  Ask your agent" : ""),
+      sub: c.line + (fault ? "  •  Ask your agent" : c.href ? "  •  Open" : ""),
       state: (c.status === "ok" || c.status === "watch" ? "uploaded" : fault ? "missing" : "pending") as "uploaded" | "missing" | "pending",
-      href: null,
+      href: c.href,
     };
   });
   const dated = (comp?.certs ?? []).filter((c) => !c.quiet);

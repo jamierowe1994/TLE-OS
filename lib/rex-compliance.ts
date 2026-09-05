@@ -173,7 +173,7 @@ export async function certificatesFor(listings: CertSubject[]): Promise<Complian
       const held = certs[key];
       // Latest expiry wins; a record with no date never displaces one with.
       if (!held || (expires != null && (held.expires == null || expires > held.expires))) {
-        certs[key] = { expires, attached };
+        certs[key] = { expires, attached, fileUrl: e.file?.url ?? null };
       }
     }
 

@@ -183,6 +183,8 @@ export interface LandlordCert {
   line: string;
   /** Alarms and legionella: no fixed expiry, so "no record" is not a fault. */
   quiet: boolean;
+  /** Where the landlord opens the file, via our own route. Null when REX holds only a date. */
+  href: string | null;
 }
 
 export interface LandlordCompliance {
@@ -216,7 +218,8 @@ function summarise(p: CompProperty): LandlordCompliance {
     const expires = daysLeft == null ? null : new Date(today.getTime() + daysLeft * 86400000).toISOString().slice(0, 10);
     const quiet = key === "alarms" || key === "legionella";
     const line = quiet && status === "missing" ? "Checked at each visit - no dated record" : certLine(status, daysLeft, expires);
-    return { key, label: CERT_META[key].label, status, daysLeft, expires, attached: Boolean(c?.attached), line, quiet };
+    const href = c?.fileUrl ? `/api/landlord/certificate?property=${encodeURIComponent(p.id)}&cert=${key}` : null;
+    return { key, label: CERT_META[key].label, status, daysLeft, expires, attached: Boolean(c?.attached), line, quiet, href };
   });
   /* The quiet duties have no fixed expiry, so "no record" on alarms or
      legionella is not a fault the landlord can act on. The headline reads

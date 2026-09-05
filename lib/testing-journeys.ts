@@ -127,11 +127,11 @@ export const JOURNEYS: Journey[] = [
         id: "landlord-certs",
         title: "Landlord portal: certificates and expiry dates",
         what: "A managed landlord sees each required certificate on their property with its expiry, the same read as the Compliance screen. Anything expired or missing says ask your agent.",
-        how: ["Sign in as a landlord with a managed property (magic link to the email on the REX owner contact).", "Under Documents: EICR, gas where the property has gas, EPC, plus the HMO set if it is one, each with a date.", "Compare against the Compliance screen for the same property. They must agree.", "Find one with a certificate due within 30 days: the Certificates step and the snapshot should say so."],
+        how: ["Sign in as a landlord with a managed property (magic link to the email on the REX owner contact).", "Under Documents: EICR, gas where the property has gas, EPC, plus the HMO set if it is one, each with a date.", "Compare against the Compliance screen for the same property. They must agree.", "Find one with a certificate due within 30 days: the Certificates step and the snapshot should say so.", "Click a certificate marked Open: the PDF should open. Try the same link signed out: not found."],
         where: "/landlord",
         state: "built",
         since: "2026-09-04",
-        notes: ["No file to open yet: REX holds the certificate and the portal does not serve REX's files. The line says ask your agent."],
+        notes: ["Where REX holds the file, the line ends in Open and the landlord gets the PDF through our own route, which checks the property is theirs. EPCs are often a date with no file in REX; those show the date only."],
       },
       {
         id: "landlord-offers",

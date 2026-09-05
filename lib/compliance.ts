@@ -79,6 +79,10 @@ export const QUIET_SET: CertKey[] = ["alarms", "legionella"];
 export type Cert = {
   /** Days from today until expiry; negative = expired; null = no record. */
   expires: number | null;
+  /** REX's URL for the certificate file, when one is attached. Never shown
+   *  to a customer raw: the landlord route fetches it under our credentials
+   *  after checking the property is theirs. */
+  fileUrl?: string | null;
   /** Is the actual certificate file on the record? (REX truth: EICRs yes,
    *  EPCs almost never — a date without a document is half a record.) */
   attached: boolean;
