@@ -1,3 +1,4 @@
+import NotificationBell from "@/components/NotificationBell";
 import DoodleIcon from "@/components/DoodleIcon";
 
 /**
@@ -277,15 +278,9 @@ export default function PageHeader({
           <p className="mt-2.5 max-w-md text-[13px] text-muted">{blurb}</p>
         </div>
 
-        {/* Notifications, top right and nothing else up there. */}
-        <button
-          type="button"
-          className="absolute right-0 top-0 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-line/80"
-          title="Notifications (wireframe)"
-        >
-          <DoodleIcon name="bell" size={17} className="text-ink" />
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-accent" />
-        </button>
+        {/* Notifications, top right and nothing else up there. Live since
+            5 Sep 2026 - see components/NotificationBell. */}
+        <NotificationBell />
 
         {/* The figure, hard right, standing on the rule.
 

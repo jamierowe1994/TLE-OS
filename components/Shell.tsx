@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import NotificationBell from "@/components/NotificationBell";
 import DoodleIcon from "@/components/DoodleIcon";
 import { readTheme, type ThemeChoice } from "@/lib/theme";
 import { FRONT, BACK, workspacesFor, type NavItem } from "@/lib/nav";
@@ -396,8 +397,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-line/70 px-5 py-4 lg:hidden">
           <span className="hand text-2xl">TLE OS</span>
-          <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-dark">
-            Preview
+          <span className="flex items-center gap-2">
+            {/* The bell rides the mobile bar so a screen without a page header
+                still has it - the page headers carry their own on desktop. */}
+            <NotificationBell compact />
+            <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-dark">
+              Preview
+            </span>
           </span>
         </header>
         {/* data-os-content is the handle the admin layout reaches for when a

@@ -81,6 +81,21 @@ export const JOURNEYS: Journey[] = [
         since: "2026-09-05",
       },
       {
+        id: "bell",
+        title: "The bell tells an agent what happened on their book",
+        what: "Every screen's bell reads the deal moves, money, PLC decisions, campaign steps needing a person, handover runs and certificate chases that concern the person signed in, with a count of what they have not looked at.",
+        how: [
+          "Sign in as an agent with a live deal. The bell top right wears a count when something happened on one of their deals since they last opened it.",
+          "Open it: each line says the property and what happened, and clicks through to the file. Opening clears the count.",
+          "Press Desktop alerts and allow it. The next thing that happens on their book arrives as a desktop notification within a minute, without the page open.",
+          "Sign in as Kirstie or an owner: the bell shows the whole book, plus handover runs and chases.",
+          "On a phone, the bell rides the top bar on every screen, including the ones without a page header.",
+        ],
+        where: "/dashboard",
+        state: "built",
+        since: "2026-09-05",
+      },
+      {
         id: "nurture-campaign",
         title: "Nurture puts the lead on a campaign, and a reply takes them off",
         what: "The reason picked on Add to nurture decides the campaign. Francesca edits any campaign, including the built-in ones, locks it onto reasons, and runs two on the same reason as a test.",
