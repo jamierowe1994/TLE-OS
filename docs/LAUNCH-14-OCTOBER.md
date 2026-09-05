@@ -16,35 +16,36 @@ pick off. **Status column is honest: `todo` until it is actually working.**
 
 ## The board
 
-Status re-read on **2 September 2026** against the commits, the screen register
-(`lib/screens.ts`) and the wiring sheet (`lib/wiring.ts`), not against memory.
-Six weeks left.
+Status re-read on **5 September 2026** against the commits and the Testing page
+(`lib/testing-journeys.ts`, Admin → Testing), not against memory. Five and a half
+weeks left. The Testing page is now the finer-grained truth: this board is the
+summary.
 
 Key: **built** works on real data · **partial** exists, with the gap named ·
 **blocked** waiting on somebody outside the code · **todo** not started.
 
-| # | Item | Owner-facing | Status (2 Sep) |
+| # | Item | Owner-facing | Status (5 Sep) |
 |---|---|---|---|
-| 1 | Market appraisals tab | Agents | **partial** — tab and spine live (26 Aug); nothing moves a record between stages, "Record the valuation" has no form, four sample rows still on screen |
+| 1 | Market appraisals tab | Agents | **built** (4 Sep) — stages read from the record (deck, visit, figure, signed terms, landlord documents, REX listing); Won and Lost are the only hand moves; Record the valuation has its form |
 | 2 | Appraisal process: book → pre → appraisal → post | Agents | **partial** — booking hands over from Leads, pre-appraisal deck, comparables, presentation builder, post-appraisal slides, DocuSeal terms signing all built; stage progression not |
 | 3 | Copy Ian's approved appraisal emails + video option | Agents | **partial** — personalised Flow video built and webhook fixed (1 Sep); the emails send from the agent's own mailbox, which is built but untested; generic sending blocked on item 12 |
-| 4 | PLC in-house, with approval queue and AI pre-check | Kirstie / Mike | **built** (22–30 Aug) — the model reads the pack, Kirstie's queue and review panel decide; the shadow log on Admin → PLC checks is what says whether it could ever run itself |
+| 4 | PLC in-house, with approval queue and AI pre-check | Kirstie / Mike | **built** — pack gated on required documents with written reasons for the conditional ones, reader runs before submit, Kirstie's queue and review, approved pack pushed into Propoly's document slots behind a switch (4 Sep), Ready to move in sign-off (5 Sep) |
 | 5 | Compliance tracker + 30/14/7 reminders | Michael | **built** (22 Aug) — tracker live off REX; the two chase emails send behind the Certificate chases switch and go to agent and landlord both |
-| 6 | Applications tracker | Kirstie | **built** — live off REX; referencing has no source anywhere and the screen says so |
-| 7 | Port the finance figures from the portal | Susan | **partial** — Susan's figures inside the OS (28 Aug), income live and self-warming; the UK PayProp book is still sample because no UK API key exists (see Waiting) |
+| 6 | Applications tracker | Kirstie | **built** — live off REX with a left-to-right spine, comments, the deal's history, and the Propoly watcher every five minutes (4 Sep); referencing still has no source and the screen says so |
+| 7 | Port the finance figures from the portal | Susan | **built** (5 Sep) — Scotland on its own key, E&W reconnected from the OS's own Wiring page; arrears, rent and the deposit matcher live on both. Agency income report not in the E&W client's permissions |
 | 8 | Multi-tenant + per-agent REX auth | Everyone | **partial** — invite-only sign-in, roles, view-as, each agent sees their own book (27–28 Aug); an agent can link their own REX account on Profile; per-agent mailbox sending exists, never run live |
-| 9 | Flatfair API | — | **blocked**: meeting requested |
+| 9 | Flatfair API | — | **partial** — hand-off screen with every fact copyable and a Done tick that moves the board (4 Sep); the API itself still **blocked** on the meeting |
 | 10 | Kelly's training hub, reskinned | Agents | **todo** |
 | 11 | Agent compliance checker in profile | Michael | **todo** |
 | 12 | Resend on two domains | — | **blocked** — Resend refuses every non-TLE domain until the domains are set up |
 | 13 | Every email flow tested and on brand | — | **blocked** on 12 — the emails themselves are written and previewable on /emails |
-| 14 | Landlord + tenant portals refined and secured | Customers | **partial** — landlord sign-in built 2 Sep (magic link to the email on the REX owner contact or the appraisal's contact), and a live home that tells the journey: the property, the beats, the valuation and terms agreed at the visit, the decks to open, the terms signed, documents up, plus any managed properties; certificates, offers and upkeep still to come; the Raj sample stays at /landlord/demo; tenant side still has no sign-in |
+| 14 | Landlord + tenant portals refined and secured | Customers | **partial** — landlord: sign-in, journey, certificates with the file to open, offers, and the let step by step (5 Sep); tenant: sign-in by magic link and a home showing the deal moving in their words (4 Sep); upkeep still has no source |
 | 15 | Marketing email builder | Francesca | **partial** — builder built (28 Aug) with fonts, layouts, drag and drop; nurture campaigns exist behind a switch; sending blocked on 12 |
 | 16 | REX PM integration | — | **settled: not viable, data is empty** (22 Aug) |
-| 17 | Tenant passport in-house | — | **partial** — passport built (30 Aug) with agent-written questions; the invite has no send path, so nobody receives one automatically |
+| 17 | Tenant passport in-house | — | **built** (4 Sep) — the invite sends from a booked viewing on the public sender, mints the passport and links to it |
 | 18 | Turn REX automations OFF at launch | — | **launch day** — work from the audit on /emails; Howard holds the Zapier webhook |
 | 19 | Live figures, leads in, notifications, portal editing | — | **partial** — dashboard figures live and month-scoped (28 Aug), Launch Pad funnel and leads inside the OS, portal write-up edits live in REX; no live notifications bar, and only the write-up field group saves back |
-| 20 | Where a property went live, per file | Agents | **partial** — live advert links per listing (29 Aug); the go-live date and which portals are not yet on the file |
+| 20 | Where a property went live, per file | Agents | **partial** — live advert links and the go-live date on the file (4 Sep); REX keeps no date per portal, so there is one go-live day rather than one per chip |
 | 21 | Help centre with an AI bot | Everyone | **partial** — Steve answers over the knowledge base, shows screens, proposes writes (29 Aug–2 Sep); the Guides shelf holds one guide |
 | 22 | Knowledge hub + a backend to feed it | Susan / Francesca / Michael / Kirstie | **partial** — Steve reads a knowledge base and Susan's brief from the admin console; no editor for the others yet, and no guide-writing backend |
 | 23 | API centre | Our other apps | **todo** |
@@ -540,10 +541,14 @@ Re-read 2 September 2026.
 
 | Blocked on | What it unblocks |
 |---|---|
-| PayProp UK API key, or v2 OAuth credentials from PayProp support | Finances on the real UK book instead of sample (item 7); damage deposits, unreconciled funds, account statements |
+| ~~PayProp UK API key~~ **done 5 Sep**: E&W connected from the OS with James's credentials. Still wanted from PayProp: the agency income report in the client's permissions, an API view of unreconciled incoming funds, and tenants created at deal start rather than tenancy set-up | item 7's income report; holding fees visible before reconciliation |
 | Resend: the Lettings Experts domain is verified (2 Sep) - needs `RESEND_FROM_PUBLIC` on Railway, e.g. `The Letting Experts <hello@thelettingexperts.co.uk>` | the landlord sign-in link, items 12, 13, 15 and every landlord/tenant email test |
 | Who does referencing, and whether they have an API, webhook or export | a real referencing status on Applications and Pre-tenancy |
-| PayProp: an endpoint for unreconciled/incoming funds, or a fixed reference format on the holding-fee note | holding fees visible on the pre-tenancy board |
+| PayProp: an endpoint for unreconciled/incoming funds (every variant is 404, 5 Sep) | "holding fee paid" before reconciliation; reconciled and held already show |
+| Propoly: a webhook on deal status, read access to a deal's documents, and creating a deal by API (all absent, probed 4 Sep) | no polling, the PLC gate checking Propoly's slots, the accepted offer starting the deal without the agent's click |
+| Propoly (tidy-up): 29 addresses held twice, 30 extra property records, 5 made since 1 Aug (5 Sep). Howard's flow appears to create rather than match | clean matching before the handover goes live |
+| Howard: attach the landlord to the listing in REX on 55 and 59 Fairley Street, 67 Gill Avenue and 5c Newton Road (3 Sep rehearsals stopped there) | those four handovers |
+| Michael: what "compliant" means for an agent | item 11 |
 | Flatfair API meeting | item 9 |
 | Meta embedded signup for a WhatsApp Business number | real WhatsApp sends through REX |
 | Power Automate trigger URLs (Application Accepted, Rental Passport) | handoff send, item 17 |
