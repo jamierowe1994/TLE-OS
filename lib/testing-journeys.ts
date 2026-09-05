@@ -410,7 +410,7 @@ export const JOURNEYS: Journey[] = [
         where: "/pre-tenancy/feed",
         state: "built",
         since: "2026-09-04",
-        notes: ["Holding fee invoices matched on 0 of 38 deals at seed time, and on 5 Sep the reason surfaced: the OS had no live PayProp at all (E&W connection dead, Scotland not lent). Scotland now reads directly; E&W waits on the portal reconnect. Re-test both after that."],
+        notes: ["5 Sep, probed on Scotland: none of the 38 live deals' tenants exist in PayProp yet - PayProp creates the tenant when the tenancy is set up, after the holding fee and deposit are paid. So 'paid, not yet reconciled' cannot be seen through the API (every unreconciled-funds path is 404); 'reconciled' will show once the tenant exists. Ask PayProp for the unreconciled incoming funds view their screen has. E&W is blind until the portal's client id and secret are restored."],
       },
       {
         id: "queue",
