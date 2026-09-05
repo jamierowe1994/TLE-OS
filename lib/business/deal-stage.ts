@@ -5,6 +5,7 @@ import { portalStageOf } from "@/lib/business/propoly-stages";
 import { propertyKey } from "@/lib/business/payprop-portfolio";
 import { loadMoneyContext, moneyForDeal, type MoneyContext } from "@/lib/business/deal-money";
 import { listCases } from "@/lib/plc-store";
+import { dealMoneyFor, type DealMoneyRow } from "@/lib/business/deposit-match";
 import type { PlcCase } from "@/lib/plc";
 
 /**
@@ -106,14 +107,17 @@ export function stageFactsFor(
   deal: BusinessDeal,
   meta: DealMeta | null,
   cases: PlcCase[],
-  money: MoneyContext | null
+  money: MoneyContext | null,
+  matched?: { holding: DealMoneyRow | null; deposit: DealMoneyRow | null } | null
 ): StageFacts {
   const plc = plcCaseForAddress(cases, deal.app.propertyName);
   const m = money?.loaded ? moneyForDeal(money, deal.app.propertyName, deal.app.startDate) : null;
   const depositDone =
     meta?.checklist?.deposit_registered?.done === true ||
     Boolean(meta?.depositScheme) ||
-    Boolean(m?.tenancy?.depositId);
+    Boolean(m?.tenancy?.depositId) ||
+    /* Matched in PayProp to this deal's tenant: reconciled or held counts. */
+    (matched?.deposit != null && matched.deposit.status !== "paid");
   return {
     plcState: plc?.state ?? null,
     plcCaseId: plc?.id ?? null,
@@ -129,19 +133,24 @@ export function stageFactsFor(
  * pays nothing. Either failing degrades to "no facts", which reads as the
  * earliest stage the live status allows - never as a stage nobody reached.
  */
-export async function loadStageSources(): Promise<{ cases: PlcCase[]; money: MoneyContext | null }> {
-  const [cases, money] = await Promise.all([
+export async function loadStageSources(dealIds: string[] = []): Promise<{
+  cases: PlcCase[];
+  money: MoneyContext | null;
+  matched: Map<string, { holding: DealMoneyRow | null; deposit: DealMoneyRow | null }>;
+}> {
+  const [cases, money, matched] = await Promise.all([
     listCases().catch(() => [] as PlcCase[]),
     loadMoneyContext().catch(() => null),
+    dealMoneyFor(dealIds).catch(() => new Map()),
   ]);
-  return { cases, money };
+  return { cases, money, matched };
 }
 
 /** One deal, from cold. For the routes that answer about a single deal. */
 export async function derivedStageFor(deal: BusinessDeal, meta: DealMeta | null): Promise<string> {
   try {
-    const { cases, money } = await loadStageSources();
-    return derivePortalStage(deal.statusKey, stageFactsFor(deal, meta, cases, money), meta);
+    const { cases, money, matched } = await loadStageSources([deal.app.id]);
+    return derivePortalStage(deal.statusKey, stageFactsFor(deal, meta, cases, money, matched.get(deal.app.id) ?? null), meta);
   } catch {
     return derivePortalStage(deal.statusKey, NO_FACTS, meta);
   }

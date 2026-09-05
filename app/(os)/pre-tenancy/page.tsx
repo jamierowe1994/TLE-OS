@@ -56,6 +56,11 @@ interface BoardDeal {
   effectiveStatusKey: string;
   /** The OS's PLC pack for this address - what the PLC stage now reads. */
   plc?: { id: string; state: string; label: string; who: string; decidedBy: string | null; decidedAt: string | null } | null;
+  /** The holding fee and deposit matched in PayProp to this deal's tenant. */
+  money?: {
+    holding: { status: string; amount: number; on: string | null; matchedBy: string; tenantName: string; note: string } | null;
+    deposit: { status: string; amount: number; on: string | null; matchedBy: string; tenantName: string; depositId: string | null; note: string } | null;
+  };
   agentName: string | null;
   agentEmail: string | null;
   portal: DealPortalOverlay;
@@ -2076,8 +2081,25 @@ function DealWorkspace({
                              moves the stage. The RLP line it used to show was
                              about a different thing (rent protection) and sat
                              under the wrong heading. */
+                          /* Money seen in PayProp against THIS tenant outranks
+                             the address-keyed invoice guess: it is the payment,
+                             matched by email, reference or name, and rechecked
+                             each tick until reconciled. */
+                          const moneyLine = (f: { status: string; amount: number; on: string | null; matchedBy: string; tenantName: string; depositId?: string | null } | null, what: string) =>
+                            f
+                              ? {
+                                  tone: "ok" as const,
+                                  text: `${what} £${Math.round(f.amount).toLocaleString("en-GB")} ${
+                                    f.status === "held" ? `held by PayProp${f.depositId ? ` (${f.depositId})` : ""}` : f.status === "reconciled" ? `reconciled${f.on ? ` ${fmtDate(f.on)}` : ""}` : `paid${f.on ? ` ${fmtDate(f.on)}` : ""}, not yet reconciled`
+                                  } - ${f.tenantName}, matched by ${f.matchedBy}.`,
+                                }
+                              : null;
                           const ev =
-                            s.key === "plc"
+                            s.key === "holding_fee" && moneyLine(deal.money?.holding ?? null, "Holding fee")
+                              ? moneyLine(deal.money?.holding ?? null, "Holding fee")!
+                              : s.key === "deposit" && moneyLine(deal.money?.deposit ?? null, "Deposit")
+                                ? moneyLine(deal.money?.deposit ?? null, "Deposit")!
+                                : s.key === "plc"
                               ? deal.plc
                                 ? {
                                     tone: (deal.plc.state === "approved" ? "ok" : deal.plc.state === "declined" ? "warn" : "none") as "ok" | "warn" | "none",

@@ -48,6 +48,11 @@ export interface PreTenancyDeal {
   effectiveStatusKey: string;
   /** The OS's PLC pack for this address, which is what the PLC stage reads. */
   plc: { id: string; state: string; label: string; who: string; decidedBy: string | null; decidedAt: string | null } | null;
+  /** The holding fee and the deposit as matched in PayProp to this deal's tenant. */
+  money: {
+    holding: { status: string; amount: number; on: string | null; matchedBy: string; tenantName: string; note: string } | null;
+    deposit: { status: string; amount: number; on: string | null; matchedBy: string; tenantName: string; depositId: string | null; note: string } | null;
+  };
   agentName: string | null;
   agentEmail: string | null;
   portal: DealPortalOverlay;
@@ -164,7 +169,7 @@ export async function GET(req: NextRequest) {
 
   const overlays = await getOverlays(deals.map((d) => d.app.id));
   /* The records seven of the eight stages are read from. See deal-stage. */
-  const stageSources = await loadStageSources();
+  const stageSources = await loadStageSources(deals.map((d) => d.app.id));
   const today = new Date().toISOString().slice(0, 10);
   const THIRTY_DAYS_AGO = new Date(Date.now() - 30 * 86_400_000)
     .toISOString()
@@ -214,9 +219,10 @@ export async function GET(req: NextRequest) {
   const out: PreTenancyDeal[] = deals.map((d) => {
     const entry = overlays.get(d.app.id);
     const meta = entry?.meta ?? null;
+    const matched = stageSources.matched.get(d.app.id) ?? null;
     const effective = derivePortalStage(
       d.statusKey,
-      stageFactsFor(d, meta, stageSources.cases, stageSources.money),
+      stageFactsFor(d, meta, stageSources.cases, stageSources.money, matched),
       meta
     );
     const plcCase = plcCaseForAddress(stageSources.cases, d.app.propertyName);
@@ -335,6 +341,14 @@ export async function GET(req: NextRequest) {
       statusKey: d.statusKey,
       effectiveStatusKey: effective,
       plc,
+      money: {
+        holding: matched?.holding
+          ? { status: matched.holding.status, amount: matched.holding.amount, on: matched.holding.on, matchedBy: matched.holding.matchedBy, tenantName: matched.holding.tenantName, note: matched.holding.note }
+          : null,
+        deposit: matched?.deposit
+          ? { status: matched.deposit.status, amount: matched.deposit.amount, on: matched.deposit.on, matchedBy: matched.deposit.matchedBy, tenantName: matched.deposit.tenantName, depositId: matched.deposit.depositId, note: matched.deposit.note }
+          : null,
+      },
       agentName: d.managerName,
       agentEmail: d.managerEmail,
       portal: overlay,

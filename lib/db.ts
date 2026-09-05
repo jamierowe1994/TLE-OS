@@ -1825,6 +1825,25 @@ ALTER TABLE os_deal_states ADD COLUMN IF NOT EXISTS rent_seen_at TIMESTAMPTZ;
 ALTER TABLE os_deal_events ADD COLUMN IF NOT EXISTS amount NUMERIC(12,2);
 CREATE INDEX IF NOT EXISTS os_deal_events_at ON os_deal_events (at DESC);
 
+-- The holding fee and the deposit as seen in PayProp for a deal, matched to
+-- the tenant by email, reference or name (lib/business/deposit-match). One
+-- row per deal per kind, moved forward on every watcher tick: paid, then
+-- reconciled, then (deposit) held.
+CREATE TABLE IF NOT EXISTS os_deal_money (
+  deal_id     TEXT NOT NULL,
+  kind        TEXT NOT NULL,
+  status      TEXT NOT NULL,
+  amount      NUMERIC(12,2) NOT NULL DEFAULT 0,
+  on_date     DATE,
+  matched_by  TEXT NOT NULL DEFAULT '',
+  tenant_name TEXT NOT NULL DEFAULT '',
+  deposit_id  TEXT,
+  note        TEXT NOT NULL DEFAULT '',
+  first_seen  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (deal_id, kind)
+);
+
 -- Testing journeys (Admin → Testing): one mark per step, made by a person.
 -- Built / blocked / not-built live in code (lib/testing-journeys); this holds
 -- only "somebody walked it", with their name, the date and what they saw.

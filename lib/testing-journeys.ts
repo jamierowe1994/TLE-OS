@@ -405,8 +405,8 @@ export const JOURNEYS: Journey[] = [
       {
         id: "money",
         title: "Money seen in PayProp",
-        what: "Holding fee invoiced, deposit registered and first rent received, announced once each.",
-        how: ["Register a deposit in PayProp for a deal on the board. Within five minutes the feed should say Deposit registered.", "Same for a first rent."],
+        what: "The holding fee and the deposit matched in PayProp to the deal's tenant by email, reference or name: paid, then reconciled, then (deposit) held. First rent from the same reports. Each step announced once, and rechecked every tick.",
+        how: ["Take a deal at Holding fee whose tenant has just paid. Within five minutes the feed should say Holding fee paid, not yet reconciled, and the board's Holding fee stage should name the tenant and how it matched.", "When PayProp reconciles it, the feed should say Holding fee reconciled with the date.", "Same for the deposit: paid, reconciled, then Deposit registered once PayProp holds it.", "A first rent should still read First rent received."],
         where: "/pre-tenancy/feed",
         state: "built",
         since: "2026-09-04",

@@ -4,6 +4,7 @@ import { getAllPropolyDeals, type BusinessDeal } from "@/lib/business/propoly-de
 import { getPropolyDeal, propolyConfigured } from "@/lib/business/propoly";
 import { logSystemEvent } from "@/lib/business/deal-store";
 import { loadMoneyContext, moneyForDeal } from "@/lib/business/deal-money";
+import { dealMoneyFor, loadMoneySources, matchDealMoney, MONEY_RANK, saveDealMoney, type MoneyFact } from "@/lib/business/deposit-match";
 import { getApplications } from "@/lib/applications";
 import { createCase, getCase } from "@/lib/plc-store";
 import { sendEmail } from "@/lib/resend";
@@ -275,10 +276,59 @@ export async function watchDeals(opts: { origin: string }): Promise<WatchResult>
   await q(`UPDATE os_deal_states SET seen_at = NOW() WHERE deal_id = ANY($1::text[])`, [[...seen]]);
 
   events.push(...(await watchMoney(deals, known)));
+  events.push(...(await watchDeposits(deals, known)));
   events.push(...(await openPacks(events, deals)));
 
   const told = await tellAgents(events, opts.origin);
   return { ok: true, deals: deals.length, events, told };
+}
+
+/* ────────────────── the holding fee and the deposit, matched ───────────── */
+
+/**
+ * James, 5 Sep: match the payment to the application by name and reference
+ * first, then recheck when it reconciles. Each deal's holding fee and
+ * deposit are matched against PayProp's tenants, balances and incoming
+ * money (lib/business/deposit-match); the row on os_deal_money only ever
+ * moves forward, and every forward move is a feed row. A deal the money
+ * pass has never looked at records silently, like the rest of the money.
+ */
+async function watchDeposits(deals: BusinessDeal[], known: Map<string, StateRow>): Promise<DealEvent[]> {
+  const out: DealEvent[] = [];
+  let src: Awaited<ReturnType<typeof loadMoneySources>>;
+  try {
+    src = await loadMoneySources();
+  } catch {
+    return out;
+  }
+  if (!src) return out;
+  const live = deals.filter((d) => d.statusKey !== "cancelled");
+  const current = await dealMoneyFor(live.map((d) => d.app.id));
+  /* The first pass over an empty table is history, not news: every holding
+     fee already paid on the book would otherwise land on the feed at once. */
+  const seeding = (await q<{ n: string }>(`SELECT COUNT(*) AS n FROM os_deal_money`))[0]?.n === "0";
+  for (const d of live) {
+    const row = known.get(d.app.id);
+    const firstLook = !row || row.money_checked_at == null;
+    const { holding, deposit } = matchDealMoney(d, src);
+    const have = current.get(d.app.id) ?? { holding: null, deposit: null };
+    const who = { agentEmail: d.managerEmail ?? row?.agent_email ?? null, agentName: d.managerName ?? row?.agent_name ?? null };
+    for (const f of [holding, deposit]) {
+      if (!f) continue;
+      const before = have[f.kind];
+      if (before && MONEY_RANK[before.status] >= MONEY_RANK[f.status]) continue;
+      await saveDealMoney(d.app.id, f);
+      if (firstLook || seeding) continue;
+      const kind: DealEventKind =
+        f.kind === "holding"
+          ? f.status === "reconciled" ? "holding_reconciled" : "holding_in"
+          : f.status === "held" ? "deposit_registered" : f.status === "reconciled" ? "deposit_reconciled" : "deposit_in";
+      /* deposit_registered from the register may already have said so. */
+      if (kind === "deposit_registered" && row?.deposit_seen_at) continue;
+      out.push(await record({ dealId: d.app.id, property: propertyOf(d), ...who, from: before?.status ?? null, to: f.status, kind, amount: f.amount }));
+    }
+  }
+  return out;
 }
 
 /* ──────────────────────── the pack, opened for them ────────────────────── */

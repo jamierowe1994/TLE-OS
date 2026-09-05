@@ -23,6 +23,9 @@ export type DealEventKind =
      Propoly "sometimes recognises payment, and sometimes it doesn't", so she
      confirms by hand. These are the OS confirming instead. */
   | "holding_in"
+  | "holding_reconciled"
+  | "deposit_in"
+  | "deposit_reconciled"
   | "deposit_registered"
   | "rent_in"
   /* The PLC pack, the other thing that lands on Kirstie's desk. dealId on
@@ -105,7 +108,13 @@ export function eventSentence(e: Pick<DealEvent, "event" | "toStatus" | "fromSta
     case "gone":
       return "No longer in Propoly";
     case "holding_in":
-      return `Holding fee ${pounds(e.amount)}in PayProp`;
+      return `Holding fee ${pounds(e.amount)}paid - in PayProp, not yet reconciled`;
+    case "holding_reconciled":
+      return `Holding fee ${pounds(e.amount)}reconciled in PayProp`;
+    case "deposit_in":
+      return `Deposit ${pounds(e.amount)}paid - in PayProp, not yet reconciled`;
+    case "deposit_reconciled":
+      return `Deposit ${pounds(e.amount)}reconciled in PayProp`;
     case "deposit_registered":
       return "Deposit registered with the scheme";
     case "rent_in":
@@ -160,6 +169,9 @@ export function eventTone(kind: DealEventKind): "ok" | "warn" | "none" {
     kind === "agreement_out" ||
     kind === "complete" ||
     kind === "holding_in" ||
+    kind === "holding_reconciled" ||
+    kind === "deposit_in" ||
+    kind === "deposit_reconciled" ||
     kind === "deposit_registered" ||
     kind === "rent_in" ||
     kind === "plc_decided"
