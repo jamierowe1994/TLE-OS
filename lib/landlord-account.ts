@@ -300,6 +300,27 @@ function offerOf(a: Application): ViewOffer {
   };
 }
 
+/* The last 300 applications, kept a minute. Three REX pages in series is
+   most of a landlord's page load, and two landlords a minute apart are
+   reading the same book. Sixty seconds is short enough that an offer
+   accepted this morning is on their screen by the time they look. */
+let appsHeld: { at: number; apps: Application[] } | null = null;
+let appsInflight: Promise<Application[]> | null = null;
+const APPS_TTL_MS = 60_000;
+async function recentApplications(): Promise<Application[]> {
+  if (appsHeld && Date.now() - appsHeld.at < APPS_TTL_MS) return appsHeld.apps;
+  if (appsInflight) return appsInflight;
+  appsInflight = getApplications(300)
+    .then((apps) => {
+      appsHeld = { at: Date.now(), apps };
+      return apps;
+    })
+    .finally(() => {
+      appsInflight = null;
+    });
+  return appsInflight;
+}
+
 /**
  * The offers on a landlord's property, from REX's applications. Matched on
  * the REX property id (the appraisal's pick, the managed property's record)
@@ -313,7 +334,7 @@ export async function landlordOffers(propertyIds: Array<string | null | undefine
   if (!props.size && !lists.size) return [];
   let apps: Application[] = [];
   try {
-    apps = await getApplications(300);
+    apps = await recentApplications();
   } catch {
     return [];
   }
