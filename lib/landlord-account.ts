@@ -11,7 +11,12 @@ import { effectiveStage, SERVICE_LEVELS, type MarketAppraisal, type MaStage } fr
 import type { ManagedProperty } from "@/lib/portfolio-types";
 import { certificatesFor } from "@/lib/rex-compliance";
 import { getApplications, type Application } from "@/lib/applications";
-import type { ViewOffer } from "@/lib/landlord-view";
+import type { ViewOffer, ViewProgress } from "@/lib/landlord-view";
+import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
+import { getMeta } from "@/lib/business/deal-store";
+import { derivedStageFor } from "@/lib/business/deal-stage";
+import { PORTAL_STAGES } from "@/lib/business/propoly-stages";
+import { propertyKey } from "@/lib/business/payprop-portfolio";
 import { CERT_META, requiredCerts, statusOf, type CertKey, type CertStatus, type CompProperty } from "@/lib/compliance";
 
 /**
@@ -321,6 +326,60 @@ export async function landlordOffers(propertyIds: Array<string | null | undefine
     return (b.dateReceived ?? "").localeCompare(a.dateReceived ?? "");
   });
   return mine.map(offerOf);
+}
+
+/* ------------------------------------------------------------ progress -- */
+
+/* The eight stages as a landlord reads them. Kirstie (4 Sep): whatever
+   reaches her should also reach the landlord's portal. The stage is the same
+   derivation her board uses; only the words are the landlord's. */
+const LANDLORD_WORDS: Record<string, { label: string; now: string; next: string }> = {
+  deal_started: { label: "Offer accepted", now: "The offer has been accepted and the deal is being set up.", next: "We collect the holding fee from the tenant, which takes the property off the market." },
+  holding_fee: { label: "Holding fee", now: "We are collecting the tenant's holding fee.", next: "Once it is in, referencing starts." },
+  referencing: { label: "Referencing", now: "The tenant's references are being checked: employer, previous landlord and credit.", next: "Nothing for you yet. We will tell you the moment they are back." },
+  plc: { label: "Compliance checks", now: "References are back. We are checking the property's certificates and your documents before anything is signed.", next: "If a certificate or a document is missing, your agent will ask you for it." },
+  deposit: { label: "Deposit", now: "The checks have passed. The deposit, or the deposit alternative, is being arranged.", next: "Nothing for you here unless your agent asks." },
+  tenancy_agreement: { label: "Tenancy agreement", now: "The tenancy agreement is being drawn up and sent for signing.", next: "Read it and sign when it arrives. Both you and the tenant sign before the rent is requested." },
+  rent_payment: { label: "First rent", now: "Signed. The tenant's first month and standing order are being set up.", next: "Your first payment follows once the rent has landed and been reconciled." },
+  move_day: { label: "Move-in day", now: "Everything is in place. The tenant moves in on the date agreed.", next: "Keys, inventory and check-in are handled by your agent." },
+};
+
+/**
+ * The landlord's accepted let, from Propoly, by address or by their email on
+ * the deal. Nearest move-in first where there is more than one. Null when no
+ * live deal exists for the property.
+ */
+export async function landlordProgress(email: string, propertyNames: string[]): Promise<ViewProgress | null> {
+  const all = (await getAllPropolyDeals().catch(() => null)) ?? [];
+  const keys = new Set(propertyNames.map((n) => propertyKey(n)).filter(Boolean));
+  const mine = all.filter(
+    (d) =>
+      d.statusKey !== "cancelled" &&
+      d.statusKey !== "complete" &&
+      ((d.app.propoly?.landlord?.email && normaliseEmail(d.app.propoly.landlord.email) === email) ||
+        (keys.size > 0 && keys.has(propertyKey(d.app.propertyName))))
+  );
+  if (!mine.length) return null;
+  mine.sort((a, b) => (a.app.startDate ?? "9999").localeCompare(b.app.startDate ?? "9999"));
+  const d = mine[0];
+  const meta = await getMeta(d.app.id).catch(() => null);
+  const stageKey = await derivedStageFor(d, meta);
+  const idx = Math.max(0, PORTAL_STAGES.findIndex((s) => s.key === stageKey));
+  const words = LANDLORD_WORDS[stageKey] ?? LANDLORD_WORDS.deal_started;
+  return {
+    property: [d.app.propertyName, d.app.locality].filter(Boolean).join(", "),
+    tenants: d.app.tenants.map((t) => t.name.split(/\s+/)[0]).filter(Boolean).join(" and ") || "The tenant",
+    moveIn: d.app.startDate,
+    rentPcm: d.app.offer,
+    stageKey,
+    stages: PORTAL_STAGES.map((s, i) => ({
+      key: s.key,
+      label: LANDLORD_WORDS[s.key]?.label ?? s.label,
+      state: i < idx ? "done" : i === idx ? "current" : "upcoming",
+    })),
+    now: words.now,
+    next: words.next,
+  };
 }
 
 /* ------------------------------------------------------------- journey -- */

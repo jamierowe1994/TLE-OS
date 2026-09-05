@@ -16,7 +16,7 @@ import { geocode } from "@/lib/geocode";
 import { DECK_KINDS } from "@/lib/present";
 import { STAGES, stepsForStage, type LandlordView, type Stage } from "@/lib/landlord-view";
 import type { ManagedProperty } from "@/lib/portfolio-types";
-import { landlordCompliance, landlordOffers, type LandlordCompliance } from "@/lib/landlord-account";
+import { landlordCompliance, landlordOffers, landlordProgress, type LandlordCompliance } from "@/lib/landlord-account";
 import type { ViewOffer } from "@/lib/landlord-view";
 
 const money = (n: number | null | undefined) => (n == null ? "—" : `£${Math.round(n).toLocaleString("en-GB")}`);
@@ -55,11 +55,17 @@ export default async function LandlordHome() {
     lead ? [lead.appraisal.rexPropertyId] : managed[0] ? [managed[0].propertyId] : [],
     lead ? [] : managed[0] ? [managed[0].listingId] : []
   );
-  const view = open[0]
+  /* The let moving, once an offer is accepted and Kirstie has the deal. */
+  const progress = await landlordProgress(
+    me.email,
+    lead ? [lead.appraisal.address] : managed[0] ? [managed[0].name] : []
+  );
+  const base = open[0]
     ? await appraisalView(open[0], first, docs, msgs, offers)
     : managed[0]
       ? managedView(managed[0], first, compliance.get(managed[0].propertyId ?? "") ?? null, offers)
       : null;
+  const view = base ? { ...base, progress } : null;
   const rest = open[0] ? managed : managed.slice(1);
 
   if (!view) {

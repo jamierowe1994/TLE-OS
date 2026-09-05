@@ -73,6 +73,18 @@ export interface ViewOffer {
   conditions: string | null;
 }
 
+/** The let moving through Kirstie's eight stages, in the landlord's words. */
+export interface ViewProgress {
+  property: string;
+  tenants: string;
+  moveIn: string | null;
+  rentPcm: number | null;
+  stageKey: string;
+  stages: Array<{ key: string; label: string; state: "done" | "current" | "upcoming" }>;
+  now: string;
+  next: string;
+}
+
 export interface ViewDocument {
   title: string;
   sub: string;
@@ -123,6 +135,8 @@ export interface LandlordView {
   documents: ViewDocument[];
   /** Offers on the property, newest first. Absent before marketing. */
   offers?: ViewOffer[];
+  /** The accepted let, step by step. Absent until a deal exists in Propoly. */
+  progress?: ViewProgress | null;
   snapshot: { readinessPct: number; note: string; lines: Array<[string, string]> };
   activity: ViewActivity[];
   messages?: ViewMessage[];

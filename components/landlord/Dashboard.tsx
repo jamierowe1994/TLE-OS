@@ -183,6 +183,54 @@ export default function LandlordDashboard({
         </ol>
       </section>
 
+      {/* ── the let, step by step ──
+          Kirstie's eight stages, derived the same way as her board and the
+          tenant's home, in the landlord's words. Present only once a deal
+          exists in Propoly. */}
+      {v.progress && (
+        <section className={panel} id="progress" data-search>
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <h2 className="text-[17px]">Your let, step by step</h2>
+            <span className="text-[11.5px] text-muted">
+              {v.progress.tenants}
+              {v.progress.moveIn ? `  •  moving in ${new Date(v.progress.moveIn).toLocaleDateString("en-GB", { day: "numeric", month: "long" })}` : ""}
+              {v.progress.rentPcm != null ? `  •  £${Math.round(v.progress.rentPcm).toLocaleString("en-GB")} per month` : ""}
+            </span>
+          </div>
+          <ol className="mt-4 flex gap-1 overflow-x-auto pb-2">
+            {v.progress.stages.map((s, i) => (
+              <li key={s.key} className="flex min-w-[96px] flex-1 flex-col">
+                <div className="flex items-center">
+                  <span
+                    className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[10px] ${
+                      s.state === "done"
+                        ? "border-accent-dark bg-accent-soft text-accent-dark"
+                        : s.state === "current"
+                          ? "border-accent-dark bg-accent-dark text-white"
+                          : "border-line bg-panel text-muted"
+                    }`}
+                  >
+                    {s.state === "done" ? "✓" : i + 1}
+                  </span>
+                  {i < v.progress!.stages.length - 1 && <span aria-hidden className={`h-[1.5px] flex-1 ${s.state === "done" ? "bg-accent-dark/50" : "bg-line"}`} />}
+                </div>
+                <span className={`mt-2 pr-2 text-[11.5px] leading-tight ${s.state === "current" ? "font-semibold" : "text-muted"}`}>{s.label}</span>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="rounded-xl bg-box p-4">
+              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">Now</p>
+              <p className="mt-1 text-[13px] leading-relaxed">{v.progress.now}</p>
+            </div>
+            <div className="rounded-xl bg-accent-soft p-4">
+              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-accent-dark">What happens next</p>
+              <p className="mt-1 text-[13px] leading-relaxed">{v.progress.next}</p>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* ── offers, once there are any ──
           Every application on the property, the accepted one first. The
           landlord reads the amount, who, when they want to move and what they

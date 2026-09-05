@@ -482,11 +482,11 @@ export const JOURNEYS: Journey[] = [
       {
         id: "portals-progress",
         title: "Landlord and tenant portals show the deal moving",
-        what: "Whatever reaches Kirstie also updates the landlord's and the tenant's portal: references back, agreement out, rent in.",
-        how: [],
-        state: "notbuilt",
-        todo: "Kirstie's ask on the 4 Sep call. The feed rows exist; the landlord portal does not show pre-tenancy progress yet and the tenant portal has no sign-in.",
-        since: "2026-09-04",
+        what: "The same eight stages Kirstie's board derives, on the landlord's home as Your let, step by step, and on the tenant's home, each in their own words with what happens next.",
+        how: ["Sign in as a landlord whose property has an accepted offer with a deal in Propoly. Your let, step by step should show the stage the board shows.", "Sign in as the tenant on the same deal. Their home should show the same stage.", "Move the deal in Propoly (or tick PLC done outside the OS). Both portals should follow on the next load."],
+        where: "/landlord",
+        state: "built",
+        since: "2026-09-05",
       },
       {
         id: "agent-checker",
