@@ -474,11 +474,11 @@ export const JOURNEYS: Journey[] = [
       },
       {
         id: "webhooks",
-        title: "Propoly tells us, instead of us asking",
-        what: "A webhook on deal status, and read access to a deal's documents, so the PLC gate can check Propoly's slots directly.",
+        title: "Propoly tells us, instead of us asking, and lets us start the deal",
+        what: "A webhook on deal status, read access to a deal's documents so the PLC gate can check Propoly's slots directly, and a way to create the deal by API so the accepted offer starts it without the agent's click.",
         how: [],
         state: "blocked",
-        blocked: { why: "Propoly has no webhooks or events, and no way to list a deal's documents (probed 4 Sep). Everything is polling and the gate checks the OS pack only.", who: "Propoly. James has the ask." },
+        blocked: { why: "Propoly has no webhooks or events, no way to list a deal's documents, and no way to create a deal (probed 4 Sep: only landlords, properties, tenants and documents can be created). Everything is polling, the gate checks the OS pack only, and the deal is started in Propoly by hand.", who: "Propoly. James has the ask; the three items belong in one conversation." },
         since: "2026-09-04",
       },
       {
