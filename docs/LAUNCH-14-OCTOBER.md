@@ -46,8 +46,8 @@ Key: **built** works on real data · **partial** exists, with the gap named ·
 | 18 | Turn REX automations OFF at launch | — | **launch day** — work from the audit on /emails; Howard holds the Zapier webhook |
 | 19 | Live figures, leads in, notifications, portal editing | — | **partial** — dashboard figures live and month-scoped (28 Aug), Launch Pad funnel and leads inside the OS, portal write-up edits live in REX; the bell is live on every screen (5 Sep): deal moves, money, PLC, campaign steps for a person, handover runs and chases, scoped to the person, with an unread count, read marking and desktop alerts; only the write-up field group saves back |
 | 20 | Where a property went live, per file | Agents | **partial** — live advert links and the go-live date on the file (4 Sep); REX keeps no date per portal, so there is one go-live day rather than one per chip |
-| 21 | Help centre with an AI bot | Everyone | **partial** — Steve answers over the knowledge base, shows screens, proposes writes (29 Aug–2 Sep); the Guides shelf holds one guide |
-| 22 | Knowledge hub + a backend to feed it | Susan / Francesca / Michael / Kirstie | **partial** — Steve reads a knowledge base and Susan's brief from the admin console; no editor for the others yet, and no guide-writing backend |
+| 21 | Help centre with an AI bot | Everyone | **partial** — Steve answers over the knowledge base, shows screens, proposes writes (29 Aug–2 Sep); his Guides shelf now lists whatever the knowledge hub marks as a guide, opening on a reader page (5 Sep); the one written guide under Admin is still a static page |
+| 22 | Knowledge hub + a backend to feed it | Susan / Francesca / Michael / Kirstie | **built** (5 Sep) — /knowledge, a workspace for the marketing, pre-tenancy, support and super admin roles (edit:knowledge) and on the owner's admin rail: plain-writing editor, shelves, a Guide tick that puts an entry on Steve's shelf, .txt/.md drop-in, and the questions Steve could not answer as the writing order. Steve reads it by shelf on the next question |
 | 23 | API centre | Our other apps | **todo** |
 
 ### Screens that are still wireframes

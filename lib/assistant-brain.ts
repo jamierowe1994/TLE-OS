@@ -92,8 +92,12 @@ async function systemBlocks(): Promise<Anthropic.TextBlockParam[]> {
     }),
     getBrief().catch(() => ({ body: "", updatedBy: "", updatedAt: null })),
   ]);
+  /* Filed by shelf, so "Fees and terms" reads as one chapter rather than
+     entries in the order somebody last touched them. */
   const knowledge = entries
-    .map((e) => `## ${e.title}\n\n${e.content}`)
+    .slice()
+    .sort((a, b) => a.section.localeCompare(b.section) || a.title.localeCompare(b.title))
+    .map((e) => `## ${e.section}: ${e.title}\n\n${e.content}`)
     .join("\n\n---\n\n");
 
   const persona = `Your name is Steve. You are the assistant inside TLE OS, the

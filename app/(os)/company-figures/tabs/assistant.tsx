@@ -115,6 +115,9 @@ export default function AssistantTab({ month }: { month: string }) {
     <div className="space-y-6">
       <div className="card p-5">
         <h2 className="text-sm font-semibold">Steve&rsquo;s briefing library</h2>
+        <p className="mt-1 text-[12px] text-muted">
+          This library now has a home of its own at <a href="/knowledge" className="underline decoration-line underline-offset-2">Knowledge</a>, where Francesca, Michael and Kirstie can write too, file things on shelves and put guides in front of the agents.
+        </p>
         <p className="mt-1 max-w-2xl text-[13px] text-muted">
           Everything saved here is handed to Steve on the agents&rsquo;
           dashboard, alongside their live figures. Add fee structures, processes,

@@ -162,6 +162,17 @@ export default function HelpDock() {
   const [signedIn, setSignedIn] = useState(false);
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"help" | "guides" | "feedback">("help");
+  /* The shelf: whatever the knowledge hub has marked as a guide. Read when
+     the tab is opened, so the panel costs nothing on screens where nobody
+     looks at it. */
+  const [shelf, setShelf] = useState<{ id: string; title: string; section: string; blurb: string; minutes: number }[] | null>(null);
+  useEffect(() => {
+    if (tab !== "guides" || shelf !== null) return;
+    fetch("/api/knowledge/guides", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { guides?: typeof shelf } | null) => setShelf(j?.guides ?? []))
+      .catch(() => setShelf([]));
+  }, [tab, shelf]);
 
   const [lines, setLines] = useState<Line[]>([]);
   const [stage, setStage] = useState<"ask" | "onboarding-name" | "onboarding-help">("ask");
@@ -839,11 +850,36 @@ export default function HelpDock() {
                  * not implying something works when it does not.
                  */
                 <div className="mt-3">
-                  <p className="text-[13.5px]">Guides are on their way</p>
+                  {shelf && shelf.length > 0 ? (
+                    <>
+                      <p className="text-[13.5px]">Guides</p>
+                      <p className="mt-1.5 text-[12px] leading-relaxed text-muted">
+                        Written by the office, to read at your own pace.
+                      </p>
+                      <ul className="mt-3 divide-y divide-line/60">
+                        {shelf.map((g) => (
+                          <li key={g.id}>
+                            <a href={`/knowledge/${g.id}`} className="block py-2.5 transition-colors hover:text-accent-dark">
+                              <span className="block text-[12.5px] font-semibold">{g.title}</span>
+                              <span className="block text-[10.5px] text-muted">
+                                {g.section} · {g.minutes} min read
+                              </span>
+                              {g.blurb && <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">{g.blurb}</span>}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : (
+                    <>
+                  <p className="text-[13.5px]">{shelf === null ? "Reading the shelf…" : "Guides are on their way"}</p>
                   <p className="mt-1.5 text-[12px] leading-relaxed text-muted">
                     Written walkthroughs and training you can read at your own pace, rather
                     than having to ask. Nothing is filed here yet.
                   </p>
+                    </>
+                  )}
+                  {!shelf?.length && (
                   <p className="mt-2.5 text-[12px] leading-relaxed text-muted">
                     Until then, ask me under{" "}
                     <button
@@ -855,6 +891,7 @@ export default function HelpDock() {
                     </button>{" "}
                     - and what people ask is what gets written first, so it is worth asking.
                   </p>
+                  )}
 
                   {/* The one thing genuinely on the shelf. The tour tells people
                       they can pick it up again from here, so it has to be here:

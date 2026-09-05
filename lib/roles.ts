@@ -128,13 +128,14 @@ export type Capability =
   | "see:roles"         // READ who holds what
   | "manage:people"     // invite, reset, view-as, the audit log
   | "manage:roles"      // CHANGE who holds what
-  | "manage:switches";  // arm a live send. Owner only, deliberately.
+  | "manage:switches"   // arm a live send. Owner only, deliberately.
+  | "edit:knowledge";   // feed Steve and the Guides shelf - Susan, Francesca, Michael, Kirstie
 
 const MATRIX: Record<Role, Capability[]> = {
   owner: [
     "admin:open", "staff:internal", "see:people", "see:business", "see:marketing",
     "see:wiring", "see:reports", "see:prelaunch", "see:pretenancy", "see:everything",
-    "see:roles", "manage:people", "manage:roles", "manage:switches",
+    "see:roles", "manage:people", "manage:roles", "manage:switches", "edit:knowledge",
   ],
   /* Susan runs the business, so she sees all of it, unscoped — and since
      4 Sep she also has a short admin of her own. Seven entries, and the list
@@ -156,12 +157,12 @@ const MATRIX: Record<Role, Capability[]> = {
      already. It is here so the rail can offer her Kirstie's board. */
   super_admin: [
     "admin:open", "staff:internal", "see:people", "see:business", "see:marketing",
-    "see:prelaunch", "see:pretenancy", "see:everything", "see:roles",
+    "see:prelaunch", "see:pretenancy", "see:everything", "see:roles", "edit:knowledge",
   ],
   /* The mirror image. A contractor brought in to debug REX needs the
      connections page and has no business reading anybody's earnings. */
   developer: ["staff:internal", "see:wiring", "see:reports"],
-  support: ["staff:internal", "see:people", "see:reports", "see:pretenancy"],
+  support: ["staff:internal", "see:people", "see:reports", "see:pretenancy", "edit:knowledge"],
   /* Kirstie. Her whole job is the run-up to a move-in, and until now there was
      no role that granted it: the only way to give her the pre-tenancy board was
      `support`, which also hands over the staff list and every pilot bug report.
@@ -169,12 +170,12 @@ const MATRIX: Record<Role, Capability[]> = {
 
      `see:everything` is not a generosity here, it is the job — she works every
      agent's deals, not her own book, and without it her board would be empty. */
-  pretenancy: ["staff:internal", "see:pretenancy", "see:everything"],
+  pretenancy: ["staff:internal", "see:pretenancy", "see:everything", "edit:knowledge"],
   /* Francesca. Deliberately NOT `see:business`, which is what her view used to
      demand: /admin/marketing asked for the capability that also opens GCI,
      arrears and every partner's earnings, so there was no way to give her
      marketing without giving her Susan's money. Now there is. */
-  marketing: ["staff:internal", "see:marketing"],
+  marketing: ["staff:internal", "see:marketing", "edit:knowledge"],
   agent: [],
 };
 

@@ -141,6 +141,14 @@ const WORKSPACES: Workspace[] = [
     href: "/marketing-hub", label: "Marketing", icon: "megaphone",
     needs: "see:marketing", primaryFor: ["marketing"],
   },
+  /* The knowledge hub (item 22, 5 Sep). Susan, Francesca, Michael and Kirstie
+     feed Steve and the Guides shelf from here; it is a second workspace for
+     each of them rather than anybody's first. The owner reaches it from the
+     admin rail, next to Steve. */
+  {
+    href: "/knowledge", label: "Knowledge", icon: "note",
+    needs: "edit:knowledge", primaryFor: ["marketing", "pretenancy", "support", "super_admin"],
+  },
 ];
 
 /**

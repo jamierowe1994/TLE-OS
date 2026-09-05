@@ -131,6 +131,9 @@ const GROUPS: Array<{
       /* Where James feeds the assistant. The agent-facing side of it lives in
          the help panel; this is the console behind it. */
       { href: "/admin/assistant", label: "Steve", needs: "see:reports" },
+      /* Where Steve's knowledge is written. The same screen Susan, Francesca,
+         Michael and Kirstie get as a workspace of their own. */
+      { href: "/knowledge", label: "Knowledge", needs: "edit:knowledge" },
       /* Next to Steve on purpose: these are written for HIS Guides tab, and
          sit here only while they are being drafted and checked. */
       { href: "/admin/guides", label: "Guides", needs: "see:reports" },

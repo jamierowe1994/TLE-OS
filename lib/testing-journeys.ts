@@ -81,6 +81,21 @@ export const JOURNEYS: Journey[] = [
         since: "2026-09-05",
       },
       {
+        id: "knowledge",
+        title: "The office writes it once; Steve and the agents both read it",
+        what: "Susan, Francesca, Michael and Kirstie have a Knowledge screen. What they write there Steve answers from on the next question, and anything ticked as a guide appears on his Guides shelf for every agent.",
+        how: [
+          "Sign in as Francesca (marketing). Knowledge is in her sidebar. Press Write something, give it a title, pick a shelf, write a few lines, save.",
+          "Ask Steve about it from any screen: he answers from what was written.",
+          "Edit it, tick Put it on the Guides shelf, save. Open Steve's panel, Guides tab: it is listed, and opens as a readable page.",
+          "The right-hand list is what agents asked Steve that nothing covered. Press one: the editor opens with the question as the title.",
+          "As an owner, reach the same screen from Admin, Steve, Knowledge.",
+        ],
+        where: "/knowledge",
+        state: "built",
+        since: "2026-09-05",
+      },
+      {
         id: "bell",
         title: "The bell tells an agent what happened on their book",
         what: "Every screen's bell reads the deal moves, money, PLC decisions, campaign steps needing a person, handover runs and certificate chases that concern the person signed in, with a count of what they have not looked at.",

@@ -978,6 +978,20 @@ CREATE TABLE IF NOT EXISTS os_cache (
 --
 -- One row, always. Versioning would be a nice-to-have; a second row would be a
 -- bug, so the primary key is a constant.
+-- What the OS knows about a knowledge entry that the shared table does not.
+--
+-- assistant_knowledge is the portal's table (title, content, updated_at) and
+-- Steve reads it as written. The section it files under, who last touched it
+-- and whether it is a guide on Steve's shelf are OS ideas, so they live here,
+-- keyed on the entry, and the shared table is never altered (5 Sep 2026).
+CREATE TABLE IF NOT EXISTS os_knowledge_meta (
+  entry_id    TEXT PRIMARY KEY,
+  section     TEXT NOT NULL DEFAULT 'How we work',
+  is_guide    BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_by  TEXT NOT NULL DEFAULT '',
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS os_assistant_brief (
   id          TEXT PRIMARY KEY DEFAULT 'brief',
   body        TEXT NOT NULL DEFAULT '',
