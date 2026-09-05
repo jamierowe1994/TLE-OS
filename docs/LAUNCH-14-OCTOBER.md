@@ -574,3 +574,4 @@ Re-read 2 September 2026.
 | James: a decision on the 165 of 293 current rentals sitting as unpublished drafts | any bulk publish |
 | James: whether the OS gets its own database before launch (it shares the portal's production one today) | item 8's "keep the details safe" |
 | James: input on the pre-presentation and the PLC check designs | items 2 and 4 |
+| James: whose name nurture emails come from. The scheduler sends through REX with no agent in the loop, so it needs a REX user id in `REX_CAMPAIGN_SEND_AS` on the TLE-OS service; until then every due email is held and the Marketing screen says so. Also the Nurture campaigns switch on Admin, Switches, and Francesca writing the three Gone quiet emails | item 15; the lead spine's Nurture branch actually emailing anyone |
