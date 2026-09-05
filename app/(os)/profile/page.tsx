@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import CustomAttributes from "@/components/CustomAttributes";
+import PersonalCompliance from "@/components/PersonalCompliance";
 import AddressField from "@/components/AddressField";
 import { PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
@@ -100,28 +101,6 @@ const DEFAULT_PROFILE: Profile = {
    shows nothing at all when the Hub has no package for them — which is the
    honest answer for the five partners whose record is blank. */
 
-/**
- * An agent's own paperwork — what a SELF-EMPLOYED lettings agent has to
- * hold personally (not trade-body memberships they don't need). Expiry as
- * day offsets, same convention as the rest of the sample book. `portal` is
- * where Sort-it-now will take them once the renewals auto-connect.
- */
-const PERSONAL_COMPLIANCE: {
-  label: string; expires: number | null; portal: string;
-}[] = [
-  { label: "ICO data-protection registration", expires: 240, portal: "ico.org.uk" },
-  { label: "Professional indemnity insurance", expires: 24, portal: "your broker" },
-  { label: "Public liability insurance", expires: 300, portal: "your broker" },
-  { label: "HMRC anti-money-laundering supervision", expires: 18, portal: "gov.uk/anti-money-laundering" },
-  { label: "Right to Rent training", expires: -12, portal: "the training portal" },
-];
-
-function dateFor(offset: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + offset);
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
-}
-
 const CONNECTIONS = [
   { id: "m365", name: "Microsoft 365", what: "Your diary and email — powers the calendar and every send", state: "off", icon: "calendar" },
   { id: "rex", name: "REX", what: "Properties, listings and compliance records", state: "on", icon: "home" },
@@ -164,8 +143,6 @@ export default function ProfilePage() {
   const [darkBox, setDarkBox] = useState(DARK_BOX_DEFAULT);
   const [accent, setAccent] = useState("");
   const [connections, setConnections] = useState(CONNECTIONS);
-  /** Labels with a diary reminder set this session. */
-  const [reminders, setReminders] = useState<Set<string>>(new Set());
 
   /* Who you are, and the accent you picked, now follow the account. Theme
      stays browser-first — it paints before React runs, and a
@@ -601,96 +578,7 @@ export default function ProfilePage() {
         )}
 
         {/* ══ PERSONAL COMPLIANCE ══ */}
-        {tab === "compliance" && (
-          <div className="max-w-3xl">
-            <p className="mb-4 text-[12.5px] leading-relaxed text-muted">
-              The properties have their page — this one is YOURS: what a self-employed
-              lettings agent has to hold personally, when each runs out, and the
-              reminder that lands in your diary a month before it does.
-            </p>
-            <div className="overflow-x-auto rounded-2xl border border-line/70">
-              <table className="w-full min-w-[620px] text-left">
-                <thead>
-                  <tr className="border-b border-line/70 text-[10px] font-semibold uppercase tracking-wide text-muted">
-                    <th className="px-4 py-3">What you hold</th>
-                    <th className="px-4 py-3">Expires</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Reminder</th>
-                    <th className="px-4 py-3" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {PERSONAL_COMPLIANCE.map((c) => {
-                    const state =
-                      c.expires == null ? "missing" : c.expires < 0 ? "expired" : c.expires <= 45 ? "due" : "ok";
-                    const hasReminder = reminders.has(c.label);
-                    return (
-                      <tr key={c.label} className="border-b border-line/40 last:border-0">
-                        <td className="px-4 py-3.5">
-                          <span className="block text-[12.5px] font-semibold">{c.label}</span>
-                          <span className="block text-[10px] text-muted">renews via {c.portal}</span>
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3.5">
-                          {c.expires != null ? (
-                            <>
-                              <span className="figures block text-[12.5px]">{dateFor(c.expires)}</span>
-                              <span className={`block text-[10px] ${state === "ok" ? "text-muted" : "font-semibold text-accent-dark"}`}>
-                                {c.expires < 0 ? `${Math.abs(c.expires)} days ago` : `in ${c.expires} days`}
-                              </span>
-                            </>
-                          ) : (
-                            <span className="text-[11px] text-muted">no record</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3.5">
-                          {state === "ok" ? (
-                            <Pill tone="good">In date</Pill>
-                          ) : state === "due" ? (
-                            <Pill tone="accent">Due soon</Pill>
-                          ) : (
-                            <Pill tone="accent">EXPIRED</Pill>
-                          )}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3.5">
-                          {c.expires != null && c.expires >= 30 ? (
-                            hasReminder ? (
-                              <span className="flex items-center gap-1.5 text-[11px] text-muted">
-                                <DoodleIcon name="bell" size={12} className="text-accent-dark" />
-                                In your diary · {dateFor(c.expires - 30)}
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => setReminders((cur) => new Set(cur).add(c.label))}
-                                className="rounded-full border border-ink/25 px-3.5 py-1.5 text-[11px] font-semibold transition-colors hover:border-ink"
-                              >
-                                Set reminder
-                              </button>
-                            )
-                          ) : (
-                            <span className="text-[10px] text-muted">too close — sort it</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3.5 text-right">
-                          {state !== "ok" && (
-                            <PressButton className="press-ring rounded-full bg-accent-dark px-4 py-2 text-[11px] font-semibold text-page">
-                              Sort it now
-                            </PressButton>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <p className="mt-4 text-[10.5px] leading-relaxed text-muted">
-              Reminders land in your diary 30 days before expiry — the minimum runway for
-              a renewal. &ldquo;Sort it now&rdquo; will open each provider&apos;s own portal
-              once the connections are wired; today it marks the intent.
-            </p>
-          </div>
-        )}
+        {tab === "compliance" && <PersonalCompliance />}
 
         {/* ══ CONNECTIONS ══ */}
         {tab === "connections" && (

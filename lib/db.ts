@@ -984,6 +984,54 @@ CREATE TABLE IF NOT EXISTS os_cache (
 -- Steve reads it as written. The section it files under, who last touched it
 -- and whether it is a guide on Steve's shelf are OS ideas, so they live here,
 -- keyed on the entry, and the shared table is never altered (5 Sep 2026).
+-- ── The agent's own compliance (item 11, 5 Sep 2026) ────────────────────────
+-- What a partner agent has to hold PERSONALLY, as Michael defines it. The
+-- list is data, not code, because "compliant" is his call and he has not
+-- made it yet: a starter set is seeded once and every row is his to edit.
+CREATE TABLE IF NOT EXISTS os_agent_requirements (
+  id             TEXT PRIMARY KEY,
+  title          TEXT NOT NULL,
+  what           TEXT NOT NULL DEFAULT '',
+  -- document | training | declaration | check
+  kind           TEXT NOT NULL DEFAULT 'document',
+  -- Where to go to get or renew it. Optional.
+  how_link       TEXT NOT NULL DEFAULT '',
+  -- NULL: done once and it stands. Otherwise it runs out this many months on.
+  renews_months  INTEGER,
+  required       BOOLEAN NOT NULL DEFAULT TRUE,
+  active         BOOLEAN NOT NULL DEFAULT TRUE,
+  position       INTEGER NOT NULL DEFAULT 0,
+  -- 'starter' until a person edits it, then who did.
+  updated_by     TEXT NOT NULL DEFAULT 'starter',
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+-- One row per agent per requirement, written by the agent when they have it
+-- and by Michael when he has seen it. done_at is what the agent says;
+-- verified_at is what Michael says, and only the second counts as checked.
+CREATE TABLE IF NOT EXISTS os_agent_compliance (
+  user_id        TEXT NOT NULL,
+  requirement_id TEXT NOT NULL,
+  done_at        DATE,
+  expires_at     DATE,
+  note           TEXT NOT NULL DEFAULT '',
+  link           TEXT NOT NULL DEFAULT '',
+  verified_by    TEXT,
+  verified_at    TIMESTAMPTZ,
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, requirement_id)
+);
+-- Which reminder bands have gone, so 30/14/7 each fire once per expiry.
+CREATE TABLE IF NOT EXISTS os_agent_compliance_chases (
+  user_id        TEXT NOT NULL,
+  requirement_id TEXT NOT NULL,
+  band           TEXT NOT NULL,
+  -- The expiry the band was about, as YYYY-MM-DD, or '' for a missing item.
+  -- Text rather than a nullable date because it is part of the key.
+  expires_at     TEXT NOT NULL DEFAULT '',
+  sent_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, requirement_id, band, expires_at)
+);
+
 CREATE TABLE IF NOT EXISTS os_knowledge_meta (
   entry_id    TEXT PRIMARY KEY,
   section     TEXT NOT NULL DEFAULT 'How we work',

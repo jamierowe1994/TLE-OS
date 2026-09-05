@@ -139,6 +139,7 @@ const MACHINE_ROUTES = [
   "/api/pretenancy/alerts/run",       // the pre-tenancy digest
   "/api/pretenancy/watch",            // the Propoly watcher, every five minutes
   "/api/compliance/reminders/run",    // the 30/14/7 certificate chase
+  "/api/agent-compliance/remind",     // the agent's own 30/14/7, and Michael's list
   "/api/lettings-capture/run",        // the daily market sweep
   "/api/radar/run",                   // Landlord Radar: sweep the patch, rescore, digest
   "/api/bond/company-sync",           // Bond: read the Land Registry company files, monthly

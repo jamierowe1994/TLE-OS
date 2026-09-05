@@ -119,6 +119,8 @@ const GROUPS: Array<{
          somebody sitting inside their own screen invites them to read it while
          deciding - which is exactly what would destroy the measurement. */
       { href: "/admin/plc-checks", label: "PLC checks", needs: "see:reports" },
+      /* Michael's list and grid: what every agent holds personally. */
+      { href: "/agent-compliance", label: "Agent compliance", needs: "see:agent-compliance" },
       { href: "/admin/todo", label: "To do", needs: "see:reports" },
       /* Deliberately NOT in the "Views" group: VIEW_PREFIXES is derived from
          that group, and any href in it unmounts this rail. Note /emails also

@@ -234,6 +234,29 @@ export const LAUNCH_ANNOUNCEMENT = {
  * because a certificate is a legal obligation and dressing it up as urgency
  * makes the genuinely urgent ones indistinguishable. */
 
+/** The agent's OWN paperwork, not the properties'. Item 11. */
+export const AGENT_COMPLIANCE_CHASE = {
+  subject: "{{count}} thing{{plural}} you hold personally need{{singular}} attention",
+  preheader: "Your own compliance, not the properties' - what is missing or running out.",
+  mode: "blocks",
+  blocks: [
+    H("pc1", "Your own compliance"),
+    T(
+      "pc2",
+      "Hi {{firstName}},<br><br>These are the things you hold personally as a TLE partner agent, and each one below is either not on file or running out. Worst first."
+    ),
+    T("pc3", "{{rows}}"),
+    BTN("pc4", "Open your profile", `${SITE}/profile`),
+    SP("pc5", 8),
+    DIV("pc6"),
+    H2("pc7", "What to do"),
+    T(
+      "pc8",
+      "Renew or get the thing, then mark it done on your profile with the date. Michael checks it from his side, and the reminder stops by itself once the date is in."
+    ),
+  ],
+};
+
 export const COMPLIANCE_CHASE_AGENT = {
   subject: "{{count}} of your properties need a certificate",
   preheader: "Gas, EICR and EPC coming up for renewal on your book.",

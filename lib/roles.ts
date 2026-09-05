@@ -89,6 +89,7 @@ export const ROLES = [
   "support",
   "pretenancy",
   "marketing",
+  "compliance",
   "agent",
 ] as const;
 export type Role = (typeof ROLES)[number];
@@ -100,6 +101,7 @@ export const ROLE_LABEL: Record<Role, string> = {
   support: "Support",
   pretenancy: "Pre-tenancy",
   marketing: "Marketing",
+  compliance: "Compliance",
   agent: "Agent",
 };
 
@@ -110,6 +112,7 @@ export const ROLE_BLURB: Record<Role, string> = {
   support: "The pre-tenancy board only. Superseded by Pre-tenancy — use that instead.",
   pretenancy: "The run-up to a move-in, across every agent's deals. Nothing else.",
   marketing: "Campaigns, paid leads, templates and the file store. No business figures.",
+  compliance: "Michael. Every agent's own compliance - what each holds, what has run out - and the knowledge hub. Nothing else.",
   agent: "Their own book and nothing else.",
 };
 
@@ -129,13 +132,15 @@ export type Capability =
   | "manage:people"     // invite, reset, view-as, the audit log
   | "manage:roles"      // CHANGE who holds what
   | "manage:switches"   // arm a live send. Owner only, deliberately.
-  | "edit:knowledge";   // feed Steve and the Guides shelf - Susan, Francesca, Michael, Kirstie
+  | "edit:knowledge"    // feed Steve and the Guides shelf - Susan, Francesca, Michael, Kirstie
+  | "see:agent-compliance"; // every agent's personal compliance, and the list that defines it - Michael
 
 const MATRIX: Record<Role, Capability[]> = {
   owner: [
     "admin:open", "staff:internal", "see:people", "see:business", "see:marketing",
     "see:wiring", "see:reports", "see:prelaunch", "see:pretenancy", "see:everything",
     "see:roles", "manage:people", "manage:roles", "manage:switches", "edit:knowledge",
+    "see:agent-compliance",
   ],
   /* Susan runs the business, so she sees all of it, unscoped — and since
      4 Sep she also has a short admin of her own. Seven entries, and the list
@@ -158,6 +163,7 @@ const MATRIX: Record<Role, Capability[]> = {
   super_admin: [
     "admin:open", "staff:internal", "see:people", "see:business", "see:marketing",
     "see:prelaunch", "see:pretenancy", "see:everything", "see:roles", "edit:knowledge",
+    "see:agent-compliance",
   ],
   /* The mirror image. A contractor brought in to debug REX needs the
      connections page and has no business reading anybody's earnings. */
@@ -176,6 +182,9 @@ const MATRIX: Record<Role, Capability[]> = {
      arrears and every partner's earnings, so there was no way to give her
      marketing without giving her Susan's money. Now there is. */
   marketing: ["staff:internal", "see:marketing", "edit:knowledge"],
+  /* Michael. The agents' own compliance is his; the properties' certificates
+     are on the Compliance page every agent already has. */
+  compliance: ["staff:internal", "see:agent-compliance", "edit:knowledge"],
   agent: [],
 };
 

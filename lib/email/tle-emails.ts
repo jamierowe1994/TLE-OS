@@ -48,8 +48,7 @@ import {
   LANDLORD_SIGN_IN,
   TENANT_SIGN_IN,
   SITE,
-  type EmailDoc,
-} from "@/lib/email/tle-documents";
+  type EmailDoc, AGENT_COMPLIANCE_CHASE } from "@/lib/email/tle-documents";
 
 /* ──────────────────────── the catalogue ──────────────────────── */
 
@@ -503,6 +502,27 @@ export function renderComplianceAgentChase(input: {
       return (
         typeof rec.text === "string" ? { ...rec, text: fill(rec.text) } : rec
       ) as unknown as (typeof COMPLIANCE_CHASE_AGENT.blocks)[number];
+    }),
+  };
+  return blocks(doc as unknown as EmailDoc)();
+}
+
+/** An agent's own compliance, item 11 - the same shape as the certificate chase. */
+export function renderAgentComplianceChase(input: { firstName: string; lines: string[] }): { subject: string; html: string } {
+  const n = input.lines.length;
+  const fill = (t: string) =>
+    t
+      .replace(/\{\{firstName\}\}/g, input.firstName)
+      .replace(/\{\{count\}\}/g, String(n))
+      .replace(/\{\{plural\}\}/g, n === 1 ? "" : "s")
+      .replace(/\{\{singular\}\}/g, n === 1 ? "s" : "")
+      .replace(/\{\{rows\}\}/g, input.lines.join("<br>"));
+  const doc = {
+    ...AGENT_COMPLIANCE_CHASE,
+    subject: fill(AGENT_COMPLIANCE_CHASE.subject),
+    blocks: AGENT_COMPLIANCE_CHASE.blocks.map((b) => {
+      const rec = b as unknown as Record<string, unknown>;
+      return (typeof rec.text === "string" ? { ...rec, text: fill(rec.text) } : rec) as unknown as (typeof AGENT_COMPLIANCE_CHASE.blocks)[number];
     }),
   };
   return blocks(doc as unknown as EmailDoc)();

@@ -147,7 +147,13 @@ const WORKSPACES: Workspace[] = [
      admin rail, next to Steve. */
   {
     href: "/knowledge", label: "Knowledge", icon: "note",
-    needs: "edit:knowledge", primaryFor: ["marketing", "pretenancy", "support", "super_admin"],
+    needs: "edit:knowledge", primaryFor: ["marketing", "pretenancy", "support", "super_admin", "compliance"],
+  },
+  /* Michael's screen (item 11, 5 Sep): what every agent has to hold, and
+     where each stands. His first screen; the owner's via the admin rail. */
+  {
+    href: "/agent-compliance", label: "Agent compliance", icon: "shield",
+    needs: "see:agent-compliance", primaryFor: ["compliance", "super_admin"],
   },
 ];
 

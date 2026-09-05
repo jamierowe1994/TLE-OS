@@ -86,6 +86,15 @@ export const SWITCHES: Switch[] = [
     legacyOn: "on",
   },
   {
+    key: "agent_compliance_chases",
+    label: "Agent compliance reminders",
+    what: "Emails an agent when something they hold personally is missing or runs out within 30, 14 or 7 days, once per band, and Michael a daily list of who is short.",
+    who: "TLE agents, and whoever holds the compliance role.",
+    confirm: "SEND REMINDERS",
+    legacyEnv: "AGENT_COMPLIANCE_CHASES",
+    legacyOn: "on",
+  },
+  {
     key: "pretenancy_alerts",
     label: "Pre-tenancy digest",
     what: "Emails a daily list of deals where the pipeline and PayProp disagree.",

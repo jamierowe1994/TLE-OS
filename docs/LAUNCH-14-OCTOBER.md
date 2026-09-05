@@ -36,7 +36,7 @@ Key: **built** works on real data · **partial** exists, with the gap named ·
 | 8 | Multi-tenant + per-agent REX auth | Everyone | **partial** — invite-only sign-in, roles, view-as, each agent sees their own book (27–28 Aug); an agent can link their own REX account on Profile; per-agent mailbox sending exists, never run live |
 | 9 | Flatfair API | — | **partial** — hand-off screen with every fact copyable and a Done tick that moves the board (4 Sep); the API itself still **blocked** on the meeting |
 | 10 | Kelly's training hub, reskinned | Agents | **todo** |
-| 11 | Agent compliance checker in profile | Michael | **todo** |
+| 11 | Agent compliance checker in profile | Michael | **frame built** (5 Sep) — Personal compliance on Profile reads a list Michael owns (a starter set of eight, each marked starter until he edits it); the agent marks each done with a date, expiry is worked out from the renewal period; /agent-compliance (new compliance role, and the owner's admin rail) shows every person against every requirement with his own "seen it" tick, which is the only thing that reads as checked; 30/14/7 reminders and a roll-up to him run daily behind the Agent compliance reminders switch. Waiting on Michael for the real list |
 | 12 | Resend on two domains | — | **blocked** — Resend refuses every non-TLE domain until the domains are set up |
 | 13 | Every email flow tested and on brand | — | **blocked** on 12 — the emails themselves are written and previewable on /emails |
 | 14 | Landlord + tenant portals refined and secured | Customers | **partial** — landlord: sign-in, journey, certificates with the file to open, offers, and the let step by step (5 Sep); tenant: sign-in by magic link and a home showing the deal moving in their words (4 Sep); upkeep still has no source |
@@ -565,7 +565,7 @@ Re-read 2 September 2026.
 | Propoly: a webhook on deal status, read access to a deal's documents, and creating a deal by API (all absent, probed 4 Sep) | no polling, the PLC gate checking Propoly's slots, the accepted offer starting the deal without the agent's click |
 | Propoly (tidy-up): 29 addresses held twice, 30 extra property records, 5 made since 1 Aug (5 Sep). Howard's flow appears to create rather than match | clean matching before the handover goes live |
 | Howard: attach the landlord to the listing in REX on 55 and 59 Fairley Street, 67 Gill Avenue and 5c Newton Road (3 Sep rehearsals stopped there) | those four handovers |
-| Michael: what "compliant" means for an agent | item 11 |
+| Michael: what "compliant" means for an agent - now a list he edits himself on /agent-compliance once James gives him the compliance role; the starter eight are a guess | item 11's list; until then the reminders switch should stay off |
 | Flatfair API meeting | item 9 |
 | Meta embedded signup for a WhatsApp Business number | real WhatsApp sends through REX |
 | Power Automate trigger URLs (Application Accepted, Rental Passport) | handoff send, item 17 |
