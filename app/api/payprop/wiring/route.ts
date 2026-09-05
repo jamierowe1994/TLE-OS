@@ -43,6 +43,9 @@ async function checkAccount(id: PayPropAccountId, label: string): Promise<{
   // the portal — which owns the single OAuth connection.
   const key = payPropKeyFor(id);
   const bridged = Boolean(process.env.PORTAL_ORIGIN && process.env.OS_BRIDGE_SECRET);
+  /* Our own OAuth client on this service outranks the portal's bridge. */
+  const { payPropClient } = await import("@/lib/business/payprop");
+  const ownOAuth = Boolean(payPropClient(id));
   if (!key && !bridged) {
     return {
       id,
@@ -85,7 +88,9 @@ async function checkAccount(id: PayPropAccountId, label: string): Promise<{
       ok: true,
       detail: key
         ? "Our own API key"
-        : "Borrowing a token from the portal — it stays the only app that refreshes",
+        : ownOAuth
+          ? "Our own OAuth connection — connected from Wiring, refreshed here"
+          : "Borrowing a token from the portal — it stays the only app that refreshes",
     },
     {
       key: "auth",
