@@ -2,32 +2,28 @@ import { NextRequest, NextResponse } from "next/server";
 import { hasDb, q } from "@/lib/db";
 import { SESSION_COOKIE, uid, verifySessionToken } from "@/lib/auth";
 import { CAMPAIGNS, type Campaign, type CampaignStep } from "@/lib/campaigns";
+import { loadCampaigns } from "@/lib/campaign-store";
 
 /**
- * Every campaign there is: the built-in set, plus the ones marketing built.
+ * Every campaign there is: the built-in set, marketing's edits to it, and the
+ * ones marketing wrote from scratch.
  *
- * The built-ins stay in code. They are the house's own thinking about why a
- * landlord walks away, they want reviewing in a diff, and they have to exist
- * on an environment with no database — the demo, a fresh clone, a laptop on a
- * train. What marketing writes afterwards shouldn't need a deploy, so it goes
- * in the table and gets merged here.
+ * ── Built-ins are editable now (5 Sep 2026) ───────────────────────────────
  *
- * Merged in ONE place so nothing downstream has to care which is which: the
- * scheduler, the agent's picker and the marketing screen all ask this route.
+ * They used to be read-only here, on the grounds that the house's own
+ * thinking belongs in a diff. James's call: Francesca covers marketing and
+ * should be able to go into any campaign and change it however she wants,
+ * without a deploy. So saving a built-in's id writes an OVERRIDE row that
+ * runs in its place, and deleting that row reverts to the code copy. The
+ * code copy is the fallback, never lost.
+ *
+ * Two live campaigns on the same reason is a TEST, not a mistake - the
+ * enroller alternates between them. "Copy as a variant" on the screen is
+ * just a POST of the same plan under a new name.
  */
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-type Row = {
-  id: string;
-  name: string;
-  audience: string;
-  reasons: string[];
-  aim: string;
-  status: string;
-  steps: CampaignStep[];
-};
 
 function slug(name: string): string {
   return (
@@ -58,25 +54,7 @@ function cleanStep(s: unknown): CampaignStep | null {
 }
 
 export async function GET() {
-  const stored = hasDb()
-    ? await q<Row>(
-        `SELECT id, name, audience, reasons, aim, status, steps FROM os_campaigns ORDER BY created_at`
-      ).catch(() => [])
-    : [];
-
-  const built: (Campaign & { source: string })[] = CAMPAIGNS.map((c) => ({ ...c, source: "built-in" }));
-  const mine: (Campaign & { source: string })[] = stored.map((r) => ({
-    id: r.id,
-    name: r.name,
-    audience: r.audience === "lost" ? "lost" : "nurture",
-    reasons: Array.isArray(r.reasons) ? r.reasons : [],
-    aim: r.aim,
-    status: r.status === "live" ? "live" : "draft",
-    steps: Array.isArray(r.steps) ? r.steps : [],
-    source: "written here",
-  }));
-
-  return NextResponse.json({ stored: hasDb(), campaigns: [...built, ...mine] });
+  return NextResponse.json({ stored: hasDb(), campaigns: await loadCampaigns() });
 }
 
 export async function POST(req: NextRequest) {
@@ -102,17 +80,10 @@ export async function POST(req: NextRequest) {
 
   // A new campaign gets an id derived from its name, with the row id kept
   // unique — enrolments and copy point at this id forever, so it must never
-  // be reused by a later campaign that happens to share a name.
+  // be reused by a later campaign that happens to share a name. A built-in's
+  // id is kept as-is: that row is the override.
   const id = body.id || `${slug(name)}-${uid().slice(-4)}`;
-
-  // Built-ins are read-only here. Editing one means editing the file, which
-  // is the point of them being in the file.
-  if (CAMPAIGNS.some((c) => c.id === id)) {
-    return NextResponse.json(
-      { error: "That's a built-in campaign — it's edited in the code, not here." },
-      { status: 409 }
-    );
-  }
+  const overriding = CAMPAIGNS.some((c) => c.id === id);
 
   await q(
     `INSERT INTO os_campaigns (id, name, audience, reasons, aim, status, steps, updated_by)
@@ -130,14 +101,14 @@ export async function POST(req: NextRequest) {
       id,
       name.slice(0, 120),
       audience,
-      JSON.stringify(Array.isArray(body.reasons) ? body.reasons : []),
+      JSON.stringify(Array.isArray(body.reasons) ? body.reasons.map(String).slice(0, 20) : []),
       String(body.aim ?? "").slice(0, 400),
       status,
       JSON.stringify(steps),
       userId,
     ]
   );
-  return NextResponse.json({ saved: true, id });
+  return NextResponse.json({ saved: true, id, overriding });
 }
 
 export async function DELETE(req: NextRequest) {
@@ -145,23 +116,25 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
   const id = new URL(req.url).searchParams.get("id") ?? "";
-  if (CAMPAIGNS.some((c) => c.id === id)) {
-    return NextResponse.json({ error: "Built-in campaigns can't be deleted here." }, { status: 409 });
-  }
   if (!hasDb()) return NextResponse.json({ saved: false, reason: "No database on this environment." });
 
-  // Anyone already on it keeps their row: deleting the campaign must not
-  // quietly delete the record of who was sent what.
-  const live = await q<{ n: string }>(
-    `SELECT COUNT(*)::text AS n FROM os_campaign_enrolments WHERE campaign_id = $1 AND status = 'active'`,
-    [id]
-  );
-  if (Number(live[0]?.n ?? 0) > 0) {
-    return NextResponse.json(
-      { error: `${live[0].n} landlord(s) are on this campaign. Stop them first.` },
-      { status: 409 }
+  const builtIn = CAMPAIGNS.some((c) => c.id === id);
+  if (!builtIn) {
+    // Anyone already on it keeps their row: deleting the campaign must not
+    // quietly delete the record of who was sent what.
+    const live = await q<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM os_campaign_enrolments WHERE campaign_id = $1 AND status = 'active'`,
+      [id]
     );
+    if (Number(live[0]?.n ?? 0) > 0) {
+      return NextResponse.json(
+        { error: `${live[0].n} landlord(s) are on this campaign. Stop them first.` },
+        { status: 409 }
+      );
+    }
   }
+  /* For a built-in this deletes the OVERRIDE: the campaign goes back to what
+     the code says, and anyone on it carries on - the steps still exist. */
   await q(`DELETE FROM os_campaigns WHERE id = $1`, [id]);
-  return NextResponse.json({ saved: true });
+  return NextResponse.json({ saved: true, reverted: builtIn });
 }

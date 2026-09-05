@@ -40,7 +40,7 @@ Key: **built** works on real data · **partial** exists, with the gap named ·
 | 12 | Resend on two domains | — | **blocked** — Resend refuses every non-TLE domain until the domains are set up |
 | 13 | Every email flow tested and on brand | — | **blocked** on 12 — the emails themselves are written and previewable on /emails |
 | 14 | Landlord + tenant portals refined and secured | Customers | **partial** — landlord: sign-in, journey, certificates with the file to open, offers, and the let step by step (5 Sep); tenant: sign-in by magic link and a home showing the deal moving in their words (4 Sep); upkeep still has no source |
-| 15 | Marketing email builder | Francesca | **partial** — builder built (28 Aug) with fonts, layouts, drag and drop; nurture campaigns exist behind a switch; sending blocked on 12 |
+| 15 | Marketing email builder | Francesca | **built** — builder (28 Aug); campaigns editable end to end incl. built-ins, locked onto reasons, A/B variants, results per campaign, and the lead spine's Nurture branch enrols by reason (5 Sep); the scheduler runs daily behind the Nurture campaigns switch and still needs a sender identity (REX_CAMPAIGN_SEND_AS) |
 | 16 | REX PM integration | — | **settled: not viable, data is empty** (22 Aug) |
 | 17 | Tenant passport in-house | — | **built** (4 Sep) — the invite sends from a booked viewing on the public sender, mints the passport and links to it |
 | 18 | Turn REX automations OFF at launch | — | **launch day** — work from the audit on /emails; Howard holds the Zapier webhook |
@@ -493,8 +493,14 @@ broken rather than rich."*
 > `os_market_appraisals`, so a landlord who says yes on the first call shows Booked with the
 > steps between left hollow. The Leads list's Stage column says the spine's word ("2nd
 > contact", "Nurture", "Appraisal booked") for any lead with something logged; REX's three
-> words stand for the rest. Still to do: the nurture CAMPAIGNS that keep them warm, and the
-> long Market Appraisals spine below, which is unchanged today.
+> words stand for the rest. **Nurture campaigns wired the same day:** the reason picked on Add
+> to nurture enrols the lead on the live campaign locked onto it (lib/campaign-store), a reply or
+> a booked appraisal takes them off with the reason kept, and the Marketing screen shows replied
+> and booked per campaign. Francesca can edit every campaign including the built-ins (an override
+> row runs in place of the code copy; revert deletes it), lock any campaign onto any reason, and
+> run two on one reason as an A/B - the enroller balances between them. Still to do: the long
+> Market Appraisals spine below, unchanged today, and James's decision on whose name nurture
+> emails come from (REX_CAMPAIGN_SEND_AS).
 
 Captured verbatim in substance, to be actioned after the handover work. His
 diagnosis: **"lead → appraisal" is one enormous jump**, so everything gets

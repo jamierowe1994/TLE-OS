@@ -76,7 +76,7 @@ export default function MarketingView() {
             : `${campaigns.length} campaign${campaigns.length === 1 ? "" : "s"} set up.`}
         </p>
         <Link
-          href="/emails"
+          href="/marketing"
           className="mt-3 inline-block rounded-lg border border-line/80 px-3.5 py-2 text-[12px]"
         >
           Open campaigns

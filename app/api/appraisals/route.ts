@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { stopLeadCampaigns } from "@/lib/campaign-store";
 import { listAppraisals, createAppraisal, recordValuation, setOutcome } from "@/lib/appraisal-store";
 import { withLiveStages } from "@/lib/appraisal-stage";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
@@ -70,6 +71,10 @@ export async function POST(req: NextRequest) {
       agent: b.agent ?? null,
       appointmentAt: b.appointmentAt ?? null,
     });
+
+    /* A booked appraisal is the nurture campaign WORKING. Take the lead off
+       it, and say so on the row - "booked" is the number marketing reads. */
+    if (appraisal.leadId) await stopLeadCampaigns(appraisal.leadId, "booked").catch(() => 0);
 
     /* A dated booking is the first moment the video nudge can be scheduled.
        Best effort, after the booking is safe: a nudge that cannot be queued

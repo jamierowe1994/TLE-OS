@@ -30,6 +30,7 @@ export type LogMode = "attempt" | "nurture";
 export default function LogTouch({
   leadId,
   leadName,
+  leadFacts,
   mode,
   initialKind = "call",
   onClose,
@@ -37,6 +38,8 @@ export default function LogTouch({
 }: {
   leadId: string;
   leadName: string;
+  /** For the campaign enrolment nurture makes: where the emails go. */
+  leadFacts?: { name: string; email: string; contactId: string | null };
   mode: LogMode;
   initialKind?: TouchKind;
   onClose: () => void;
@@ -76,7 +79,7 @@ export default function LogTouch({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(
           mode === "nurture"
-            ? { kind: "nurture", body: reason + (body.trim() ? ` - ${body.trim()}` : "") }
+            ? { kind: "nurture", reason, body, lead: leadFacts }
             : { kind, outcome, body }
         ),
       });
@@ -154,8 +157,8 @@ export default function LogTouch({
           <>
             <h2 className="hand text-[20px]">Add to nurture</h2>
             <p className="mt-1 text-[12.5px] text-muted">
-              {first} is not saying no and not answering. They stay warm here instead of dying in a call list,
-              and come straight back on the spine the moment they reply.
+              {first} is not saying no and not answering. The reason picks the campaign that keeps them warm,
+              and they come straight back on the spine the moment they reply.
             </p>
             <p className="mt-4 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Why</p>
             <div className="mt-1.5 flex flex-wrap gap-2">

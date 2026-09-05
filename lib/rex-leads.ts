@@ -185,6 +185,7 @@ function toLead(l: RexLead, enquiry: Lead["enquiry"]): Lead {
     listingId: l.listing?.id ?? undefined,
     office: l.listing?.location?.text ?? undefined,
     subject: l.subject ?? undefined,
+    contactId: l.contact?.id ? String(l.contact.id) : undefined,
   };
 }
 

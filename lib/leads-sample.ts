@@ -53,6 +53,9 @@ export type Lead = {
   /** Which office the listing belongs to — this REX account is shared. */
   office?: string;
   subject?: string;
+  /** The REX contact behind the lead, when there is one - where a campaign
+   *  email is sent from and filed against. */
+  contactId?: string;
   /** The OS's own word for where a landlord lead is - "2nd contact",
    *  "Nurture", "Appraisal booked" - folded from the log (lib/lead-spine).
    *  Unset when nothing has been logged, and the REX stage stands. */

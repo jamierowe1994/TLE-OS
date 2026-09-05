@@ -15,7 +15,7 @@ export default function Campaigns() {
           Linked rather than copied here. Two campaign engines within one product is how you
           end up unable to say which one actually sent.
         </p>
-        <Link href="/emails" className="mt-3 inline-block rounded-lg border border-line/80 px-3.5 py-2 text-[12px]">
+        <Link href="/marketing" className="mt-3 inline-block rounded-lg border border-line/80 px-3.5 py-2 text-[12px]">
           Open campaigns
         </Link>
       </div>

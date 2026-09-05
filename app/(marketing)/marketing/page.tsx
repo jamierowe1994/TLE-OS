@@ -45,7 +45,17 @@ const OUTCOME: Record<string, { label: string; tone: string }> = {
   no_email: { label: "No email address", tone: "text-muted" },
 };
 
-type Listed = Campaign & { source?: string };
+type Listed = Campaign & { source?: "built-in" | "overridden" | "written here" };
+
+/** What happened to everyone who was ever on it. */
+type Result = { live: number; total: number; replied?: number; booked?: number; finished?: number };
+
+/** The other live campaigns on the same reasons - the test this one is in. */
+function testedAgainst(c: Campaign, all: Campaign[]): Campaign[] {
+  return all.filter(
+    (o) => o.id !== c.id && o.status === "live" && o.reasons.some((r) => c.reasons.includes(r))
+  );
+}
 
 export default function Marketing() {
   const [openId, setOpenId] = useState<string>("");
@@ -65,7 +75,46 @@ export default function Marketing() {
   const [editing, setEditing] = useState<"new" | Campaign | null>(null);
   const open: Listed | undefined = campaigns.find((c) => c.id === openId);
 
-  const [counts, setCounts] = useState<Record<string, { live: number; total: number }>>({});
+  const [counts, setCounts] = useState<Record<string, Result>>({});
+  const [busy, setBusy] = useState<string>("");
+
+  /** The same plan under a new name, as a draft: the B in an A/B. */
+  async function copyAsVariant(c: Campaign) {
+    setBusy("copy");
+    try {
+      const res = await fetch("/api/campaigns", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: `${c.name} (B)`,
+          aim: c.aim,
+          audience: c.audience,
+          reasons: c.reasons,
+          status: "draft",
+          steps: c.steps,
+        }),
+      });
+      const j = await res.json();
+      if (j.saved) {
+        await loadCampaigns();
+        setOpenId(j.id);
+      }
+    } finally {
+      setBusy("");
+    }
+  }
+
+  /** Drop marketing's edits to a built-in and run the code copy again. */
+  async function revert(c: Campaign) {
+    if (!window.confirm(`Put "${c.name}" back to the built-in plan? Your edits to the plan go; the words written for each step stay.`)) return;
+    setBusy("revert");
+    try {
+      await fetch(`/api/campaigns?id=${encodeURIComponent(c.id)}`, { method: "DELETE" });
+      await loadCampaigns();
+    } finally {
+      setBusy("");
+    }
+  }
   const [copy, setCopy] = useState<Record<string, StepCopy>>({});
   const [run, setRun] = useState<RunReport | null>(null);
 
@@ -155,10 +204,24 @@ export default function Marketing() {
                   <span className="text-accent-dark">
                     {counts[c.id]?.live ? `${counts[c.id].live} on it now` : "Nobody on it yet"}
                   </span>
+                  {(counts[c.id]?.replied ?? 0) > 0 && (
+                    <span className="text-muted">· {counts[c.id].replied} replied</span>
+                  )}
+                  {(counts[c.id]?.booked ?? 0) > 0 && (
+                    <span className="text-muted">· {counts[c.id].booked} booked</span>
+                  )}
                   {unwritten(c) > 0 && (
                     <span className="text-muted">· {unwritten(c)} still to write</span>
                   )}
                 </p>
+                {testedAgainst(c, campaigns).length > 0 && (
+                  <p className="mt-1 text-[10.5px] text-muted">
+                    Tested against {testedAgainst(c, campaigns).map((o) => o.name).join(", ")}
+                  </p>
+                )}
+                {c.source === "overridden" && (
+                  <p className="mt-1 text-[10.5px] text-muted">Built in, edited here</p>
+                )}
               </button>
             </li>
           ))}
@@ -236,20 +299,45 @@ export default function Marketing() {
             {counts[open.id]?.live ? `${counts[open.id].live} on it now` : "nobody on it yet"}
           </p>
         </div>
-        {open.source === "built-in" ? (
-          <span className="ml-auto text-[10.5px] text-muted">
-            Built in — its plan lives in the code, its words don&apos;t
-          </span>
-        ) : (
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {open.source === "built-in" && (
+            <span className="text-[10.5px] text-muted">Built in — edit it and your version runs instead</span>
+          )}
+          {open.source === "overridden" && (
+            <button
+              type="button"
+              onClick={() => revert(open)}
+              disabled={busy !== ""}
+              className="rounded-xl border border-line/70 px-3 py-1.5 text-[12px] text-muted hover:border-ink/30 disabled:opacity-40"
+            >
+              Revert to the built-in
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => copyAsVariant(open)}
+            disabled={busy !== ""}
+            title="The same plan under a new name, as a draft. Turn it live on the same reasons and leads alternate between the two."
+            className="rounded-xl border border-line/70 px-3 py-1.5 text-[12px] hover:border-ink/30 disabled:opacity-40"
+          >
+            {busy === "copy" ? "Copying…" : "Copy as a variant"}
+          </button>
           <button
             type="button"
             onClick={() => setEditing(open)}
-            className="ml-auto rounded-xl border border-line/70 px-3 py-1.5 text-[12px] hover:border-ink/30"
+            className="rounded-xl border border-line/70 px-3 py-1.5 text-[12px] hover:border-ink/30"
           >
             Edit the plan
           </button>
-        )}
+        </div>
       </div>
+      {testedAgainst(open, campaigns).length > 0 && (
+        <p className="-mt-2 mb-4 text-[11.5px] text-muted">
+          Running as a test against {testedAgainst(open, campaigns).map((o) => o.name).join(", ")}: new
+          leads on a shared reason alternate between them, and the replied and booked counts say
+          which is winning.
+        </p>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,420px)_1fr]">
         {/* ── the plan ── */}

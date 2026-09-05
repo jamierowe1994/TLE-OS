@@ -102,6 +102,7 @@ export function contactToLead(c: ContactRow): Lead {
     agent: c.createdBy,
     notes: c.notes,
     address: c.address || undefined,
+    contactId: c.rexId ?? undefined,
     activity: [
       {
         icon: "user",

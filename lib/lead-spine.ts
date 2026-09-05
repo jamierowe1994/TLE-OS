@@ -47,11 +47,19 @@ export const OUTCOMES: { id: TouchOutcome; label: string; for: TouchKind[] }[] =
   { id: "replied", label: "They replied", for: ["text", "email"] },
 ];
 
+/**
+ * Why a lead goes to nurture. These are CAMPAIGN reasons too: marketing locks
+ * a campaign onto one or more of them (lib/campaigns, the Marketing screen),
+ * and the reason picked here is what decides which campaign the lead lands
+ * on. "Weighing up agents" is shared with the appraisal vocabulary on
+ * purpose - the same campaign fits both.
+ */
 export const NURTURE_REASONS = [
   "Not answering",
-  "Not ready yet - wants to wait",
-  "Using another agent for now",
-  "Selling instead, might let later",
+  "Not ready yet",
+  "Weighing up agents",
+  "Selling instead",
+  "Other",
 ];
 
 /** Landlord spine ids, in order. Mirrors LANDLORD_TRACK in lib/journey. */

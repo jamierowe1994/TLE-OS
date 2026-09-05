@@ -535,18 +535,22 @@ export default function LeadDrawer({
   const [touches, setTouches] = useState<LeadTouch[]>([]);
   const [spine, setSpine] = useState<Spine | null>(null);
   const [logging, setLogging] = useState<LogMode | null>(null);
+  /** The campaign the lead is on, named - what nurture actually did. */
+  const [campaign, setCampaign] = useState<{ id: string; name: string; since: string; step: number } | null>(null);
   const leadId = lead?.id ?? null;
   useEffect(() => {
     if (!leadId) return;
     let gone = false;
     setTouches([]);
     setSpine(null);
+    setCampaign(null);
     fetch(`/api/leads/${encodeURIComponent(leadId)}/touches`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: { ok?: boolean; touches?: LeadTouch[]; spine?: Spine | null } | null) => {
+      .then((j: { ok?: boolean; touches?: LeadTouch[]; spine?: Spine | null; campaign?: typeof campaign } | null) => {
         if (gone || !j?.ok) return;
         setTouches(j.touches ?? []);
         if (j.spine) setSpine(j.spine);
+        setCampaign(j.campaign ?? null);
       })
       .catch(() => {
         /* No log is an empty log; the rail falls back to REX's own word. */
@@ -556,9 +560,10 @@ export default function LeadDrawer({
     };
   }, [leadId]);
   /** Every save hands the whole log back, so the screen re-reads what was saved. */
-  const takeLog = (j: { touches?: LeadTouch[]; spine?: Spine | null }) => {
+  const takeLog = (j: { touches?: LeadTouch[]; spine?: Spine | null; campaign?: typeof campaign }) => {
     if (j.touches) setTouches(j.touches);
     if (j.spine) setSpine(j.spine);
+    if ("campaign" in j) setCampaign(j.campaign ?? null);
   };
   async function logTouch(body: Record<string, unknown>) {
     if (!leadId) return null;
@@ -1483,6 +1488,12 @@ export default function LeadDrawer({
                       Since {whenAgo(nurturing.at)} - {nurturing.reason}. Added by {nurturing.byName}. Log a call
                       they answered or a reply and they come straight back on the spine, at {here.label.toLowerCase()}.
                     </p>
+                    <p className="mt-2 flex items-center gap-2 text-[11.5px] font-medium text-accent-dark">
+                      <DoodleIcon name="mail" size={13} />
+                      {campaign
+                        ? `On ${campaign.name}${campaign.step > 0 ? ` - step ${campaign.step} sent` : " - first step to come"}`
+                        : "No campaign fits that reason yet - marketing can write one on the Marketing screen."}
+                    </p>
                   </>
                 ) : sp?.booked ? (
                   <>
@@ -1968,10 +1979,11 @@ export default function LeadDrawer({
         <LogTouch
           leadId={lead.id}
           leadName={lead.name}
+          leadFacts={{ name: lead.name, email: contact.email || lead.email, contactId: lead.contactId ?? null }}
           mode={logging}
           onClose={() => setLogging(null)}
           onLogged={(j) => {
-            takeLog(j as { touches?: LeadTouch[]; spine?: Spine | null });
+            takeLog(j as { touches?: LeadTouch[]; spine?: Spine | null; campaign?: typeof campaign });
             setLogging(null);
           }}
         />

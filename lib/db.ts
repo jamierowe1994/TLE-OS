@@ -698,6 +698,12 @@ CREATE TABLE IF NOT EXISTS os_campaign_enrolments (
 CREATE UNIQUE INDEX IF NOT EXISTS os_campaign_enrolments_active
   ON os_campaign_enrolments (campaign_id, record_type, record_id)
   WHERE status = 'active';
+-- The REX contact the sends go to (5 Sep 2026). record_id is the OS's own
+-- key for the record - a lead is "rex-<lead id>" or "os-<uuid>" - and only
+-- sometimes a contact; the scheduler needs the contact, so it is carried here.
+ALTER TABLE os_campaign_enrolments ADD COLUMN IF NOT EXISTS rex_contact_id TEXT;
+-- Who put them on: 'lead-spine' (the Nurture branch), 'appraisal', 'hand'.
+ALTER TABLE os_campaign_enrolments ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT '';
 CREATE INDEX IF NOT EXISTS os_campaign_enrolments_campaign
   ON os_campaign_enrolments (campaign_id, status);
 

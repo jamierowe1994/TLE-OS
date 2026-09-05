@@ -3,7 +3,8 @@ import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view
 import { timingSafeEqual } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { SESSION_COOKIE, uid, verifySessionToken } from "@/lib/auth";
-import { CAMPAIGNS, type Campaign } from "@/lib/campaigns";
+import type { Campaign } from "@/lib/campaigns";
+import { campaignsById } from "@/lib/campaign-store";
 import { dispositionOf, nextDue, type StepPlan } from "@/lib/scheduler";
 import { renderStep, type StepCopy } from "@/lib/campaign-mail";
 import { rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
@@ -31,42 +32,17 @@ import { switchOn } from "@/lib/switches";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-/**
- * Every campaign, built-in and written here, by id.
- *
- * Loaded per run rather than held in a module constant: a campaign marketing
- * created this morning has to be schedulable this afternoon, and a constant
- * built at import time would only see it after the next deploy.
- */
-async function campaignsById(): Promise<Map<string, Campaign>> {
-  const m = new Map<string, Campaign>(CAMPAIGNS.map((c) => [c.id, c]));
-  const rows = await q<{
-    id: string;
-    name: string;
-    audience: string;
-    reasons: string[];
-    aim: string;
-    status: string;
-    steps: Campaign["steps"];
-  }>(`SELECT id, name, audience, reasons, aim, status, steps FROM os_campaigns`).catch(() => []);
-  for (const r of rows) {
-    m.set(r.id, {
-      id: r.id,
-      name: r.name,
-      audience: r.audience === "lost" ? "lost" : "nurture",
-      reasons: Array.isArray(r.reasons) ? r.reasons : [],
-      aim: r.aim,
-      status: r.status === "live" ? "live" : "draft",
-      steps: Array.isArray(r.steps) ? r.steps : [],
-    });
-  }
-  return m;
-}
+/* Every campaign, built-in, overridden and written here, comes from
+   lib/campaign-store - loaded per run, so a campaign marketing edited this
+   morning is what runs this afternoon. */
 
 type Row = {
   id: string;
   campaign_id: string;
   record_id: string;
+  /** The REX contact the send goes to. Null on rows from before 5 Sep 2026,
+   *  when record_id itself was the contact. */
+  rex_contact_id: string | null;
   name: string;
   email: string;
   last_step_sent: number;
@@ -132,7 +108,7 @@ async function storedCopy(): Promise<Map<string, StepCopy>> {
 
 async function activeRows(): Promise<Row[]> {
   return q<Row>(
-    `SELECT id, campaign_id, record_id, name, email, last_step_sent, enrolled_at
+    `SELECT id, campaign_id, record_id, rex_contact_id, name, email, last_step_sent, enrolled_at
        FROM os_campaign_enrolments
       WHERE status = 'active'
       ORDER BY enrolled_at`
@@ -286,10 +262,11 @@ export async function POST(req: NextRequest) {
 
     try {
       if (!rexConfigured()) throw new Error("REX isn't connected on this environment.");
-      // By record, so the send lands on the landlord's REX timeline and the
-      // next person to open them can see it. record_id is the REX contact; no
-      // record means no timeline, and an email nobody can later find.
-      if (!/^\d+$/.test(row.record_id)) {
+      // By contact, so the send lands on the landlord's REX timeline and the
+      // next person to open them can see it. No contact means no timeline,
+      // and an email nobody can later find.
+      const contactId = row.rex_contact_id ?? row.record_id;
+      if (!/^\d+$/.test(contactId)) {
         throw new Error("No REX contact record for this enrolment, so the send would land nowhere.");
       }
       /* Nurture runs on a timer, so there is no signed-in person to send as.
@@ -297,7 +274,7 @@ export async function POST(req: NextRequest) {
          who nurture comes from, this refuses rather than sending a landlord an
          email from the office account - see NoSenderIdentity. */
       const sent = await sendMerge(
-        { contactId: row.record_id },
+        { contactId },
         { subject: mail.subject, body: mail.html },
         null,
         { sendFromUserId: process.env.REX_CAMPAIGN_SEND_AS ?? null }

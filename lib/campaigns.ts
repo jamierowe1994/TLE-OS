@@ -62,6 +62,19 @@ export type Campaign = {
  */
 export const CAMPAIGNS: Campaign[] = [
   {
+    id: "gone-quiet-lead",
+    name: "Gone quiet - never spoken to",
+    audience: "nurture",
+    reasons: ["Not answering"],
+    aim: "A landlord lead that never picked up. Three light touches over six weeks, then stop - most who come back do so on the second.",
+    status: "live",
+    steps: [
+      { day: 2, channel: "email", subject: "You asked about letting your property", gist: "Short. We tried to call, here is what we do and one question back. No attachments." },
+      { day: 10, channel: "email", subject: "What your property might let for", gist: "One figure or a range for their area, and the offer of a fifteen-minute call." },
+      { day: 42, channel: "email", subject: "Still thinking about letting?", gist: "The last one. Say we will leave it there, and how to pick it up again." },
+    ],
+  },
+  {
     id: "win-back-agent",
     name: "Win-back — went to another agent",
     audience: "lost",
@@ -124,7 +137,7 @@ export const CAMPAIGNS: Campaign[] = [
     id: "not-ready",
     name: "Not ready yet",
     audience: "nurture",
-    reasons: ["Tenant still in situ", "Letting later in the year", "Thinking about it"],
+    reasons: ["Tenant still in situ", "Letting later in the year", "Thinking about it", "Not ready yet"],
     aim: "Be the agent they were already talking to when the date finally arrives.",
     status: "live",
     steps: [
@@ -234,6 +247,33 @@ export function campaignsFor(
   // Never leave an agent with nothing: an unmatched reason still gets the
   // general campaigns for its side.
   return exact.length ? exact : live.filter((c) => !c.reasons.length || !exact.length);
+}
+
+/**
+ * The campaigns that fit a REASON, wherever they sit.
+ *
+ * The reason is the specific thing - "Not answering", "Fee too high" - and a
+ * campaign written for it fits whichever side of the book the person came in
+ * on. So exact matches are taken across BOTH audiences first, and only when
+ * nothing was written for that reason does the audience's own general set
+ * (campaigns with no reasons at all) stand in. Nothing matching means nothing:
+ * a lead is better left off a campaign than put on the wrong one.
+ *
+ * Several live campaigns on one reason is not a conflict, it is a TEST:
+ * the enroller alternates between them and the Marketing screen shows which
+ * one got the replies. That is how marketing runs an A/B without a switch.
+ */
+export function campaignsForReason(
+  reason: string | null,
+  audience: CampaignAudience,
+  all: Campaign[] = CAMPAIGNS
+): Campaign[] {
+  const live = all.filter((c) => c.status === "live");
+  if (reason) {
+    const exact = live.filter((c) => c.reasons.includes(reason));
+    if (exact.length) return exact;
+  }
+  return live.filter((c) => c.audience === audience && !c.reasons.length);
 }
 
 export function lastDay(c: Campaign): number {

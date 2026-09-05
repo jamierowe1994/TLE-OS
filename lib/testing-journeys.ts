@@ -81,6 +81,26 @@ export const JOURNEYS: Journey[] = [
         since: "2026-09-05",
       },
       {
+        id: "nurture-campaign",
+        title: "Nurture puts the lead on a campaign, and a reply takes them off",
+        what: "The reason picked on Add to nurture decides the campaign. Francesca edits any campaign, including the built-in ones, locks it onto reasons, and runs two on the same reason as a test.",
+        how: [
+          "On a landlord lead, press Nurture, pick Not answering, add. The card should read On Gone quiet - never spoken to.",
+          "Log a call you Spoke on. The card returns to the spine and the campaign's replied count goes up on the Marketing screen.",
+          "Open Marketing (the marketing role's home). Open Gone quiet - never spoken to, press Edit the plan, change a subject, save: the card says Built in, edited here. Revert to the built-in puts it back.",
+          "Press Copy as a variant, turn the copy live on the same reason. The next lead nurtured for that reason lands on whichever of the two has fewer people; the cards say Tested against each other with replied and booked counts.",
+          "Write the copy for each email step; until it is written the scheduler holds the step and says so under Due right now.",
+        ],
+        where: "/marketing",
+        state: "built",
+        since: "2026-09-05",
+        switchKey: "campaign_sending",
+        notes: [
+          "Sends go through REX mail merge as the user in REX_CAMPAIGN_SEND_AS. Until that is set the scheduler holds every email and says why. Whose name nurture comes from is James's call.",
+          "The scheduler runs from the daily cron at 07:00 with the other jobs.",
+        ],
+      },
+      {
         id: "book",
         title: "Book the appraisal from a lead",
         what: "Leads hands the visit over to Market Appraisals with the address, the contact and the slot.",

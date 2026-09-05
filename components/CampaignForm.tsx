@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { LOST_REASONS, NURTURE_REASONS } from "@/lib/appraisal";
+import { NURTURE_REASONS as LEAD_REASONS } from "@/lib/lead-spine";
 import type { Campaign, CampaignStep } from "@/lib/campaigns";
 
 /**
@@ -60,7 +61,13 @@ export default function CampaignForm({
   const [saving, setSaving] = useState(false);
   const [note, setNote] = useState("");
 
-  const reasons = d.audience === "lost" ? LOST_REASONS : NURTURE_REASONS;
+  /* The reasons an appraisal can end on, and the ones a lead can go to
+     nurture for - the lead spine's Nurture branch enrols by reason too, so a
+     campaign locked onto "Not answering" is what a never-answered lead gets. */
+  const reasons: readonly string[] =
+    d.audience === "lost"
+      ? LOST_REASONS
+      : [...new Set<string>([...NURTURE_REASONS, ...LEAD_REASONS])];
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((p) => ({ ...p, [k]: v }));
   const setStep = (i: number, patch: Partial<CampaignStep>) =>
     setD((p) => ({ ...p, steps: p.steps.map((s, n) => (n === i ? { ...s, ...patch } : s)) }));
@@ -102,7 +109,7 @@ export default function CampaignForm({
           <div>
             <h2 className="text-[16px]">{existing ? "Edit campaign" : "New campaign"}</h2>
             <p className="text-[11.5px] text-muted">
-              {note || "The plan, not the words — those come after, one step at a time."}
+              {note || "The plan, not the words — those come after, one step at a time. Two live campaigns on the same reason run as a test: leads alternate between them."}
             </p>
           </div>
           <div className="ml-auto flex gap-2">
@@ -200,8 +207,9 @@ export default function CampaignForm({
               })}
             </div>
             <p className="mt-1.5 text-[10.5px] text-muted">
-              Pick none and it&apos;s offered for any {d.audience === "lost" ? "lost" : "nurtured"}{" "}
-              appraisal.
+              Locked onto these: a lead or an appraisal with one of these reasons lands on this campaign.
+              Pick none and it stands in for any {d.audience === "lost" ? "lost" : "nurtured"} one with no
+              campaign of its own.
             </p>
           </div>
         </div>
