@@ -12,15 +12,17 @@ import type { MetadataRoute } from "next";
  * The feed page then asks for notification permission once and pings her
  * whenever the watcher records a move.
  *
- * start_url opens on the feed, not the dashboard, because the feed is the
- * whole reason to install it.
+ * start_url opened on the feed until 5 Sep. James's call that day: her first
+ * screen is a dashboard of her own, with the feed, the packs, the stages
+ * and the move-ins on it - so the installed window opens there, and the
+ * feed is one card away or a pop-out.
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "TLE OS - What moved",
+    name: "TLE OS - Pre-tenancy",
     short_name: "TLE OS",
-    description: "Every deal Propoly moved, as it happens.",
-    start_url: "/pre-tenancy/feed?app=1",
+    description: "What moved, the packs with compliance, and who is moving in.",
+    start_url: "/pre-tenancy/dashboard?app=1",
     scope: "/",
     display: "standalone",
     background_color: "#fbfaf7",

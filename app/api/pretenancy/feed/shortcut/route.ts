@@ -15,13 +15,16 @@ import { publicOrigin } from "@/lib/origin";
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
-  const url = `${publicOrigin(req)}/feed`;
+  /* ?to=dashboard: her first screen rather than the bare feed (5 Sep). */
+  const dashboard = req.nextUrl.searchParams.get("to") === "dashboard";
+  const url = `${publicOrigin(req)}${dashboard ? "/pre-tenancy/dashboard" : "/feed"}`;
+  const title = dashboard ? "TLE OS - Pre-tenancy" : "TLE OS - What moved";
   const ua = req.headers.get("user-agent") ?? "";
   const windows = /Windows/i.test(ua);
   const body = windows
     ? `[InternetShortcut]\r\nURL=${url}\r\n`
     : `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>URL</key><string>${url}</string></dict></plist>\n`;
-  const name = windows ? "TLE OS - What moved.url" : "TLE OS - What moved.webloc";
+  const name = windows ? `${title}.url` : `${title}.webloc`;
   return new NextResponse(body, {
     headers: {
       "Content-Type": windows ? "application/internet-shortcut" : "application/xml",

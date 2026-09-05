@@ -84,7 +84,7 @@ export const JOURNEYS: Journey[] = [
         id: "kirstie-dashboard",
         title: "Kirstie lands on her dashboard",
         what: "Signing in with the pre-tenancy role opens a dashboard: what moved (live), the packs waiting with compliance and how long, deals by stage, and who moves in this fortnight. Board, What moved and PLC queue are pills at the top of every one of her screens.",
-        how: ["Sign in as Kirstie: the first screen is the dashboard, greeting her by name.", "Each card opens the screen it summarises. Press a pack: the queue opens on it. Press a move-in: the board opens on that deal.", "Pop out on What moved opens the live feed in its own window.", "As an owner, Admin, Kirstie's view lands on the same dashboard."],
+        how: ["Sign in as Kirstie: the first screen is the dashboard, greeting her by name.", "Each card opens the screen it summarises. Press a pack: the queue opens on it. Press a move-in: the board opens on that deal.", "Pop out on What moved opens the live feed in its own window.", "Add to your desktop: in Chrome or Edge it installs TLE OS as its own window that opens on this dashboard; elsewhere it downloads a shortcut file that opens it, signed in. Safari: File, Add to Dock.", "As an owner, Admin, Kirstie's view lands on the same dashboard."],
         where: "/pre-tenancy/dashboard",
         state: "built",
         since: "2026-09-05",

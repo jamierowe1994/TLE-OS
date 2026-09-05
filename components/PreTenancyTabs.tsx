@@ -23,9 +23,12 @@ const TABS = [
 export default function PreTenancyTabs() {
   const pathname = usePathname();
   return (
+    /* On a phone the strip sits in the flow under the top bar and scrolls
+       sideways; fixed top centre it landed on top of the wordmark and the
+       bell. On a desktop the top centre is the one free edge. */
     <nav
       aria-label="Pre-tenancy"
-      className="fixed left-1/2 top-3 z-[80] flex -translate-x-1/2 items-center gap-1 rounded-full border border-line/80 bg-panel p-1 shadow-[0_6px_18px_-8px_rgba(0,0,0,0.35)]"
+      className="mx-auto mt-3 flex w-fit max-w-full items-center gap-1 overflow-x-auto whitespace-nowrap rounded-full border border-line/80 bg-panel p-1 shadow-[0_6px_18px_-8px_rgba(0,0,0,0.35)] lg:fixed lg:left-1/2 lg:top-3 lg:z-[80] lg:mt-0 lg:-translate-x-1/2"
     >
       {TABS.map((t) => {
         const active = t.exact ? pathname === t.href : pathname.startsWith(t.href);

@@ -5,6 +5,7 @@ import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import DealFeed, { popOutFeed } from "@/components/DealFeed";
+import DesktopInstall from "@/components/DesktopInstall";
 import { Pill } from "@/components/Wire";
 import { whenAgo } from "@/lib/lead-spine";
 
@@ -104,7 +105,7 @@ export default function PreTenancyDashboard() {
      the window; this page is not the board, so it carries its own margins,
      and starts below the pill strip rather than under it. */
   return (
-    <div className="mx-auto max-w-6xl px-5 pb-16 pt-14 sm:px-8">
+    <div className="mx-auto max-w-6xl px-5 pb-16 pt-4 sm:px-8 lg:pt-14">
       <PageHeader
         title={greeting(data?.firstName ?? "")}
         blurb={
@@ -114,13 +115,16 @@ export default function PreTenancyDashboard() {
         }
         search={false}
         actions={
-          <Link
-            href="/pre-tenancy"
-            className="flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page"
-          >
-            <DoodleIcon name="checklist" size={14} />
-            Open the board
-          </Link>
+          <span className="flex flex-wrap items-center gap-2">
+            <DesktopInstall shortcutHref="/api/pretenancy/feed/shortcut?to=dashboard" />
+            <Link
+              href="/pre-tenancy"
+              className="flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page"
+            >
+              <DoodleIcon name="checklist" size={14} />
+              Open the board
+            </Link>
+          </span>
         }
       />
 

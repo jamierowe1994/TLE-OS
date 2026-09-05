@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 export default function PreTenancyFeedPage() {
   return (
-    <div className="mx-auto max-w-6xl px-5 pb-16 pt-14 sm:px-8">
+    <div className="mx-auto max-w-6xl px-5 pb-16 pt-4 sm:px-8 lg:pt-14">
       <PageHeader
         title="What moved"
         blurb="Every deal Propoly moved, as it happens. Leave it open."
