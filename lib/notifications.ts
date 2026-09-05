@@ -62,8 +62,8 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
         ).catch(() => [])
       : [],
     ops
-      ? q<{ id: string; application_id: string; status: string; mode: string; finished_at: Date; error: string | null }>(
-          `SELECT id, application_id, status, mode, finished_at, error
+      ? q<{ id: string; application_id: string; status: string; mode: string; finished_at: Date; error: string | null; steps: unknown }>(
+          `SELECT id, application_id, status, mode, finished_at, error, steps
              FROM os_handovers WHERE finished_at IS NOT NULL
             ORDER BY finished_at DESC LIMIT $1`,
           [limit]
@@ -103,12 +103,17 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
     });
   }
   for (const h of handovers) {
+    /* A failed run keeps its reason on the step that failed, not in the
+       error column, so the line says which step and why. */
+    const steps = Array.isArray(h.steps) ? (h.steps as { label?: string; state?: string; detail?: string }[]) : [];
+    const stuck = steps.find((st) => st.state === "failed" || st.state === "blocked");
+    const why = h.error ?? (stuck ? `${stuck.label ?? "A step"}: ${stuck.detail ?? "failed"}` : null);
     out.push({
       id: `handover:${h.id}`,
       kind: "handover",
       at: new Date(h.finished_at).toISOString(),
       title: `Handover ${h.status}${h.mode === "shadow" ? " (rehearsal)" : ""}`,
-      body: h.error ? h.error : `Application ${h.application_id}${h.status === "ok" ? " went through every step." : "."}`,
+      body: why ? `Application ${h.application_id}. ${why}` : `Application ${h.application_id}${h.status === "ok" ? " went through every step." : "."}`,
       href: `/applications?open=${encodeURIComponent(h.application_id)}`,
       tone: h.status === "ok" ? "ok" : "warn",
     });
