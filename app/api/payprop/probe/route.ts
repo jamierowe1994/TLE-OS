@@ -37,6 +37,44 @@ export async function GET(req: NextRequest) {
   const res = await payPropGet(account, path, params);
   const result = res.result as Record<string, unknown> | null;
   const rows = Array.isArray(result?.items) ? (result!.items as unknown[]) : Array.isArray(result) ? (result as unknown[]) : null;
+
+  /* ?tally=1: instead of three sample rows, count the page by category and
+     pick out anything that mentions holding or deposit - amount, property,
+     dates only. The question this answers is "does the holding deposit show
+     up here once it is reconciled", which three rows cannot. */
+  if (sp.get("tally") && rows) {
+    const byCategory = new Map<string, number>();
+    const matches: unknown[] = [];
+    for (const raw of rows) {
+      const r = raw as Record<string, unknown>;
+      const cat = String((r.category as Record<string, unknown> | undefined)?.name ?? "") || "(none)";
+      byCategory.set(cat, (byCategory.get(cat) ?? 0) + 1);
+      const desc = String(r.description ?? "");
+      if (/hold|deposit/i.test(cat) || /hold|deposit/i.test(desc)) {
+        const inc = r.incoming_transaction as Record<string, unknown> | undefined;
+        matches.push({
+          category: cat,
+          amount: r.amount,
+          description: desc.slice(0, 80),
+          property: (inc?.property as Record<string, unknown> | undefined)?.name ?? (r.property as Record<string, unknown> | undefined)?.name ?? null,
+          reconciled: inc?.reconciliation_date ?? null,
+          incomingStatus: inc?.status ?? null,
+          beneficiaryType: (r.beneficiary as Record<string, unknown> | undefined)?.type ?? null,
+          due: r.due_date ?? null,
+        });
+      }
+    }
+    return NextResponse.json({
+      ok: res.ok,
+      status: res.status,
+      error: res.error ?? null,
+      pagination: result?.pagination ?? null,
+      rows: rows.length,
+      byCategory: [...byCategory.entries()].sort((a, b) => b[1] - a[1]),
+      matches: matches.slice(0, 20),
+    });
+  }
+
   return NextResponse.json({
     ok: res.ok,
     status: res.status,
