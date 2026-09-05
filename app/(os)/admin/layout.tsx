@@ -88,7 +88,7 @@ const GROUPS: Array<{
     items: [
       { href: "/company-figures", label: "Susan's view", needs: "see:business" },
       { href: "/marketing-hub", label: "Francesca's view", needs: "see:marketing" },
-      { href: "/pre-tenancy", label: "Kirstie's view", needs: "see:pretenancy" },
+      { href: "/pre-tenancy/dashboard", label: "Kirstie's view", needs: "see:pretenancy" },
     ],
   },
   {

@@ -68,7 +68,7 @@ function SignIn() {
            will be the activity log." Only when nothing asked for a
            particular page: a link she followed still goes where it said. */
         const asked = new URLSearchParams(window.location.search).get("next");
-        router.replace(!asked && j.user?.role === "pretenancy" ? "/pre-tenancy/feed" : next);
+        router.replace(!asked && j.user?.role === "pretenancy" ? "/pre-tenancy/dashboard" : next);
       } else {
         setError(j.error ?? "That didn't work.");
       }

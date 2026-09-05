@@ -81,6 +81,15 @@ export const JOURNEYS: Journey[] = [
         since: "2026-09-05",
       },
       {
+        id: "kirstie-dashboard",
+        title: "Kirstie lands on her dashboard",
+        what: "Signing in with the pre-tenancy role opens a dashboard: what moved (live), the packs waiting with compliance and how long, deals by stage, and who moves in this fortnight. Board, What moved and PLC queue are pills at the top of every one of her screens.",
+        how: ["Sign in as Kirstie: the first screen is the dashboard, greeting her by name.", "Each card opens the screen it summarises. Press a pack: the queue opens on it. Press a move-in: the board opens on that deal.", "Pop out on What moved opens the live feed in its own window.", "As an owner, Admin, Kirstie's view lands on the same dashboard."],
+        where: "/pre-tenancy/dashboard",
+        state: "built",
+        since: "2026-09-05",
+      },
+      {
         id: "knowledge",
         title: "The office writes it once; Steve and the agents both read it",
         what: "Susan, Francesca, Michael and Kirstie have a Knowledge screen. What they write there Steve answers from on the next question, and anything ticked as a guide appears on his Guides shelf for every agent.",

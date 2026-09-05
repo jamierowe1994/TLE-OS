@@ -1,4 +1,5 @@
 import OwnWorkspace from "@/components/OwnWorkspace";
+import PreTenancyTabs from "@/components/PreTenancyTabs";
 
 /**
  * Kirstie's workspace — the run-up to a move-in, at its own address.
@@ -8,5 +9,10 @@ import OwnWorkspace from "@/components/OwnWorkspace";
  * here: she held one screen and was shown a menu of ten doors and one key.
  */
 export default function PreTenancyLayout({ children }: { children: React.ReactNode }) {
-  return <OwnWorkspace needs="see:pretenancy">{children}</OwnWorkspace>;
+  return (
+    <OwnWorkspace needs="see:pretenancy">
+      <PreTenancyTabs />
+      {children}
+    </OwnWorkspace>
+  );
 }
