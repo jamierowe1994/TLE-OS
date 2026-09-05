@@ -321,6 +321,24 @@ CREATE TABLE IF NOT EXISTS os_notes (
 );
 CREATE INDEX IF NOT EXISTS os_notes_record_idx ON os_notes (record_type, record_id, created_at DESC);
 
+-- What an agent did to a landlord lead: every call, text, visit and email,
+-- with how it went. James, 23 Aug 2026: contact attempts should be LOGGED
+-- rather than remembered - "three unanswered calls is information, and only
+-- if somebody wrote it down". The lead spine (lib/lead-spine.ts) is a fold
+-- over these rows, so there is no stored stage to drift from the truth.
+-- Nurture and rejoin are rows too: the branch is an event, not a flag.
+CREATE TABLE IF NOT EXISTS os_lead_touches (
+  id             TEXT PRIMARY KEY,
+  lead_id        TEXT NOT NULL,
+  kind           TEXT NOT NULL,
+  outcome        TEXT,
+  body           TEXT NOT NULL DEFAULT '',
+  by_id          TEXT,
+  by_name        TEXT NOT NULL DEFAULT '',
+  at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_lead_touches_lead_idx ON os_lead_touches (lead_id, at DESC);
+
 -- The OS's own working state on a record REX has no field for: the appraisal
 -- sub-case on a lead, the landlord-property-tenant link on a listing.
 --

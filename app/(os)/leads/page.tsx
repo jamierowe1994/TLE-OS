@@ -168,12 +168,35 @@ export default function Leads() {
   /* Ours first, newest at the top. Somebody who has just typed a record in
      expects to see it, and burying it below three hundred portal enquiries is
      the same as not showing it at all. */
-  const ALL = useMemo(() => [...ours, ...source.leads], [ours, source.leads]);
+  /* ── What the OS has logged against each lead ─────────────────────────
+     One read for the whole book: only leads with something logged or booked
+     come back, and for those the Stage column says the spine's word rather
+     than REX's three. Fails to nothing - the REX stage stands. */
+  const [spines, setSpines] = useState<Record<string, { label: string | null }>>({});
+  useEffect(() => {
+    let gone = false;
+    fetch("/api/leads/spine", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { ok?: boolean; spines?: Record<string, { label: string | null }> } | null) => {
+        if (!gone && j?.ok && j.spines) setSpines(j.spines);
+      })
+      .catch(() => {});
+    return () => { gone = true; };
+  }, [openId]);
+
+  const ALL = useMemo(
+    () =>
+      [...ours, ...source.leads].map((l) => {
+        const label = spines[l.id]?.label;
+        return label ? { ...l, spineLabel: label } : l;
+      }),
+    [ours, source.leads, spines]
+  );
 
   // The dropdowns offer what the book actually contains — no imagined values.
   const sources = useMemo(() => [...new Set(ALL.map((l) => l.source))].sort(), [ALL]);
   const agents = useMemo(() => [...new Set(ALL.map((l) => l.agent))].sort(), [ALL]);
-  const stages = useMemo(() => [...new Set(ALL.map((l) => l.stage))], [ALL]);
+  const stages = useMemo(() => [...new Set(ALL.map((l) => l.spineLabel ?? l.stage))], [ALL]);
 
   // Tenant-side and landlord-side are different jobs with different questions,
   // so the nav splits them and the list follows. The filters stack on top.
@@ -183,7 +206,7 @@ export default function Leads() {
       if (side && leadSide(l) !== side) return false;
       if (fSource && l.source !== fSource) return false;
       if (fAgent && l.agent !== fAgent) return false;
-      if (fStage && l.stage !== fStage) return false;
+      if (fStage && (l.spineLabel ?? l.stage) !== fStage) return false;
       /* Phone and address are in the needle too. Somebody looking a landlord up
          mid-call has the number in front of them far more often than the town,
          and a search that silently ignores what you typed reads as "not in the
@@ -238,7 +261,14 @@ export default function Leads() {
       { key: "agent", label: "Agent", optional: true, cell: "whitespace-nowrap text-muted", render: (l) => l.agent },
       {
         key: "stage", label: "Stage", cell: "whitespace-nowrap",
-        render: (l) => <Pill tone={STAGE_TONE[l.stage]}>{l.stage}</Pill>,
+        render: (l) =>
+          l.spineLabel ? (
+            <Pill tone={l.spineLabel === "Appraisal booked" ? "good" : l.spineLabel === "Nurture" ? "neutral" : "accent"}>
+              {l.spineLabel}
+            </Pill>
+          ) : (
+            <Pill tone={STAGE_TONE[l.stage]}>{l.stage}</Pill>
+          ),
       },
     ],
     []

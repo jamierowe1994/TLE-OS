@@ -483,7 +483,18 @@ photo endpoint for sold addresses, and matching back to a marketing listing hit
 1 in 10. *"A comparables slide where one property in ten has a photo reads as
 broken rather than rich."*
 
-## The landlord spine, rethought — James, 23 Aug 2026 (NOT YET BUILT)
+## The landlord spine, rethought — James, 23 Aug 2026 (BUILT 5 Sep 2026)
+
+> **Built 5 Sep.** The lead spine is DERIVED from a log: every call, text, visit and email an
+> agent logs is a row in `os_lead_touches`, and `lib/lead-spine.ts` folds those rows into the
+> six ticks. "Log the attempt" is a five-second sheet (what it was, how it went, a line).
+> Nurture is a row too, drawn as a pill hanging off the contact steps; a spoke/replied outcome
+> or "Back on the spine" brings the lead back. Booking the appraisal is read from
+> `os_market_appraisals`, so a landlord who says yes on the first call shows Booked with the
+> steps between left hollow. The Leads list's Stage column says the spine's word ("2nd
+> contact", "Nurture", "Appraisal booked") for any lead with something logged; REX's three
+> words stand for the rest. Still to do: the nurture CAMPAIGNS that keep them warm, and the
+> long Market Appraisals spine below, which is unchanged today.
 
 Captured verbatim in substance, to be actioned after the handover work. His
 diagnosis: **"lead → appraisal" is one enormous jump**, so everything gets
@@ -542,7 +553,7 @@ Re-read 2 September 2026.
 | Blocked on | What it unblocks |
 |---|---|
 | ~~PayProp UK API key~~ **done 5 Sep**: E&W connected from the OS with James's credentials. Still wanted from PayProp: the agency income report in the client's permissions, an API view of unreconciled incoming funds, and tenants created at deal start rather than tenancy set-up | item 7's income report; holding fees visible before reconciliation |
-| Resend: the Lettings Experts domain is verified (2 Sep) - needs `RESEND_FROM_PUBLIC` on Railway, e.g. `The Letting Experts <hello@thelettingexperts.co.uk>` | the landlord sign-in link, items 12, 13, 15 and every landlord/tenant email test |
+| ~~Resend: needs `RESEND_FROM_PUBLIC` on Railway~~ **done** (set by 5 Sep) - customer email is now gated only by the Email to customers switch | the landlord sign-in link, items 12, 13, 15 and every landlord/tenant email test |
 | Who does referencing, and whether they have an API, webhook or export | a real referencing status on Applications and Pre-tenancy |
 | PayProp: an endpoint for unreconciled/incoming funds (every variant is 404, 5 Sep) | "holding fee paid" before reconciliation; reconciled and held already show |
 | Propoly: a webhook on deal status, read access to a deal's documents, and creating a deal by API (all absent, probed 4 Sep) | no polling, the PLC gate checking Propoly's slots, the accepted offer starting the deal without the agent's click |

@@ -65,6 +65,22 @@ export const JOURNEYS: Journey[] = [
     blurb: "A lead becomes a booked appraisal, a deck, a visit, a video, a signed set of terms and a landlord who can sign in.",
     steps: [
       {
+        id: "spine",
+        title: "Work a landlord lead along the spine",
+        what: "Every call, text, visit and email is logged in five seconds, the rail ticks itself from the log, and a lead that goes quiet is parked on the Nurture branch rather than forgotten.",
+        how: [
+          "Open Leads, Landlord, pick a lead, press Log first contact: choose Call and No answer, then Log it. The rail should tick Contacted and ask for the email next.",
+          "Press Sent it from Outlook - log it. Email sent ticks; Second contact is the next action.",
+          "Log two more attempts. The Stage column on the list should read 2nd contact, then 3rd contact.",
+          "Press the Nurture pill under the rail, pick a reason, add. The pill fills, the card says In nurture, the list says Nurture.",
+          "Press Back on the spine, or log a call you Spoke on. The lead carries on from where it was.",
+          "Press They said yes - book the appraisal from any step. The rail should show Appraisal booked with the skipped steps left hollow, and the drawer offers Open on Market Appraisals.",
+        ],
+        where: "/leads?side=landlord",
+        state: "built",
+        since: "2026-09-05",
+      },
+      {
         id: "book",
         title: "Book the appraisal from a lead",
         what: "Leads hands the visit over to Market Appraisals with the address, the contact and the slot.",

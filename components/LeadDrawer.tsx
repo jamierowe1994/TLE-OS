@@ -17,6 +17,8 @@ import PropertyFacts from "@/components/PropertyFacts";
 import ReferToAgent, { isSalesIntent, SALES_TAGS } from "@/components/ReferToAgent";
 import SignaturePanel, { type Signer } from "@/components/SignaturePanel";
 import ViewingBooker from "@/components/ViewingBooker";
+import LogTouch, { type LogMode } from "@/components/LogTouch";
+import { touchIcon, touchSentence, whenAgo, type LeadTouch, type Spine, type SpineId } from "@/lib/lead-spine";
 import { Pill } from "@/components/Wire";
 import { leadSide } from "@/lib/leads-sample";
 import { isOsLead, osContactIdFrom } from "@/lib/contacts-as-leads";
@@ -35,7 +37,7 @@ import {
 import AppraisalTrack from "@/components/AppraisalTrack";
 import { EMPTY_CASE, type AppraisalCase } from "@/lib/appraisal";
 import { saveLabel, useCaseState } from "@/lib/case-state";
-import { isStalled, startingStep, trackFor } from "@/lib/journey";
+import { isStalled, NURTURE_BRANCH, startingStep, trackFor } from "@/lib/journey";
 import rexSample from "@/lib/rex-sample.json";
 
 /**
@@ -525,6 +527,50 @@ export default function LeadDrawer({
      uses it: there is an early return between the two, and a hook after a
      conditional return changes the hook order between renders. */
   const [showProcess, setShowProcess] = useState(false);
+  /* ── The log, and the spine folded from it ───────────────────────────────
+     For a landlord the rail is DERIVED (lib/lead-spine): every call, text,
+     visit and email an agent logs is a row, and the ticks are a reading of
+     those rows. Nothing here is remembered in component state and lost when
+     the drawer closes - which is what "log the attempt" used to do. */
+  const [touches, setTouches] = useState<LeadTouch[]>([]);
+  const [spine, setSpine] = useState<Spine | null>(null);
+  const [logging, setLogging] = useState<LogMode | null>(null);
+  const leadId = lead?.id ?? null;
+  useEffect(() => {
+    if (!leadId) return;
+    let gone = false;
+    setTouches([]);
+    setSpine(null);
+    fetch(`/api/leads/${encodeURIComponent(leadId)}/touches`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { ok?: boolean; touches?: LeadTouch[]; spine?: Spine | null } | null) => {
+        if (gone || !j?.ok) return;
+        setTouches(j.touches ?? []);
+        if (j.spine) setSpine(j.spine);
+      })
+      .catch(() => {
+        /* No log is an empty log; the rail falls back to REX's own word. */
+      });
+    return () => {
+      gone = true;
+    };
+  }, [leadId]);
+  /** Every save hands the whole log back, so the screen re-reads what was saved. */
+  const takeLog = (j: { touches?: LeadTouch[]; spine?: Spine | null }) => {
+    if (j.touches) setTouches(j.touches);
+    if (j.spine) setSpine(j.spine);
+  };
+  async function logTouch(body: Record<string, unknown>) {
+    if (!leadId) return null;
+    const r = await fetch(`/api/leads/${encodeURIComponent(leadId)}/touches`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const j = (await r.json().catch(() => null)) as { ok?: boolean; touches?: LeadTouch[]; spine?: Spine | null } | null;
+    if (j?.ok) takeLog(j);
+    return j;
+  }
   /* The appraisal sub-case, stored per lead in os_case_state. */
   const [appraisal, setAppraisal, appraisalSave] = useCaseState<AppraisalCase>(
     "appraisal",
@@ -594,6 +640,10 @@ export default function LeadDrawer({
   useEffect(() => {
     if (lead) setStep(startingStep(lead));
   }, [lead]);
+  /* A landlord's rail reads from the log, not from REX's three words. */
+  useEffect(() => {
+    if (lead && spine && leadSide(lead) === "landlord") setStep(spine.stepIndex);
+  }, [lead, spine]);
 
   useEffect(() => {
     if (!lead) return;
@@ -689,6 +739,13 @@ export default function LeadDrawer({
   const stalled = isStalled(lead);
   const here = track[Math.min(step, track.length - 1)];
   const finished = step >= track.length - 1;
+  /* The landlord spine, when the log has answered. `sp` is null for a tenant
+     and while the log is still loading, and every derived behaviour hangs off
+     it being present - so a slow answer costs nothing but a moment of the old
+     rail. */
+  const sp = !isTenant ? spine : null;
+  const nurturing = sp?.nurture ?? null;
+  const canNurture = Boolean(sp && !sp.booked && sp.attempts >= 1 && !nurturing);
 
   /* At the appraisal step the appraisal itself takes the screen — the lead's
      timeline and the notes step aside for it. An escape hatch rather than a
@@ -722,6 +779,7 @@ export default function LeadDrawer({
       else setComposing(true);
     }
     else if (here.action === "handoff") setHandingOff(true);
+    else if (here.action === "log") setLogging("attempt");
     else advance();
   }
 
@@ -750,14 +808,23 @@ export default function LeadDrawer({
       ]
     : [{ id: "sg1", name: lead.name, email: contact.email || lead.email, role: "Landlord" }];
 
-  function addNote() {
-    if (!draft.trim()) return;
-    setNotes((n) => [
-      { id: `n${Date.now()}`, author: "You", when: "Just now", text: draft.trim() },
-      ...n,
-    ]);
+  async function addNote() {
+    const text = draft.trim();
+    if (!text) return;
     setDraft("");
+    /* Written to the log, so it is still there tomorrow and on somebody
+       else's screen. Only if the log cannot take it does it stay local. */
+    const j = await logTouch({ kind: "note", body: text }).catch(() => null);
+    if (!j?.ok) {
+      setNotes((n) => [{ id: `n${Date.now()}`, author: "You", when: "Just now", text }, ...n]);
+    }
   }
+  const noteRows: Note[] = [
+    ...touches
+      .filter((t) => t.kind === "note")
+      .map((t) => ({ id: `touch-${t.id}`, author: t.byName, when: whenAgo(t.at), text: t.body })),
+    ...notes,
+  ];
 
   return (
     <div className="fixed inset-0 z-[120]">
@@ -870,7 +937,13 @@ export default function LeadDrawer({
               ) : (
                 <h2 className="text-[26px] leading-tight">{lead.name}</h2>
               )}
-              <Pill tone={STAGE_TONE[lead.stage]}>{lead.stage}</Pill>
+              {/* The spine's word when the log has one; REX's otherwise. Same
+                  rule as the list, so the two never disagree about a lead. */}
+              {sp?.label ? (
+                <Pill tone={sp.booked ? "good" : sp.nurture ? "neutral" : "accent"}>{sp.label}</Pill>
+              ) : (
+                <Pill tone={STAGE_TONE[lead.stage]}>{lead.stage}</Pill>
+              )}
               {sync && (
                 <span
                   className={`text-[11px] ${sync.bad ? "text-accent-dark" : "text-muted"}`}
@@ -1094,6 +1167,22 @@ export default function LeadDrawer({
                             <span className="block text-[10.5px] text-muted">{v.when}</span>
                           </span>
                           <Pill tone={v.outcome === "Applying" ? "good" : "neutral"}>{v.outcome}</Pill>
+                        </li>
+                      ))}
+                      {touches.map((t) => (
+                        <li key={t.id} className="flex items-start gap-3 border-b border-line/40 pb-4 last:border-0 last:pb-0">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft/60">
+                            <DoodleIcon name={touchIcon(t)} size={15} className="text-accent-dark" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[12.5px]">
+                              {touchSentence(t)}
+                              {t.kind !== "nurture" && t.body ? <span className="text-muted"> — {t.body}</span> : null}
+                            </span>
+                            <span className="block text-[10.5px] text-muted">
+                              {t.byName} · {whenAgo(t.at)}
+                            </span>
+                          </span>
                         </li>
                       ))}
                       {lead.activity.map((a, i) => (
@@ -1351,6 +1440,30 @@ export default function LeadDrawer({
               current={step}
               stalled={stalled}
               onPick={setStep}
+              doneAt={sp ? (i) => Boolean(sp.done[track[i].id as SpineId]) : undefined}
+              pickAny={Boolean(sp)}
+              branch={
+                !isTenant
+                  ? {
+                      label: nurturing ? "In nurture" : NURTURE_BRANCH.label,
+                      from: 1,
+                      to: 4,
+                      active: Boolean(nurturing),
+                      available: canNurture,
+                      hint: nurturing
+                        ? "Press to put them back on the spine"
+                        : canNurture
+                          ? NURTURE_BRANCH.detail
+                          : sp?.booked
+                            ? "Booked - nothing to nurture"
+                            : "Log an attempt first; nurture is for a lead that has stopped answering",
+                      onClick: () => {
+                        if (nurturing) void logTouch({ kind: "rejoin" });
+                        else setLogging("nurture");
+                      },
+                    }
+                  : undefined
+              }
             />
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-x-8 gap-y-3 border-t border-line/60 pt-4">
@@ -1363,6 +1476,22 @@ export default function LeadDrawer({
                     Not proceeding — {lead.name.split(" ")[0]} stopped at &ldquo;{here.label}
                     &rdquo;. Pick a step on the rail to restart them.
                   </p>
+                ) : nurturing ? (
+                  <>
+                    <p className="hand mt-1.5 text-[17px] leading-snug">In nurture</p>
+                    <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
+                      Since {whenAgo(nurturing.at)} - {nurturing.reason}. Added by {nurturing.byName}. Log a call
+                      they answered or a reply and they come straight back on the spine, at {here.label.toLowerCase()}.
+                    </p>
+                  </>
+                ) : sp?.booked ? (
+                  <>
+                    <p className="hand mt-1.5 text-[17px] leading-snug">Appraisal booked</p>
+                    <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
+                      The lead&apos;s work is done here. Everything from the visit onwards happens on Market
+                      Appraisals - the confirmation, the deck, the valuation and the terms.
+                    </p>
+                  </>
                 ) : (
                   <>
                     <p className="hand mt-1.5 text-[17px] leading-snug">{here.title}</p>
@@ -1395,6 +1524,33 @@ export default function LeadDrawer({
                     Signed copy came back (wireframe)
                   </button>
                 </div>
+              ) : !stalled && sp?.booked ? (
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <Link
+                    href={handoverTarget(`lead-${lead.id}`)}
+                    className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-6 py-3 text-[13px] font-semibold text-page"
+                  >
+                    <DoodleIcon name="calendar" size={15} />
+                    Open on Market Appraisals
+                  </Link>
+                </div>
+              ) : !stalled && nurturing ? (
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <PressButton
+                    onClick={() => void logTouch({ kind: "rejoin" })}
+                    className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-6 py-3 text-[13px] font-semibold text-page"
+                  >
+                    <DoodleIcon name="target" size={15} />
+                    Back on the spine
+                  </PressButton>
+                  <button
+                    type="button"
+                    onClick={() => setLogging("attempt")}
+                    className="text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+                  >
+                    Log an attempt
+                  </button>
+                </div>
               ) : !stalled && (
                 <div className="flex shrink-0 flex-col items-end gap-2">
                   <PressButton
@@ -1418,7 +1574,7 @@ export default function LeadDrawer({
                       Add AML & compliance documents
                     </button>
                   )}
-                  {here.action !== "none" && !finished && (
+                  {here.action !== "none" && !finished && !sp && (
                     <button
                       type="button"
                       onClick={advance}
@@ -1427,7 +1583,36 @@ export default function LeadDrawer({
                       Already done — move on
                     </button>
                   )}
-                  {finished && (
+                  {/* The derived spine has no "move on": the log moves it. What
+                      it offers instead is the honest shortcut for each step. */}
+                  {sp && here.id === "email" && (
+                    <button
+                      type="button"
+                      onClick={() => void logTouch({ kind: "email", outcome: "sent", body: "Sent from my own mailbox" })}
+                      className="text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+                    >
+                      Sent it from Outlook — log it
+                    </button>
+                  )}
+                  {sp && here.id !== "lead" && here.id !== "appraisal_booked" && here.action !== "log" && (
+                    <button
+                      type="button"
+                      onClick={() => setLogging("attempt")}
+                      className="text-[11px] font-semibold text-muted transition-colors hover:text-ink"
+                    >
+                      Log an attempt
+                    </button>
+                  )}
+                  {sp && !sp.booked && here.id !== "appraisal_booked" && (
+                    <button
+                      type="button"
+                      onClick={() => { setBookMode("appraisal"); setBooking(true); }}
+                      className="text-[11px] font-semibold text-accent-dark transition-colors hover:text-ink"
+                    >
+                      They said yes — book the appraisal
+                    </button>
+                  )}
+                  {finished && !sp && (
                     <p className="text-[11px] text-muted">
                       Last step on the {isTenant ? "tenant" : "landlord"} track.
                     </p>
@@ -1512,7 +1697,7 @@ export default function LeadDrawer({
               </div>
 
               <ul className="min-h-0 space-y-3 overflow-y-auto pr-1">
-                {notes.map((n) => (
+                {noteRows.map((n) => (
                   <li
                     key={n.id}
                     className={`rounded-xl p-3.5 ${n.pinned ? "bg-accent-soft/40" : "border border-line/60"}`}
@@ -1522,21 +1707,23 @@ export default function LeadDrawer({
                       <span className="text-[10.5px] text-muted">
                         {n.author} · {n.when}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setNotes((cur) =>
-                            cur.map((x) => (x.id === n.id ? { ...x, pinned: !x.pinned } : x))
-                          )
-                        }
-                        className="text-[10.5px] font-semibold text-muted transition-colors hover:text-ink"
-                      >
-                        {n.pinned ? "Unpin" : "Pin"}
-                      </button>
+                      {!n.id.startsWith("touch-") && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setNotes((cur) =>
+                              cur.map((x) => (x.id === n.id ? { ...x, pinned: !x.pinned } : x))
+                            )
+                          }
+                          className="text-[10.5px] font-semibold text-muted transition-colors hover:text-ink"
+                        >
+                          {n.pinned ? "Unpin" : "Pin"}
+                        </button>
+                      )}
                     </div>
                   </li>
                 ))}
-                {!notes.length && <Empty>No notes yet — yours will be the first.</Empty>}
+                {!noteRows.length && <Empty>No notes yet — yours will be the first.</Empty>}
               </ul>
             </div>
           </div>
@@ -1549,6 +1736,9 @@ export default function LeadDrawer({
       <Compose
         open={composing}
         onClose={() => setComposing(false)}
+        /* An email that actually went is a row in the log - the spine's
+           "Email sent" tick is that row, not the act of opening the window. */
+        onSent={(subject) => void logTouch({ kind: "email", outcome: "sent", body: subject })}
         to={contact.email || lead.email}
         audience={isTenant ? "tenant" : "landlord"}
         /* Cased, not passed through. A lead arrives from a portal or a form
@@ -1772,6 +1962,19 @@ export default function LeadDrawer({
             </p>
           </div>
         </div>
+      )}
+
+      {logging && (
+        <LogTouch
+          leadId={lead.id}
+          leadName={lead.name}
+          mode={logging}
+          onClose={() => setLogging(null)}
+          onLogged={(j) => {
+            takeLog(j as { touches?: LeadTouch[]; spine?: Spine | null });
+            setLogging(null);
+          }}
+        />
       )}
 
       <SignaturePanel

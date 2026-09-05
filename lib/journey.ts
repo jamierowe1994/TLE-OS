@@ -33,6 +33,7 @@ export type JourneyAction =
   | "sign"           // prepare a document for signature
   | "handoff"        // push the record to its next home
   | "review"         // put the applications in front of the landlord
+  | "log"            // write down a contact attempt - call, text, visit
   | "none";
 
 export type JourneyStep = {
@@ -169,14 +170,14 @@ export const LANDLORD_TRACK: JourneyStep[] = [
     title: "New landlord lead",
     detail:
       "Where it came from, and how to reach them. Read the source before you ring — a portal enquiry and a referral are not the same conversation.",
-    action: "none", cta: "Log first contact",
+    action: "log", cta: "Log first contact",
   },
   {
     id: "contacted", label: "Contacted", icon: "call",
     title: "First contact",
     detail:
       "You've spoken to them, or tried. Log the attempt either way — three unanswered calls is information, and only if somebody wrote it down.",
-    action: "none", cta: "Log the attempt",
+    action: "log", cta: "Log the attempt",
   },
   {
     id: "email", label: "Email sent", icon: "mail",
@@ -189,14 +190,14 @@ export const LANDLORD_TRACK: JourneyStep[] = [
     id: "contact2", label: "2nd contact", icon: "call",
     title: "Second contact",
     detail: "Follow the email up. Most landlords answer on the second or third attempt, not the first.",
-    action: "none", cta: "Log the attempt",
+    action: "log", cta: "Log the attempt",
   },
   {
     id: "contact3", label: "3rd contact", icon: "call",
     title: "Third contact",
     detail:
       "The last direct attempt. If this doesn't land, they go to nurture rather than being quietly dropped.",
-    action: "none", cta: "Log the attempt",
+    action: "log", cta: "Log the attempt",
   },
   {
     id: "appraisal_booked", label: "Appraisal booked", icon: "calendar",

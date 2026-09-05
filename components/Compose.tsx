@@ -40,12 +40,15 @@ type Template = {
 export default function Compose({
   open,
   onClose,
+  onSent,
   to,
   audience = "any",
   merge,
 }: {
   open: boolean;
   onClose: () => void;
+  /** Fired only when something actually left - never on cancel. */
+  onSent?: (subject: string) => void;
   to: string;
   audience?: "landlord" | "tenant" | "any";
   /** name, firstName, address, postcode, agent — whatever the caller holds. */
@@ -261,7 +264,10 @@ export default function Compose({
               });
               const j = await r.json().catch(() => null);
               setNote(j?.reason ?? "Something went wrong.");
-              if (j?.sent) onClose();
+              if (j?.sent) {
+                onSent?.(subject);
+                onClose();
+              }
             }}
             disabled={!canSend}
             className={`flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-semibold ${
