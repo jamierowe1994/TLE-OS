@@ -73,10 +73,13 @@ async function writeOne(r: Row, provenance: string): Promise<Row> {
   const blocked = await rexWriteBlockedBecause();
   const w = blocked
     ? { ok: false, note: blocked, entryId: undefined as string | undefined }
-    : await writeCertificateToRex({ propertyId: r.property_id, type: r.type_id, expiry: ymd(r.expiry) as string, issue: ymd(r.issue), key: r.r2_key, name: r.name, provenance });
+    : await writeCertificateToRex({ propertyId: r.property_id, type: r.type_id, expiry: ymd(r.expiry) as string, issue: ymd(r.issue), key: r.r2_key, name: r.name, provenance, existingEntryId: r.rex_entry_id || null });
+  /* A refused UPDATE keeps the entry id: the entry exists in REX, only its
+     file is missing, and forgetting the id would make the next retry create
+     a second one. */
   const rows = await q<Row>(
     `UPDATE os_certificates SET rex_entry_id = $2, rex_note = $3, rex_at = NOW() WHERE id = $1 RETURNING *`,
-    [r.id, w.ok ? w.entryId ?? "" : null, w.note]
+    [r.id, w.ok ? w.entryId ?? "" : r.rex_entry_id || null, w.note]
   );
   if (w.ok) void refreshComplianceBook().catch(() => null);
   return rows[0];

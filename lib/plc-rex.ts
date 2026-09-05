@@ -129,8 +129,13 @@ export async function writeCertificateToRex(input: {
   name: string;
   /** Where it came from, for the entry's notes. */
   provenance: string;
+  /** An entry the OS already wrote: update it (needs ComplianceEntries/update) rather than make a second. */
+  existingEntryId?: string | null;
 }): Promise<{ ok: boolean; note: string; entryId?: string }> {
   try {
+    if (input.existingEntryId && rexWritesLocked("ComplianceEntries", "update")) {
+      return { ok: false, note: `Entry ${input.existingEntryId} is already in REX without its file; completing it needs REX_ALLOW_WRITES to name ComplianceEntries/update.` };
+    }
     const url = await presigned({ key: input.key, name: input.name } as PlcDocument);
     const up = await rexCall("Upload", "uploadFileFromUrl", { url });
     const uri = (up.result as { uri?: string } | undefined)?.uri;
@@ -138,26 +143,38 @@ export async function writeCertificateToRex(input: {
     const derived = !input.issue;
     const issue = input.issue ?? issueFrom(input.expiry, input.type);
     const notes = `${input.provenance}${derived && issue ? " Issue date derived from the expiry." : ""}`;
-    const detail: Record<string, unknown> = { expiry_date: input.expiry, notes };
+    /* The file goes INSIDE the type's details block as well as on the entry.
+       Learned live on 5 Sep: gas took file_uri on the entry; the EICR came
+       back "Field 'upload certificate': This field is required" until the
+       uri was also given as details.eicr.file, which is where the type's
+       own schema declares it. */
+    const detail: Record<string, unknown> = { expiry_date: input.expiry, notes, file: uri };
     if (issue) detail.issue_date = issue;
     if (input.type === "eicr") detail.status = "eicr_satisfactory";
     if (input.type === "gas_safety") {
       detail.status = "pass";
       detail.not_required = false;
     }
+    if (input.existingEntryId) {
+      const upd = await rexCall("ComplianceEntries", "update", {
+        data: { id: Number(input.existingEntryId), details: { [input.type]: detail } },
+        return_id: true,
+      });
+      if (!upd.ok) return { ok: false, note: upd.error ?? `REX answered ${upd.status}.` };
+      return { ok: true, note: `Completed on the property in REX with its file, expires ${input.expiry}.`, entryId: input.existingEntryId };
+    }
     const res = await rexCall("ComplianceEntries", "create", {
       data: {
         parent_object_type_id: "property",
         parent_object_id: Number(input.propertyId),
         type_id: input.type,
-        file_uri: uri,
         details: { [input.type]: detail },
       },
       return_id: true,
     });
     if (!res.ok) return { ok: false, note: res.error ?? `REX answered ${res.status}.` };
     const id = typeof res.result === "number" || typeof res.result === "string" ? String(res.result) : String((res.result as { id?: unknown })?.id ?? "");
-    return { ok: true, note: `On the property in REX, expires ${input.expiry}.`, entryId: id || undefined };
+    return { ok: true, note: `On the property in REX with its file, expires ${input.expiry}.`, entryId: id || undefined };
   } catch (e) {
     return { ok: false, note: e instanceof Error ? e.message : "write failed" };
   }
