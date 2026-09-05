@@ -2039,6 +2039,10 @@ export interface AgentApplication {
     /** The landlord on the deal — populated on 99% of deals and thrown away
      *  until now. Kirstie has never had a landlord contact on the file. */
     landlord?: { name: string | null; email: string | null; phone: string | null } | null;
+    /** Propoly's own ids, so the handover can tell a landlord already on
+     *  this property's deal from one it would be linking for the first time. */
+    propertyUuid?: string | null;
+    landlordUuids?: string[];
     /** Guarantors, where the deal has them (~31%). */
     guarantors?: Array<{ name: string | null; email: string | null; phone: string | null }>;
   };

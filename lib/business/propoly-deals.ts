@@ -274,6 +274,10 @@ function toApplication(d: Record<string, unknown>, statusKey: string): AgentAppl
         return /flatfair/i.test(t) || /^\s*deposit\s+replacement\b/i.test(t);
       }),
       landlord: firstParty(d.landlord_details),
+      propertyUuid: typeof d.property_uuid === "string" ? d.property_uuid : null,
+      landlordUuids: (Array.isArray(d.landlord_details) ? (d.landlord_details as Array<Record<string, unknown>>) : [])
+        .map((l) => (typeof l.uuid === "string" ? l.uuid : null))
+        .filter((u): u is string => Boolean(u)),
       guarantors: partyList(d.guarantors_details),
     },
   };

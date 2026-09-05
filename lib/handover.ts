@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { rexCall } from "@/lib/rex";
 import { propolyConfigured, propolyGet, propolyPatch, propolyPost } from "@/lib/business/propoly";
+import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
 import { switchOn } from "@/lib/switches";
 import { handoffFor, type Handoff } from "@/lib/deal-handoff";
 
@@ -389,9 +390,28 @@ export async function runHandover(
       await rec.add({ id: "rex-uuid", label: "Propoly uuid on the REX listing", state: "ok", detail: "Already on the listing." });
     }
 
-    /* 5. Each landlord related to the property. */
+    /* 5. Each landlord related to the property.
+
+       Propoly's read API shows no landlord-property relationship anywhere,
+       but a deal on the property lists its landlords. So a landlord who is
+       already on any Propoly deal for this property was related by whoever
+       made that deal - Howard's flow, most likely - and the rehearsal says
+       so rather than "would relate" a link that exists. Live, it is skipped
+       too: a 409 would come back anyway, and the run reads cleaner without
+       it. */
+    const relatedAlready = new Set<string>();
+    if (propertyUuid && !propertyUuid.startsWith("(")) {
+      const deals = (await getAllPropolyDeals().catch(() => null)) ?? [];
+      for (const d of deals) {
+        if (d.app.propoly?.propertyUuid === propertyUuid) for (const u of d.app.propoly.landlordUuids ?? []) relatedAlready.add(u);
+      }
+    }
     for (const uuid of landlordUuids) {
       const payload = { associated_type: "Property", associated_uuid: propertyUuid };
+      if (relatedAlready.has(uuid)) {
+        await rec.add({ id: `relationship:${uuid}`, label: `Landlord ${uuid} ↔ property`, state: "ok", detail: "Already related: this landlord is on a Propoly deal for this property.", request: payload });
+        continue;
+      }
       if (!live || uuid.startsWith("(") || !propertyUuid || propertyUuid.startsWith("(")) {
         await rec.add({ id: `relationship:${uuid}`, label: `Landlord ${uuid} ↔ property`, state: live ? "skipped" : "would", detail: live ? "Skipped: a step before it did not produce an id." : "Would relate the landlord to the property.", request: payload });
         continue;
