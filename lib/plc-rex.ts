@@ -186,9 +186,9 @@ export async function writeCertificateToRex(input: {
   existingEntryId?: string | null;
 }): Promise<{ ok: boolean; note: string; entryId?: string }> {
   try {
-    if (input.existingEntryId && rexWritesLocked("ComplianceEntries", "update")) {
-      return { ok: false, note: `Entry ${input.existingEntryId} is already in REX without its file; completing it needs REX_ALLOW_WRITES to name ComplianceEntries/update.` };
-    }
+    /* An entry the OS already made: the Documents copy is always worth
+       filing (Listings/update is allowed); touching the entry itself needs
+       ComplianceEntries/update, and is skipped with a word when it is not. */
     const url = await presigned({ key: input.key, name: input.name } as PlcDocument);
     const up = await rexCall("Upload", "uploadFileFromUrl", { url });
     const uri = (up.result as { uri?: string } | undefined)?.uri;
@@ -209,13 +209,18 @@ export async function writeCertificateToRex(input: {
       detail.not_required = false;
     }
     if (input.existingEntryId) {
-      const upd = await rexCall("ComplianceEntries", "update", {
-        data: { id: Number(input.existingEntryId), details: { [input.type]: detail } },
-        return_id: true,
-      });
-      if (!upd.ok) return { ok: false, note: upd.error ?? `REX answered ${upd.status}.` };
+      let entryNote: string;
+      if (rexWritesLocked("ComplianceEntries", "update")) {
+        entryNote = `Entry ${input.existingEntryId} left as it is (ComplianceEntries/update is not on the allowlist).`;
+      } else {
+        const upd = await rexCall("ComplianceEntries", "update", {
+          data: { id: Number(input.existingEntryId), details: { [input.type]: detail } },
+          return_id: true,
+        });
+        entryNote = upd.ok ? `Entry ${input.existingEntryId} updated, expires ${input.expiry}.` : `Entry ${input.existingEntryId} not updated: ${upd.error ?? `REX answered ${upd.status}.`}`;
+      }
       const doc = await attachCertificateToListing({ propertyId: input.propertyId, uri, name: input.name, description: docDescription(input.type, input.expiry, input.name) });
-      return { ok: true, note: `Compliance entry updated, expires ${input.expiry}. Documents: ${doc.note}`, entryId: input.existingEntryId };
+      return { ok: true, note: `${entryNote} Documents: ${doc.note}`, entryId: input.existingEntryId };
     }
     const res = await rexCall("ComplianceEntries", "create", {
       data: {
