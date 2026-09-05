@@ -1179,6 +1179,28 @@ ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS waivers JSONB NOT NULL DEFAULT
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS propoly_push JSONB;
 -- The last write of the approved pack's certificates into REX's compliance table (5 Sep 2026).
 ALTER TABLE os_plc_cases ADD COLUMN IF NOT EXISTS rex_push JSONB;
+
+-- Certificates that came in OUTSIDE a PLC pack (5 Sep 2026): the backlog
+-- downloaded out of Propoly and dropped in, batch by batch. The OS keeps the
+-- file; REX gets the entry, and the outcome of that write is recorded here
+-- so a refused one can be retried without a second upload.
+CREATE TABLE IF NOT EXISTS os_certificates (
+  id            TEXT PRIMARY KEY,
+  property_id   TEXT NOT NULL,
+  property_name TEXT NOT NULL DEFAULT '',
+  type_id       TEXT NOT NULL,
+  expiry        DATE NOT NULL,
+  issue         DATE,
+  r2_key        TEXT NOT NULL,
+  name          TEXT NOT NULL,
+  source        TEXT NOT NULL DEFAULT '',
+  added_by      TEXT NOT NULL DEFAULT '',
+  added_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  rex_entry_id  TEXT,
+  rex_note      TEXT NOT NULL DEFAULT '',
+  rex_at        TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS os_certificates_property ON os_certificates (property_id, type_id);
 CREATE INDEX IF NOT EXISTS os_plc_cases_agent ON os_plc_cases (lower(agent_email), created_at DESC);
 
 -- The shadow log: what the rules recommended, and what the person decided.

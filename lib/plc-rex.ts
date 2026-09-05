@@ -105,6 +105,64 @@ export async function rexPropertyForCase(c: PlcCase): Promise<string | null> {
   return hit?.propertyId ?? null;
 }
 
+/** Why a write cannot happen right now, or null when it can. Checked once per run. */
+export async function rexWriteBlockedBecause(): Promise<string | null> {
+  if (!(await switchOn("rex_compliance_write"))) return "Certificates into REX is switched off (Admin, Switches).";
+  if (!rexConfigured()) return "REX isn't connected on this environment.";
+  const locked = [["ComplianceEntries", "create"], ["Upload", "uploadFileFromUrl"]].filter(([s, m]) => rexWritesLocked(s, m));
+  if (locked.length) return `REX writes are locked - REX_ALLOW_WRITES needs ${locked.map(([s, m]) => `${s}/${m}`).join(" and ")}.`;
+  return null;
+}
+
+/**
+ * One certificate, into REX. Shared by the approved pack and the batch
+ * intake, so a certificate written either way lands identically.
+ */
+export async function writeCertificateToRex(input: {
+  propertyId: string;
+  type: string;
+  expiry: string;
+  /** Read off the certificate when known; derived from the expiry otherwise. */
+  issue?: string | null;
+  /** R2 key of the file. */
+  key: string;
+  name: string;
+  /** Where it came from, for the entry's notes. */
+  provenance: string;
+}): Promise<{ ok: boolean; note: string; entryId?: string }> {
+  try {
+    const url = await presigned({ key: input.key, name: input.name } as PlcDocument);
+    const up = await rexCall("Upload", "uploadFileFromUrl", { url });
+    const uri = (up.result as { uri?: string } | undefined)?.uri;
+    if (!up.ok || !uri) return { ok: false, note: `REX would not take the file: ${up.error ?? JSON.stringify(up.result ?? "").slice(0, 160)}` };
+    const derived = !input.issue;
+    const issue = input.issue ?? issueFrom(input.expiry, input.type);
+    const notes = `${input.provenance}${derived && issue ? " Issue date derived from the expiry." : ""}`;
+    const detail: Record<string, unknown> = { expiry_date: input.expiry, notes };
+    if (issue) detail.issue_date = issue;
+    if (input.type === "eicr") detail.status = "eicr_satisfactory";
+    if (input.type === "gas_safety") {
+      detail.status = "pass";
+      detail.not_required = false;
+    }
+    const res = await rexCall("ComplianceEntries", "create", {
+      data: {
+        parent_object_type_id: "property",
+        parent_object_id: Number(input.propertyId),
+        type_id: input.type,
+        file_uri: uri,
+        details: { [input.type]: detail },
+      },
+      return_id: true,
+    });
+    if (!res.ok) return { ok: false, note: res.error ?? `REX answered ${res.status}.` };
+    const id = typeof res.result === "number" || typeof res.result === "string" ? String(res.result) : String((res.result as { id?: unknown })?.id ?? "");
+    return { ok: true, note: `On the property in REX, expires ${input.expiry}.`, entryId: id || undefined };
+  } catch (e) {
+    return { ok: false, note: e instanceof Error ? e.message : "write failed" };
+  }
+}
+
 export async function pushCaseToRex(caseId: string, by: string): Promise<RexPush> {
   const c = await getCase(caseId);
   if (!c) throw new Error("That pack no longer exists.");
@@ -124,19 +182,9 @@ export async function pushCaseToRex(caseId: string, by: string): Promise<RexPush
     await recordRexPush(caseId, push);
     return push;
   }
-  if (!(await switchOn("rex_compliance_write"))) {
-    const push = skipAll("Certificates into REX is switched off (Admin, Switches).");
-    await recordRexPush(caseId, push);
-    return push;
-  }
-  if (!rexConfigured()) {
-    const push = skipAll("REX isn't connected on this environment.");
-    await recordRexPush(caseId, push);
-    return push;
-  }
-  const locked = [["ComplianceEntries", "create"], ["Upload", "uploadFileFromUrl"]].filter(([s, m]) => rexWritesLocked(s, m));
-  if (locked.length) {
-    const push = skipAll(`REX writes are locked - REX_ALLOW_WRITES needs ${locked.map(([s, m]) => `${s}/${m}`).join(" and ")}.`);
+  const blocked = await rexWriteBlockedBecause();
+  if (blocked) {
+    const push = skipAll(blocked);
     await recordRexPush(caseId, push);
     return push;
   }
@@ -162,42 +210,20 @@ export async function pushCaseToRex(caseId: string, by: string): Promise<RexPush
       results.push({ checkId: doc.checkId, name: doc.name, type, outcome: "skipped", note: `REX needs an expiry date for ${label} and the reader did not find one on the document.` });
       continue;
     }
-    try {
-      const url = await presigned(doc);
-      const up = await rexCall("Upload", "uploadFileFromUrl", { url });
-      const uri = (up.result as { uri?: string } | undefined)?.uri;
-      if (!up.ok || !uri) {
-        results.push({ checkId: doc.checkId, name: doc.name, type, outcome: "failed", note: `REX would not take the file: ${up.error ?? JSON.stringify(up.result ?? "").slice(0, 160)}` });
-        continue;
-      }
-      const issue = issueFrom(expiry, type);
-      const notes = `Written by TLE OS from PLC pack ${c.id} (${doc.name}).${issue ? " Issue date derived from the expiry." : ""}`;
-      const detail: Record<string, unknown> = { expiry_date: expiry, notes };
-      if (issue) detail.issue_date = issue;
-      if (type === "eicr") detail.status = "eicr_satisfactory";
-      if (type === "gas_safety") {
-        detail.status = "pass";
-        detail.not_required = false;
-      }
-      const res = await rexCall("ComplianceEntries", "create", {
-        data: {
-          parent_object_type_id: "property",
-          parent_object_id: Number(propertyId),
-          type_id: type,
-          file_uri: uri,
-          details: { [type]: detail },
-        },
-        return_id: true,
-      });
-      if (res.ok) {
-        done.add(type);
-        results.push({ checkId: doc.checkId, name: doc.name, type, outcome: "uploaded", note: `On the property in REX, expires ${expiry}.` });
-      } else {
-        results.push({ checkId: doc.checkId, name: doc.name, type, outcome: "failed", note: res.error ?? `REX answered ${res.status}.` });
-      }
-    } catch (e) {
-      results.push({ checkId: doc.checkId, name: doc.name, type, outcome: "failed", note: e instanceof Error ? e.message : "write failed" });
+    if (doc.placeholder) {
+      results.push({ checkId: doc.checkId, name: doc.name, type, outcome: "skipped", note: "Recorded by name only on this environment - there is no file to send." });
+      continue;
     }
+    const w = await writeCertificateToRex({
+      propertyId,
+      type,
+      expiry,
+      key: doc.key,
+      name: doc.name,
+      provenance: `Written by TLE OS from PLC pack ${c.id} (${doc.name}).`,
+    });
+    if (w.ok) done.add(type);
+    results.push({ checkId: doc.checkId, name: doc.name, type, outcome: w.ok ? "uploaded" : "failed", note: w.note });
   }
 
   const push: RexPush = { at, by, propertyId, results };
