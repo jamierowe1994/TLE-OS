@@ -231,7 +231,39 @@ export async function writeCertificateToRex(input: {
       },
       return_id: true,
     });
-    if (!res.ok) return { ok: false, note: res.error ?? `REX answered ${res.status}.` };
+    if (!res.ok) {
+      /* REX keeps ONE active entry per type per property (learned on the
+         backlog run, 5 Sep: "There is already an active compliance entry for
+         this type and parent object"). Find it and bring its dates up to
+         ours where the allowlist permits; file the document either way, so
+         a person still finds the certificate on the listing. */
+      if (/already an active compliance entry/i.test(res.error ?? "")) {
+        const found = await rexCall("ComplianceEntries", "search", {
+          limit: 5,
+          criteria: [
+            { name: "parent_object_id", type: "=", value: Number(input.propertyId) },
+            { name: "type_id", type: "=", value: input.type },
+          ],
+        });
+        const rows = found.ok ? ((found.result as { rows?: unknown[] })?.rows ?? (Array.isArray(found.result) ? found.result : [])) : [];
+        const existing = (rows as { id?: unknown; details?: Record<string, { expiry_date?: string }> }[])[0];
+        const existingId = existing?.id != null ? String(existing.id) : null;
+        const theirs = existing?.details?.[input.type]?.expiry_date ?? null;
+        const doc = await attachCertificateToListing({ propertyId: input.propertyId, uri, name: input.name, description: docDescription(input.type, input.expiry, input.name) });
+        if (!existingId) return { ok: false, note: `REX says an entry exists but would not show it. Documents: ${doc.note}` };
+        if (theirs && theirs >= input.expiry) {
+          return { ok: true, note: `REX already holds this type to ${theirs}, not older than ours; left as it is. Documents: ${doc.note}`, entryId: existingId };
+        }
+        if (rexWritesLocked("ComplianceEntries", "update")) {
+          return { ok: true, note: `REX holds this type to ${theirs ?? "no date"} - ours is ${input.expiry}, but bringing it up needs ComplianceEntries/update on the allowlist. Documents: ${doc.note}`, entryId: existingId };
+        }
+        const upd = await rexCall("ComplianceEntries", "update", { data: { id: Number(existingId), details: { [input.type]: detail } }, return_id: true });
+        return upd.ok
+          ? { ok: true, note: `Existing entry brought up from ${theirs ?? "no date"} to ${input.expiry}. Documents: ${doc.note}`, entryId: existingId }
+          : { ok: false, note: `Existing entry could not be updated: ${upd.error ?? upd.status}. Documents: ${doc.note}` };
+      }
+      return { ok: false, note: res.error ?? `REX answered ${res.status}.` };
+    }
     const id = typeof res.result === "number" || typeof res.result === "string" ? String(res.result) : String((res.result as { id?: unknown })?.id ?? "");
     const doc = await attachCertificateToListing({ propertyId: input.propertyId, uri, name: input.name, description: docDescription(input.type, input.expiry, input.name) });
     return { ok: true, note: `On the property in REX with its file, expires ${input.expiry}. Documents: ${doc.note}`, entryId: id || undefined };

@@ -89,7 +89,7 @@ async function gate(req: NextRequest) {
   return requireAnyCapability(req, ["manage:switches", "see:agent-compliance"]);
 }
 
-async function writeOne(r: Row, provenance: string): Promise<Row> {
+async function writeOne(r: Row, provenance: string, req_refresh = false): Promise<Row> {
   const blocked = await rexWriteBlockedBecause();
   const w = blocked
     ? { ok: false, note: blocked, entryId: undefined as string | undefined }
@@ -101,7 +101,10 @@ async function writeOne(r: Row, provenance: string): Promise<Row> {
     `UPDATE os_certificates SET rex_entry_id = $2, rex_note = $3, rex_at = NOW() WHERE id = $1 RETURNING *`,
     [r.id, w.ok ? w.entryId ?? "" : r.rex_entry_id || null, w.note]
   );
-  if (w.ok) void refreshComplianceBook().catch(() => null);
+  /* No book refresh here: the backlog writes hundreds in a row and each
+     refresh walks REX for every property. The tracker refreshes itself
+     within the hour, and the batch runner asks for one at the end. */
+  if (w.ok && req_refresh) void refreshComplianceBook().catch(() => null);
   return rows[0];
 }
 
@@ -126,7 +129,7 @@ export async function POST(req: NextRequest) {
   if (retry) {
     const rows = await q<Row>(`SELECT * FROM os_certificates WHERE id = $1`, [retry]);
     if (!rows[0]) return NextResponse.json({ ok: false, error: "No such certificate." }, { status: 404 });
-    const r = await writeOne(rows[0], `Written by TLE OS from ${rows[0].source || "a dropped file"} (${rows[0].name}).`);
+    const r = await writeOne(rows[0], `Written by TLE OS from ${rows[0].source || "a dropped file"} (${rows[0].name}).`, req.nextUrl.searchParams.get("refresh") === "1");
     return NextResponse.json({ ok: true, certificate: out(r) });
   }
 
@@ -167,6 +170,6 @@ export async function POST(req: NextRequest) {
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
     [id, propertyId, propertyName, type, expiry, issueRaw || null, key, name, source, by]
   );
-  const r = await writeOne(rows[0], `Written by TLE OS from ${source} (${name}).`);
+  const r = await writeOne(rows[0], `Written by TLE OS from ${source} (${name}).`, req.nextUrl.searchParams.get("refresh") === "1");
   return NextResponse.json({ ok: true, certificate: out(r) });
 }
