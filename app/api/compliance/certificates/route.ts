@@ -33,6 +33,26 @@ const TYPES = new Set([
 ]);
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * REX's type → the OS's certificate key, so the file lands in the SAME vault
+ * folder the Compliance drawer already lists (documents/compliance-<property>-
+ * <key>/…). One place per property per certificate, whether it arrived by a
+ * drop here, an upload on the drawer, or a pack.
+ */
+const CERT_KEY: Record<string, string> = {
+  gas_safety: "gas",
+  eicr: "eicr",
+  epc: "epc",
+  mandatory_hmo_license: "licence",
+  additional_hmo_license: "licence",
+  selective_hmo_license: "licence",
+  legionella_risk_assessment: "legionella",
+  portable_appliance_testing: "pat",
+  smoke_alarms: "alarms",
+  co_alarms: "alarms",
+  emergency_lighting_fire_exit: "fire",
+};
+
 interface Row extends Record<string, unknown> {
   id: string;
   property_id: string;
@@ -129,7 +149,7 @@ export async function POST(req: NextRequest) {
 
   const id = uid();
   const name = file.name || `${type}.pdf`;
-  const key = `certificates/${propertyId}/${type}-${expiry}-${safeName(name)}`;
+  const key = `documents/${safeName(`compliance-${propertyId}-${CERT_KEY[type] ?? type}`)}/${Date.now()}-${safeName(name)}`;
   const bytes = new Uint8Array(await file.arrayBuffer());
   await withR2((client) =>
     client.send(
