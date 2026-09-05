@@ -93,3 +93,10 @@ Source: the production OpenAPI spec (TLE-portal/docs/propoly-openapi.yaml) plus 
 - Scotland fixed: `PAYPROP_API_KEY_SCOTLAND` set on TLE-OS by reference to the portal's variable. E&W needs a reconnect on the portal by Susan or James.
 - Holding fees never appear as PayProp invoices (Scotland: 73 invoices, categories Rent, Other, Reimbursement). `holding_in` cannot fire from invoices. Needs PayProp's incoming-funds endpoint or holding fees raised as "Holding deposit" invoices.
 - The PayProp register now writes to `integration_cache` (55KB), so a deploy no longer loses it.
+
+## The money flow, as James described it on 5 Sep (reference)
+
+- **Holding deposit**: Propoly raises the payment request to the tenant. The tenant pays. The money lands in PayProp as an incoming payment. PayProp recognises and reconciles it. Once registered, the deal moves on in Propoly (PayProp and Propoly say they are integrated for this).
+- **Flatfair**: takes the complete payment (the deposit alternative). Not hooked into anything of ours yet; API meeting pending.
+- **Rent**: first month requested by Propoly once both parties have signed; lands in PayProp; reconciled there.
+- What the OS can see today: `report/all-payments` (rows carry `incoming_transaction` with a reconciliation date), `export/invoices`, `export/payments`, tenant balances. Whether the holding deposit is visible in all-payments once reconciled is being probed with the Scotland key.
