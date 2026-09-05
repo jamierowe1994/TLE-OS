@@ -233,7 +233,7 @@ export const JOURNEYS: Journey[] = [
         what: "Rent received, arrears and statements from PayProp's UK account.",
         how: [],
         state: "blocked",
-        blocked: { why: "The E&W (uk) PayProp connection is dead: the portal's stored refresh token from 11 Aug is rejected, so the portal lends the OS nothing and every UK money read - rent in, deposit registered, holding fee, arrears, the digest - is blind. Scotland now reaches PayProp directly with its API key (5 Sep).", who: "Susan or James: reconnect E&W on the portal (Admin, PayProp, Connect) so a fresh refresh token is stored. Then the OS borrows it again." },
+        blocked: { why: "The E&W (uk) PayProp connection is dead: the portal's client id and secret were found blank on 5 Sep, so nothing can refresh the token and every UK money read - rent in, deposit, holding fee, arrears, the digest - is blind. The OS now owns the connection: Wiring has a Connect E&W button and its own callback. Scotland reads directly with its API key.", who: "James: set PAYPROP_CLIENT_ID and PAYPROP_CLIENT_SECRET on the TLE-OS service (from PayProp's API settings for the E&W agency), have PayProp register https://tle-os.co.uk/api/payprop/callback as the redirect on that client, then press Connect E&W on Admin, Wiring and approve at PayProp." },
         since: "2026-09-05",
       },
     ],

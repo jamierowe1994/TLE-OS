@@ -96,6 +96,21 @@ export async function payPropGet(
     }
     auth = `APIkey ${key}`;
   } else {
+    /* Our own OAuth connection first (the shared payprop_tokens row, refreshed
+       with the client id and secret on THIS service), and the portal's bridge
+       only as the fallback it used to be. 5 Sep: the OS owns the connection
+       now; the portal is on its way out. */
+    try {
+      const { payPropAccessToken, payPropClient } = await import("@/lib/business/payprop");
+      if (payPropClient(account)) {
+        const own = await payPropAccessToken(account);
+        if (own) auth = `Bearer ${own}`;
+      }
+    } catch {
+      /* fall through to the bridge */
+    }
+  }
+  if (!auth) {
     const { payPropBearer, bridgeConfigured } = await import("@/lib/payprop-bridge");
     if (!bridgeConfigured()) {
       return { status: 0, ok: false, result: null, error: "No PayProp access on this environment — set PORTAL_ORIGIN and OS_BRIDGE_SECRET, or an API key." };

@@ -28,8 +28,17 @@ type Health = {
 export default function AdminConnections() {
   const [h, setH] = useState<Health | null>(null);
   const [err, setErr] = useState(false);
+  /* Back from PayProp: the callback lands here with a word either way. */
+  const [payprop, setPayprop] = useState<{ ok: boolean; detail: string } | null>(null);
   useEffect(() => {
     fetch("/api/os-health").then((r) => (r.ok ? r.json() : Promise.reject(new Error()))).then(setH).catch(() => setErr(true));
+    try {
+      const sp = new URLSearchParams(window.location.search);
+      const st = sp.get("payprop");
+      if (st) setPayprop({ ok: st === "connected", detail: sp.get("detail") ?? "" });
+    } catch {
+      /* fine */
+    }
   }, []);
 
   if (err) return <p className="mt-6 text-[12.5px] text-accent-dark">Couldn&apos;t read the wiring.</p>;
@@ -134,6 +143,36 @@ export default function AdminConnections() {
           </li>
         ))}
       </ul>
+
+      {/* ── PayProp, connected from HERE ──
+          The OS owns the connection now. England & Wales is OAuth: an owner
+          presses Connect, approves at PayProp, and the refresh token lands in
+          the shared row every PayProp read refreshes from. Scotland is an API
+          key on this service and needs no button. The portal used to hold
+          the connection and lend tokens; it is going, and its client settings
+          were found blank on 5 Sep. */}
+      <section className="fade-up mt-6 rounded-2xl border border-line/80 bg-panel p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <span className="text-[13.5px]">PayProp: England &amp; Wales connection</span>
+          <a
+            href="/api/payprop/connect?account=uk"
+            className="rounded-full border border-ink px-3.5 py-1.5 text-[12px] font-semibold transition hover:bg-ink hover:text-white"
+          >
+            Connect E&amp;W at PayProp
+          </a>
+        </div>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
+          Needs PAYPROP_CLIENT_ID and PAYPROP_CLIENT_SECRET on this service, and https://tle-os.co.uk/api/payprop/callback
+          registered as the redirect on the PayProp client. Press once, approve at PayProp, and every E&amp;W money
+          read on the OS follows. Scotland reads with its own key and needs nothing here.
+        </p>
+        {payprop && (
+          <p className={`mt-2 rounded-lg px-3 py-2 text-[12px] ${payprop.ok ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>
+            {payprop.ok ? "Connected. " : "Not connected. "}
+            {payprop.detail}
+          </p>
+        )}
+      </section>
       <p className="mt-4 rounded-2xl border border-line/80 bg-panel p-4 text-[11.5px] leading-relaxed text-muted">
         <span className="font-semibold">Email from this domain goes to colleagues only</span> —
         {" "}{h.emailPolicy.internalDomains.map((d) => `@${d}`).join(", ")}. Anything else is refused
