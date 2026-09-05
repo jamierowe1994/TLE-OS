@@ -117,6 +117,11 @@ export async function POST(req: NextRequest) {
       tokens: { in: res.usage.input_tokens, out: res.usage.output_tokens },
     });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "read failed" }, { status: 502 });
+    /* Not 502: Cloudflare swaps an origin 502 for its own error page, and
+       the reason (the backlog run, 6 Sep: "Your credit balance is too low")
+       never reaches the caller. */
+    const msg = e instanceof Error ? e.message : "read failed";
+    const plain = /credit balance/i.test(msg) ? "The reader's Anthropic account has run out of credit - top it up at console.anthropic.com." : msg;
+    return NextResponse.json({ ok: false, error: plain }, { status: 500 });
   }
 }
