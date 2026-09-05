@@ -100,8 +100,11 @@ export default function PreTenancyDashboard() {
 
   const overdue = (data?.queue ?? []).filter((c) => age(c.submittedAt).over).length;
 
+  /* The workspace strips the shell's padding so the ported board can own
+     the window; this page is not the board, so it carries its own margins,
+     and starts below the pill strip rather than under it. */
   return (
-    <>
+    <div className="mx-auto max-w-6xl px-5 pb-16 pt-14 sm:px-8">
       <PageHeader
         title={greeting(data?.firstName ?? "")}
         blurb={
@@ -247,6 +250,6 @@ export default function PreTenancyDashboard() {
           )}
         </Card>
       </div>
-    </>
+    </div>
   );
 }

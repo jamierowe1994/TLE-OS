@@ -90,7 +90,7 @@ export default function PlcQueuePage() {
   const overdue = (queue ?? []).filter((c) => ageOf(c.submittedAt).over).length;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+    <div className="mx-auto max-w-4xl px-5 pb-16 pt-14 sm:px-8">
       <p className="text-xs uppercase tracking-[0.18em] text-muted">Pre-tenancy</p>
       <h1 className="mt-1 text-2xl tracking-normal text-ink">PLC Queue</h1>
       <p className="mt-2 max-w-2xl text-sm text-muted">
