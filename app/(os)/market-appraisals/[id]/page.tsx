@@ -7,6 +7,7 @@ import ResearchPanel from "@/components/ResearchPanel";
 import DeckRail from "@/components/DeckRail";
 import ValuationForm from "@/components/ValuationForm";
 import RexPropertyPicker from "@/components/RexPropertyPicker";
+import PropertyFile from "@/components/PropertyFile";
 import VideoChaseControl from "@/components/VideoChaseControl";
 import AppraisalOutcome from "@/components/AppraisalOutcome";
 import {
@@ -238,6 +239,13 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
           </p>
         )}
       </section>
+
+      {/* ── the property file: certificates the landlord hands over at the
+             appraisal are filed NOW, against the address, and are on the REX
+             property the day it is linked or instructed (James, 6 Sep). ── */}
+      <div className="fade-up mt-4">
+        <PropertyFile propertyId={ma.rexPropertyId} address={ma.address} screen="the market appraisal" />
+      </div>
 
       {/* ── 2. the booking ──────────────────────────────────────────────── */}
       <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-6">

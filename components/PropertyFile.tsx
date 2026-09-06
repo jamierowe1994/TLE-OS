@@ -72,7 +72,8 @@ export default function PropertyFile({
 }: {
   /** The REX property. Give this when you have it. */
   propertyId?: string | null;
-  /** Else the address, and the matcher finds the property or holds the file against the address. */
+  /** Else the address, and the matcher finds the property or holds the file against the address.
+   *  Given WITH the property (an appraisal that has just been linked), files held against the address move onto it. */
   address?: string | null;
   title?: string;
   /** Where the file was attached from, kept on the record: "the listing", "the application", "the market appraisal". */
@@ -87,6 +88,15 @@ export default function PropertyFile({
 
   const key = propertyId ? `property=${encodeURIComponent(propertyId)}` : address ? `address=${encodeURIComponent(address)}` : null;
   const effectiveId = propertyId ?? pick ?? data?.propertyId ?? null;
+
+  /* Given both a property and the address it was known by before, anything
+     held against the address moves onto the property - once, idempotent. */
+  const linked = useRef<string | null>(null);
+  useEffect(() => {
+    if (!propertyId || !address || linked.current === `${propertyId}|${address}`) return;
+    linked.current = `${propertyId}|${address}`;
+    void fetch("/api/property-file/link", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address, propertyId }) }).catch(() => null);
+  }, [propertyId, address]);
 
   const load = useCallback(() => {
     if (!key) return;
