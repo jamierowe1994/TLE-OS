@@ -20,6 +20,55 @@ import type {
 //   GET /properties → rows carry managed_by_user_data { email, first/last }
 //     — the per-agent key: matches the agent's portal login email.
 //
+// ── PROPOLY RESHAPED /deals, 6 Sep 2026 ───────────────────────────────────
+//
+// Kirstie's board showed "Address unavailable" on every property. Nothing
+// here had changed: Propoly moved the deal payload from ~20 flat fields to 14
+// keys of nested objects, so every read below missed and every value came
+// back undefined. It reads as one broken field; it was the whole record.
+//
+//   property_address       → property.address   (and COMMA-separated now,
+//                                                not one line per part)
+//   property_uuid          → property.uuid      ← the manager join, so the
+//                                                agent went null on every row
+//   tenant_details[]       → tenants[]          (first_name/last_name)
+//   landlord_details[]     → landlords[]        (+ is_lead)
+//   guarantors_details[]   → guarantors[]
+//   price_pcm_pence        → terms.price_pcm_pence
+//   deposit_pence          → terms.deposit_pence
+//   holding_fee_pence      → terms.holding_fee_pence
+//   move_in_date           → terms.move_in_date
+//
+// Every read takes the new path first and falls back to the old one, so a
+// rollback at their end costs us nothing.
+//
+// ── WHAT PROPOLY NO LONGER SENDS ──────────────────────────────────────────
+//
+// Not moved — GONE, from both /deals and /deals/{uuid}, and no include=,
+// expand=, view= or /api/v2 brings them back (all probed 6 Sep):
+//
+//   tenant + landlord email and phone  — we can no longer contact a party
+//                                        from a deal; only their name
+//   extra_clauses_details              — backed the Flatfair deposit-
+//                                        replacement flag, which now can
+//                                        never be true. On those deals
+//                                        deposit_pence is a liability cap,
+//                                        not cash to register, so this is
+//                                        the loss that MATTERS
+//   standing_order_reference           — the "Standing order set up" tick
+//   tenancy_service_level              — managed / tenant find / rent collect
+//   pets                               — the Pets row on the drawer
+//
+// These are read as null/false rather than guessed at. Ask Propoly whether
+// this was deliberate data-minimisation and whether a scope on our agent
+// credential restores them; do not infer any of them from something else.
+//
+// The new payload does carry things we never had — referencing{}, agreements{},
+// payments{} and a per-deal assigned_agent{} — which map onto Kirstie's
+// checklist better than what they replaced. Deliberately not wired in here:
+// this change is a repair, and her board should not move under her without
+// James seeing it first.
+//
 // CONTRACT (as lib/rex-stats.ts): never throw into a page — return null so
 // the caller can fall back; cache so a dashboard load doesn't hammer them.
 
@@ -176,21 +225,57 @@ interface CachedDeal {
 let dealsCache: { at: number; deals: CachedDeal[] } | null = null;
 
 const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+/** A nested object, or an empty one — so `obj(d.terms).price_pcm_pence` is safe. */
+const obj = (v: unknown): Record<string, unknown> =>
+  v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+const arr = (v: unknown): Array<Record<string, unknown>> =>
+  Array.isArray(v) ? (v as Array<Record<string, unknown>>) : [];
 
-/** "4 Staddon Gardens,\nTorquay,\nDevon,\nTQ2 8DP" → name + locality. */
+/** "Ada" + "Lovelace" → "Ada Lovelace", or null if neither is there. */
+function personName(r: Record<string, unknown>): string | null {
+  const joined = [r.first_name, r.last_name]
+    .filter((v): v is string => typeof v === "string" && v.trim() !== "")
+    .join(" ")
+    .trim();
+  return str(r.name) ?? (joined || null);
+}
+
+/**
+ * The deal's address, however Propoly is spelling it this week.
+ *
+ * It used to be `property_address`, a single string with a line per part:
+ * "4 Staddon Gardens,\nTorquay,\nDevon,\nTQ2 8DP". On 6 Sep 2026 it became
+ * `property.address` on a nested object, comma-separated on one line:
+ * "29/9 Springfield Street, Edinburgh, Midlothian, EH6 5DU".
+ *
+ * Splitting on newlines OR commas reads both, so a rollback at their end
+ * doesn't break us a second time.
+ */
 function splitAddress(raw: unknown): { name: string; locality: string } {
   const lines = (typeof raw === "string" ? raw : "")
-    .split(/\n+/)
-    .map((l) => l.replace(/,\s*$/, "").trim())
+    .split(/[\n,]+/)
+    .map((l) => l.trim())
     .filter(Boolean);
   if (lines.length === 0) return { name: "Address unavailable", locality: "" };
-  // "Flat 1" alone isn't a name — take the building line with it.
-  const nameLines = /^(flat|apartment|unit|room|studio)\b/i.test(lines[0]) && lines.length > 2 ? 2 : 1;
+  /* A sub-building on its own isn't a name — take the building line with it.
+     Named forms ("Flat 1") and the Scottish numeric ones the Edinburgh book is
+     full of ("2f1", "3/2"), which carry no keyword to match on. */
+  const sub =
+    /^(flat|apartment|apt|unit|room|studio)\b/i.test(lines[0]) ||
+    /^\d+[a-z]?(\/\d+[a-z]?)?$/i.test(lines[0]) ||
+    lines[0].length <= 4;
+  const nameLines = sub && lines.length > 2 ? 2 : 1;
   const name = lines.slice(0, nameLines).join(", ");
   const town = lines[nameLines] ?? "";
   const last = lines[lines.length - 1] ?? "";
   const postcode = last !== town && /\d/.test(last) ? last : "";
   return { name, locality: [town, postcode].filter(Boolean).join(" ") };
+}
+
+/** The property leg of a deal: `property.uuid` now, `property_uuid` before. */
+function propertyUuidOf(d: Record<string, unknown>): string | null {
+  return str(obj(d.property).uuid) ?? str(d.property_uuid);
 }
 
 function toApplication(d: Record<string, unknown>, statusKey: string): AgentApplication {
@@ -199,21 +284,24 @@ function toApplication(d: Record<string, unknown>, statusKey: string): AgentAppl
     stage: "received" as ApplicationStage,
     order: 50,
   };
-  const { name, locality } = splitAddress(d.property_address);
+  const { name, locality } = splitAddress(obj(d.property).address ?? d.property_address);
 
-  const rawTenants = Array.isArray(d.tenant_details)
-    ? (d.tenant_details as Array<Record<string, unknown>>)
-    : [];
+  /* Tenants moved from `tenant_details` to `tenants`, and lost their email and
+     phone on the way — see the CONTACT DETAILS note at the top of the file.
+     Read both shapes; whichever one answers, contact is null when absent
+     rather than an empty string, so nothing renders a blank mailto. */
+  const rawTenants = arr(d.tenants).length ? arr(d.tenants) : arr(d.tenant_details);
   const tenants: ApplicationTenant[] = rawTenants.map((t, i) => ({
-    name: str(t.name) ?? "Unnamed tenant",
+    name: personName(t) ?? "Unnamed tenant",
     email: str(t.email),
     phone: str(t.phone),
-    isPrimary: i === 0,
+    isPrimary: typeof t.is_lead === "boolean" ? t.is_lead : i === 0,
   }));
 
-  const pencePcm = typeof d.price_pcm_pence === "number" ? d.price_pcm_pence : null;
-  const depositPence = typeof d.deposit_pence === "number" ? d.deposit_pence : null;
-  const holdingPence = typeof d.holding_fee_pence === "number" ? d.holding_fee_pence : null;
+  const terms = obj(d.terms);
+  const pencePcm = num(terms.price_pcm_pence) ?? num(d.price_pcm_pence);
+  const depositPence = num(terms.deposit_pence) ?? num(d.deposit_pence);
+  const holdingPence = num(terms.holding_fee_pence) ?? num(d.holding_fee_pence);
   const service = SERVICE_LABELS[String(d.tenancy_service_level ?? "")] ?? null;
   const pets = d.pets;
   const hasPets =
@@ -242,7 +330,7 @@ function toApplication(d: Record<string, unknown>, statusKey: string): AgentAppl
     offerPeriod: "month",
     affordability: null,
     dateReceived: str(d.created_at)?.slice(0, 10) ?? null,
-    startDate: str(d.move_in_date),
+    startDate: str(terms.move_in_date) ?? str(d.move_in_date),
     agreementMonths: null,
     occupants: tenants.length || null,
     hasPets,
@@ -273,12 +361,12 @@ function toApplication(d: Record<string, unknown>, statusKey: string): AgentAppl
         const t = String(c ?? "");
         return /flatfair/i.test(t) || /^\s*deposit\s+replacement\b/i.test(t);
       }),
-      landlord: firstParty(d.landlord_details),
-      propertyUuid: typeof d.property_uuid === "string" ? d.property_uuid : null,
-      landlordUuids: (Array.isArray(d.landlord_details) ? (d.landlord_details as Array<Record<string, unknown>>) : [])
+      landlord: firstParty(arr(d.landlords).length ? d.landlords : d.landlord_details),
+      propertyUuid: propertyUuidOf(d),
+      landlordUuids: (arr(d.landlords).length ? arr(d.landlords) : arr(d.landlord_details))
         .map((l) => (typeof l.uuid === "string" ? l.uuid : null))
         .filter((u): u is string => Boolean(u)),
-      guarantors: partyList(d.guarantors_details),
+      guarantors: partyList(arr(d.guarantors).length ? d.guarantors : d.guarantors_details),
     },
   };
 }
@@ -290,17 +378,21 @@ function partyList(
   const rows = Array.isArray(v) ? v : v && typeof v === "object" ? [v] : [];
   return (rows as Array<Record<string, unknown>>)
     .map((r) => ({
-      name: str(r.name) ?? null,
+      name: personName(r),
       email: str(r.email) ?? null,
       phone: str(r.phone) ?? null,
     }))
     .filter((p) => p.name || p.email || p.phone);
 }
 
+/** The lead landlord where Propoly flags one, else the first listed. */
 function firstParty(
   v: unknown
 ): { name: string | null; email: string | null; phone: string | null } | null {
-  return partyList(v)[0] ?? null;
+  const rows = Array.isArray(v) ? (v as Array<Record<string, unknown>>) : [];
+  const leadAt = rows.findIndex((r) => r.is_lead === true);
+  const list = partyList(v);
+  return (leadAt >= 0 ? list[leadAt] : list[0]) ?? null;
 }
 
 let dealsInflight: Promise<CachedDeal[] | null> | null = null;
@@ -308,7 +400,7 @@ let dealsInflight: Promise<CachedDeal[] | null> | null = null;
 async function fetchAllDeals(): Promise<CachedDeal[] | null> {
   if (dealsCache && Date.now() - dealsCache.at < DEALS_TTL_MS) return dealsCache.deals;
   if (!dealsCache) {
-    const snap = await loadSnapshot<CachedDeal[]>("deals_v2");
+    const snap = await loadSnapshot<CachedDeal[]>("deals_v3");
     if (snap) {
       dealsCache = { at: snap.savedAt, deals: snap.data };
       if (Date.now() - snap.savedAt < DEALS_TTL_MS) return dealsCache.deals;
@@ -355,7 +447,9 @@ async function runDealsFetch(): Promise<CachedDeal[] | null> {
   const deals: CachedDeal[] = [];
   statusLists.forEach((rows, i) => {
     for (const d of rows ?? []) {
-      const propertyUuid = typeof d.property_uuid === "string" ? d.property_uuid : null;
+      /* The join that decides WHOSE board a deal lands on. When this silently
+         went undefined nobody lost a row - they lost the agent on every row. */
+      const propertyUuid = propertyUuidOf(d);
       const mgr = propertyUuid ? managerMap?.get(propertyUuid) : undefined;
       deals.push({
         app: toApplication(d, keys[i]),
@@ -367,7 +461,7 @@ async function runDealsFetch(): Promise<CachedDeal[] | null> {
   });
 
   dealsCache = { at: Date.now(), deals };
-  void saveSnapshot("deals_v2", deals);
+  void saveSnapshot("deals_v3", deals);
   return deals;
 }
 
