@@ -188,6 +188,10 @@ export async function matchProperty(address: string): Promise<MatchResult> {
   const sameBuilding = here.filter((x) => f.building != null && x.c.building === f.building);
   const exact = here.filter((x) => (f.nums.size ? same(x.c.nums, f.nums) && x.c.ident === f.ident && x.c.front === f.front : !x.c.nums.size && x.c.sig.size >= 2 && covers(f.sig, x.c.sig)));
   if (exact.length) {
+    /* A certificate filed on ONE room of a shared house is the house's (James,
+       6 Sep, 2 Norwich Street): it goes on every room and the house too. */
+    const family = f.unitWord === "room" ? sameBuilding.filter((x) => !exact.includes(x)) : [];
+    if (family.length) return done([...exact, ...family], `room of a shared house: the house and its ${sameBuilding.length} records`, "confident");
     const rooms = f.unit == null ? sameBuilding.filter((x) => x.c.unitWord === "room" && !exact.includes(x)) : [];
     if (rooms.length) return done([...exact, ...rooms], `exact, plus ${rooms.length} ${rooms.length === 1 ? "room" : "rooms"} REX holds under it`, "confident");
     return done(exact, exact.length > 1 ? `exact (REX holds it ${exact.length} times)` : "exact", "confident");
