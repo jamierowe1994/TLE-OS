@@ -83,6 +83,9 @@ export type Cert = {
    *  to a customer raw: the landlord route fetches it under our credentials
    *  after checking the property is theirs. */
   fileUrl?: string | null;
+  /** REX's not_required flag on the entry: the landlord says the duty does
+   *  not apply (no gas at the property, from the signed terms). */
+  notRequired?: boolean;
   /** Is the actual certificate file on the record? (REX truth: EICRs yes,
    *  EPCs almost never — a date without a document is half a record.) */
   attached: boolean;

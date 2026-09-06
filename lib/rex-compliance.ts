@@ -184,9 +184,10 @@ export async function certificatesFor(listings: CertSubject[]): Promise<Complian
       const attached = Boolean(e.file?.url);
       if (attached) withCertificate++;
       const held = certs[key];
+      const notRequired = Boolean(detail?.not_required);
       // Latest expiry wins; a record with no date never displaces one with.
       if (!held || (expires != null && (held.expires == null || expires > held.expires))) {
-        certs[key] = { expires, attached, fileUrl: e.file?.url ?? null };
+        certs[key] = { expires, attached, fileUrl: e.file?.url ?? null, ...(notRequired ? { notRequired: true } : {}) };
       }
     }
 
@@ -199,7 +200,8 @@ export async function certificatesFor(listings: CertSubject[]): Promise<Complian
     /* A gas entry marked not required is the landlord saying there is no gas
        (from the signed terms of business, 6 Sep 2026): the home has no gas
        duty, so it is not counted as missing one. */
-    const hasGasRecord = mine.some((e) => (e.type_id === "gas_safety" || e.type_id === "oil_safety") && !e.details?.[e.type_id!]?.not_required);
+    const hasGasRecord = mine.some((e) => e.type_id === "gas_safety" || e.type_id === "oil_safety");
+    const gasNotRequired = Boolean(certs.gas?.notRequired) && certs.gas?.expires == null;
     if (!hasGasRecord) gasUnknown++;
 
     return {
@@ -213,7 +215,7 @@ export async function certificatesFor(listings: CertSubject[]): Promise<Complian
       // populated on 0% of the book — so this is genuinely unknown, not empty.
       tenant: undefined,
       hmo: mine.some((e) => HMO_TYPES.includes(e.type_id ?? "")),
-      hasGas: hasGasRecord,
+      hasGas: hasGasRecord && !gasNotRequired,
       certs,
     };
   });
