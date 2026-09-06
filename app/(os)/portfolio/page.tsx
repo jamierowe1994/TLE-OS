@@ -690,7 +690,17 @@ export default function Portfolio() {
 
   return (
     <>
-      <PageHeader title="Portfolio" blurb={blurb} illustration="/illustrations/buildings-street.png" />
+      <PageHeader
+        title="Portfolio"
+        blurb={blurb}
+        illustration="/illustrations/buildings-street.png"
+        /* The bar under the header IS the book's filter - one search per
+           page (James, 6 Sep 2026), not a global bar above and a second box
+           in the pill row. */
+        searchValue={q}
+        onSearch={setQ}
+        searchPlaceholder="Address, landlord, tenant or agent…"
+      />
 
       {state.status === "failed" ? (
         <div className="fade-up mt-8 rounded-2xl border border-dashed border-accent-dark/50 bg-panel p-6">
@@ -736,12 +746,6 @@ export default function Portfolio() {
               ))}
             </div>
             <span className="hidden h-6 w-px bg-line/80 sm:block" />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Address, landlord, tenant or agent…"
-              className="min-w-[200px] flex-1 rounded-full border border-line/80 bg-box px-4 py-2 text-[12.5px] outline-none focus:border-accent"
-            />
             <Filter label="Service" options={services} value={service} onChange={setService} />
             {everything && <Filter label="Agent" options={agents} value={agent} onChange={setAgent} />}
             <Filter label="Town" options={towns} value={town} onChange={setTown} />

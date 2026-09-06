@@ -201,17 +201,19 @@ export default function PageHeader({
      with. Keyed by the numbers themselves, so two identical headers share one
      rule and two different ones never collide. */
   const seatClass = `seat-${Math.round(illustrationHeight)}-${Math.round((seat ?? 0) * 1000)}`;
-  /* From sm up, a seated figure is set in far enough to clear the page's
-     action button, so the search row only has to clear his SHINS — his shoes
-     hang past it into empty space, which is what dangling legs do. The rule
-     itself then sits where it does on every other page. Below sm there is no
-     room to set him in beside the search box, so there the row clears his feet
-     completely (factor 1) and he stays in the corner. */
+  /* From lg up, a seated figure is set in far enough to clear the page's
+     action button, so the search row does not move for him at all: it sits
+     the same 20px under the rule it does on every other page (James, 6 Sep
+     2026 - every header the same height, every search row in the same place)
+     and his legs hang past it into the empty middle of the row, which is what
+     dangling legs do. Below lg there is no room to set him in beside the
+     search box, so there the row clears his feet completely (factor 1) and
+     he stays in the corner. */
   const clearance = [
     [0.5, 1],
     [0.68, 1],
-    [0.88, 0.55],
-    [1, 0.55],
+    [0.88, 0],
+    [1, 0],
   ].map(([scale, factor]) => Math.round(legs * scale * factor) + 20);
 
   /* The strip is scaled to the element's width, so each frame ends up exactly
@@ -236,7 +238,12 @@ export default function PageHeader({
           }
           .${spriteClass} {
             background-image: url(${sprite.src});
-            background-size: 100% auto;
+            /* Sized to the run EXACTLY, not "100% auto": with auto the frame
+               height came out of the rounded width, a third of a pixel short
+               at 230, and by frame 29 the next frame's feet were showing at
+               the bottom as a stray mark. Stretching the strip to the whole
+               run makes every step land on a frame edge. */
+            background-size: 100% ${spriteRun}px;
             background-repeat: no-repeat;
             animation: ${spriteClass} ${spriteSecs}s steps(${sprite.frames}) infinite alternate;
           }
@@ -262,7 +269,7 @@ export default function PageHeader({
             of its way — without this the blurb runs underneath it the moment
             the window narrows. Each step matches the scale below. */}
         <div
-          className={`mb-2 pb-9 pl-2 pt-8 ${
+          className={`self-start pl-2 pt-[68px] ${
             !hasArt
               ? ""
               : seated
@@ -275,6 +282,11 @@ export default function PageHeader({
         >
           {/* Flick strokes used to frame the title's corners; retired
               (James, 8 Aug 2026) — the hand face carries the voice alone. */}
+          {/* The title is pinned to a fixed distance from the top, not the
+              rule. It used to hang off the bottom, so a one-line blurb put it
+              40px lower than a three-line one and every page started
+              somewhere different (James, 6 Sep 2026). The blurb now flows
+              down from it and the rule stays where it is. */}
           <h1 className="text-[30px] leading-tight">{title}</h1>
           <p className="mt-2.5 max-w-md text-[13px] text-muted">{blurb}</p>
         </div>

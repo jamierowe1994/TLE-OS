@@ -170,9 +170,12 @@ export default function Applications() {
         render: (a) => (
           <span className="flex items-center gap-2.5">
             <PropertyPhoto src={a.image} className="h-9 w-11 shrink-0 rounded-md" />
-            <span className="min-w-0">
-              <span className="block whitespace-nowrap">{a.property}</span>
-              <span className="block whitespace-nowrap text-[10.5px] text-muted">{a.locality}</span>
+            {/* Truncated, not nowrap: a long address used to push the whole
+                table past the panel's edge and the Status column off the
+                screen (James, 6 Sep 2026). */}
+            <span className="min-w-0 max-w-[200px]">
+              <span className="block truncate" title={a.property}>{a.property}</span>
+              <span className="block truncate text-[10.5px] text-muted">{a.locality}</span>
             </span>
           </span>
         ),
@@ -192,7 +195,12 @@ export default function Applications() {
             </span>
           ),
       },
-      { key: "moveIn", label: "Move-in", cell: "whitespace-nowrap text-muted", render: (a) => a.startDate ?? "—" },
+      {
+        key: "moveIn", label: "Move-in", cell: "whitespace-nowrap text-muted",
+        /* "28 Sep 2026", not the ISO string REX hands back - it read as a
+           database field, and it was the widest thing in the column. */
+        render: (a) => (a.startDate ? new Date(a.startDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"),
+      },
       {
         key: "stage", label: "Status", cell: "whitespace-nowrap",
         render: (a) => (
@@ -217,7 +225,12 @@ export default function Applications() {
           );
         },
       },
-      { key: "agent", label: "With", cell: "whitespace-nowrap text-muted", render: (a) => a.agent ?? "—" },
+      {
+        key: "agent", label: "With", cell: "whitespace-nowrap text-muted",
+        /* First name only: the full name was the column that pushed the
+           table past the panel, and the drawer says who in full. */
+        render: (a) => (a.agent ? a.agent.split(" ")[0] : "—"),
+      },
     ],
     []
   );
@@ -236,7 +249,11 @@ export default function Applications() {
            pipeline below was pulled in: her body dangles down that gutter.
            0.05 is where her fist is in the artwork, measured off the frames. */
         sprite={{ src: "/illustrations/hanging-strip.webp", frames: 30, aspect: 0.653, fps: 12 }}
-        illustrationHeight={300}
+        /* 230, down from 300: at 300 her feet reached the pipeline panel and
+           everything under the rule had to be pulled in to 80% to miss her.
+           At 230 she ends above the pipeline, which runs full width again
+           (James, 6 Sep 2026: the applications screen looked cut off). */
+        illustrationHeight={230}
         grip={0.0428}
         lineBreak="dip"
       />
@@ -264,7 +281,7 @@ export default function Applications() {
       )}
 
       {/* ── The pipeline: how many sit at each status. ── */}
-      <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5 lg:max-w-[80%]">
+      <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-[15px]">Pipeline</h2>
           <p className="text-[11px] text-muted">

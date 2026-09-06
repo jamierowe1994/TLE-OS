@@ -927,7 +927,7 @@ export default function LeadDrawer({
                   REX's to change, and an input that silently discards what you
                   type is worse than plain text. */}
               {ours ? (
-                <h2 className="text-[26px] leading-tight">
+                <h2 className="min-w-0 flex-1 text-[26px] leading-tight">
                   <InlineField
                     value={personName}
                     onChange={(v) => {

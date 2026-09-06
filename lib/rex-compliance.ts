@@ -83,10 +83,18 @@ function plusMonths(iso: string | null | undefined, months: number | undefined):
   return d.toISOString().slice(0, 10);
 }
 
+const MIN_DATE = new Date("2000-01-01T00:00:00").getTime();
+const MAX_DATE = new Date("2045-12-31T23:59:59").getTime();
+
 function daysUntil(date: string | null | undefined): number | null {
   if (!date) return null;
   const then = new Date(`${date}T00:00:00`).getTime();
   if (!Number.isFinite(then)) return null;
+  /* A date outside 2000-2045 is a typo in REX (8 Swarbourn Close's EICR
+     said 1905 and showed as 44,393 days over), not a certificate. Same
+     window the intake refuses, so nothing can be filed the tracker then
+     cannot read. It counts as no valid date. */
+  if (then < MIN_DATE || then > MAX_DATE) return null;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return Math.round((then - today.getTime()) / 86400000);

@@ -410,7 +410,14 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             person's whole view needs the window. It was being targeted by CSS
             that matched nothing, so "full screen" was never full screen — the
             view sat inside this padding and overflowed by exactly its height. */}
-        <main data-os-content className="w-full flex-1 px-5 py-8 lg:px-10 2xl:px-14">
+        {/* pb-28, not py-8's 32px: Steve sits fixed in the bottom-right corner,
+            and the last row of every page was ending up under him. The extra
+            bottom padding is his lane, so the end of the page always scrolls
+            clear of his face (James, 6 Sep 2026). From xl the right padding
+            is the same lane sideways: he spans 12-72px in from the edge, and
+            the last column of a wide table was ending up under him, so the
+            content stops 84px short and nothing collides. */}
+        <main data-os-content className="w-full flex-1 px-5 pb-28 pt-8 lg:px-10 xl:pr-[84px] 2xl:pl-14">
           {children}
         </main>
       </div>

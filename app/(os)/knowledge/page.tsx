@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import { PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
@@ -174,7 +173,11 @@ export default function KnowledgeHub() {
       <PageHeader
         title="Knowledge"
         blurb="How this business works, written down once. Steve answers from it on the next question, and anything marked as a guide goes on his shelf for the agents."
-        search={false}
+        /* One search per page (James, 6 Sep 2026): the header's bar searches
+           what is written, and the shelf row below is only the filters. */
+        searchValue={q}
+        onSearch={setQ}
+        searchPlaceholder="Search what is written…"
         actions={
           <PressButton
             onClick={() => startNew()}
@@ -189,16 +192,6 @@ export default function KnowledgeHub() {
         {/* ── the shelves ── */}
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2.5">
-            <label className="flex min-w-44 flex-1 items-center gap-2.5 rounded-full border border-line/80 px-3.5 py-2 focus-within:border-ink">
-              <DoodleIcon name="search" size={14} className="shrink-0 text-muted" />
-              <input
-                type="text"
-                placeholder="Search what is written…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                className="w-full bg-transparent text-[12px] outline-none placeholder:text-muted/70"
-              />
-            </label>
             <button
               type="button"
               onClick={() => setFSection(null)}

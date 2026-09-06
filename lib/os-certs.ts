@@ -34,6 +34,9 @@ export type OsCertRow = {
 function daysUntil(iso: string): number | null {
   const then = new Date(`${String(iso).slice(0, 10)}T00:00:00`).getTime();
   if (!Number.isFinite(then)) return null;
+  /* Same 2000-2045 window as the intake and the REX reader: a date outside
+     it is a typo, and counts as no valid date rather than as decades over. */
+  if (then < new Date("2000-01-01T00:00:00").getTime() || then > new Date("2045-12-31T23:59:59").getTime()) return null;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return Math.round((then - today.getTime()) / 86400000);

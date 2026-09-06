@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
 import AddedHere from "@/components/AddedHere";
 import { contactToLead, type ContactRow } from "@/lib/contacts-as-leads";
@@ -310,6 +309,11 @@ export default function Leads() {
         /* No dip and no break: he is sitting ON the line, and his own body
            hides it where he is. A trough would read as the line sagging. */
         lineBreak="none"
+        /* The bar under the header is the list's search - one search per
+           page (James, 6 Sep 2026). */
+        searchValue={q}
+        onSearch={setQ}
+        searchPlaceholder="Search leads…"
         actions={
           <PressButton
             onClick={() => setCreating(true)}
@@ -325,17 +329,9 @@ export default function Leads() {
       <div className="mt-4">
         <div className="fade-up min-w-0 rounded-2xl border border-line/80 bg-panel p-5">
           {/* Filters, with the column customiser at the end of the row. */}
+          {/* The search itself is the bar under the header - one search per
+              page (James, 6 Sep 2026). This row is only the filters. */}
           <div className="flex flex-wrap items-center gap-2.5">
-            <label className="flex min-w-44 flex-1 items-center gap-2.5 rounded-full border border-line/80 px-3.5 py-2 focus-within:border-ink">
-              <DoodleIcon name="search" size={14} className="shrink-0 text-muted" />
-              <input
-                type="text"
-                placeholder="Search leads…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                className="w-full bg-transparent text-[12px] outline-none placeholder:text-muted/70"
-              />
-            </label>
             <Filter label="All sources" options={sources} value={fSource} onChange={setFSource} />
             <Filter label="All agents" options={agents} value={fAgent} onChange={setFAgent} />
             <Filter label="All stages" options={stages} value={fStage} onChange={setFStage} />
