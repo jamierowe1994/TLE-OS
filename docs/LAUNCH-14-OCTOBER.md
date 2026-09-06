@@ -588,15 +588,26 @@ in its own right; where it would hook in is noted so it can be picked up cleanly
 | C | **HMOs as a house with rooms** - when a property is marked HMO, take the room count and offer to build the rooms into the file; the house is the parent, each room a sub-record that opens fully but stays attached | REX holds rooms as separate property records already (the backlog's "shared house" matches: 5a Newton Road, 166 Gloucester Road North). The OS needs a parent link (address match, or a stored `parent_property_id`) so the property file, compliance and portfolio show the house with its rooms folded under it, and a house-level certificate (gas, EICR, EPC) counts for every room | The matcher already groups rooms under their building; the write side (creating N room records in REX) is the new part |
 | D | **Blockers** - a deal cannot proceed past a set point until the minimum compliance is on file: gas (where there is gas), EICR and EPC on an ordinary let; the HMO set on an HMO | The PLC gate (`lib/plc.ts`, `lib/plc-rules.ts`) is the natural place: the pack cannot be approved, and the handover cannot start, until the property file shows the required set in date. The required set is already one rule (`requiredCerts`) and the no-gas fact from A removes the gas requirement honestly | Needs James's word on WHERE the block bites (offer accepted? move-in?) and whether a manager can override with a reason |
 
-### Portfolio drawer, redesigned around the house - James, 6 Sep 2026 (evening, not built)
+### Portfolio drawer, redesigned around the house - James, 6 Sep 2026 (built that evening)
 
-The drawer is "very confusing and very long". What he wants: the drawer opens out like the
-other screens; a shared house shows its rooms as tabs (Room 1, Room 2, …) rather than every
-tenant crammed into one column; each room shows its tenant, and the tenant opens into their
-own file (details, tenancy, documents). Depends on idea C above (the house-and-rooms link on
-the OS record: `os_properties` will need `parent_id`, filled by the matcher's shared-house
-grouping). Property file, certificates and the room's tenant hang off the room; house-level
-certificates (gas, EICR, EPC, licence) show once on the house and are inherited by every room.
+The drawer was "very confusing and very long". Built (lib/houses.ts, lib/address-parse.ts, 6 Sep evening):
+a shared house shows ONCE in the Portfolio list and opens a wider drawer with a tab for the house
+and a tab per room, each room carrying its tenant's card (phone, email, Tenant's file into REX).
+No stored link yet: the grouping is by address alone (postcode + building + street), so a room
+added to REX tomorrow joins its house on its own. Two shapes of house in REX, both handled:
+- **Rooms named** ("Room 2, 2 Norwich Street"; 5a/5b/5c Newton Road, 32 Waylen Street, 12 Portfield
+  Close, 1A Templars Field with a house record too): tabs Room 1, Room 2 …; a room re-let three
+  times is one tab (the let one, else the latest).
+- **One leased listing per let, no rooms named** (166 Gloucester Road North: fifteen listings, one
+  property, £795 on each, a different tenant on each): one row, fifteen tabs, each named by the
+  tenant the let is really for (the one on the fewest of the house's lets - two names sit on every
+  let). The drawer says plainly that REX records no room numbers. A plain home let twice collapses
+  the same way (46 addresses, 110 listings; the list is 599 rows for 692 listings).
+- **Certificates**: a room reads the house's gas, EICR, EPC and licence where it has none of its own,
+  in the compliance book (`inherited` on the cert) and in the property file ("held on 5a Newton Road").
+Still open from idea C: a stored `parent_id` on `os_properties` and room numbers for the
+one-listing-per-let houses (REX has none; REX PM's tenancies might), and building N room records in REX
+when a property is marked HMO.
 
 ## Launch week to-do (James, 6 Sep 2026)
 
