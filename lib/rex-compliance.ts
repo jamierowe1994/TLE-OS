@@ -237,7 +237,16 @@ export async function certificatesFor(listings: CertSubject[]): Promise<Complian
      certificates are their compliance, and they count in every figure so
      the OS matches REX PM's managed book, not REX CRM's. */
   const extra = await notOnRex().catch(() => []);
-  const extraCerts = await osCertsFor(extra.map((p) => p.id)).catch(() => new Map());
+  const extraCerts = await osCertsFor([...new Set([...extra.map((p) => p.id), ...listings.map((l) => l.propertyId).filter((id) => /^pm-/i.test(id))])]).catch(() => new Map());
+  /* The managed book may already list these homes (Portfolio does): REX
+     answered nothing for them, so their certificates come from the OS. */
+  for (const p of properties) {
+    if (!/^pm-/i.test(p.id)) continue;
+    p.certs = extraCerts.get(p.id) ?? {};
+    p.onRex = false;
+    const o = extra.find((x) => x.id === p.id);
+    if (o) { p.hmo = o.hmo; p.hasGas = !o.noGas; }
+  }
   for (const o of extra) {
     if (listings.some((l) => l.propertyId === o.id)) continue;
     const certs = extraCerts.get(o.id) ?? {};
