@@ -213,9 +213,9 @@ export async function writeCertificateToRex(input: {
       if (rexWritesLocked("ComplianceEntries", "update")) {
         entryNote = `Entry ${input.existingEntryId} left as it is (ComplianceEntries/update is not on the allowlist).`;
       } else {
+        /* update takes data only - return_id is create's (backlog run, 6 Sep). */
         const upd = await rexCall("ComplianceEntries", "update", {
           data: { id: Number(input.existingEntryId), details: { [input.type]: detail } },
-          return_id: true,
         });
         entryNote = upd.ok ? `Entry ${input.existingEntryId} updated, expires ${input.expiry}.` : `Entry ${input.existingEntryId} not updated: ${upd.error ?? `REX answered ${upd.status}.`}`;
       }
@@ -257,7 +257,7 @@ export async function writeCertificateToRex(input: {
         if (rexWritesLocked("ComplianceEntries", "update")) {
           return { ok: true, note: `REX holds this type to ${theirs ?? "no date"} - ours is ${input.expiry}, but bringing it up needs ComplianceEntries/update on the allowlist. Documents: ${doc.note}`, entryId: existingId };
         }
-        const upd = await rexCall("ComplianceEntries", "update", { data: { id: Number(existingId), details: { [input.type]: detail } }, return_id: true });
+        const upd = await rexCall("ComplianceEntries", "update", { data: { id: Number(existingId), details: { [input.type]: detail } } });
         return upd.ok
           ? { ok: true, note: `Existing entry brought up from ${theirs ?? "no date"} to ${input.expiry}. Documents: ${doc.note}`, entryId: existingId }
           : { ok: false, note: `Existing entry could not be updated: ${upd.error ?? upd.status}. Documents: ${doc.note}` };
