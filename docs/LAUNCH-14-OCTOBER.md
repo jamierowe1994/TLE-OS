@@ -576,6 +576,12 @@ Switches as found: customer email ON, pre-tenancy digest ON (sends to James and 
 14 alerts today), REX contact create ON; certificate chases, agent-compliance reminders,
 handover live, agent deal emails, Propoly documents, campaign sending all OFF.
 
+## Launch week to-do (James, 6 Sep 2026)
+
+| When | What | How |
+|---|---|---|
+| A day or two before 14 October | **Run the REX PM certificate pull again**, so whatever the team uploaded to REX PM since 6 September comes across before the OS goes live. Then the team uploads through the OS and REX PM is Susan's to keep or drop. | James signs into REX PM (Alfie) in Chrome; Claude runs the same pull from that session: export the compliance entries, match, download into Desktop/compliance, run the certificate runner with expired ones left out. Steps and scripts are in the memory note `tle-os-rex-pm-pull`. Only what is new is taken. |
+
 ## Waiting on someone else
 
 Re-read 2 September 2026.
