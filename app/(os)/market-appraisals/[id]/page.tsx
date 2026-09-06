@@ -339,6 +339,27 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
                 {here && (
                   <span className="mt-0.5 pr-3 text-[10.5px] leading-snug text-muted">{s.blurb}</span>
                 )}
+                {/* The small ticks: have I sent this, done this, made this.
+                    Read from the record (lib/appraisal-stage), never typed. */}
+                {(() => {
+                  const ticks = (ma.ticks ?? []).filter((t) => t.stage === s.id);
+                  if (!ticks.length) return null;
+                  return (
+                    <ul className="mt-2 space-y-1 pr-3">
+                      {ticks.map((t) => (
+                        <li key={t.id} className="flex items-start gap-1.5 text-[10.5px] leading-snug" title={t.at ? new Date(t.at).toLocaleString("en-GB") : undefined}>
+                          <span className={`mt-[1px] flex h-3 w-3 shrink-0 items-center justify-center rounded-full border text-[8px] ${t.done ? "border-accent-dark bg-accent-dark text-white" : "border-line text-transparent"}`}>
+                            ✓
+                          </span>
+                          <span className={t.done ? "text-ink" : "text-muted"}>
+                            {t.label}
+                            {t.detail ? <span className="text-muted"> · {t.detail}</span> : t.done && t.at ? <span className="text-muted"> · {new Date(t.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span> : null}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  );
+                })()}
               </li>
             );
           })}

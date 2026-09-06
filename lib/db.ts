@@ -418,6 +418,9 @@ ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS setup_fee       INTEGE
 ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS valuation_note  TEXT;
 ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS valued_at       TIMESTAMPTZ;
 ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS valued_by       TEXT;
+-- When terms of business last went out for signature (6 Sep 2026). DocuSeal
+-- keeps the submission; this is the one fact the spine needs from it.
+ALTER TABLE os_market_appraisals ADD COLUMN IF NOT EXISTS terms_sent_at   TIMESTAMPTZ;
 
 -- WHAT KIRSTIE HAS ALREADY BEEN TOLD.
 --

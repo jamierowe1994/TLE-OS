@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
-import { getAppraisal } from "@/lib/appraisal-store";
+import { getAppraisal, markTermsSent } from "@/lib/appraisal-store";
 import { SERVICE_LEVELS } from "@/lib/market-appraisal";
 import { docusealConfigured, openTermsSigning, DocusealBlocked } from "@/lib/docuseal";
 
@@ -99,6 +99,9 @@ export async function POST(req: NextRequest) {
       feePercent: ma.feePct ?? null,
       externalId: ma.id,
     });
+
+    /* The spine's "Terms sent" tick reads this. */
+    await markTermsSent(ma.id);
 
     return NextResponse.json({
       ok: true,

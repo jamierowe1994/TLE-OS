@@ -108,11 +108,28 @@ export interface MarketAppraisal {
   rexPropertyId: string | null;
   /** Presentation token, once one has been minted. */
   presentToken: string | null;
+  /** ISO, when terms of business last went out for signature (DocuSeal). Null until they have. */
+  termsSentAt?: string | null;
   createdAt: string;
   /** Attached by the list API: the stage read from the record (lib/appraisal-stage)
    *  and one line saying why. Absent on a bare row. */
   liveStage?: MaStage;
   stageWhy?: string;
+  /** The small ticks inside each stage - "have I sent this, done this, made
+   *  this" - read from the record by lib/appraisal-stage. */
+  ticks?: AppraisalTick[];
+}
+
+/** One thing that has or has not happened on the file, filed under its stage. */
+export interface AppraisalTick {
+  id: string;
+  stage: MaStage;
+  label: string;
+  done: boolean;
+  /** ISO, when it happened, where that is known. */
+  at: string | null;
+  /** One short line: "opened 3 times", "queued for Thursday". */
+  detail?: string;
 }
 
 /**

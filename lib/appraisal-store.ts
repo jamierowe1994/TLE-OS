@@ -74,6 +74,7 @@ interface Row extends Record<string, unknown> {
   valued_by: string | null;
   rex_property_id: string | null;
   present_token: string | null;
+  terms_sent_at: string | Date | null;
   created_at: string | Date;
 }
 
@@ -81,7 +82,7 @@ interface Row extends Record<string, unknown> {
 const COLS = `id, lead_id, landlord, address, postcode, agent, appointment_at,
               stage, valuation, service_level, fee_pct, setup_fee,
               valuation_note, valued_at, valued_by, rex_property_id,
-              present_token, created_at`;
+              present_token, terms_sent_at, created_at`;
 
 function rowTo(r: Row): MarketAppraisal {
   return {
@@ -109,8 +110,21 @@ function rowTo(r: Row): MarketAppraisal {
     valuedBy: r.valued_by,
     rexPropertyId: r.rex_property_id,
     presentToken: r.present_token,
+    termsSentAt: r.terms_sent_at ? new Date(r.terms_sent_at).toISOString() : null,
     createdAt: new Date(r.created_at).toISOString(),
   };
+}
+
+/** Terms went out for signature just now. */
+export async function markTermsSent(id: string): Promise<void> {
+  if (!hasDb()) return;
+  await q(`UPDATE os_market_appraisals SET terms_sent_at = NOW(), updated_at = NOW() WHERE id = $1`, [id]).catch(() => null);
+}
+
+/** The stage as the record now reads. Only ever moves forward; won and lost are the agent's. */
+export async function persistStage(id: string, stage: MaStage): Promise<void> {
+  if (!hasDb()) return;
+  await q(`UPDATE os_market_appraisals SET stage = $2, updated_at = NOW() WHERE id = $1 AND stage NOT IN ('won','lost') AND stage <> $2`, [id, stage]).catch(() => null);
 }
 
 async function readFile(): Promise<MarketAppraisal[]> {
