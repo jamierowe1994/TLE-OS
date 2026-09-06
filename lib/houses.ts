@@ -1,5 +1,5 @@
 import { houseKeyOf, isRoomAddress, houseNameFrom, parseAddress } from "@/lib/address-parse";
-import type { ManagedProperty } from "@/lib/portfolio-types";
+import type { ManagedProperty, Party } from "@/lib/portfolio-types";
 
 /**
  * A shared house and its rooms, read from the managed book by address alone
@@ -110,10 +110,27 @@ const shortDate = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T0
     166 Gloucester Road North; the third is the room's. */
 export function tabLabel(house: House, p: ManagedProperty): string {
   if (house.kind === "rooms") return roomLabel(p);
-  if (!p.tenants.length) return `Let ${shortDate(p.letSince)}`;
+  const own = ownTenants(house, p);
+  if (!own.length) return `Let ${shortDate(p.letSince)}`;
+  const label = own.map((t) => t.name).join(", ");
+  /* The same tenant on two lets (a renewal): the date tells them apart. */
+  const twice = house.rooms.some((r) => r !== p && ownTenants(house, r).map((t) => t.name).join(", ") === label);
+  return twice ? `${label} · ${shortDate(p.letSince)}` : label;
+}
+
+/** The tenants a let is really for: those on the fewest of the house's lets. */
+export function ownTenants(house: House, p: ManagedProperty): Party[] {
+  if (house.kind === "rooms" || !p.tenants.length) return p.tenants;
   const count = (id: string) => house.rooms.filter((r) => r.tenants.some((t) => t.contactId === id)).length;
   const least = Math.min(...p.tenants.map((t) => count(t.contactId)));
-  return p.tenants.filter((t) => count(t.contactId) === least).map((t) => t.name).join(", ");
+  return p.tenants.filter((t) => count(t.contactId) === least);
+}
+
+/** A let's tenants with its own first, then the names shared across the house. */
+export function tenantsInOrder(house: House | null, p: ManagedProperty): Party[] {
+  if (!house || house.kind === "rooms") return p.tenants;
+  const own = new Set(ownTenants(house, p).map((t) => t.contactId));
+  return [...p.tenants].sort((a, b) => Number(own.has(b.contactId)) - Number(own.has(a.contactId)));
 }
 
 /** listingId → the house it belongs to, every let of every room included. */

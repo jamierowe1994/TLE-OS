@@ -8,7 +8,7 @@ import FindingData from "@/components/business/FindingData";
 import PropertyFile from "@/components/PropertyFile";
 import { Pill } from "@/components/Wire";
 import { rexContactUrl, rexListingUrl } from "@/lib/business/rex-links";
-import { housesIn, houseByListing, roomLabel, tabLabel, type House } from "@/lib/houses";
+import { housesIn, houseByListing, roomLabel, tabLabel, tenantsInOrder, type House } from "@/lib/houses";
 import {
   CERT_META, headlineCerts, requiredCerts, statusOf,
   type CertKey, type CertStatus, type CompProperty,
@@ -309,7 +309,7 @@ function PropertyPanel({
           </div>
           {house && (
             /* The house, then a tab per room. A filled dot is a let room. */
-            <div className="-mx-1 flex gap-1 overflow-x-auto pb-0.5">
+            <div className="-mx-1 flex gap-1 overflow-x-auto pb-0.5 sm:flex-wrap">
               {[{ id: "house", label: "The house", let: null as boolean | null }, ...house.rooms.map((r) => ({ id: r.listingId, label: tabLabel(house, r), let: r.tenants.length > 0 }))].map((t) => (
                 <button
                   key={t.id}
@@ -364,9 +364,12 @@ function PropertyPanel({
             <section className="mt-6">
               <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">{p.tenants.length === 1 ? "Tenant" : "Tenants"}</p>
               {p.tenants.length ? (
-                <ul className="space-y-2">{p.tenants.map(tenantCard)}</ul>
+                <ul className="space-y-2">{tenantsInOrder(house, p).map(tenantCard)}</ul>
               ) : (
                 <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No tenant on this room in REX. It is empty, or the let has not been recorded.</p>
+              )}
+              {lets && p.tenants.length > 1 && (
+                <p className="mt-2 text-[11.5px] text-muted">REX names everyone on the tenancy on each let. This let&apos;s own tenant is first.</p>
               )}
             </section>
           )}
