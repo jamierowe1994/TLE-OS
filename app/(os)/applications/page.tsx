@@ -330,6 +330,7 @@ export default function Applications() {
             id: open.id,
             tenant: (open.applicants.find((p) => p.isPrimary) ?? open.applicants[0])?.name ?? "—",
             property: open.property,
+            propertyId: open.propertyId,
             locality: open.locality,
             image: open.image,
             rent: open.offerAmount ? `${gbp(open.offerAmount)} pcm` : "—",

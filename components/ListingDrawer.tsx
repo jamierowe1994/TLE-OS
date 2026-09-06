@@ -11,6 +11,7 @@ import ProcessTimeline from "@/components/ProcessTimeline";
 import PortalStatsPanel from "@/components/PortalStatsPanel";
 import TenancyLinkPanel from "@/components/TenancyLinkPanel";
 import ListingDocuments from "@/components/ListingDocuments";
+import PropertyFile from "@/components/PropertyFile";
 import ViewingBooker, { type Person } from "@/components/ViewingBooker";
 import { CopyButton, DoneTick, PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
@@ -77,7 +78,7 @@ type LandlordState =
   | { status: "none" }
   | { status: "problem"; says: string };
 
-type TabKey = "home" | "property" | "marketing" | "photos" | "documents";
+type TabKey = "home" | "property" | "marketing" | "photos" | "compliance" | "documents";
 
 /* Property and Marketing are EDIT tabs — the facts they hold moved up into
    the header, so the tab is where you go to change them, not to read them.
@@ -87,6 +88,10 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "property", label: "Property" },
   { key: "marketing", label: "Marketing" },
   { key: "photos", label: "Photos" },
+  /* The property file: every duty the home carries, where it stands in
+     REX, and the certificates on hand. The same panel Portfolio and
+     Compliance show, so the file travels with the property. */
+  { key: "compliance", label: "Compliance" },
   /* Where the signed terms live now that the panel has gone. Filed rather
      than displayed: nobody needs it until the one day they very much do. */
   { key: "documents", label: "Documents" },
@@ -1139,6 +1144,10 @@ export default function ListingDrawer({
                   they have to live somewhere with a URL before REX can be handed one.
                 </p>
               </Card>
+            )}
+
+            {tab === "compliance" && (
+              <PropertyFile propertyId={listing.propertyId ?? null} address={listing.propertyId ? null : listing.name} screen="the listing" />
             )}
 
             {tab === "documents" && (

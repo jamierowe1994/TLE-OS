@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
-import { requireAnyCapability } from "@/lib/admin";
+import { requireAnyCapability, whoIs } from "@/lib/admin";
+import { pendingKeyFor } from "@/lib/property-match";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
 import { R2_BUCKET, r2Configured, safeName, withR2 } from "@/lib/r2";
@@ -92,6 +93,12 @@ async function gate(req: NextRequest) {
 }
 
 async function writeOne(r: Row, provenance: string, req_refresh = false): Promise<Row> {
+  /* Held against an address REX does not know yet: kept here, written the
+     day the property exists (POST /api/property-file/link). */
+  if (r.property_id.startsWith("pending-")) {
+    const rows = await q<Row>(`UPDATE os_certificates SET rex_note = $2, rex_at = NOW() WHERE id = $1 RETURNING *`, [r.id, "Held against the address until it has a REX property."]);
+    return rows[0];
+  }
   const blocked = await rexWriteBlockedBecause();
   const w = blocked
     ? { ok: false, note: blocked, entryId: undefined as string | undefined }
@@ -122,8 +129,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const me = await gate(req);
-  if (!me) return NextResponse.json({ ok: false, error: "Not yours." }, { status: 403 });
+  /* Filing a certificate is anyone's job - an agent on a listing, Kirstie on
+     a deal - so any signed-in person may. Reading the whole list is not. */
+  const { actor } = await whoIs(req);
+  const me = actor;
+  if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
   const by = me.name || me.email;
 
@@ -148,14 +158,17 @@ export async function POST(req: NextRequest) {
   const form = await req.formData().catch(() => null);
   if (!form) return NextResponse.json({ ok: false, error: "Expected a file and its facts as a form." }, { status: 400 });
   const file = form.get("file");
-  const propertyId = String(form.get("propertyId") ?? "").trim();
+  /* No REX property yet (a market appraisal, say): the address is the key,
+     and the file waits there for the property. */
+  const address = String(form.get("address") ?? "").trim().slice(0, 200);
+  const propertyId = String(form.get("propertyId") ?? "").trim() || (address ? pendingKeyFor(address) : "");
   const type = String(form.get("type") ?? "").trim();
   const expiry = String(form.get("expiry") ?? "").trim();
   const issueRaw = String(form.get("issue") ?? "").trim();
-  const propertyName = String(form.get("propertyName") ?? "").trim().slice(0, 200);
+  const propertyName = (String(form.get("propertyName") ?? "").trim() || address).slice(0, 200);
   const source = String(form.get("source") ?? "dropped file").trim().slice(0, 120);
   if (!(file instanceof File) || !file.size) return NextResponse.json({ ok: false, error: "No file." }, { status: 400 });
-  if (!/^\d+$/.test(propertyId)) return NextResponse.json({ ok: false, error: "propertyId must be the REX property id." }, { status: 400 });
+  if (!/^(\d+|pending-[a-z0-9-]+)$/.test(propertyId)) return NextResponse.json({ ok: false, error: "propertyId must be the REX property id, or give an address." }, { status: 400 });
   if (!TYPES.has(type)) return NextResponse.json({ ok: false, error: `type must be one of ${[...TYPES].join(", ")}.` }, { status: 400 });
   if (!PLAUSIBLE(expiry)) return NextResponse.json({ ok: false, error: "expiry must be YYYY-MM-DD between 2000 and 2045." }, { status: 400 });
   if (issueRaw && !YMD.test(issueRaw)) return NextResponse.json({ ok: false, error: "issue must be YYYY-MM-DD." }, { status: 400 });

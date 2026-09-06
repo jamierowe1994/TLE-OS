@@ -1524,6 +1524,19 @@ export interface DealCompliance {
  * anyone looks before a tenancy starts, which makes it the most important
  * place for a gap to be visible.
  */
+/**
+ * Every compliance item REX holds for ONE property, plus a "nothing on file"
+ * row for each certificate it ought to have and doesn't - for the property
+ * file panel (6 Sep 2026). `checked` false means REX did not give a complete
+ * answer, and the caller must say so rather than show an empty list.
+ */
+export async function getComplianceItemsFor(propertyId: string): Promise<{ items: ComplianceItem[]; checked: boolean }> {
+  if (!rexConfigured() || !propertyId) return { items: [], checked: false };
+  const { byParent, unchecked } = await fetchComplianceByParent([String(propertyId)]);
+  const checked = !unchecked.has(String(propertyId));
+  return { items: addMissingRequired(byParent.get(String(propertyId)) ?? [], checked), checked };
+}
+
 export async function getComplianceForProperties(
   propertyIds: string[]
 ): Promise<Map<string, DealCompliance>> {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { requireAnyCapability } from "@/lib/admin";
+import { whoIs } from "@/lib/admin";
 
 /**
  * POST /api/compliance/certificates/read → what one certificate says.
@@ -60,8 +60,8 @@ const TOOL: Anthropic.Tool = {
 };
 
 export async function POST(req: NextRequest) {
-  const me = await requireAnyCapability(req, ["manage:switches", "see:agent-compliance"]);
-  if (!me) return NextResponse.json({ ok: false, error: "Not yours." }, { status: 403 });
+  const { actor } = await whoIs(req);
+  if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!process.env.ANTHROPIC_API_KEY) return NextResponse.json({ ok: false, error: "No reader key on this environment." }, { status: 503 });
 
   const form = await req.formData().catch(() => null);

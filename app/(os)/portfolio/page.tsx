@@ -5,7 +5,7 @@ import PageHeader from "@/components/PageHeader";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import PortfolioMap from "@/components/PortfolioMap";
 import FindingData from "@/components/business/FindingData";
-import CertificatesOnFile from "@/components/CertificatesOnFile";
+import PropertyFile from "@/components/PropertyFile";
 import { Pill } from "@/components/Wire";
 import { rexListingUrl } from "@/lib/business/rex-links";
 import {
@@ -313,53 +313,15 @@ function PropertyPanel({
             )}
           </section>
 
-          <section className="mt-5">
-            <div className="mb-2 flex items-baseline justify-between">
-              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">Certificates</p>
-              {summary && <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${summary.tone}`}>{summary.label}</span>}
-            </div>
-            {certsState === "checking" && <FindingData label="Checking REX" className="text-[12px]" />}
-            {certsState === "slow" && <p className="text-[12px] text-muted">Still reading certificates from REX. They will appear when it finishes.</p>}
-            {certsState === "failed" && <p className="text-[12px] text-accent-dark">Couldn&rsquo;t read certificates from REX.</p>}
-            {certsState === "ready" && !cert && (
-              <p className="text-[12px] text-muted">REX holds no property record for this listing, so there is nothing to check.</p>
+          {/* The property file - the same panel the listing, the application
+              and the appraisal show, so the certificates travel with the home. */}
+          <div className="mt-5">
+            {p.propertyId ? (
+              <PropertyFile propertyId={p.propertyId} screen="the portfolio" />
+            ) : (
+              <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">REX holds no property record for this listing, so there is nothing to check.</p>
             )}
-            {cert && (
-              <ul className="space-y-2">
-                {certRows.map((r) => (
-                  <li key={r.key} className="flex items-center justify-between gap-3 rounded-xl border border-line/70 bg-panel px-4 py-2.5">
-                    <div className="min-w-0">
-                      <p className="text-[13px]">{CERT_META[r.key].label}</p>
-                      <p className="text-[11px] text-muted">
-                        {r.expires == null
-                          ? "No record in REX"
-                          : r.expires < 0
-                            ? `Expired ${Math.abs(r.expires)} days ago`
-                            : `Expires in ${r.expires} days`}
-                        {r.expires != null && !r.attached ? " · no document attached" : ""}
-                      </p>
-                    </div>
-                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${TONE[r.status]}`}>
-                      {r.status === "ok" ? "In date" : r.status === "watch" ? "Due soon" : r.status === "urgent" ? "Due now" : r.status}
-                    </span>
-                  </li>
-                ))}
-                {cert.hmo && <li className="text-[11px] text-muted">Licensed HMO.</li>}
-                {!cert.hasGas && <li className="text-[11px] text-muted">No gas record on file: either no gas supply, or gas nobody has certified. REX does not say which.</li>}
-              </ul>
-            )}
-          </section>
-
-          {/* The documents themselves. Most of the backlog (6 Sep) landed on
-              managed homes with no live listing, so this is where a person
-              finds the file. */}
-          <section className="mt-5">
-            <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Certificates on file</p>
-            <CertificatesOnFile
-              propertyId={p.propertyId}
-              emptyText={p.propertyId ? "None held in the OS for this home yet." : "REX holds no property record for this listing, so nothing can be filed against it."}
-            />
-          </section>
+          </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-2">
             <a

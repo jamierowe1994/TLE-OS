@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import ResearchPanel from "@/components/ResearchPanel";
+import PropertyFile from "@/components/PropertyFile";
 import Link from "next/link";
 import { Pill } from "@/components/Wire";
 import { MA_STAGES, effectiveStage, needsValuation, type MarketAppraisal } from "@/lib/market-appraisal";
@@ -189,6 +190,10 @@ export default function AppraisalDrawer({
                 Build the presentation
               </Link>
               <ResearchPanel address={appraisal.address} postcode={appraisal.postcode} beds={2} />
+              {/* A certificate the landlord hands over at the appraisal is
+                  filed NOW, against the address, and is on the property the
+                  day it is instructed. */}
+              <PropertyFile address={`${appraisal.address}${appraisal.postcode && !appraisal.address.includes(appraisal.postcode) ? `, ${appraisal.postcode}` : ""}`} screen="the market appraisal" />
             </div>
           </div>
         </div>

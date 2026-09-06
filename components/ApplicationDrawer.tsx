@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import PropertyPhoto from "@/components/PropertyPhoto";
+import PropertyFile from "@/components/PropertyFile";
 import { Pill } from "@/components/Wire";
 import StageSpine, { type SpineStop } from "@/components/StageSpine";
 import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
@@ -59,6 +60,8 @@ export interface AppRecord {
   id: string;
   tenant: string;
   property: string;
+  /** REX property id, when the application carries one - the property file hangs off it. */
+  propertyId?: string | null;
   locality: string;
   image: string | null;
   rent: string;
@@ -511,6 +514,11 @@ export default function ApplicationDrawer({
                 </div>
               </div>
             </div>
+          </div>
+          {/* The property file travels with the home: what the tenancy will
+              need to be compliant about, and the certificates already held. */}
+          <div className="px-6 pb-6">
+            <PropertyFile propertyId={app.propertyId ?? null} address={app.propertyId ? null : `${app.property}, ${app.locality}`} screen="the application" />
           </div>
         </div>
       </aside>
