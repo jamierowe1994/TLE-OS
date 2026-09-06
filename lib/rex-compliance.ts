@@ -196,7 +196,10 @@ export async function certificatesFor(listings: CertSubject[]): Promise<Complian
       certs.epc = { expires: daysUntil(l.epcExpiry), attached: false };
     }
 
-    const hasGasRecord = mine.some((e) => e.type_id === "gas_safety" || e.type_id === "oil_safety");
+    /* A gas entry marked not required is the landlord saying there is no gas
+       (from the signed terms of business, 6 Sep 2026): the home has no gas
+       duty, so it is not counted as missing one. */
+    const hasGasRecord = mine.some((e) => (e.type_id === "gas_safety" || e.type_id === "oil_safety") && !e.details?.[e.type_id!]?.not_required);
     if (!hasGasRecord) gasUnknown++;
 
     return {
