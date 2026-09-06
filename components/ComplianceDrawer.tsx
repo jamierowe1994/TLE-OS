@@ -5,7 +5,8 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PropertyFile from "@/components/PropertyFile";
 import { Pill } from "@/components/Wire";
 import { CERT_META, requiredCerts, statusOf, type CertKey, type CompProperty } from "@/lib/compliance";
-import { COMPLIANCE_READERS as R, houseByListing, housesIn, roomLabel, tabLabel, type House } from "@/lib/houses";
+import { COMPLIANCE_READERS as R, houseByListing, housesIn, pickerOption, roomLabel, tabLabel, type House } from "@/lib/houses";
+import RoomPicker from "@/components/RoomPicker";
 import { useDocumentOpen } from "@/lib/doc-sheet";
 
 /**
@@ -110,18 +111,20 @@ export default function ComplianceDrawer({
             </button>
           </div>
           {house && (
-            <div className="-mx-1 flex gap-1 overflow-x-auto pb-0.5 sm:flex-wrap">
-              {[{ id: "house", label: "The house", bad: false }, ...house.rooms.map((r) => ({ id: r.id, label: tabLabel(house, r, R), bad: requiredCerts(r).some((k) => ["expired", "urgent", "missing"].includes(statusOf(r.certs[k]))) }))].map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setTab(t.id)}
-                  className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-[12.5px] transition-colors ${tab === t.id ? "border-ink font-semibold text-ink" : "border-transparent text-muted hover:text-ink"}`}
-                >
-                  {t.id !== "house" && <span className={`inline-block h-1.5 w-1.5 rounded-full ${t.bad ? "bg-accent-dark" : "bg-good"}`} />}
-                  {t.label}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-2 pb-4">
+              <button
+                type="button"
+                onClick={() => setTab("house")}
+                className={`rounded-full border px-4 py-2 text-[12.5px] font-semibold transition-colors ${tab === "house" ? "border-ink bg-ink text-page" : "border-line/80 hover:border-ink"}`}
+              >
+                The house
+              </button>
+              <RoomPicker
+                options={house.rooms.map((r) => ({ id: r.id, ...pickerOption(house, r, R), bad: requiredCerts(r).some((k) => ["expired", "urgent", "missing"].includes(statusOf(r.certs[k]))) }))}
+                value={tab === "house" ? null : tab}
+                onChange={setTab}
+                placeholder={lets ? "Tenants" : "Rooms"}
+              />
             </div>
           )}
         </div>
@@ -149,9 +152,9 @@ export default function ComplianceDrawer({
             })}
           </div>
 
-          {houseView && house && (
+          {houseView && house && !lets && (
             <section className="mt-6">
-              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">{lets ? "Lets" : "Rooms"}</p>
+              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Rooms</p>
               <ul className="overflow-hidden rounded-xl border border-line/70 bg-panel">
                 {house.rooms.map((r) => {
                   const bad = requiredCerts(r).filter((k) => ["expired", "urgent", "missing"].includes(statusOf(r.certs[k])));

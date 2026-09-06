@@ -8,7 +8,8 @@ import FindingData from "@/components/business/FindingData";
 import PropertyFile from "@/components/PropertyFile";
 import { Pill } from "@/components/Wire";
 import { rexContactUrl, rexListingUrl } from "@/lib/business/rex-links";
-import { housesIn, houseByListing, roomLabel, tabLabel, tenantsInOrder, MANAGED_READERS as R, type House } from "@/lib/houses";
+import { housesIn, houseByListing, roomLabel, tabLabel, tenantsInOrder, pickerOption, MANAGED_READERS as R, type House } from "@/lib/houses";
+import RoomPicker from "@/components/RoomPicker";
 import { useDocumentOpen } from "@/lib/doc-sheet";
 import {
   CERT_META, headlineCerts, requiredCerts, statusOf,
@@ -311,19 +312,22 @@ function PropertyPanel({
             </div>
           </div>
           {house && (
-            /* The house, then a tab per room. A filled dot is a let room. */
-            <div className="-mx-1 flex gap-1 overflow-x-auto pb-0.5 sm:flex-wrap">
-              {[{ id: "house", label: "The house", let: null as boolean | null }, ...house.rooms.map((r) => ({ id: r.listingId, label: tabLabel(house, r, R), let: r.tenants.length > 0 }))].map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setTab(t.id)}
-                  className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-[12.5px] transition-colors ${tab === t.id ? "border-ink font-semibold text-ink" : "border-transparent text-muted hover:text-ink"}`}
-                >
-                  {t.let != null && <span className={`inline-block h-1.5 w-1.5 rounded-full ${t.let ? "bg-good" : "border border-line"}`} />}
-                  {t.label}
-                </button>
-              ))}
+            /* The house, and one dropdown for the rooms: the tenant's name
+               and the room they hold. Not a tab per room (James, 6 Sep). */
+            <div className="flex flex-wrap items-center gap-2 pb-4">
+              <button
+                type="button"
+                onClick={() => setTab("house")}
+                className={`rounded-full border px-4 py-2 text-[12.5px] font-semibold transition-colors ${tab === "house" ? "border-ink bg-ink text-page" : "border-line/80 hover:border-ink"}`}
+              >
+                The house
+              </button>
+              <RoomPicker
+                options={house.rooms.map((r) => ({ id: r.listingId, ...pickerOption(house, r, R) }))}
+                value={tab === "house" ? null : tab}
+                onChange={setTab}
+                placeholder={lets ? "Tenants" : "Rooms"}
+              />
             </div>
           )}
         </div>
@@ -377,24 +381,40 @@ function PropertyPanel({
             </section>
           )}
 
-          {houseView && house && (
+          {houseView && house && lets && (
+            /* REX names no rooms here: the people on the newest let are the
+               tenancy today; every earlier let stays folded away. */
             <section className="mt-6">
-              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">{lets ? "Lets" : "Rooms"}</p>
-              {lets && (
-                <p className="mb-2 text-[11.5px] text-muted">REX holds this house as one leased listing per let and records no room numbers, so each let is named by its tenant. Newest first.</p>
+              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Tenants</p>
+              <ul className="space-y-2">{tenantsInOrder(house, house.rooms[0], R).map(tenantCard)}</ul>
+              {house.rooms.length > 1 && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-[11.5px] text-muted underline-offset-2 hover:underline">{house.rooms.length - 1} earlier {house.rooms.length - 1 === 1 ? "let" : "lets"} on record in REX</summary>
+                  <ul className="mt-2 overflow-hidden rounded-xl border border-line/70 bg-panel">
+                    {house.rooms.slice(1).map((r) => (
+                      <li key={r.listingId} className="border-b border-line/40 last:border-0">
+                        <button type="button" onClick={() => setTab(r.listingId)} className="grid w-full grid-cols-[minmax(0,1fr)_100px_80px] items-center gap-3 px-4 py-2 text-left text-[12px] transition-colors hover:bg-box">
+                          <span className="min-w-0 truncate">{tabLabel(house, r, R)}</span>
+                          <span className="text-muted">{day(r.letSince)}</span>
+                          <span className="figures text-right">{r.rent == null ? "—" : money(r.rent)}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               )}
+            </section>
+          )}
+
+          {houseView && house && !lets && (
+            <section className="mt-6">
+              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Rooms</p>
               <ul className="overflow-hidden rounded-xl border border-line/70 bg-panel">
                 {house.rooms.map((r) => (
                   <li key={r.listingId} className="border-b border-line/40 last:border-0">
-                    <button type="button" onClick={() => setTab(r.listingId)} className={`grid w-full items-center gap-3 px-4 py-2.5 text-left text-[12.5px] transition-colors hover:bg-box ${lets ? "grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_100px_90px]" : "grid-cols-[84px_minmax(0,1fr)_auto] sm:grid-cols-[84px_minmax(0,1fr)_100px_90px]"}`}>
-                      {lets ? (
-                        <span className="min-w-0 truncate"><span className="font-semibold">{tabLabel(house, r, R)}</span>{r.tenants.length > 1 ? <span className="text-muted"> · {r.tenants.length} on the tenancy</span> : null}</span>
-                      ) : (
-                        <>
-                          <span className="font-semibold">{roomLabel(r)}</span>
-                          <span className="min-w-0 truncate">{r.tenants[0]?.name ?? <span className="text-muted">Empty</span>}{r.tenants.length > 1 ? <span className="text-muted"> +{r.tenants.length - 1}</span> : null}</span>
-                        </>
-                      )}
+                    <button type="button" onClick={() => setTab(r.listingId)} className="grid w-full grid-cols-[84px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 text-left text-[12.5px] transition-colors hover:bg-box sm:grid-cols-[84px_minmax(0,1fr)_100px_90px]">
+                      <span className="font-semibold">{roomLabel(r)}</span>
+                      <span className="min-w-0 truncate">{r.tenants[0]?.name ?? <span className="text-muted">Empty</span>}{r.tenants.length > 1 ? <span className="text-muted"> +{r.tenants.length - 1}</span> : null}</span>
                       <span className="hidden text-muted sm:block">{day(r.letSince)}</span>
                       <span className="figures text-right">{r.rent == null ? <span className="text-muted">—</span> : `${money(r.rent)}${r.rentPeriod === "week" ? " pw" : ""}`}</span>
                     </button>

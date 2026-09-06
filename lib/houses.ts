@@ -163,3 +163,11 @@ export function houseByListing<T extends Addressed>(houses: Map<string, House<T>
   for (const h of houses.values()) for (const p of h.all) m.set(r.id(p), h);
   return m;
 }
+
+/** What the room picker shows for one room or let: the tenant, and where. */
+export function pickerOption<T extends Addressed>(house: House<T>, p: T, r: HouseReaders<T>): { name: string; where: string } {
+  const tenants = house.kind === "rooms" ? r.tenants(p) : ownTenants(house, p, r);
+  const name = tenants.length ? `${tenants[0].name}${tenants.length > 1 ? ` +${tenants.length - 1}` : ""}` : "Empty";
+  const where = house.kind === "rooms" ? roomLabel(p) : `let ${shortDate(r.since(p))}`;
+  return { name, where };
+}
