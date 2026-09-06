@@ -180,8 +180,12 @@ export async function POST(req: NextRequest) {
   if (issueRaw && !YMD.test(issueRaw)) return NextResponse.json({ ok: false, error: "issue must be YYYY-MM-DD." }, { status: 400 });
   if (file.size > 25 * 1024 * 1024) return NextResponse.json({ ok: false, error: "That file is over 25MB." }, { status: 413 });
 
-  const id = uid();
   const name = file.name || `${type}.pdf`;
+  /* The same file filed twice on the same home (6 Sep: thirty rooms each
+     carrying the house's EICR) is one certificate, not thirty. */
+  const twin = await q<Row>(`SELECT * FROM os_certificates WHERE property_id = $1 AND type_id = $2 AND name = $3 AND expiry = $4 ORDER BY added_at LIMIT 1`, [propertyId, type, name, expiry]);
+  if (twin[0]) return NextResponse.json({ ok: true, duplicate: true, certificate: out(twin[0]) });
+  const id = uid();
   const key = `documents/${safeName(`compliance-${propertyId}-${CERT_KEY[type] ?? type}`)}/${Date.now()}-${safeName(name)}`;
   const bytes = new Uint8Array(await file.arrayBuffer());
   await withR2((client) =>
