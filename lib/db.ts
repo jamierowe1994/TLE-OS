@@ -1204,6 +1204,31 @@ CREATE TABLE IF NOT EXISTS os_certificates (
   rex_at        TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS os_certificates_property ON os_certificates (property_id, type_id);
+
+-- THE OS'S OWN PROPERTY RECORD (6 Sep 2026). One row per REX PM property, linked
+-- to its REX CRM property where the address matched, "not on REX" where it did
+-- not. See lib/os-properties.ts for why it exists.
+CREATE TABLE IF NOT EXISTS os_properties (
+  id              TEXT PRIMARY KEY,
+  source          TEXT NOT NULL DEFAULT 'rex-pm',
+  ref             TEXT NOT NULL DEFAULT '',
+  address         TEXT NOT NULL,
+  name            TEXT NOT NULL DEFAULT '',
+  locality        TEXT NOT NULL DEFAULT '',
+  postcode        TEXT,
+  town            TEXT,
+  bedrooms        INTEGER,
+  management      TEXT,
+  categories      JSONB NOT NULL DEFAULT '[]'::jsonb,
+  hmo             BOOLEAN NOT NULL DEFAULT FALSE,
+  no_gas          BOOLEAN NOT NULL DEFAULT FALSE,
+  rex_property_id TEXT,
+  match_how       TEXT,
+  active          BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_properties_rex ON os_properties (rex_property_id);
 CREATE INDEX IF NOT EXISTS os_plc_cases_agent ON os_plc_cases (lower(agent_email), created_at DESC);
 
 -- The shadow log: what the rules recommended, and what the person decided.

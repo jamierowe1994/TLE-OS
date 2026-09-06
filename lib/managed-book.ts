@@ -1,5 +1,6 @@
 import "server-only";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
+import { notOnRex } from "@/lib/os-properties";
 import type {
   ManagedBook,
   ManagedCounts,
@@ -238,6 +239,40 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
   }
 
   const properties = rows.map(toProperty).filter((p) => p.listingId);
+  /* Homes REX CRM has no property for (6 Sep 2026): the OS holds them so
+     the managed book reads like REX PM's. Only for the whole-business view;
+     an agent's own book stays REX's, since these carry no agent. */
+  if (!rexUserId) {
+    for (const o of await notOnRex().catch(() => [])) {
+      properties.push({
+        listingId: o.id,
+        propertyId: o.id,
+        name: o.name || o.address,
+        locality: o.locality,
+        address: o.address,
+        town: o.town,
+        postcode: o.postcode,
+        lat: null,
+        lng: null,
+        rent: null,
+        rentPeriod: null,
+        rentMonthly: null,
+        service: o.management && /active/i.test(o.management) ? "Managed" : null,
+        letType: null,
+        letSince: null,
+        onBooksSince: null,
+        agent: null,
+        landlord: null,
+        tenants: [],
+        image: null,
+        images: [],
+        epcExpiry: null,
+        epcRating: null,
+        onRex: false,
+        ref: o.ref,
+      });
+    }
+  }
   const landlords = landlordsOf(properties);
   return {
     properties,

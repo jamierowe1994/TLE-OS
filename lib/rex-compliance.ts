@@ -2,6 +2,8 @@ import "server-only";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { fetchListingBook } from "@/lib/rex-listings";
 import type { CertKey, CompProperty } from "@/lib/compliance";
+import { factsByRexId, notOnRex } from "@/lib/os-properties";
+import { osCertsFor } from "@/lib/os-certs";
 
 /**
  * The compliance book, live from REX.
@@ -219,6 +221,38 @@ export async function certificatesFor(listings: CertSubject[]): Promise<Complian
       certs,
     };
   });
+
+  /* What the OS knows on its own record (6 Sep 2026): REX PM's categories
+     make a home an HMO or a no-gas home even where REX CRM holds no licence
+     entry or no not-required gas entry. */
+  const facts = await factsByRexId().catch(() => new Map());
+  for (const p of properties) {
+    const f = facts.get(p.id);
+    if (!f) continue;
+    if (f.hmo) p.hmo = true;
+    if (f.noGas && p.certs.gas?.expires == null) p.hasGas = false;
+  }
+
+  /* Homes REX CRM has no property for. The OS is their record: its own
+     certificates are their compliance, and they count in every figure so
+     the OS matches REX PM's managed book, not REX CRM's. */
+  const extra = await notOnRex().catch(() => []);
+  const extraCerts = await osCertsFor(extra.map((p) => p.id)).catch(() => new Map());
+  for (const o of extra) {
+    if (listings.some((l) => l.propertyId === o.id)) continue;
+    const certs = extraCerts.get(o.id) ?? {};
+    properties.push({
+      id: o.id,
+      name: o.name || o.address,
+      locality: o.locality,
+      landlord: "—",
+      tenant: undefined,
+      hmo: o.hmo,
+      hasGas: !o.noGas,
+      certs,
+      onRex: false,
+    });
+  }
 
   return {
     properties,

@@ -4,6 +4,7 @@ import { getComplianceItemsFor, type ComplianceItem } from "@/lib/business/rex-s
 import { matchProperty, pendingKeyFor, type MatchResult } from "@/lib/property-match";
 import { listVault, type VaultFile } from "@/lib/vault";
 import { rexConfigured } from "@/lib/rex";
+import { osCertRows } from "@/lib/os-certs";
 
 /**
  * GET /api/property-file?property=<REX property id>
@@ -66,9 +67,10 @@ export async function GET(req: NextRequest) {
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const propertyParam = (req.nextUrl.searchParams.get("property") ?? "").trim();
   const address = (req.nextUrl.searchParams.get("address") ?? "").trim();
-  if (!/^\d+$/.test(propertyParam) && !address) return NextResponse.json({ ok: false, error: "Which property?" }, { status: 400 });
+  const osOnly = /^pm-[0-9a-f-]+$/i.test(propertyParam);
+  if (!/^\d+$/.test(propertyParam) && !osOnly && !address) return NextResponse.json({ ok: false, error: "Which property?" }, { status: 400 });
 
-  let propertyId: string | null = /^\d+$/.test(propertyParam) ? propertyParam : null;
+  let propertyId: string | null = /^\d+$/.test(propertyParam) || osOnly ? propertyParam : null;
   let match: MatchResult | null = null;
   if (!propertyId && address) {
     match = await matchProperty(address).catch(() => null);
@@ -77,7 +79,7 @@ export async function GET(req: NextRequest) {
 
   const pendingKey = address ? pendingKeyFor(address) : null;
   const [rex, files, pendingFiles] = await Promise.all([
-    propertyId ? getComplianceItemsFor(propertyId).catch(() => ({ items: [] as ComplianceItem[], checked: false })) : Promise.resolve({ items: [] as ComplianceItem[], checked: false }),
+    propertyId && !osOnly ? getComplianceItemsFor(propertyId).catch(() => ({ items: [] as ComplianceItem[], checked: false })) : Promise.resolve({ items: [] as ComplianceItem[], checked: osOnly }),
     propertyId ? listVault(propertyId).catch(() => [] as VaultFile[]) : Promise.resolve([] as VaultFile[]),
     pendingKey ? listVault(pendingKey).catch(() => [] as VaultFile[]) : Promise.resolve([] as VaultFile[]),
   ]);
@@ -87,6 +89,18 @@ export async function GET(req: NextRequest) {
 
   const rows: FileRow[] = [];
   const seenVault = new Set<string>();
+  /* A home REX CRM does not hold: the OS's own certificates are its rows. */
+  if (osOnly && propertyId) {
+    const today = new Date().toISOString().slice(0, 10);
+    const latest = new Map<string, { expiry: string; issue: string | null }>();
+    for (const r of await osCertRows([propertyId]).catch(() => [])) if (!latest.has(r.type_id)) latest.set(r.type_id, { expiry: r.expiry, issue: r.issue });
+    for (const [type, v] of latest) {
+      const vk = VAULT_KEY[type];
+      const own = vk ? byVaultKey.get(vk) ?? [] : [];
+      if (vk) seenVault.add(vk);
+      rows.push({ type, label: Object.entries(INTAKE_TYPE).find(([, t]) => t === type)?.[0]?.toUpperCase() ?? type, state: v.expiry < today ? "expired" : "valid", expiry: v.expiry, issued: v.issue, inRex: false, fileInRex: false, files: own });
+    }
+  }
   for (const it of rex.items) {
     if (NOT_A_CERTIFICATE.has(it.type)) continue;
     const vk = VAULT_KEY[it.type];

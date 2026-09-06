@@ -99,6 +99,12 @@ async function writeOne(r: Row, provenance: string, req_refresh = false): Promis
     const rows = await q<Row>(`UPDATE os_certificates SET rex_note = $2, rex_at = NOW() WHERE id = $1 RETURNING *`, [r.id, "Held against the address until it has a REX property."]);
     return rows[0];
   }
+  /* A home REX CRM does not hold (6 Sep: the OS carries every REX PM home,
+     linked or not): the OS is its record, and there is nothing in REX to write. */
+  if (/^pm-/i.test(r.property_id)) {
+    const rows = await q<Row>(`UPDATE os_certificates SET rex_note = $2, rex_at = NOW() WHERE id = $1 RETURNING *`, [r.id, "Not on REX: this home has no REX property, so the OS holds the certificate."]);
+    return rows[0];
+  }
   const blocked = await rexWriteBlockedBecause();
   const w = blocked
     ? { ok: false, note: blocked, entryId: undefined as string | undefined }
@@ -168,7 +174,7 @@ export async function POST(req: NextRequest) {
   const propertyName = (String(form.get("propertyName") ?? "").trim() || address).slice(0, 200);
   const source = String(form.get("source") ?? "dropped file").trim().slice(0, 120);
   if (!(file instanceof File) || !file.size) return NextResponse.json({ ok: false, error: "No file." }, { status: 400 });
-  if (!/^(\d+|pending-[a-z0-9-]+)$/.test(propertyId)) return NextResponse.json({ ok: false, error: "propertyId must be the REX property id, or give an address." }, { status: 400 });
+  if (!/^(\d+|pending-[a-z0-9-]+|pm-[0-9a-f-]+)$/i.test(propertyId)) return NextResponse.json({ ok: false, error: "propertyId must be the REX property id, an OS property id, or give an address." }, { status: 400 });
   if (!TYPES.has(type)) return NextResponse.json({ ok: false, error: `type must be one of ${[...TYPES].join(", ")}.` }, { status: 400 });
   if (!PLAUSIBLE(expiry)) return NextResponse.json({ ok: false, error: "expiry must be YYYY-MM-DD between 2000 and 2045." }, { status: 400 });
   if (issueRaw && !YMD.test(issueRaw)) return NextResponse.json({ ok: false, error: "issue must be YYYY-MM-DD." }, { status: 400 });

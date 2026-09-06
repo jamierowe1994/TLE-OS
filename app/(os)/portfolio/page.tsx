@@ -254,7 +254,7 @@ function PropertyPanel({
             <h2 className="text-[20px] leading-tight">{p.name}</h2>
             <p className="mt-1 text-[12px] text-muted">
               {p.locality || "—"}
-              {p.service ? ` · ${p.service}` : " · service not set in REX"}
+              {p.onRex === false ? ` · ${p.service ?? "Managed"} in REX PM${p.ref ? ` (${p.ref})` : ""} · not on REX` : p.service ? ` · ${p.service}` : " · service not set in REX"}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
@@ -324,14 +324,18 @@ function PropertyPanel({
           </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-2">
-            <a
-              href={rexListingUrl(p.listingId, "leased")}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-full border border-ink/80 px-4 py-2 text-[12px] font-semibold transition-colors hover:bg-ink hover:text-page"
-            >
-              Open in REX
-            </a>
+            {p.onRex === false ? (
+              <span className="text-[11.5px] text-muted">Not on REX: the OS is this home's record, brought over from REX PM.</span>
+            ) : (
+              <a
+                href={rexListingUrl(p.listingId, "leased")}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full border border-ink/80 px-4 py-2 text-[12px] font-semibold transition-colors hover:bg-ink hover:text-page"
+              >
+                Open in REX
+              </a>
+            )}
             {everything && p.agent && <span className="text-[11.5px] text-muted">Looked after by {p.agent.name}</span>}
           </div>
         </div>
@@ -351,6 +355,8 @@ export default function Portfolio() {
   const [agent, setAgent] = useState<string | null>(null);
   const [town, setTown] = useState<string | null>(null);
   const [lookOnly, setLookOnly] = useState(false);
+  /* Homes REX CRM has no property for: the OS holds them from REX PM (6 Sep 2026). */
+  const [notOnRexOnly, setNotOnRexOnly] = useState(false);
   const [sort, setSort] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   /* ?open=<listing id> from the search bar. */
@@ -465,6 +471,7 @@ export default function Portfolio() {
       if (agent && p.agent?.id !== agent) return false;
       if (town && p.town !== town) return false;
       if (lookOnly && !attention.has(p.listingId)) return false;
+      if (notOnRexOnly && p.onRex !== false) return false;
       if (needle) {
         const hay = [p.address, p.name, p.locality, p.landlord?.name, p.landlord?.email, p.agent?.name, ...p.tenants.map((t) => t.name)]
           .filter(Boolean).join(" ").toLowerCase();
@@ -492,9 +499,9 @@ export default function Portfolio() {
       }
     });
     return rows;
-  }, [book, q, service, agent, town, lookOnly, sort, attention, certBy, summaryOf]);
+  }, [book, q, service, agent, town, lookOnly, notOnRexOnly, sort, attention, certBy, summaryOf]);
 
-  const filtering = Boolean(q.trim() || service || agent || town || lookOnly);
+  const filtering = Boolean(q.trim() || service || agent || town || lookOnly || notOnRexOnly);
 
   /* Landlords: those with at least one property in the filtered set, or, when
      only the search box is in play, a name or email that matches it. */
@@ -610,13 +617,16 @@ export default function Portfolio() {
             >
               Needs a look
             </button>
+            <button type="button" onClick={() => setNotOnRexOnly((v) => !v)} className={pillClass(notOnRexOnly)} title="Homes REX PM manages that REX CRM has no property for; the OS is their record">
+              Not on REX
+            </button>
             <Filter label="Sort" options={SORTS} value={sort} onChange={setSort} />
           </div>
 
           {book && filtering && (
             <p className="mt-2 text-[11.5px] text-muted">
               {filtered.length} of {book.counts.properties} properties · {money(rentRoll)} pcm ·{" "}
-              <button type="button" onClick={() => { setQ(""); setService(null); setAgent(null); setTown(null); setLookOnly(false); }} className="underline hover:text-ink">
+              <button type="button" onClick={() => { setQ(""); setService(null); setAgent(null); setTown(null); setLookOnly(false); setNotOnRexOnly(false); }} className="underline hover:text-ink">
                 clear
               </button>
             </p>
@@ -660,6 +670,7 @@ export default function Portfolio() {
                           </span>
                           <span className="hidden md:block">
                             {p.service ? <Pill tone={p.service === "Managed" ? "good" : "neutral"}>{p.service}</Pill> : <span className="text-[11px] text-muted">Not set</span>}
+                            {p.onRex === false && <Pill tone="accent">Not on REX</Pill>}
                           </span>
                           <span className="hidden min-w-0 truncate text-[12px] md:block">
                             {p.landlord ? p.landlord.name : <span className="text-muted">Not on record</span>}

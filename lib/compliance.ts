@@ -103,6 +103,8 @@ export type CompProperty = {
   hmo: boolean;
   hasGas: boolean;
   certs: Partial<Record<CertKey, Cert>>;
+  /** False when REX CRM has no property for this home and the OS is its record (6 Sep 2026). Absent = on REX. */
+  onRex?: boolean;
 };
 
 /**

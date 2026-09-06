@@ -62,6 +62,10 @@ export interface ManagedProperty {
   images: string[];
   epcExpiry: string | null;
   epcRating: string | null;
+  /** False when REX CRM has no property for this home and the OS is its record (6 Sep 2026). */
+  onRex?: boolean;
+  /** REX PM's reference (PRP00341), where the home came from there. */
+  ref?: string;
 }
 
 export interface ManagedLandlord {
