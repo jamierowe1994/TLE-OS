@@ -12,3 +12,8 @@ const REX_APP_URL = "https://app.rexsoftware.com";
 export function rexListingUrl(listingId: string, lens: RexLens): string {
   return `${REX_APP_URL}/listings/#lens=${lens}&id=${encodeURIComponent(listingId)}`;
 }
+
+/* Contacts follow the same shape: https://app.rexsoftware.com/contacts/#id=1234 */
+export function rexContactUrl(contactId: string): string {
+  return `${REX_APP_URL}/contacts/#id=${encodeURIComponent(contactId)}`;
+}

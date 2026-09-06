@@ -5,6 +5,9 @@ import { matchProperty, pendingKeyFor, type MatchResult } from "@/lib/property-m
 import { listVault, type VaultFile } from "@/lib/vault";
 import { rexConfigured } from "@/lib/rex";
 import { osCertRows } from "@/lib/os-certs";
+import { managedBookFor } from "@/lib/managed-book-cache";
+import { scopeFor } from "@/lib/scope";
+import { houseKeyOf, isRoomAddress } from "@/lib/address-parse";
 
 /**
  * GET /api/property-file?property=<REX property id>
@@ -60,6 +63,44 @@ export interface FileRow {
   inRex: boolean;
   fileInRex: boolean;
   files: VaultFile[];
+  /** Held on the house (or another room of it), not this room's own record. */
+  fromHouse?: string;
+}
+
+/* A shared house: the certificate is the building's. When a room's own
+   record lacks a type, the house's row (or another room's) stands in for it,
+   labelled with where it is held. */
+async function houseRowsFor(req: NextRequest, propertyId: string, seen: Set<string>): Promise<FileRow[]> {
+  const scope = await scopeFor(req).catch(() => null);
+  if (!scope || scope.unlinked) return [];
+  const { book } = await managedBookFor(scope.rexUserId).catch(() => ({ book: null }));
+  if (!book) return [];
+  const me = book.properties.find((p) => p.propertyId === propertyId);
+  if (!me) return [];
+  const myAddr = `${me.name}, ${me.locality}`;
+  const key = houseKeyOf(myAddr);
+  if (!key) return [];
+  const siblings = book.properties.filter((p) => p.propertyId && p.propertyId !== propertyId && houseKeyOf(`${p.name}, ${p.locality}`) === key);
+  if (!siblings.length || (!isRoomAddress(myAddr) && !siblings.some((p) => isRoomAddress(`${p.name}, ${p.locality}`)))) return [];
+  /* The house itself first, then the rooms. */
+  siblings.sort((a, b) => Number(isRoomAddress(`${a.name}, ${a.locality}`)) - Number(isRoomAddress(`${b.name}, ${b.locality}`)));
+  const out: FileRow[] = [];
+  const held = new Set(seen);
+  for (const sib of siblings) {
+    const [rex, files] = await Promise.all([
+      getComplianceItemsFor(sib.propertyId as string).catch(() => ({ items: [] as ComplianceItem[], checked: false })),
+      listVault(sib.propertyId as string).catch(() => [] as VaultFile[]),
+    ]);
+    const byVaultKey = new Map<string, VaultFile[]>();
+    for (const f of files) byVaultKey.set(f.certKey, [...(byVaultKey.get(f.certKey) ?? []), f]);
+    for (const it of rex.items) {
+      if (NOT_A_CERTIFICATE.has(it.type) || held.has(it.type) || it.state === "missing") continue;
+      held.add(it.type);
+      const vk = VAULT_KEY[it.type];
+      out.push({ type: it.type, label: it.label, state: it.state, expiry: it.expiry, issued: it.issued, inRex: Boolean(it.entryId), fileInRex: Boolean(it.hasDocument), files: vk ? byVaultKey.get(vk) ?? [] : [], fromHouse: sib.name });
+    }
+  }
+  return out;
 }
 
 export async function GET(req: NextRequest) {
@@ -113,6 +154,16 @@ export async function GET(req: NextRequest) {
   for (const [vk, own] of byVaultKey) {
     if (seenVault.has(vk)) continue;
     rows.push({ type: INTAKE_TYPE[vk] ?? vk, label: own[0]?.label ?? vk, state: "held-here", expiry: null, issued: null, inRex: false, fileInRex: false, files: own });
+  }
+  /* A room of a shared house reads the house's certificates where it has
+     none of its own; a missing row on the room is replaced by the house's. */
+  if (propertyId && !osOnly) {
+    const own = new Set(rows.filter((r) => r.state !== "missing").map((r) => r.type));
+    const fromHouse = await houseRowsFor(req, propertyId, own).catch(() => [] as FileRow[]);
+    for (const h of fromHouse) {
+      const at = rows.findIndex((r) => r.type === h.type);
+      if (at >= 0) rows[at] = h; else rows.push(h);
+    }
   }
   rows.sort((a, b) => (ORDER.indexOf(a.type) + 1 || 99) - (ORDER.indexOf(b.type) + 1 || 99));
 

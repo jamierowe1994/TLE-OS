@@ -19,7 +19,7 @@ import { Pill } from "@/components/Wire";
  */
 
 interface VaultFile { key: string; certKey: string; label: string; name: string; size: number; uploadedAt: string | null; open: string }
-interface Row { type: string; label: string; state: "valid" | "expiring" | "expired" | "missing" | "not-required" | "held-here"; expiry: string | null; issued: string | null; inRex: boolean; fileInRex: boolean; files: VaultFile[] }
+interface Row { type: string; label: string; state: "valid" | "expiring" | "expired" | "missing" | "not-required" | "held-here"; expiry: string | null; issued: string | null; inRex: boolean; fileInRex: boolean; files: VaultFile[]; fromHouse?: string }
 interface Candidate { id: string; name: string; locality: string }
 interface Answer {
   ok: boolean;
@@ -269,6 +269,7 @@ export default function PropertyFile({
                   <span className="text-[11px] text-muted">
                     {r.expiry ? `${r.state === "expired" ? "Expired" : "Expires"} ${day(r.expiry)}` : r.issued ? `Issued ${day(r.issued)}` : ""}
                     {r.inRex && !r.fileInRex && r.expiry ? " · no document in REX" : ""}
+                    {r.fromHouse ? ` · held on ${r.fromHouse}` : ""}
                   </span>
                   <button type="button" onClick={() => openPicker(r.type)} className="ml-auto rounded-full border border-line/80 px-3 py-1 text-[11px] hover:border-ink/40">
                     Attach

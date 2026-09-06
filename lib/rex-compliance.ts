@@ -4,6 +4,7 @@ import { fetchListingBook } from "@/lib/rex-listings";
 import type { CertKey, CompProperty } from "@/lib/compliance";
 import { activeOsProperties, factsByRexId } from "@/lib/os-properties";
 import { osCertsFor } from "@/lib/os-certs";
+import { houseKeyOf, isRoomAddress } from "@/lib/address-parse";
 
 /**
  * The compliance book, live from REX.
@@ -274,6 +275,38 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       certs,
       onRex: false,
     });
+  }
+
+  /* A shared house's certificates are the house's (James, 6 Sep): gas, EICR,
+     EPC and the licence are done for the building. Every room inherits the
+     best the house or any of its rooms holds, per type, so a room REX never
+     had a certificate written on still reads in date. Flats are not rooms
+     and are left alone. */
+  const houses = new Map<string, CompProperty[]>();
+  for (const p of properties) {
+    const addr = `${p.name}, ${p.locality}`;
+    if (!isRoomAddress(addr) && !properties.some((o) => o !== p && isRoomAddress(`${o.name}, ${o.locality}`) && houseKeyOf(`${o.name}, ${o.locality}`) === houseKeyOf(addr))) continue;
+    const key = houseKeyOf(addr);
+    if (!key) continue;
+    (houses.get(key) ?? houses.set(key, []).get(key)!).push(p);
+  }
+  for (const members of houses.values()) {
+    if (members.length < 2) continue;
+    const best: CompProperty["certs"] = {};
+    for (const m of members) for (const [k, c] of Object.entries(m.certs) as [CertKey, NonNullable<CompProperty["certs"][CertKey]>][]) {
+      const held = best[k];
+      if (!held || (c.expires != null && (held.expires == null || c.expires > held.expires))) best[k] = c;
+    }
+    const anyGas = members.some((m) => m.hasGas);
+    const anyHmo = members.some((m) => m.hmo);
+    for (const m of members) {
+      for (const [k, c] of Object.entries(best) as [CertKey, NonNullable<CompProperty["certs"][CertKey]>][]) {
+        const own = m.certs[k];
+        if (!own || (c.expires != null && (own.expires == null || c.expires > own.expires))) m.certs[k] = { ...c, inherited: true };
+      }
+      m.hasGas = anyGas && !(m.certs.gas?.notRequired && m.certs.gas?.expires == null);
+      m.hmo = anyHmo;
+    }
   }
 
   return {

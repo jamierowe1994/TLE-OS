@@ -7,7 +7,8 @@ import PortfolioMap from "@/components/PortfolioMap";
 import FindingData from "@/components/business/FindingData";
 import PropertyFile from "@/components/PropertyFile";
 import { Pill } from "@/components/Wire";
-import { rexListingUrl } from "@/lib/business/rex-links";
+import { rexContactUrl, rexListingUrl } from "@/lib/business/rex-links";
+import { housesIn, houseByListing, roomLabel, type House } from "@/lib/houses";
 import {
   CERT_META, headlineCerts, requiredCerts, statusOf,
   type CertKey, type CertStatus, type CompProperty,
@@ -194,10 +195,12 @@ function Contact({ p, muted = false }: { p: Party; muted?: boolean }) {
 /* ----------------------------------------------------------- the panel -- */
 
 function PropertyPanel({
-  property, cert, certsState, everything, onClose, onStep,
+  property, house, certFor, certsState, everything, onClose, onStep,
 }: {
   property: ManagedProperty;
-  cert: CompProperty | undefined;
+  /** The shared house this listing belongs to, when it is one. */
+  house: House | null;
+  certFor: (p: ManagedProperty) => CompProperty | undefined;
   certsState: CertsState["status"];
   everything: boolean;
   onClose: () => void;
@@ -205,14 +208,18 @@ function PropertyPanel({
 }) {
   const [shown, setShown] = useState(false);
   const [at, setAt] = useState(0);
-  const p = property;
-  const shots = p.images.length ? p.images : p.image ? [p.image] : [];
+  /* "house", or a room's listing id. A plain home has no tabs. */
+  const [tab, setTab] = useState<string>("house");
 
   useEffect(() => {
     const t = requestAnimationFrame(() => setShown(true));
     return () => cancelAnimationFrame(t);
   }, []);
-  useEffect(() => { setAt(0); }, [p.listingId]);
+  useEffect(() => {
+    setAt(0);
+    /* Opened from a room's row or the search bar: land on that room. */
+    setTab(house && house.rooms.some((r) => r.listingId === property.listingId) ? property.listingId : "house");
+  }, [property.listingId, house]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -223,6 +230,14 @@ function PropertyPanel({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, onStep]);
 
+  const room = house && tab !== "house" ? house.rooms.find((r) => r.listingId === tab) ?? null : null;
+  /* What the body describes: a room, the house's own record, or the home. */
+  const p: ManagedProperty = room ?? house?.house ?? (house ? house.rooms[0] : property);
+  const houseView = Boolean(house) && !room;
+  const shots = p.images.length ? p.images : p.image ? [p.image] : [];
+  const cert = certFor(p);
+  void certsState;
+
   const summary = summarise(cert);
   const certRows: Array<{ key: CertKey; status: CertStatus; expires: number | null; attached: boolean }> = cert
     ? requiredCerts(cert).map((key) => {
@@ -230,12 +245,39 @@ function PropertyPanel({
         return { key, status: statusOf(c), expires: c?.expires ?? null, attached: c?.attached ?? false };
       })
     : [];
+  void certRows;
+  void summary;
 
   const fact = (label: string, value: React.ReactNode) => (
     <div>
       <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">{label}</p>
       <p className="mt-0.5 text-[13px]">{value}</p>
     </div>
+  );
+
+  const letRooms = house ? house.rooms.filter((r) => r.tenants.length > 0) : [];
+  const roomRent = house ? house.rooms.reduce((a, r) => a + (r.rentMonthly ?? 0), 0) : 0;
+  const earliest = house ? house.members.map((m) => m.onBooksSince).filter(Boolean).sort()[0] ?? null : null;
+  const landlord = house ? house.house?.landlord ?? house.rooms.find((r) => r.landlord)?.landlord ?? null : p.landlord;
+
+  const title = house ? house.name : p.name;
+  const sub = house
+    ? `${house.locality || "—"} · shared house · ${house.rooms.length} ${house.rooms.length === 1 ? "room" : "rooms"}, ${letRooms.length} let${house.house?.service ? ` · ${house.house.service}` : ""}`
+    : `${p.locality || "—"}${p.onRex === false ? ` · ${p.service ?? "Managed"} in REX PM${p.ref ? ` (${p.ref})` : ""} · not on REX` : p.service ? ` · ${p.service}` : " · service not set in REX"}`;
+
+  const tenantCard = (t: Party) => (
+    <li key={t.contactId} className="rounded-xl border border-line/70 bg-panel px-4 py-3 text-[13px]">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="font-semibold">{t.name}</span>
+        {t.phone && <a href={`tel:${t.phone.replace(/\s+/g, "")}`} className="text-[12px] text-muted hover:text-ink">{t.phone}</a>}
+        {t.email && <a href={`mailto:${t.email}`} className="truncate text-[12px] text-muted hover:text-ink">{t.email}</a>}
+        {p.onRex !== false && (
+          <a href={rexContactUrl(t.contactId)} target="_blank" rel="noreferrer" className="ml-auto rounded-full border border-line/80 px-3 py-1 text-[11px] hover:border-ink/40">
+            Tenant&apos;s file
+          </a>
+        )}
+      </div>
+    </li>
   );
 
   return (
@@ -246,22 +288,37 @@ function PropertyPanel({
         className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`}
       />
       <aside
-        className={`absolute inset-y-0 right-0 flex w-full max-w-xl flex-col overflow-hidden rounded-l-2xl bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] ${shown ? "translate-x-0" : "translate-x-full"}`}
+        className={`absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-2xl bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] ${house ? "max-w-3xl" : "max-w-xl"} ${shown ? "translate-x-0" : "translate-x-full"}`}
         style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
       >
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line/70 px-6 py-5">
-          <div className="min-w-0">
-            <h2 className="text-[20px] leading-tight">{p.name}</h2>
-            <p className="mt-1 text-[12px] text-muted">
-              {p.locality || "—"}
-              {p.onRex === false ? ` · ${p.service ?? "Managed"} in REX PM${p.ref ? ` (${p.ref})` : ""} · not on REX` : p.service ? ` · ${p.service}` : " · service not set in REX"}
-            </p>
+        <div className="shrink-0 border-b border-line/70 px-6 pt-5">
+          <div className="flex items-start justify-between gap-3 pb-5">
+            <div className="min-w-0">
+              <h2 className="text-[20px] leading-tight">{title}</h2>
+              <p className="mt-1 text-[12px] text-muted">{sub}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button type="button" aria-label="Previous property" onClick={() => onStep(-1)} className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">‹</button>
+              <button type="button" aria-label="Next property" onClick={() => onStep(1)} className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">›</button>
+              <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">✕</button>
+            </div>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <button type="button" aria-label="Previous property" onClick={() => onStep(-1)} className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">‹</button>
-            <button type="button" aria-label="Next property" onClick={() => onStep(1)} className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">›</button>
-            <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">✕</button>
-          </div>
+          {house && (
+            /* The house, then a tab per room. A filled dot is a let room. */
+            <div className="-mx-1 flex gap-1 overflow-x-auto pb-0.5">
+              {[{ id: "house", label: "The house", let: null as boolean | null }, ...house.rooms.map((r) => ({ id: r.listingId, label: roomLabel(r), let: r.tenants.length > 0 }))].map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-[12.5px] transition-colors ${tab === t.id ? "border-ink font-semibold text-ink" : "border-transparent text-muted hover:text-ink"}`}
+                >
+                  {t.let != null && <span className={`inline-block h-1.5 w-1.5 rounded-full ${t.let ? "bg-good" : "border border-line"}`} />}
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
@@ -276,19 +333,60 @@ function PropertyPanel({
             )}
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
-            {fact("Rent", p.rent == null ? "Not set" : `${money(p.rent)} ${p.rentPeriod === "week" ? "per week" : "pcm"}`)}
-            {fact("Let type", p.letType ?? "—")}
-            {fact("Let since", day(p.letSince))}
-            {fact("On the books since", day(p.onBooksSince))}
-            {fact("Agent", p.agent?.name ?? "—")}
-            {fact("Postcode", p.postcode ?? "—")}
-          </div>
+          {houseView && house ? (
+            <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
+              {fact("Rooms", `${house.rooms.length}, ${letRooms.length} let`)}
+              {fact("Rent roll", roomRent ? `${money(roomRent)} pcm` : "Not set")}
+              {fact("Postcode", p.postcode ?? "—")}
+              {fact("Agent", p.agent?.name ?? "—")}
+              {fact("On the books since", day(earliest))}
+              {fact("In REX as", house.house ? "the house and its rooms" : "the rooms only")}
+            </div>
+          ) : (
+            <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
+              {fact("Rent", p.rent == null ? "Not set" : `${money(p.rent)} ${p.rentPeriod === "week" ? "per week" : "pcm"}`)}
+              {fact("Let type", p.letType ?? "—")}
+              {fact("Let since", day(p.letSince))}
+              {fact("On the books since", day(p.onBooksSince))}
+              {fact("Agent", p.agent?.name ?? "—")}
+              {fact("Postcode", p.postcode ?? "—")}
+            </div>
+          )}
+
+          {/* A room's tenant comes first: that is what the room tab is for. */}
+          {room && (
+            <section className="mt-6">
+              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">{p.tenants.length === 1 ? "Tenant" : "Tenants"}</p>
+              {p.tenants.length ? (
+                <ul className="space-y-2">{p.tenants.map(tenantCard)}</ul>
+              ) : (
+                <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No tenant on this room in REX. It is empty, or the let has not been recorded.</p>
+              )}
+            </section>
+          )}
+
+          {houseView && house && (
+            <section className="mt-6">
+              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Rooms</p>
+              <ul className="overflow-hidden rounded-xl border border-line/70 bg-panel">
+                {house.rooms.map((r) => (
+                  <li key={r.listingId} className="border-b border-line/40 last:border-0">
+                    <button type="button" onClick={() => setTab(r.listingId)} className="grid w-full grid-cols-[84px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 text-left text-[12.5px] transition-colors hover:bg-box sm:grid-cols-[84px_minmax(0,1fr)_100px_90px]">
+                      <span className="font-semibold">{roomLabel(r)}</span>
+                      <span className="min-w-0 truncate">{r.tenants[0]?.name ?? <span className="text-muted">Empty</span>}{r.tenants.length > 1 ? <span className="text-muted"> +{r.tenants.length - 1}</span> : null}</span>
+                      <span className="hidden text-muted sm:block">{day(r.letSince)}</span>
+                      <span className="figures text-right">{r.rent == null ? <span className="text-muted">—</span> : `${money(r.rent)}${r.rentPeriod === "week" ? " pw" : ""}`}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           <section className="mt-6">
             <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Landlord</p>
-            {p.landlord ? (
-              <div className="rounded-xl border border-line/70 bg-panel px-4 py-3 text-[13px]"><Contact p={p.landlord} /></div>
+            {landlord ? (
+              <div className="rounded-xl border border-line/70 bg-panel px-4 py-3 text-[13px]"><Contact p={landlord} /></div>
             ) : (
               <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">
                 No landlord on the REX record. The owner relationship on this listing is empty, so nobody is being guessed at.
@@ -296,28 +394,30 @@ function PropertyPanel({
             )}
           </section>
 
-          <section className="mt-5">
-            <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">
-              {p.tenants.length === 1 ? "Tenant" : "Tenants"}
-            </p>
-            {p.tenants.length ? (
-              <ul className="space-y-2">
-                {p.tenants.map((t) => (
-                  <li key={t.contactId} className="rounded-xl border border-line/70 bg-panel px-4 py-3 text-[13px]"><Contact p={t} /></li>
-                ))}
-              </ul>
-            ) : (
-              <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">
-                No tenant on the REX record.
+          {!house && (
+            <section className="mt-5">
+              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">
+                {p.tenants.length === 1 ? "Tenant" : "Tenants"}
               </p>
-            )}
-          </section>
+              {p.tenants.length ? (
+                <ul className="space-y-2">{p.tenants.map(tenantCard)}</ul>
+              ) : (
+                <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">
+                  No tenant on the REX record.
+                </p>
+              )}
+            </section>
+          )}
 
           {/* The property file - the same panel the listing, the application
-              and the appraisal show, so the certificates travel with the home. */}
+              and the appraisal show, so the certificates travel with the home.
+              A room reads the house's certificates where it has none of its own. */}
           <div className="mt-5">
+            {houseView && house && !house.house && (
+              <p className="mb-2 text-[11.5px] text-muted">REX holds this house as its rooms only, so the file below is the first room&apos;s. Every room shares the house&apos;s certificates.</p>
+            )}
             {p.propertyId ? (
-              <PropertyFile propertyId={p.propertyId} screen="the portfolio" />
+              <PropertyFile key={p.propertyId} propertyId={p.propertyId} screen="the portfolio" />
             ) : (
               <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">REX holds no property record for this listing, so there is nothing to check.</p>
             )}
@@ -325,7 +425,7 @@ function PropertyPanel({
 
           <div className="mt-6 flex flex-wrap items-center gap-2">
             {p.onRex === false ? (
-              <span className="text-[11.5px] text-muted">Not on REX: the OS is this home's record, brought over from REX PM.</span>
+              <span className="text-[11.5px] text-muted">Not on REX: the OS is this home&apos;s record, brought over from REX PM.</span>
             ) : (
               <a
                 href={rexListingUrl(p.listingId, "leased")}
@@ -333,7 +433,7 @@ function PropertyPanel({
                 rel="noreferrer"
                 className="rounded-full border border-ink/80 px-4 py-2 text-[12px] font-semibold transition-colors hover:bg-ink hover:text-page"
               >
-                Open in REX
+                {room ? `Open ${roomLabel(room)} in REX` : "Open in REX"}
               </a>
             )}
             {everything && p.agent && <span className="text-[11.5px] text-muted">Looked after by {p.agent.name}</span>}
@@ -420,6 +520,9 @@ export default function Portfolio() {
   const book = state.status === "ready" ? state.book : null;
   const everything = state.status === "ready" && state.everything;
   const certBy = certs.status === "ready" ? certs.by : null;
+  /* Shared houses: one row in the list, rooms as tabs in the drawer. */
+  const houses = useMemo(() => housesIn(book?.properties ?? []), [book]);
+  const houseOf = useMemo(() => houseByListing(houses), [houses]);
 
   const summaryOf = useCallback(
     (p: ManagedProperty) => (certBy && p.propertyId ? summarise(certBy.get(p.propertyId)) : null),
@@ -536,6 +639,19 @@ export default function Portfolio() {
   const close = useCallback(() => setOpenId(null), []);
 
   const rentRoll = useMemo(() => filtered.reduce((a, p) => a + (p.rentMonthly ?? 0), 0), [filtered]);
+  /* The list: a shared house once, in place of its first room. */
+  const listRows = useMemo(() => {
+    const seen = new Set<string>();
+    const out: Array<{ p: ManagedProperty; house: House | null }> = [];
+    for (const p of filtered) {
+      const h = houseOf.get(String(p.listingId));
+      if (!h) { out.push({ p, house: null }); continue; }
+      if (seen.has(h.key)) continue;
+      seen.add(h.key);
+      out.push({ p: h.house ?? h.rooms[0], house: h });
+    }
+    return out;
+  }, [filtered, houseOf]);
 
   const blurb =
     state.status === "loading" ? "Fetching the managed book from REX…"
@@ -648,25 +764,28 @@ export default function Portfolio() {
                   <li className="hidden grid-cols-[56px_minmax(0,2fr)_90px_100px_minmax(0,1.3fr)_120px] items-center gap-3 border-b border-line/70 px-4 py-2.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted md:grid xl:grid-cols-[56px_minmax(0,2.2fr)_90px_100px_minmax(0,1.4fr)_minmax(0,1fr)_100px_120px]">
                     <span /><span>Property</span><span>Rent</span><span>Service</span><span>Landlord</span><span className="hidden xl:block">{everything ? "Agent" : "Tenant"}</span><span className="hidden xl:block">Let since</span><span>Certificates</span>
                   </li>
-                  {filtered.map((p) => {
+                  {listRows.map(({ p, house }) => {
                     const s = summaryOf(p);
+                    const letRooms = house ? house.rooms.filter((r) => r.tenants.length > 0).length : 0;
+                    const rent = house ? house.rooms.reduce((a, r) => a + (r.rentMonthly ?? 0), 0) : p.rentMonthly;
+                    const landlord = house ? house.house?.landlord ?? house.rooms.find((r) => r.landlord)?.landlord ?? null : p.landlord;
                     return (
-                      <li key={p.listingId} className="border-b border-line/40 last:border-0">
+                      <li key={house ? house.key : p.listingId} className="border-b border-line/40 last:border-0">
                         <button
                           type="button"
                           onClick={() => setOpenId(p.listingId)}
                           className="grid w-full grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-box md:grid-cols-[56px_minmax(0,2fr)_90px_100px_minmax(0,1.3fr)_120px] xl:grid-cols-[56px_minmax(0,2.2fr)_90px_100px_minmax(0,1.4fr)_minmax(0,1fr)_100px_120px]"
                         >
-                          <PropertyPhoto src={p.image} alt="" className="h-11 w-14 rounded-lg object-cover" />
+                          <PropertyPhoto src={p.image ?? house?.rooms.find((r) => r.image)?.image ?? null} alt="" className="h-11 w-14 rounded-lg object-cover" />
                           <span className="min-w-0">
-                            <span className="block truncate text-[13px]">{p.name}</span>
+                            <span className="block truncate text-[13px]">{house ? house.name : p.name}</span>
                             <span className="block truncate text-[11px] text-muted">
-                              {p.locality}
-                              <span className="md:hidden">{p.landlord ? ` · ${p.landlord.name}` : ""}</span>
+                              {house ? `${house.locality} · ${house.rooms.length} rooms, ${letRooms} let` : p.locality}
+                              <span className="md:hidden">{landlord ? ` · ${landlord.name}` : ""}</span>
                             </span>
                           </span>
                           <span className="figures text-[13px] md:text-[13px]">
-                            {money(p.rentMonthly)}<span className="text-[10.5px] text-muted"> pcm</span>
+                            {money(rent)}<span className="text-[10.5px] text-muted"> pcm</span>
                           </span>
                           <span className="hidden md:block">
                             {p.service ? <Pill tone={p.service === "Managed" ? "good" : "neutral"}>{p.service}</Pill> : <span className="text-[11px] text-muted">Not set</span>}
@@ -674,12 +793,12 @@ export default function Portfolio() {
                             {p.onRex !== false && p.rexLet === false && <Pill tone="neutral">Not let in REX</Pill>}
                           </span>
                           <span className="hidden min-w-0 truncate text-[12px] md:block">
-                            {p.landlord ? p.landlord.name : <span className="text-muted">Not on record</span>}
+                            {landlord ? landlord.name : <span className="text-muted">Not on record</span>}
                           </span>
                           <span className="hidden min-w-0 truncate text-[12px] text-muted xl:block">
-                            {everything ? (p.agent?.name ?? "—") : (p.tenants[0]?.name ?? "—")}
+                            {house ? `${house.rooms.reduce((a, r) => a + r.tenants.length, 0)} tenants` : everything ? (p.agent?.name ?? "—") : (p.tenants[0]?.name ?? "—")}
                           </span>
-                          <span className="hidden text-[12px] text-muted xl:block">{day(p.letSince)}</span>
+                          <span className="hidden text-[12px] text-muted xl:block">{house ? "—" : day(p.letSince)}</span>
                           <span className="hidden md:block">
                             {s ? (
                               <span className={`inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${s.tone}`}>{s.label}</span>
@@ -786,7 +905,8 @@ export default function Portfolio() {
       {open && (
         <PropertyPanel
           property={open}
-          cert={certBy && open.propertyId ? certBy.get(open.propertyId) : undefined}
+          house={houseOf.get(String(open.listingId)) ?? null}
+          certFor={(hp) => (certBy && hp.propertyId ? certBy.get(hp.propertyId) : undefined)}
           certsState={certs.status}
           everything={everything}
           onClose={close}

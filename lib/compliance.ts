@@ -86,6 +86,8 @@ export type Cert = {
   /** REX's not_required flag on the entry: the landlord says the duty does
    *  not apply (no gas at the property, from the signed terms). */
   notRequired?: boolean;
+  /** Held by the house (or another room of it) rather than on this room's own record. */
+  inherited?: boolean;
   /** Is the actual certificate file on the record? (REX truth: EICRs yes,
    *  EPCs almost never — a date without a document is half a record.) */
   attached: boolean;
