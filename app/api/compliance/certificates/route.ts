@@ -32,6 +32,8 @@ const TYPES = new Set([
   "legionella_risk_assessment", "portable_appliance_testing", "smoke_alarms", "co_alarms", "emergency_lighting_fire_exit",
 ]);
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
+/** No certificate on this book carries a date outside these years; anything else is a misread. */
+const PLAUSIBLE = (v: string) => YMD.test(v) && v >= "2000-01-01" && v <= "2045-12-31";
 
 /**
  * REX's type → the OS's certificate key, so the file lands in the SAME vault
@@ -127,8 +129,17 @@ export async function POST(req: NextRequest) {
 
   const retry = req.nextUrl.searchParams.get("retry");
   if (retry) {
-    const rows = await q<Row>(`SELECT * FROM os_certificates WHERE id = $1`, [retry]);
+    let rows = await q<Row>(`SELECT * FROM os_certificates WHERE id = $1`, [retry]);
     if (!rows[0]) return NextResponse.json({ ok: false, error: "No such certificate." }, { status: 404 });
+    /* A corrected date travels with the retry (6 Sep: the small reader gave
+       1905 and 1994 on a handful, the bigger one read them right). The
+       stored row is put right first, then REX is brought up to it. */
+    const fix = (await req.json().catch(() => null)) as { expiry?: string; issue?: string } | null;
+    if (fix?.expiry || fix?.issue) {
+      if (fix.expiry && !PLAUSIBLE(fix.expiry)) return NextResponse.json({ ok: false, error: "expiry must be YYYY-MM-DD between 2000 and 2045." }, { status: 400 });
+      if (fix.issue && !YMD.test(fix.issue)) return NextResponse.json({ ok: false, error: "issue must be YYYY-MM-DD." }, { status: 400 });
+      rows = await q<Row>(`UPDATE os_certificates SET expiry = COALESCE($2, expiry), issue = COALESCE($3, issue) WHERE id = $1 RETURNING *`, [retry, fix.expiry ?? null, fix.issue ?? null]);
+    }
     const r = await writeOne(rows[0], `Written by TLE OS from ${rows[0].source || "a dropped file"} (${rows[0].name}).`, req.nextUrl.searchParams.get("refresh") === "1");
     return NextResponse.json({ ok: true, certificate: out(r) });
   }
@@ -146,7 +157,7 @@ export async function POST(req: NextRequest) {
   if (!(file instanceof File) || !file.size) return NextResponse.json({ ok: false, error: "No file." }, { status: 400 });
   if (!/^\d+$/.test(propertyId)) return NextResponse.json({ ok: false, error: "propertyId must be the REX property id." }, { status: 400 });
   if (!TYPES.has(type)) return NextResponse.json({ ok: false, error: `type must be one of ${[...TYPES].join(", ")}.` }, { status: 400 });
-  if (!YMD.test(expiry)) return NextResponse.json({ ok: false, error: "expiry must be YYYY-MM-DD." }, { status: 400 });
+  if (!PLAUSIBLE(expiry)) return NextResponse.json({ ok: false, error: "expiry must be YYYY-MM-DD between 2000 and 2045." }, { status: 400 });
   if (issueRaw && !YMD.test(issueRaw)) return NextResponse.json({ ok: false, error: "issue must be YYYY-MM-DD." }, { status: 400 });
   if (file.size > 25 * 1024 * 1024) return NextResponse.json({ ok: false, error: "That file is over 25MB." }, { status: 413 });
 
