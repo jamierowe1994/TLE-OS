@@ -9,7 +9,7 @@ import PropertyFile from "@/components/PropertyFile";
 import { Pill } from "@/components/Wire";
 import { rexListingUrl } from "@/lib/business/rex-links";
 import {
-  CERT_META, headlineCerts, statusOf,
+  CERT_META, headlineCerts, requiredCerts, statusOf,
   type CertKey, type CertStatus, type CompProperty,
 } from "@/lib/compliance";
 import type { ManagedBook, ManagedLandlord, ManagedProperty, Party } from "@/lib/portfolio-types";
@@ -225,7 +225,7 @@ function PropertyPanel({
 
   const summary = summarise(cert);
   const certRows: Array<{ key: CertKey; status: CertStatus; expires: number | null; attached: boolean }> = cert
-    ? [...headlineCerts(cert), ...(["alarms", "legionella"] as CertKey[])].map((key) => {
+    ? requiredCerts(cert).map((key) => {
         const c = cert.certs[key];
         return { key, status: statusOf(c), expires: c?.expires ?? null, attached: c?.attached ?? false };
       })

@@ -102,14 +102,22 @@ export type CompProperty = {
   certs: Partial<Record<CertKey, Cert>>;
 };
 
-/** What this property is REQUIRED to hold. */
+/**
+ * What this property is REQUIRED to hold.
+ *
+ * James, 6 Sep 2026: "Gas, electric and EPC are by far the most important,
+ * and every property needs to have them. Things like smoke and CO alarms,
+ * fire risk and PAT should be tracked on HMOs." So the big three on every
+ * home (gas where there is gas), and the HMO set plus the quiet duties only
+ * where the home is an HMO. A house with no HMO licence is no longer red
+ * for a legionella review it was never chased for.
+ */
 export function requiredCerts(p: CompProperty): CertKey[] {
   return [
     "eicr" as const,
     ...(p.hasGas ? ["gas" as const] : []),
     "epc" as const,
-    ...(p.hmo ? HMO_SET : []),
-    ...QUIET_SET,
+    ...(p.hmo ? [...HMO_SET, ...QUIET_SET] : []),
   ];
 }
 

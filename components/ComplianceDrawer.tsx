@@ -141,8 +141,7 @@ export default function ComplianceDrawer({
 
   const groups: { title: string; keys: CertKey[] }[] = [
     { title: "The big three — safety law", keys: BIG_THREE.filter((k) => required.includes(k)) },
-    ...(p.hmo ? [{ title: "Because it's an HMO", keys: HMO_SET }] : []),
-    { title: "The quiet duties", keys: QUIET_SET },
+    ...(p.hmo ? [{ title: "Because it's an HMO", keys: [...HMO_SET, ...QUIET_SET] }] : []),
   ];
 
   return (
