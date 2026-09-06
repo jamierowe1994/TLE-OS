@@ -138,6 +138,7 @@ const MACHINE_ROUTES = [
   "/api/scheduled-sends/run",         // queued email
   "/api/pretenancy/alerts/run",       // the pre-tenancy digest
   "/api/pretenancy/watch",            // the Propoly watcher, every five minutes
+  "/api/compliance/warm",             // sweeps the book before anybody asks
   "/api/compliance/reminders/run",    // the 30/14/7 certificate chase
   "/api/agent-compliance/remind",     // the agent's own 30/14/7, and Michael's list
   "/api/lettings-capture/run",        // the daily market sweep

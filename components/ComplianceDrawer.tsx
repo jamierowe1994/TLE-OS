@@ -75,34 +75,55 @@ export default function ComplianceDrawer({
     return () => cancelAnimationFrame(id);
   }, [property]);
 
-  // Ask the vault what's already filed against this property. Without this
-  // every attached certificate disappeared on refresh — still stored, but
-  // invisible, which invites somebody to upload it all over again.
+  /**
+   * What is already filed against this property — in ONE read.
+   *
+   * Without this the attached certificates vanished on refresh: still stored,
+   * still invisible, which invites somebody to upload the lot again.
+   *
+   * ── Why one request and not one per certificate ──────────────────────────
+   *
+   * This used to fan out over `requiredCerts(property)` and hit /api/r2/list
+   * once per type — five to eight requests every time a drawer opened, each
+   * one a ListObjectsV2 against R2, all for folders that share a prefix.
+   * Opening six properties to check six certificates was forty round trips.
+   *
+   * /api/compliance/vault already reads the whole shelf under that prefix in
+   * a single call. It was written for the listing's Documents tab (5 Sep) and
+   * its own note said the drawer still went a certificate at a time. It does
+   * not any more.
+   *
+   * It returns every certKey the property has, not only the required ones,
+   * which is strictly more than before and costs nothing: `files` is only ever
+   * read by key, so a type the drawer does not render is simply never looked
+   * up — and a document filed against a cert that later stopped being required
+   * is now findable rather than silently dropped.
+   */
   useEffect(() => {
     if (!property) return;
     const pid = property.id;
     let gone = false;
     setFiles({});
     (async () => {
-      const found: Record<string, { name: string; url: string }[]> = {};
-      await Promise.all(
-        requiredCerts(property).map(async (certKey) => {
-          try {
-            const res = await fetch(
-              `/api/r2/list?scope=document&ref=${encodeURIComponent(`compliance-${pid}-${certKey}`)}`
-            );
-            const j = await res.json();
-            if (!j.ok || !j.files?.length) return;
-            found[`${pid}:${certKey}`] = j.files.map((f: { key: string; name: string }) => ({
-              name: f.name,
-              url: `/api/r2/file?key=${encodeURIComponent(f.key)}`,
-            }));
-          } catch {
-            /* a vault that won't answer shows as nothing filed, not a crash */
-          }
-        })
-      );
-      if (!gone) setFiles(found);
+      try {
+        const res = await fetch(
+          `/api/compliance/vault?property=${encodeURIComponent(pid)}`,
+          { cache: "no-store" }
+        );
+        const j = (await res.json()) as {
+          ok?: boolean;
+          files?: { certKey: string; name: string; open: string }[];
+        };
+        if (gone || !j.ok || !j.files?.length) return;
+        const found: Record<string, { name: string; url: string }[]> = {};
+        for (const f of j.files) {
+          if (!f.certKey) continue;
+          (found[`${pid}:${f.certKey}`] ??= []).push({ name: f.name, url: f.open });
+        }
+        setFiles(found);
+      } catch {
+        /* a vault that won't answer shows as nothing filed, not a crash */
+      }
     })();
     return () => { gone = true; };
   }, [property]);
