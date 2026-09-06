@@ -599,9 +599,11 @@ async function ensureCompletes(): Promise<CompletedDeal[] | null> {
     return completesCache.completes;
   }
   if (!completesCache) {
-    // v3 snapshot key — v2 lacked address/rent, so a stored v2 blob would
-    // serve rows the table cannot render. A clean re-pull fills them.
-    const snap = await loadSnapshot<CompletedDeal[]>("completes-v3");
+    // v4 snapshot key. v2 lacked address/rent; v3 was written by the mapper
+    // that read Propoly's pre-6-Sep field names, so a stored v3 blob has a
+    // null date and null agent on every row — the silent-zero shape. Both
+    // need a clean re-pull rather than a migration.
+    const snap = await loadSnapshot<CompletedDeal[]>("completes-v4");
     if (snap) {
       completesCache = { at: snap.savedAt, completes: snap.data };
       if (Date.now() - snap.savedAt < COMPLETES_TTL_MS) return completesCache.completes;
@@ -611,23 +613,37 @@ async function ensureCompletes(): Promise<CompletedDeal[] | null> {
   if (!rows) return completesCache?.completes ?? null;
   completesCache = {
     at: Date.now(),
-    completes: rows.map((r) => ({
-      date: typeof r.move_in_date === "string" ? r.move_in_date : null,
-      service:
-        typeof r.tenancy_service_level === "string" ? r.tenancy_service_level : null,
-      propertyUuid: typeof r.property_uuid === "string" ? r.property_uuid : null,
-      // Propoly writes the address as one multi-line string; flattened here so
-      // a table cell does not have to care.
-      address:
-        typeof r.property_address === "string"
-          ? r.property_address.replace(/\s*\n\s*/g, ", ").replace(/,\s*,/g, ",").trim()
+    /* Same reshape as the pipeline above (see the header note) — these are
+       /deals rows too, just the completed ones. Worth spelling out why this
+       mattered more than the board did: `date` feeds a [start, end] window and
+       `propertyUuid` feeds the agent join, and BOTH of those fail closed. A
+       null date is skipped by the window test and a null uuid is skipped by
+       `if (!mgr) continue`, so a shape change here does not error and does not
+       blank a screen — it quietly reports every agent as having moved nobody
+       in. Zero is a plausible-looking figure, which is exactly what makes it
+       the dangerous kind of wrong. */
+    completes: rows.map((r) => {
+      const terms = obj(r.terms);
+      const address = str(obj(r.property).address) ?? str(r.property_address);
+      return {
+        date: str(terms.move_in_date) ?? str(r.move_in_date),
+        // Propoly stopped sending this on 6 Sep; null until they say otherwise.
+        service: str(r.tenancy_service_level),
+        propertyUuid: propertyUuidOf(r),
+        // Multi-line in the old shape, comma-separated in the new. Flattened
+        // either way so a table cell does not have to care.
+        address: address
+          ? address.replace(/\s*\n\s*/g, ", ").replace(/,\s*,/g, ",").trim()
           : null,
-      rentPcm:
-        typeof r.price_pcm_pence === "number" ? Math.round(r.price_pcm_pence) / 100 : null,
-      uuid: typeof r.uuid === "string" ? r.uuid : null,
-    })),
+        rentPcm: (() => {
+          const pence = num(terms.price_pcm_pence) ?? num(r.price_pcm_pence);
+          return pence == null ? null : Math.round(pence) / 100;
+        })(),
+        uuid: str(r.uuid),
+      };
+    }),
   };
-  void saveSnapshot("completes-v3", completesCache.completes);
+  void saveSnapshot("completes-v4", completesCache.completes);
   return completesCache.completes;
 }
 
@@ -687,6 +703,15 @@ export async function getPropolyRlpMtd(
   const completes = await ensureCompletes().catch(() => null);
   if (!completes) return null;
   const inMonth = completes.filter((c) => c.date?.startsWith(month));
+  /* Propoly stopped sending tenancy_service_level on 6 Sep 2026, and this
+     figure is ENTIRELY a split by it. With the field gone every row fails the
+     full_managed test, so the honest answer and the broken one look identical
+     on screen: "0 of 13 move-ins are fully managed", labelled live.
+     A share we cannot compute is not a share of zero. Return null so the tile
+     shows its unavailable state, per the live-figures rule — never a plausible
+     number we did not actually measure. The test is whether ANY row in the
+     month carries a service level, so a real zero still reports as zero. */
+  if (inMonth.length > 0 && !inMonth.some((c) => c.service)) return null;
   return {
     total: inMonth.length,
     fullyManaged: inMonth.filter((c) => c.service === "full_managed").length,
