@@ -57,6 +57,9 @@ const STATE: Record<Row["state"], { label: string; tone: "good" | "accent" | "ne
   "not-required": { label: "Not required", tone: "neutral" },
   "held-here": { label: "Held here", tone: "neutral" },
 };
+/* James, 6 Sep: "not required" reads as optional. A gas entry marked not
+   required means there is no gas at the property, so say that. */
+const stateLabel = (r: Row) => (r.state === "not-required" && r.type === "gas_safety" ? "No gas at the property" : STATE[r.state].label);
 
 const day = (iso: string | null) => {
   if (!iso) return "";
@@ -82,6 +85,7 @@ export default function PropertyFile({
   const [data, setData] = useState<Answer | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pick, setPick] = useState<string | null>(null); // a candidate the person chose
+  const [open, setOpen] = useState<Record<string, boolean>>({}); // rows showing every file, not just the latest
   const [pending, setPending] = useState<{ file: File; forType: string | null; read: Read | null; type: string; expiry: string; issue: string; busy: boolean; note: string | null } | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const forType = useRef<string | null>(null);
@@ -261,7 +265,7 @@ export default function PropertyFile({
               <li key={r.type} className={`rounded-xl border p-3 ${r.state === "expired" ? "border-accent-dark bg-accent-soft/30" : r.state === "missing" || r.state === "expiring" ? "border-accent-dark/40" : "border-line/70"}`}>
                 <div className="flex flex-wrap items-center gap-2.5">
                   <span className="text-[13px] font-semibold">{r.label}</span>
-                  <Pill tone={s.tone}>{s.label}</Pill>
+                  <Pill tone={s.tone}>{stateLabel(r)}</Pill>
                   <span className="text-[11px] text-muted">
                     {r.expiry ? `${r.state === "expired" ? "Expired" : "Expires"} ${day(r.expiry)}` : r.issued ? `Issued ${day(r.issued)}` : ""}
                     {r.inRex && !r.fileInRex && r.expiry ? " · no document in REX" : ""}
@@ -272,13 +276,20 @@ export default function PropertyFile({
                 </div>
                 {r.files.length > 0 && (
                   <ul className="mt-2 space-y-1.5">
-                    {r.files.map((f) => (
+                    {(open[r.type] ? r.files : r.files.slice(0, 2)).map((f) => (
                       <li key={f.key} className="flex items-center gap-2 text-[12px]">
                         <DoodleIcon name="doc" size={13} className="text-muted" />
                         <span className="min-w-0 truncate">{f.name}</span>
                         <a href={f.open} target="_blank" rel="noreferrer" className="ml-auto shrink-0 rounded-full border border-line/80 px-2.5 py-0.5 text-[11px] hover:border-ink/40">Open</a>
                       </li>
                     ))}
+                    {r.files.length > 2 && (
+                      <li>
+                        <button type="button" onClick={() => setOpen((o) => ({ ...o, [r.type]: !o[r.type] }))} className="text-[11px] text-muted underline-offset-2 hover:underline">
+                          {open[r.type] ? "Show the latest only" : `${r.files.length - 2} earlier ${r.files.length - 2 === 1 ? "file" : "files"}`}
+                        </button>
+                      </li>
+                    )}
                   </ul>
                 )}
               </li>
