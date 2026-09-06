@@ -150,7 +150,7 @@ export type CertsAnswer =
   | { status: "pending" }
   | { status: "failed"; message: string };
 
-export async function managedCertsFor(rexUserId: string | null, book: ManagedBook): Promise<CertsAnswer> {
+export async function managedCertsFor(rexUserId: string | null, book: ManagedBook, force = false): Promise<CertsAnswer> {
   const key = certsKeyFor(rexUserId);
   const work = () =>
     certificatesFor(
@@ -161,6 +161,7 @@ export async function managedCertsFor(rexUserId: string | null, book: ManagedBoo
 
   const h = await held<ComplianceBook>(key);
   const age = h ? Date.now() - h.at : Infinity;
+  if (force) { const fresh = await refresh(key, work); return { status: "ready", certs: fresh.data, ageMs: 0, stale: false }; }
   if (h && age < CERTS_FRESH_MS) return { status: "ready", certs: h.data, ageMs: age, stale: false };
   if (h && age < CERTS_STALE_MS) {
     void refresh(key, work).catch(() => {});

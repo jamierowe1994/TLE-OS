@@ -26,7 +26,9 @@ export async function GET(req: NextRequest) {
 
   try {
     const { book } = await managedBookFor(scope.rexUserId);
-    const answer = await managedCertsFor(scope.rexUserId, book);
+    /* ?refresh=1 (owner-only in practice, used after a certificate run):
+       walk REX now rather than serving the hour-old answer. */
+    const answer = await managedCertsFor(scope.rexUserId, book, req.nextUrl.searchParams.get("refresh") === "1");
     if (answer.status === "ready") {
       return NextResponse.json({
         ok: true,

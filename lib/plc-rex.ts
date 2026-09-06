@@ -63,8 +63,13 @@ const TYPE_WORDS: Record<string, string> = {
 };
 
 /** "EICR - expires 2028-09-06 - file.pdf": what the document is called in REX. */
+/** REX's JSON layer refuses a name with a stray byte in it ("Malformed UTF-8", 6 Sep): plain ASCII only. */
+export function plainName(name: string): string {
+  return name.normalize("NFKD").replace(/[^\x20-\x7e]/g, "").replace(/\s+/g, " ").trim() || "certificate.pdf";
+}
+
 function docDescription(type: string, expiry: string, name: string): string {
-  return `${TYPE_WORDS[type] ?? type} - expires ${expiry} - ${name}`.slice(0, 200);
+  return `${TYPE_WORDS[type] ?? type} - expires ${expiry} - ${plainName(name)}`.slice(0, 200);
 }
 
 const LIFE_MONTHS: Partial<Record<string, number>> = { eicr: 60, gas_safety: 12, epc: 120, legionella_risk_assessment: 24, portable_appliance_testing: 12 };
@@ -195,7 +200,7 @@ export async function writeCertificateToRex(input: {
     if (!up.ok || !uri) return { ok: false, note: `REX would not take the file: ${up.error ?? JSON.stringify(up.result ?? "").slice(0, 160)}` };
     const derived = !input.issue;
     const issue = input.issue ?? issueFrom(input.expiry, input.type);
-    const notes = `${input.provenance}${derived && issue ? " Issue date derived from the expiry." : ""}`;
+    const notes = plainName(`${input.provenance}${derived && issue ? " Issue date derived from the expiry." : ""}`);
     /* The file goes INSIDE the type's details block as well as on the entry.
        Learned live on 5 Sep: gas took file_uri on the entry; the EICR came
        back "Field 'upload certificate': This field is required" until the
