@@ -64,6 +64,8 @@ export interface ManagedProperty {
   epcRating: string | null;
   /** False when REX CRM has no property for this home and the OS is its record (6 Sep 2026). */
   onRex?: boolean;
+  /** False when REX holds the property but does not mark it as let, and REX PM manages it (6 Sep 2026). */
+  rexLet?: boolean;
   /** REX PM's reference (PRP00341), where the home came from there. */
   ref?: string;
 }

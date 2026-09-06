@@ -471,7 +471,7 @@ export default function Portfolio() {
       if (agent && p.agent?.id !== agent) return false;
       if (town && p.town !== town) return false;
       if (lookOnly && !attention.has(p.listingId)) return false;
-      if (notOnRexOnly && p.onRex !== false) return false;
+      if (notOnRexOnly && p.onRex !== false && p.rexLet !== false) return false;
       if (needle) {
         const hay = [p.address, p.name, p.locality, p.landlord?.name, p.landlord?.email, p.agent?.name, ...p.tenants.map((t) => t.name)]
           .filter(Boolean).join(" ").toLowerCase();
@@ -617,7 +617,7 @@ export default function Portfolio() {
             >
               Needs a look
             </button>
-            <button type="button" onClick={() => setNotOnRexOnly((v) => !v)} className={pillClass(notOnRexOnly)} title="Homes REX PM manages that REX CRM has no property for; the OS is their record">
+            <button type="button" onClick={() => setNotOnRexOnly((v) => !v)} className={pillClass(notOnRexOnly)} title="Homes REX PM manages that REX either has no property for, or does not mark as let">
               Not on REX
             </button>
             <Filter label="Sort" options={SORTS} value={sort} onChange={setSort} />
@@ -671,6 +671,7 @@ export default function Portfolio() {
                           <span className="hidden md:block">
                             {p.service ? <Pill tone={p.service === "Managed" ? "good" : "neutral"}>{p.service}</Pill> : <span className="text-[11px] text-muted">Not set</span>}
                             {p.onRex === false && <Pill tone="accent">Not on REX</Pill>}
+                            {p.onRex !== false && p.rexLet === false && <Pill tone="neutral">Not let in REX</Pill>}
                           </span>
                           <span className="hidden min-w-0 truncate text-[12px] md:block">
                             {p.landlord ? p.landlord.name : <span className="text-muted">Not on record</span>}

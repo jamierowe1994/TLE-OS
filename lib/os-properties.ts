@@ -91,6 +91,13 @@ export async function notOnRex(): Promise<OsProperty[]> {
   return rows.map(rowTo);
 }
 
+/** Every home REX PM manages today (active letting agreement), linked or not. */
+export async function activeOsProperties(): Promise<OsProperty[]> {
+  if (!hasDb()) return [];
+  const rows = await q<Row>(`SELECT * FROM os_properties WHERE active ORDER BY name`).catch(() => []);
+  return rows.map(rowTo);
+}
+
 /** What the OS knows about a REX property from its own record: HMO, no gas. */
 export async function factsByRexId(): Promise<Map<string, { hmo: boolean; noGas: boolean; ref: string }>> {
   const out = new Map<string, { hmo: boolean; noGas: boolean; ref: string }>();

@@ -2,7 +2,7 @@ import "server-only";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { fetchListingBook } from "@/lib/rex-listings";
 import type { CertKey, CompProperty } from "@/lib/compliance";
-import { factsByRexId, notOnRex } from "@/lib/os-properties";
+import { activeOsProperties, factsByRexId } from "@/lib/os-properties";
 import { osCertsFor } from "@/lib/os-certs";
 
 /**
@@ -140,10 +140,23 @@ export async function fetchComplianceBook(): Promise<ComplianceBook> {
  * the same rules — latest expiry wins, EPC falls back to the listing field,
  * "no gas record" stays unknown — rather than a second copy of them.
  */
-export async function certificatesFor(listings: CertSubject[]): Promise<ComplianceBook> {
-  if (!rexConfigured() || !listings.length) return EMPTY;
+export async function certificatesFor(subjects: CertSubject[]): Promise<ComplianceBook> {
+  if (!rexConfigured() || !subjects.length) return EMPTY;
 
-  const ids = listings.map((l) => l.propertyId);
+  /* Every home REX PM manages joins the book (6 Sep 2026): one REX holds a
+     property for but does not mark as let comes in under its REX property,
+     so its REX certificates are read like any other. */
+  const osProps = await activeOsProperties().catch(() => []);
+  const listings = [...subjects];
+  const present = new Set(subjects.map((l) => String(l.propertyId)));
+  for (const o of osProps) {
+    const id = o.rexPropertyId ?? o.id;
+    if (present.has(id)) continue;
+    present.add(id);
+    listings.push({ propertyId: id, name: o.name || o.address, locality: o.locality, epcExpiry: null });
+  }
+
+  const ids = listings.map((l) => l.propertyId).filter((id) => /^\d+$/.test(id));
   const chunks: string[][] = [];
   for (let i = 0; i < ids.length; i += CHUNK) chunks.push(ids.slice(i, i + CHUNK));
 
@@ -236,7 +249,7 @@ export async function certificatesFor(listings: CertSubject[]): Promise<Complian
   /* Homes REX CRM has no property for. The OS is their record: its own
      certificates are their compliance, and they count in every figure so
      the OS matches REX PM's managed book, not REX CRM's. */
-  const extra = await notOnRex().catch(() => []);
+  const extra = osProps.filter((o) => !o.rexPropertyId);
   const extraCerts = await osCertsFor([...new Set([...extra.map((p) => p.id), ...listings.map((l) => l.propertyId).filter((id) => /^pm-/i.test(id))])]).catch(() => new Map());
   /* The managed book may already list these homes (Portfolio does): REX
      answered nothing for them, so their certificates come from the OS. */

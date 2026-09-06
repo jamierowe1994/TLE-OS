@@ -1,6 +1,6 @@
 import "server-only";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
-import { notOnRex } from "@/lib/os-properties";
+import { activeOsProperties } from "@/lib/os-properties";
 import type {
   ManagedBook,
   ManagedCounts,
@@ -243,10 +243,17 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
      the managed book reads like REX PM's. Only for the whole-business view;
      an agent's own book stays REX's, since these carry no agent. */
   if (!rexUserId) {
-    for (const o of await notOnRex().catch(() => [])) {
+    const have = new Set(properties.map((p) => String(p.propertyId ?? "")));
+    for (const o of await activeOsProperties().catch(() => [])) {
+      /* Already in REX's let book: nothing to add. Linked to a REX property
+         REX does not mark as let (84 of them, 6 Sep): the home is managed in
+         REX PM all the same, so it joins the book under its REX property. */
+      if (o.rexPropertyId && have.has(o.rexPropertyId)) continue;
+      if (have.has(o.id)) continue;
+      have.add(o.rexPropertyId ?? o.id);
       properties.push({
-        listingId: o.id,
-        propertyId: o.id,
+        listingId: o.rexPropertyId ? `pm-link-${o.rexPropertyId}` : o.id,
+        propertyId: o.rexPropertyId ?? o.id,
         name: o.name || o.address,
         locality: o.locality,
         address: o.address,
@@ -268,7 +275,8 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
         images: [],
         epcExpiry: null,
         epcRating: null,
-        onRex: false,
+        onRex: Boolean(o.rexPropertyId),
+        rexLet: false,
         ref: o.ref,
       });
     }
