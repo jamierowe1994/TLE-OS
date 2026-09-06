@@ -550,8 +550,9 @@ export default function Portfolio() {
     });
   }, [book, filtered, q, filtering, service, agent, town, lookOnly]);
 
-  const byId = useMemo(() => new Map((book?.properties ?? []).map((p) => [p.listingId, p])), [book]);
-  const open = openId ? byId.get(openId) ?? null : null;
+  /* Keyed as text: ?open=518547 from the search bar arrives as a string. */
+  const byId = useMemo(() => new Map((book?.properties ?? []).map((p) => [String(p.listingId), p])), [book]);
+  const open = openId ? byId.get(String(openId)) ?? null : null;
   const step = useCallback(
     (d: number) => {
       setOpenId((id) => {
