@@ -5,6 +5,7 @@ import { sweepScope, type SweepResult } from "@/lib/listing-capture";
 import { saleMatches, type RecentSale } from "@/lib/sales";
 import { resendConfigured, resendSendUnlocked, sendEmail } from "@/lib/resend";
 import { assertInternalRecipient } from "@/lib/email-policy";
+import { radarDigestEmail } from "@/lib/email/agent-emails";
 import {
   isOurs,
   isPrivateLister,
@@ -840,34 +841,29 @@ export async function sendDigest(): Promise<{ sent: string[]; skipped: string | 
 
   const summary = await radarSummary();
   const top = (await listProspects()).filter((p) => p.stage === "new").slice(0, 10);
-  const lines = [
-    `Landlord Radar - ${new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}`,
-    ``,
-    `${summary.active} properties flagged across ${summary.districts} districts, ${summary.newToday} new today.`,
-    ``,
-    ...Object.entries(summary.bySignal)
+  /* On the shared TLE OS shell since 6 Sep 2026: it went out as a <pre>
+     before, and read as a log file. The text part carries the same lines. */
+  const mail = radarDigestEmail({
+    dateLabel: new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }),
+    active: summary.active,
+    districts: summary.districts,
+    newToday: summary.newToday,
+    signals: Object.entries(summary.bySignal)
       .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
-      .map(([k, n]) => `  ${SIGNALS[k as SignalKey].label}: ${n}`),
-    ``,
-    `Top ten not yet worked:`,
-    ...top.map(
-      (p) =>
-        `  ${p.score}  ${p.address || p.street || ""} ${p.postcode}${p.rent ? `  ${pounds(p.rent)} pcm` : ""}${
-          p.agent ? `  (${p.agent})` : ""
-        }\n      ${p.signals.map((s) => s.detail).join("; ")}`
-    ),
-    ``,
-    `Open Radar: https://tle-os.co.uk/tools/radar`,
-  ];
-  const text = lines.join("\n");
-  const html = `<pre style="font-family:Unitext,Montserrat,sans-serif;font-size:13px;white-space:pre-wrap">${text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")}</pre>`;
+      .map(([k, n]) => ({ label: SIGNALS[k as SignalKey].label, count: n ?? 0 })),
+    top: top.map((p) => ({
+      score: p.score,
+      address: `${p.address || p.street || ""} ${p.postcode}`.trim(),
+      rent: p.rent ? `${pounds(p.rent)} pcm` : null,
+      agent: p.agent ?? null,
+      why: p.signals.map((s) => s.detail).join("; "),
+    })),
+  });
 
   const sent: string[] = [];
   for (const to of raw.split(",").map((s) => s.trim()).filter(Boolean)) {
     assertInternalRecipient(to);
-    await sendEmail({ to, subject: `Landlord Radar: ${summary.active} flagged, ${summary.newToday} new`, html, text });
+    await sendEmail({ to, subject: mail.subject, html: mail.html, text: mail.text });
     sent.push(to);
   }
   return { sent, skipped: null };

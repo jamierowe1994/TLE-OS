@@ -29,6 +29,7 @@ import { tleBrand } from "@/lib/campaign-mail";
 import { verifyEmailFor, resetEmailFor } from "@/lib/verify-email";
 import { pilotInviteEmail } from "@/lib/email/pilot-email";
 import { videoChaseEmail } from "@/lib/email/video-chase-email";
+import { certificateChaseEmail, ownComplianceEmail, pretenancyDigestEmail, dealMovedEmail, radarDigestEmail } from "@/lib/email/agent-emails";
 import {
   bodyFor,
   confirmBodyFor,
@@ -41,14 +42,13 @@ import {
 import { renderPlain } from "@/lib/campaign-mail";
 import {
   LAUNCH_ANNOUNCEMENT,
-  COMPLIANCE_CHASE_AGENT,
   COMPLIANCE_CHASE_LANDLORD,
   TENANT_PASSPORT_INVITE,
   LANDLORD_DECK_INVITE,
   LANDLORD_SIGN_IN,
   TENANT_SIGN_IN,
   SITE,
-  type EmailDoc, AGENT_COMPLIANCE_CHASE } from "@/lib/email/tle-documents";
+  type EmailDoc } from "@/lib/email/tle-documents";
 
 /* ──────────────────────── the catalogue ──────────────────────── */
 
@@ -222,8 +222,93 @@ export const TLE_EMAILS: CatalogEntry[] = [
     to: "The letting agent whose book the property is on",
     summary:
       "One email per agent, not per certificate — a dozen properties would otherwise be a dozen emails on a Monday, which is how a chase becomes something people filter. Worst first, expired at the top. Chased by BAND rather than exact day, so a missed run does not mean a certificate is never chased at all.",
-    doc: COMPLIANCE_CHASE_AGENT,
-    render: (o) => blocks(withSample(o ?? COMPLIANCE_CHASE_AGENT))(),
+    /* No `doc` since 6 Sep 2026: it is on the shared TLE OS shell with the
+       other agent emails, hand-rolled, so the builder no longer owns it. */
+    render: () => {
+      const m = certificateChaseEmail({ firstName: "Helen", lines: COMPLIANCE_SAMPLE.rows.split("<br>") });
+      return { subject: m.subject, html: m.html };
+    },
+  },
+  {
+    id: "own-compliance",
+    group: "Compliance",
+    name: "Your Own Compliance — Agent",
+    audience: "partner",
+    trigger: "Daily, when something an agent holds personally is missing or runs out within 30, 14 or 7 days",
+    fires: "app/api/agent-compliance/remind (cron, POST with x-cron-key)",
+    to: "The agent, and a roll-up to whoever holds the compliance role",
+    summary:
+      "Michael's list, read back to each agent: what they hold personally that is not on file or running out. Marking it done on the profile stops the reminder.",
+    render: () => {
+      const m = ownComplianceEmail({
+        firstName: "Helen",
+        lines: ["Right to Rent training - expired 2026-08-30", "Professional indemnity - runs out 2026-09-28 (22 days)", "DBS check - not on file"],
+      });
+      return { subject: m.subject, html: m.html };
+    },
+  },
+  {
+    id: "pretenancy-digest",
+    group: "Pre-tenancy",
+    name: "Pre-tenancy Digest",
+    audience: "partner",
+    trigger: "Every morning, when the pipeline and PayProp disagree about a deal",
+    fires: "app/api/pretenancy/alerts/run (cron, POST with x-cron-key)",
+    to: "Whoever holds see:pretenancy - Kirstie, Susan, James",
+    summary:
+      "One property at a time, worst first: a deal past Deposit with nothing registered, a move-in date passed with no rent schedule, and the tenancies that have started paying. Nothing here is a tick somebody made.",
+    render: () => {
+      const m = pretenancyDigestEmail([
+        { dealId: "d1", stageKey: "deposit", key: "d1:deposit", tone: "attention", address: "12 Test Street, Northampton", agentName: "Rhiannon", text: "Past Deposit for 9 days, nothing registered in PayProp" },
+        { dealId: "d1", stageKey: "rent_payment", key: "d1:rent", tone: "attention", address: "12 Test Street, Northampton", agentName: "Rhiannon", text: "Move-in was 2 Sep and there is no rent schedule" },
+        { dealId: "d2", stageKey: "holding", key: "d2:holding", tone: "attention", address: "Flat 2, Mercer Street, Bedford", agentName: "Dan", text: "Holding fee invoiced 6 days ago, not reconciled" },
+        { dealId: "d3", stageKey: "rent_payment", key: "d3:rent", tone: "good", address: "9 Example Close, Kettering", agentName: "Sean", text: "First rent of £925 in on 4 Sep" },
+      ]);
+      return { subject: m.subject, html: m.html };
+    },
+  },
+  {
+    id: "deal-moved",
+    group: "Pre-tenancy",
+    name: "Your Deal Moved",
+    audience: "partner",
+    trigger: "When Propoly moves an agent's deal: references back, agreement out, complete, cancelled, rent in, ready to move in",
+    fires: "lib/business/deal-watch (the five-minute watcher, behind the Tell agents switch)",
+    to: "The agent who manages the property in Propoly",
+    summary:
+      "One event, one email: what happened and what the agent does next. Held until the Tell agents switch is on; the feed records every move regardless.",
+    render: () => {
+      const m = dealMovedEmail(
+        { id: 1, dealId: "d1", property: "12 Test Street, Northampton", event: "references_back", fromStatus: "references", toStatus: "plc", at: new Date().toISOString(), amount: null, agentEmail: null, agentName: "Rhiannon" } as never,
+        SITE
+      );
+      return { subject: m.subject, html: m.html };
+    },
+  },
+  {
+    id: "radar-digest",
+    group: "Tools",
+    name: "Landlord Radar Morning Note",
+    audience: "partner",
+    trigger: "Every morning after the sweep, to the addresses in RADAR_DIGEST_TO",
+    fires: "lib/radar sendDigest (the radar cron)",
+    to: "Whoever works the Bond list",
+    summary: "What Radar found overnight and the ten best doors nobody has knocked on yet.",
+    render: () => {
+      const m = radarDigestEmail({
+        dateLabel: "Monday 7 September",
+        active: 184,
+        districts: 6,
+        newToday: 11,
+        signals: [{ label: "Long on market", count: 92 }, { label: "Price drop", count: 48 }, { label: "Relisted", count: 31 }, { label: "Sold recently", count: 13 }],
+        top: [
+          { score: 86, address: "14 Martins Lane NN5 4WJ", rent: "£1,150 pcm", agent: "Connells", why: "On the market 71 days; reduced twice" },
+          { score: 79, address: "2 Norwich Street MK40 1AB", rent: "£925 pcm", agent: "Haart", why: "Relisted after 3 weeks off; price drop of £50" },
+          { score: 74, address: "Flat 9, 29 Springfield Street NN1 3DA", rent: "£800 pcm", agent: null, why: "On the market 58 days" },
+        ],
+      });
+      return { subject: m.subject, html: m.html };
+    },
   },
   {
     id: "compliance-chase-landlord",
@@ -468,7 +553,7 @@ The Letting Experts`
   },
 ];
 
-export const EMAIL_GROUPS = ["Pre-launch", "Market appraisals", "Compliance", "Terms of business", "Accounts"];
+export const EMAIL_GROUPS = ["Pre-launch", "Market appraisals", "Compliance", "Pre-tenancy", "Terms of business", "Accounts", "Tools"];
 
 /**
  * The agent's certificate chase, filled with a real book.
@@ -482,50 +567,17 @@ export const EMAIL_GROUPS = ["Pre-launch", "Market appraisals", "Compliance", "T
  * the preview and the real thing. A preview rendered from a different source
  * than the send is a preview that can lie.
  */
-export function renderComplianceAgentChase(input: {
-  firstName: string;
-  /** Already sorted worst-first by the caller — the order is a judgement about
-   *  the book, not about typography, so it is not made here. */
-  lines: string[];
-}): { subject: string; html: string } {
-  const fill = (t: string) =>
-    t
-      .replace(/\{\{firstName\}\}/g, input.firstName)
-      .replace(/\{\{count\}\}/g, String(input.lines.length))
-      .replace(/\{\{rows\}\}/g, input.lines.join("<br>"));
-
-  const doc = {
-    ...COMPLIANCE_CHASE_AGENT,
-    subject: fill(COMPLIANCE_CHASE_AGENT.subject),
-    blocks: COMPLIANCE_CHASE_AGENT.blocks.map((b) => {
-      const rec = b as unknown as Record<string, unknown>;
-      return (
-        typeof rec.text === "string" ? { ...rec, text: fill(rec.text) } : rec
-      ) as unknown as (typeof COMPLIANCE_CHASE_AGENT.blocks)[number];
-    }),
-  };
-  return blocks(doc as unknown as EmailDoc)();
+export function renderComplianceAgentChase(input: { firstName: string; lines: string[] }): { subject: string; html: string } {
+  /* Since 6 Sep 2026 this is the shared TLE OS shell, not the block document
+     - see lib/email/agent-emails. Kept under its old name for any caller. */
+  const m = certificateChaseEmail(input);
+  return { subject: m.subject, html: m.html };
 }
 
 /** An agent's own compliance, item 11 - the same shape as the certificate chase. */
 export function renderAgentComplianceChase(input: { firstName: string; lines: string[] }): { subject: string; html: string } {
-  const n = input.lines.length;
-  const fill = (t: string) =>
-    t
-      .replace(/\{\{firstName\}\}/g, input.firstName)
-      .replace(/\{\{count\}\}/g, String(n))
-      .replace(/\{\{plural\}\}/g, n === 1 ? "" : "s")
-      .replace(/\{\{singular\}\}/g, n === 1 ? "s" : "")
-      .replace(/\{\{rows\}\}/g, input.lines.join("<br>"));
-  const doc = {
-    ...AGENT_COMPLIANCE_CHASE,
-    subject: fill(AGENT_COMPLIANCE_CHASE.subject),
-    blocks: AGENT_COMPLIANCE_CHASE.blocks.map((b) => {
-      const rec = b as unknown as Record<string, unknown>;
-      return (typeof rec.text === "string" ? { ...rec, text: fill(rec.text) } : rec) as unknown as (typeof AGENT_COMPLIANCE_CHASE.blocks)[number];
-    }),
-  };
-  return blocks(doc as unknown as EmailDoc)();
+  const m = ownComplianceEmail(input);
+  return { subject: m.subject, html: m.html };
 }
 
 /** The sign-in link email, filled for one landlord and ready to send. */

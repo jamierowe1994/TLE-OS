@@ -9,6 +9,7 @@ import { getApplications } from "@/lib/applications";
 import { createCase, getCase } from "@/lib/plc-store";
 import { sendEmail } from "@/lib/resend";
 import { switchOn } from "@/lib/switches";
+import { dealMovedEmail } from "@/lib/email/agent-emails";
 import {
   eventSentence,
   kindFor,
@@ -464,49 +465,10 @@ async function watchMoney(deals: BusinessDeal[], known: Map<string, StateRow>): 
 
 /* ─────────────────────────── telling people ────────────────────────────── */
 
-function subjectFor(e: DealEvent): string {
-  switch (e.event) {
-    case "references_back":
-      return `References back: ${e.property}`;
-    case "agreement_out":
-      return `Out for signing: ${e.property}`;
-    case "complete":
-      return `Complete: ${e.property}`;
-    case "cancelled":
-      return `Cancelled: ${e.property}`;
-    case "rent_in":
-      return `Rent in: ${e.property}`;
-    case "move_in_ready":
-      return `Ready to move in: ${e.property}`;
-    default:
-      return `${eventSentence(e)}: ${e.property}`;
-  }
-}
-
-function bodyFor(e: DealEvent, origin: string): { text: string; html: string } {
-  const next =
-    e.event === "references_back"
-      ? "Next: start the PLC check from the application. Every certificate and ID needs to be in the pack before it goes to Kirstie, or the check fails and costs another £60."
-      : e.event === "agreement_out"
-        ? "Next: nothing until both the landlord and the tenant have signed. Kirstie will mark it complete."
-        : e.event === "complete"
-          ? "Signed and monies in. Move-in is the last step."
-          : e.event === "rent_in"
-            ? "The first rent has landed in PayProp. Kirstie will close the deal off; you can plan the move-in."
-            : e.event === "move_in_ready"
-              ? "Kirstie has signed the property off as compliant and the tenant ready to move in. Keys, inventory and check-in are yours to arrange."
-              : "Propoly has cancelled this deal. If that is a surprise, speak to Kirstie.";
-  const link = `${origin}/applications`;
-  const text = `${e.property}\n${eventSentence(e)}.\n\n${next}\n\nOpen your applications: ${link}\n`;
-  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-  const html = `<div style="font:15px/1.5 Unitext,Montserrat,system-ui,sans-serif;color:#1f1f1f;max-width:560px">
-<p style="margin:0 0 4px;font-size:17px">${esc(e.property)}</p>
-<p style="margin:0 0 18px;color:#555">${esc(eventSentence(e))}.</p>
-<p style="margin:0 0 18px">${esc(next)}</p>
-<p style="margin:0"><a href="${link}" style="display:inline-block;padding:10px 16px;border-radius:999px;background:#1f1f1f;color:#fff;text-decoration:none">Open my applications</a></p>
-</div>`;
-  return { text, html };
-}
+/* The subject and body used to be built here as a bare <div>. They come off
+   the shared TLE OS shell now (lib/email/agent-emails), the same one the
+   invite and the certificate chase use, so an agent's inbox reads as one
+   product. */
 
 export async function tellAgents(events: DealEvent[], origin: string): Promise<number> {
   const worth = events.filter((e) => TELL_AGENT.has(e.event));
@@ -523,8 +485,8 @@ export async function tellAgents(events: DealEvent[], origin: string): Promise<n
       note = "Not told - agent emails are off in Admin, Switches.";
     } else {
       try {
-        const { text, html } = bodyFor(e, origin);
-        await sendEmail({ to: e.agentEmail, subject: subjectFor(e), text, html });
+        const m = dealMovedEmail(e, origin);
+        await sendEmail({ to: e.agentEmail, subject: m.subject, text: m.text, html: m.html });
         to = e.agentEmail;
         at = new Date();
         note = `Told ${e.agentName ?? e.agentEmail}.`;

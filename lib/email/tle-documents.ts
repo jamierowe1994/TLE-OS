@@ -235,6 +235,10 @@ export const LAUNCH_ANNOUNCEMENT = {
  * makes the genuinely urgent ones indistinguishable. */
 
 /** The agent's OWN paperwork, not the properties'. Item 11. */
+/* RETIRED 6 Sep 2026: the agent's own-compliance reminder and the certificate
+   chase to agents both render on the shared TLE OS shell now
+   (lib/email/agent-emails). These two documents are kept only as the record
+   of the wording they carried; nothing sends them. */
 export const AGENT_COMPLIANCE_CHASE = {
   subject: "{{count}} thing{{plural}} you hold personally need{{singular}} attention",
   preheader: "Your own compliance, not the properties' - what is missing or running out.",

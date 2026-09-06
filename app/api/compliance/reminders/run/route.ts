@@ -6,7 +6,7 @@ import { rexConfigured } from "@/lib/rex";
 import { getComplianceBook } from "@/lib/compliance-cache";
 import { buildQueue, buildTracker, type QueuedReminder } from "@/lib/compliance-tracker";
 import { chasesSent, markChased } from "@/lib/compliance-chase-store";
-import { renderComplianceAgentChase } from "@/lib/email/tle-emails";
+import { certificateChaseEmail } from "@/lib/email/agent-emails";
 import { sendEmail } from "@/lib/resend";
 import { switchOn } from "@/lib/switches";
 
@@ -242,12 +242,12 @@ export async function POST(req: NextRequest) {
   const chased: Array<{ key: string; propertyId: string; cert: string; band: number; to: string }> = [];
 
   for (const g of sendable) {
-    const { subject, html } = renderComplianceAgentChase({
+    const mail = certificateChaseEmail({
       firstName: g.agentName.split(/\s+/)[0] ?? "there",
       lines: g.lines,
     });
     try {
-      await sendEmail({ to: g.to!, subject, html });
+      await sendEmail({ to: g.to!, subject: mail.subject, html: mail.html, text: mail.text });
       for (const r of g.items) {
         /* The key is propertyId:cert:band, built by buildQueue — the cert is
            the middle segment. Parsed rather than re-derived so the log and the

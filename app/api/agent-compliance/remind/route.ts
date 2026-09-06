@@ -3,7 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { requireCapability } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
 import { plannedReminders, recordReminded } from "@/lib/agent-compliance";
-import { renderAgentComplianceChase } from "@/lib/email/tle-emails";
+import { ownComplianceEmail, ownComplianceRollupEmail } from "@/lib/email/agent-emails";
 import { sendEmail } from "@/lib/resend";
 import { switchOn } from "@/lib/switches";
 
@@ -61,9 +61,9 @@ export async function POST(req: NextRequest) {
 
   const results: { to: string; ok: boolean; detail?: string }[] = [];
   for (const r of planned) {
-    const mail = renderAgentComplianceChase({ firstName: (r.name || r.email).split(" ")[0], lines: r.lines });
+    const mail = ownComplianceEmail({ firstName: (r.name || r.email).split(" ")[0], lines: r.lines });
     try {
-      await sendEmail({ to: r.email, subject: mail.subject, html: mail.html });
+      await sendEmail({ to: r.email, subject: mail.subject, html: mail.html, text: mail.text });
       await recordReminded(r);
       results.push({ to: r.email, ok: true });
     } catch (e) {
@@ -75,11 +75,10 @@ export async function POST(req: NextRequest) {
      compliance role. An empty daily email teaches people to ignore it. */
   const roll = await michaels();
   if (planned.length && roll.length) {
-    const lines = planned.map((r) => `${r.name || r.email}: ${r.lines.join("; ")}`);
-    const mail = renderAgentComplianceChase({ firstName: "there", lines });
+    const mail = ownComplianceRollupEmail({ people: planned.map((r) => ({ name: r.name || r.email, lines: r.lines })) });
     for (const m of roll) {
       try {
-        await sendEmail({ to: m.email, subject: `${planned.length} agent${planned.length === 1 ? "" : "s"} short on their own compliance`, html: mail.html });
+        await sendEmail({ to: m.email, subject: mail.subject, html: mail.html, text: mail.text });
         results.push({ to: m.email, ok: true, detail: "roll-up" });
       } catch (e) {
         results.push({ to: m.email, ok: false, detail: e instanceof Error ? e.message : "send failed" });

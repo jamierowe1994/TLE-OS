@@ -10,6 +10,7 @@ import { loadMoneyContext, moneyForDeal } from "@/lib/business/deal-money";
 import { dealAlerts, digestText, type AlertDeal, type DealAlert } from "@/lib/business/deal-alerts";
 import { alreadySent, markSent, clearResolved } from "@/lib/business/alert-store";
 import { sendEmail } from "@/lib/resend";
+import { pretenancyDigestEmail } from "@/lib/email/agent-emails";
 import { can } from "@/lib/roles";
 import { switchOn } from "@/lib/switches";
 
@@ -189,19 +190,15 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const body = digestText(fresh);
-  const subject = `Pre-tenancy: ${fresh.length} thing${fresh.length === 1 ? "" : "s"} to look at`;
+  /* On the shared TLE OS shell since 6 Sep 2026 - it went out as a
+     monospace <pre> before, the one email from the OS that looked like a
+     log file. The text part is still digestText, unchanged. */
+  const mail = pretenancyDigestEmail(fresh);
+  const subject = mail.subject;
   const failures: string[] = [];
   for (const address of to) {
     try {
-      await sendEmail({
-        to: address,
-        subject,
-        text: body,
-        html: `<pre style="font:14px/1.5 ui-monospace,monospace;white-space:pre-wrap">${body
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")}</pre>`,
-      });
+      await sendEmail({ to: address, subject, text: mail.text, html: mail.html });
     } catch (e) {
       failures.push(`${address}: ${e instanceof Error ? e.message : "send failed"}`);
     }

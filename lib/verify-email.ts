@@ -80,7 +80,11 @@ export function resetEmailFor(link: string): VerifyEmail {
         "Click the button below to choose a new password. The link works once and lasts an hour.",
       button: "Choose a new password",
       link,
-      image: "illustrations/sign-in.gif",
+      /* Its own picture since 6 Sep 2026 - it shared the sign-in squiggle
+         with the set-up email, and two different emails with the same
+         picture read as the same email sent twice. */
+      image: "illustrations/email/reset.gif",
+      imageWidth: 150,
       footnote:
         "If you didn't ask for this, you can safely ignore it. Your password has not changed, and nothing happens until the link is opened.",
     }),

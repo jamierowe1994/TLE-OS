@@ -65,6 +65,19 @@ const ORIGIN = (process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/,
  */
 export const ASSET_V = "4";
 
+/**
+ * One line of a list inside the shell: a chase, a digest, a morning note.
+ *
+ * `tone` is the rule down the left of the row - clay for something that needs
+ * a hand, green for something that went right, and the hairline grey for the
+ * rest. It is the only colour in the email besides the button, so it carries.
+ */
+export interface ShellRow {
+  title: string;
+  detail?: string;
+  tone?: "attention" | "good" | "neutral";
+}
+
 export interface ShellOpts {
   heading: string;
   intro: string;
@@ -72,8 +85,64 @@ export interface ShellOpts {
   link: string;
   /** Path under /public, e.g. "illustrations/sign-in.gif". */
   image: string;
+  /** Rendered width of the picture. 260 suits the landscape drawings; a
+   *  portrait figure at 260 wide stands taller than the words, so it gets
+   *  something narrower. */
+  imageWidth?: number;
   /** The quiet paragraph under the button. Omitted entirely when absent. */
   footnote?: string;
+  /**
+   * The list, when the email is about several things: the properties on a
+   * chase, the deals in a digest. Left-aligned under the centred intro, so
+   * an address reads as an address and not as a caption (James, 6 Sep 2026:
+   * every internal email on the one layout). Absent on the doorway emails,
+   * which have exactly one thing to say.
+   */
+  rows?: ShellRow[];
+  /** A short line above the rows - "3 properties need a look". */
+  rowsLead?: string;
+}
+
+const TONE: Record<NonNullable<ShellRow["tone"]>, string> = {
+  attention: "#a85a51",
+  good: "#3f8f5f",
+  neutral: "#e7e5e4",
+};
+
+/**
+ * The rows, as a table: one cell for the coloured rule, one for the words.
+ * Tables, not borders on a div - Outlook draws a border-left on a div as a
+ * full box or not at all, and a cell with a bgcolor is the one thing every
+ * client agrees on.
+ */
+function rowsTable(rows: ShellRow[], lead?: string): string {
+  const cells = rows
+    .map(
+      (r) => `
+                <tr>
+                  <td width="3" bgcolor="${TONE[r.tone ?? "neutral"]}" style="background-color:${TONE[r.tone ?? "neutral"]};width:3px;font-size:0;line-height:0">&nbsp;</td>
+                  <td style="padding:9px 0 9px 14px;background-color:#ffffff">
+                    <p style="margin:0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14.5px;line-height:1.35;font-weight:600;color:#1c1917;background-color:#ffffff">${esc(r.title)}</p>${
+                      r.detail
+                        ? `
+                    <p style="margin:2px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#57534e;background-color:#ffffff">${esc(r.detail)}</p>`
+                        : ""
+                    }
+                  </td>
+                </tr>
+                <tr><td colspan="2" height="6" style="height:6px;font-size:0;line-height:0;background-color:#ffffff">&nbsp;</td></tr>`
+    )
+    .join("");
+  return `
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" align="left" style="margin:30px 0 0;text-align:left">${
+              lead
+                ? `
+              <tr><td colspan="2" style="padding:0 0 10px;background-color:#ffffff">
+                <p style="margin:0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.4;letter-spacing:0.06em;text-transform:uppercase;font-weight:700;color:#78716c;background-color:#ffffff">${esc(lead)}</p>
+              </td></tr>`
+                : ""
+            }${cells}
+            </table>`;
 }
 
 export function emailShell(opts: ShellOpts): string {
@@ -98,13 +167,13 @@ export function emailShell(opts: ShellOpts): string {
             <img src="${ORIGIN}/brand/tle-os-wordmark.png?v=${ASSET_V}" width="160" alt="TLE OS"
                  style="display:block;margin:0 auto;width:160px;max-width:60%;height:auto;border:0;outline:none;text-decoration:none;font-family:'Bradley Hand','Segoe Script',cursive;font-size:26px;color:#1c1917">
 
-            <img src="${ORIGIN}/${opts.image}?v=${ASSET_V}" width="260" alt=""
-                 style="display:block;margin:24px auto 0;width:260px;max-width:78%;height:auto;border:0;outline:none;text-decoration:none">
+            <img src="${ORIGIN}/${opts.image}?v=${ASSET_V}" width="${opts.imageWidth ?? 260}" alt=""
+                 style="display:block;margin:24px auto 0;width:${opts.imageWidth ?? 260}px;max-width:78%;height:auto;border:0;outline:none;text-decoration:none">
 
             <p style="margin:44px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:30px;line-height:1.2;font-weight:700;color:#1c1917;background-color:#ffffff">${esc(opts.heading)}</p>
 
             <p style="margin:14px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:14.5px;line-height:1.55;color:#57534e;background-color:#ffffff">${esc(opts.intro)}</p>
-
+${opts.rows && opts.rows.length ? rowsTable(opts.rows, opts.rowsLead) : ""}
             <!-- Black, not the brand red: it is the only thing to press. -->
             <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:26px auto 0">
               <tr>
