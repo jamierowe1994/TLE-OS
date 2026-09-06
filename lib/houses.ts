@@ -115,3 +115,10 @@ export function tabLabel(house: House, p: ManagedProperty): string {
   const least = Math.min(...p.tenants.map((t) => count(t.contactId)));
   return p.tenants.filter((t) => count(t.contactId) === least).map((t) => t.name).join(", ");
 }
+
+/** listingId → the house it belongs to, every let of every room included. */
+export function houseByListing(houses: Map<string, House>): Map<string, House> {
+  const m = new Map<string, House>();
+  for (const h of houses.values()) for (const p of h.all) m.set(String(p.listingId), h);
+  return m;
+}
