@@ -3,6 +3,7 @@ import { whoIs } from "@/lib/admin";
 import { scopeFor } from "@/lib/scope";
 import { hasDb, q } from "@/lib/db";
 import { bookFor } from "@/lib/listings-cache";
+import { managedBookFor } from "@/lib/managed-book-cache";
 import { getComplianceBook } from "@/lib/compliance-cache";
 import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
 import { getApplications } from "@/lib/applications";
@@ -65,8 +66,9 @@ export async function GET(req: NextRequest) {
   const scope = await scopeFor(req);
   const rexUserId = scope.unlinked ? null : scope.rexUserId;
 
-  const [book, leads, compliance, deals, applications] = await Promise.all([
+  const [book, managed, leads, compliance, deals, applications] = await Promise.all([
     bookFor(rexUserId).catch(() => null),
+    managedBookFor(rexUserId).then((m) => m.book).catch(() => null),
     cachedLeads(rexUserId),
     getComplianceBook().catch(() => null),
     getAllPropolyDeals().catch(() => null),
@@ -81,6 +83,16 @@ export async function GET(req: NextRequest) {
     if (matches(needle, l.name, l.locality) || idMatch(needle, l.propertyId) || idMatch(needle, l.id)) {
       /* HMO rooms share a name; the listing ref keeps them apart. */
       hits.push({ kind: "property", title: l.name, sub: `${l.locality} · listing ${l.id}`, href: `/listings?open=${encodeURIComponent(l.id)}` });
+    }
+  }
+  /* Managed homes (6 Sep): most certificates live on homes with no live
+     listing, so the search has to open the Portfolio drawer for them. */
+  const seenListing = new Set((book?.listings ?? []).map((l) => String(l.id)));
+  for (const m of managed?.properties ?? []) {
+    if (!cap(50)) break;
+    if (seenListing.has(String(m.listingId))) continue;
+    if (matches(needle, m.name, m.locality, m.address) || idMatch(needle, m.propertyId) || idMatch(needle, m.listingId)) {
+      hits.push({ kind: "property", title: m.name, sub: `${m.locality} · managed`, href: `/portfolio?open=${encodeURIComponent(m.listingId)}` });
     }
   }
   for (const l of leads) {

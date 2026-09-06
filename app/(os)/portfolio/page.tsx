@@ -5,6 +5,7 @@ import PageHeader from "@/components/PageHeader";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import PortfolioMap from "@/components/PortfolioMap";
 import FindingData from "@/components/business/FindingData";
+import CertificatesOnFile from "@/components/CertificatesOnFile";
 import { Pill } from "@/components/Wire";
 import { rexListingUrl } from "@/lib/business/rex-links";
 import {
@@ -347,6 +348,17 @@ function PropertyPanel({
                 {!cert.hasGas && <li className="text-[11px] text-muted">No gas record on file: either no gas supply, or gas nobody has certified. REX does not say which.</li>}
               </ul>
             )}
+          </section>
+
+          {/* The documents themselves. Most of the backlog (6 Sep) landed on
+              managed homes with no live listing, so this is where a person
+              finds the file. */}
+          <section className="mt-5">
+            <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Certificates on file</p>
+            <CertificatesOnFile
+              propertyId={p.propertyId}
+              emptyText={p.propertyId ? "None held in the OS for this home yet." : "REX holds no property record for this listing, so nothing can be filed against it."}
+            />
           </section>
 
           <div className="mt-6 flex flex-wrap items-center gap-2">
