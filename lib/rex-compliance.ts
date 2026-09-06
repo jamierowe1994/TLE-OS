@@ -66,7 +66,7 @@ const CONCURRENCY = 6;
 interface RexEntry extends Record<string, unknown> {
   parent_object_id?: number | string;
   type_id?: string;
-  details?: Record<string, { expiry_date?: string | null; not_required?: boolean }> | null;
+  details?: Record<string, { expiry_date?: string | null; issue_date?: string | null; not_required?: boolean }> | null;
   file?: { url?: string } | null;
 }
 
