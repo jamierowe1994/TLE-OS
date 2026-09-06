@@ -588,6 +588,16 @@ in its own right; where it would hook in is noted so it can be picked up cleanly
 | C | **HMOs as a house with rooms** - when a property is marked HMO, take the room count and offer to build the rooms into the file; the house is the parent, each room a sub-record that opens fully but stays attached | REX holds rooms as separate property records already (the backlog's "shared house" matches: 5a Newton Road, 166 Gloucester Road North). The OS needs a parent link (address match, or a stored `parent_property_id`) so the property file, compliance and portfolio show the house with its rooms folded under it, and a house-level certificate (gas, EICR, EPC) counts for every room | The matcher already groups rooms under their building; the write side (creating N room records in REX) is the new part |
 | D | **Blockers** - a deal cannot proceed past a set point until the minimum compliance is on file: gas (where there is gas), EICR and EPC on an ordinary let; the HMO set on an HMO | The PLC gate (`lib/plc.ts`, `lib/plc-rules.ts`) is the natural place: the pack cannot be approved, and the handover cannot start, until the property file shows the required set in date. The required set is already one rule (`requiredCerts`) and the no-gas fact from A removes the gas requirement honestly | Needs James's word on WHERE the block bites (offer accepted? move-in?) and whether a manager can override with a reason |
 
+### Portfolio drawer, redesigned around the house - James, 6 Sep 2026 (evening, not built)
+
+The drawer is "very confusing and very long". What he wants: the drawer opens out like the
+other screens; a shared house shows its rooms as tabs (Room 1, Room 2, …) rather than every
+tenant crammed into one column; each room shows its tenant, and the tenant opens into their
+own file (details, tenancy, documents). Depends on idea C above (the house-and-rooms link on
+the OS record: `os_properties` will need `parent_id`, filled by the matcher's shared-house
+grouping). Property file, certificates and the room's tenant hang off the room; house-level
+certificates (gas, EICR, EPC, licence) show once on the house and are inherited by every room.
+
 ## Launch week to-do (James, 6 Sep 2026)
 
 | When | What | How |
