@@ -102,6 +102,59 @@ export async function readPresentation(token: string): Promise<PresentationRow |
   return rows[0] ? toRow(rows[0]) : null;
 }
 
+/**
+ * When a presentation stops opening.
+ *
+ * Fourteen days after the appraisal it was made for - or after it was sent,
+ * whichever is later, so a post-appraisal deck sent a week after the visit
+ * still gets its fortnight. James, 6 Sep 2026: "make sure they get deleted,
+ * maybe two weeks after the presentation." A landlord's rent figure and
+ * comparables should not sit on a public link forever.
+ */
+export const PRESENTATION_DAYS = 14;
+
+export async function presentationExpiry(row: Pick<PresentationRow, "ref" | "createdAt">): Promise<Date> {
+  let anchor = new Date(row.createdAt).getTime();
+  if (hasDb() && row.ref) {
+    const rows = await q<{ appointment_at: Date | string | null }>(
+      `SELECT appointment_at FROM os_market_appraisals WHERE lead_id = $1 OR id = $2 LIMIT 1`,
+      [row.ref, `lead-${row.ref}`]
+    ).catch(() => []);
+    const at = rows[0]?.appointment_at ? new Date(rows[0].appointment_at).getTime() : 0;
+    if (at > anchor) anchor = at;
+  }
+  return new Date(anchor + PRESENTATION_DAYS * 86400000);
+}
+
+/** Delete one presentation outright - the deck, the video key, the opens. */
+export async function deletePresentation(token: string): Promise<void> {
+  if (!hasDb() || !token) return;
+  await q(`DELETE FROM os_presentations WHERE token = $1`, [token]).catch(() => []);
+}
+
+/**
+ * The sweep: every presentation past its fortnight, gone. Run daily from a
+ * cron; a deck is also deleted the moment somebody opens it expired, so an
+ * unopened one is the only kind the sweep ever finds.
+ */
+export async function purgeExpiredPresentations(): Promise<{ deleted: number }> {
+  if (!hasDb()) return { deleted: 0 };
+  const rows = await q<{ token: string }>(
+    `DELETE FROM os_presentations p
+      USING (
+        SELECT p2.token,
+               GREATEST(p2.created_at, COALESCE(a.appointment_at, p2.created_at)) AS anchor
+          FROM os_presentations p2
+          LEFT JOIN os_market_appraisals a ON a.lead_id = p2.ref OR a.id = 'lead-' || p2.ref
+      ) x
+      WHERE x.token = p.token
+        AND x.anchor < NOW() - ($1 || ' days')::interval
+      RETURNING p.token`,
+    [String(PRESENTATION_DAYS)]
+  ).catch(() => []);
+  return { deleted: rows.length };
+}
+
 export async function markOpened(token: string): Promise<void> {
   if (!hasDb() || !token) return;
   await q(

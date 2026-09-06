@@ -92,7 +92,7 @@ interface LeadSource {
   loading: boolean;
   reason?: string;
   scanned?: number;
-  setAside?: { sales: number; unclear: number };
+  setAside?: { sales: number; unclear: number; blank: number };
   total?: number | null;
   stale?: boolean;
 }
@@ -294,7 +294,9 @@ export default function Leads() {
                   source.total ? ` — ${source.total.toLocaleString("en-GB")} enquiries on record` : ""
                 }. Showing the ${source.scanned?.toLocaleString("en-GB") ?? ""} most recent, ${
                   source.setAside
-                    ? `with ${(source.setAside.sales + source.setAside.unclear).toLocaleString("en-GB")} set aside as sales or unclear`
+                    ? `with ${(source.setAside.sales + source.setAside.unclear).toLocaleString("en-GB")} set aside as sales or unclear${
+                        source.setAside.blank ? ` and ${source.setAside.blank.toLocaleString("en-GB")} with no details at all` : ""
+                      }`
                     : ""
                 }.`
               : (source.reason ?? "New enquiries from the portals, your ads and the website.")

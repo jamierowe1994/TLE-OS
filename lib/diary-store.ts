@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { DIARY, type Appt } from "@/lib/diary";
+import type { Appt } from "@/lib/diary";
 
 /**
  * One live copy of the diary, shared by every screen that shows it.
@@ -11,8 +11,12 @@ import { DIARY, type Appt } from "@/lib/diary";
  * fetched data through all of them would mean a provider and eight prop
  * chains; instead there is one tiny store they all subscribe to.
  *
- * It starts as the sample book, so nothing ever renders empty, and swaps
- * itself for the real one the moment REX answers. `live` says which you have.
+ * It starts EMPTY and loading, and fills the moment REX answers. It used to
+ * start as the sample book "so nothing ever renders empty" - which meant a
+ * slow or failed REX put "Viewing - 41 Harewood Road" on a real agent's
+ * dashboard as if it were theirs. The rule is live figures or an honest
+ * error, never a stand-in (James, 6 Sep 2026). `live` says whether REX
+ * answered; `error` says why not.
  */
 
 interface DiaryState {
@@ -20,12 +24,14 @@ interface DiaryState {
   live: boolean;
   loading: boolean;
   agents: string[];
+  /** Why the diary is not live, for the screens to say so. */
+  error: string | null;
 }
 
 /** The server (and first client) snapshot must be the SAME object every
  *  time it's read — returning a fresh literal makes React re-render forever
  *  looking for a stable value. */
-const INITIAL: DiaryState = { appts: DIARY, live: false, loading: true, agents: [] };
+const INITIAL: DiaryState = { appts: [], live: false, loading: true, agents: [], error: null };
 
 let state: DiaryState = INITIAL;
 const listeners = new Set<() => void>();
@@ -42,22 +48,22 @@ function load(): Promise<void> {
     .then((j) => {
       if (j.ok && j.live && Array.isArray(j.appts)) {
         // Live book — the server has already merged our own appointments in.
-        set({ appts: j.appts, live: true, loading: false, agents: j.agents ?? [] });
-      } else if (j.ok && Array.isArray(j.mine) && j.mine.length) {
-        /* No REX, so the sample book is standing in — but appointments made
-           HERE are real and get merged on top. Without this, booking a travel
-           buffer on an environment with no REX looks like it did nothing. */
+        set({ appts: j.appts, live: true, loading: false, agents: j.agents ?? [], error: null });
+      } else if (j.ok && Array.isArray(j.mine)) {
+        /* No REX on this environment. Appointments made HERE are real and
+           still show; nothing stands in for the rest. */
         set({
-          appts: [...DIARY, ...j.mine].sort((a, b) => a.day - b.day || a.start.localeCompare(b.start)),
+          appts: [...(j.mine as Appt[])].sort((a, b) => a.day - b.day || a.start.localeCompare(b.start)),
           live: false,
           loading: false,
           agents: state.agents,
+          error: j.reason ?? "REX isn't connected on this environment.",
         });
       } else {
-        set({ ...state, loading: false });
+        set({ ...state, loading: false, error: j.error ?? j.reason ?? "REX didn't answer." });
       }
     })
-    .catch(() => set({ ...state, loading: false }));
+    .catch(() => set({ ...state, loading: false, error: "REX didn't answer." }));
 }
 
 function start() {

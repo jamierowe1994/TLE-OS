@@ -26,7 +26,7 @@ export interface LeadBook {
   leads: Lead[];
   /** Everything the walk saw, so the screen can be honest about its own scope. */
   scanned: number;
-  setAside: { sales: number; unclear: number };
+  setAside: { sales: number; unclear: number; blank: number };
   total: number | null;
   newestAt: string | null;
 }
@@ -64,7 +64,7 @@ const LETTINGS_WORDS = /\b(letting|lettings|tenant|tenancy|rent|rental|to let)\b
 const SALES_WORDS = /\b(sales enquiry|buyer|for sale|purchase|vendor|offers over)\b/i;
 const VALUATION_WORDS = /\b(valuation|appraisal|market appraisal|how much is)\b/i;
 
-type Verdict = { keep: true; enquiry: Lead["enquiry"] } | { keep: false; why: "sales" | "unclear" };
+type Verdict = { keep: true; enquiry: Lead["enquiry"] } | { keep: false; why: "sales" | "unclear" | "blank" };
 
 /**
  * Which side of the business is this?
@@ -75,6 +75,14 @@ type Verdict = { keep: true; enquiry: Lead["enquiry"] } | { keep: false; why: "s
  * aside rather than filed under a side it might not belong to.
  */
 export function classify(l: RexLead): Verdict {
+  /* No name AND no way to reach them is not a lead, it is a row (James,
+     6 Sep 2026: "a lot of leads come through without any details on them").
+     Set aside and counted, never shown - a nameless enquiry that at least
+     carries an email or a phone number still stays, because somebody can
+     ring it. */
+  if (!l.contact?.name?.trim() && !l.contact?.email_address?.trim() && !l.contact?.phone_number?.trim()) {
+    return { keep: false, why: "blank" };
+  }
   const category = l.listing?.listing_category?.id ?? null;
   if (category) {
     if (RENTAL_CATEGORIES.includes(category)) return { keep: true, enquiry: "Letting" };
@@ -206,11 +214,11 @@ function toLead(l: RexLead, enquiry: Lead["enquiry"]): Lead {
  */
 export async function fetchLeadBook(rexUserId?: string | null): Promise<LeadBook> {
   if (!rexConfigured()) {
-    return { leads: [], scanned: 0, setAside: { sales: 0, unclear: 0 }, total: null, newestAt: null };
+    return { leads: [], scanned: 0, setAside: { sales: 0, unclear: 0, blank: 0 }, total: null, newestAt: null };
   }
 
   const leads: Lead[] = [];
-  const setAside = { sales: 0, unclear: 0 };
+  const setAside = { sales: 0, unclear: 0, blank: 0 };
   let scanned = 0;
   let total: number | null = null;
   let newestAt: string | null = null;

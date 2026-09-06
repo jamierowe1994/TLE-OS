@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { LEADS } from "@/lib/leads-sample";
+import type { Lead } from "@/lib/leads-sample";
 
 /**
  * Where the leads actually came from — the one question on this page that
@@ -25,15 +25,17 @@ import { LEADS } from "@/lib/leads-sample";
  * mode needs no special case.
  */
 
-type Group = { key: string; sources: string[]; prev: number };
+type Group = { key: string; sources: string[] };
 
-/* prev = last month's share of leads. Placeholder figures: the current column
-   is counted from the real book, but nothing here stores history yet. */
+/* Which REX sources land in which column. REX names a source off the email it
+   came from (lib/rex-leads sourceOf), so the words here are those. Anything
+   unlisted falls into "Other" rather than vanishing from the total. */
 const GROUPS: Group[] = [
-  { key: "Portals", prev: 44, sources: ["Rightmove", "Zoopla", "OnTheMarket", "SpareRoom", "Gumtree"] },
-  { key: "Paid social", prev: 19, sources: ["Facebook ad", "Instagram ad", "TikTok ad", "Google Ads"] },
-  { key: "Website", prev: 22, sources: ["Website", "Phone-in", "Walk-in", "Email enquiry", "Live chat"] },
-  { key: "Word of mouth", prev: 15, sources: ["Referral", "Existing landlord", "Existing tenant", "Event", "Board / signage"] },
+  { key: "Portals", sources: ["Rightmove", "Zoopla", "OnTheMarket", "GetAgent", "SpareRoom", "Gumtree", "Openrent"] },
+  { key: "Paid social", sources: ["Facebook", "Instagram", "Facebook ad", "Instagram ad", "TikTok ad", "Google Ads", "Ghl", "Gohighlevel"] },
+  { key: "Website", sources: ["Website", "Direct", "Phone-in", "Walk-in", "Email enquiry", "Live chat"] },
+  { key: "Word of mouth", sources: ["Referral", "Existing landlord", "Existing tenant", "Event", "Board / signage"] },
+  { key: "Other", sources: [] },
 ];
 
 /**
@@ -60,24 +62,45 @@ function wholePercents(counts: number[]): number[] {
 const HATCH =
   "repeating-linear-gradient(45deg, transparent 0 5px, color-mix(in srgb, var(--ink) 13%, transparent) 5px 6px)";
 
-export default function LeadSourceChart() {
+/**
+ * Live since 6 Sep 2026. It counted the sample book before, so the dashboard
+ * said "Portals 50%" on every laptop in the business regardless of what had
+ * actually come in. The leads are the same 500 the Leads screen shows,
+ * handed in by the tile; this month is counted from them, and last month
+ * only if the scan reaches back to the first of it - otherwise the dashed
+ * rule and the deltas are left off rather than drawn against a partial
+ * month. Never a stand-in number.
+ */
+export default function LeadSourceChart({ leads }: { leads: Lead[] }) {
   const [hot, setHot] = useState<string | null>(null);
 
-  const counts = GROUPS.map((g) => LEADS.filter((l) => g.sources.includes(l.source)).length);
+  const now = new Date();
+  const thisStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const lastStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).getTime();
+  const at = (l: Lead) => (l.receivedAt ? new Date(l.receivedAt).getTime() : NaN);
+  const thisMonth = leads.filter((l) => at(l) >= thisStart);
+  const lastMonth = leads.filter((l) => at(l) >= lastStart && at(l) < thisStart);
+  const oldest = leads.reduce((a, l) => Math.min(a, Number.isFinite(at(l)) ? at(l) : Infinity), Infinity);
+  const haveLast = oldest <= lastStart && lastMonth.length > 0;
+
+  const groupOf = (l: Lead) => GROUPS.find((g) => g.sources.some((s) => s.toLowerCase() === (l.source ?? "").toLowerCase()))?.key ?? "Other";
+  const countIn = (list: Lead[]) => GROUPS.map((g) => list.filter((l) => groupOf(l) === g.key).length);
+  const counts = countIn(thisMonth);
   const total = counts.reduce((a, b) => a + b, 0);
   const pcts = wholePercents(counts);
+  const prevPcts = haveLast ? wholePercents(countIn(lastMonth)) : GROUPS.map(() => 0);
 
   const bars = GROUPS.map((g, i) => ({
     key: g.key,
     count: counts[i],
     pct: pcts[i],
-    prev: g.prev,
-    delta: pcts[i] - g.prev,
-  }));
+    prev: prevPcts[i],
+    delta: haveLast ? pcts[i] - prevPcts[i] : 0,
+  })).filter((b) => b.key !== "Other" || b.count > 0);
 
   // Scaled against the tallest thing on the chart, this month or last, so a
   // column can never overflow its track and the rules stay inside.
-  const ceiling = Math.max(...bars.flatMap((b) => [b.pct, b.prev]));
+  const ceiling = Math.max(1, ...bars.flatMap((b) => [b.pct, b.prev]));
   const h = (v: number) => `${(v / ceiling) * 92}%`;
 
   /* Which column gets the full-strength accent.
@@ -87,7 +110,7 @@ export default function LeadSourceChart() {
      every single month and saying so tells nobody anything. And not the
      biggest mover in either direction: the accent reads as approval, so it
      must never be the thing that fell. Nothing rising, nothing highlighted. */
-  const risers = bars.filter((b) => b.delta > 0);
+  const risers = haveLast ? bars.filter((b) => b.delta > 0) : [];
   const mover = risers.length
     ? risers.reduce((a, b) => (b.delta / b.prev > a.delta / a.prev ? b : a))
     : null;
@@ -118,20 +141,23 @@ export default function LeadSourceChart() {
                   strong ? "text-accent-dark" : "text-muted"
                 }`}
               >
-                {b.delta > 0 ? "+" : b.delta < 0 ? "−" : ""}
-                {Math.abs(b.delta) || "–"}
+                {!haveLast ? "" : b.delta > 0 ? "+" : b.delta < 0 ? "−" : ""}
+                {!haveLast ? "\u00a0" : Math.abs(b.delta) || "–"}
               </span>
 
               <span
                 className="relative block h-[104px] w-full overflow-hidden rounded-lg"
                 style={{ backgroundImage: HATCH }}
               >
-                {/* Last month, as a rule you can see the bar against. */}
-                <span
-                  aria-hidden
-                  className="absolute inset-x-0 border-t border-dashed border-ink/45"
-                  style={{ bottom: h(b.prev) }}
-                />
+                {/* Last month, as a rule you can see the bar against - only
+                    when the book actually reaches back that far. */}
+                {haveLast && (
+                  <span
+                    aria-hidden
+                    className="absolute inset-x-0 border-t border-dashed border-ink/45"
+                    style={{ bottom: h(b.prev) }}
+                  />
+                )}
                 <span
                   className="absolute inset-x-0 bottom-0 rounded-lg transition-all duration-300"
                   style={{
@@ -155,7 +181,11 @@ export default function LeadSourceChart() {
       {/* One sentence under the chart, because a number nobody reads out loud
           is a number nobody acts on. */}
       <p className="mt-3.5 border-t border-line/60 pt-3 text-[11px] leading-relaxed text-muted">
-        {lead ? (
+        {!haveLast ? (
+          <>
+            {total} lead{total === 1 ? "" : "s"} so far this month · last month is not in the book yet
+          </>
+        ) : lead ? (
           <>
             <span className="font-semibold text-ink">{lead.key}</span>{" "}
             {lead.delta === 0
@@ -167,7 +197,7 @@ export default function LeadSourceChart() {
         ) : (
           "Nothing up on last month"
         )}
-        <span className="ml-1 opacity-70">· dashed rule = last month</span>
+        {haveLast && <span className="ml-1 opacity-70">· dashed rule = last month</span>}
       </p>
     </div>
   );

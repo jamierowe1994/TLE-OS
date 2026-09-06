@@ -142,7 +142,7 @@ export async function GET() {
       ok: true,
       live: false,
       mine,
-      reason: "REX isn't connected here — the sample diary is standing in.",
+      reason: "REX isn't connected here.",
     });
   }
 

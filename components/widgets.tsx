@@ -17,6 +17,7 @@ import { VIEWING_OUTCOMES, minutesOf, type Appt } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 import { dueWithin, CERT_META } from "@/lib/compliance";
 import type { Lead } from "@/lib/leads-sample";
+import type { Notice } from "@/lib/notices";
 import type { Application } from "@/lib/applications";
 import type { OsListing } from "@/lib/rex-listings";
 
@@ -56,6 +57,24 @@ export function Head({ icon, label }: { icon: string; label: string }) {
         {label}
       </span>
     </div>
+  );
+}
+
+/**
+ * The honest body for a tile whose figures used to be typed in.
+ *
+ * Eight tiles on the dashboard and five on Finances carried sample numbers
+ * - "£2,340 arrears", "7 maintenance jobs", "Portals 50%" - and rendered
+ * them to whoever was signed in as if they were theirs (found 6 Sep 2026).
+ * The rule is live figures or an honest blank, so until a tile has a feed it
+ * says so, in one line, and what would connect it.
+ */
+export function NotConnected({ needs, w, h }: { needs: string; w: number; h: number }) {
+  return (
+    <>
+      <BigCount value="—" hint="not connected yet" />
+      {(w >= 2 || h >= 2) && <p className="mt-2 text-[11px] leading-relaxed text-muted">{needs}</p>}
+    </>
   );
 }
 
@@ -185,16 +204,6 @@ export function RowList({
   );
 }
 
-/* ── Sample series (no history store yet — these are the wireframe's truth) ── */
-const FB_8W = [2, 4, 3, 5, 4, 6, 5, 9];
-const IG_8W = [1, 1, 2, 3, 2, 2, 4, 4];
-const ADS = [
-  { name: "2-bed launch — Didsbury", platform: "Facebook", leads: 6, spend: "£4.10/lead" },
-  { name: "Landlord switch offer", platform: "Instagram", leads: 3, spend: "£7.40/lead" },
-  { name: "Free valuation", platform: "Facebook", leads: 4, spend: "£5.20/lead" },
-];
-
-
 /* ── The Diary widget: the day at 1×1, the week grid from 2×2, the full
    two-row diary at 4×3 — the same grid as everywhere else, so someone can
    log in, glance, and go. ── */
@@ -279,7 +288,7 @@ function DiaryWidget({ w, h }: { w: number; h: number }) {
 /* ── The Today widget carries its own calendar modal. ── */
 function TodayWidget({ w, h }: { w: number; h: number }) {
   const [open, setOpen] = useState(false);
-  const { appts } = useDiary();
+  const { appts, loading, error } = useDiary();
   /**
    * IN TIME ORDER, all-day first.
    *
@@ -298,8 +307,14 @@ function TodayWidget({ w, h }: { w: number; h: number }) {
         Number(Boolean(b.allDay)) - Number(Boolean(a.allDay)) ||
         minutesOf(a.start) - minutesOf(b.start)
     );
-  const today = inOrder(appts.filter((a) => a.day === 0));
-  const tomorrow = inOrder(appts.filter((a) => a.day === 1));
+  /* WORK ONLY on the tile. The REX diary carries whatever a colleague put in
+     it, and "Boat Trip to Lindos" was on the dashboard beside the viewings
+     (James, 6 Sep 2026). Anything the title does not identify as a viewing,
+     appraisal, take-on, inspection or move-in is left to the full calendar,
+     which still shows everything. */
+  const work = appts.filter((a) => a.kind !== "other");
+  const today = inOrder(work.filter((a) => a.day === 0));
+  const tomorrow = inOrder(work.filter((a) => a.day === 1));
   const showTomorrow = w >= 2 || h >= 3;
   /** The next thing with an actual time on it. */
   const nextUp = today.find((a) => !a.allDay)?.start ?? "—";
@@ -311,10 +326,16 @@ function TodayWidget({ w, h }: { w: number; h: number }) {
           {w >= 2 && <FlowTag from="365 calendar (sign-in TBC)" />}
         </div>
         {h === 1 ? (
-          <BigCount value={String(today.length)} hint={`next at ${nextUp}`} />
+          <BigCount value={loading ? "•" : error ? "—" : String(today.length)} hint={loading ? "reading your diary…" : error ? error : `next at ${nextUp}`} />
+        ) : loading ? (
+          <p className="mt-5 text-[11.5px] text-muted">Reading your diary…</p>
+        ) : error && today.length === 0 ? (
+          /* An honest blank, never the sample book: the tile says why. */
+          <p className="mt-5 text-[11.5px] text-accent-dark">{error}</p>
         ) : (
           <div className={showTomorrow && w >= 2 ? "mt-5 grid grid-cols-2 gap-4" : "mt-5"}>
             <ul className="space-y-2.5">
+              {today.length === 0 && <li className="text-[11.5px] text-muted">Nothing in the diary today.</li>}
               {today.slice(0, 4).map((t) => (
                 <li key={t.id} className="flex items-baseline gap-3">
                   <span className={`w-11 shrink-0 text-accent-dark ${t.allDay ? "text-[9.5px] uppercase tracking-wide" : "figures text-[13px]"}`}>
@@ -357,20 +378,36 @@ function TodayWidget({ w, h }: { w: number; h: number }) {
 }
 
 /* ── Attention list, with its ticks. ── */
-function AttentionWidget({ h }: { w: number; h: number }) {
-  const ITEMS = [
-    { id: "leads", text: "3 leads uncontacted for over 24 hours", area: "Leads", hot: true },
-    { id: "gas", text: "Gas cert expires in 12 days — 41 Harewood Road", area: "Compliance", hot: true },
-    { id: "ref", text: "Referencing stalled 6 days — Flat 2, Mercer St", area: "Applications", hot: false },
-    { id: "money", text: "£1,240 reconciled in, not yet paid out", area: "Finances", hot: false },
-  ];
+const noticesSlot: { p: Promise<unknown> | null } = { p: null };
+
+/**
+ * What needs you: the bell's own notices, on the board.
+ *
+ * Until 6 Sep 2026 this was four typed lines ("Gas cert expires in 12 days -
+ * 41 Harewood Road") shown to everybody. It is now the same feed the bell
+ * reads - deal moves, money, PLC, chases, scoped to the person - with the
+ * unread ones first. Ticking hides a line on this screen; the file is where
+ * dealing happens, and opening the bell is what marks things read.
+ */
+function AttentionWidget({ w, h }: { w: number; h: number }) {
+  const { data, loading, error } = useShared<{ notices: Notice[]; unread: number; seenAt: string | null }>(
+    noticesSlot, "/api/notifications?limit=12",
+    (j) => (j.ok && Array.isArray(j.notices) ? { notices: j.notices as Notice[], unread: Number(j.unread ?? 0), seenAt: (j.seenAt as string | null) ?? null } : null)
+  );
   const [done, setDone] = useState<Set<string>>(new Set());
   const [showAll, setShowAll] = useState(false);
+  const items = (data?.notices ?? []).map((n) => ({
+    id: n.id,
+    text: n.title + (n.body ? ` — ${n.body}` : ""),
+    href: n.href,
+    hot: n.tone === "warn" || (data?.seenAt ? n.at > data.seenAt : true),
+  }));
+  const open = items.filter((a) => !done.has(a.id)).length;
   if (h === 1) {
     return (
       <>
         <Head icon="bell" label="Needs attention" />
-        <BigCount value={String(ITEMS.length - done.size)} hint="open items" />
+        <BigCount value={loading ? "•" : error ? "—" : String(open)} hint={loading ? "reading the bell…" : error ? error : `${data?.unread ?? 0} new`} />
       </>
     );
   }
@@ -378,55 +415,65 @@ function AttentionWidget({ h }: { w: number; h: number }) {
     <>
       <div className="flex items-center justify-between gap-2">
         <Head icon="bell" label="Needs attention" />
-        <Pill tone="accent">{ITEMS.length - done.size}</Pill>
+        {!loading && !error && <Pill tone="accent">{open}</Pill>}
       </div>
-      <ul className="mt-5 space-y-2.5">
-        {(showAll ? ITEMS : ITEMS.slice(0, 4)).map((a) => {
-          const ticked = done.has(a.id);
-          return (
-            <li key={a.id}>
-              <button
-                type="button"
-                onClick={() =>
-                  setDone((cur) => {
-                    const next = new Set(cur);
-                    if (next.has(a.id)) next.delete(a.id);
-                    else next.add(a.id);
-                    return next;
-                  })
-                }
-                className="flex w-full items-start gap-2.5 text-left"
-              >
-                <span
+      {loading ? (
+        <p className="mt-5 text-[11.5px] text-muted">Reading the bell…</p>
+      ) : error ? (
+        <p className="mt-5 text-[11.5px] text-accent-dark">{error}</p>
+      ) : items.length === 0 ? (
+        <p className="mt-5 text-[11.5px] text-muted">Nothing needs you right now.</p>
+      ) : (
+        <ul className="mt-5 space-y-2.5">
+          {(showAll ? items : items.slice(0, 4)).map((a) => {
+            const ticked = done.has(a.id);
+            return (
+              <li key={a.id} className="flex items-start gap-2.5">
+                <button
+                  type="button"
+                  aria-label={ticked ? "Untick" : "Tick"}
+                  onClick={() =>
+                    setDone((cur) => {
+                      const next = new Set(cur);
+                      if (next.has(a.id)) next.delete(a.id);
+                      else next.add(a.id);
+                      return next;
+                    })
+                  }
                   className={`mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors ${
                     ticked ? "border-accent-dark bg-accent-soft text-accent-dark" : "border-line"
                   }`}
                 >
                   {ticked && <span className="text-[10px] leading-none">✓</span>}
-                </span>
-                <span className={`text-[12.5px] leading-snug ${ticked ? "text-muted line-through opacity-60" : ""}`}>
-                  {a.text}
-                  <span className={`ml-1.5 text-[10px] font-semibold ${a.hot ? "text-accent-dark" : "text-muted"}`}>
-                    {a.area}
-                  </span>
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      {ITEMS.length > 4 && !showAll && (
+                </button>
+                {a.href ? (
+                  <Link href={a.href} className={`text-[12.5px] leading-snug hover:underline ${ticked ? "text-muted line-through opacity-60" : a.hot ? "" : "text-muted"}`}>
+                    {a.text}
+                  </Link>
+                ) : (
+                  <span className={`text-[12.5px] leading-snug ${ticked ? "text-muted line-through opacity-60" : a.hot ? "" : "text-muted"}`}>{a.text}</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {items.length > 4 && !showAll && (
         <button
           type="button"
           onClick={() => setShowAll(true)}
           className="mt-3 text-[11px] font-semibold text-muted transition-colors hover:text-ink"
         >
-          Show all {ITEMS.length} →
+          +{items.length - 4} more →
         </button>
+      )}
+      {w >= 2 && !loading && !error && (
+        <p className="mt-3 border-t border-line/50 pt-2 text-[10px] text-muted">The same list as the bell, newest first. Opening the bell marks it read.</p>
       )}
     </>
   );
 }
+
 
 /* ── The registry itself. ── */
 /**
@@ -823,6 +870,50 @@ const daysSince = (iso: string | null | undefined, ms?: number | null) => {
  * business that can be less than twelve weeks, so a week older than the
  * oldest lead we hold is left out rather than drawn as zero.
  */
+/**
+ * Lead sources, counted from the live book - the same 500 leads the tile
+ * above shares. At 1x1 it names the biggest source this month; "Portals 50%"
+ * used to be typed in.
+ */
+function LeadSourcesWidget({ w, h }: { w: number; h: number }) {
+  const { data, loading, error } = useShared<{ leads: Lead[] }>(
+    leadsSlot, "/api/leads",
+    (j) => (j.ok && Array.isArray(j.leads) ? { leads: j.leads as Lead[] } : null)
+  );
+  const leads = data?.leads ?? [];
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const month = leads.filter((l) => l.receivedAt && new Date(l.receivedAt).getTime() >= start);
+  const bySource = new Map<string, number>();
+  for (const l of month) bySource.set(l.source, (bySource.get(l.source) ?? 0) + 1);
+  const top = [...bySource.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <Head icon="pie" label="Lead sources" />
+        {w >= 2 && <FlowTag from="REX" />}
+      </div>
+      {h === 1 ? (
+        <BigCount
+          value={loading ? "•" : error ? "—" : top ? `${Math.round((top[1] / Math.max(1, month.length)) * 100)}%` : "0"}
+          hint={loading ? "asking REX" : error ? error : top ? `${top[0]} — biggest source this month` : "no leads this month yet"}
+        />
+      ) : loading ? (
+        <p className="mt-5 text-[11.5px] text-muted">Asking REX…</p>
+      ) : error ? (
+        <p className="mt-5 text-[11.5px] text-accent-dark">{error}</p>
+      ) : (
+        <div className="mt-2">
+          <LeadSourceChart leads={leads} />
+          <Link href="/leads" className="mt-3 block text-[11px] font-semibold text-muted transition-colors hover:text-ink">
+            All leads →
+          </Link>
+        </div>
+      )}
+    </>
+  );
+}
+
 function LeadsTodayWidget({ w, h }: { w: number; h: number }) {
   const { data, loading, unlinked, error } = useShared<{ leads: Lead[] }>(
     leadsSlot, "/api/leads",
@@ -1105,24 +1196,7 @@ export const WIDGETS: Record<string, WidgetDef> = {
     label: "Lead sources", icon: "pie", hint: "top source → bars → the full chart",
     defaultW: 1, defaultH: 2,
     sizes: { s: [1, 1], m: [1, 2], l: [2, 2] },
-    render: (w, h) => (
-      <>
-        <div className="flex items-center justify-between gap-2">
-          <Head icon="pie" label="Lead sources" />
-          {w >= 2 && <FlowTag from="REX + GHL" />}
-        </div>
-        {h === 1 ? (
-          <BigCount value="50%" hint="Portals — biggest source" />
-        ) : (
-          <div className="mt-2">
-            <LeadSourceChart />
-            <Link href="/leads" className="mt-3 block text-[11px] font-semibold text-muted transition-colors hover:text-ink">
-              All leads →
-            </Link>
-          </div>
-        )}
-      </>
-    ),
+    render: (w, h) => <LeadSourcesWidget w={w} h={h} />,
   },
 
   pipeline: {
@@ -1138,20 +1212,7 @@ export const WIDGETS: Record<string, WidgetDef> = {
     render: (w, h) => (
       <>
         <Head icon="megaphone" label="Facebook leads" />
-        {w === 1 && h === 1 ? (
-          <BigCount value="9" hint="+4 this week · via GHL" />
-        ) : (
-          <div className="mt-2 flex items-end gap-4">
-            <div>
-              <p className="figures text-[34px] leading-none">9</p>
-              <p className="mt-1 text-[11px] font-medium text-accent-dark">+4 this week</p>
-            </div>
-            <div className="mb-1 min-w-0 flex-1">
-              <Bars data={FB_8W} tall={h >= 2} />
-              <p className="mt-1 text-[9px] text-muted">8 weeks · via GoHighLevel</p>
-            </div>
-          </div>
-        )}
+        <NotConnected needs="Needs GoHighLevel's API. Meta's own lead count is on Company figures for owners; nothing here is per agent yet." w={w} h={h} />
       </>
     ),
   },
@@ -1162,20 +1223,7 @@ export const WIDGETS: Record<string, WidgetDef> = {
     render: (w, h) => (
       <>
         <Head icon="star" label="Instagram leads" />
-        {w === 1 && h === 1 ? (
-          <BigCount value="4" hint="+2 this week · via GHL" />
-        ) : (
-          <div className="mt-2 flex items-end gap-4">
-            <div>
-              <p className="figures text-[34px] leading-none">4</p>
-              <p className="mt-1 text-[11px] font-medium text-accent-dark">+2 this week</p>
-            </div>
-            <div className="mb-1 min-w-0 flex-1">
-              <Bars data={IG_8W} tall={h >= 2} />
-              <p className="mt-1 text-[9px] text-muted">8 weeks · via GoHighLevel</p>
-            </div>
-          </div>
-        )}
+        <NotConnected needs="Needs GoHighLevel's API. Meta's own lead count is on Company figures for owners; nothing here is per agent yet." w={w} h={h} />
       </>
     ),
   },
@@ -1186,14 +1234,7 @@ export const WIDGETS: Record<string, WidgetDef> = {
     render: (w, h) => (
       <>
         <Head icon="rocket" label="Ads running" />
-        {w === 1 && h === 1 ? (
-          <BigCount value="3" hint="13 leads this week" />
-        ) : (
-          <RowList
-            rows={ADS.map((a) => ({ a: String(a.leads), b: `${a.name} · ${a.platform}`, c: a.spend }))}
-            max={3}
-          />
-        )}
+        <NotConnected needs="Needs the Meta ads account read per agent. The company-wide spend is on Company figures." w={w} h={h} />
       </>
     ),
   },
@@ -1240,41 +1281,7 @@ export const WIDGETS: Record<string, WidgetDef> = {
     render: (w, h) => (
       <>
         <Head icon="wallet" label="Earnings this month" />
-        {w === 1 && h === 1 ? (
-          <BigCount value="£38.4k" hint="net of VAT · +6% on last month" />
-        ) : (
-          <>
-            <div className="mt-2 flex items-end gap-4">
-              <div>
-                <p className="figures text-[34px] leading-none">£38.4k</p>
-                <p className="mt-1 text-[11px] font-medium text-accent-dark">+6% on last month</p>
-              </div>
-              <div className="mb-1 min-w-0 flex-1">
-                <LineGraph data={[31, 34, 33, 36, 32, 35, 37, 34, 38, 36, 36, 38.4]} tall={h >= 2} />
-                <p className="mt-1 text-[9px] text-muted">12 months · net of VAT</p>
-              </div>
-            </div>
-            {h >= 2 && (
-              <>
-                <p className="mt-4 text-[10px] font-semibold uppercase tracking-wide text-muted">By stream</p>
-                <RowList
-                  rows={[
-                    { a: "£29.1k", b: "Management fees", c: "76%" },
-                    { a: "£6.8k", b: "Letting & renewal fees", c: "18%" },
-                    { a: "£2.5k", b: "Other agency income", c: "6%" },
-                  ]}
-                  max={3}
-                />
-                {w >= 2 && (
-                  <p className="mt-3 border-t border-line/50 pt-2 text-[10px] text-muted">
-                    Counted the PayProp way: fees belong to the month the batch transferred,
-                    every figure net of VAT — so this always agrees with the bank.
-                  </p>
-                )}
-              </>
-            )}
-          </>
-        )}
+        <NotConnected needs="Needs the rule for what counts as an agent's own fees - PayProp knows the fee, not whose it is. Company fees are on Company figures." w={w} h={h} />
       </>
     ),
   },
@@ -1285,18 +1292,7 @@ export const WIDGETS: Record<string, WidgetDef> = {
     render: (w, h) => (
       <>
         <Head icon="megaphone" label="Recently listed" />
-        {w === 1 && h === 1 ? (
-          <BigCount value="3" hint="live this week" />
-        ) : (
-          <RowList
-            rows={[
-              { a: "1d", b: "12 Elm Gardens — £1,200 pcm", c: "4 enquiries" },
-              { a: "3d", b: "6 Sandpiper Way — £850 pcm", c: "2 viewings" },
-              { a: "5d", b: "Flat A, 41 Milton Road — £795 pcm", c: "quiet — check photos" },
-            ]}
-            max={h >= 2 ? 3 : 2}
-          />
-        )}
+        <NotConnected needs="Needs enquiries and viewings joined to each new listing. The listings themselves are on Listings." w={w} h={h} />
       </>
     ),
   },
@@ -1307,36 +1303,7 @@ export const WIDGETS: Record<string, WidgetDef> = {
     render: (w, h) => (
       <>
         <Head icon="coin" label="Rent arrears" />
-        {w === 1 && h === 1 ? (
-          <BigCount value="£2,340" hint="3 tenancies behind" />
-        ) : (
-          <>
-            <div className="mt-2 flex items-center gap-4">
-              <Donut
-                centre="99.2%"
-                sub="collected"
-                parts={[
-                  { value: 99.2, color: "var(--accent-dark)" },
-                  { value: 0.8, color: "var(--accent-soft)" },
-                ]}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="figures text-[22px] leading-none">£2,340</p>
-                <p className="mt-1 text-[11px] text-muted">outstanding across 3 tenancies</p>
-              </div>
-            </div>
-            {h >= 2 && (
-              <RowList
-                rows={[
-                  { a: "£1,190", b: "Flat 2, Mercer Street", c: "34 days" },
-                  { a: "£750", b: "183 Walesby Lane", c: "12 days" },
-                  { a: "£400", b: "88 Kelvin Way", c: "5 days" },
-                ]}
-                max={3}
-              />
-            )}
-          </>
-        )}
+        <NotConnected needs="PayProp's arrears are live on Company figures for owners. Per agent needs the rule for whose tenancy is whose." w={w} h={h} />
       </>
     ),
   },
@@ -1347,20 +1314,7 @@ export const WIDGETS: Record<string, WidgetDef> = {
     render: (w, h) => (
       <>
         <Head icon="setting" label="Maintenance jobs" />
-        {w === 1 && h === 1 ? (
-          <BigCount value="7" hint="2 urgent" />
-        ) : (
-          <RowList
-            rows={[
-              { a: "2d", b: "Boiler down — Flat A, Milton Road", c: "URGENT" },
-              { a: "4d", b: "Leak under sink — 41 Harewood Road", c: "URGENT" },
-              { a: "6d", b: "Fence panel — 12 Elm Gardens" },
-              { a: "9d", b: "Extractor fan — 108 Cherry Tree Drive" },
-              { a: "15d", b: "Guttering — 8 Recreation Terrace" },
-            ]}
-            max={h >= 2 ? 5 : 3}
-          />
-        )}
+        <NotConnected needs="No source. REX's property management tables are empty and nothing else records jobs. Works orders are on the build list." w={w} h={h} />
       </>
     ),
   },
@@ -1371,27 +1325,7 @@ export const WIDGETS: Record<string, WidgetDef> = {
     render: (w, h) => (
       <>
         <Head icon="file-contract" label="Tenancies ending" />
-        {w === 1 && h === 1 ? (
-          <BigCount value="5" hint="in the next 60 days" />
-        ) : (
-          <>
-            <RowList
-              rows={[
-                { a: "12d", b: "Flat 2, Mercer Street", c: "renewal offered" },
-                { a: "23d", b: "6 Sandpiper Way", c: "no reply yet" },
-                { a: "31d", b: "44 Priory Court (rm 2)", c: "leaving — re-let" },
-                { a: "44d", b: "88 Kelvin Way", c: "renewal likely" },
-                { a: "58d", b: "183 Walesby Lane", c: "chase" },
-              ]}
-              max={h >= 2 ? 5 : 3}
-            />
-            {h >= 2 && w >= 2 && (
-              <p className="mt-3 border-t border-line/50 pt-2 text-[10px] text-muted">
-                Every unanswered renewal is a void in waiting — chase the quiet ones first.
-              </p>
-            )}
-          </>
-        )}
+        <NotConnected needs="Needs tenancy end dates from PayProp joined to the managed book." w={w} h={h} />
       </>
     ),
   },
