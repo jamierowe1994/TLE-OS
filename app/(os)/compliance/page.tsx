@@ -3,10 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
-import WorksOrderModal, { type OrderTarget } from "@/components/WorksOrder";
 import ComplianceDrawer from "@/components/ComplianceDrawer";
-import { Pill, FlowTag } from "@/components/Wire";
-import { PressButton } from "@/components/Bits";
+import { FlowTag } from "@/components/Wire";
 import {
   BIG_THREE, CERT_META, COMP_BOOK, dueWithin, headlineCerts, statusOf,
   type CertKey, type CertStatus, type CompProperty,
@@ -16,8 +14,9 @@ import {
  * Compliance — the page that keeps every home legal and every tenant safe.
  *
  * The order of the page IS the priority order of the job:
- *   1. THE NEXT MONTH: everything expired or expiring inside 30 days, each
- *      with the button that fixes it (a works order to the right trade).
+ *   1. THE NEXT MONTH: everything expired or expiring inside 30 days - days
+ *      over, the home, the requirement, the expiry date. Nothing is booked
+ *      or sent from the list (James, 6 Sep 2026): click into the home.
  *   2. The whole book, one row per property, the big three as columns —
  *      so "where are we weak" is a glance, not an audit.
  *
@@ -66,10 +65,6 @@ export default function Compliance() {
     const wanted = new URLSearchParams(window.location.search).get("open");
     if (wanted) setOpenId(wanted);
   }, []);
-  const [ordering, setOrdering] = useState<OrderTarget | null>(null);
-  /** key = `${propertyId}:${cert}` */
-  const [orders, setOrders] = useState<Record<string, { contractor: string; when: string }>>({});
-  const [reminded, setReminded] = useState<Set<string>>(new Set());
 
   /* ── The real book, out of REX. Sample stands in until it answers. ── */
   const [source, setSource] = useState<{
@@ -96,7 +91,12 @@ export default function Compliance() {
     return () => { gone = true; };
   }, []);
 
-  const BOOK = source.properties;
+  /* The book carries one record per leased listing, so a home let three
+     times came three times; the page shows each home once. */
+  const BOOK = useMemo(() => {
+    const seen = new Set<string>();
+    return source.properties.filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)));
+  }, [source.properties]);
   const urgent = useMemo(() => dueWithin(30, BOOK), [BOOK]);
 
   // Per-property worst status, for the tiles and the filter.
@@ -190,69 +190,48 @@ export default function Compliance() {
         </div>
         {urgent.length ? (
           <ul className="divide-y divide-line/40">
+            {/* Days over, the home, the requirement in its own box, the date.
+                The whole row opens the home; nothing is done from here. */}
+            <li className="hidden grid-cols-[74px_minmax(0,1fr)_200px_130px] items-center gap-4 pb-2 text-[10px] font-semibold uppercase tracking-wide text-muted md:grid">
+              <span className="text-center">Days</span><span>Property</span><span>Requirement</span><span>Expiry date</span>
+            </li>
             {urgent.map(({ p, key, cert, status }) => {
               const ok = `${p.id}:${key}`;
-              const order = orders[ok];
               const days = cert?.expires ?? null;
+              const expiry = days == null ? null : new Date(Date.now() + days * 86400000);
               return (
-                <li key={ok} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
-                  {/* The number the whole row is about. */}
-                  <span className="w-[74px] shrink-0 text-center">
-                    <span
-                      className={`figures block text-[22px] leading-none ${
-                        status === "expired" ? "text-accent-dark" : ""
-                      }`}
-                    >
-                      {status === "expired" ? Math.abs(days!) : days}
-                    </span>
-                    <span className="block text-[9px] font-semibold uppercase tracking-wide text-muted">
-                      {status === "expired" ? "days over" : "days left"}
-                    </span>
-                  </span>
-
+                <li key={ok}>
                   <button
                     type="button"
                     onClick={() => setOpenId(p.id)}
-                    className="min-w-[190px] flex-1 text-left transition-opacity hover:opacity-70"
+                    className="grid w-full grid-cols-[74px_minmax(0,1fr)] items-center gap-x-4 gap-y-2 py-3 text-left transition-colors hover:bg-accent-soft/20 md:grid-cols-[74px_minmax(0,1fr)_200px_130px]"
                   >
-                    <span className="hand block text-[13.5px]">{p.name}</span>
-                    <span className="block text-[10.5px] text-muted">
-                      {CERT_META[key].label} · landlord {p.landlord}
-                      {p.tenant
-                        ? ` · access via ${p.tenant}`
-                        : p.tenant === null
-                          ? " · vacant, keys held"
-                          : " · occupancy not known"}
+                    <span className="text-center">
+                      <span className={`figures block text-[22px] leading-none ${status === "expired" ? "text-accent-dark" : ""}`}>
+                        {status === "expired" ? Math.abs(days!) : days}
+                      </span>
+                      <span className="block text-[9px] font-semibold uppercase tracking-wide text-muted">
+                        {status === "expired" ? "days over" : "days left"}
+                      </span>
+                    </span>
+                    <span className="min-w-0">
+                      <span className="hand block truncate text-[13.5px]">{p.name}</span>
+                      <span className="block truncate text-[10.5px] text-muted">
+                        {p.locality}
+                        {p.landlord ? ` · landlord ${p.landlord}` : ""}
+                        {p.hmo ? " · HMO" : ""}
+                      </span>
+                    </span>
+                    <span className="col-start-2 md:col-start-auto">
+                      <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11.5px] font-semibold ${status === "expired" ? "border-accent-dark bg-accent-soft/40 text-accent-dark" : "border-line/80"}`}>
+                        <DoodleIcon name={CERT_META[key].icon} size={12} className="text-accent-dark" />
+                        {CERT_META[key].label}
+                      </span>
+                    </span>
+                    <span className="figures col-start-2 text-[12.5px] md:col-start-auto">
+                      {expiry ? expiry.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—"}
                     </span>
                   </button>
-
-                  <span className="flex shrink-0 items-center gap-2">
-                    {order ? (
-                      <Pill tone="good">Order out — {order.contractor.split(" (")[0]}, {order.when}</Pill>
-                    ) : (
-                      <PressButton
-                        onClick={() =>
-                          setOrdering({ property: p, cert: key })
-                        }
-                        className="press-ring flex items-center gap-1.5 rounded-full bg-accent-dark px-4 py-2 text-[11.5px] font-semibold text-page"
-                      >
-                        <DoodleIcon name="setting" size={13} />
-                        Book the {CERT_META[key].trade}
-                      </PressButton>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setReminded((cur) => new Set(cur).add(ok))}
-                      disabled={reminded.has(ok)}
-                      className={`rounded-full border px-3.5 py-2 text-[11px] font-semibold transition-colors ${
-                        reminded.has(ok)
-                          ? "cursor-default border-line/60 text-muted"
-                          : "border-ink/25 hover:border-ink"
-                      }`}
-                    >
-                      {reminded.has(ok) ? "Landlord told ✓" : "Tell the landlord"}
-                    </button>
-                  </span>
                 </li>
               );
             })}
@@ -359,19 +338,10 @@ export default function Compliance() {
 
       <ComplianceDrawer
         property={open}
+        book={BOOK}
         onClose={() => setOpenId(null)}
-        orders={orders}
-        onOrder={(t) => setOrdering(t)}
       />
 
-      <WorksOrderModal
-        target={ordering}
-        onClose={() => setOrdering(null)}
-        onRaised={(t, contractor, when) => {
-          setOrders((cur) => ({ ...cur, [`${t.property.id}:${t.cert}`]: { contractor, when } }));
-          setOrdering(null);
-        }}
-      />
     </>
   );
 }

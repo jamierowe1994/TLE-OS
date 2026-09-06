@@ -38,8 +38,12 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    /* ?save=1: the document sheet's Save button. The browser is told to
+       download rather than show it, under the file's own name. */
+    const save = req.nextUrl.searchParams.get("save") === "1";
+    const fileName = key.slice(key.lastIndexOf("/") + 1).replace(/^\d+-/, "");
     const url = await withR2((client) =>
-      getSignedUrl(client, new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }), {
+      getSignedUrl(client, new GetObjectCommand({ Bucket: R2_BUCKET, Key: key, ...(save ? { ResponseContentDisposition: `attachment; filename="${fileName.replace(/["\\]/g, "")}"` } : {}) }), {
         expiresIn: TTL_SECONDS,
       })
     );

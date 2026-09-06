@@ -8,7 +8,8 @@ import FindingData from "@/components/business/FindingData";
 import PropertyFile from "@/components/PropertyFile";
 import { Pill } from "@/components/Wire";
 import { rexContactUrl, rexListingUrl } from "@/lib/business/rex-links";
-import { housesIn, houseByListing, roomLabel, tabLabel, tenantsInOrder, type House } from "@/lib/houses";
+import { housesIn, houseByListing, roomLabel, tabLabel, tenantsInOrder, MANAGED_READERS as R, type House } from "@/lib/houses";
+import { useDocumentOpen } from "@/lib/doc-sheet";
 import {
   CERT_META, headlineCerts, requiredCerts, statusOf,
   type CertKey, type CertStatus, type CompProperty,
@@ -210,6 +211,8 @@ function PropertyPanel({
   const [at, setAt] = useState(0);
   /* "house", or a room's listing id. A plain home has no tabs. */
   const [tab, setTab] = useState<string>("house");
+  /* A certificate is up from the bottom: slide aside until it goes. */
+  const docOpen = useDocumentOpen();
 
   useEffect(() => {
     const t = requestAnimationFrame(() => setShown(true));
@@ -292,7 +295,7 @@ function PropertyPanel({
         className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`}
       />
       <aside
-        className={`absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-2xl bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] ${house ? "max-w-3xl" : "max-w-xl"} ${shown ? "translate-x-0" : "translate-x-full"}`}
+        className={`absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-2xl bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] lg:w-[calc(100%-17rem)] ${shown && !docOpen ? "translate-x-0" : "translate-x-full"}`}
         style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
       >
         <div className="shrink-0 border-b border-line/70 px-6 pt-5">
@@ -310,7 +313,7 @@ function PropertyPanel({
           {house && (
             /* The house, then a tab per room. A filled dot is a let room. */
             <div className="-mx-1 flex gap-1 overflow-x-auto pb-0.5 sm:flex-wrap">
-              {[{ id: "house", label: "The house", let: null as boolean | null }, ...house.rooms.map((r) => ({ id: r.listingId, label: tabLabel(house, r), let: r.tenants.length > 0 }))].map((t) => (
+              {[{ id: "house", label: "The house", let: null as boolean | null }, ...house.rooms.map((r) => ({ id: r.listingId, label: tabLabel(house, r, R), let: r.tenants.length > 0 }))].map((t) => (
                 <button
                   key={t.id}
                   type="button"
@@ -327,7 +330,7 @@ function PropertyPanel({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           <div className="relative overflow-hidden rounded-2xl border border-line/70 bg-box">
-            <PropertyPhoto src={shots[at] ?? null} alt="" className="h-[220px] w-full object-cover" />
+            <PropertyPhoto src={shots[at] ?? null} alt="" className="h-[220px] w-full object-cover lg:h-[300px]" />
             {shots.length > 1 && (
               <>
                 <button type="button" aria-label="Previous photograph" onClick={() => setAt((n) => (n - 1 + shots.length) % shots.length)} className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-page/90 text-[13px] shadow-sm">‹</button>
@@ -338,7 +341,7 @@ function PropertyPanel({
           </div>
 
           {houseView && house ? (
-            <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
+            <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 lg:grid-cols-6">
               {lets ? fact("Lets on record", String(house.rooms.length)) : fact("Rooms", `${house.rooms.length}, ${letRooms.length} let`)}
               {lets
                 ? fact("Rent", p.rent == null ? "Not set" : `${money(p.rent)} ${p.rentPeriod === "week" ? "per week" : "pcm"} on the latest let`)
@@ -349,7 +352,7 @@ function PropertyPanel({
               {fact("In REX as", lets ? "one listing per let, no rooms named" : house.house ? "the house and its rooms" : "the rooms only")}
             </div>
           ) : (
-            <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
+            <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 lg:grid-cols-6">
               {fact("Rent", p.rent == null ? "Not set" : `${money(p.rent)} ${p.rentPeriod === "week" ? "per week" : "pcm"}`)}
               {fact("Let type", p.letType ?? "—")}
               {fact("Let since", day(p.letSince))}
@@ -364,7 +367,7 @@ function PropertyPanel({
             <section className="mt-6">
               <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">{p.tenants.length === 1 ? "Tenant" : "Tenants"}</p>
               {p.tenants.length ? (
-                <ul className="space-y-2">{tenantsInOrder(house, p).map(tenantCard)}</ul>
+                <ul className="space-y-2">{tenantsInOrder(house, p, R).map(tenantCard)}</ul>
               ) : (
                 <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">No tenant on this room in REX. It is empty, or the let has not been recorded.</p>
               )}
@@ -385,7 +388,7 @@ function PropertyPanel({
                   <li key={r.listingId} className="border-b border-line/40 last:border-0">
                     <button type="button" onClick={() => setTab(r.listingId)} className={`grid w-full items-center gap-3 px-4 py-2.5 text-left text-[12.5px] transition-colors hover:bg-box ${lets ? "grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_100px_90px]" : "grid-cols-[84px_minmax(0,1fr)_auto] sm:grid-cols-[84px_minmax(0,1fr)_100px_90px]"}`}>
                       {lets ? (
-                        <span className="min-w-0 truncate"><span className="font-semibold">{tabLabel(house, r)}</span>{r.tenants.length > 1 ? <span className="text-muted"> · {r.tenants.length} on the tenancy</span> : null}</span>
+                        <span className="min-w-0 truncate"><span className="font-semibold">{tabLabel(house, r, R)}</span>{r.tenants.length > 1 ? <span className="text-muted"> · {r.tenants.length} on the tenancy</span> : null}</span>
                       ) : (
                         <>
                           <span className="font-semibold">{roomLabel(r)}</span>
@@ -435,7 +438,7 @@ function PropertyPanel({
               <p className="mb-2 text-[11.5px] text-muted">REX holds this house as its rooms only, so the file below is the first room&apos;s. Every room shares the house&apos;s certificates.</p>
             )}
             {p.propertyId ? (
-              <PropertyFile key={p.propertyId} propertyId={p.propertyId} screen="the portfolio" />
+              <PropertyFile key={p.propertyId} propertyId={p.propertyId} propertyName={house ? `${house.name}${room ? ` · ${roomLabel(room)}` : ""}` : p.name} screen="the portfolio" />
             ) : (
               <p className="rounded-xl border border-dashed border-line/80 px-4 py-3 text-[12px] text-muted">REX holds no property record for this listing, so there is nothing to check.</p>
             )}
@@ -539,8 +542,8 @@ export default function Portfolio() {
   const everything = state.status === "ready" && state.everything;
   const certBy = certs.status === "ready" ? certs.by : null;
   /* Shared houses: one row in the list, rooms as tabs in the drawer. */
-  const houses = useMemo(() => housesIn(book?.properties ?? []), [book]);
-  const houseOf = useMemo(() => houseByListing(houses), [houses]);
+  const houses = useMemo(() => housesIn(book?.properties ?? [], R), [book]);
+  const houseOf = useMemo(() => houseByListing(houses, R), [houses]);
 
   const summaryOf = useCallback(
     (p: ManagedProperty) => (certBy && p.propertyId ? summarise(certBy.get(p.propertyId)) : null),

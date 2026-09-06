@@ -6,6 +6,7 @@ import ViewAsBar from "@/components/ViewAsBar";
 import HelpDock from "@/components/HelpDock";
 import SetupGate from "@/components/SetupGate";
 import Tour from "@/components/Tour";
+import DocumentSheet from "@/components/DocumentSheet";
 
 export default function OsLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -38,6 +39,9 @@ export default function OsLayout({ children }: { children: React.ReactNode }) {
         <Suspense fallback={null}>
           <Tour />
         </Suspense>
+        {/* The certificate viewer, up from the bottom of whichever page a
+            file was opened on. Drawers slide aside for it (lib/doc-sheet). */}
+        <DocumentSheet />
       </IntroGate>
     </ThemeGate>
   );

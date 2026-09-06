@@ -85,7 +85,8 @@ export function parseAddress(s: string): Parsed {
   let unitWord: "room" | "flat" | null = null;
   words.forEach((w, i) => {
     if (UNIT_WORDS.test(w)) {
-      unitWord = unitWord ?? (/^(room|studio)$/.test(w) ? "room" : "flat");
+      /* "Apartment Room 5, 5a Newton Road" is a room: the room word wins. */
+      unitWord = /^(room|studio)$/.test(w) ? "room" : unitWord ?? "flat";
       if (unit == null && words[i + 1] && isNum(words[i + 1])) unit = words[i + 1];
     }
   });
@@ -134,5 +135,5 @@ export function isRoomAddress(address: string): boolean {
 
 /** The house's own line, from a room's: "Room 2, 2 Norwich Street, Wisbech PE13 2LE" → "2 Norwich Street, Wisbech PE13 2LE". */
 export function houseNameFrom(address: string): string {
-  return address.replace(/^\s*(room|studio|bed(room)?)\s*[a-z0-9]+\s*[,/-]?\s*/i, "").trim();
+  return address.replace(/^\s*(?:(?:apartment|flat)\s+)?(room|studio|bed(room)?)\s*[a-z0-9]+\s*[,/-]?\s*/i, "").trim();
 }

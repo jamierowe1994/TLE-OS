@@ -1,133 +1,61 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import PropertyFile from "@/components/PropertyFile";
 import { Pill } from "@/components/Wire";
-import { PressButton } from "@/components/Bits";
-import type { OrderTarget } from "@/components/WorksOrder";
-import {
-  BIG_THREE, CERT_META, HMO_SET, QUIET_SET, requiredCerts, statusOf,
-  type CertKey, type CompProperty,
-} from "@/lib/compliance";
+import { CERT_META, requiredCerts, statusOf, type CertKey, type CompProperty } from "@/lib/compliance";
+import { COMPLIANCE_READERS as R, houseByListing, housesIn, roomLabel, tabLabel, type House } from "@/lib/houses";
+import { useDocumentOpen } from "@/lib/doc-sheet";
 
 /**
- * One property's full compliance file: every duty it carries, where each
- * stands, whether the actual certificate is on record, and the button that
- * fixes whatever's wrong. The quiet duties (alarms, legionella) appear here
- * even though the page's table doesn't carry them — the drawer is the whole
- * truth, the table is the headline.
+ * One home's compliance, pulled out to the width of the lead drawer
+ * (James, 6 Sep 2026: "it should fully pull out, the same as a lead").
+ *
+ * A shared house opens with a tab for the house and one per room, the same
+ * grouping Portfolio uses, so the certificate on the house is seen from any
+ * room. The body is the property file - every duty, where it stands in REX,
+ * the certificate itself, Attach - which is the same panel the listing, the
+ * application and the appraisal show. Nothing is booked or sent from here:
+ * open the certificate and the sheet offers Save and Send.
  */
 
 function certLine(expires: number | null): string {
-  if (expires == null) return "No record on file";
-  if (expires < 0) return `Expired ${Math.abs(expires)} days ago`;
-  if (expires <= 60) return `Expires in ${expires} days`;
+  if (expires == null) return "No record";
+  if (expires < 0) return `Expired ${Math.abs(expires)}d ago`;
+  if (expires <= 60) return `${expires}d left`;
   const months = Math.round(expires / 30.4);
-  return `Expires in ~${months} month${months === 1 ? "" : "s"}`;
+  return `~${months} month${months === 1 ? "" : "s"}`;
 }
 
 export default function ComplianceDrawer({
   property,
+  book,
   onClose,
-  orders,
-  onOrder,
 }: {
   property: CompProperty | null;
+  /** The whole book, so a room can find its house. */
+  book: CompProperty[];
   onClose: () => void;
-  orders: Record<string, { contractor: string; when: string }>;
-  onOrder: (t: OrderTarget) => void;
 }) {
   const [shown, setShown] = useState(false);
-  /** Certificates in the vault, keyed propertyId:cert. Loaded from R2 when
-   *  the drawer opens and added to as files land — so what you filed last
-   *  week is still on the screen this week, not just this session. */
-  const [files, setFiles] = useState<Record<string, { name: string; url: string }[]>>({});
-  const [busy, setBusy] = useState<string | null>(null);
-  const [uploadErr, setUploadErr] = useState<string | null>(null);
+  const [tab, setTab] = useState<string>("house");
+  const docOpen = useDocumentOpen();
 
-  async function attach(certKey: string, file: File) {
-    if (!property) return;
-    const slot = `${property.id}:${certKey}`;
-    setBusy(slot);
-    setUploadErr(null);
-    try {
-      const body = new FormData();
-      body.set("file", file);
-      body.set("scope", "document");
-      body.set("ref", `compliance-${property.id}-${certKey}`);
-      const res = await fetch("/api/r2/upload", { method: "POST", body });
-      const j = await res.json();
-      if (!j.ok) throw new Error(j.error ?? "Upload failed");
-      setFiles((cur) => ({
-        ...cur,
-        [slot]: [...(cur[slot] ?? []), { name: j.name, url: j.url }],
-      }));
-    } catch (e) {
-      setUploadErr(e instanceof Error ? e.message : "Upload failed");
-    } finally {
-      setBusy(null);
-    }
-  }
+  const houses = useMemo(() => housesIn(book, R), [book]);
+  const houseOf = useMemo(() => houseByListing(houses, R), [houses]);
+  const house: House<CompProperty> | null = property ? houseOf.get(property.id) ?? null : null;
 
   useEffect(() => {
     if (!property) { setShown(false); return; }
     const id = requestAnimationFrame(() => setShown(true));
     return () => cancelAnimationFrame(id);
   }, [property]);
-
-  /**
-   * What is already filed against this property — in ONE read.
-   *
-   * Without this the attached certificates vanished on refresh: still stored,
-   * still invisible, which invites somebody to upload the lot again.
-   *
-   * ── Why one request and not one per certificate ──────────────────────────
-   *
-   * This used to fan out over `requiredCerts(property)` and hit /api/r2/list
-   * once per type — five to eight requests every time a drawer opened, each
-   * one a ListObjectsV2 against R2, all for folders that share a prefix.
-   * Opening six properties to check six certificates was forty round trips.
-   *
-   * /api/compliance/vault already reads the whole shelf under that prefix in
-   * a single call. It was written for the listing's Documents tab (5 Sep) and
-   * its own note said the drawer still went a certificate at a time. It does
-   * not any more.
-   *
-   * It returns every certKey the property has, not only the required ones,
-   * which is strictly more than before and costs nothing: `files` is only ever
-   * read by key, so a type the drawer does not render is simply never looked
-   * up — and a document filed against a cert that later stopped being required
-   * is now findable rather than silently dropped.
-   */
   useEffect(() => {
     if (!property) return;
-    const pid = property.id;
-    let gone = false;
-    setFiles({});
-    (async () => {
-      try {
-        const res = await fetch(
-          `/api/compliance/vault?property=${encodeURIComponent(pid)}`,
-          { cache: "no-store" }
-        );
-        const j = (await res.json()) as {
-          ok?: boolean;
-          files?: { certKey: string; name: string; open: string }[];
-        };
-        if (gone || !j.ok || !j.files?.length) return;
-        const found: Record<string, { name: string; url: string }[]> = {};
-        for (const f of j.files) {
-          if (!f.certKey) continue;
-          (found[`${pid}:${f.certKey}`] ??= []).push({ name: f.name, url: f.open });
-        }
-        setFiles(found);
-      } catch {
-        /* a vault that won't answer shows as nothing filed, not a crash */
-      }
-    })();
-    return () => { gone = true; };
-  }, [property]);
-
+    const opened = house ? house.rooms.find((r) => r.id === property.id || (house.kind === "rooms" && roomLabel(r).toLowerCase() === roomLabel(property).toLowerCase())) : null;
+    setTab(opened && house?.house?.id !== property.id ? opened.id : "house");
+  }, [property, house]);
   useEffect(() => {
     if (!property) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -136,159 +64,119 @@ export default function ComplianceDrawer({
   }, [property, onClose]);
 
   if (!property) return null;
-  const p = property;
+  const room = house && tab !== "house" ? house.rooms.find((r) => r.id === tab) ?? null : null;
+  const p: CompProperty = room ?? house?.house ?? (house ? house.rooms[0] : property);
+  const houseView = Boolean(house) && !room;
+  const lets = house?.kind === "lets";
   const required = requiredCerts(p);
+  const title = house ? house.name : p.name;
+  const sub = house
+    ? lets
+      ? `${house.locality} · ${house.rooms.length} lets on record in REX`
+      : `${house.locality} · shared house · ${house.rooms.length} ${house.rooms.length === 1 ? "room" : "rooms"}`
+    : `${p.locality} · landlord ${p.landlord || "not on record"}${p.tenant ? ` · ${p.tenant} in situ` : p.tenant === null ? " · vacant" : ""}`;
 
-  const groups: { title: string; keys: CertKey[] }[] = [
-    { title: "The big three — safety law", keys: BIG_THREE.filter((k) => required.includes(k)) },
-    ...(p.hmo ? [{ title: "Because it's an HMO", keys: [...HMO_SET, ...QUIET_SET] }] : []),
-  ];
+  /* The worst of every room, for the house tab. */
+  const worstOf = (k: CertKey) => {
+    const members = house ? house.members : [p];
+    const order = ["expired", "urgent", "missing", "watch", "ok"];
+    return members.map((m) => m.certs[k]).sort((a, b) => order.indexOf(statusOf(a)) - order.indexOf(statusOf(b)))[0];
+  };
 
   return (
     <div className="fixed inset-0 z-[130]">
       <button
         aria-label="Close"
         onClick={onClose}
-        className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${
-          shown ? "opacity-100" : "opacity-0"
-        }`}
+        className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`}
       />
       <aside
-        className={`absolute inset-y-0 right-0 flex overflow-hidden rounded-l-2xl w-full max-w-xl flex-col bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] ${
-          shown ? "translate-x-0" : "translate-x-full"
-        }`}
+        className={`absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-2xl bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] lg:w-[calc(100%-17rem)] ${shown && !docOpen ? "translate-x-0" : "translate-x-full"}`}
         style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
       >
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line/70 px-6 py-5">
-          <div className="min-w-0">
-            <h2 className="text-[20px] leading-tight">{p.name}</h2>
-            <p className="mt-1 text-[12px] text-muted">
-              {p.locality} · landlord {p.landlord}
-              {p.tenant ? ` · ${p.tenant} in situ` : " · vacant"}
-              {p.hmo && <span className="ml-1.5 font-semibold text-accent-dark">HMO</span>}
-              {!p.hasGas && " · no gas supply"}
-            </p>
+        <div className="shrink-0 border-b border-line/70 px-6 pt-5">
+          <div className="flex items-start justify-between gap-3 pb-5">
+            <div className="min-w-0">
+              <h2 className="text-[20px] leading-tight">{title}</h2>
+              <p className="mt-1 text-[12px] text-muted">
+                {sub}
+                {p.hmo && <span className="ml-1.5 font-semibold text-accent-dark">HMO</span>}
+                {!p.hasGas && " · no gas at the property"}
+                {p.onRex === false && " · not on REX"}
+              </p>
+            </div>
+            <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">
+              ✕
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink"
-          >
-            ✕
-          </button>
+          {house && (
+            <div className="-mx-1 flex gap-1 overflow-x-auto pb-0.5 sm:flex-wrap">
+              {[{ id: "house", label: "The house", bad: false }, ...house.rooms.map((r) => ({ id: r.id, label: tabLabel(house, r, R), bad: requiredCerts(r).some((k) => ["expired", "urgent", "missing"].includes(statusOf(r.certs[k]))) }))].map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-t-lg border-b-2 px-3 py-2 text-[12.5px] transition-colors ${tab === t.id ? "border-ink font-semibold text-ink" : "border-transparent text-muted hover:text-ink"}`}
+                >
+                  {t.id !== "house" && <span className={`inline-block h-1.5 w-1.5 rounded-full ${t.bad ? "bg-accent-dark" : "bg-good"}`} />}
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          {groups.map((g) => (
-            <div key={g.title} className="mb-6 last:mb-0">
-              <p className="mb-2.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted">
-                {g.title}
-              </p>
-              <ul className="space-y-2.5">
-                {g.keys.map((key) => {
-                  const cert = p.certs[key];
-                  const s = statusOf(cert);
-                  const bad = s === "expired" || s === "urgent" || s === "missing";
-                  const order = orders[`${p.id}:${key}`];
+          {/* Where every duty stands, at a glance. On the house tab, the
+              worst across the rooms; a room reads the house's certificates. */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {required.map((k) => {
+              const cert = houseView ? worstOf(k) : p.certs[k];
+              const s = statusOf(cert);
+              const bad = s === "expired" || s === "urgent" || s === "missing";
+              return (
+                <div key={k} className={`rounded-xl border px-3.5 py-3 ${s === "expired" ? "border-accent-dark bg-accent-soft/30" : bad ? "border-accent-dark/40" : "border-line/70"}`}>
+                  <p className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-muted">
+                    <DoodleIcon name={CERT_META[k].icon} size={12} className="text-accent-dark" />
+                    {CERT_META[k].short}
+                  </p>
+                  <p className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[12.5px]">
+                    <Pill tone={bad ? "accent" : "good"}>{k === "gas" && !p.hasGas ? "No gas" : certLine(cert?.expires ?? null)}</Pill>
+                    {cert?.inherited && <span className="text-[10.5px] text-muted">from the house</span>}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {houseView && house && (
+            <section className="mt-6">
+              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">{lets ? "Lets" : "Rooms"}</p>
+              <ul className="overflow-hidden rounded-xl border border-line/70 bg-panel">
+                {house.rooms.map((r) => {
+                  const bad = requiredCerts(r).filter((k) => ["expired", "urgent", "missing"].includes(statusOf(r.certs[k])));
                   return (
-                    <li
-                      key={key}
-                      className={`rounded-2xl border p-4 ${
-                        s === "expired"
-                          ? "border-accent-dark bg-accent-soft/30"
-                          : bad
-                            ? "border-accent-dark/40"
-                            : "border-line/70"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="flex items-center gap-2.5">
-                          <DoodleIcon name={CERT_META[key].icon} size={16} className="text-accent-dark" />
-                          <span className="text-[13px] font-semibold">{CERT_META[key].label}</span>
-                        </span>
-                        <Pill tone={s === "ok" || s === "watch" ? "good" : "accent"}>
-                          {certLine(cert?.expires ?? null)}
-                        </Pill>
-                      </div>
-                      <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
-                        {CERT_META[key].rule}
-                      </p>
-                      <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                        {/* A date without a document is half a record — the
-                            real book's biggest quiet problem. */}
-                        {cert?.expires != null &&
-                          (cert.attached ? (
-                            <span className="flex items-center gap-1.5 text-[11px] text-muted">
-                              <DoodleIcon name="doc" size={12} /> Certificate on file
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1.5 text-[11px] font-semibold text-accent-dark">
-                              <DoodleIcon name="doc" size={12} /> Date recorded, certificate NOT attached
-                            </span>
-                          ))}
-                        {/* The storage is REAL: the file lands in the R2
-                            vault under this property and certificate, and
-                            opens back out of a signed link. */}
-                        {(files[`${p.id}:${key}`] ?? []).map((f) => (
-                          <a
-                            key={f.url}
-                            href={f.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-1 text-[10.5px] font-semibold text-accent-dark transition-opacity hover:opacity-80"
-                          >
-                            <DoodleIcon name="doc" size={11} />
-                            {f.name.length > 26 ? `${f.name.slice(0, 24)}…` : f.name}
-                          </a>
-                        ))}
-                        <label className="flex cursor-pointer items-center gap-1.5 rounded-full border border-line/80 px-2.5 py-1 text-[10.5px] font-semibold text-muted transition-colors hover:border-ink hover:text-ink">
-                          <DoodleIcon name="upload" size={11} />
-                          {busy === `${p.id}:${key}` ? "Storing…" : "Attach certificate"}
-                          <input
-                            type="file"
-                            accept="application/pdf,image/*"
-                            className="hidden"
-                            disabled={busy !== null}
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              if (f) void attach(key, f);
-                              e.target.value = "";
-                            }}
-                          />
-                        </label>
-                        {order ? (
-                          <Pill tone="good">
-                            Order out — {order.contractor.split(" (")[0]}, {order.when}
-                          </Pill>
-                        ) : (
-                          bad && (
-                            <PressButton
-                              onClick={() => onOrder({ property: p, cert: key })}
-                              className="press-ring flex items-center gap-1.5 rounded-full bg-accent-dark px-3.5 py-1.5 text-[11px] font-semibold text-page"
-                            >
-                              <DoodleIcon name="setting" size={12} />
-                              Book the {CERT_META[key].trade}
-                            </PressButton>
-                          )
-                        )}
-                      </div>
+                    <li key={r.id} className="border-b border-line/40 last:border-0">
+                      <button type="button" onClick={() => setTab(r.id)} className="flex w-full items-center gap-3 px-4 py-2.5 text-left text-[12.5px] transition-colors hover:bg-box">
+                        <span className="font-semibold">{tabLabel(house, r, R)}</span>
+                        <span className="min-w-0 flex-1 truncate text-muted">{r.tenant ?? "Empty"}</span>
+                        {bad.length ? <Pill tone="accent">{bad.map((k) => CERT_META[k].short).join(", ")}</Pill> : <Pill tone="good">In date</Pill>}
+                      </button>
                     </li>
                   );
                 })}
               </ul>
-            </div>
-          ))}
-
-          {uploadErr && (
-            <p className="mb-3 rounded-lg bg-accent-soft/60 px-3 py-2 text-[11px] font-semibold text-accent-dark">
-              {uploadErr}
-            </p>
+            </section>
           )}
-          <p className="border-t border-line/60 pt-3 text-[10px] leading-relaxed text-muted">
-            Attach certificate is LIVE — files store in the agency&apos;s own vault (R2)
-            under this property and certificate, and open from time-limited signed links.
-            Next: reading REX&apos;s dates and existing certificates in beside them.
-          </p>
+
+          <div className="mt-6">
+            <PropertyFile
+              key={p.id}
+              propertyId={p.id}
+              propertyName={house ? `${house.name}${room ? ` · ${tabLabel(house, room, R)}` : ""}` : p.name}
+              screen="compliance"
+            />
+          </div>
         </div>
       </aside>
     </div>

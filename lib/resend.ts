@@ -128,6 +128,8 @@ export async function sendEmail(msg: {
   /** Who this is for. "customer" goes out on the public sender and may reach
    *  anyone; "internal" (the default) keeps the OS domain and its guard. */
   audience?: Audience;
+  /** Files to go with it, base64. A certificate out of the vault, say. */
+  attachments?: { filename: string; content: string }[];
 }): Promise<SendResult> {
   const audience: Audience = msg.audience ?? "internal";
   if (!process.env.RESEND_API_KEY) {
@@ -187,6 +189,7 @@ export async function sendEmail(msg: {
       html: msg.html,
       ...(msg.text ? { text: msg.text } : {}),
       ...(msg.replyTo ? { reply_to: msg.replyTo } : {}),
+      ...(msg.attachments?.length ? { attachments: msg.attachments } : {}),
     }),
     signal: AbortSignal.timeout(20_000),
   });

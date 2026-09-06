@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { Pill } from "@/components/Wire";
+import { openDocument } from "@/lib/doc-sheet";
 
 /**
  * The property file: one panel, the same wherever a home is opened.
@@ -72,6 +73,7 @@ export default function PropertyFile({
   address,
   title = "Property file",
   screen = "the OS",
+  propertyName = null,
 }: {
   /** The REX property. Give this when you have it. */
   propertyId?: string | null;
@@ -81,6 +83,8 @@ export default function PropertyFile({
   title?: string;
   /** Where the file was attached from, kept on the record: "the listing", "the application", "the market appraisal". */
   screen?: string;
+  /** The home's line, for the document sheet's heading. */
+  propertyName?: string | null;
 }) {
   const [data, setData] = useState<Answer | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -275,19 +279,28 @@ export default function PropertyFile({
                     Attach
                   </button>
                 </div>
+                {/* The newest file IS the certificate; a new one attached
+                    on top replaces it here, the older ones fold away. Click
+                    opens it in the sheet from the bottom of the page. */}
                 {r.files.length > 0 && (
                   <ul className="mt-2 space-y-1.5">
-                    {(open[r.type] ? r.files : r.files.slice(0, 2)).map((f) => (
-                      <li key={f.key} className="flex items-center gap-2 text-[12px]">
-                        <DoodleIcon name="doc" size={13} className="text-muted" />
-                        <span className="min-w-0 truncate">{f.name}</span>
-                        <a href={f.open} target="_blank" rel="noreferrer" className="ml-auto shrink-0 rounded-full border border-line/80 px-2.5 py-0.5 text-[11px] hover:border-ink/40">Open</a>
+                    {(open[r.type] ? r.files : r.files.slice(0, 1)).map((f, i) => (
+                      <li key={f.key}>
+                        <button
+                          type="button"
+                          onClick={() => openDocument({ key: f.key, name: f.name, label: r.label, property: propertyName, url: f.open })}
+                          className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-box ${i > 0 ? "text-muted" : ""}`}
+                        >
+                          <DoodleIcon name="doc" size={13} className="shrink-0 text-muted" />
+                          <span className="min-w-0 truncate">{f.name}</span>
+                          <span className="ml-auto shrink-0 text-[11px] text-muted">{i === 0 ? "Open" : "Earlier"}</span>
+                        </button>
                       </li>
                     ))}
-                    {r.files.length > 2 && (
-                      <li>
+                    {r.files.length > 1 && (
+                      <li className="px-2">
                         <button type="button" onClick={() => setOpen((o) => ({ ...o, [r.type]: !o[r.type] }))} className="text-[11px] text-muted underline-offset-2 hover:underline">
-                          {open[r.type] ? "Show the latest only" : `${r.files.length - 2} earlier ${r.files.length - 2 === 1 ? "file" : "files"}`}
+                          {open[r.type] ? "Show the current one only" : `${r.files.length - 1} earlier ${r.files.length - 1 === 1 ? "certificate" : "certificates"}`}
                         </button>
                       </li>
                     )}
