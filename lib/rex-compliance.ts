@@ -70,6 +70,16 @@ interface RexEntry extends Record<string, unknown> {
   file?: { url?: string } | null;
 }
 
+/** Months a certificate usually runs, used only when REX holds an issue date and no expiry. */
+const LIFE_MONTHS: Record<string, number> = { portable_appliance_testing: 12, gas_safety: 12, eicr: 60, epc: 120, legionella_risk_assessment: 24 };
+function plusMonths(iso: string | null | undefined, months: number | undefined): string | null {
+  if (!iso || !months) return null;
+  const d = new Date(`${String(iso).slice(0, 10)}T12:00:00`);
+  if (!Number.isFinite(d.getTime())) return null;
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
 function daysUntil(date: string | null | undefined): number | null {
   if (!date) return null;
   const then = new Date(`${date}T00:00:00`).getTime();
@@ -167,7 +177,10 @@ export async function certificatesFor(listings: CertSubject[]): Promise<Complian
       const key = TYPE_MAP[e.type_id ?? ""];
       if (!key) continue;
       const detail = e.details?.[e.type_id!];
-      const expires = daysUntil(detail?.expiry_date);
+      /* A PAT entry holds only the tested date (REX's own schema, 6 Sep 2026):
+         its next test is a year on. Any type with an issue date and no expiry
+         gets the certificate's usual life, so it is not counted as no record. */
+      const expires = daysUntil(detail?.expiry_date) ?? daysUntil(plusMonths(detail?.issue_date, LIFE_MONTHS[e.type_id ?? ""]));
       const attached = Boolean(e.file?.url);
       if (attached) withCertificate++;
       const held = certs[key];
