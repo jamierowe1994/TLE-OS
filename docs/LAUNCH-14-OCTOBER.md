@@ -576,6 +576,18 @@ Switches as found: customer email ON, pre-tenancy digest ON (sends to James and 
 14 alerts today), REX contact create ON; certificate chases, agent-compliance reminders,
 handover live, agent deal emails, Propoly documents, campaign sending all OFF.
 
+## Four ideas from the certificate work - James, 6 Sep 2026 (not built)
+
+Captured while the no-gas homes were being marked from the terms of business. Each is a build
+in its own right; where it would hook in is noted so it can be picked up cleanly.
+
+| # | Idea | Where it hooks in | Notes |
+|---|---|---|---|
+| A | **Read every new terms of business for its facts** - no gas, whether water or council tax is included, service level, fee - and show them on the property everywhere someone might look (the property file, the listing, compliance), so nobody hunts for a gas certificate a home cannot have | The DocuSeal webhook already stores the signed terms (`os_signed_documents`); the reader used for the terms today (tool `report_terms`) becomes a route that runs on completion and writes the facts onto the property; the property file panel shows "No gas at the property, per the terms signed 12 Aug" and the gas entry in REX is created not required at the same moment | Reader prompt and tool already exist in the scratchpad; the gas fact is proven on 128 documents |
+| B | **One landlord, many properties in a click or two** - once a landlord exists, adding their next home should not start from scratch | The market appraisal booking (`app/api/appraisals`) and the REX contact/property create path already on the allowlist; a "Add another property for this landlord" action that copies the landlord, the service level and the fee, and asks only for the address | Small; the matcher can pre-fill the REX property |
+| C | **HMOs as a house with rooms** - when a property is marked HMO, take the room count and offer to build the rooms into the file; the house is the parent, each room a sub-record that opens fully but stays attached | REX holds rooms as separate property records already (the backlog's "shared house" matches: 5a Newton Road, 166 Gloucester Road North). The OS needs a parent link (address match, or a stored `parent_property_id`) so the property file, compliance and portfolio show the house with its rooms folded under it, and a house-level certificate (gas, EICR, EPC) counts for every room | The matcher already groups rooms under their building; the write side (creating N room records in REX) is the new part |
+| D | **Blockers** - a deal cannot proceed past a set point until the minimum compliance is on file: gas (where there is gas), EICR and EPC on an ordinary let; the HMO set on an HMO | The PLC gate (`lib/plc.ts`, `lib/plc-rules.ts`) is the natural place: the pack cannot be approved, and the handover cannot start, until the property file shows the required set in date. The required set is already one rule (`requiredCerts`) and the no-gas fact from A removes the gas requirement honestly | Needs James's word on WHERE the block bites (offer accepted? move-in?) and whether a manager can override with a reason |
+
 ## Launch week to-do (James, 6 Sep 2026)
 
 | When | What | How |
