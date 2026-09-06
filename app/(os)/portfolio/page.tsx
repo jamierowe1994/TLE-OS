@@ -8,7 +8,7 @@ import FindingData from "@/components/business/FindingData";
 import PropertyFile from "@/components/PropertyFile";
 import { Pill } from "@/components/Wire";
 import { rexContactUrl, rexListingUrl } from "@/lib/business/rex-links";
-import { housesIn, houseByListing, roomLabel, type House } from "@/lib/houses";
+import { housesIn, houseByListing, roomLabel, tabLabel, type House } from "@/lib/houses";
 import {
   CERT_META, headlineCerts, requiredCerts, statusOf,
   type CertKey, type CertStatus, type CompProperty,
@@ -218,7 +218,8 @@ function PropertyPanel({
   useEffect(() => {
     setAt(0);
     /* Opened from a room's row or the search bar: land on that room. */
-    setTab(house && house.rooms.some((r) => r.listingId === property.listingId) ? property.listingId : "house");
+    const opened = house ? house.rooms.find((r) => r.listingId === property.listingId || (house.kind === "rooms" && roomLabel(r).toLowerCase() === roomLabel(property).toLowerCase())) : null;
+    setTab(opened && house?.house?.listingId !== property.listingId ? opened.listingId : "house");
   }, [property.listingId, house]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -261,8 +262,11 @@ function PropertyPanel({
   const landlord = house ? house.house?.landlord ?? house.rooms.find((r) => r.landlord)?.landlord ?? null : p.landlord;
 
   const title = house ? house.name : p.name;
+  const lets = house?.kind === "lets";
   const sub = house
-    ? `${house.locality || "—"} · shared house · ${house.rooms.length} ${house.rooms.length === 1 ? "room" : "rooms"}, ${letRooms.length} let${house.house?.service ? ` · ${house.house.service}` : ""}`
+    ? lets
+      ? `${house.locality || "—"} · ${house.rooms.length} lets on record in REX${p.service ? ` · ${p.service}` : ""}`
+      : `${house.locality || "—"} · shared house · ${house.rooms.length} ${house.rooms.length === 1 ? "room" : "rooms"}, ${letRooms.length} let${house.house?.service ? ` · ${house.house.service}` : ""}`
     : `${p.locality || "—"}${p.onRex === false ? ` · ${p.service ?? "Managed"} in REX PM${p.ref ? ` (${p.ref})` : ""} · not on REX` : p.service ? ` · ${p.service}` : " · service not set in REX"}`;
 
   const tenantCard = (t: Party) => (
@@ -306,7 +310,7 @@ function PropertyPanel({
           {house && (
             /* The house, then a tab per room. A filled dot is a let room. */
             <div className="-mx-1 flex gap-1 overflow-x-auto pb-0.5">
-              {[{ id: "house", label: "The house", let: null as boolean | null }, ...house.rooms.map((r) => ({ id: r.listingId, label: roomLabel(r), let: r.tenants.length > 0 }))].map((t) => (
+              {[{ id: "house", label: "The house", let: null as boolean | null }, ...house.rooms.map((r) => ({ id: r.listingId, label: tabLabel(house, r), let: r.tenants.length > 0 }))].map((t) => (
                 <button
                   key={t.id}
                   type="button"
@@ -335,12 +339,14 @@ function PropertyPanel({
 
           {houseView && house ? (
             <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
-              {fact("Rooms", `${house.rooms.length}, ${letRooms.length} let`)}
-              {fact("Rent roll", roomRent ? `${money(roomRent)} pcm` : "Not set")}
+              {lets ? fact("Lets on record", String(house.rooms.length)) : fact("Rooms", `${house.rooms.length}, ${letRooms.length} let`)}
+              {lets
+                ? fact("Rent", p.rent == null ? "Not set" : `${money(p.rent)} ${p.rentPeriod === "week" ? "per week" : "pcm"} on the latest let`)
+                : fact("Rent roll", roomRent ? `${money(roomRent)} pcm` : "Not set")}
               {fact("Postcode", p.postcode ?? "—")}
               {fact("Agent", p.agent?.name ?? "—")}
               {fact("On the books since", day(earliest))}
-              {fact("In REX as", house.house ? "the house and its rooms" : "the rooms only")}
+              {fact("In REX as", lets ? "one listing per let, no rooms named" : house.house ? "the house and its rooms" : "the rooms only")}
             </div>
           ) : (
             <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3">
@@ -367,13 +373,22 @@ function PropertyPanel({
 
           {houseView && house && (
             <section className="mt-6">
-              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Rooms</p>
+              <p className="mb-2 text-[10.5px] font-semibold uppercase tracking-wide text-muted">{lets ? "Lets" : "Rooms"}</p>
+              {lets && (
+                <p className="mb-2 text-[11.5px] text-muted">REX holds this house as one leased listing per let and records no room numbers, so each let is named by its tenant. Newest first.</p>
+              )}
               <ul className="overflow-hidden rounded-xl border border-line/70 bg-panel">
                 {house.rooms.map((r) => (
                   <li key={r.listingId} className="border-b border-line/40 last:border-0">
-                    <button type="button" onClick={() => setTab(r.listingId)} className="grid w-full grid-cols-[84px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 text-left text-[12.5px] transition-colors hover:bg-box sm:grid-cols-[84px_minmax(0,1fr)_100px_90px]">
-                      <span className="font-semibold">{roomLabel(r)}</span>
-                      <span className="min-w-0 truncate">{r.tenants[0]?.name ?? <span className="text-muted">Empty</span>}{r.tenants.length > 1 ? <span className="text-muted"> +{r.tenants.length - 1}</span> : null}</span>
+                    <button type="button" onClick={() => setTab(r.listingId)} className={`grid w-full items-center gap-3 px-4 py-2.5 text-left text-[12.5px] transition-colors hover:bg-box ${lets ? "grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_100px_90px]" : "grid-cols-[84px_minmax(0,1fr)_auto] sm:grid-cols-[84px_minmax(0,1fr)_100px_90px]"}`}>
+                      {lets ? (
+                        <span className="min-w-0 truncate"><span className="font-semibold">{tabLabel(house, r)}</span>{r.tenants.length > 1 ? <span className="text-muted"> · {r.tenants.length} on the tenancy</span> : null}</span>
+                      ) : (
+                        <>
+                          <span className="font-semibold">{roomLabel(r)}</span>
+                          <span className="min-w-0 truncate">{r.tenants[0]?.name ?? <span className="text-muted">Empty</span>}{r.tenants.length > 1 ? <span className="text-muted"> +{r.tenants.length - 1}</span> : null}</span>
+                        </>
+                      )}
                       <span className="hidden text-muted sm:block">{day(r.letSince)}</span>
                       <span className="figures text-right">{r.rent == null ? <span className="text-muted">—</span> : `${money(r.rent)}${r.rentPeriod === "week" ? " pw" : ""}`}</span>
                     </button>
@@ -413,7 +428,7 @@ function PropertyPanel({
               and the appraisal show, so the certificates travel with the home.
               A room reads the house's certificates where it has none of its own. */}
           <div className="mt-5">
-            {houseView && house && !house.house && (
+            {houseView && house && !house.house && !lets && (
               <p className="mb-2 text-[11.5px] text-muted">REX holds this house as its rooms only, so the file below is the first room&apos;s. Every room shares the house&apos;s certificates.</p>
             )}
             {p.propertyId ? (
@@ -433,7 +448,7 @@ function PropertyPanel({
                 rel="noreferrer"
                 className="rounded-full border border-ink/80 px-4 py-2 text-[12px] font-semibold transition-colors hover:bg-ink hover:text-page"
               >
-                {room ? `Open ${roomLabel(room)} in REX` : "Open in REX"}
+                {room ? `Open ${lets ? "this let" : roomLabel(room)} in REX` : "Open in REX"}
               </a>
             )}
             {everything && p.agent && <span className="text-[11.5px] text-muted">Looked after by {p.agent.name}</span>}
@@ -767,7 +782,7 @@ export default function Portfolio() {
                   {listRows.map(({ p, house }) => {
                     const s = summaryOf(p);
                     const letRooms = house ? house.rooms.filter((r) => r.tenants.length > 0).length : 0;
-                    const rent = house ? house.rooms.reduce((a, r) => a + (r.rentMonthly ?? 0), 0) : p.rentMonthly;
+                    const rent = house && house.kind === "rooms" ? house.rooms.reduce((a, r) => a + (r.rentMonthly ?? 0), 0) : p.rentMonthly;
                     const landlord = house ? house.house?.landlord ?? house.rooms.find((r) => r.landlord)?.landlord ?? null : p.landlord;
                     return (
                       <li key={house ? house.key : p.listingId} className="border-b border-line/40 last:border-0">
@@ -780,7 +795,7 @@ export default function Portfolio() {
                           <span className="min-w-0">
                             <span className="block truncate text-[13px]">{house ? house.name : p.name}</span>
                             <span className="block truncate text-[11px] text-muted">
-                              {house ? `${house.locality} · ${house.rooms.length} rooms, ${letRooms} let` : p.locality}
+                              {house ? `${house.locality} · ${house.kind === "lets" ? `${house.rooms.length} lets on record` : `${house.rooms.length} rooms, ${letRooms} let`}` : p.locality}
                               <span className="md:hidden">{landlord ? ` · ${landlord.name}` : ""}</span>
                             </span>
                           </span>
@@ -796,7 +811,7 @@ export default function Portfolio() {
                             {landlord ? landlord.name : <span className="text-muted">Not on record</span>}
                           </span>
                           <span className="hidden min-w-0 truncate text-[12px] text-muted xl:block">
-                            {house ? `${house.rooms.reduce((a, r) => a + r.tenants.length, 0)} tenants` : everything ? (p.agent?.name ?? "—") : (p.tenants[0]?.name ?? "—")}
+                            {house ? `${new Set(house.rooms.flatMap((r) => r.tenants.map((t) => t.contactId))).size} tenants` : everything ? (p.agent?.name ?? "—") : (p.tenants[0]?.name ?? "—")}
                           </span>
                           <span className="hidden text-[12px] text-muted xl:block">{house ? "—" : day(p.letSince)}</span>
                           <span className="hidden md:block">

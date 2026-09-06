@@ -58,6 +58,9 @@ export interface Parsed {
  */
 export function parseAddress(s: string): Parsed {
   let raw = String(s);
+  /* "Room 1/5a Newton Road", "Room 2 / 66a Fore Street": the slash after a
+     unit is a comma, not a floor code. */
+  raw = raw.replace(/^(\s*(?:room|studio|bed(?:room)?|flat|apartment|unit)\s*[a-z0-9]+)\s*\/\s*/i, "$1, ");
   const scot = raw.match(/^\s*(\d+[a-z]?)\s*[-/]\s*(\d+[a-z]?)\b/i);
   let scotBuilding: string | null = null;
   let scotUnit: string | null = null;
@@ -131,5 +134,5 @@ export function isRoomAddress(address: string): boolean {
 
 /** The house's own line, from a room's: "Room 2, 2 Norwich Street, Wisbech PE13 2LE" → "2 Norwich Street, Wisbech PE13 2LE". */
 export function houseNameFrom(address: string): string {
-  return address.replace(/^\s*(room|studio|bed(room)?)\s*[a-z0-9]+\s*[,-]?\s*/i, "").trim();
+  return address.replace(/^\s*(room|studio|bed(room)?)\s*[a-z0-9]+\s*[,/-]?\s*/i, "").trim();
 }

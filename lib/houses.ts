@@ -14,6 +14,9 @@ import type { ManagedProperty } from "@/lib/portfolio-types";
 
 export interface House {
   key: string;
+  /** "rooms": REX names the rooms. "lets": REX holds the same address as
+      several leased listings, one per let, and names no rooms. */
+  kind: "rooms" | "lets";
   /** "2 Norwich Street" - the house's own line. */
   name: string;
   locality: string;
@@ -21,8 +24,10 @@ export interface House {
   house: ManagedProperty | null;
   /** The rooms, in room order. */
   rooms: ManagedProperty[];
-  /** The house record first, then the rooms: every listing in the group. */
+  /** The house record first, then the rooms: one listing per room. */
   members: ManagedProperty[];
+  /** Every listing at the house, earlier lets of the same room included. */
+  all: ManagedProperty[];
 }
 
 const addrOf = (p: ManagedProperty) => `${p.name}, ${p.locality}`;
@@ -39,6 +44,19 @@ const roomOrder = (p: ManagedProperty) => {
   return Number.isFinite(n) ? n : 999;
 };
 
+const current = (a: ManagedProperty, b: ManagedProperty) =>
+  (b.tenants.length > 0 ? 1 : 0) - (a.tenants.length > 0 ? 1 : 0) || String(b.letSince ?? "").localeCompare(String(a.letSince ?? ""));
+
+/** One record per label: the let one, else the latest. */
+function dedupe(list: ManagedProperty[], labelOf: (p: ManagedProperty) => string): ManagedProperty[] {
+  const by = new Map<string, ManagedProperty>();
+  for (const p of [...list].sort(current)) {
+    const k = labelOf(p).toLowerCase();
+    if (!by.has(k)) by.set(k, p);
+  }
+  return [...by.values()];
+}
+
 /** Every house in the book with at least one room, keyed by house key. */
 export function housesIn(properties: ManagedProperty[]): Map<string, House> {
   const byKey = new Map<string, ManagedProperty[]>();
@@ -49,22 +67,51 @@ export function housesIn(properties: ManagedProperty[]): Map<string, House> {
   }
   const out = new Map<string, House>();
   for (const [key, members] of byKey) {
-    const rooms = members.filter((p) => isRoomAddress(addrOf(p))).sort((a, b) => roomOrder(a) - roomOrder(b) || a.name.localeCompare(b.name, "en-GB"));
+    /* REX keeps a leased listing per let, so a room re-let three times is
+       three records: one tab per room, the current let (a tenant, else the
+       latest) standing for it. */
+    const rooms = dedupe(members.filter((p) => isRoomAddress(addrOf(p))), roomLabel)
+      .sort((a, b) => roomOrder(a) - roomOrder(b) || a.name.localeCompare(b.name, "en-GB"));
     if (!rooms.length) continue;
     const rest = members.filter((p) => !isRoomAddress(addrOf(p)));
-    /* One non-room record at the same building is the house itself; more
-       than one (flats in a block that also has rooms) is not a house. */
-    const house = rest.length === 1 ? rest[0] : null;
-    if (rest.length > 1 || (!house && rooms.length < 2)) continue;
+    /* A record for the building itself (no flat number) is the house; flats
+       at the same number make it a block, not a shared house. */
+    if (rest.some((p) => parseAddress(addrOf(p)).unit != null)) continue;
+    const house = rest.length ? dedupe(rest, () => "house")[0] : null;
+    /* One room let twice with no house record is still one home: show it once. */
+    if (!house && rooms.length < 2 && members.length < 2) continue;
     const name = house ? house.name : houseNameFrom(rooms[0].name);
-    out.set(key, { key, name, locality: (house ?? rooms[0]).locality, house, rooms, members: house ? [house, ...rooms] : rooms });
+    out.set(key, { key, kind: "rooms", name, locality: (house ?? rooms[0]).locality, house, rooms, members: house ? [house, ...rooms] : rooms, all: members });
+  }
+  /* 166 Gloucester Road North: fifteen leased listings with the same name,
+     one property, a room's rent on each and a different tenant on each. REX
+     holds a shared house as one let per room and names no rooms. Show the
+     address once, with the lets as its tabs, newest first. A plain home let
+     twice collapses the same way: one row, its lets inside. */
+  const grouped = new Set([...out.values()].flatMap((h) => h.all.map((m) => String(m.listingId))));
+  const byAddr = new Map<string, ManagedProperty[]>();
+  for (const p of properties) {
+    if (grouped.has(String(p.listingId)) || isRoomAddress(addrOf(p))) continue;
+    const k = addrOf(p).toLowerCase().replace(/\s+/g, " ").trim();
+    (byAddr.get(k) ?? byAddr.set(k, []).get(k)!).push(p);
+  }
+  for (const [k, lets] of byAddr) {
+    if (lets.length < 2) continue;
+    const sorted = [...lets].sort((a, b) => String(b.letSince ?? "").localeCompare(String(a.letSince ?? "")) || String(b.listingId).localeCompare(String(a.listingId)));
+    out.set(`lets|${k}`, { key: `lets|${k}`, kind: "lets", name: sorted[0].name, locality: sorted[0].locality, house: null, rooms: sorted, members: sorted, all: sorted });
   }
   return out;
 }
 
-/** listingId → the house it belongs to. */
-export function houseByListing(houses: Map<string, House>): Map<string, House> {
-  const m = new Map<string, House>();
-  for (const h of houses.values()) for (const p of h.members) m.set(String(p.listingId), h);
-  return m;
+const shortDate = (iso: string | null) => (iso ? new Date(`${iso.slice(0, 10)}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "date not set");
+
+/** The tab's name: the room, or for a let the tenant the let is really for -
+    the one on the fewest of the house's lets. Two names stay on every let of
+    166 Gloucester Road North; the third is the room's. */
+export function tabLabel(house: House, p: ManagedProperty): string {
+  if (house.kind === "rooms") return roomLabel(p);
+  if (!p.tenants.length) return `Let ${shortDate(p.letSince)}`;
+  const count = (id: string) => house.rooms.filter((r) => r.tenants.some((t) => t.contactId === id)).length;
+  const least = Math.min(...p.tenants.map((t) => count(t.contactId)));
+  return p.tenants.filter((t) => count(t.contactId) === least).map((t) => t.name).join(", ");
 }
