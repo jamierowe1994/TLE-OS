@@ -201,13 +201,15 @@ export async function writeCertificateToRex(input: {
        back "Field 'upload certificate': This field is required" until the
        uri was also given as details.eicr.file, which is where the type's
        own schema declares it. */
-    const detail: Record<string, unknown> = { expiry_date: input.expiry, notes, file: uri };
+    const detail: Record<string, unknown> = { notes, file: uri };
+    /* Per REX's own schema (getSchemaForType, read 6 Sep): a PAT entry holds
+       only the tested date, no expiry, and gas, PAT and legionella each
+       carry a required not_required checkbox. */
+    if (input.type !== "portable_appliance_testing") detail.expiry_date = input.expiry;
     if (issue) detail.issue_date = issue;
     if (input.type === "eicr") detail.status = "eicr_satisfactory";
-    if (input.type === "gas_safety") {
-      detail.status = "pass";
-      detail.not_required = false;
-    }
+    if (input.type === "gas_safety") detail.status = "pass";
+    if (input.type === "gas_safety" || input.type === "portable_appliance_testing" || input.type === "legionella_risk_assessment") detail.not_required = false;
     if (input.existingEntryId) {
       let entryNote: string;
       if (rexWritesLocked("ComplianceEntries", "update")) {
