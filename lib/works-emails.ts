@@ -246,7 +246,7 @@ export function outcomeLine(s: SendOutcome): string {
      is the sort of line that ends up on a screen in front of a client. */
   const who = s.to === "accounts" ? "Accounts" : `the ${s.to}`;
   const Who = s.to === "accounts" ? "Accounts'" : `The ${s.to}'s`;
-  if (s.via === "the rehearsal") return `${Who} email was written and kept on the walkthrough, not sent.`;
+  if (s.via === "the rehearsal") return `Emailed ${who} at ${s.address} - written and kept here, not sent.`;
   if (s.sent) return `Emailed ${who} at ${s.address}${s.via === "own mailbox" ? ", from your own mailbox" : ""}.`;
   return `${s.to === "accounts" ? "Accounts were" : `The ${s.to} was`} not emailed: ${(s.reason ?? "").replace(/\.+$/, "")}.`;
 }

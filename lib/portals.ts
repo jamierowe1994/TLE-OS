@@ -280,14 +280,14 @@ export const PORTAL_FOLDERS: PortalFolder[] = [
     name: "Maintenance",
     icon: "setting",
     blurb:
-      "A repair walked end to end, and every side of it: the agent, the contractor on their phone, the landlord's post and the tenant's.",
+      "A repair, and every side of it: the agent's job sheet, the contractor on their phone, the landlord's post and the tenant's.",
     items: [
       {
         kind: "open",
         id: "maintenance-rehearsal",
-        name: "The walkthrough, and the link to send",
+        name: "All four views of a repair",
         blurb:
-          "One repair from the tenant's phone call to the invoice, on four tabs. The real steps, the real contractor page and the real emails - and a capability link anybody can open without an account.",
+          "One repair, and what it looks like to the agent, the landlord, the tenant and the contractor. The real screens and the real emails, on four tabs.",
         href: "/admin/rehearsal",
       },
       {
