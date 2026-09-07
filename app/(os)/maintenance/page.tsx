@@ -70,7 +70,15 @@ function nextFor(o: WorksOrder): { text: string; hot: boolean } {
   }
 }
 
-type Property = { id: string; name: string; locality: string; landlord?: string; tenant?: string | null };
+type Property = { id: string; name: string; locality: string; landlord?: string; tenant?: string | null; certs?: Record<string, { expires: number | null }> };
+
+/** Which certificate on the compliance book a planned category is about. */
+const CATEGORY_CERT: Record<string, string> = {
+  "Gas safety (CP12)": "gas",
+  "EICR": "eicr",
+  "EPC": "epc",
+  "HMO licence inspection": "licence",
+};
 
 export default function Maintenance() {
   const router = useRouter();
@@ -312,7 +320,7 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
   useEffect(() => {
     fetch("/api/compliance/book", { cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => setProps(Array.isArray(j.properties) ? j.properties.map((p: Property) => ({ id: p.id, name: p.name, locality: p.locality, landlord: p.landlord, tenant: p.tenant })) : []))
+      .then((j) => setProps(Array.isArray(j.properties) ? j.properties.map((p: Property) => ({ id: p.id, name: p.name, locality: p.locality, landlord: p.landlord, tenant: p.tenant, certs: p.certs })) : []))
       .catch(() => setProps([]));
     try {
       const sp = new URLSearchParams(window.location.search);
@@ -368,6 +376,20 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
     }).catch(() => { if (live) setFilled([]); });
     return () => { live = false; };
   }, [picked]);
+
+  /* A planned job is due when the certificate we hold runs out, so picking
+     the home and the category fills the date in. Only while the date is
+     untouched - a date typed by hand always wins. */
+  const [dueTouched, setDueTouched] = useState(false);
+  useEffect(() => {
+    if (kind !== "planned" || dueTouched || !picked) return;
+    const key = CATEGORY_CERT[category];
+    const days = key ? picked.certs?.[key]?.expires : null;
+    if (days == null) return;
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    setDueAt(d.toISOString().slice(0, 10));
+  }, [kind, picked, category, dueTouched]);
 
   const hits = useMemo(() => {
     const needle = pq.trim().toLowerCase();
@@ -496,7 +518,12 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
           ) : (
             <div>
               <label className={label}>Due by</label>
-              <input type="date" value={dueAt} onChange={(e) => setDueAt(e.target.value)} className={`mt-1 ${field}`} />
+              <input type="date" value={dueAt} onChange={(e) => { setDueTouched(true); setDueAt(e.target.value); }} className={`mt-1 ${field}`} />
+              {picked && CATEGORY_CERT[category] && picked.certs?.[CATEGORY_CERT[category]]?.expires != null && !dueTouched && (
+                <p className="mt-1 text-[11px] text-muted">
+                  {(picked.certs[CATEGORY_CERT[category]]!.expires as number) < 0 ? "Overdue - the certificate we hold ran out on this date." : "From the certificate we hold on this home."}
+                </p>
+              )}
             </div>
           )}
 
@@ -513,7 +540,7 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
           </div>
           {tenants.length > 1 && (
             <div className="sm:col-span-2">
-              <label className={label}>Which of them reported it</label>
+              <label className={label}>{kind === "repair" ? "Which of them reported it" : "Who we'll arrange access with"}</label>
               <select value={whichTenant} onChange={(e) => chooseTenant(tenants, Number(e.target.value))} className={`mt-1 ${field}`}>
                 {tenants.map((t, i) => (
                   <option key={`${t.name}-${i}`} value={i}>{t.name}{t.phone ? ` · ${t.phone}` : ""}</option>
