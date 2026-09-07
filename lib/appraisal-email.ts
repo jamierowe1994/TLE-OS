@@ -237,7 +237,7 @@ I've attached a calendar invite so it lands in your diary.
 
 Nothing to prepare at this stage. I'll send you a bit more detail nearer the time - what happens on the day and the handful of documents worth digging out.
 
-If that time stops working, just reply or ring me on ${i.agentPhone} and we'll move it.
+If that time stops working, just ${i.agentPhone ? `reply or ring me on ${i.agentPhone}` : "reply to this email"} and we'll move it.
 
 Kind regards,
 ${i.agentName}

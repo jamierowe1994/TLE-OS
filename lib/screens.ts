@@ -122,10 +122,9 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     wiring: "partial",
     caveats: [
       "You cannot start an appraisal on this screen. One is created by booking it from a landlord lead on Leads, which then brings you straight to its file. There is no New appraisal button here and that is deliberate.",
-      "Four rows are stand-ins to shape the screen. Anything you booked yourself is marked Booked here - the unmarked ones are samples, so don't quote them.",
-      "The stage tabs only filter. Nothing on this screen moves an appraisal from one stage to the next, so a record stays at Booked until that is built.",
-      "Record the valuation on the file page does not open a form yet.",
-      "The confirmation email and the calendar invite to the landlord are not connected, and the appointment does not reach REX's diary. Send the confirmation and put the appointment in REX yourself.",
+      "Stages move on their own, read from the record: the deck sent, the visit passed, the figure recorded, the terms signed, the landlord's documents, the REX listing. Won and Lost are the only moves made by hand.",
+      "Booking sends the landlord their confirmation with a calendar file attached, from the public sender with you as reply-to, as long as their record has an email address and Email to customers is on. The file says whether it went.",
+      "The appointment does not reach REX's diary yet. Put it in REX yourself until that write is unlocked.",
     ],
     next: "A won appraisal becomes a listing.",
   },

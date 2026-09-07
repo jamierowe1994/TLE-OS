@@ -8,6 +8,7 @@ import { SERVICE_LEVELS, type ServiceLevel } from "@/lib/market-appraisal";
 import type { NextRequest } from "next/server";
 import { queueVideoChase } from "@/lib/video-chase";
 import { publicOrigin } from "@/lib/origin";
+import { sendBookingConfirmation, type ConfirmationResult } from "@/lib/appraisal-confirm";
 
 /**
  * The appraisals the OS has booked.
@@ -81,19 +82,30 @@ export async function POST(req: NextRequest) {
        must never cost the appointment (see the header). Needs a signed-in
        person, because a queued email still goes out in somebody's name. */
     let videoChase: { queued: boolean; sendAt?: string; reason?: string } | null = null;
+    /* The landlord's confirmation, with the calendar file, the moment the
+       booking is safe (James, 6 Sep 2026: it was written and never wired).
+       Same rule as the nudge: it must never cost the appointment. */
+    let confirmation: ConfirmationResult | null = null;
     if (appraisal.appointmentAt) {
-      try {
-        const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
-        const me = userId ? await findUserById(userId) : null;
-        if (me) {
+      const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
+      const me = userId ? await findUserById(userId).catch(() => null) : null;
+      if (me) {
+        try {
+          confirmation = await sendBookingConfirmation({ ma: appraisal, me });
+        } catch (e) {
+          confirmation = { sent: false, reason: e instanceof Error ? e.message : "The confirmation did not send." };
+        }
+        try {
           const origin = publicOrigin(req);
           videoChase = await queueVideoChase({ ma: appraisal, me, origin });
+        } catch {
+          videoChase = { queued: false, reason: "Couldn't queue the video nudge." };
         }
-      } catch {
-        videoChase = { queued: false, reason: "Couldn't queue the video nudge." };
+      } else {
+        confirmation = { sent: false, reason: "Not signed in, so the confirmation could not go out in anybody's name." };
       }
     }
-    return NextResponse.json({ appraisal, videoChase });
+    return NextResponse.json({ appraisal, videoChase, confirmation });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Could not save the appraisal." },
