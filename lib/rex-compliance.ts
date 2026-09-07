@@ -63,6 +63,9 @@ const TYPE_MAP: Record<string, CertKey> = {
 
 const HMO_TYPES = ["mandatory_hmo_license", "additional_hmo_license", "selective_hmo_license"];
 /** Ten ids per query: this service is superlinear-slow and hard-caps at 100 rows. */
+/** A REX row, untyped at the edge. */
+type Row = Record<string, unknown>;
+
 const CHUNK = 10;
 const CONCURRENCY = 6;
 
@@ -178,6 +181,51 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
   });
   const entries = results.flat();
 
+  /**
+   * Who is on each home, batched the same way the certificates are.
+   *
+   * The listing projection this book is built from carries no contacts, so
+   * every row read "landlord —" and no row ever named the tenant - the one
+   * person an engineer has to ring to get through the door. James, 7 Sep
+   * 2026, asked for it on the rows, which rules out the per-property lookup
+   * the drawer uses: 264 homes would be 264 REX calls.
+   *
+   * So it goes with the grain of this file: property_id IN a chunk, the same
+   * chunk size and concurrency, and the answer is cached with the book. Ten
+   * properties a call, six calls at a time.
+   */
+  const peopleByProperty = new Map<string, { landlord: string; tenants: string[] }>();
+  const peopleResults = await inBatches(chunks, CONCURRENCY, async (chunk) => {
+    const res = await rexCall("Listings", "search", {
+      criteria: [{ name: "property_id", type: "in", value: chunk }],
+      limit: 100,
+      extra_options: { extra_fields: ["related.contact_reln_listing"] },
+    });
+    return res.ok ? (rexRows(res.result) as Row[]) : [];
+  }).catch(() => [] as Row[][]);
+
+  for (const row of peopleResults.flat()) {
+    const pid = String((row.property as Row | null)?.id ?? row.property_id ?? "");
+    if (!pid) continue;
+    const relns = ((row.related ?? {}) as Row).contact_reln_listing;
+    if (!Array.isArray(relns)) continue;
+    const landlords: string[] = [];
+    const tenants: string[] = [];
+    for (const x of relns as Row[]) {
+      const type = String(((x.reln_type as Row | null)?.id ?? ""));
+      const name = String((x.contact as Row | null)?.name ?? "").trim();
+      if (!name) continue;
+      if (type === "owner" && !landlords.includes(name)) landlords.push(name);
+      if (type === "purchtenant" && !tenants.includes(name)) tenants.push(name);
+    }
+    /* A home let more than once comes back more than once. The first row
+       REX gives is the most recent, so an older tenancy never overwrites a
+       newer one. */
+    const held = peopleByProperty.get(pid);
+    if (!held) peopleByProperty.set(pid, { landlord: landlords[0] ?? "", tenants });
+    else if (!held.landlord && landlords[0]) held.landlord = landlords[0];
+  }
+
   // Group by property, keeping the LATEST expiry per certificate type — a
   // property with a renewed gas certificate has two entries, and the old one
   // must not be the one that decides whether it's compliant.
@@ -228,16 +276,17 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
     const gasNotRequired = Boolean(certs.gas?.notRequired) && certs.gas?.expires == null;
     if (!hasGasRecord) gasUnknown++;
 
+    /* Read above, in one batched pass over the same chunks. Blank stays
+       blank: an em dash is "we did not find one", not a person. */
+    const who = peopleByProperty.get(l.propertyId);
     return {
       id: l.propertyId,
       name: l.name,
       locality: l.locality,
-      // REX's listing projection carries neither the landlord's name nor the
-      // sitting tenant's, so neither is invented here.
-      landlord: "—",
-      // REX's listing projection carries no tenant, and `tenancy_id` is
-      // populated on 0% of the book — so this is genuinely unknown, not empty.
-      tenant: undefined,
+      landlord: who?.landlord || "—",
+      /* undefined is "we do not know", null is "nobody lives here". Only a
+         home REX answered about can honestly say vacant. */
+      tenant: who ? (who.tenants.length ? who.tenants.join(", ") : null) : undefined,
       hmo: mine.some((e) => HMO_TYPES.includes(e.type_id ?? "")),
       hasGas: hasGasRecord && !gasNotRequired,
       certs,

@@ -128,7 +128,7 @@ export default function Compliance() {
   };
 
   const book = graded.filter(({ p, worst }) => {
-    if (query && !`${p.name} ${p.locality} ${p.landlord}`.toLowerCase().includes(query.toLowerCase()))
+    if (query && !`${p.name} ${p.locality} ${p.landlord} ${p.tenant ?? ""}`.toLowerCase().includes(query.toLowerCase()))
       return false;
     if (filter === "all") return true;
     if (filter === "ok") return worst === "ok" || worst === "watch";
@@ -218,7 +218,8 @@ export default function Compliance() {
                       <span className="hand block truncate text-[13.5px]">{p.name}</span>
                       <span className="block truncate text-[10.5px] text-muted">
                         {p.locality}
-                        {p.landlord ? ` · landlord ${p.landlord}` : ""}
+                        {p.landlord && p.landlord !== "—" ? ` · landlord ${p.landlord}` : ""}
+                        {p.tenant ? ` · ${p.tenant}` : ""}
                         {p.hmo ? " · HMO" : ""}
                       </span>
                     </span>
@@ -277,7 +278,7 @@ export default function Compliance() {
                   <th key={k} className="pb-2 pr-4">{CERT_META[k].short}</th>
                 ))}
                 <th className="pb-2 pr-4">HMO extras</th>
-                <th className="pb-2">Landlord</th>
+                <th className="pb-2">Who&apos;s there</th>
               </tr>
             </thead>
             <tbody>
@@ -314,7 +315,14 @@ export default function Compliance() {
                       <span className="text-[10.5px] text-muted/60">—</span>
                     )}
                   </td>
-                  <td className="whitespace-nowrap py-3 text-[12px] text-muted">{p.landlord}</td>
+                  <td className="py-3 text-[12px] text-muted">
+                    <span className="block max-w-[190px] truncate" title={p.landlord}>{p.landlord}</span>
+                    {p.tenant === null ? (
+                      <span className="block text-[10.5px] text-muted/70" title="REX has no tenant on the listing: either nobody is in, or it has not been recorded">no tenant on record</span>
+                    ) : p.tenant ? (
+                      <span className="block max-w-[190px] truncate text-[10.5px] text-muted/70" title={p.tenant}>{p.tenant}</span>
+                    ) : null}
+                  </td>
                 </tr>
               ))}
               {!book.length && (

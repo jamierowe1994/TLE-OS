@@ -24,7 +24,10 @@ import { hasDb, q } from "@/lib/db";
  *                   could mean an expired certificate reported as in date
  */
 
-const CACHE_KEY = "compliance:v1";
+/* v2 (7 Sep 2026): the book carries the landlord and the tenant now. The
+   old entries hold "—" for every home, and would be served stale for a day,
+   so the key moves rather than the shape being patched in place. */
+const CACHE_KEY = "compliance:v2";
 export const FRESH_MS = 60 * 60 * 1000;
 export const STALE_MS = 24 * 60 * 60 * 1000;
 
