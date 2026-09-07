@@ -50,6 +50,8 @@ export type Lead = {
   photo?: string;
   address?: string;
   listingId?: number;
+  /** REX's assignee user id - who is chasing it; the ledger scopes on it. */
+  assigneeId?: string;
   /** Which office the listing belongs to — this REX account is shared. */
   office?: string;
   subject?: string;

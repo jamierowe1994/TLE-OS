@@ -94,6 +94,8 @@ interface LeadSource {
   scanned?: number;
   setAside?: { sales: number; unclear: number; blank: number };
   total?: number | null;
+  /** Leads the OS holds of its own, in its ledger. */
+  onFile?: number;
   stale?: boolean;
 }
 
@@ -157,6 +159,7 @@ export default function Leads() {
             scanned: j.scanned,
             setAside: j.setAside,
             total: j.total,
+            onFile: j.onFile,
             stale: j.stale,
           });
         } else {
@@ -298,7 +301,7 @@ export default function Leads() {
                         source.setAside.blank ? ` and ${source.setAside.blank.toLocaleString("en-GB")} with no details at all` : ""
                       }`
                     : ""
-                }.`
+                }.${source.onFile ? ` ${source.onFile.toLocaleString("en-GB")} kept on file in the OS.` : ""}`
               : (source.reason ?? "New enquiries from the portals, your ads and the website.")
         }
         illustration="/illustrations/sitting-man.png"

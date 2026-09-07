@@ -207,6 +207,31 @@ export default function ListingDrawer({
   /* The photo set popped out full size; null when closed. */
   const [lightbox, setLightbox] = useState<number | null>(null);
   useEffect(() => {
+    if (!listing) { setEnquiries(null); setLiveApps(null); return; }
+    let gone = false;
+    const id = String(listing.id);
+    setEnquiries(null);
+    setLiveApps(null);
+    fetch("/api/leads", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; leads?: { id: string; name: string; source: string; received: string; receivedAt?: string; email: string; phone: string; enquiryMessage?: string; listingId?: number | string }[] }) => {
+        if (gone) return;
+        const mine = (j.leads ?? []).filter((l) => String(l.listingId ?? "") === id);
+        setEnquiries(mine.map((l) => ({ id: l.id, name: l.name, source: l.source, received: l.received, receivedAt: l.receivedAt, email: l.email, phone: l.phone, message: l.enquiryMessage })));
+      })
+      .catch(() => { if (!gone) setEnquiries([]); });
+    fetch("/api/applications?limit=300", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; applications?: { id: string; statusLabel?: string; status?: string; listingId?: string | number; applicants?: { name?: string }[]; offerAmount?: number | null; dateReceived?: number | null }[] }) => {
+        if (gone) return;
+        const mine = (j.applications ?? []).filter((a) => String(a.listingId ?? "") === id);
+        setLiveApps(mine.map((a) => ({ id: String(a.id), statusLabel: a.statusLabel ?? a.status ?? "", applicants: (a.applicants ?? []).map((x) => x.name).filter(Boolean).join(" & "), offerAmount: a.offerAmount ?? null, dateReceived: a.dateReceived ?? null })));
+      })
+      .catch(() => { if (!gone) setLiveApps([]); });
+    return () => { gone = true; };
+  }, [listing]);
+
+  useEffect(() => {
     if (!listing) {
       setLandlord({ status: "idle" });
       return;
@@ -238,6 +263,12 @@ export default function ListingDrawer({
   const [step, setStep] = useState(0);
   const [handingOver, setHandingOver] = useState(false);
   const [offers, setOffers] = useState<Offer[]>([]);
+  /* LIVE, from REX via the OS: the enquiries and the applications on THIS
+     listing (James, 7 Sep 2026: "it's not showing the actual leads that have
+     inquired about a property"). The lead book is the cached one every
+     screen shares, filtered here to the listing; applications likewise. */
+  const [enquiries, setEnquiries] = useState<{ id: string; name: string; source: string; received: string; receivedAt?: string; email: string; phone: string; message?: string }[] | null>(null);
+  const [liveApps, setLiveApps] = useState<{ id: string; statusLabel: string; applicants: string; offerAmount: number | null; dateReceived: number | null }[] | null>(null);
   const [topPick, setTopPick] = useState<number | null>(null);
   /* The landlord–property–tenant link, made the moment an offer is accepted
      and stored per listing in os_case_state. Null until someone accepts, at
@@ -844,6 +875,36 @@ export default function ListingDrawer({
           </div>
 
           <div className="mt-5">
+            {tab === "home" && enquiries !== null && (
+              /* ── The enquiries REX holds against this listing, as REX's own
+                    Leads tab shows them. Each opens on the Leads board. ── */
+              <div className="mb-4">
+              <Card title={`Enquiries · ${enquiries.length}`} icon="target">
+                {enquiries.length ? (
+                  <ul className="divide-y divide-line/40">
+                    {enquiries.slice(0, 12).map((e) => (
+                      <li key={e.id}>
+                        <a href={`/leads?open=${encodeURIComponent(e.id)}`} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 py-2.5 transition-colors hover:bg-box sm:grid-cols-[minmax(0,1.2fr)_110px_minmax(0,1fr)_90px]">
+                          <span className="min-w-0">
+                            <span className="hand block truncate text-[13px]">{e.name}</span>
+                            <span className="block truncate text-[10.5px] text-muted">{[e.phone, e.email].filter(Boolean).join(" · ") || "No contact details"}</span>
+                          </span>
+                          <span className="hidden sm:block"><Pill tone="neutral">{e.source}</Pill></span>
+                          <span className="hidden min-w-0 truncate text-[11px] text-muted sm:block">{e.message || "—"}</span>
+                          <span className="text-right text-[11px] text-muted">{e.received}</span>
+                        </a>
+                      </li>
+                    ))}
+                    {enquiries.length > 12 && (
+                      <li className="pt-2 text-[11px] text-muted">{enquiries.length - 12} more on the Leads board.</li>
+                    )}
+                  </ul>
+                ) : (
+                  <p className="py-4 text-center text-[12px] text-muted">No enquiries on this listing yet.</p>
+                )}
+              </Card>
+              </div>
+            )}
             {tab === "home" && (
               <div className="grid gap-4 lg:grid-cols-2">
                 {/* ── Left: the applications, accumulating as they land. ── */}
@@ -860,6 +921,18 @@ export default function ListingDrawer({
                     </PressButton>
                   }
                 >
+                  {/* What REX holds first: the real applications on this listing. */}
+                  {liveApps && liveApps.length > 0 && (
+                    <ul className="mb-3 divide-y divide-line/40">
+                      {liveApps.map((a) => (
+                        <li key={a.id} className="flex items-center gap-3 py-2">
+                          <span className="hand min-w-0 flex-1 truncate text-[13px]">{a.applicants || "Applicant not named"}</span>
+                          <Pill tone={/accept/i.test(a.statusLabel) ? "good" : /unsuccess|withdraw|declin/i.test(a.statusLabel) ? "neutral" : "accent"}>{a.statusLabel}</Pill>
+                          {a.offerAmount != null && <span className="figures text-[13px]">£{a.offerAmount.toLocaleString("en-GB")}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   {offers.length ? (
                     <ul className="space-y-3">
                       {offers.map((o, i) => (

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchLeadBook, type LeadBook } from "@/lib/rex-leads";
 import { scopeFor } from "@/lib/scope";
+import { ledgerBoard, ledgerStats, recordLeads } from "@/lib/lead-ledger";
+import { ago } from "@/lib/rex-leads";
 import { hasDb, q } from "@/lib/db";
 import { rexConfigured } from "@/lib/rex";
 
@@ -69,6 +71,15 @@ async function store(key: string, entry: Cached): Promise<void> {
   }
 }
 
+/** The scan's book, widened to everything on file for this scope. "received"
+    is relative, so it is re-said from receivedAt at read time. */
+async function fromLedger(book: LeadBook, rexUserId: string | null): Promise<LeadBook> {
+  const stored = await ledgerBoard(rexUserId, 500).catch(() => []);
+  if (stored.length < book.leads.length) return book;
+  const leads = stored.map((l) => (l.receivedAt ? { ...l, received: ago(Math.floor(new Date(l.receivedAt).getTime() / 1000)) } : l));
+  return { ...book, leads };
+}
+
 function refresh(key: string, rexUserId: string | null): Promise<Cached> {
   // Collapse concurrent callers onto one walk — five people opening the page
   // at nine o'clock shouldn't be five trips through REX. Per SCOPE, though:
@@ -78,7 +89,10 @@ function refresh(key: string, rexUserId: string | null): Promise<Cached> {
   if (live) return live;
   const p = fetchLeadBook(rexUserId)
       .then(async (book) => {
-        const entry = { book, at: Date.now() };
+        /* Kept for good, then the board is read back from the ledger so it
+           holds every lead on file, not just what one scan of REX returns. */
+        await recordLeads(book.leads).catch(() => 0);
+        const entry = { book: await fromLedger(book, rexUserId), at: Date.now() };
         memory.set(key, entry);
         await store(key, entry);
         return entry;
@@ -114,18 +128,20 @@ export async function GET(req: NextRequest) {
 
   const held = memory.get(key) ?? (await readStored(key));
   const age = held ? Date.now() - held.at : Infinity;
+  /* How much the OS now holds of its own, whatever REX shows. */
+  const onFile = (await ledgerStats().catch(() => ({ onFile: 0 }))).onFile;
 
   if (held && age < FRESH_MS) {
-    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...held.book, ageMs: age });
+    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...held.book, onFile, ageMs: age });
   }
   if (held && age < STALE_MS) {
     void refresh(key, scope.rexUserId); // behind the scenes; this caller gets the stale copy now
-    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...held.book, ageMs: age, stale: true });
+    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...held.book, onFile, ageMs: age, stale: true });
   }
 
   try {
     const fresh = await refresh(key, scope.rexUserId);
-    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...fresh.book, ageMs: 0 });
+    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...fresh.book, onFile: (await ledgerStats().catch(() => ({ onFile }))).onFile, ageMs: 0 });
   } catch (e) {
     // Something is better than nothing, however old.
     if (held) {

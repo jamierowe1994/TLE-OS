@@ -40,7 +40,7 @@ interface RexLead extends Record<string, unknown> {
   received_from_email?: string | null;
   is_spam?: string | null;
   contact?: { name?: string; email_address?: string; phone_number?: string; id?: string } | null;
-  assignee?: { name?: string } | null;
+  assignee?: { id?: number | string; name?: string } | null;
   lead_type?: { id?: string; text?: string } | null;
   lead_status?: { id?: string; text?: string } | null;
   listing?: {
@@ -126,7 +126,7 @@ export function sourceOf(l: RexLead): string {
   return raw.split(".")[0].replace(/^\w/, (c) => c.toUpperCase());
 }
 
-function ago(seconds: number): string {
+export function ago(seconds: number): string {
   const mins = Math.floor((Date.now() / 1000 - seconds) / 60);
   if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
@@ -194,6 +194,7 @@ function toLead(l: RexLead, enquiry: Lead["enquiry"]): Lead {
     office: l.listing?.location?.text ?? undefined,
     subject: l.subject ?? undefined,
     contactId: l.contact?.id ? String(l.contact.id) : undefined,
+    assigneeId: l.assignee?.id != null ? String(l.assignee.id) : undefined,
   };
 }
 

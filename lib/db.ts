@@ -330,6 +330,74 @@ CREATE TABLE IF NOT EXISTS os_reminders (
 );
 CREATE INDEX IF NOT EXISTS os_reminders_user ON os_reminders (user_id, due_at DESC);
 
+-- Works orders: every job on a managed home, reported through paid. Two
+-- kinds - a repair (reactive, with an urgency) and a planned job (a gas
+-- safety, an EICR, with a due date). lib/works-orders carries the life of
+-- one. Money in pence. Files are R2 keys on the job (photos, invoice,
+-- certificate). ref is the human number on the job sheet.
+CREATE TABLE IF NOT EXISTS os_contractors (
+  id             TEXT PRIMARY KEY,
+  name           TEXT NOT NULL,
+  trade          TEXT NOT NULL DEFAULT '',
+  phone          TEXT NOT NULL DEFAULT '',
+  email          TEXT NOT NULL DEFAULT '',
+  registration   TEXT NOT NULL DEFAULT '',
+  notes          TEXT NOT NULL DEFAULT '',
+  active         BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE SEQUENCE IF NOT EXISTS os_works_orders_ref START 1001;
+CREATE TABLE IF NOT EXISTS os_works_orders (
+  id               TEXT PRIMARY KEY,
+  ref              INTEGER NOT NULL DEFAULT nextval('os_works_orders_ref'),
+  kind             TEXT NOT NULL DEFAULT 'repair',
+  status           TEXT NOT NULL DEFAULT 'reported',
+  property_id      TEXT,
+  property_name    TEXT NOT NULL DEFAULT '',
+  locality         TEXT NOT NULL DEFAULT '',
+  landlord         TEXT NOT NULL DEFAULT '',
+  tenant           TEXT NOT NULL DEFAULT '',
+  title            TEXT NOT NULL DEFAULT '',
+  description      TEXT NOT NULL DEFAULT '',
+  category         TEXT NOT NULL DEFAULT '',
+  urgency          TEXT,
+  due_at           TIMESTAMPTZ,
+  reported_by      TEXT NOT NULL DEFAULT '',
+  reported_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  raised_by        TEXT NOT NULL DEFAULT '',
+  contractor_id    TEXT,
+  contractor_name  TEXT NOT NULL DEFAULT '',
+  scheduled_at     TIMESTAMPTZ,
+  access           TEXT NOT NULL DEFAULT '',
+  authority_pence  INTEGER NOT NULL DEFAULT 15000,
+  quote_pence      INTEGER,
+  approved_by      TEXT NOT NULL DEFAULT '',
+  approved_at      TIMESTAMPTZ,
+  completed_at     TIMESTAMPTZ,
+  completion_note  TEXT NOT NULL DEFAULT '',
+  invoice_pence    INTEGER,
+  invoice_ref      TEXT NOT NULL DEFAULT '',
+  invoiced_at      TIMESTAMPTZ,
+  paid_at          TIMESTAMPTZ,
+  paid_how         TEXT,
+  cancelled_reason TEXT NOT NULL DEFAULT '',
+  files            JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_works_orders_status ON os_works_orders (status, due_at);
+CREATE INDEX IF NOT EXISTS os_works_orders_property ON os_works_orders (property_id);
+CREATE TABLE IF NOT EXISTS os_works_order_events (
+  id             TEXT PRIMARY KEY,
+  order_id       TEXT NOT NULL,
+  at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  by_name        TEXT NOT NULL DEFAULT '',
+  kind           TEXT NOT NULL DEFAULT 'note',
+  text           TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS os_works_order_events_order ON os_works_order_events (order_id, at DESC);
+
 -- Notes the team writes against a record (a property, a lead, a viewing).
 CREATE TABLE IF NOT EXISTS os_notes (
   id             TEXT PRIMARY KEY,
@@ -981,6 +1049,29 @@ ALTER TABLE os_scheduled_sends ADD COLUMN IF NOT EXISTS html TEXT;
 
 -- Results of slow REX/PayProp walks, so a deploy doesn't cost minutes of
 -- empty screens before the first figure appears.
+-- The lead ledger: every enquiry the OS has seen, kept (lib/lead-ledger.ts).
+CREATE TABLE IF NOT EXISTS os_leads (
+  id             TEXT PRIMARY KEY,            -- rex-<lead id>
+  received_at    TIMESTAMPTZ,
+  source         TEXT,
+  enquiry        TEXT,
+  stage          TEXT,
+  name           TEXT,
+  email          TEXT,
+  phone          TEXT,
+  listing_id     TEXT,
+  contact_id     TEXT,
+  assignee_id    TEXT,
+  agent          TEXT,
+  address        TEXT,
+  payload        JSONB NOT NULL,
+  first_seen     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_leads_received_idx ON os_leads (received_at DESC);
+CREATE INDEX IF NOT EXISTS os_leads_listing_idx ON os_leads (listing_id);
+CREATE INDEX IF NOT EXISTS os_leads_assignee_idx ON os_leads (assignee_id, received_at DESC);
+
 CREATE TABLE IF NOT EXISTS os_cache (
   key            TEXT PRIMARY KEY,
   payload        JSONB NOT NULL,
