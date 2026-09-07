@@ -227,6 +227,7 @@ export default function RadarBoard({
   filterPreset,
   districts: districtsProp,
   onAsk,
+  onlyKeys,
 }: {
   /** Inside Bond: no page header, the workspace supplies its own. */
   embedded?: boolean;
@@ -240,6 +241,8 @@ export default function RadarBoard({
   districts?: string[];
   /** Bond: open Ask Bond with this door in focus. Absent standalone. */
   onAsk?: (p: Prospect) => void;
+  /** Bond's process bar: show only these doors, whatever their stage. */
+  onlyKeys?: Set<string> | null;
 } = {}) {
   const [rows, setRows] = useState<Row[]>([]);
   const [summary, setSummary] = useState<RadarSummary | null>(null);
@@ -393,8 +396,14 @@ export default function RadarBoard({
   const book = useMemo(() => {
     const needle = near ? "" : q.trim().toLowerCase();
     return rows.filter((r) => {
-      if (fStage ? r.stage !== fStage : !OPEN_STAGES.includes(r.stage)) return false;
-      if (!fStage && r.score === 0) return false;
+      /* A step on the process bar names its doors outright - a won door
+         is not an open stage, and it must still show under Won. */
+      if (onlyKeys) {
+        if (!onlyKeys.has(r.property_key)) return false;
+      } else {
+        if (fStage ? r.stage !== fStage : !OPEN_STAGES.includes(r.stage)) return false;
+        if (!fStage && r.score === 0) return false;
+      }
       if (signalsOn.size > 0 && !r.signals.some((s) => signalsOn.has(s.key))) return false;
       if (fDistrict && r.district !== fDistrict) return false;
       if (mine && r.district && !mine.has(r.district)) return false;
@@ -410,7 +419,7 @@ export default function RadarBoard({
       }
       return true;
     });
-  }, [rows, q, signalsOn, fDistrict, fAgent, fStage, area, near, radius, mine]);
+  }, [rows, q, signalsOn, fDistrict, fAgent, fStage, area, near, radius, mine, onlyKeys]);
 
   useEffect(() => { setPage(0); }, [q, signalsOn, fDistrict, fAgent, fStage, perPage, area, near, radius]);
 

@@ -9,6 +9,7 @@ import BondAsk, { type AskFocus } from "@/components/BondAsk";
 import BondNudges from "@/components/BondNudges";
 import BondToday, { rememberSearch, type TodayData } from "@/components/BondToday";
 import { QrModal, QrPanel } from "@/components/BondQr";
+import BondProcess, { loadProcess } from "@/components/BondProcess";
 
 /**
  * Bond — the prospecting workspace.
@@ -30,19 +31,26 @@ import { QrModal, QrPanel } from "@/components/BondQr";
  * ever shows a placeholder as if it were a fact.
  */
 
-type Room = "today" | "nudges" | "map" | "prospects" | "landlords" | "competitors" | "lookup" | "campaigns" | "owners" | "postcards";
+type Room = "today" | "doors" | "nudges" | "landlords" | "competitors" | "lookup" | "campaigns" | "owners" | "postcards";
 
-const ROOMS: { key: Room; label: string; icon: string; blurb: string }[] = [
+/**
+ * Three rooms, then More.
+ *
+ * James, 7 Sep 2026: "a lot of tabs there, and it's fairly confusing". Ten
+ * rooms became three that carry the process - Today, Doors (the map and the
+ * list are one book two ways, with the six-step bar over it), Nudges - and
+ * the rest sit under More for the person who needs them.
+ */
+const ROOMS: { key: Room; label: string; icon: string; blurb: string; more?: boolean }[] = [
   { key: "today", label: "Today", icon: "dashboard", blurb: "" },
+  { key: "doors", label: "Doors", icon: "search", blurb: "Every flagged door in the patch, on the map and in the list, with where each stands on the process." },
   { key: "nudges", label: "Nudges", icon: "call", blurb: "Landlords who have dealt with us, whose door has just moved. Ring them." },
-  { key: "map", label: "Map", icon: "search", blurb: "Explore opportunities across your patch and beyond." },
-  { key: "prospects", label: "Prospects", icon: "list", blurb: "Every flagged door in the patch, strongest first." },
-  { key: "landlords", label: "Landlords", icon: "user", blurb: "The people and companies behind the doors, scored by opportunity." },
-  { key: "competitors", label: "Competitors", icon: "target", blurb: "Who holds the stock in your patch, and when their tenancies come round." },
-  { key: "lookup", label: "Look up", icon: "home", blurb: "Any address on the register, and add a door by hand." },
-  { key: "campaigns", label: "Campaigns", icon: "megaphone", blurb: "The sequences that write to landlords, and their copy." },
-  { key: "owners", label: "Owners", icon: "key", blurb: "Who owns what, from the Land Registry." },
-  { key: "postcards", label: "Postcards", icon: "mail", blurb: "The queue of cards and letters: queued, held, sent." },
+  { key: "landlords", more: true, label: "Landlords", icon: "user", blurb: "The people and companies behind the doors, scored by opportunity." },
+  { key: "competitors", more: true, label: "Competitors", icon: "target", blurb: "Who holds the stock in your patch, and when their tenancies come round." },
+  { key: "lookup", more: true, label: "Look up", icon: "home", blurb: "Any address on the register, and add a door by hand." },
+  { key: "campaigns", more: true, label: "Campaigns", icon: "megaphone", blurb: "The sequences that write to landlords, and their copy." },
+  { key: "owners", more: true, label: "Owners", icon: "key", blurb: "Who owns what, from the Land Registry." },
+  { key: "postcards", more: true, label: "Postcards", icon: "mail", blurb: "The queue of cards and letters: queued, held, sent." },
 ];
 
 interface Provider {
@@ -93,6 +101,22 @@ export default function BondApp() {
   const [nearPreset, setNearPreset] = useState<string | undefined>(undefined);
   const [filterPreset, setFilterPreset] = useState<string | undefined>(undefined);
   const [lookupPreset, setLookupPreset] = useState<string | undefined>(undefined);
+  /* The process bar's pick: which step the Doors room is filtered to, and the
+     doors standing at it. */
+  const [step, setStep] = useState<number | null>(null);
+  const [stepKeys, setStepKeys] = useState<Set<string> | null>(null);
+  const [more, setMore] = useState(false);
+  /* Pick a step: the Doors room shows the doors standing exactly there. */
+  function pickStep(s: number | null) {
+    setStep(s);
+    if (s == null) {
+      setStepKeys(null);
+      return;
+    }
+    void loadProcess(patch ?? []).then((d) => {
+      setStepKeys(new Set(Object.entries(d?.doors ?? {}).filter(([, at]) => at === s).map(([k]) => k)));
+    });
+  }
 
   /* THE PATCH. James, 3 Sep: "when they sign in for the app, they'll select
      their areas that they cover... it will then cordon off the rest." The
@@ -191,7 +215,7 @@ export default function BondApp() {
     rememberSearch(term);
     setQuick(term);
     setNearPreset(term);
-    setRoom("map");
+    setRoom("doors");
   }
 
   return (
@@ -217,7 +241,7 @@ export default function BondApp() {
           <p className="mt-1 px-1 text-[10.5px] text-muted">Prospecting for The Lettings Experts</p>
           <div className="mt-4 border-t border-line/70" />
           <nav className="mt-4 flex flex-col gap-1">
-            {ROOMS.map((r) => (
+            {ROOMS.filter((r) => !r.more).map((r) => (
               <button
                 key={r.key}
                 type="button"
@@ -230,6 +254,28 @@ export default function BondApp() {
                 {r.label}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setMore((m) => !m)}
+              className="mt-1 flex items-center justify-between rounded-xl px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-muted/70 hover:text-ink"
+            >
+              More
+              <span className="text-[9px]">{more || ROOMS.some((r) => r.more && r.key === room) ? "▴" : "▾"}</span>
+            </button>
+            {(more || ROOMS.some((r) => r.more && r.key === room)) &&
+              ROOMS.filter((r) => r.more).map((r) => (
+                <button
+                  key={r.key}
+                  type="button"
+                  onClick={() => setRoom(r.key)}
+                  className={`hand flex items-center rounded-xl px-3 py-2 text-left text-[12.5px] transition-colors ${
+                    room === r.key ? "bg-accent-soft font-medium text-ink" : "text-muted hover:bg-box hover:text-ink"
+                  }`}
+                >
+                  <DoodleIcon name={r.icon} size={14} className="mr-2.5 shrink-0" />
+                  {r.label}
+                </button>
+              ))}
           </nav>
           <button
             type="button"
@@ -322,19 +368,41 @@ export default function BondApp() {
 
           <main className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
             {room === "today" && (
-              <BondToday data={today} error={todayError} quick={quick} setQuick={setQuick} search={runSearch} go={setRoom} />
+              <BondToday
+                data={today}
+                error={todayError}
+                quick={quick}
+                setQuick={setQuick}
+                search={runSearch}
+                go={setRoom}
+                districts={patch ?? []}
+                onStep={(s) => {
+                  pickStep(s);
+                  setRoom("doors");
+                }}
+              />
             )}
             {/* No fade-up wrapper here: its animation leaves a transform on the
                 element, and a transform turns an ancestor into the containing
                 block for position: fixed. The property panel inside the board
                 would then be clipped to this box instead of covering the
                 screen. Measured, not guessed. */}
-            {(room === "map" || room === "prospects") && (
+            {room === "doors" && (
+              <div className="mb-4">
+                <BondProcess
+                  districts={patch ?? []}
+                  active={step}
+                  compact
+                  onPick={pickStep}
+                />
+              </div>
+            )}
+            {room === "doors" && (
               <RadarBoard
                 embedded
-                view={room === "map" ? "map" : "list"}
                 nearPreset={nearPreset}
                 filterPreset={filterPreset}
+                onlyKeys={stepKeys}
                 districts={patch ?? []}
                 onAsk={(p) => {
                   const a = (p.address || p.street || "").trim();
@@ -347,7 +415,7 @@ export default function BondApp() {
                 districts={patch ?? []}
                 openDoor={(address) => {
                   setFilterPreset(address);
-                  setRoom("prospects");
+                  setRoom("doors");
                 }}
                 onAsk={(key, label) => askAbout({ kind: "landlord", key, label })}
               />
@@ -366,7 +434,7 @@ export default function BondApp() {
                 preset={lookupPreset}
                 openOnBoard={(address) => {
                   setFilterPreset(address);
-                  setRoom("prospects");
+                  setRoom("doors");
                 }}
               />
             )}
@@ -375,7 +443,7 @@ export default function BondApp() {
                 districts={patch ?? []}
                 openDoor={(address) => {
                   setFilterPreset(address);
-                  setRoom("prospects");
+                  setRoom("doors");
                 }}
                 onAsk={askAbout}
               />

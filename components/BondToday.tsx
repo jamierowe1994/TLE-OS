@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import BondProcess from "@/components/BondProcess";
 
 /**
  * Today - Bond's front page, after James's sketch of 3 Sep 2026.
@@ -60,7 +61,7 @@ export interface TodayData {
   providers: { owner: { connected: boolean; name: string | null }; postcard: { connected: boolean; name: string | null } };
 }
 
-type Room = "today" | "nudges" | "map" | "prospects" | "landlords" | "competitors" | "lookup" | "campaigns" | "owners" | "postcards";
+type Room = "today" | "doors" | "nudges" | "landlords" | "competitors" | "lookup" | "campaigns" | "owners" | "postcards";
 
 const RECENT_KEY = "bond.recent";
 export function rememberSearch(term: string) {
@@ -119,12 +120,18 @@ export default function BondToday({
   setQuick,
   search,
   go,
+  districts = [],
+  onStep,
 }: {
   data: TodayData | null;
   error: string | null;
   quick: string;
   setQuick: (v: string) => void;
   search: (term: string) => void;
+  /** The patch the process is read over. */
+  districts?: string[];
+  /** Pressing a step on the bar: open Doors at that step. */
+  onStep?: (step: number) => void;
   go: (r: Room) => void;
 }) {
   const [recent, setRecent] = useState<string[]>([]);
@@ -180,12 +187,17 @@ export default function BondToday({
         )}
       </form>
 
+      {/* The process first: the trial's question, answered from the record. */}
+      <div className="mt-5">
+        <BondProcess districts={districts} onPick={(s) => s != null && onStep?.(s)} />
+      </div>
+
       {/* The tiles. */}
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-6">
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 xl:grid-cols-6">
         <Tile tone="peach" icon="call" label="Nudges" value={s ? s.nudgesOpen : null} hint="to call today" onClick={() => go("nudges")} />
-        <Tile tone="rose" icon="target" label="Flagged" value={s ? s.flagged : null} hint={s ? `across ${s.districts} districts` : ""} onClick={() => go("map")} />
-        <Tile tone="butter" icon="star" label="New today" value={s ? s.newToday : null} hint={s?.lastSweep ? `swept ${when(s.lastSweep)}` : "not swept yet"} onClick={() => go("prospects")} />
-        <Tile tone="lilac" icon="calendar" label="Anniversaries" value={s ? s.anniversariesSoon : null} hint="in the next 60 days" onClick={() => go("prospects")} />
+        <Tile tone="rose" icon="target" label="Flagged" value={s ? s.flagged : null} hint={s ? `across ${s.districts} districts` : ""} onClick={() => go("doors")} />
+        <Tile tone="butter" icon="star" label="New today" value={s ? s.newToday : null} hint={s?.lastSweep ? `swept ${when(s.lastSweep)}` : "not swept yet"} onClick={() => go("doors")} />
+        <Tile tone="lilac" icon="calendar" label="Anniversaries" value={s ? s.anniversariesSoon : null} hint="in the next 60 days" onClick={() => go("doors")} />
         <Tile tone="mint" icon="home" label="Worked this week" value={s ? s.workedThisWeek : null} hint="properties touched" />
         <Tile tone="sky" icon="checklist" label="Appraisals booked" value={s ? s.appraisalsBooked : null} hint="from Bond" />
       </div>
@@ -242,7 +254,7 @@ export default function BondToday({
               ))}
             </ul>
           )}
-          <button type="button" onClick={() => go("prospects")} className="mt-3 w-full rounded-xl border border-line py-2 text-[12px] text-muted transition-colors hover:border-ink hover:text-ink">
+          <button type="button" onClick={() => go("doors")} className="mt-3 w-full rounded-xl border border-line py-2 text-[12px] text-muted transition-colors hover:border-ink hover:text-ink">
             View all opportunities
           </button>
         </Card>
