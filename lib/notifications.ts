@@ -26,7 +26,12 @@ import { remindersFor } from "@/lib/reminders";
  *                            see:pretenancy or see:everything
  *   campaign steps for a     see:marketing or an owner - a call step is a job
  *   person                   for the office, not for a lead's agent
- *   handover runs, chases    owners and pre-tenancy, who own those processes
+ *   handover runs            owners and pre-tenancy, who own the process -
+ *                            LIVE runs only. Rehearsals are a log for James
+ *                            (Admin), not news for anyone (James, 7 Sep 2026)
+ *   chases                   NOT here. The chase email already carries the
+ *                            same line; a second copy in the bell was noise
+ *                            (James, 7 Sep 2026)
  *   reminders                the person alone - worked out from their own
  *                            book by lib/reminders, never anybody else's
  *
@@ -52,7 +57,7 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
   const office = can(me.role, "see:marketing") || me.role === "owner";
   const ops = me.role === "owner" || can(me.role, "see:pretenancy");
 
-  const [deals, steps, handovers, chases, reminders] = await Promise.all([
+  const [deals, steps, handovers, reminders] = await Promise.all([
     listDealEvents({ agentEmail: whole ? null : me.email, limit }).catch(() => []),
     office
       ? q<{ id: string; campaign_id: string; subject: string; detail: string; at: Date; name: string }>(
@@ -67,15 +72,8 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
     ops
       ? q<{ id: string; application_id: string; status: string; mode: string; finished_at: Date; error: string | null; steps: unknown }>(
           `SELECT id, application_id, status, mode, finished_at, error, steps
-             FROM os_handovers WHERE finished_at IS NOT NULL
+             FROM os_handovers WHERE finished_at IS NOT NULL AND mode <> 'shadow'
             ORDER BY finished_at DESC LIMIT $1`,
-          [limit]
-        ).catch(() => [])
-      : [],
-    ops
-      ? q<{ chase_key: string; property_id: string; cert: string; band: number; sent_to: string; sent_at: Date }>(
-          `SELECT chase_key, property_id, cert, band, sent_to, sent_at
-             FROM os_compliance_chases_sent ORDER BY sent_at DESC LIMIT $1`,
           [limit]
         ).catch(() => [])
       : [],
@@ -122,18 +120,6 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
       tone: h.status === "ok" ? "ok" : "warn",
     });
   }
-  for (const c of chases) {
-    out.push({
-      id: `chase:${c.chase_key}`,
-      kind: "chase",
-      at: new Date(c.sent_at).toISOString(),
-      title: `${c.cert} chase sent`,
-      body: `${c.band} days out${c.sent_to ? `, to ${c.sent_to}` : ""}.`,
-      href: "/compliance",
-      tone: "none",
-    });
-  }
-
   out.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
   return out.slice(0, limit);
 }
