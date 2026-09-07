@@ -56,6 +56,8 @@ export interface InvoiceSettings {
   footer: string;
   /** Where "invoice in" notices go: the accounts inbox, not compliance (Michael, 7 Sep 2026). */
   accountsEmail: string;
+  /** Where finished jobs and their documents go: Michael's compliance inbox. */
+  complianceEmail: string;
 }
 
 export const DEFAULT_SETTINGS: InvoiceSettings = {
@@ -74,6 +76,9 @@ export const DEFAULT_SETTINGS: InvoiceSettings = {
   defaultVatRate: 20,
   footer: "Please pay by bank transfer quoting the invoice number. Thank you.",
   accountsEmail: "",
+  /* James, 7 Sep 2026: Michael has this inbox. Defaulted rather than left
+     blank so the ping works the day it ships, and still overridable. */
+  complianceEmail: "compliance@thelettingexperts.co.uk",
 };
 
 export interface InvoiceLine {

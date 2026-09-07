@@ -3,6 +3,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { hasDb } from "@/lib/db";
 import { orderByToken, moveOrder, logEvent, markAccountsTold, stepOf, pounds, type WorksOrder } from "@/lib/works-orders";
 import { emailsForMove, outcomeLine, tellAccounts } from "@/lib/works-emails";
+import { pingCompliance } from "@/lib/works-compliance";
 import { agentFor } from "@/lib/works-agent";
 import { invoiceSettings } from "@/lib/invoices";
 import { withR2, R2_BUCKET, safeName, r2Configured } from "@/lib/r2";
@@ -63,6 +64,11 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
         if (told.sent) await markAccountsTold(o.id);
         await logEvent(o.id, "TLE OS", "email", told.sent ? `Accounts told: ${pounds(next.invoicePence)} to pay, at ${told.address}.` : `Accounts not told: ${told.reason}.`);
         if (me) for (const e of await emailsForMove(next, "done", me).catch(() => [])) await logEvent(o.id, "TLE OS", "email", outcomeLine(e));
+        await pingCompliance(next, "done");
+      } else {
+        /* A photo on a job that is already finished still goes over; on one
+           that is not, it rides along in the completion email. */
+        await pingCompliance(next, "file");
       }
       return NextResponse.json({ ok: true, job: publicView(next) });
     }
@@ -77,6 +83,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
     if (b.action === "done") {
       const next = await moveOrder(o.id, { action: "done", note: (b.note ?? "").trim() || "Marked done by the contractor." }, by);
       if (me) for (const e of await emailsForMove(next, "done", me).catch(() => [])) await logEvent(o.id, "TLE OS", "email", outcomeLine(e));
+      await pingCompliance(next, "done");
       return NextResponse.json({ ok: true, job: publicView(next) });
     }
     return NextResponse.json({ ok: false, error: "Say what to do." }, { status: 400 });

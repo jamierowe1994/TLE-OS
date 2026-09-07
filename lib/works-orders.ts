@@ -162,6 +162,7 @@ export interface WorksOrder {
   propertyLat: number | null;
   propertyLng: number | null;
   accountsToldAt: string | null;
+  complianceToldAt: string | null;
   /** A walkthrough job: real machinery, invented people, no email leaves. */
   rehearsal: boolean;
   title: string;
@@ -240,6 +241,7 @@ function toOrder(r: Row): WorksOrder {
     propertyLat: n(r.property_lat),
     propertyLng: n(r.property_lng),
     accountsToldAt: iso(r.accounts_told_at),
+    complianceToldAt: iso(r.compliance_told_at),
     rehearsal: r.rehearsal === true,
     title: s(r.title),
     description: s(r.description),
@@ -273,7 +275,7 @@ function toOrder(r: Row): WorksOrder {
 
 const COLS = `id, ref, kind, status, property_id, property_name, locality, landlord, tenant, tenant_email, landlord_email, landlord_mobile,
   landlord_told_at, arranging, landlord_follow_up_at, landlord_resolved_at, contractor_contacted_at, contractor_confirmed_at, landlord_arranged_at,
-  tenant_happy, tenant_happy_at, tenant_happy_note, payee, contractor_token, tenant_token, property_lat, property_lng, accounts_told_at,
+  tenant_happy, tenant_happy_at, tenant_happy_note, payee, contractor_token, tenant_token, property_lat, property_lng, accounts_told_at, compliance_told_at,
   title, description, category, urgency,
   due_at, reported_by, reported_at, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence, quote_pence,
   approved_by, approved_at, completed_at, completion_note, invoice_pence, invoice_ref, invoiced_at, paid_at, paid_how,
@@ -500,6 +502,12 @@ export const pounds = (pence: number | null | undefined) =>
 
 const when = (v: string | null | undefined) =>
   v ? new Date(v).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "a date to be agreed";
+
+/** Compliance have been told the job is done: stamped so it only ever goes once. */
+export async function markComplianceTold(id: string): Promise<void> {
+  if (!hasDb()) return;
+  await q(`UPDATE os_works_orders SET compliance_told_at = NOW() WHERE id = $1`, [id]).catch(() => {});
+}
 
 /** Accounts have the invoice: stamped when the email actually went. */
 export async function markAccountsTold(id: string): Promise<void> {

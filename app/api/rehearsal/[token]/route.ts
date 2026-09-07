@@ -3,6 +3,7 @@ import { whoIs } from "@/lib/admin";
 import { hasDb } from "@/lib/db";
 import { moveOrder, logEvent, markAccountsTold, contractorsFor, stepOf, type Move } from "@/lib/works-orders";
 import { emailsForMove, outcomeLine, tellAccounts } from "@/lib/works-emails";
+import { pingCompliance } from "@/lib/works-compliance";
 import { invoiceSettings } from "@/lib/invoices";
 import {
   REHEARSAL_FAULTS, currentRehearsal, endRehearsal, ensureTrades, rehearsalAgent, rehearsalById,
@@ -88,6 +89,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
     const next = await moveOrder(found.order.id, body.move, by);
     const emails = await emailsForMove(next, body.move.action, me, { how: "how" in body.move ? body.move.how : undefined }).catch(() => []);
     for (const e of emails) await logEvent(next.id, "TLE OS", "email", outcomeLine(e));
+    await pingCompliance(next, body.move.action);
     if (body.move.action === "invoice") {
       const told = await tellAccounts(next, (await invoiceSettings()).accountsEmail ?? "");
       if (told.sent) await markAccountsTold(next.id);

@@ -113,7 +113,7 @@ export function rehearsalTokenValid(candidate: string | undefined): boolean {
 
 export interface RehearsalEmail {
   id: string;
-  role: "contractor" | "tenant" | "landlord" | "accounts";
+  role: "contractor" | "tenant" | "landlord" | "accounts" | "compliance";
   address: string;
   subject: string;
   html: string;

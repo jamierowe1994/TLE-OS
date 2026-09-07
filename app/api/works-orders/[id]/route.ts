@@ -3,6 +3,7 @@ import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { getOrder, moveOrder, logEvent, markAccountsTold, type Move } from "@/lib/works-orders";
 import { emailsForMove, outcomeLine, tellAccounts } from "@/lib/works-emails";
+import { pingCompliance } from "@/lib/works-compliance";
 import { invoiceSettings } from "@/lib/invoices";
 import { pounds } from "@/lib/works-orders";
 
@@ -43,6 +44,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       if (told.sent) await markAccountsTold(order.id);
       await logEvent(order.id, "TLE OS", "email", told.sent ? `Accounts told: ${pounds(order.invoicePence)} to pay, at ${told.address}.` : `Accounts not told: ${told.reason}.`);
     }
+    await pingCompliance(order, move.action);
     const found = await getOrder(id);
     return NextResponse.json({ ok: true, order, events: found?.events ?? [], emails });
   } catch (e) {

@@ -23,7 +23,7 @@ import type { Move, RankedContractor, WorksEvent, WorksOrder } from "@/lib/works
  */
 
 type Fault = { id: string; title: string; category: string; urgency: string; description: string };
-type Mail = { id: string; role: "contractor" | "tenant" | "landlord" | "accounts"; address: string; subject: string; html: string; at: string };
+type Mail = { id: string; role: "contractor" | "tenant" | "landlord" | "accounts" | "compliance"; address: string; subject: string; html: string; at: string };
 type State = {
   ok: boolean;
   order: WorksOrder | null;
@@ -78,6 +78,9 @@ export default function MaintenanceViews() {
   const o = s?.order ?? null;
   const emails = s?.emails ?? [];
   const mailFor = (id: TabId) => emails.filter((e) => e.role === id);
+  /* Accounts and compliance are the office's own post, so they sit under the
+     agent's screen rather than earning a tab of their own. */
+  const office = emails.filter((e) => e.role === "accounts" || e.role === "compliance");
 
   if (err && !s) return <Shell><p className="text-[13px] text-accent-dark">{err}</p></Shell>;
   if (!s) return <Shell><p className="text-[13px] text-muted">Loading…</p></Shell>;
@@ -124,7 +127,17 @@ export default function MaintenanceViews() {
       {err && <p className="mt-3 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-2.5 text-[12px]">{err}</p>}
 
       <div className="mt-4">
-        {tab === "agent" && <AgentView o={o} events={s.events} ranked={s.ranked} move={move} busy={busy} />}
+        {tab === "agent" && (
+          <>
+            <AgentView o={o} events={s.events} ranked={s.ranked} move={move} busy={busy} />
+            {office.length > 0 && (
+              <section className="mt-6">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Into the office</p>
+                <div className="mt-3"><Mailbox mail={office} /></div>
+              </section>
+            )}
+          </>
+        )}
         {tab === "landlord" && <Mailbox mail={mailFor("landlord")} />}
         {tab === "tenant" && (
           <Beside screen={o.completedAt && o.tenantToken ? `/repair/${o.tenantToken}` : null}>

@@ -1101,7 +1101,7 @@ function ContractorProfile({ id, onClose, onEdit, openJob, canEdit }: { id: stri
 /* ── The invoicing schedule ─────────────────────────────────────────────── */
 
 type InvoiceRow = { id: string; number: string | null; status: string; toName: string; property: string; issueDate: string; dueDate: string; reference: string; orderRef: number | null; lines: { qty: number; unitPence: number; vatRate: number }[] };
-type Settings = { companyName: string; addressLines: string[]; email: string; phone: string; accountsEmail: string; vatNumber: string; companyNumber: string; bankName: string; accountName: string; sortCode: string; accountNumber: string; prefix: string; termsDays: number; defaultVatRate: number; footer: string };
+type Settings = { companyName: string; addressLines: string[]; email: string; phone: string; accountsEmail: string; complianceEmail: string; vatNumber: string; companyNumber: string; bankName: string; accountName: string; sortCode: string; accountNumber: string; prefix: string; termsDays: number; defaultVatRate: number; footer: string };
 
 const INVOICE_STATUS: Record<string, { label: string; tone: "neutral" | "accent" | "good" }> = {
   draft: { label: "Draft", tone: "neutral" }, issued: { label: "Produced", tone: "accent" }, sent: { label: "Sent", tone: "accent" }, paid: { label: "Paid", tone: "good" }, void: { label: "Void", tone: "neutral" },
@@ -1168,6 +1168,10 @@ function Invoices({ onOpen }: { onOpen: (id: string) => void }) {
             <div className="sm:col-span-2 lg:col-span-3">
               <input value={settings.accountsEmail ?? ""} onChange={(e) => setSettings({ ...settings, accountsEmail: e.target.value })} placeholder="Accounts inbox - where a contractor's invoice is sent when it lands on a job" className={field} />
               <p className="mt-1 text-[11px] text-muted">Every invoice that lands on a job goes here with the PayProp details, and sits on the Accounts list until it is marked paid.</p>
+            </div>
+            <div className="sm:col-span-2 lg:col-span-3">
+              <input value={settings.complianceEmail ?? ""} onChange={(e) => setSettings({ ...settings, complianceEmail: e.target.value })} placeholder="Compliance inbox - where finished jobs and their documents go" className={field} />
+              <p className="mt-1 text-[11px] text-muted">A job that finishes goes here with its documents listed, and anything added afterwards is sent over as it lands. Nothing goes while a job is still open.</p>
             </div>
             <textarea value={settings.addressLines.join("\n")} onChange={(e) => setSettings({ ...settings, addressLines: e.target.value.split("\n") })} placeholder="Address, one line per line" rows={3} className={`${field} sm:col-span-2 lg:col-span-3`} />
             <input value={settings.vatNumber} onChange={(e) => setSettings({ ...settings, vatNumber: e.target.value })} placeholder="VAT number" className={field} />

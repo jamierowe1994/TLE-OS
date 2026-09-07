@@ -29,7 +29,7 @@ import type { OsUser } from "@/lib/users";
  */
 
 export interface SendOutcome {
-  to: "contractor" | "tenant" | "landlord" | "accounts";
+  to: "contractor" | "tenant" | "landlord" | "accounts" | "compliance";
   sent: boolean;
   address?: string;
   reason?: string;
@@ -179,6 +179,98 @@ export async function tellAccounts(o: WorksOrder, accountsEmail: string): Promis
   }
 }
 
+/**
+ * Michael's ping.
+ *
+ * James, 7 Sep 2026: "I need an automated email to go out to Michael. He has
+ * access to the compliance email... Don't bother notifying him until it's
+ * complete, but when it gets completed, we should then just ping that over."
+ *
+ * So compliance hears twice at most, and never while a job is open:
+ *
+ *   done      the job is finished, with every document on it listed
+ *   document  a document lands on a job that is ALREADY finished - the
+ *             certificate that follows the visit, which is the whole point
+ *
+ * A photo taken mid-visit is silent, because the job is not done yet and it
+ * will be named in the completion email anyway. That falls out of the rule
+ * rather than needing a list of file types to ignore.
+ *
+ * Internal shell, internal sender: Michael is staff, so this is not gated by
+ * the customer-email switch and does not carry the customer branding.
+ */
+export async function tellCompliance(
+  o: WorksOrder,
+  trigger: "done" | "document",
+  complianceEmail: string,
+  file?: { name: string; by: string }
+): Promise<SendOutcome> {
+  const address = complianceEmail.trim();
+  if (!address.includes("@")) return { to: "compliance", sent: false, reason: "no compliance inbox set under Maintenance, Invoices" };
+
+  const where = o.propertyName + (o.locality ? `, ${o.locality}` : "");
+  const docs = o.files ?? [];
+  const kindWord = o.kind === "planned" ? o.category : "Repair";
+
+  const rows: { title: string; detail: string; tone: "neutral" | "attention" | "good" }[] = [
+    { title: where, detail: `${kindWord} · job #${o.ref}${o.landlord ? ` · landlord ${o.landlord}` : ""}`, tone: "neutral" },
+  ];
+  let heading: string, intro: string, subject: string;
+
+  if (trigger === "document") {
+    subject = `Document on job #${o.ref}: ${file?.name ?? "a file"} - ${where}`;
+    heading = `A document has landed on job #${o.ref}`;
+    intro = `${file?.by || "Somebody"} added a document to a job that is already finished. It is on the job with the rest of the paperwork.`;
+    rows.push({ title: file?.name ?? "a file", detail: "Open the job to read or download it", tone: "attention" });
+  } else {
+    subject = `${kindWord} done at ${where} - job #${o.ref}`;
+    heading = `Job #${o.ref} is done`;
+    intro = `${o.title}${o.contractorName ? `, done by ${o.contractorName}` : ""}${o.completedAt ? ` on ${when(o.completedAt)}` : ""}.${o.completionNote ? ` ${o.completionNote}` : ""}`;
+    rows.push(
+      docs.length
+        ? { title: `${docs.length} document${docs.length === 1 ? "" : "s"} on the job`, detail: docs.map((d) => d.name).join(" · "), tone: "attention" }
+        : { title: "No documents yet", detail: "Anything added from here on is sent over as it lands", tone: "neutral" }
+    );
+  }
+
+  const html = emailShell({
+    heading,
+    intro,
+    rows,
+    rowsLead: "The job",
+    button: "Open the job",
+    link: `${ORIGIN}/maintenance?open=${encodeURIComponent(o.id)}`,
+    image: "illustrations/email/certificates.gif",
+    footnote: "Sent because the job finished. Nothing goes over while a job is still open.",
+  });
+  if (o.rehearsal) return keep(o.id, "compliance", address, subject, html);
+  try {
+    await sendEmail({
+      to: address,
+      subject,
+      html,
+      text: `${heading}. ${o.title} at ${where}. Job #${o.ref}. Open: ${ORIGIN}/maintenance?open=${o.id}`,
+    });
+    return { to: "compliance", sent: true, address, via: "internal sender" };
+  } catch (e) {
+    return { to: "compliance", sent: false, address, reason: e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "the email did not send" };
+  }
+}
+
+/**
+ * Whether a move earns Michael an email, decided once rather than at each of
+ * the routes that can complete a job or add a file.
+ *
+ * Returns null when it does not, so a caller can pass every move through it.
+ */
+export function complianceTrigger(o: WorksOrder, action: Move["action"] | "raised" | "done_request"): "done" | "document" | null {
+  if (action === "done" && o.completedAt && !o.complianceToldAt) return "done";
+  /* A file only counts once the job is finished; before that it rides along
+     in the completion email. */
+  if (action === "file" && o.completedAt) return "document";
+  return null;
+}
+
 /** Which emails a move sets off. Returns every outcome, for the timeline. */
 export async function emailsForMove(o: WorksOrder, action: Move["action"] | "raised" | "done_request", me: OsUser, detail: { how?: string } = {}): Promise<SendOutcome[]> {
   const out: SendOutcome[] = [];
@@ -244,9 +336,10 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
 export function outcomeLine(s: SendOutcome): string {
   /* "Accounts" is an office, not a person: "the accounts was not emailed"
      is the sort of line that ends up on a screen in front of a client. */
-  const who = s.to === "accounts" ? "Accounts" : `the ${s.to}`;
-  const Who = s.to === "accounts" ? "Accounts'" : `The ${s.to}'s`;
+  const office = s.to === "accounts" || s.to === "compliance";
+  const who = s.to === "accounts" ? "Accounts" : s.to === "compliance" ? "Compliance" : `the ${s.to}`;
+  const Who = s.to === "accounts" ? "Accounts'" : s.to === "compliance" ? "Compliance'" : `The ${s.to}'s`;
   if (s.via === "the rehearsal") return `Emailed ${who} at ${s.address} - written and kept here, not sent.`;
   if (s.sent) return `Emailed ${who} at ${s.address}${s.via === "own mailbox" ? ", from your own mailbox" : ""}.`;
-  return `${s.to === "accounts" ? "Accounts were" : `The ${s.to} was`} not emailed: ${(s.reason ?? "").replace(/\.+$/, "")}.`;
+  return `${office ? `${who} were` : `The ${s.to} was`} not emailed: ${(s.reason ?? "").replace(/\.+$/, "")}.`;
 }

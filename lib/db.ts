@@ -421,6 +421,9 @@ ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS done_request_at         TIM
    invented people, so the flow can be walked in front of somebody. Kept off
    every real list, and its emails are captured rather than sent. */
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS rehearsal               BOOLEAN NOT NULL DEFAULT false;
+/* Michael's ping, once per job (James, 7 Sep 2026): compliance hears when a
+   job is finished, never while it is open. */
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS compliance_told_at      TIMESTAMPTZ;
 ALTER TABLE os_contractors  ADD COLUMN IF NOT EXISTS rehearsal               BOOLEAN NOT NULL DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS os_rehearsal_emails (
