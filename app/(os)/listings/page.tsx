@@ -148,7 +148,11 @@ function Filter({
 }
 
 export default function Listings() {
-  const [openAt, setOpenAt] = useState<number | null>(null);
+  /* Open BY ID, not by index. The book is re-read behind the page and its
+     order changes as REX updates records, so an index taken at open time
+     pointed at a different house a minute later (?open=228a Chapter Road
+     opened 166 Gloucester Road North, 7 Sep). */
+  const [openId, setOpenId] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<string | null>(null);
   const [rentBand, setRentBand] = useState<string | null>(null);
@@ -192,9 +196,8 @@ export default function Listings() {
     if (openedFromUrl.current || !LISTINGS.length) return;
     const wanted = new URLSearchParams(window.location.search).get("open");
     if (!wanted) return;
-    const at = LISTINGS.findIndex((l) => String(l.id) === wanted);
-    if (at >= 0) {
-      setOpenAt(at);
+    if (LISTINGS.some((l) => String(l.id) === wanted)) {
+      setOpenId(wanted);
       openedFromUrl.current = true;
     }
   }, [LISTINGS]);
@@ -307,7 +310,7 @@ export default function Listings() {
             <button
               key={l.id}
               type="button"
-              onClick={() => setOpenAt(LISTINGS.indexOf(l))}
+              onClick={() => setOpenId(String(l.id))}
               // Thinner rule and less padding, so the photograph can grow
               // into the space rather than floating in a frame. p-2 with an
               // inner radius of 14 against the card's 16 keeps the two curves
@@ -420,10 +423,16 @@ export default function Listings() {
       </p>
 
       <ListingDrawer
-        listing={openAt == null ? null : LISTINGS[openAt]}
-        onClose={() => setOpenAt(null)}
+        listing={openId == null ? null : LISTINGS.find((l) => String(l.id) === openId) ?? null}
+        onClose={() => setOpenId(null)}
         onStep={(d) =>
-          setOpenAt((i) => (i == null ? i : (i + d + LISTINGS.length) % LISTINGS.length))
+          setOpenId((id) => {
+            /* Step through the board as shown - filtered and sorted - not the raw book. */
+            const list = board.length ? board : LISTINGS;
+            const i = list.findIndex((l) => String(l.id) === id);
+            if (i < 0) return id;
+            return String(list[(i + d + list.length) % list.length].id);
+          })
         }
       />
 
