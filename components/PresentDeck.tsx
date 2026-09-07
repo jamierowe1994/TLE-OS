@@ -18,12 +18,6 @@ import {
 } from "@/lib/present";
 import { NEXT_STEPS } from "@/lib/present-copy";
 import { icsFor } from "@/lib/appraisal-email";
-import PresentContents, {
-  CONTENTS_INSET,
-  CONTENTS_LEFT,
-  CONTENTS_OFF,
-  type Chapter,
-} from "@/components/PresentContents";
 
 /**
  * The pre-appraisal deck, as the landlord sees it.
@@ -119,7 +113,7 @@ function Welcome({ deck, show }: { deck: Deck; show: boolean }) {
   return (
     <section
       data-slide="welcome"
-      className="relative flex min-h-full w-full shrink-0 flex-col justify-center px-6 pb-28 pt-20 sm:px-10 lg:px-14 lg:pb-24 lg:pt-14"
+      className="relative flex min-h-full w-full shrink-0 flex-col justify-center px-6 pb-20 pt-20 sm:px-10 lg:px-14"
       style={{ background: CREAM, color: INK }}
     >
       <div className="mx-auto grid w-full max-w-[1340px] items-center gap-10 lg:grid-cols-[1.08fr_0.92fr] lg:gap-12">
@@ -331,7 +325,7 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
   return (
     <section
       data-slide="appointment"
-      className="relative flex min-h-full w-full shrink-0 flex-col pb-24"
+      className="relative flex min-h-full w-full shrink-0 flex-col pb-20"
       style={{ background: PAPER, color: INK }}
     >
       {/* The mark used to sit here, in this slide's own header. It is chrome
@@ -609,7 +603,7 @@ function Agent({ deck, show }: { deck: Deck; show: boolean }) {
 
           {(a.name || a.title) && (
             <Rise show={show} i={2}>
-              <p className="mt-4 text-[13px] font-light text-black/45">
+              <p className="mt-5 text-[13.5px] font-light text-black/45 sm:mt-6">
                 {a.name}
                 {a.name && a.title ? " · " : ""}
                 <span className={a.name ? "" : "text-black/70"}>{a.title}</span>
@@ -618,9 +612,21 @@ function Agent({ deck, show }: { deck: Deck; show: boolean }) {
           )}
 
           <Rise show={show} i={3}>
-            <div className="mt-6 max-w-[520px] space-y-4">
+            {/* ONE MEASURE FOR THE WHOLE COLUMN. The bio ran to 520 and the
+                row of three to 620, so their right edges missed each other by
+                a hundred pixels and the column read as two columns that had
+                slipped. James, 7 Sep: "we need to make sure everything
+                aligns."
+
+                620 AND NOT LESS, and the row of three is what sets it: three
+                columns need about 150px of text each to hold their body copy
+                to two lines, and below that "Honest guidance at every step"
+                breaks to three while the other two stay at two - ragged in
+                exactly the way the one-line titles were fixed to avoid. The
+                bio takes the wider measure and a little more leading with it. */}
+            <div className="mt-6 max-w-[620px] space-y-4 sm:mt-7">
               {paragraphs.map((p, i) => (
-                <p key={i} className="text-[14.5px] font-light leading-[1.65] text-black/65">
+                <p key={i} className="text-[14.5px] font-light leading-[1.72] text-black/65">
                   {p}
                 </p>
               ))}
@@ -646,7 +652,16 @@ function Agent({ deck, show }: { deck: Deck; show: boolean }) {
           )}
 
           <Rise show={show} i={5}>
-            <div className="mt-7 flex flex-wrap gap-2.5">
+            {/* THE ROW OF THREE, given room. James, 7 Sep: "the buttons are
+                too close together", and the whole column wanted stretching -
+                a headshot 460px tall beside four blocks stacked at 24px
+                intervals left the type looking crammed into the top half of
+                its own half of the slide. */}
+            {/* The extra room is a DESKTOP stretch. On a phone this slide is
+                already taller than the screen and scrolls inside itself, so
+                the same margins there would only push the row of three further
+                out of sight. */}
+            <div className="mt-8 flex flex-wrap gap-3 sm:mt-10 sm:gap-3.5">
               {a.phone && (
                 <a
                   href={`tel:${tel}`}
@@ -687,24 +702,27 @@ function Agent({ deck, show }: { deck: Deck; show: boolean }) {
               doing, and without the fill they sit on the page as part of what
               the agent is saying rather than as a widget bolted underneath. */}
           <Rise show={show} i={6}>
-            <div className="mt-8 grid max-w-[620px] gap-y-5 sm:grid-cols-3 sm:gap-x-0">
+            <div className="mt-8 grid max-w-[620px] gap-y-5 sm:mt-11 sm:grid-cols-3 sm:gap-x-0 sm:gap-y-6">
               {AGENT_CHIPS.map((c, i) => (
                 <div
                   key={c.title}
-                  className={`flex items-start gap-2.5 ${i === 0 ? "sm:pr-5" : "sm:border-l sm:px-5"}`}
+                  className={`flex items-start gap-3 ${i === 0 ? "sm:pr-6" : "sm:border-l sm:pl-6 sm:pr-6"}`}
                   style={{ borderColor: "rgba(59,59,60,0.12)" }}
                 >
                   <span className="mt-[1px] shrink-0" style={{ color: CORAL }}>
-                    <Line name={c.icon} size={19} />
+                    <Line name={c.icon} size={20} />
                   </span>
                   <span className="min-w-0">
+                    {/* whitespace-nowrap holds the promise the copy makes: each
+                        title is one line, so the three bodies start on the same
+                        baseline and the row reads as one row. */}
                     <span
-                      className="block text-[13px] leading-snug"
+                      className="block whitespace-nowrap text-[14px] leading-snug"
                       style={{ fontFamily: HAND, fontWeight: 700 }}
                     >
                       {c.title}
                     </span>
-                    <span className="mt-1 block text-[11.5px] font-light leading-snug text-black/50">
+                    <span className="mt-1.5 block text-[12.5px] font-light leading-[1.45] text-black/50">
                       {c.body}
                     </span>
                   </span>
@@ -1512,44 +1530,6 @@ function Questions({ deck, show }: { deck: Deck; show: boolean }) {
 
 /** The arrow on the Back and Next controls. Its own component only so the two
  *  buttons cannot drift apart in weight or size. */
-/** Three rules, shortening. A list, not a hamburger: this opens a contents
- *  page rather than a site menu, and the difference is worth one glyph. */
-function ContentsIcon() {
-  return (
-    <svg
-      width={14}
-      height={14}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      aria-hidden
-    >
-      <path d="M4 6h16M4 12h11M4 18h7" />
-    </svg>
-  );
-}
-
-function Chevron({ dir }: { dir: "left" | "right" }) {
-  return (
-    <svg
-      width={15}
-      height={15}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-      style={dir === "left" ? { transform: "scaleX(-1)" } : undefined}
-    >
-      <path d="M9 5l7 7-7 7" />
-    </svg>
-  );
-}
-
 /** "Tuesday 19 August at 2:00pm" → "Tuesday". Used only to sign off warmly;
  *  if the string isn't shaped like that it still reads as a word, not a bug.
  *  Case is left alone — the day is a proper noun and "see you tuesday" reads
@@ -1799,7 +1779,7 @@ export default function PresentDeck({
      section that loses every one of its slides to a missing-data rule simply
      never appears - no empty chapter, and nothing to keep in step by hand. */
   const chapters = useMemo(() => {
-    const out: Chapter[] = [];
+    const out: { id: SectionId; label: string; from: number; count: number }[] = [];
     slides.forEach((s, i) => {
       const last = out[out.length - 1];
       if (last && last.id === s.section) last.count += 1;
@@ -1809,20 +1789,6 @@ export default function PresentDeck({
   }, [slides]);
   const chapter = chapters.find((c) => at >= c.from && at < c.from + c.count);
 
-  /**
-   * WHETHER THIS DECK GETS A CONTENTS AT ALL.
-   *
-   * The pre-appraisal is five slides — who is coming, when, and why us. A
-   * contents column down the side of five slides is furniture: it takes a
-   * quarter of the screen to tell somebody there are five things, and it
-   * would put "Getting started" in a list on a deck whose whole point is that
-   * nothing is being asked for yet. The two long decks are thirty-one and
-   * thirty-three, which is where a corridor of arrow buttons stops being
-   * navigable, so the threshold sits between the two rather than at a number
-   * anybody has to remember.
-   */
-  const hasContents = slides.length >= 10;
-  const [sheet, setSheet] = useState(false);
 
   /**
    * THE TRANSITION SEAM. Nothing renders here yet, and that is deliberate.
@@ -1869,12 +1835,7 @@ export default function PresentDeck({
        to keep in step. See themeVars in present-kit. */
     <DeckStyleCtx.Provider value={asStyle(deck.style)}>
     <div
-      /* The inset for the contents rail lives on the frame rather than on each
-         slide: the scroller is w-full of this box, so every one of the
-         thirty-three cells narrows by exactly the rail's width and the snap
-         still lands on a whole slide. Doing it per slide would have meant
-         thirty-three chances to miss one. */
-      className={`relative h-[100dvh] w-full overflow-hidden ${hasContents ? CONTENTS_INSET : ""}`}
+      className="relative h-[100dvh] w-full overflow-hidden"
       style={themeVars(asStyle(deck.style))}
       data-present-style={asStyle(deck.style)}
     >
@@ -1927,20 +1888,6 @@ export default function PresentDeck({
         ))}
       </div>
 
-      {hasContents && (
-        <PresentContents
-          slides={slides}
-          chapters={chapters}
-          at={at}
-          go={go}
-          tint={tint}
-          onDark={onDark}
-          accent={accent}
-          sheet={sheet}
-          onSheet={setSheet}
-        />
-      )}
-
       {/* ── The chapter rail ──
           There is no "1 / 29" here and there deliberately never will be again.
           James, 4 Sep: it "is making me depressed" - which is the correct
@@ -1961,14 +1908,9 @@ export default function PresentDeck({
           closed. */}
       {/* ── The mark, top left ──
           James, 7 Sep. One logo, in one place, for the whole deck rather than
-          reprinted per slide. Above 1440 the contents rail carries it at the
-          head of its own column and this one stands down, so there is never
-          two of them. */}
-      <div
-        className={`pointer-events-none fixed left-0 top-0 z-30 px-6 pt-6 sm:px-10 sm:pt-7 lg:px-14 ${
-          hasContents ? CONTENTS_OFF : ""
-        }`}
-      >
+          reprinted on every slide. With the contents column gone this and the
+          position indicator opposite it are the only chrome the deck has. */}
+      <div className="pointer-events-none fixed left-0 top-0 z-30 px-6 pt-6 sm:px-10 sm:pt-7 lg:px-14">
         <Mark className="h-9 sm:h-10" />
       </div>
 
@@ -2023,65 +1965,6 @@ export default function PresentDeck({
         </div>
       </div>
 
-      {/* ── The navigation bar ──
-          James, 7 Sep: "just the forward and back arrows". So that is all it
-          holds. The brand went to the top left, above the contents, and the
-          slide title went to the top right as the part's name — both were
-          saying, at the foot of the page, things that belong at the head of it.
-
-          THE BAR ITSELF STAYS, with its own ground and hairline, even though
-          it now carries two round buttons. It is what guarantees nothing on a
-          dense slide prints under them: seven slides are taller than a laptop
-          window, and they scroll up to a solid edge rather than fading out
-          behind a floating control. */}
-      <div
-        className={`fixed inset-x-0 bottom-0 flex items-center justify-end gap-2.5 px-6 pb-5 pt-4 sm:px-10 lg:px-16 ${
-          hasContents ? CONTENTS_LEFT : ""
-        }`}
-        style={{
-          background: tint,
-          borderTop: `1px solid ${onDark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.07)"}`,
-        }}
-      >
-        {/* Contents, only where the rail is not. Above 1440 the whole list is
-            down the left and this would be a second door to the same room;
-            below it, this is the ONLY way in, and a deck whose contents exist
-            on a desktop and nowhere else is worse than one with none. */}
-        {hasContents && (
-          <button
-            onClick={() => setSheet(true)}
-            aria-label="Contents"
-            className={`flex h-11 w-11 items-center justify-center rounded-full border transition-opacity ${CONTENTS_OFF}`}
-            style={{
-              borderColor: onDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.15)",
-              color: onDark ? "#ffffff" : INK,
-            }}
-          >
-            <ContentsIcon />
-          </button>
-        )}
-        <button
-          onClick={() => go(at - 1)}
-          disabled={at === 0}
-          aria-label="Back"
-          className="flex h-11 w-11 items-center justify-center rounded-full border transition-opacity disabled:opacity-30"
-          style={{
-            borderColor: onDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.15)",
-            color: onDark ? "#ffffff" : INK,
-          }}
-        >
-          <Chevron dir="left" />
-        </button>
-        <button
-          onClick={() => go(at + 1)}
-          disabled={at === slides.length - 1}
-          aria-label="Next"
-          className="flex h-11 w-11 items-center justify-center rounded-full transition-opacity disabled:opacity-30"
-          style={{ background: onDark ? "#ffffff" : INK, color: onDark ? accent : "#ffffff" }}
-        >
-          <Chevron dir="right" />
-        </button>
-      </div>
     </div>
     </DeckStyleCtx.Provider>
   );

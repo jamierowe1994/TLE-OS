@@ -404,8 +404,14 @@ export const WHY_TLE: { title: string; body: string }[] = [
  * statistics nobody can stand behind.
  */
 export const AGENT_CHIPS: { icon: "pin" | "chat" | "heart"; title: string; body: string }[] = [
+  /* ONE LINE EACH. James, 7 Sep: "just call it Straight advice rather than
+     that, so it's all over one line, so everything matches up in terms of
+     spacing." "Straight talking advice" wrapped to two lines while the other
+     two sat on one, which pushed its body copy down and left the row of three
+     ragged - the one thing a row of three must not be. The bodies are held to
+     the same length for the same reason. */
   { icon: "pin", title: "Local expert", body: "In-depth knowledge of your area" },
-  { icon: "chat", title: "Straight talking advice", body: "Honest, clear guidance at every step" },
+  { icon: "chat", title: "Straight advice", body: "Honest guidance at every step" },
   { icon: "heart", title: "Here to help", body: "Focused on you and your goals" },
 ];
 

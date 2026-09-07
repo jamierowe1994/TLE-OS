@@ -187,7 +187,7 @@ function Blocks({
 export function Agenda({ deck, show }: { deck: Deck; show: boolean }) {
   return (
     <CreamSlide id="agenda">
-      <div className="mx-auto grid w-full max-w-[1340px] items-center gap-10 lg:grid-cols-[0.92fr_1.08fr] lg:gap-16">
+      <div className="mx-auto grid w-full max-w-[1340px] items-center gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-16">
         <div className="max-w-[520px]">
           <HandHead eyebrow="What we&rsquo;ll cover" show={show} lines={2}>
             Here&rsquo;s what
@@ -205,37 +205,48 @@ export function Agenda({ deck, show }: { deck: Deck; show: boolean }) {
 
           {deck.property.address && (
             <Rise show={show} i={3}>
-              <p className="mt-4 text-[12.5px] font-light text-black/45">
+              <p className="mt-5 text-[13px] font-light text-black/45">
                 For <span className="font-normal text-black/70">{deck.property.address}</span>
               </p>
             </Rise>
           )}
         </div>
 
-        {/* The list. Hairlines rather than cards: seven boxes would read as
-            seven things to get through, and the point is that it is one
-            journey with seven stops. */}
+        {/* The list. Hairlines rather than cards: four boxes would read as four
+            things to get through, and the point is that it is one journey with
+            four stops.
+
+            ── Set BIG, and given room ────────────────────────────────────────
+            James, 7 Sep: this slide "looks a bit thin and very small... we
+            might want to pad this out or make some things bigger." He is
+            right, and the reason is structural rather than a matter of taste.
+            This is the only slide whose whole job is a list of four things, so
+            the list has to carry the page on its own - at 17px in a column
+            half the width of the screen it read as a footnote to the headline
+            beside it. The numbers, the titles and the room between the rows
+            all go up together; changing one of the three would just move the
+            imbalance somewhere else. */}
         <ol className="lg:pt-2">
           {AGENDA.map((a, n) => (
             <Rise key={a.title} show={show} i={2 + Math.floor(n / 2)}>
               <li
-                className="flex gap-4 py-3.5 sm:gap-5"
+                className="flex gap-5 py-5 sm:gap-7 sm:py-8"
                 style={{ borderTop: n === 0 ? "none" : "1px solid rgba(0,0,0,0.08)" }}
               >
                 <span
-                  className="mt-[3px] shrink-0 text-[15px] leading-none tabular-nums"
+                  className="mt-[6px] shrink-0 text-[19px] leading-none tabular-nums sm:text-[22px]"
                   style={{ fontFamily: HAND, fontWeight: 700, color: CORAL }}
                 >
                   {String(n + 1).padStart(2, "0")}
                 </span>
                 <span className="min-w-0">
                   <span
-                    className="block text-[16px] leading-snug sm:text-[17px]"
+                    className="block text-[19px] leading-snug sm:text-[24px]"
                     style={{ fontFamily: HAND, fontWeight: 700 }}
                   >
                     {a.title}
                   </span>
-                  <span className="mt-1 block text-[13px] font-light leading-[1.5] text-black/50">
+                  <span className="mt-2 block text-[14px] font-light leading-[1.55] text-black/50 sm:text-[15px]">
                     {a.body}
                   </span>
                 </span>

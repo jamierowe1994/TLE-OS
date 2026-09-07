@@ -362,8 +362,12 @@ export function Slide({
       // to say so. A slide that quietly loses half its content is worse than
       // one that scrolls.
       //
-      // pb-28 keeps the last line clear of the bottom bar, which is now a
-      // solid strip on every width rather than a fade on phones only.
+      // THE PADDING IS SYMMETRICAL NOW, and that is the whole point of it.
+      // pb-28 existed to clear a bottom bar that no longer exists (James,
+      // 7 Sep: "get rid of the navigation bar"), and with `justify-center`
+      // above it an unequal pair does not centre a slide, it sits it high.
+      // Top and bottom match, so the content is centred in the viewport and
+      // the mark in the corner simply overlays the top of that space.
       //
       // The old `lg:pr-48` is gone with the contents rail it was reserving
       // room for. It was measured against a rail that reached 188px in; there
@@ -371,7 +375,7 @@ export function Slide({
       // the reserve back would leave every slide's measure short of the page
       // for no reason. pt-20 replaces pt-16 for the same trade at the top:
       // the counter now sits up there.
-      className="relative flex min-h-full w-full shrink-0 flex-col justify-center px-6 pb-28 pt-20 sm:px-10 lg:px-20 lg:pb-24"
+      className="relative flex min-h-full w-full shrink-0 flex-col justify-center px-6 pb-20 pt-20 sm:px-10 lg:px-20"
       style={{ background: dark ? RED : "#ffffff", color: dark ? "#ffffff" : INK }}
     >
       {children}
@@ -537,7 +541,7 @@ export function CreamSlide({
   return (
     <section
       data-slide={id}
-      className="relative flex min-h-full w-full shrink-0 flex-col justify-center px-6 pb-28 pt-20 sm:px-10 lg:px-14 lg:pb-24 lg:pt-14"
+      className="relative flex min-h-full w-full shrink-0 flex-col justify-center px-6 pb-20 pt-20 sm:px-10 lg:px-14"
       style={{ background: CREAM, color: INK }}
     >
       {children}
