@@ -5,6 +5,11 @@ import { managedBookFor } from "@/lib/managed-book-cache";
 import { peopleForProperty, type Person } from "@/lib/rex-property-people";
 
 /**
+ * Who is on a home: the landlord, every sitting tenant, where it is, and
+ * any access notes on file. Used by Report a repair, Plan a job and the
+ * Compliance drawer - all three need the same answer, so it lives here
+ * rather than under any one of them.
+ *
  * What the OS already knows about a home, for the report form: the
  * landlord's name, email and mobile, every sitting tenant with their name,
  * number and email, where it is, and any access notes on file.

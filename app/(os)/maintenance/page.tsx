@@ -356,7 +356,7 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
     if (!picked) { setFilled(null); return; }
     let live = true;
     setFilled([]);
-    fetch(`/api/works-orders/property?id=${encodeURIComponent(picked.id)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => {
+    fetch(`/api/property/people?id=${encodeURIComponent(picked.id)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => {
       if (!live || !j.ok) return;
       const got: string[] = [];
       const list = (Array.isArray(j.tenants) ? j.tenants : []) as { name: string; email: string; phone: string }[];

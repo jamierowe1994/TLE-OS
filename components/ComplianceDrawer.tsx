@@ -21,6 +21,34 @@ import { useDocumentOpen } from "@/lib/doc-sheet";
  * open the certificate and the sheet offers Save and Send.
  */
 
+type Party = { name: string; email: string; phone: string };
+
+/**
+ * A certificate, in the words Plan a job uses for its category.
+ *
+ * The two lists were written apart - Compliance names duties, Maintenance
+ * names jobs you book - so the mapping is spelled out rather than guessed by
+ * string-matching, which would quietly stop working when either list is
+ * edited.
+ */
+const BOOK_AS: Record<CertKey, string> = {
+  gas: "Gas safety (CP12)",
+  eicr: "EICR",
+  epc: "EPC",
+  licence: "HMO licence inspection",
+  fire: "Fire risk assessment",
+  pat: "PAT test",
+  alarms: "Smoke & CO alarms",
+  legionella: "Legionella risk assessment",
+};
+
+/** The day a certificate runs out, as a date Plan a job can read. */
+function dueDate(expires: number | null | undefined): string {
+  const d = new Date();
+  d.setDate(d.getDate() + (expires ?? 0));
+  return d.toISOString().slice(0, 10);
+}
+
 function certLine(expires: number | null): string {
   if (expires == null) return "No record";
   if (expires < 0) return `Expired ${Math.abs(expires)}d ago`;
@@ -41,6 +69,16 @@ export default function ComplianceDrawer({
 }) {
   const [shown, setShown] = useState(false);
   const [tab, setTab] = useState<string>("house");
+  /**
+   * Who is actually on the home.
+   *
+   * The compliance book is built from REX's listing projection, which
+   * carries neither the landlord's name nor the tenant's - so this drawer
+   * has been saying "landlord not on record" about every home on the book.
+   * The same lookup Report a repair uses answers it, and an engineer coming
+   * out for a certificate needs the tenant's number anyway.
+   */
+  const [people, setPeople] = useState<{ landlord: Party | null; tenants: Party[] } | null>(null);
   const docOpen = useDocumentOpen();
 
   const houses = useMemo(() => housesIn(book, R), [book]);
@@ -57,6 +95,20 @@ export default function ComplianceDrawer({
     const opened = house ? house.rooms.find((r) => r.id === property.id || (house.kind === "rooms" && roomLabel(r).toLowerCase() === roomLabel(property).toLowerCase())) : null;
     setTab(opened && house?.house?.id !== property.id ? opened.id : "house");
   }, [property, house]);
+  /* Keyed on the open tab, so a room in a shared house is asked about on
+     its own rather than inheriting the house's people. */
+  const askAbout = property ? (tab !== "house" ? tab : property.id) : null;
+  useEffect(() => {
+    if (!askAbout) { setPeople(null); return; }
+    let live = true;
+    setPeople(null);
+    fetch(`/api/property/people?id=${encodeURIComponent(askAbout)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (live && j.ok) setPeople({ landlord: j.landlord ?? null, tenants: Array.isArray(j.tenants) ? j.tenants : [] }); })
+      .catch(() => { /* the drawer still works without them */ });
+    return () => { live = false; };
+  }, [askAbout]);
+
   useEffect(() => {
     if (!property) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -75,7 +127,7 @@ export default function ComplianceDrawer({
     ? lets
       ? `${house.locality} · ${house.rooms.length} lets on record in REX`
       : `${house.locality} · shared house · ${house.rooms.length} ${house.rooms.length === 1 ? "room" : "rooms"}`
-    : `${p.locality} · landlord ${p.landlord || "not on record"}${p.tenant ? ` · ${p.tenant} in situ` : p.tenant === null ? " · vacant" : ""}`;
+    : p.locality;
 
   /* The worst of every room, for the house tab. */
   const worstOf = (k: CertKey) => {
@@ -130,6 +182,51 @@ export default function ComplianceDrawer({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          {/* Who an engineer has to deal with. Read from REX when the drawer
+              opens, because the compliance book carries neither. */}
+          <section className="mb-4 rounded-2xl border border-line/80 bg-panel p-4">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Who&apos;s there</p>
+            {people === null ? (
+              <p className="mt-2 text-[12px] text-muted">Reading the property…</p>
+            ) : !people.landlord && people.tenants.length === 0 ? (
+              <p className="mt-2 text-[12px] text-muted">Nobody on record in REX for this home.</p>
+            ) : (
+              <div className="mt-2 grid gap-x-6 gap-y-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Landlord</p>
+                  {people.landlord ? (
+                    <p className="mt-0.5 text-[12.5px]">
+                      {people.landlord.name}
+                      {people.landlord.phone && <span className="block text-[11.5px] text-muted">{people.landlord.phone}</span>}
+                      {people.landlord.email && <span className="block truncate text-[11.5px] text-muted" title={people.landlord.email}>{people.landlord.email}</span>}
+                    </p>
+                  ) : (
+                    <p className="mt-0.5 text-[12px] text-muted">Not on record</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
+                    {people.tenants.length > 1 ? `Tenants · ${people.tenants.length}` : "Tenant"}
+                  </p>
+                  {people.tenants.length === 0 ? (
+                    <p className="mt-0.5 text-[12px] text-muted">Vacant, or none on record</p>
+                  ) : (
+                    <ul className="mt-0.5 space-y-1.5">
+                      {people.tenants.map((t, i) => (
+                        <li key={`${t.name}-${i}`} className="text-[12.5px]">
+                          {t.name}
+                          {t.phone && <span className="block text-[11.5px] text-muted">{t.phone}</span>}
+                          {t.email && <span className="block truncate text-[11.5px] text-muted" title={t.email}>{t.email}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            )}
+            <p className="mt-3 text-[11px] text-muted">Access for a certificate visit is arranged with the tenant. Book it on a certificate below and the job opens with the home, the duty, the date and these people already filled in.</p>
+          </section>
+
           {/* Where every duty stands, at a glance. On the house tab, the
               worst across the rooms; a room reads the house's certificates. */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -147,6 +244,14 @@ export default function ComplianceDrawer({
                     <Pill tone={bad ? "accent" : "good"}>{k === "gas" && !p.hasGas ? "No gas" : certLine(cert?.expires ?? null)}</Pill>
                     {cert?.inherited && <span className="text-[10.5px] text-muted">from the house</span>}
                   </p>
+                  {bad && !(k === "gas" && !p.hasGas) && (
+                    <a
+                      href={`/maintenance?raise=planned&property=${encodeURIComponent(p.id)}&category=${encodeURIComponent(BOOK_AS[k])}&due=${dueDate(cert?.expires ?? 0)}`}
+                      className="mt-2 inline-block rounded-full border border-line/80 px-3 py-1 text-[11px] transition-colors hover:border-ink"
+                    >
+                      Book it
+                    </a>
+                  )}
                 </div>
               );
             })}
