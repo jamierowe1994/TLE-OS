@@ -1049,6 +1049,29 @@ ALTER TABLE os_scheduled_sends ADD COLUMN IF NOT EXISTS html TEXT;
 
 -- Results of slow REX/PayProp walks, so a deploy doesn't cost minutes of
 -- empty screens before the first figure appears.
+-- The viewings ledger: every diary event REX holds against a listing that
+-- the OS has read, kept (lib/rex-viewings.ts). Who came, when, who took it.
+CREATE TABLE IF NOT EXISTS os_viewings (
+  id             TEXT PRIMARY KEY,            -- rex-<calendar event id>
+  listing_id     TEXT,
+  property_id    TEXT,
+  starts_at      TIMESTAMPTZ NOT NULL,
+  ends_at        TIMESTAMPTZ,
+  mins           INTEGER NOT NULL DEFAULT 30,
+  kind           TEXT NOT NULL DEFAULT 'other',
+  title          TEXT NOT NULL DEFAULT '',
+  status         TEXT,
+  cancelled      BOOLEAN NOT NULL DEFAULT FALSE,
+  agent          TEXT,
+  contacts       JSONB NOT NULL DEFAULT '[]',
+  feedback_id    TEXT,
+  payload        JSONB NOT NULL,
+  first_seen     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_viewings_listing_idx ON os_viewings (listing_id, starts_at DESC);
+CREATE INDEX IF NOT EXISTS os_viewings_property_idx ON os_viewings (property_id, starts_at DESC);
+
 -- The lead ledger: every enquiry the OS has seen, kept (lib/lead-ledger.ts).
 CREATE TABLE IF NOT EXISTS os_leads (
   id             TEXT PRIMARY KEY,            -- rex-<lead id>

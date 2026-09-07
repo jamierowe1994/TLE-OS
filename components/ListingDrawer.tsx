@@ -220,6 +220,15 @@ export default function ListingDrawer({
         setEnquiries(mine.map((l) => ({ id: l.id, name: l.name, source: l.source, received: l.received, receivedAt: l.receivedAt, email: l.email, phone: l.phone, message: l.enquiryMessage })));
       })
       .catch(() => { if (!gone) setEnquiries([]); });
+    setViewings(null);
+    setOpenViewing(null);
+    fetch(`/api/listings/viewings?id=${encodeURIComponent(id)}${listing.propertyId ? `&property=${encodeURIComponent(String(listing.propertyId))}` : ""}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; upcoming?: LiveViewing[]; past?: LiveViewing[] }) => {
+        if (gone) return;
+        setViewings({ upcoming: j.upcoming ?? [], past: j.past ?? [] });
+      })
+      .catch(() => { if (!gone) setViewings({ upcoming: [], past: [] }); });
     fetch("/api/applications?limit=300", { cache: "no-store" })
       .then((r) => r.json())
       .then((j: { ok?: boolean; applications?: { id: string; statusLabel?: string; status?: string; listingId?: string | number; applicants?: { name?: string }[]; offerAmount?: number | null; dateReceived?: number | null }[] }) => {
@@ -268,6 +277,11 @@ export default function ListingDrawer({
      inquired about a property"). The lead book is the cached one every
      screen shares, filtered here to the listing; applications likewise. */
   const [enquiries, setEnquiries] = useState<{ id: string; name: string; source: string; received: string; receivedAt?: string; email: string; phone: string; message?: string }[] | null>(null);
+  /* The listing's diary out of REX (and kept): upcoming and past viewings,
+     who came and who took them (James, 7 Sep). */
+  type LiveViewing = { id: string; startsAt: string; endsAt: string | null; mins: number; kind: string; title: string; type: string | null; status: string | null; cancelled: boolean; agent: string | null; contacts: { id: string; name: string; email: string | null; phone: string | null; leadId?: string | null }[]; feedbackId: string | null; description: string | null };
+  const [viewings, setViewings] = useState<{ upcoming: LiveViewing[]; past: LiveViewing[] } | null>(null);
+  const [openViewing, setOpenViewing] = useState<string | null>(null);
   const [liveApps, setLiveApps] = useState<{ id: string; statusLabel: string; applicants: string; offerAmount: number | null; dateReceived: number | null }[] | null>(null);
   const [topPick, setTopPick] = useState<number | null>(null);
   /* The landlord–property–tenant link, made the moment an offer is accepted
@@ -477,9 +491,52 @@ export default function ListingDrawer({
 
   // What's already happened here, from the shared diary — same entries the
   // calendar shows, filtered to this property.
-  const pastViewings = DIARY.filter(
-    (a) => a.kind === "viewing" && a.day < 0 && a.what.includes(listing.name)
-  );
+
+  /* One diary entry, opening out to its details on a click. */
+  const viewingRow = (v: LiveViewing) => {
+    const start = new Date(v.startsAt);
+    const end = v.endsAt ? new Date(v.endsAt) : null;
+    const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    const who = v.contacts.map((c) => c.name).join(", ");
+    const open = openViewing === v.id;
+    const past = start.getTime() < Date.now();
+    return (
+      <li key={v.id} className="border-b border-line/40 last:border-0">
+        <button type="button" onClick={() => setOpenViewing(open ? null : v.id)} className="flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-box">
+          <span className="w-28 shrink-0 text-[11px] text-muted">
+            {start.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: past ? undefined : undefined })} · {hhmm(start)}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[12.5px]">{who || v.title || "Viewing"}</span>
+          <Pill tone={v.cancelled ? "neutral" : past ? (v.feedbackId ? "good" : "accent") : "good"}>
+            {v.cancelled ? "Cancelled" : past ? (v.feedbackId ? "Feedback in" : "Viewed") : v.status ?? "Booked"}
+          </Pill>
+        </button>
+        {open && (
+          <div className="mb-3 rounded-xl border border-line/70 bg-panel px-4 py-3 text-[12px]">
+            <p className="text-[13px]">
+              {v.mins} minute {v.kind === "viewing" ? "viewing" : v.kind}, {start.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}, {hhmm(start)}{end ? ` to ${hhmm(end)}` : ""}
+            </p>
+            <p className="mt-1 text-muted">
+              {v.type ?? v.title}{v.agent ? ` · taken by ${v.agent}` : ""}{v.status ? ` · ${v.status}` : ""}
+            </p>
+            {v.contacts.length > 0 && (
+              <ul className="mt-2.5 space-y-1.5">
+                {v.contacts.map((c) => (
+                  <li key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="font-semibold">{c.name}</span>
+                    {c.phone && <a href={`tel:${c.phone.replace(/\s+/g, "")}`} className="text-muted hover:text-ink">{c.phone}</a>}
+                    {c.email && <a href={`mailto:${c.email}`} className="text-muted hover:text-ink">{c.email}</a>}
+                    {c.leadId && <a href={`/leads?open=${encodeURIComponent(c.leadId)}`} className="rounded-full border border-line/80 px-2.5 py-0.5 text-[11px] hover:border-ink/40">Open the lead</a>}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {v.description && <p className="mt-2 whitespace-pre-line text-muted">{v.description}</p>}
+          </div>
+        )}
+      </li>
+    );
+  };
 
   /** The step decides what the button does, same as on a lead. */
   function fire() {
@@ -986,34 +1043,29 @@ export default function ListingDrawer({
                       </PressButton>
                     }
                   >
-                    {booked.length ? (
-                      <ul className="space-y-2.5">
+                    {(viewings?.upcoming.length ?? 0) + booked.length > 0 ? (
+                      <ul>
+                        {(viewings?.upcoming ?? []).map(viewingRow)}
                         {booked.map((v, i) => (
-                          <li key={i} className="flex items-center gap-3 border-b border-line/40 pb-2.5 last:border-0 last:pb-0">
+                          <li key={`b${i}`} className="flex items-center gap-3 border-b border-line/40 py-2.5 last:border-0">
                             <span className="figures w-28 shrink-0 text-[12px] text-accent-dark">{v.when}</span>
                             <span className="min-w-0 flex-1 truncate text-[12.5px]">{v.who}</span>
-                            <Pill tone="neutral">Booked</Pill>
+                            <Pill tone="neutral">Booked here</Pill>
                           </li>
                         ))}
                       </ul>
+                    ) : viewings === null ? (
+                      <p className="py-4 text-center text-[12px] text-muted">Reading the diary…</p>
                     ) : (
                       <p className="py-4 text-center text-[12px] text-muted">Nothing in the diary yet.</p>
                     )}
                   </Card>
 
-                  <Card title="Past viewings" icon="clock">
-                    {pastViewings.length ? (
-                      <ul className="space-y-2.5">
-                        {pastViewings.map((v) => (
-                          <li key={v.id} className="flex items-center gap-3 border-b border-line/40 pb-2.5 last:border-0 last:pb-0">
-                            <span className="w-28 shrink-0 text-[11px] text-muted">
-                              {v.day === -1 ? "Yesterday" : `${-v.day} days ago`} · {v.start}
-                            </span>
-                            <span className="min-w-0 flex-1 truncate text-[12.5px]">{v.who}</span>
-                            <Pill tone="accent">Feedback due</Pill>
-                          </li>
-                        ))}
-                      </ul>
+                  <Card title={viewings?.past.length ? `Past viewings · ${viewings.past.length}` : "Past viewings"} icon="clock">
+                    {viewings?.past.length ? (
+                      <ul>{viewings.past.slice(0, 20).map(viewingRow)}{viewings.past.length > 20 && <li className="pt-2 text-[11px] text-muted">{viewings.past.length - 20} earlier, kept on file.</li>}</ul>
+                    ) : viewings === null ? (
+                      <p className="py-4 text-center text-[12px] text-muted">Reading the diary…</p>
                     ) : (
                       <p className="py-4 text-center text-[12px] text-muted">
                         Nobody&apos;s been through the door yet.
