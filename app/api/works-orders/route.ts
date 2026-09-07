@@ -15,14 +15,15 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const { actor } = await whoIs(req);
+  const { actor, subject } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: true, live: false, reason: "No database on this environment.", orders: [], contractors: [], summary: null });
   const kindRaw = req.nextUrl.searchParams.get("kind");
   const kind = KINDS.includes(kindRaw as Kind) ? (kindRaw as Kind) : null;
   const open = req.nextUrl.searchParams.get("open") === "1";
   const propertyId = req.nextUrl.searchParams.get("property");
-  const [orders, contractors, summary] = await Promise.all([listOrders({ kind, open, propertyId }), listContractors(), worksSummary()]);
+  const me = subject ?? actor;
+  const [orders, contractors, summary] = await Promise.all([listOrders({ kind, open, propertyId }), listContractors(me.id), worksSummary()]);
   return NextResponse.json({ ok: true, live: true, orders, contractors, summary });
 }
 

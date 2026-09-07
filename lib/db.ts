@@ -347,6 +347,15 @@ CREATE TABLE IF NOT EXISTS os_contractors (
   created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- Since 7 Sep 2026 a contractor belongs to somebody (owner_id) or to the
+-- company (NULL): each agent keeps their own book of trades beside the
+-- corporate ones everyone can use.
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS owner_id     TEXT;
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS contact      TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS website      TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS address      TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS created_by   TEXT NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS os_contractors_owner ON os_contractors (owner_id);
 CREATE SEQUENCE IF NOT EXISTS os_works_orders_ref START 1001;
 CREATE TABLE IF NOT EXISTS os_works_orders (
   id               TEXT PRIMARY KEY,

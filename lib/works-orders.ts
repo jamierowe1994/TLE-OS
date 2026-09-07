@@ -90,14 +90,33 @@ export const DEFAULT_AUTHORITY_PENCE = 15000;
 
 export interface Contractor {
   id: string;
+  /** The firm, or the person if they trade under their own name. */
   name: string;
+  /** Who you ring there. */
+  contact: string;
   trade: string;
   phone: string;
   email: string;
+  website: string;
+  address: string;
   /** Gas Safe number, NICEIC number, whatever the trade carries. */
   registration: string;
   notes: string;
   active: boolean;
+  /** Whose book they are in. Null is the company's: everyone can use them. */
+  ownerId: string | null;
+  createdBy: string;
+}
+
+/** What a contractor has done for us, off the jobs they were on. */
+export interface ContractorStats {
+  jobs: number;
+  open: number;
+  quotedPence: number;
+  invoicedPence: number;
+  paidPence: number;
+  outstandingPence: number;
+  lastJobAt: string | null;
 }
 
 export interface WorksOrder {
@@ -211,24 +230,61 @@ const COLS = `id, ref, kind, status, property_id, property_name, locality, landl
 /* ── contractors ────────────────────────────────────────────────────────── */
 
 function toContractor(r: Row): Contractor {
-  return { id: s(r.id), name: s(r.name), trade: s(r.trade), phone: s(r.phone), email: s(r.email), registration: s(r.registration), notes: s(r.notes), active: r.active !== false };
+  return {
+    id: s(r.id), name: s(r.name), contact: s(r.contact), trade: s(r.trade), phone: s(r.phone), email: s(r.email), website: s(r.website), address: s(r.address),
+    registration: s(r.registration), notes: s(r.notes), active: r.active !== false, ownerId: r.owner_id ? s(r.owner_id) : null, createdBy: s(r.created_by),
+  };
 }
 
-export async function listContractors(): Promise<Contractor[]> {
+/** The company's contractors and this person's own. Nobody else's. */
+export async function listContractors(forUserId?: string | null): Promise<Contractor[]> {
   if (!hasDb()) return [];
-  return (await q<Row>(`SELECT * FROM os_contractors ORDER BY active DESC, trade, name`)).map(toContractor);
+  return (
+    await q<Row>(`SELECT * FROM os_contractors WHERE owner_id IS NULL OR owner_id = $1 ORDER BY active DESC, (owner_id IS NULL), trade, name`, [forUserId ?? ""])
+  ).map(toContractor);
 }
 
-export async function saveContractor(input: Partial<Contractor> & { name: string; trade: string }): Promise<Contractor> {
+export async function getContractor(id: string): Promise<Contractor | null> {
+  if (!hasDb()) return null;
+  const [r] = await q<Row>(`SELECT * FROM os_contractors WHERE id = $1`, [id]);
+  return r ? toContractor(r) : null;
+}
+
+export async function saveContractor(input: Partial<Contractor> & { name: string; trade: string }, by: string): Promise<Contractor> {
   const id = input.id || uid();
   const [r] = await q<Row>(
-    `INSERT INTO os_contractors (id, name, trade, phone, email, registration, notes, active)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-     ON CONFLICT (id) DO UPDATE SET name = $2, trade = $3, phone = $4, email = $5, registration = $6, notes = $7, active = $8, updated_at = NOW()
+    `INSERT INTO os_contractors (id, name, contact, trade, phone, email, website, address, registration, notes, active, owner_id, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+     ON CONFLICT (id) DO UPDATE SET name = $2, contact = $3, trade = $4, phone = $5, email = $6, website = $7, address = $8, registration = $9, notes = $10, active = $11, owner_id = $12, updated_at = NOW()
      RETURNING *`,
-    [id, input.name.trim(), input.trade.trim(), (input.phone ?? "").trim(), (input.email ?? "").trim(), (input.registration ?? "").trim(), (input.notes ?? "").trim(), input.active !== false]
+    [
+      id, input.name.trim(), (input.contact ?? "").trim(), input.trade.trim(), (input.phone ?? "").trim(), (input.email ?? "").trim().toLowerCase(),
+      (input.website ?? "").trim(), (input.address ?? "").trim(), (input.registration ?? "").trim(), (input.notes ?? "").trim(), input.active !== false,
+      input.ownerId ?? null, by,
+    ]
   );
   return toContractor(r);
+}
+
+/** Their record with us: the jobs, and the money through them. */
+export async function contractorStats(id: string): Promise<ContractorStats> {
+  const empty: ContractorStats = { jobs: 0, open: 0, quotedPence: 0, invoicedPence: 0, paidPence: 0, outstandingPence: 0, lastJobAt: null };
+  if (!hasDb()) return empty;
+  const [r] = await q<Row>(
+    `SELECT count(*) AS jobs,
+            count(*) FILTER (WHERE status IN ('reported','approval','approved','scheduled')) AS open,
+            coalesce(sum(quote_pence), 0) AS quoted,
+            coalesce(sum(invoice_pence), 0) AS invoiced,
+            coalesce(sum(invoice_pence) FILTER (WHERE status = 'paid'), 0) AS paid,
+            coalesce(sum(invoice_pence) FILTER (WHERE status = 'invoiced'), 0) AS outstanding,
+            max(created_at) AS last
+       FROM os_works_orders WHERE contractor_id = $1`,
+    [id]
+  );
+  return {
+    jobs: Number(r?.jobs ?? 0), open: Number(r?.open ?? 0), quotedPence: Number(r?.quoted ?? 0), invoicedPence: Number(r?.invoiced ?? 0),
+    paidPence: Number(r?.paid ?? 0), outstandingPence: Number(r?.outstanding ?? 0), lastJobAt: iso(r?.last),
+  };
 }
 
 /* ── orders ─────────────────────────────────────────────────────────────── */

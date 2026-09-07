@@ -55,7 +55,17 @@ export const BACK: NavItem[] = [
   { href: "/compliance", label: "Compliance", icon: "shield" },
   /* Works orders: repairs and planned jobs on the managed book, reported
      through paid. Next to Compliance because a gas safety is both. */
-  { href: "/maintenance", label: "Maintenance", icon: "setting" },
+  {
+    href: "/maintenance",
+    label: "Maintenance",
+    icon: "setting",
+    /* Two jobs in one room (James, 7 Sep 2026, "a bit like we have with
+       leads"): the jobs themselves, and the book of people who do them. */
+    children: [
+      { href: "/maintenance?section=jobs", label: "Jobs" },
+      { href: "/maintenance?section=contractors", label: "Contractors" },
+    ],
+  },
   /* Back office rather than Marketing: this is the audit of what already goes
      out under our name, not a place to write anything new. */
   { href: "/emails", label: "Emails", icon: "mail" },

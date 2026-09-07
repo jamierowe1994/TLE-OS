@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -68,7 +68,16 @@ type Property = { id: string; name: string; locality: string; landlord?: string;
 
 export default function Maintenance() {
   const router = useRouter();
+  const params = useSearchParams();
+  /* The rail's two children: Jobs (repairs and planned, with the invoices
+     beside them) and Contractors. The pills row narrows within Jobs. */
+  const rail = params.get("section") === "contractors" ? "contractors" : "jobs";
   const [section, setSection] = useState<Kind | "contractors" | "invoices">("repair");
+  useEffect(() => {
+    if (rail === "contractors") setSection("contractors");
+    else if (params.get("section") === "invoices") setSection("invoices");
+    else setSection((cur) => (cur === "contractors" ? "repair" : cur));
+  }, [rail, params]);
   const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; live: boolean; reason?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
@@ -91,7 +100,6 @@ export default function Maintenance() {
       if (raise === "repair" || raise === "planned") { setSection(raise); setRaising(raise); }
       const open = sp.get("open");
       if (open) setOpenId(open);
-      if (sp.get("section") === "invoices") setSection("invoices");
     } catch { /* fine */ }
   }, []);
 
@@ -113,7 +121,11 @@ export default function Maintenance() {
     <>
       <PageHeader
         title="Maintenance"
-        blurb="Every job on the managed book, reported through paid. Repairs run on an urgency; planned jobs like a gas safety run on a date. Nothing here is a note-to-self: a job carries its contractor, its quote, its invoice and who said yes."
+        blurb={
+          rail === "contractors"
+            ? "The people who do the work. Your own book of trades beside the company's, each with a profile, their jobs and what they are owed."
+            : "Every job on the managed book, reported through paid. Repairs run on an urgency; planned jobs like a gas safety run on a date. Nothing here is a note-to-self: a job carries its contractor, its quote, its invoice and who said yes."
+        }
         illustration="/illustrations/notioly/home-caring.svg"
         lineBreak="dip"
         searchValue={q}
@@ -158,10 +170,9 @@ export default function Maintenance() {
           [
             ["repair", "Repairs", s?.byKind.repair],
             ["planned", "Planned maintenance", s?.byKind.planned],
-            ["contractors", "Contractors", data?.contractors.length],
             ["invoices", "Invoices", undefined],
           ] as const
-        ).map(([key, label, n]) => (
+        ).filter(() => rail === "jobs").map(([key, label, n]) => (
           <button
             key={key}
             type="button"
@@ -185,7 +196,7 @@ export default function Maintenance() {
       {section === "invoices" ? (
         <Invoices onOpen={(id) => router.push(`/maintenance/invoices/${id}`)} />
       ) : section === "contractors" ? (
-        <Contractors contractors={data?.contractors ?? []} onChange={load} />
+        <Contractors onChange={load} openJob={(id) => { router.push("/maintenance?section=jobs"); setOpenId(id); }} />
       ) : !data ? (
         <p className="mt-6 text-[12.5px] text-muted">Reading the jobs…</p>
       ) : grouped.length === 0 ? (
@@ -440,10 +451,7 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
 
           <div>
             <label className={label}>Contractor, if already known</label>
-            <select value={contractorId} onChange={(e) => setContractorId(e.target.value)} className={`mt-1 ${field}`}>
-              <option value="">Not yet</option>
-              {contractors.filter((c) => c.active).map((c) => <option key={c.id} value={c.id}>{c.name} · {c.trade}</option>)}
-            </select>
+            <ContractorPick contractors={contractors} value={contractorId} onChange={setContractorId} className={`mt-1 ${field}`} />
           </div>
           <div>
             <label className={label}>Booked for, if already booked</label>
@@ -597,13 +605,10 @@ function JobDrawer({ order, contractors, onClose, onChanged }: { order: WorksOrd
               <div className="mt-4 rounded-xl border border-line/80 bg-card p-4">
                 {act === "assign" && (
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <select value={f.contractorId ?? o.contractorId ?? ""} onChange={(e) => setF({ ...f, contractorId: e.target.value })} className={field}>
-                      <option value="">Pick a contractor</option>
-                      {contractors.filter((c) => c.active).map((c) => <option key={c.id} value={c.id}>{c.name} · {c.trade}</option>)}
-                    </select>
+                    <ContractorPick contractors={contractors} value={f.contractorId ?? o.contractorId ?? ""} onChange={(v) => setF({ ...f, contractorId: v })} className={field} />
                     <input type="datetime-local" value={f.scheduledAt ?? ""} onChange={(e) => setF({ ...f, scheduledAt: e.target.value })} className={field} />
                     <input value={f.note ?? ""} onChange={(e) => setF({ ...f, note: e.target.value })} placeholder="A line for the timeline (optional)" className={`${field} sm:col-span-2`} />
-                    {contractors.length === 0 && <p className="text-[11.5px] text-muted sm:col-span-2">No contractors yet. Add them under Contractors first.</p>}
+
                   </div>
                 )}
                 {act === "schedule" && <input type="datetime-local" value={f.scheduledAt ?? ""} onChange={(e) => setF({ ...f, scheduledAt: e.target.value })} className={field} />}
@@ -772,65 +777,247 @@ function Fact({ k, v }: { k: string; v: string }) {
   );
 }
 
-/* ── The trades book ────────────────────────────────────────────────────── */
+/* ── Picking a contractor, or adding one without leaving the job ────────── */
 
-function Contractors({ contractors, onChange }: { contractors: Contractor[]; onChange: () => void }) {
-  const [editing, setEditing] = useState<Partial<Contractor> | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const field = "w-full rounded-lg border border-line/80 bg-box px-3 py-2 text-[13px] outline-none focus:border-ink";
-
-  async function save() {
-    if (!editing?.name?.trim() || !editing.trade?.trim()) return setErr("A name and a trade.");
-    setBusy(true);
-    const r = await fetch("/api/contractors", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(editing) }).then((x) => x.json()).catch(() => null);
-    setBusy(false);
-    if (!r?.ok) return setErr(r?.error ?? "Could not save.");
-    setEditing(null);
-    setErr(null);
-    onChange();
-  }
-
+function ContractorPick({ contractors, value, onChange, className }: { contractors: Contractor[]; value: string; onChange: (id: string) => void; className: string }) {
+  const [list, setList] = useState(contractors);
+  const [adding, setAdding] = useState(false);
+  useEffect(() => setList(contractors), [contractors]);
+  const mine = list.filter((c) => c.active && c.ownerId);
+  const corp = list.filter((c) => c.active && !c.ownerId);
   return (
-    <div className="mt-4 rounded-2xl border border-line/80 bg-panel p-5">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-[15px]">The trades book</h2>
-          <p className="mt-0.5 text-[11.5px] text-muted">Who gets the works order. Gas Safe and NICEIC numbers live here, because a certificate from an unregistered engineer is not a certificate.</p>
-        </div>
-        <PressButton onClick={() => setEditing({ active: true })} className="rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-page">+ Add</PressButton>
-      </div>
-      {editing && (
-        <div className="mt-4 grid gap-3 rounded-xl border border-line/80 bg-card p-4 sm:grid-cols-3">
-          <input value={editing.name ?? ""} onChange={(e) => setEditing({ ...editing, name: e.target.value })} placeholder="Name or firm" className={field} />
-          <input value={editing.trade ?? ""} onChange={(e) => setEditing({ ...editing, trade: e.target.value })} placeholder="Trade - Gas Safe engineer, electrician…" className={field} />
-          <input value={editing.registration ?? ""} onChange={(e) => setEditing({ ...editing, registration: e.target.value })} placeholder="Gas Safe / NICEIC number" className={field} />
-          <input value={editing.phone ?? ""} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} placeholder="Phone" className={field} />
-          <input value={editing.email ?? ""} onChange={(e) => setEditing({ ...editing, email: e.target.value })} placeholder="Email" className={field} />
-          <input value={editing.notes ?? ""} onChange={(e) => setEditing({ ...editing, notes: e.target.value })} placeholder="Notes - areas, rates, hours" className={field} />
-          <label className="flex items-center gap-2 text-[12.5px]"><input type="checkbox" checked={editing.active !== false} onChange={(e) => setEditing({ ...editing, active: e.target.checked })} /> Active</label>
-          {err && <p className="text-[12px] text-accent-dark sm:col-span-2">{err}</p>}
-          <div className="flex justify-end gap-2 sm:col-span-3">
-            <button type="button" onClick={() => { setEditing(null); setErr(null); }} className="rounded-full border border-line/80 px-4 py-1.5 text-[12px] text-muted">Cancel</button>
-            <button type="button" disabled={busy} onClick={() => void save()} className="rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page">{busy ? "Saving…" : "Save"}</button>
-          </div>
+    <div>
+      <select value={adding ? "__add" : value} onChange={(e) => { if (e.target.value === "__add") setAdding(true); else onChange(e.target.value); }} className={className}>
+        <option value="">Not yet</option>
+        {mine.length > 0 && <optgroup label="Your contractors">{mine.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.trade}</option>)}</optgroup>}
+        {corp.length > 0 && <optgroup label="The company's">{corp.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.trade}</option>)}</optgroup>}
+        <option value="__add">+ Add a contractor…</option>
+      </select>
+      {adding && (
+        <div className="mt-2 rounded-xl border border-line/80 bg-card p-3">
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-muted">New contractor, in your book</p>
+          <ContractorForm
+            compact
+            initial={{}}
+            canCorporate={false}
+            onClose={() => setAdding(false)}
+            onSaved={(c) => { setList((cur) => [c, ...cur]); onChange(c.id); setAdding(false); }}
+          />
         </div>
       )}
-      {contractors.length === 0 ? (
-        <p className="mt-4 text-[12.5px] text-muted">Nobody in the book yet. Add the people you already ring.</p>
+    </div>
+  );
+}
+
+/* ── The trades book ────────────────────────────────────────────────────── */
+
+const BLANK_CONTRACTOR: Partial<Contractor> = { name: "", contact: "", trade: "", phone: "", email: "", website: "", address: "", registration: "", notes: "", active: true };
+
+/** The form, used from the book and from inside a job. */
+function ContractorForm({ initial, canCorporate, onSaved, onClose, compact = false }: { initial: Partial<Contractor>; canCorporate: boolean; onSaved: (c: Contractor) => void; onClose: () => void; compact?: boolean }) {
+  const [c, setC] = useState<Partial<Contractor> & { scope?: "mine" | "corporate" }>({ ...BLANK_CONTRACTOR, ...initial, scope: initial.id ? (initial.ownerId ? "mine" : "corporate") : "mine" });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const field = "w-full rounded-lg border border-line/80 bg-box px-3 py-2 text-[12.5px] outline-none focus:border-ink";
+  const label = "block text-[10px] font-bold uppercase tracking-wider text-muted";
+  async function save() {
+    if (!c.name?.trim() || !c.trade?.trim()) return setErr("A name and a trade, at least.");
+    setBusy(true);
+    const r = await fetch("/api/contractors", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(c) }).then((x) => x.json()).catch(() => null);
+    setBusy(false);
+    if (!r?.ok) return setErr(r?.error ?? "Could not save.");
+    onSaved(r.contractor);
+  }
+  return (
+    <div className={`grid gap-3 ${compact ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
+      <div><label className={label}>Company or name</label><input value={c.name ?? ""} onChange={(e) => setC({ ...c, name: e.target.value })} placeholder="JD Plumbing & Heating" className={`mt-1 ${field}`} /></div>
+      <div><label className={label}>Trade</label><input value={c.trade ?? ""} onChange={(e) => setC({ ...c, trade: e.target.value })} placeholder="Gas Safe engineer, electrician, handyman…" className={`mt-1 ${field}`} /></div>
+      <div><label className={label}>Who you ring</label><input value={c.contact ?? ""} onChange={(e) => setC({ ...c, contact: e.target.value })} placeholder="Contact name" className={`mt-1 ${field}`} /></div>
+      <div><label className={label}>Phone</label><input value={c.phone ?? ""} onChange={(e) => setC({ ...c, phone: e.target.value })} className={`mt-1 ${field}`} /></div>
+      <div><label className={label}>Email</label><input type="email" value={c.email ?? ""} onChange={(e) => setC({ ...c, email: e.target.value })} placeholder="Where the works orders go" className={`mt-1 ${field}`} /></div>
+      {!compact && (
+        <>
+          <div><label className={label}>Website</label><input value={c.website ?? ""} onChange={(e) => setC({ ...c, website: e.target.value })} placeholder="https://" className={`mt-1 ${field}`} /></div>
+          <div className="sm:col-span-2"><label className={label}>Address</label><input value={c.address ?? ""} onChange={(e) => setC({ ...c, address: e.target.value })} className={`mt-1 ${field}`} /></div>
+          <div><label className={label}>Registration</label><input value={c.registration ?? ""} onChange={(e) => setC({ ...c, registration: e.target.value })} placeholder="Gas Safe / NICEIC / NAPIT number" className={`mt-1 ${field}`} /></div>
+          <div className="sm:col-span-2 lg:col-span-3"><label className={label}>Notes</label><textarea value={c.notes ?? ""} onChange={(e) => setC({ ...c, notes: e.target.value })} rows={2} placeholder="Areas they cover, rates, hours, how they like to be booked" className={`mt-1 ${field}`} /></div>
+        </>
+      )}
+      <div className="flex flex-wrap items-center gap-4 sm:col-span-2 lg:col-span-3">
+        {canCorporate ? (
+          <label className="flex items-center gap-2 text-[12.5px]">
+            <input type="checkbox" checked={c.scope === "corporate"} onChange={(e) => setC({ ...c, scope: e.target.checked ? "corporate" : "mine" })} />
+            On the company shelf, for everyone
+          </label>
+        ) : (
+          <span className="text-[11.5px] text-muted">Goes in your own book.</span>
+        )}
+        <label className="flex items-center gap-2 text-[12.5px]"><input type="checkbox" checked={c.active !== false} onChange={(e) => setC({ ...c, active: e.target.checked })} /> Active</label>
+        {err && <span className="text-[12px] text-accent-dark">{err}</span>}
+        <span className="ml-auto flex gap-2">
+          <button type="button" onClick={onClose} className="rounded-full border border-line/80 px-4 py-1.5 text-[12px] text-muted">Cancel</button>
+          <button type="button" disabled={busy} onClick={() => void save()} className="rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page">{busy ? "Saving…" : "Save"}</button>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function Contractors({ onChange, openJob }: { onChange: () => void; openJob: (id: string) => void }) {
+  const [data, setData] = useState<{ contractors: Contractor[]; me: string | null; canCorporate: boolean } | null>(null);
+  const [editing, setEditing] = useState<Partial<Contractor> | null>(null);
+  const [profile, setProfile] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const load = useCallback(() => {
+    fetch("/api/contractors", { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j.ok) setData(j); else setErr(j.error ?? "Could not read the book."); }).catch(() => setErr("Could not read the book."));
+  }, []);
+  useEffect(load, [load]);
+  const all = data?.contractors ?? [];
+  const needle = q.trim().toLowerCase();
+  const match = (c: Contractor) => !needle || `${c.name} ${c.contact} ${c.trade} ${c.phone} ${c.email} ${c.notes} ${c.registration}`.toLowerCase().includes(needle);
+  const mine = all.filter((c) => c.ownerId && match(c));
+  const corporate = all.filter((c) => !c.ownerId && match(c));
+
+  const Shelf = ({ title, blurb, rows, canEdit }: { title: string; blurb: string; rows: Contractor[]; canEdit: boolean }) => (
+    <section className="rounded-2xl border border-line/80 bg-panel p-5">
+      <div className="flex items-baseline justify-between gap-3">
+        <div>
+          <h2 className="text-[15px]">{title}</h2>
+          <p className="mt-0.5 text-[11.5px] text-muted">{blurb}</p>
+        </div>
+        <span className="text-[11px] text-muted">{rows.length}</span>
+      </div>
+      {rows.length === 0 ? (
+        <p className="mt-3 text-[12.5px] text-muted">Nobody here yet.</p>
       ) : (
-        <ul className="mt-4 divide-y divide-line/50">
-          {contractors.map((c) => (
+        <ul className="mt-3 divide-y divide-line/50">
+          {rows.map((c) => (
             <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-              <div className="min-w-0">
-                <p className={`text-[13px] ${c.active ? "" : "text-muted line-through"}`}>{c.name} <span className="text-muted">· {c.trade}</span></p>
-                <p className="text-[11px] text-muted">{[c.registration, c.phone, c.email, c.notes].filter(Boolean).join(" · ")}</p>
-              </div>
-              <button type="button" onClick={() => setEditing(c)} className="text-[11.5px] text-muted underline hover:text-ink">Edit</button>
+              <button type="button" onClick={() => setProfile(c.id)} className="min-w-0 flex-1 text-left">
+                <p className={`hand text-[13.5px] ${c.active ? "" : "text-muted line-through"}`}>{c.name} <span className="font-sans text-[11px] text-muted">· {c.trade}</span></p>
+                <p className="truncate text-[11px] text-muted">{[c.contact, c.phone, c.email, c.registration].filter(Boolean).join(" · ") || "no contact details yet"}</p>
+              </button>
+              {canEdit && <button type="button" onClick={() => setEditing(c)} className="text-[11.5px] text-muted underline hover:text-ink">Edit</button>}
             </li>
           ))}
         </ul>
       )}
+    </section>
+  );
+
+  return (
+    <div className="mt-4 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the book…" className="w-full max-w-xs rounded-full border border-line/80 bg-box px-4 py-2 text-[12.5px] outline-none focus:border-ink" />
+        <PressButton onClick={() => setEditing({ ...BLANK_CONTRACTOR })} className="rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-page">+ Add a contractor</PressButton>
+      </div>
+      {err && <p className="text-[12.5px] text-accent-dark">{err}</p>}
+      {editing && data && (
+        <div className="rounded-2xl border border-line/80 bg-panel p-5">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-muted">{editing.id ? "Edit" : "New contractor"}</p>
+          <div className="mt-3">
+            <ContractorForm initial={editing} canCorporate={data.canCorporate} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); onChange(); }} />
+          </div>
+        </div>
+      )}
+      {!data ? (
+        <p className="text-[12.5px] text-muted">Reading the book…</p>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Shelf title="Your contractors" blurb="The people you ring. Yours alone - nobody else sees them." rows={mine} canEdit />
+          <Shelf title="The company's contractors" blurb="Kept by the office. Everyone can book them." rows={corporate} canEdit={data.canCorporate} />
+        </div>
+      )}
+      {profile && <ContractorProfile id={profile} onClose={() => setProfile(null)} onEdit={(c) => { setProfile(null); setEditing(c); }} openJob={openJob} canEdit={(c) => Boolean(c.ownerId) || Boolean(data?.canCorporate)} />}
+    </div>
+  );
+}
+
+/** One contractor, pulled out: who they are, what they have done for us, what is owed. */
+function ContractorProfile({ id, onClose, onEdit, openJob, canEdit }: { id: string; onClose: () => void; onEdit: (c: Contractor) => void; openJob: (id: string) => void; canEdit: (c: Contractor) => boolean }) {
+  const [d, setD] = useState<{ contractor: Contractor; stats: { jobs: number; open: number; quotedPence: number; invoicedPence: number; paidPence: number; outstandingPence: number; lastJobAt: string | null }; jobs: WorksOrder[] } | null>(null);
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setShown(true));
+    fetch(`/api/contractors?id=${encodeURIComponent(id)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j.ok) setD(j); }).catch(() => {});
+    return () => cancelAnimationFrame(t);
+  }, [id]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  const c = d?.contractor;
+  return (
+    <div className="fixed inset-0 z-[130]">
+      <button aria-label="Close" onClick={onClose} className={`absolute inset-0 cursor-default bg-ink/35 transition-opacity duration-300 ${shown ? "opacity-100" : "opacity-0"}`} />
+      <aside className={`absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-2xl bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] lg:w-[calc(100%-17rem)] ${shown ? "translate-x-0" : "translate-x-full"}`} style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}>
+        <div className="shrink-0 border-b border-line/70 px-6 pt-5">
+          <div className="flex items-start justify-between gap-3 pb-5">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted">{c ? (c.ownerId ? "Your contractor" : "Company contractor") : "Contractor"}{c && !c.active ? " · not active" : ""}</p>
+              <h2 className="mt-1 text-[20px] leading-tight">{c?.name ?? "Reading…"}</h2>
+              <p className="mt-1 text-[12px] text-muted">{c ? [c.trade, c.contact, c.registration].filter(Boolean).join(" · ") : ""}</p>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              {c && canEdit(c) && <button type="button" onClick={() => onEdit(c)} className="rounded-full border border-line/80 px-3.5 py-1.5 text-[12px]">Edit</button>}
+              <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted hover:text-ink">✕</button>
+            </div>
+          </div>
+        </div>
+        {c && d && (
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="space-y-4">
+                <section className="rounded-2xl border border-line/80 bg-panel p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted">How to reach them</p>
+                  <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-[12.5px] sm:grid-cols-3">
+                    <Fact k="Phone" v={c.phone || "—"} />
+                    <Fact k="Email" v={c.email || "—"} />
+                    <Fact k="Website" v={c.website || "—"} />
+                    <Fact k="Address" v={c.address || "—"} />
+                    <Fact k="Registration" v={c.registration || "—"} />
+                    <Fact k="Added by" v={c.createdBy || "—"} />
+                  </dl>
+                  {c.notes && <p className="mt-3 whitespace-pre-wrap text-[12.5px] leading-relaxed">{c.notes}</p>}
+                </section>
+                <section className="rounded-2xl border border-line/80 bg-panel p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Their jobs</p>
+                  {d.jobs.length === 0 ? (
+                    <p className="mt-2 text-[12.5px] text-muted">None yet. Put them on a job and it shows here.</p>
+                  ) : (
+                    <ul className="mt-2 divide-y divide-line/50">
+                      {d.jobs.map((o) => (
+                        <li key={o.id}>
+                          <button type="button" onClick={() => { onClose(); openJob(o.id); }} className="flex w-full items-center justify-between gap-3 py-2.5 text-left hover:bg-accent-soft/20">
+                            <span className="min-w-0">
+                              <span className="block truncate text-[13px]">#{o.ref} · {o.title}</span>
+                              <span className="block truncate text-[10.5px] text-muted">{o.propertyName} · {STATUS_LABEL[o.status]}</span>
+                            </span>
+                            <span className="figures shrink-0 text-[12.5px]">{o.invoicePence != null ? pounds(o.invoicePence) : o.quotePence != null ? `${pounds(o.quotePence)} quoted` : "—"}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              </div>
+              <section className="rounded-2xl border border-line/80 bg-panel p-4">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Money through them</p>
+                <dl className="mt-2 space-y-2 text-[12.5px]">
+                  <div className="flex justify-between"><dt className="text-muted">Jobs</dt><dd className="figures">{d.stats.jobs}{d.stats.open ? ` · ${d.stats.open} open` : ""}</dd></div>
+                  <div className="flex justify-between"><dt className="text-muted">Quoted</dt><dd className="figures">{pounds(d.stats.quotedPence)}</dd></div>
+                  <div className="flex justify-between"><dt className="text-muted">Invoiced</dt><dd className="figures">{pounds(d.stats.invoicedPence)}</dd></div>
+                  <div className="flex justify-between"><dt className="text-muted">Paid</dt><dd className="figures">{pounds(d.stats.paidPence)}</dd></div>
+                  <div className="flex justify-between border-t border-line/60 pt-2 font-semibold"><dt>Owed to them</dt><dd className="figures">{pounds(d.stats.outstandingPence)}</dd></div>
+                </dl>
+                <p className="mt-3 text-[11px] text-muted">Read off the jobs they were on: the quote logged, the invoice added, and what is marked paid.</p>
+              </section>
+            </div>
+          </div>
+        )}
+      </aside>
     </div>
   );
 }
