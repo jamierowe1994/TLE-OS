@@ -227,7 +227,7 @@ export const LAUNCH_ANNOUNCEMENT = {
  * The tracker's rule is that every reminder addresses BOTH — an agent must
  * never be surprised by a chase on their own file. The landlord half is written
  * here and deliberately not wired: lib/email-policy refuses any non-internal
- * address until the public Lettings Experts domain exists, so this is what it
+ * address until the public Letting Experts domain exists, so this is what it
  * WILL say, previewable now and sendable the day that domain lands.
  *
  * No deadline theatre. The band is stated as a fact — "expires in 14 days" —

@@ -132,7 +132,7 @@ export default function Frame({
           </p>
         )}
 
-        <p className="mt-4 text-center text-[11px] text-muted">The Lettings Experts</p>
+        <p className="mt-4 text-center text-[11px] text-muted">The Letting Experts</p>
       </div>
     </main>
   );

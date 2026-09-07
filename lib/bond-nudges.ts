@@ -488,7 +488,7 @@ export async function buildNudges(): Promise<{ nudges: number; matched: number }
           kind: "win_back",
           headline: `Back on the market ${w.agentBit}`,
           reason: [`We had it until ${when} (${String(d.reason ?? "withdrawn").replace(/_/g, " ")}).`, `Now ${w.agentBit}, ${w.daysBit}.`, ...sig.bits].join(" "),
-          opener: `Hi ${first}, it is The Lettings Experts. We looked after ${spoken(base.address)} until ${when} and I can see it is back on the market, ${w.daysBit}. How is it going? If it would help, we would happily take another look and tell you where the rent should sit.`,
+          opener: `Hi ${first}, it is The Letting Experts. We looked after ${spoken(base.address)} until ${when} and I can see it is back on the market, ${w.daysBit}. How is it going? If it would help, we would happily take another look and tell you where the rent should sit.`,
           detail: { listing: l, signals: sig.bits, withdrawn_reason: d.reason, lost_agency: d.lost_agency },
           score: (w.onMarket ? 90 : 70) + lift,
         });
@@ -499,7 +499,7 @@ export async function buildNudges(): Promise<{ nudges: number; matched: number }
           kind: "lost_instruction",
           headline: `Withdrawn ${monthYear(eventOn)}: ${String(d.reason).replace(/_/g, " ")}`,
           reason: `Came off our books in ${monthYear(eventOn)}${d.lost_agency && !/^\d+$/.test(String(d.lost_agency)) ? ` to ${d.lost_agency}` : ""}. Nothing seen on the market since.`,
-          opener: `Hi ${first}, it is The Lettings Experts. We had ${spoken(base.address)} until ${monthYear(eventOn)} and I wanted to check how it is being let now, and whether there is anything we can help with.`,
+          opener: `Hi ${first}, it is The Letting Experts. We had ${spoken(base.address)} until ${monthYear(eventOn)} and I wanted to check how it is being let now, and whether there is anything we can help with.`,
           detail: { withdrawn_reason: d.reason, lost_agency: d.lost_agency },
           score: 45,
         });
@@ -514,7 +514,7 @@ export async function buildNudges(): Promise<{ nudges: number; matched: number }
         kind: "former_landlord",
         headline: `We let it before; now ${w.agentBit}`,
         reason: [`We let it${eventOn ? ` in ${monthYear(eventOn)}` : ""}.`, `Now ${w.agentBit}, ${w.daysBit}.`, ...sig.bits].join(" "),
-        opener: `Hi ${first}, it is The Lettings Experts. We let ${spoken(base.address)} for you${eventOn ? ` in ${monthYear(eventOn)}` : ""} and I noticed it is on the market again, ${w.daysBit}. Would a second opinion on the rent be useful? No charge, and no obligation.`,
+        opener: `Hi ${first}, it is The Letting Experts. We let ${spoken(base.address)} for you${eventOn ? ` in ${monthYear(eventOn)}` : ""} and I noticed it is on the market again, ${w.daysBit}. Would a second opinion on the rent be useful? No charge, and no obligation.`,
         detail: { listing: l, signals: sig.bits },
         score: (w.onMarket ? 85 : 65) + lift,
       });
@@ -530,7 +530,7 @@ export async function buildNudges(): Promise<{ nudges: number; matched: number }
           kind: "appraisal_elsewhere",
           headline: `Valued by us, now ${w.agentBit}`,
           reason: [`We valued it${eventOn ? ` in ${monthYear(eventOn)}` : ""}${rentBit}.`, `Now ${w.agentBit}, ${w.daysBit}.`, ...sig.bits].join(" "),
-          opener: `Hi ${first}, it is The Lettings Experts. We came out to value ${spoken(base.address)}${eventOn ? ` in ${monthYear(eventOn)}` : ""}. I can see it is on the market now, ${w.daysBit}. How is it going? If the rent is not quite landing, we would be glad to take another look.`,
+          opener: `Hi ${first}, it is The Letting Experts. We came out to value ${spoken(base.address)}${eventOn ? ` in ${monthYear(eventOn)}` : ""}. I can see it is on the market now, ${w.daysBit}. How is it going? If the rent is not quite landing, we would be glad to take another look.`,
           detail: { listing: l, signals: sig.bits, appraised_rent: d.rent },
           score: (w.onMarket ? 85 : 60) + lift,
         });
@@ -541,7 +541,7 @@ export async function buildNudges(): Promise<{ nudges: number; matched: number }
           kind: "appraisal_anniversary",
           headline: "A year since we valued it",
           reason: `Valued ${monthYear(eventOn)}${rentBit}. Not on the market that we have seen. Rents have moved since.`,
-          opener: `Hi ${first}, it is The Lettings Experts. It is about a year since we valued ${spoken(base.address)}. Rents around you have moved since then; would an updated figure be useful? It takes ten minutes and there is no charge.`,
+          opener: `Hi ${first}, it is The Letting Experts. It is about a year since we valued ${spoken(base.address)}. Rents around you have moved since then; would an updated figure be useful? It takes ten minutes and there is no charge.`,
           detail: { appraised_rent: d.rent },
           score: 55,
         });
@@ -591,7 +591,7 @@ export async function buildNudges(): Promise<{ nudges: number; matched: number }
       our_agent: a.agent,
       headline: `Valued by us, now ${w.agentBit}`,
       reason: [`We valued it in ${monthYear(eventOn)}${a.valuation ? ` at £${a.valuation.toLocaleString("en-GB")}` : ""} (${a.stage.replace(/_/g, " ")}).`, `Now ${w.agentBit}, ${w.daysBit}.`, ...sig.bits].join(" "),
-      opener: `Hi ${first}, it is The Lettings Experts. We came out to value ${spoken(a.address)} in ${monthYear(eventOn)}. I can see it is on the market now, ${w.daysBit}. How is it going? If the rent is not quite landing, we would be glad to take another look.`,
+      opener: `Hi ${first}, it is The Letting Experts. We came out to value ${spoken(a.address)} in ${monthYear(eventOn)}. I can see it is on the market now, ${w.daysBit}. How is it going? If the rent is not quite landing, we would be glad to take another look.`,
       detail: { listing: l, signals: sig.bits, appraised_rent: a.valuation, stage: a.stage },
       score: (w.onMarket ? 85 : 60) + Math.min(10, Math.round(sig.score / 10)),
     });

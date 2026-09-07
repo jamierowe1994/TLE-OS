@@ -56,7 +56,7 @@ export interface Switch {
 export const SWITCHES: Switch[] = [
   {
     /**
-     * Email to CUSTOMERS - the public Lettings Experts sender, verified in
+     * Email to CUSTOMERS - the public Letting Experts sender, verified in
      * Resend on 2 Sep 2026. The landlord sign-in link is the first thing to
      * go out on it; the appraisal, compliance and invitation emails follow as
      * they are wired.
@@ -70,7 +70,7 @@ export const SWITCHES: Switch[] = [
      */
     key: "customer_email",
     label: "Email to landlords and tenants",
-    what: "Lets the OS send email to customers on the public Lettings Experts sender: the landlord sign-in link today, the appraisal and compliance emails as they are wired.",
+    what: "Lets the OS send email to customers on the public Letting Experts sender: the landlord sign-in link today, the appraisal and compliance emails as they are wired.",
     who: "LANDLORDS AND TENANTS, from the address in RESEND_FROM_PUBLIC. Staff email is not affected.",
     confirm: "EMAIL CUSTOMERS",
     legacyEnv: "RESEND_ALLOW_SEND",

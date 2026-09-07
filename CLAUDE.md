@@ -1,6 +1,6 @@
 # TLE-OS
 
-Ops overlay / front door for **The Lettings Experts** that pushes into REX. Deliberate sibling of
+Ops overlay / front door for **The Letting Experts** that pushes into REX. Deliberate sibling of
 `TLE-portal` — kept separate until the portal ships. Both are active; both were committed to on
 the same day. Client: Susan Liles. Ops: Howard. Pre-tenancy: Kirstie Mulholland.
 

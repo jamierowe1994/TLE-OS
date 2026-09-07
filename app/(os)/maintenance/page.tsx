@@ -289,9 +289,15 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
   const [dueAt, setDueAt] = useState("");
   const [reportedBy, setReportedBy] = useState(kind === "repair" ? "Tenant" : "Compliance tracker");
   const [tenant, setTenant] = useState("");
+  const [tenantPhone, setTenantPhone] = useState("");
   const [tenantEmail, setTenantEmail] = useState("");
+  /* Every tenant on the home, so a shared house can say which of them rang. */
+  const [tenants, setTenants] = useState<{ name: string; email: string; phone: string }[]>([]);
+  const [whichTenant, setWhichTenant] = useState(0);
   const [landlordEmail, setLandlordEmail] = useState("");
   const [landlordMobile, setLandlordMobile] = useState("");
+  const [landlordName, setLandlordName] = useState("");
+  const [source, setSource] = useState("");
   const [access, setAccess] = useState("");
   const [place, setPlace] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
   const [filled, setFilled] = useState<string[] | null>(null);
@@ -327,6 +333,14 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
     }
   }, [props, pq, picked]);
   useEffect(() => { if (picked?.tenant) setTenant(picked.tenant); }, [picked]);
+  /* Picking a tenant from the list fills the three fields together. */
+  const chooseTenant = useCallback((list: { name: string; email: string; phone: string }[], i: number) => {
+    const t = list[i];
+    setWhichTenant(i);
+    setTenant(t?.name ?? "");
+    setTenantPhone(t?.phone ?? "");
+    setTenantEmail(t?.email ?? "");
+  }, []);
   /* What the OS knows about the home fills the form: the tenant's name,
      number and email, the landlord's email and mobile, the access notes on
      file. James, 7 Sep 2026: "all of this stuff should be automated." */
@@ -337,14 +351,19 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
     fetch(`/api/works-orders/property?id=${encodeURIComponent(picked.id)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => {
       if (!live || !j.ok) return;
       const got: string[] = [];
-      const t = j.tenant as { name: string; email: string; phone: string } | null;
+      const list = (Array.isArray(j.tenants) ? j.tenants : []) as { name: string; email: string; phone: string }[];
       const l = j.landlord as { name: string; email: string; phone: string } | null;
-      if (t?.name || t?.phone) { setTenant([t.name, t.phone].filter(Boolean).join(" · ")); got.push("tenant"); }
-      if (t?.email) { setTenantEmail(t.email); got.push("tenant's email"); }
+      setTenants(list);
+      if (list.length) {
+        chooseTenant(list, 0);
+        got.push(list.length === 1 ? "the tenant" : `${list.length} tenants`);
+      }
+      if (l?.name) { setLandlordName(l.name); got.push("landlord"); }
       if (l?.email) { setLandlordEmail(l.email); got.push("landlord's email"); }
       if (l?.phone) { setLandlordMobile(l.phone); got.push("landlord's mobile"); }
       if (j.access) { setAccess(j.access); got.push("access notes"); }
       setPlace({ lat: j.lat ?? null, lng: j.lng ?? null });
+      setSource(typeof j.source === "string" ? j.source : "");
       setFilled(got);
     }).catch(() => { if (live) setFilled([]); });
     return () => { live = false; };
@@ -373,7 +392,8 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        kind, propertyId: picked?.id ?? null, propertyName, locality: picked?.locality ?? "", landlord: picked?.landlord ?? "", tenant, tenantEmail, landlordEmail, landlordMobile,
+        kind, propertyId: picked?.id ?? null, propertyName, locality: picked?.locality ?? "",
+        landlord: landlordName || picked?.landlord || "", tenant, tenantPhone, tenantEmail, landlordEmail, landlordMobile,
         propertyLat: place.lat, propertyLng: place.lng,
         title, description, category, urgency: kind === "repair" ? urgency : null, dueAt: kind === "planned" ? new Date(dueAt).toISOString() : null,
         reportedBy, access, contractorId: contractorId || null, scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
@@ -422,7 +442,11 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
                   <button type="button" onClick={() => { setPicked(null); setPq(""); }} className="text-[11px] text-muted underline">change</button>
                 </div>
                 <p className="mt-1 text-[11px] text-muted">
-                  {filled === null ? "Reading the property…" : filled.length === 0 ? "Nothing on file for the people here yet - fill them in below." : `Filled from the property: ${filled.join(", ")}.`}
+                  {filled === null
+                    ? "Reading the property…"
+                    : filled.length === 0
+                      ? "Nothing on file for the people here yet - fill them in below."
+                      : `Filled from ${source || "the property"}: ${filled.join(", ")}.`}
                 </p>
               </div>
             ) : (
@@ -487,13 +511,32 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
               {REPORTED_BY.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
+          {tenants.length > 1 && (
+            <div className="sm:col-span-2">
+              <label className={label}>Which of them reported it</label>
+              <select value={whichTenant} onChange={(e) => chooseTenant(tenants, Number(e.target.value))} className={`mt-1 ${field}`}>
+                {tenants.map((t, i) => (
+                  <option key={`${t.name}-${i}`} value={i}>{t.name}{t.phone ? ` · ${t.phone}` : ""}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-muted">{tenants.length} tenants on this home. The one you pick is who the emails go to.</p>
+            </div>
+          )}
           <div>
-            <label className={label}>Tenant, for access</label>
-            <input value={tenant} onChange={(e) => setTenant(e.target.value)} placeholder="Name and number" className={`mt-1 ${field}`} />
+            <label className={label}>Tenant</label>
+            <input value={tenant} onChange={(e) => setTenant(e.target.value)} placeholder="Their name" className={`mt-1 ${field}`} />
+          </div>
+          <div>
+            <label className={label}>Tenant's number</label>
+            <input value={tenantPhone} onChange={(e) => setTenantPhone(e.target.value)} placeholder="For access" className={`mt-1 ${field}`} />
           </div>
           <div>
             <label className={label}>Tenant's email</label>
             <input type="email" value={tenantEmail} onChange={(e) => setTenantEmail(e.target.value)} placeholder="So they're told at each step" className={`mt-1 ${field}`} />
+          </div>
+          <div>
+            <label className={label}>Landlord</label>
+            <input value={landlordName} onChange={(e) => setLandlordName(e.target.value)} placeholder="Their name" className={`mt-1 ${field}`} />
           </div>
           <div>
             <label className={label}>Landlord's email</label>
@@ -711,7 +754,8 @@ function JobDrawer({ order, contractors, canCorporate, onClose, onChanged }: { o
                   <div className="grid gap-3 sm:grid-cols-2">
                     <input value={f.title ?? o.title} onChange={(e) => setF({ ...f, title: e.target.value })} className={`${field} sm:col-span-2`} />
                     <textarea value={f.description ?? o.description} onChange={(e) => setF({ ...f, description: e.target.value })} rows={3} className={`${field} sm:col-span-2`} />
-                    <input value={f.tenant ?? o.tenant} onChange={(e) => setF({ ...f, tenant: e.target.value })} placeholder="Tenant, for access" className={field} />
+                    <input value={f.tenant ?? o.tenant} onChange={(e) => setF({ ...f, tenant: e.target.value })} placeholder="Tenant's name" className={field} />
+                    <input value={f.tenantPhone ?? o.tenantPhone} onChange={(e) => setF({ ...f, tenantPhone: e.target.value })} placeholder="Tenant's number" className={field} />
                     <input value={f.tenantEmail ?? o.tenantEmail} onChange={(e) => setF({ ...f, tenantEmail: e.target.value })} placeholder="Tenant's email" className={field} />
                     <input value={f.landlord ?? o.landlord} onChange={(e) => setF({ ...f, landlord: e.target.value })} placeholder="Landlord" className={field} />
                     <input value={f.landlordEmail ?? o.landlordEmail} onChange={(e) => setF({ ...f, landlordEmail: e.target.value })} placeholder="Landlord's email" className={field} />
@@ -744,7 +788,7 @@ function JobDrawer({ order, contractors, canCorporate, onClose, onChanged }: { o
                         : act === "cancel" ? { action: "cancel", reason: f.note ?? "" }
                         : act === "reopen" ? { action: "reopen", note: f.note }
                         : act === "note" ? { action: "note", note: f.note ?? "" }
-                        : act === "edit" ? { action: "edit", fields: { title: f.title, description: f.description, tenant: f.tenant, tenantEmail: f.tenantEmail, landlord: f.landlord, landlordEmail: f.landlordEmail, access: f.access, authorityPence: f.authority ? toPence(f.authority) : undefined, urgency: f.urgency as Urgency | undefined, dueAt: f.dueAt !== undefined ? (f.dueAt ? new Date(f.dueAt).toISOString() : null) : undefined } }
+                        : act === "edit" ? { action: "edit", fields: { title: f.title, description: f.description, tenant: f.tenant, tenantPhone: f.tenantPhone, tenantEmail: f.tenantEmail, landlord: f.landlord, landlordEmail: f.landlordEmail, access: f.access, authorityPence: f.authority ? toPence(f.authority) : undefined, urgency: f.urgency as Urgency | undefined, dueAt: f.dueAt !== undefined ? (f.dueAt ? new Date(f.dueAt).toISOString() : null) : undefined } }
                         : null;
                       if (!m) return setErr(act === "assign" ? "Pick a contractor." : act === "paid" ? "Say how it was paid." : "Fill it in first.");
                       void move(m);
@@ -768,6 +812,8 @@ function JobDrawer({ order, contractors, canCorporate, onClose, onChanged }: { o
                   {o.kind === "repair" ? <Fact k="Urgency" v={URGENCIES.find((u) => u.id === o.urgency)?.label ?? "—"} /> : <Fact k="Due" v={day(o.dueAt)} />}
                   {o.kind === "repair" && <Fact k="Attend by" v={stamp(o.dueAt)} />}
                   <Fact k="Reported by" v={`${o.reportedBy || "—"} · ${day(o.reportedAt)}`} />
+                  <Fact k="Tenant" v={o.tenant || "—"} />
+                  <Fact k="Tenant's number" v={o.tenantPhone || "—"} />
                   <Fact k="Tenant's email" v={o.tenantEmail || "none - not being told"} />
                   <Fact k="Landlord's email" v={o.landlordEmail || "none - not being told"} />
                   <Fact k="Landlord's mobile" v={o.landlordMobile || "—"} />

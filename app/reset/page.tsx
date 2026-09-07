@@ -40,7 +40,7 @@ function AskForEmail() {
       });
       const j = (await r.json()) as { wrongDomain?: boolean; message?: string };
       if (j.wrongDomain) {
-        setWrongDomain(j.message ?? "That address isn't a Lettings Experts one.");
+        setWrongDomain(j.message ?? "That address isn't a Letting Experts one.");
         return;
       }
       setSent(true);

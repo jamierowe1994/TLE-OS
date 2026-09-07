@@ -371,7 +371,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
     trigger:
       "The same bands, but one email per property per certificate — a landlord owns one or two houses and a list means nothing to them",
     fires:
-      "NOT WIRED — lib/email-policy refuses every non-internal address until the public Lettings Experts domain exists. This is what it will say on the day that lands.",
+      "NOT WIRED — lib/email-policy refuses every non-internal address until the public Letting Experts domain exists. This is what it will say on the day that lands.",
     to: "The landlord, with their agent copied",
     draft: true,
     summary:
@@ -513,7 +513,7 @@ The Letting Experts`
   /* ── The two doorways: an appointment becomes an account ──────────────────
      Both fire on a BOOKING, which is the moment the person is definitely
      thinking about us. Neither is wired to anything yet, and neither can be
-     until the public Lettings Experts sending domain exists - lib/email-policy
+     until the public Letting Experts sending domain exists - lib/email-policy
      refuses every non-internal address, so as things stand these can only be
      sent to a colleague from Admin -> Emails. That is exactly what they are
      for today: reading the words, and deciding what the screens behind them
@@ -547,7 +547,7 @@ The Letting Experts`
     name: "Landlord Sign-in Link",
     audience: "landlord",
     trigger: "A landlord asks for their link on /landlord/sign-in",
-    fires: "Wired 2 Sep 2026. Goes on the public Lettings Experts sender (RESEND_FROM_PUBLIC) to the email on the landlord's REX owner contact.",
+    fires: "Wired 2 Sep 2026. Goes on the public Letting Experts sender (RESEND_FROM_PUBLIC) to the email on the landlord's REX owner contact.",
     to: "The landlord, at the address REX holds for them",
     draft: false,
     summary:

@@ -67,7 +67,7 @@ const toReq = (r: ReqRow): Requirement => ({
 const STARTER: Omit<Requirement, "id" | "active" | "updatedBy">[] = [
   { title: "Photo ID seen", what: "Passport or driving licence, seen and recorded by TLE when you joined.", kind: "document", howLink: "", renewsMonths: null, required: true, position: 1 },
   { title: "Proof of address", what: "A bill or statement from the last three months.", kind: "document", howLink: "", renewsMonths: 12, required: true, position: 2 },
-  { title: "Partner agreement signed", what: "Your signed agreement with The Lettings Experts.", kind: "document", howLink: "", renewsMonths: null, required: true, position: 3 },
+  { title: "Partner agreement signed", what: "Your signed agreement with The Letting Experts.", kind: "document", howLink: "", renewsMonths: null, required: true, position: 3 },
   { title: "Right to Rent training", what: "Knowing what to check, and what a share code is, before any tenancy starts.", kind: "training", howLink: "", renewsMonths: 24, required: true, position: 4 },
   { title: "Anti-money laundering awareness", what: "What to look for and who to tell. Refreshed yearly.", kind: "training", howLink: "", renewsMonths: 12, required: true, position: 5 },
   { title: "Data protection awareness", what: "Handling applicant and landlord data properly. Refreshed yearly.", kind: "training", howLink: "", renewsMonths: 12, required: true, position: 6 },

@@ -138,7 +138,9 @@ export interface WorksOrder {
   propertyName: string;
   locality: string;
   landlord: string;
+  /** The tenant's name. Their number is tenantPhone, not buried in here. */
   tenant: string;
+  tenantPhone: string;
   /** Where the step emails go. Blank means nobody is told, and the timeline says so. */
   tenantEmail: string;
   landlordEmail: string;
@@ -222,6 +224,7 @@ function toOrder(r: Row): WorksOrder {
     locality: s(r.locality),
     landlord: s(r.landlord),
     tenant: s(r.tenant),
+    tenantPhone: s(r.tenant_phone),
     tenantEmail: s(r.tenant_email),
     landlordEmail: s(r.landlord_email),
     landlordMobile: s(r.landlord_mobile),
@@ -273,7 +276,7 @@ function toOrder(r: Row): WorksOrder {
   };
 }
 
-const COLS = `id, ref, kind, status, property_id, property_name, locality, landlord, tenant, tenant_email, landlord_email, landlord_mobile,
+const COLS = `id, ref, kind, status, property_id, property_name, locality, landlord, tenant, tenant_phone, tenant_email, landlord_email, landlord_mobile,
   landlord_told_at, arranging, landlord_follow_up_at, landlord_resolved_at, contractor_contacted_at, contractor_confirmed_at, landlord_arranged_at,
   tenant_happy, tenant_happy_at, tenant_happy_note, payee, contractor_token, tenant_token, property_lat, property_lng, accounts_told_at, compliance_told_at,
   title, description, category, urgency,
@@ -353,6 +356,7 @@ export interface NewOrder {
   tenantEmail?: string;
   landlordEmail?: string;
   landlordMobile?: string;
+  tenantPhone?: string;
   rehearsal?: boolean;
   propertyLat?: number | null;
   propertyLng?: number | null;
@@ -392,8 +396,8 @@ export async function createOrder(input: NewOrder, by: string): Promise<WorksOrd
     `INSERT INTO os_works_orders
        (id, kind, status, property_id, property_name, locality, landlord, tenant, tenant_email, landlord_email, title, description, category, urgency, due_at,
         reported_by, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence,
-        landlord_mobile, contractor_token, tenant_token, property_lat, property_lng, rehearsal)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
+        landlord_mobile, contractor_token, tenant_token, property_lat, property_lng, rehearsal, tenant_phone)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
      RETURNING ${COLS}`,
     [
       id, kind, status, input.propertyId ?? null, input.propertyName.trim(), (input.locality ?? "").trim(), (input.landlord ?? "").trim(),
@@ -402,7 +406,7 @@ export async function createOrder(input: NewOrder, by: string): Promise<WorksOrd
       (input.reportedBy ?? "Agent").trim(), by, input.contractorId ?? null, contractorName, input.scheduledAt ?? null,
       (input.access ?? "").trim(), Number.isFinite(input.authorityPence) ? Number(input.authorityPence) : DEFAULT_AUTHORITY_PENCE,
       (input.landlordMobile ?? "").trim(), randomBytes(16).toString("base64url"), randomBytes(16).toString("base64url"),
-      input.propertyLat ?? null, input.propertyLng ?? null, input.rehearsal === true,
+      input.propertyLat ?? null, input.propertyLng ?? null, input.rehearsal === true, (input.tenantPhone ?? "").trim(),
     ]
   );
   const order = toOrder(r);
@@ -494,7 +498,7 @@ export type Move =
   | { action: "cancel"; reason: string }
   | { action: "reopen"; note?: string }
   | { action: "note"; note: string }
-  | { action: "edit"; fields: Partial<Pick<WorksOrder, "title" | "description" | "category" | "urgency" | "dueAt" | "tenant" | "tenantEmail" | "landlord" | "landlordEmail" | "landlordMobile" | "access" | "authorityPence" | "reportedBy">> }
+  | { action: "edit"; fields: Partial<Pick<WorksOrder, "title" | "description" | "category" | "urgency" | "dueAt" | "tenant" | "tenantPhone" | "tenantEmail" | "landlord" | "landlordEmail" | "landlordMobile" | "access" | "authorityPence" | "reportedBy">> }
   | { action: "file"; file: { key: string; name: string; type: string } };
 
 export const pounds = (pence: number | null | undefined) =>
@@ -675,6 +679,7 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
       if (f.landlord != null) set("landlord", f.landlord.trim());
       if (f.landlordEmail != null) set("landlord_email", f.landlordEmail.trim().toLowerCase());
       if (f.landlordMobile != null) set("landlord_mobile", f.landlordMobile.trim());
+      if (f.tenantPhone != null) set("tenant_phone", f.tenantPhone.trim());
       if (f.access != null) set("access", f.access.trim());
       if (f.reportedBy != null) set("reported_by", f.reportedBy.trim());
       if (f.authorityPence != null && Number.isFinite(f.authorityPence)) set("authority_pence", Math.round(f.authorityPence));

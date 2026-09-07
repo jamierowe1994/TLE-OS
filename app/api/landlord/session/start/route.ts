@@ -12,7 +12,7 @@ import { normaliseEmail } from "@/lib/users";
  * Same shape as the password reset: one answer whatever happened, so the
  * form cannot be used to find out which addresses are landlords of ours. The
  * difference is who may ask - anyone, from any domain - and where the email
- * goes out: the public Lettings Experts sender, never the OS domain.
+ * goes out: the public Letting Experts sender, never the OS domain.
  *
  * ── The dev link ──────────────────────────────────────────────────────────
  *

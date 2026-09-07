@@ -238,7 +238,7 @@ export default function BondApp() {
           <div className="flex items-center gap-2 px-1">
             <span className="hand text-[26px] leading-none">Bond</span>
           </div>
-          <p className="mt-1 px-1 text-[10.5px] text-muted">Prospecting for The Lettings Experts</p>
+          <p className="mt-1 px-1 text-[10.5px] text-muted">Prospecting for The Letting Experts</p>
           <div className="mt-4 border-t border-line/70" />
           <nav className="mt-4 flex flex-col gap-1">
             {ROOMS.filter((r) => !r.more).map((r) => (

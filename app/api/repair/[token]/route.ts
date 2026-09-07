@@ -22,6 +22,6 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
   if (!o || !hasDb()) return NextResponse.json({ ok: false, error: "That link isn't one of ours." }, { status: 404 });
   const b = (await req.json().catch(() => ({}))) as { happy?: string; note?: string };
   if (b.happy !== "yes" && b.happy !== "no") return NextResponse.json({ ok: false, error: "Yes or no?" }, { status: 400 });
-  const next = await moveOrder(o.id, { action: "tenant_happy", happy: b.happy, note: (b.note ?? "").trim() }, o.tenant.replace(/\s*\+?\d[\d\s]{6,}\d/g, "").replace(/[\s·,-]+$/, "").trim() || "The tenant");
+  const next = await moveOrder(o.id, { action: "tenant_happy", happy: b.happy, note: (b.note ?? "").trim() }, o.tenant.trim() || "The tenant");
   return NextResponse.json({ ok: true, happy: next.tenantHappy });
 }

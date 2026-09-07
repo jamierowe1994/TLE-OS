@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     body.to === "landlord" && landlordName ? `Dear ${landlordName.split(" ")[0]},` : "Hello,",
     propertyName ? `Please find attached the ${label} for ${propertyName}.` : `Please find attached the ${label}.`,
     note,
-    `Kind regards,\n${actor.name ?? "The Lettings Experts"}\nThe Lettings Experts`,
+    `Kind regards,\n${actor.name ?? "The Letting Experts"}\nThe Letting Experts`,
   ].filter(Boolean).join("\n\n");
 
   try {

@@ -93,8 +93,10 @@ async function varsFor(o: WorksOrder, me: OsUser): Promise<Record<string, string
     contractorName: c?.name || o.contractorName || "the contractor",
     contractorGreeting: c?.contact ? first(c.contact) : c?.name || o.contractorName || "there",
     contractorPhone: c?.phone ?? "",
+    /* The name and the number are their own fields now. The old rows kept
+       both in `tenant`, so those still get picked apart. */
     tenantName: first(o.tenant.replace(/\s*\+?\d[\d\s]{6,}\d/g, "").replace(/[\s·,-]+$/, "")),
-    tenantPhone: (o.tenant.match(/\+?\d[\d\s]{6,}\d/) ?? [""])[0].trim(),
+    tenantPhone: o.tenantPhone || (o.tenant.match(/\+?\d[\d\s]{6,}\d/) ?? [""])[0].trim(),
     landlordName: first(o.landlord),
     access: o.access || "none recorded",
     description: o.description || "",

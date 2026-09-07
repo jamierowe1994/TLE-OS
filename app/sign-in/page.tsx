@@ -161,7 +161,7 @@ function SignIn() {
         </p>
 
         {/* No "set one up" link, deliberately. TLE OS is INVITE ONLY: having a
-            Lettings Experts address is not the same as being meant to be in
+            Letting Experts address is not the same as being meant to be in
             here, and a self-serve doorway quietly makes it so. The /join route
             still exists — it is where an invite link lands — but you have to
             have been sent one. */}

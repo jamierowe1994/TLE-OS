@@ -60,7 +60,7 @@ export function fromAddress(): string | null {
 }
 
 /**
- * The PUBLIC sender - the Lettings Experts domain, for landlords and tenants.
+ * The PUBLIC sender - the Letting Experts domain, for landlords and tenants.
  *
  * Two senders, routed by audience, exactly as lib/email-policy said to do the
  * day the public domain arrived (2 Sep 2026). Internal mail keeps RESEND_FROM
@@ -148,7 +148,7 @@ export async function sendEmail(msg: {
   if (!from) {
     throw new ResendBlocked(
       audience === "customer"
-        ? "RESEND_FROM_PUBLIC isn't set. Customer email needs an address on the Lettings Experts domain verified in Resend, e.g. \"The Letting Experts <hello@thelettingexperts.co.uk>\"."
+        ? "RESEND_FROM_PUBLIC isn't set. Customer email needs an address on the Letting Experts domain verified in Resend, e.g. \"The Letting Experts <hello@thelettingexperts.co.uk>\"."
         : "RESEND_FROM isn't set. It must be an address on the domain verified in Resend, e.g. hello@tle-os.co.uk."
     );
   }
@@ -168,7 +168,7 @@ export async function sendEmail(msg: {
   }
   /* THE INTERNAL-ONLY RULE. This domain is for colleagues: verification links,
      password confirmations, invites. A landlord or tenant must never receive
-     mail from it — client email waits for the public Lettings Experts domain.
+     mail from it — client email waits for the public Letting Experts domain.
      Enforced here, at the one place mail actually leaves, rather than at the
      call sites, which multiply. See lib/email-policy for the full reasoning. */
   if (audience === "internal") assertInternalRecipient(to);

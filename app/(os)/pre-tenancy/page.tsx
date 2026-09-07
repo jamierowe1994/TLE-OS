@@ -636,7 +636,7 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
       {/* THERE IS NO HEADER ANY MORE, and that is the point.
 
           There used to be a full-width sticky bar across the top carrying the
-          Lettings Experts mark, a workspace switcher and her profile. The mark
+          Letting Experts mark, a workspace switcher and her profile. The mark
           and the switcher went first — she signs into one product, on her own
           screen, all day, and the switcher linked to /pretenancy, a route this
           app does not have. The bar itself has now gone too, because a

@@ -90,7 +90,7 @@ const DEFAULTS: Array<{ key: string; name: string; trigger: Trigger; steps: Arra
         active: true,
         sort: 1,
         copy:
-          "Your tenancy at {address} comes up for renewal around {anniversary}. If you would like a second opinion on the rent, or a hand with the renewal paperwork, we are a short walk away. The Lettings Experts, {phone}.",
+          "Your tenancy at {address} comes up for renewal around {anniversary}. If you would like a second opinion on the rent, or a hand with the renewal paperwork, we are a short walk away. The Letting Experts, {phone}.",
       },
       { title: "8 weeks before", offset_days: -56, mail_type: "postcard", active: false, sort: 2, copy: "" },
       {
@@ -100,7 +100,7 @@ const DEFAULTS: Array<{ key: string; name: string; trigger: Trigger; steps: Arra
         active: true,
         sort: 3,
         copy:
-          "Six weeks to the anniversary at {address}. Rents on your street have moved since {since}; we can tell you where yours sits, free and with no obligation. The Lettings Experts, {phone}.",
+          "Six weeks to the anniversary at {address}. Rents on your street have moved since {since}; we can tell you where yours sits, free and with no obligation. The Letting Experts, {phone}.",
       },
       {
         title: "4 weeks before",
@@ -109,7 +109,7 @@ const DEFAULTS: Array<{ key: string; name: string; trigger: Trigger; steps: Arra
         active: true,
         sort: 4,
         copy:
-          "Dear {landlord},\n\nThe tenancy at {address} reaches its anniversary around {anniversary}. This is the moment most landlords review the rent and the service they are getting.\n\nWe manage homes across your area and would be glad to show you what a switch would look like: the rent we would set, what we charge, and how we handle the changeover so your tenant barely notices.\n\nIf now is not the time, keep this letter for when it is.\n\nKind regards,\nThe Lettings Experts",
+          "Dear {landlord},\n\nThe tenancy at {address} reaches its anniversary around {anniversary}. This is the moment most landlords review the rent and the service they are getting.\n\nWe manage homes across your area and would be glad to show you what a switch would look like: the rent we would set, what we charge, and how we handle the changeover so your tenant barely notices.\n\nIf now is not the time, keep this letter for when it is.\n\nKind regards,\nThe Letting Experts",
       },
     ],
   },
@@ -125,9 +125,9 @@ const DEFAULTS: Array<{ key: string; name: string; trigger: Trigger; steps: Arra
         active: true,
         sort: 1,
         copy:
-          "Dear {landlord},\n\nCongratulations on {address}. If it is going to be let, the first few weeks decide how the next few years go: the right rent, the right tenant, the compliance sorted before anybody moves in.\n\nWe would be glad to help with any of it, from a free rent check to full management.\n\nKind regards,\nThe Lettings Experts",
+          "Dear {landlord},\n\nCongratulations on {address}. If it is going to be let, the first few weeks decide how the next few years go: the right rent, the right tenant, the compliance sorted before anybody moves in.\n\nWe would be glad to help with any of it, from a free rent check to full management.\n\nKind regards,\nThe Letting Experts",
       },
-      { title: "Two weeks later", offset_days: 14, mail_type: "postcard", active: true, sort: 2, copy: "Still deciding how to run {address}? A ten-minute call with us will settle the rent question. The Lettings Experts, {phone}." },
+      { title: "Two weeks later", offset_days: 14, mail_type: "postcard", active: true, sort: 2, copy: "Still deciding how to run {address}? A ten-minute call with us will settle the rent question. The Letting Experts, {phone}." },
     ],
   },
 ];

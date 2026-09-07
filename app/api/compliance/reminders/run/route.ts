@@ -30,7 +30,7 @@ import { switchOn } from "@/lib/switches";
  * The tracker's rule is that every chase reaches the landlord AND their agent,
  * because an agent must never be surprised by a chase on their own file. Only
  * the agent half can be sent: lib/email-policy refuses every non-internal
- * address until the public Lettings Experts domain exists. The landlord
+ * address until the public Letting Experts domain exists. The landlord
  * document is written and previewable and waits for that.
  *
  * So a run reports how many landlords it did NOT write to. A number that is

@@ -217,7 +217,7 @@ ${
             <p style="margin:20px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:11.5px;letter-spacing:0.04em;color:#a8a29e">
               Instagram &nbsp;·&nbsp; Facebook &nbsp;·&nbsp; LinkedIn
             </p>
-            <p style="margin:12px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:12px;color:#78716c">The Lettings Experts</p>
+            <p style="margin:12px 0 0;font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:12px;color:#78716c">The Letting Experts</p>
           </td>
         </tr>
       </table>

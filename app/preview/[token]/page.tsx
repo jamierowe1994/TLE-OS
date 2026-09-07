@@ -96,7 +96,7 @@ export default async function PreviewHome({
           <RexDino size={150} />
         </div>
 
-        <p className="mt-6 text-center text-[11px] text-muted">The Lettings Experts</p>
+        <p className="mt-6 text-center text-[11px] text-muted">The Letting Experts</p>
       </div>
     </main>
   );

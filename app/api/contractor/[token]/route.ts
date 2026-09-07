@@ -21,7 +21,7 @@ export const runtime = "nodejs";
 function publicView(o: WorksOrder) {
   return {
     ref: o.ref, title: o.title, category: o.category, description: o.description, status: o.status, step: stepOf(o),
-    address: [o.propertyName, o.locality].filter(Boolean).join(", "), access: o.access, tenant: o.tenant, contractorName: o.contractorName,
+    address: [o.propertyName, o.locality].filter(Boolean).join(", "), access: o.access, tenant: [o.tenant, o.tenantPhone].filter(Boolean).join(" · "), contractorName: o.contractorName,
     scheduledAt: o.scheduledAt, completedAt: o.completedAt, invoicePence: o.invoicePence, invoiceRef: o.invoiceRef,
     files: o.files.map((f) => ({ name: f.name, at: f.at })),
   };

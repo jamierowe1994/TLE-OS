@@ -196,7 +196,7 @@ export const PORTAL_FOLDERS: PortalFolder[] = [
         kind: "email",
         id: "landlord-sign-in-email",
         name: "The link they get",
-        blurb: "Single use, lasts a day, sent on the public Lettings Experts sender.",
+        blurb: "Single use, lasts a day, sent on the public Letting Experts sender.",
         emailId: "landlord-sign-in",
       },
       {

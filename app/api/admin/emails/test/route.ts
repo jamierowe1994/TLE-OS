@@ -29,7 +29,7 @@ import { publicOrigin } from "@/lib/origin";
  * ── Why it needs no new domain ────────────────────────────────────────────
  *
  * Staff addresses are precisely who the OS domain is FOR. So test sends work
- * today, with no waiting on the public Lettings Experts domain — the thing that
+ * today, with no waiting on the public Letting Experts domain — the thing that
  * is blocked is mailing a real landlord, which this deliberately cannot do.
  *
  * ── The subject says TEST ─────────────────────────────────────────────────
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
   }
 
   /* A test goes out the way the real one would. A landlord's or tenant's
-     email is sent on the public Lettings Experts sender, to the owner's own
+     email is sent on the public Letting Experts sender, to the owner's own
      inbox - which is the only way to see, from Admin, that the public domain
      and its key actually work. Staff email keeps the OS sender. */
   const audience = entry.audience === "landlord" || entry.audience === "tenant" ? "customer" : "internal";

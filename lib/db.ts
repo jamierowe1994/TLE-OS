@@ -424,6 +424,10 @@ ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS rehearsal               BOO
 /* Michael's ping, once per job (James, 7 Sep 2026): compliance hears when a
    job is finished, never while it is open. */
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS compliance_told_at      TIMESTAMPTZ;
+/* The tenant's number on its own (James, 7 Sep 2026: "name, then number
+   after"). The tenant column was one string with both in it, which every
+   email then had to pick apart with a regex. */
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenant_phone            TEXT NOT NULL DEFAULT '';
 ALTER TABLE os_contractors  ADD COLUMN IF NOT EXISTS rehearsal               BOOLEAN NOT NULL DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS os_rehearsal_emails (

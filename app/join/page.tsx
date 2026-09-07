@@ -55,7 +55,7 @@ function AskForEmail() {
       });
       const j = (await r.json()) as { wrongDomain?: boolean; message?: string };
       if (j.wrongDomain) {
-        setWrongDomain(j.message ?? "That address isn't a Lettings Experts one.");
+        setWrongDomain(j.message ?? "That address isn't a Letting Experts one.");
         return;
       }
       setSent(true);
@@ -243,7 +243,7 @@ function ChoosePassword({ token }: { token: string }) {
  * No token, no join.
  *
  * The "give us your email and we'll send a link" form has gone: it let anybody
- * with a Lettings Experts address start the process themselves, which is not
+ * with a Letting Experts address start the process themselves, which is not
  * what invite-only means. An invite now begins in the admin centre, and this
  * page only finishes it.
  */

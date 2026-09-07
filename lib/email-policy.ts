@@ -6,7 +6,7 @@
  * "This domain should only be sent to internal staff emails. If we're emailing
  * a lettings agent about something, whether that's a confirmation of password
  * or whatever, that is fine. If we're emailing externally, I need to set up a
- * different domain because we would need the official Lettings Experts domain
+ * different domain because we would need the official Letting Experts domain
  * for that one."
  *
  * So the OS domain is an INTERNAL domain. Password confirmations, verification
@@ -35,7 +35,7 @@
  *
  * Do NOT delete this. Add the second sender with its own `from`, and route by
  * AUDIENCE: internal mail keeps this domain and this guard, client mail goes
- * out on the Lettings Experts domain. The guard is what keeps them from
+ * out on the Letting Experts domain. The guard is what keeps them from
  * quietly becoming one thing again.
  */
 
@@ -107,7 +107,7 @@ export function wrongDomainMessage(email: string): string {
   const d = domainOf(email);
   const list = internalDomains().map((x) => `@${x}`).join(" or ");
   return (
-    `That's ${d ? `an @${d}` : "not a work"} address — TLE OS only lets you in on a Lettings Experts one. ` +
+    `That's ${d ? `an @${d}` : "not a work"} address — TLE OS only lets you in on a Letting Experts one. ` +
     `Try your ${list} address instead. ` +
     `If you don't have one yet, that's a question for James rather than for this box.`
   );
@@ -124,7 +124,7 @@ export function assertInternalRecipient(email: string): void {
   const d = domainOf(email);
   throw new ExternalRecipientRefused(
     `The TLE OS domain only emails internal staff, and ${d ? `@${d}` : "that address"} isn't one of ours (${internalDomains().map((x) => `@${x}`).join(", ")}). ` +
-      `Client-facing email needs the public Lettings Experts sending domain, which isn't set up yet. ` +
+      `Client-facing email needs the public Letting Experts sending domain, which isn't set up yet. ` +
       `If this address really is a colleague, add its domain to INTERNAL_EMAIL_DOMAINS.`
   );
 }
