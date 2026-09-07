@@ -1,6 +1,7 @@
 import "server-only";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { activeOsProperties } from "@/lib/os-properties";
+import { sittingTenantsByProperty } from "@/lib/rex-tenants";
 import type {
   ManagedBook,
   ManagedCounts,
@@ -239,6 +240,21 @@ export async function fetchManagedBook(rexUserId?: string | null): Promise<Manag
   }
 
   const properties = rows.map(toProperty).filter((p) => p.listingId);
+
+  /**
+   * The sitting tenant, where the listing does not name one.
+   *
+   * Same gap as the compliance book: `purchtenant` on the listing is filled
+   * for about half this book, and REX keeps the real link on the tenancy
+   * application. The listing wins where it has somebody - it is the more
+   * direct statement - and the application fills in behind it.
+   */
+  const sitting = await sittingTenantsByProperty().catch(() => new Map<string, { people: Party[] }>());
+  for (const p of properties) {
+    if (p.tenants.length || !p.propertyId) continue;
+    const who = sitting.get(p.propertyId);
+    if (who) p.tenants = who.people.map((t: Party) => ({ contactId: t.contactId, name: t.name, email: t.email, phone: t.phone }));
+  }
   /* Homes REX CRM has no property for (6 Sep 2026): the OS holds them so
      the managed book reads like REX PM's. Only for the whole-business view;
      an agent's own book stays REX's, since these carry no agent. */

@@ -28,7 +28,10 @@ import type { ManagedBook } from "./portfolio-types";
  * cross-tenant leak, not a stale figure — see the note in listings-cache.
  */
 
-const BOOK_BASE = "portfolio:v1";
+/* v2 (7 Sep 2026): the book fills the sitting tenant from the tenancy
+   application where the listing names nobody. Stored books hold the old,
+   thinner answer and would be served for six hours. */
+const BOOK_BASE = "portfolio:v2";
 const CERTS_BASE = "portfolio-certs:v1";
 
 export const bookKeyFor = (rexUserId: string | null) =>

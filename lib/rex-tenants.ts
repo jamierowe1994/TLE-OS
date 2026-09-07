@@ -27,7 +27,16 @@ import { getApplications, type Application } from "@/lib/applications";
  * so the length is a floor on how long they stay, never a ceiling.
  */
 
+export interface TenantParty {
+  contactId: string;
+  name: string;
+  email: string;
+  phone: string;
+}
+
 export interface SittingTenants {
+  /** The people, in the shape the managed book already uses for a party. */
+  people: TenantParty[];
   names: string[];
   /** When their tenancy began, so a screen can show how sure this is. */
   startDate: string | null;
@@ -39,6 +48,18 @@ const ACCEPTED = new Set(["accepted"]);
 
 /** REX pages at 100 and the book is a few hundred; 1000 is headroom, not a guess. */
 const MAX = 1000;
+
+/**
+ * One walk, shared.
+ *
+ * Both books ask for this - the compliance book once, the managed book once
+ * per agent scope - and the answer is the same every time because a tenant
+ * is a tenant whoever listed the home. Without this, five agents opening
+ * Portfolio would be five walks of the same service.
+ */
+const TTL_MS = 30 * 60 * 1000;
+let held: { at: number; map: Map<string, SittingTenants> } | null = null;
+let inflight: Promise<Map<string, SittingTenants>> | null = null;
 
 function ended(a: Application): { end: number | null; pastTerm: boolean } {
   if (!a.startDate) return { end: null, pastTerm: false };
@@ -55,6 +76,14 @@ function ended(a: Application): { end: number | null; pastTerm: boolean } {
  * key means "we do not know", never "empty".
  */
 export async function sittingTenantsByProperty(): Promise<Map<string, SittingTenants>> {
+  if (held && Date.now() - held.at < TTL_MS) return held.map;
+  if (!inflight) {
+    inflight = walk().finally(() => { inflight = null; });
+  }
+  return inflight;
+}
+
+async function walk(): Promise<Map<string, SittingTenants>> {
   const out = new Map<string, SittingTenants>();
   const apps = await getApplications(MAX, null).catch(() => [] as Application[]);
 
@@ -73,12 +102,12 @@ export async function sittingTenantsByProperty(): Promise<Map<string, SittingTen
     const { pastTerm } = ended(a);
     /* The rule: a tenancy that has run its term is not claimed as current. */
     if (pastTerm) { out.delete(a.propertyId as string); continue; }
-    out.set(a.propertyId as string, {
-      names: a.applicants.map((t) => t.name).filter((n) => n && n !== "Name not recorded"),
-      startDate: a.startDate,
-      pastTerm,
-    });
+    const people: TenantParty[] = a.applicants
+      .filter((t) => t.name && t.name !== "Name not recorded")
+      .map((t) => ({ contactId: t.contactId ?? "", name: t.name, email: t.email ?? "", phone: t.phone ?? "" }));
+    out.set(a.propertyId as string, { people, names: people.map((t) => t.name), startDate: a.startDate, pastTerm });
   }
-  for (const [k, v] of out) if (v.names.length === 0) out.delete(k);
+  for (const [k, v] of out) if (v.people.length === 0) out.delete(k);
+  held = { at: Date.now(), map: out };
   return out;
 }
