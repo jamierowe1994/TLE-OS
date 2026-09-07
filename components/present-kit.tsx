@@ -143,6 +143,11 @@ export type DeckTheme = {
   tint3: string;
   display: string;
   script: string;
+  /** How much bigger the emphasised word is than the type around it, and what
+   *  line-height it takes. Both belong to the FACE rather than to the slide:
+   *  a script needs the extra size, a marker set at its own size does not. */
+  scriptEm: string;
+  scriptLh: string;
   /** Drawn illustrations, or photographs where we have them. */
   art: "drawn" | "photo";
 };
@@ -160,7 +165,19 @@ export const THEMES: Record<PresentStyle, DeckTheme> = {
     tint2: "#e9eee4",
     tint3: "#fdf2da",
     display: "var(--font-shantell), 'Trebuchet MS', sans-serif",
-    script: "var(--font-script), 'Snell Roundhand', cursive",
+    /* NO CURSIVE IN THE DRAWN LOOK. James, 7 Sep: "get rid of all of the
+       cursive... 'Let's get you' all looks good, but then the 'more' is in a
+       different font. They should all be exactly the same font."
+       `inherit` rather than naming the marker face on purpose: the emphasised
+       word then takes whatever headline it is sitting inside, so it matches on
+       the cream slides (marker) AND on the appointment slide (serif) without
+       either being listed here. One word, one rule, nothing to keep in step. */
+    script: "inherit",
+    /* And at the SAME SIZE. The 1.22 below exists because a script's x-height
+       is far smaller than the type around it; at the same face it just makes
+       one word bigger than its own sentence. */
+    scriptEm: "1em",
+    scriptLh: "inherit",
     art: "drawn",
   },
   /* Anti Flash White and Expert Red - a colourway the guidelines name, so the
@@ -173,6 +190,8 @@ export const THEMES: Record<PresentStyle, DeckTheme> = {
     tint3: "#f7f1e4",
     display: INTER,
     script: LORA_IT,
+    scriptEm: "1.22em",
+    scriptLh: "1",
     art: "drawn",
   },
   photo: {
@@ -183,6 +202,8 @@ export const THEMES: Record<PresentStyle, DeckTheme> = {
     tint3: "#f7f1e4",
     display: INTER,
     script: LORA_IT,
+    scriptEm: "1.22em",
+    scriptLh: "1",
     art: "photo",
   },
 };
@@ -198,6 +219,8 @@ export function themeVars(style: PresentStyle): React.CSSProperties {
     ["--p-tint-3" as string]: t.tint3,
     ["--p-display" as string]: t.display,
     ["--p-script" as string]: t.script,
+    ["--p-script-em" as string]: t.scriptEm,
+    ["--p-script-lh" as string]: t.scriptLh,
   };
 }
 
@@ -525,14 +548,15 @@ export function CreamSlide({
 /**
  * The word a headline turns on.
  *
- * Script rather than marker, coral rather than ink, and underlined by hand —
- * three signals that this is the point of the sentence. The rule is an SVG
- * path rather than a border because a straight line under a handwritten word
- * looks like a mistake in the type, and it DRAWS rather than appearing, so the
- * emphasis lands a beat after the word it emphasises.
+ * Coral rather than ink, and underlined by hand. The rule is an SVG path
+ * rather than a border because it DRAWS rather than appearing, so the emphasis
+ * lands a beat after the word it emphasises.
  *
- * `HAND_WORDS` carries pen paths for "welcome" and "lets" only, so this cannot
- * be a written HandWord. The underline carries the hand instead.
+ * THE FACE IS THE THEME'S, not this component's. In the drawn look it inherits
+ * the headline it sits in, so the emphasised word is the same font as the rest
+ * of the sentence and only the colour and the rule mark it — see THEMES.hand.
+ * The brand looks still set it in Lora Italic, which is the guidelines' own
+ * supporting face, and those need the extra size a smaller x-height asks for.
  */
 export function Emphasis({ show, children }: { show: boolean; children: React.ReactNode }) {
   return (
@@ -542,8 +566,8 @@ export function Emphasis({ show, children }: { show: boolean; children: React.Re
         style={{
           fontFamily: FLOW_EM,
           color: CORAL,
-          fontSize: "1.22em",
-          lineHeight: 1,
+          fontSize: "var(--p-script-em, 1.22em)",
+          lineHeight: "var(--p-script-lh, 1)",
           paddingRight: "0.06em",
         }}
       >

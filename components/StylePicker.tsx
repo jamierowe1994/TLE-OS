@@ -53,7 +53,10 @@ export default function StylePicker({
 }) {
   return (
     <div
-      className="fixed left-1/2 top-4 z-40 flex -translate-x-1/2 flex-col gap-1 rounded-[20px] px-1.5 py-1.5"
+      /* Below the logo on a phone, not on top of it. The mark is fixed to the
+         top left of every deck now, and a review control printed over the
+         brand is the first thing anybody reviewing would report. */
+      className="fixed left-1/2 top-[74px] z-40 flex -translate-x-1/2 flex-col gap-1 rounded-[20px] px-1.5 py-1.5 sm:top-4"
       style={{
         background: "rgba(255,255,255,0.94)",
         boxShadow: "0 6px 24px rgba(0,0,0,0.13)",

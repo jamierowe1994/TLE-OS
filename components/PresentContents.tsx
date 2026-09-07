@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { HAND } from "@/components/present-kit";
+import { Mark } from "@/components/present-kit";
 import type { SectionId, SlideId } from "@/lib/present";
 
 /**
@@ -87,8 +87,6 @@ type Props = {
   tint: string;
   /** Whether the current slide carries white type. */
   onDark: boolean;
-  /** Cream slides are the drawn ones — they set their headings in the hand. */
-  cream: boolean;
   accent: string;
   /* Below the desktop breakpoint the same tree opens as a sheet, from a button
      in the deck's bottom bar. The open flag lives with that button rather than
@@ -104,7 +102,6 @@ export default function PresentContents({
   go,
   tint,
   onDark,
-  cream,
   accent,
   sheet,
   onSheet,
@@ -137,7 +134,6 @@ export default function PresentContents({
         onSheet(false);
       }}
       onDark={onDark}
-      cream={cream}
       accent={accent}
     />
   );
@@ -153,13 +149,22 @@ export default function PresentContents({
           borderRight: `1px solid ${onDark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.07)"}`,
         }}
       >
-        <div className="px-7 pb-5 pt-8">
+        {/* THE MARK SITS AT THE TOP OF THE COLUMN, not on the slide.
+            James, 7 Sep. Every slide used to carry its own logo in its own
+            corner, which meant the brand moved as you paged. Anchored here it
+            stops being a repeated stamp and becomes the masthead the contents
+            hangs off - and the deck's left-hand side reads as one thing.
+
+            The gap under it is deliberate and generous: the mark and the list
+            are two different jobs, and a contents that starts immediately
+            under a logo reads as a caption to it. */}
+        <div className="px-7 pt-8">
+          <Mark className="h-8" />
+        </div>
+        <div className="px-7 pb-4 pt-11">
           <span
             className="text-[10.5px] uppercase tracking-[0.18em]"
-            style={{
-              fontFamily: cream ? HAND : undefined,
-              color: onDark ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.38)",
-            }}
+            style={{ color: onDark ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.38)" }}
           >
             Contents
           </span>
@@ -193,10 +198,7 @@ export default function PresentContents({
             <div className="flex items-center justify-between px-6 pb-4 pt-7">
               <span
                 className="text-[10.5px] uppercase tracking-[0.18em]"
-                style={{
-                  fontFamily: cream ? HAND : undefined,
-                  color: onDark ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.38)",
-                }}
+                style={{ color: onDark ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.38)" }}
               >
                 Contents
               </span>
@@ -235,7 +237,6 @@ function Tree({
   onOpen,
   go,
   onDark,
-  cream,
   accent,
 }: {
   slides: { id: SlideId; title: string; section: SectionId }[];
@@ -246,7 +247,6 @@ function Tree({
   onOpen: (id: SectionId) => void;
   go: (i: number) => void;
   onDark: boolean;
-  cream: boolean;
   accent: string;
 }) {
   const dim = onDark ? "rgba(255,255,255,0.55)" : "rgba(0,0,0,0.42)";
@@ -271,7 +271,6 @@ function Tree({
               ink={ink}
               dim={dim}
               accent={accent}
-              cream={cream}
             />
           ))}
         </ul>
@@ -292,22 +291,14 @@ function Tree({
                   line up down the column rather than shuffling. */}
               <span
                 className="shrink-0 text-[11px] leading-none tabular-nums"
-                style={{
-                  fontFamily: cream ? HAND : undefined,
-                  fontWeight: 700,
-                  color: now || isOpen ? accent : dim,
-                }}
+                style={{ fontWeight: 700, color: now || isOpen ? accent : dim }}
               >
                 {String(n + 1).padStart(2, "0")}
               </span>
               <span className="min-w-0 flex-1">
                 <span
                   className="block truncate text-[13.5px] leading-snug"
-                  style={{
-                    fontFamily: cream ? HAND : undefined,
-                    fontWeight: cream ? 700 : 500,
-                    color: now || isOpen ? ink : dim,
-                  }}
+                  style={{ fontWeight: 600, color: now || isOpen ? ink : dim }}
                 >
                   {c.label}
                 </span>
@@ -333,7 +324,6 @@ function Tree({
                     ink={ink}
                     dim={dim}
                     accent={accent}
-                    cream={cream}
                   />
                 ))}
               </ul>
@@ -354,7 +344,6 @@ function SlideRow({
   ink,
   dim,
   accent,
-  cream,
 }: {
   title: string;
   on: boolean;
@@ -362,7 +351,6 @@ function SlideRow({
   ink: string;
   dim: string;
   accent: string;
-  cream: boolean;
 }) {
   return (
     <li>
@@ -382,11 +370,7 @@ function SlideRow({
             title in the deck and costs the rail nothing it does not have. */}
         <span
           className="min-w-0 flex-1 text-[12.5px] leading-snug"
-          style={{
-            fontFamily: cream ? HAND : undefined,
-            color: on ? ink : dim,
-            fontWeight: on ? 600 : 400,
-          }}
+          style={{ color: on ? ink : dim, fontWeight: on ? 600 : 400 }}
         >
           {title}
         </span>

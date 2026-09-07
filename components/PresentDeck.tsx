@@ -18,7 +18,6 @@ import {
 } from "@/lib/present";
 import { NEXT_STEPS } from "@/lib/present-copy";
 import { icsFor } from "@/lib/appraisal-email";
-import HandWord from "@/components/HandWord";
 import PresentContents, {
   CONTENTS_INSET,
   CONTENTS_LEFT,
@@ -59,7 +58,6 @@ import {
   Emphasis,
   DISPLAY,
   Eyebrow,
-  FLOW,
   INK,
   Line,
   MIST,
@@ -336,9 +334,10 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
       className="relative flex min-h-full w-full shrink-0 flex-col pb-24"
       style={{ background: PAPER, color: INK }}
     >
-      <header className="px-6 pt-8 sm:px-12 sm:pt-10 lg:px-16">
-        <Mark className="h-10 sm:h-11" />
-      </header>
+      {/* The mark used to sit here, in this slide's own header. It is chrome
+          now — fixed top left for the whole deck — so all that is left is the
+          space it stood in, which the headline still wants. */}
+      <header className="h-[52px] sm:h-[60px]" />
 
       {/* THE RIGHT PADDING IS LOAD-BEARING, not spacing taste.
 
@@ -379,22 +378,12 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
                 <span className="block">About {minutes} minutes,</span>
                 <span className="block">and you&rsquo;ll know</span>
                 <span className="block whitespace-nowrap">
-                  what it{" "}
-                  {/* Written, like the entrance. Sized in em so it tracks the
-                      headline at every breakpoint, and a touch bigger than the
-                      serif around it - a script's x-height is far smaller, so
-                      matched sizes make it look shrunken. */}
-                  <HandWord
-                    word="lets"
-                    written={show}
-                    color={RED}
-                    size="1.22em"
-                    align="-0.30em"
-                    ms={1400}
-                    delay={420}
-                    className="mx-[0.06em] inline-block"
-                  />{" "}
-                  for
+                  {/* The last handwritten word in the deck, gone. It was drawn
+                      letterforms filling in along a pen path, and it was the
+                      one word on this slide nobody could read at a glance.
+                      Emphasis instead: same face as the sentence around it,
+                      coral, and the rule still draws itself in. */}
+                  what it <Emphasis show={show}>lets</Emphasis> for
                 </span>
               </h2>
             </Rise>
@@ -1946,7 +1935,6 @@ export default function PresentDeck({
           go={go}
           tint={tint}
           onDark={onDark}
-          cream={cream}
           accent={accent}
           sheet={sheet}
           onSheet={setSheet}
@@ -1971,22 +1959,30 @@ export default function PresentDeck({
           brochure should be able to get there, and a deck that makes them
           swipe past nine slides they did not ask for has earned being
           closed. */}
+      {/* ── The mark, top left ──
+          James, 7 Sep. One logo, in one place, for the whole deck rather than
+          reprinted per slide. Above 1440 the contents rail carries it at the
+          head of its own column and this one stands down, so there is never
+          two of them. */}
       <div
-        className={`pointer-events-none fixed inset-x-0 top-0 flex items-center justify-end px-6 pt-7 sm:px-10 lg:px-14 ${
-          /* On a desktop the contents rail already says which part this is and
-             how far into it we are, in words. Two answers to the same question
-             on one screen is one too many. */
+        className={`pointer-events-none fixed left-0 top-0 z-30 px-6 pt-6 sm:px-10 sm:pt-7 lg:px-14 ${
           hasContents ? CONTENTS_OFF : ""
         }`}
       >
+        <Mark className="h-9 sm:h-10" />
+      </div>
+
+      <div className="pointer-events-none fixed inset-x-0 top-0 flex items-center justify-end px-6 pt-7 sm:px-10 lg:px-14">
         <div className="flex items-center gap-4">
+          {/* WHERE WE ARE, in the top right. James, 7 Sep. It is the part's
+              name and not a count, which is the same rule as before: "1 / 29"
+              on the first screen tells a landlord how much is left rather than
+              what they are looking at. Shown at every width now — a phone is
+              the device that most needs telling. */}
           {chapter?.label && (
             <span
-              className="hidden text-[12.5px] sm:block"
-              style={{
-                fontFamily: cream ? HAND : undefined,
-                color: onDark ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.5)",
-              }}
+              className="max-w-[45vw] truncate text-[12.5px]"
+              style={{ color: onDark ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.5)" }}
             >
               {chapter.label}
             </span>
@@ -2027,11 +2023,19 @@ export default function PresentDeck({
         </div>
       </div>
 
-      {/* Bottom: the brand on the left, the two controls on the right. A hard
-          rule rather than a fade - the entrance is a flat colour now, and a
-          gradient over a flat ground reads as a smudge. */}
+      {/* ── The navigation bar ──
+          James, 7 Sep: "just the forward and back arrows". So that is all it
+          holds. The brand went to the top left, above the contents, and the
+          slide title went to the top right as the part's name — both were
+          saying, at the foot of the page, things that belong at the head of it.
+
+          THE BAR ITSELF STAYS, with its own ground and hairline, even though
+          it now carries two round buttons. It is what guarantees nothing on a
+          dense slide prints under them: seven slides are taller than a laptop
+          window, and they scroll up to a solid edge rather than fading out
+          behind a floating control. */}
       <div
-        className={`fixed inset-x-0 bottom-0 flex items-center justify-between gap-4 px-6 pb-5 pt-4 sm:px-10 lg:px-16 ${
+        className={`fixed inset-x-0 bottom-0 flex items-center justify-end gap-2.5 px-6 pb-5 pt-4 sm:px-10 lg:px-16 ${
           hasContents ? CONTENTS_LEFT : ""
         }`}
         style={{
@@ -2039,71 +2043,44 @@ export default function PresentDeck({
           borderTop: `1px solid ${onDark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.07)"}`,
         }}
       >
-        <span
-          className="hidden text-[13px] sm:block"
-          style={{
-            fontFamily: HAND,
-            color: onDark ? "rgba(255,255,255,0.8)" : "rgba(0,0,0,0.5)",
-          }}
-        >
-          The Letting Experts
-        </span>
-        {/* On a phone the brand gives way to the slide's own title — knowing
-            where you are beats knowing whose deck it is. */}
-        <span
-          className="max-w-[45%] truncate text-[12px] sm:hidden"
-          style={{
-            fontFamily: cream ? HAND : undefined,
-            color: onDark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.45)",
-          }}
-        >
-          {chapter?.label || slides[at]?.title}
-        </span>
-
-        <div className="flex items-center gap-2.5">
-          {/* Contents, on everything narrower than the rail's breakpoint. It
-              sits with Back and Next rather than in a corner of its own
-              because it IS navigation, and a landlord reaching for the thumb
-              end of the screen should find all three in one place. */}
-          {hasContents && (
-            <button
-              onClick={() => setSheet(true)}
-              aria-label="Contents"
-              className={`flex items-center gap-1.5 rounded-full border px-3.5 py-2.5 text-[13px] transition-opacity sm:px-4 ${CONTENTS_OFF}`}
-              style={{
-                borderColor: onDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.15)",
-                color: onDark ? "#ffffff" : INK,
-              }}
-            >
-              <ContentsIcon />
-              <span className="hidden sm:inline">Contents</span>
-            </button>
-          )}
+        {/* Contents, only where the rail is not. Above 1440 the whole list is
+            down the left and this would be a second door to the same room;
+            below it, this is the ONLY way in, and a deck whose contents exist
+            on a desktop and nowhere else is worse than one with none. */}
+        {hasContents && (
           <button
-            onClick={() => go(at - 1)}
-            disabled={at === 0}
-            className="flex items-center gap-1.5 rounded-full border px-4 py-2.5 text-[13px] transition-opacity disabled:opacity-30 sm:px-5"
+            onClick={() => setSheet(true)}
+            aria-label="Contents"
+            className={`flex h-11 w-11 items-center justify-center rounded-full border transition-opacity ${CONTENTS_OFF}`}
             style={{
               borderColor: onDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.15)",
               color: onDark ? "#ffffff" : INK,
             }}
           >
-            <Chevron dir="left" />
-            Back
+            <ContentsIcon />
           </button>
-          <button
-            onClick={() => go(at + 1)}
-            disabled={at === slides.length - 1}
-            className="flex items-center gap-1.5 rounded-full px-5 py-2.5 text-[13px] font-medium transition-opacity disabled:opacity-30 sm:px-6"
-            style={{
-              background: onDark ? "#ffffff" : INK,
-              color: onDark ? accent : "#ffffff",
-            }}
-          >
-            Next
-            <Chevron dir="right" />
-          </button>
-        </div>
+        )}
+        <button
+          onClick={() => go(at - 1)}
+          disabled={at === 0}
+          aria-label="Back"
+          className="flex h-11 w-11 items-center justify-center rounded-full border transition-opacity disabled:opacity-30"
+          style={{
+            borderColor: onDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.15)",
+            color: onDark ? "#ffffff" : INK,
+          }}
+        >
+          <Chevron dir="left" />
+        </button>
+        <button
+          onClick={() => go(at + 1)}
+          disabled={at === slides.length - 1}
+          aria-label="Next"
+          className="flex h-11 w-11 items-center justify-center rounded-full transition-opacity disabled:opacity-30"
+          style={{ background: onDark ? "#ffffff" : INK, color: onDark ? accent : "#ffffff" }}
+        >
+          <Chevron dir="right" />
+        </button>
       </div>
     </div>
     </DeckStyleCtx.Provider>
