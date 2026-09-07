@@ -257,13 +257,3 @@ export function dueWithin(days: number, book: CompProperty[] = COMP_BOOK) {
   return out.sort((a, b) => (a.cert?.expires ?? -999) - (b.cert?.expires ?? -999));
 }
 
-/** The trades book — who gets the works order. */
-export const CONTRACTORS: Record<string, string[]> = {
-  electrician: ["M. Fletcher Electrical", "Brightspark NG", "Ohm & Away Ltd"],
-  "Gas Safe engineer": ["R. Holt Heating (Gas Safe 512884)", "Notts Boiler Co"],
-  "EPC assessor": ["EPC Assessors Notts", "GreenScore Surveys"],
-  "fire assessor": ["Midlands Fire Safety", "SafeExit Assessments"],
-  "council application": ["Renew with the council"],
-  assessor: ["AquaCheck Midlands"],
-  "engineer on next visit": ["Fold into the next visit"],
-};

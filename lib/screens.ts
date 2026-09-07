@@ -76,6 +76,23 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     caveats: ["The board layout is saved in your own browser, so it does not follow you to another device."],
   },
 
+  "/maintenance": {
+    purpose: "Every job on the managed book, reported through paid: repairs on an urgency, planned jobs like a gas safety on a date.",
+    does: [
+      "Report a repair: the property, what is wrong, how urgent. Emergency means attend within 24 hours, urgent within 3 days, routine within 14. The clock starts when it is reported.",
+      "Plan a job: a gas safety, an EICR, a boiler service, an inspection, with the date it is due. Compliance can raise one from a certificate that is coming up.",
+      "Open a job for its sheet: what needs doing next, the contractor, the quote and the landlord's authority, the invoice, the timeline under each person's name, and the files on it.",
+      "A quote over the landlord's authority waits on their yes and says so; under it, the job is approved on the spot.",
+      "Keep the trades book under Contractors, with Gas Safe and NICEIC numbers.",
+    ],
+    wiring: "live",
+    caveats: [
+      "Nothing here emails the contractor, the tenant or the landlord yet. Ring them, and put the line on the timeline.",
+      "PayProp is read-only to the OS, so marking a job as charged through PayProp records the fact here; the charge is raised in PayProp by hand.",
+      "A certificate that comes back from a planned job is filed on the job. Attaching it to the property's compliance file is still done from Compliance.",
+    ],
+  },
+
   "/tools": {
     purpose:
       "The kit that sits alongside your book, grouped by the job it does. The first group is Prospecting — the doors nobody has knocked on yet.",

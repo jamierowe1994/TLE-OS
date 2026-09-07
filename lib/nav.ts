@@ -53,6 +53,9 @@ export const FRONT: NavItem[] = [
 /** BACK OFFICE — the book being run. */
 export const BACK: NavItem[] = [
   { href: "/compliance", label: "Compliance", icon: "shield" },
+  /* Works orders: repairs and planned jobs on the managed book, reported
+     through paid. Next to Compliance because a gas safety is both. */
+  { href: "/maintenance", label: "Maintenance", icon: "setting" },
   /* Back office rather than Marketing: this is the audit of what already goes
      out under our name, not a place to write anything new. */
   { href: "/emails", label: "Emails", icon: "mail" },
@@ -219,6 +222,7 @@ export const AGENT_ROUTES = [
   "/viewings",
   "/applications",
   "/compliance",
+  "/maintenance",
   "/emails",
   "/portfolio",
   "/finances",

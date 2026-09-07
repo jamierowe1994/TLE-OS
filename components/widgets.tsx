@@ -914,6 +914,43 @@ function LeadSourcesWidget({ w, h }: { w: number; h: number }) {
   );
 }
 
+/** Live since 7 Sep 2026, off the works orders. It was "7 · 2 urgent", typed in. */
+const worksSlot: { p: Promise<unknown> | null } = { p: null };
+function MaintenanceWidget({ w, h }: { w: number; h: number }) {
+  const { data, loading, error } = useShared<{ summary: { open: number; overdue: number; emergencies: number; awaitingLandlord: number; byKind: { repair: number; planned: number } }; orders: { id: string; ref: number; title: string; propertyName: string; status: string; urgency: string | null; dueAt: string | null }[] }>(
+    worksSlot, "/api/works-orders?open=1",
+    (j) => (j.ok && j.summary ? { summary: j.summary as never, orders: (j.orders as never[]) ?? [] } : null)
+  );
+  const s = data?.summary;
+  return (
+    <>
+      <Head icon="setting" label="Maintenance jobs" />
+      {loading ? (
+        <BigCount value="•" hint="reading the jobs" />
+      ) : error || !s ? (
+        <BigCount value="—" hint={error ?? "couldn't read the jobs"} />
+      ) : w === 1 && h === 1 ? (
+        <BigCount value={String(s.open)} hint={s.emergencies ? `${s.emergencies} emergenc${s.emergencies === 1 ? "y" : "ies"}` : s.overdue ? `${s.overdue} overdue` : `${s.byKind.repair} repairs · ${s.byKind.planned} planned`} />
+      ) : (
+        <>
+          <BigCount value={String(s.open)} hint={`${s.overdue} overdue · ${s.awaitingLandlord} awaiting the landlord`} />
+          <RowList
+            rows={(data?.orders ?? []).slice(0, h >= 2 ? 5 : 3).map((o) => ({
+              a: `#${o.ref}`,
+              b: `${o.title} — ${o.propertyName}`,
+              c: o.urgency === "emergency" ? "EMERGENCY" : o.dueAt ? new Date(o.dueAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : undefined,
+            }))}
+            max={h >= 2 ? 5 : 3}
+          />
+          <Link href="/maintenance" className="mt-3 block text-[11px] font-semibold text-muted transition-colors hover:text-ink">
+            All jobs →
+          </Link>
+        </>
+      )}
+    </>
+  );
+}
+
 function LeadsTodayWidget({ w, h }: { w: number; h: number }) {
   const { data, loading, unlinked, error } = useShared<{ leads: Lead[] }>(
     leadsSlot, "/api/leads",
@@ -1311,12 +1348,7 @@ export const WIDGETS: Record<string, WidgetDef> = {
   maintenance: {
     label: "Maintenance jobs", icon: "setting", hint: "what's open, what's urgent",
     defaultW: 1, defaultH: 1,
-    render: (w, h) => (
-      <>
-        <Head icon="setting" label="Maintenance jobs" />
-        <NotConnected needs="No source. REX's property management tables are empty and nothing else records jobs. Works orders are on the build list." w={w} h={h} />
-      </>
-    ),
+    render: (w, h) => <MaintenanceWidget w={w} h={h} />,
   },
 
   renewals: {
