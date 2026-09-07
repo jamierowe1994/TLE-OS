@@ -641,9 +641,10 @@ Re-read 2 September 2026.
 | James: whose name nurture emails come from. The scheduler sends through REX with no agent in the loop, so it needs a REX user id in `REX_CAMPAIGN_SEND_AS` on the TLE-OS service; until then every due email is held and the Marketing screen says so. Also the Nurture campaigns switch on Admin, Switches, and Francesca writing the three Gone quiet emails | item 15; the lead spine's Nurture branch actually emailing anyone |
 
 ### Launch-week checks added 7 Sep 2026
-- **Published count**: REX's Published filter shows about 120 rentals, the OS's book 114 (57 available
-  once the let-agreed ones are set aside, which REX still lists as published). Find the six before
-  pre-launch: likely a category or listing-state the Listings::search criteria exclude.
+- **Published count - resolved 7 Sep**: REX shows 120 published rentals, the OS 114. The six are
+  commercial rentals (three under The Letting Experts' office - Glasgow, Peterborough, Cambridge -
+  three under The Commercial Property Experts). James: leave commercial off for now. The book asks
+  REX for residential_rental only, and gets all 114; 57 are available once let-agreed is set aside.
 - **Lead ledger** (`os_leads`, cron every five minutes) and **viewings ledger** (`os_viewings`, read
   when a listing opens) went live 7 Sep. Consider a nightly viewings sweep across the whole book
   so history accrues without anyone opening the listing.
