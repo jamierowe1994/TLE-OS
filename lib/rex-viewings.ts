@@ -160,6 +160,22 @@ export async function recordViewings(viewings: Viewing[]): Promise<void> {
     cols.flat()
   );
 
+  /* An appointment booked in the OS that has since reached REX comes back
+     here as a REX event. Same place, same start (to the minute), and the OS
+     row is marked with the REX id so nothing shows it twice. */
+  for (const v of viewings) {
+    if (!v.listingLabel && !v.title) continue;
+    const street = (v.listingLabel ?? v.title).split(",")[0].trim().toLowerCase();
+    if (street.length < 4) continue;
+    await q(
+      `UPDATE os_appointments SET rex_event_id = $1, synced_at = COALESCE(synced_at, NOW())
+        WHERE rex_event_id IS NULL
+          AND ABS(EXTRACT(EPOCH FROM (starts_at - $2::timestamptz))) <= 120
+          AND (LOWER(where_at) LIKE $3 OR LOWER(title) LIKE $3)`,
+      [v.id, v.startsAt, `%${street}%`]
+    ).catch(() => null);
+  }
+
   /* Viewers as leads. Only people the ledger does not already hold by
      contact id: a portal enquiry that led to the viewing stays the record. */
   const contacts = new Map<string, { c: ViewingContact; v: Viewing }>();
@@ -203,4 +219,88 @@ export async function leadIdsByContact(contactIds: string[]): Promise<Map<string
   const rows = await q<{ id: string; contact_id: string }>(`SELECT id, contact_id FROM os_leads WHERE contact_id = ANY($1)`, [contactIds]).catch(() => []);
   for (const r of rows) if (!out.has(r.contact_id) || !r.id.startsWith("contact-")) out.set(r.contact_id, r.id);
   return out;
+}
+
+/** Whose calendars count as ours - the lettings mailboxes. */
+const OUR_DOMAIN = "thelettingexperts.co.uk";
+
+/**
+ * The nightly sweep: every event on the lettings calendars, back to `since`,
+ * that is tied to a listing or a property, kept. Keyed on REX's event id,
+ * so a re-read updates the row it wrote last night rather than adding one.
+ * James, 7 Sep 2026: for the team moving over, history has to be there
+ * before anyone opens the listing; once bookings are made in the OS the
+ * sweep matters less.
+ */
+export async function sweepDiary(sinceDays = 730, budgetPages = 50): Promise<{ scanned: number; kept: number; pages: number; from: string; cursor: string | null; caughtUp: boolean }> {
+  if (!rexConfigured()) return { scanned: 0, kept: 0, pages: 0, from: "", cursor: null, caughtUp: false };
+  const calIds: string[] = [];
+  for (let page = 0; page < 3; page++) {
+    const res = await rexCall("Calendars", "search", { limit: 100, offset: page * 100 });
+    if (!res.ok) break;
+    const rows = rexRows(res.result) as { id?: string; owner_user?: { email_address?: string } }[];
+    for (const c of rows) if ((c.owner_user?.email_address ?? "").toLowerCase().endsWith(`@${OUR_DOMAIN}`) && c.id) calIds.push(String(c.id));
+    if (rows.length < 100) break;
+  }
+
+  /* Where the last run got to. REX's calendar answers about four seconds a
+     page and two years is near three hundred pages, so each run takes a
+     budget of pages from the cursor and the next run carries on. Once it
+     reaches today it starts the next run a month back, so the recent diary
+     is re-read every time and a booking changed in REX is picked up. */
+  const CURSOR_KEY = "viewings-sweep:v1";
+  const held = hasDb()
+    ? await q<{ payload: { cursor?: string | null } }>(`SELECT payload FROM os_cache WHERE key = $1`, [CURSOR_KEY]).then((r) => r[0]?.payload ?? null).catch(() => null)
+    : null;
+  const since = new Date();
+  since.setDate(since.getDate() - sinceDays);
+  const from = held?.cursor && new Date(held.cursor) > since ? new Date(held.cursor) : since;
+  const iso = (d: Date) => d.toISOString().slice(0, 19).replace("T", " ");
+
+  let scanned = 0;
+  let kept = 0;
+  let pages = 0;
+  let last: string | null = null;
+  let caughtUp = false;
+  let batch: Viewing[] = [];
+  for (let offset = 0; pages < budgetPages; offset += 100) {
+    const res = await rexCall("CalendarEvents", "search", {
+      limit: 100,
+      offset,
+      order_by: { starts_at: "asc" },
+      criteria: [
+        { name: "starts_at", type: ">=", value: iso(from) },
+        ...(calIds.length ? [{ name: "calendar_id", type: "in", value: calIds }] : []),
+      ],
+    });
+    if (!res.ok) break;
+    pages++;
+    const rows = rexRows(res.result) as RexEvent[];
+    scanned += rows.length;
+    for (const e of rows) {
+      const v = toViewing(e);
+      if (v && (v.listingId || v.propertyId)) batch.push(v);
+      if (e.starts_at?.time) last = e.starts_at.time;
+    }
+    if (batch.length >= 200) { await recordViewings(batch); kept += batch.length; batch = []; }
+    if (rows.length < 100) { caughtUp = true; break; }
+  }
+  if (batch.length) { await recordViewings(batch); kept += batch.length; }
+
+  /* Next time: carry on from the last event read, or, caught up, a month back. */
+  let cursor: string | null = last;
+  if (caughtUp || (last && new Date(last) > new Date())) {
+    const back = new Date();
+    back.setDate(back.getDate() - 30);
+    cursor = back.toISOString();
+    caughtUp = true;
+  }
+  if (hasDb() && cursor) {
+    await q(
+      `INSERT INTO os_cache (key, payload, computed_at) VALUES ($1, $2, NOW())
+       ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, computed_at = NOW()`,
+      [CURSOR_KEY, JSON.stringify({ cursor, caughtUp, at: new Date().toISOString() })]
+    ).catch(() => null);
+  }
+  return { scanned, kept, pages, from: from.toISOString(), cursor, caughtUp };
 }

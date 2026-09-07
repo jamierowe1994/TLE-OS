@@ -953,6 +953,10 @@ CREATE TABLE IF NOT EXISTS os_appointments (
   created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS os_appointments_when ON os_appointments (starts_at);
+-- Once an OS booking has reached REX and been read back as a calendar event,
+-- the two are one appointment: this is the REX event it became, so the diary
+-- and the listing never show it twice (James, 7 Sep 2026).
+ALTER TABLE os_appointments ADD COLUMN IF NOT EXISTS rex_event_id TEXT;
 
 -- Presentations sent to landlords — the pre-appraisal deck they open from a
 -- link in the confirmation email.
