@@ -629,3 +629,109 @@ export const INVOICE_SENT = {
   ],
   branding: { showSignoff: false },
 } as const;
+
+/* The report to the landlord, the moment it is logged (workflow step 1). */
+export const WORKS_LANDLORD_REPORT = {
+  subject: "Reported at {{address}}: {{title}}",
+  preheader: "What the tenant has told us, and what happens next.",
+  mode: "blocks",
+  blocks: [
+    H("wlr1", "A repair has been reported"),
+    T("wlr2", "Hi {{landlordName}},<br><br>Your tenant has reported the following at <strong>{{address}}</strong>. We've logged it as job #{{ref}} and marked it <strong>{{urgency}}</strong>."),
+    T("wlr3", "<strong>{{title}}</strong><br>{{category}}<br><br>{{description}}"),
+    T("wlr4", "There are two ways we can go from here: you arrange it with your own contractor, or we arrange it for you with one of ours and keep you posted at each step. Reply to this email or ring {{agentPhone}} and tell us which you'd prefer."),
+    SP("wlr5", 8),
+    T("wlr6", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    FOOT("wlr7", "You're getting this because The Letting Experts manage this property for you."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/* The report to a contractor, asking if they'll take it (step 4). */
+export const WORKS_CONTRACTOR_REPORT = {
+  subject: "Can you take this? {{title}} at {{address}}",
+  preheader: "A job for you if you're free. Reply yes and it's yours.",
+  mode: "blocks",
+  blocks: [
+    H("wcr1", "Can you take this one?"),
+    T("wcr2", "Hi {{contractorName}},<br><br>We've got a job at <strong>{{address}}</strong> and you're our first call."),
+    T("wcr3", "<strong>{{title}}</strong><br>{{category}} · {{urgency}} · attend by {{dueBy}}<br><br>{{description}}"),
+    T("wcr4", "Reply <strong>yes</strong> and we'll send the works order with the tenant's details for access. If you can't, say so and we'll ask somebody else - no hard feelings."),
+    SP("wcr5", 8),
+    T("wcr6", "Thanks,<br>{{agentName}}<br>The Letting Experts · {{agentPhone}}"),
+    FOOT("wcr7", "You're getting this because you're on The Letting Experts' trades book."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/* To the tenant, the moment a contractor says yes (step 5). */
+export const WORKS_TENANT_FOUND = {
+  subject: "We've found someone for {{title}}",
+  preheader: "{{contractorName}} will be in touch to arrange access.",
+  mode: "blocks",
+  blocks: [
+    H("wtf1", "We've found someone"),
+    T("wtf2", "Hi {{tenantName}},<br><br>Good news on <strong>{{title}}</strong> (job #{{ref}}): <strong>{{contractorName}}</strong>{{contractorFirm}} has agreed to do the work."),
+    T("wtf3", "They'll be in touch with you directly to arrange a time that suits you both. If you haven't heard from them within a couple of days, reply to this email or ring {{agentPhone}} and we'll chase."),
+    SP("wtf4", 8),
+    T("wtf5", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    FOOT("wtf6", "You're getting this because you reported a repair at a property managed by The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/* To the landlord once the date is in (step 6). */
+export const WORKS_LANDLORD_ARRANGED = {
+  subject: "Arranged: {{title}} at {{address}}, {{scheduledAt}}",
+  preheader: "{{contractorName}} is booked. Nothing for you to do.",
+  mode: "blocks",
+  blocks: [
+    H("wla1", "It's arranged"),
+    T("wla2", "Hi {{landlordName}},<br><br><strong>{{contractorName}}</strong> is booked to attend {{address}} on <strong>{{scheduledAt}}</strong> for <strong>{{title}}</strong> (job #{{ref}}). The tenant knows to expect them."),
+    T("wla3", "We'll let you know when it's done, and send the invoice once we have the contractor's. Anything over your pre-authorised {{authority}} we'd have asked you about first."),
+    SP("wla4", 8),
+    T("wla5", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    FOOT("wla6", "You're getting this because The Letting Experts manage this property for you."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/* To the contractor after the visit: mark it done, drop in the photos and the invoice (step 7). */
+export const WORKS_CONTRACTOR_DONE_REQUEST = {
+  subject: "#{{ref}} {{title}}: all done? Invoice and photos here",
+  preheader: "One page: mark it done, add your photos and your invoice.",
+  mode: "blocks",
+  blocks: [
+    H("wcd1", "All done at {{address}}?"),
+    T("wcd2", "Hi {{contractorName}},<br><br>If job #{{ref}}, <strong>{{title}}</strong>, is finished, the button below takes you to one page where you can mark it done, add any photos of the work, and drop in your invoice. Quote #{{ref}} on it and it goes straight to accounts."),
+    SP("wcd3", 8),
+    BTN("wcd4", "Mark it done and send the invoice", "{{contractorLink}}"),
+    SP("wcd5", 8),
+    T("wcd6", "If it isn't finished yet, ignore this until it is. If something's stopping you, reply and tell us."),
+    SP("wcd7", 8),
+    T("wcd8", "Thanks,<br>{{agentName}}<br>The Letting Experts · {{agentPhone}}"),
+    FOOT("wcd9", "You're getting this because you're booked on a job for The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/* To the tenant when it's marked done: are you happy? (step 8) */
+export const WORKS_TENANT_HAPPY = {
+  subject: "Was {{title}} sorted?",
+  preheader: "One click to tell us. If it isn't right, we'll get somebody back out.",
+  mode: "blocks",
+  blocks: [
+    H("wth1", "Was it sorted?"),
+    T("wth2", "Hi {{tenantName}},<br><br>We believe {{contractorName}} has been out to {{address}} for <strong>{{title}}</strong> (job #{{ref}}). Could you tell us whether you're happy with what's been done?"),
+    SP("wth3", 8),
+    BTN("wth4", "Yes, all sorted", "{{happyLink}}"),
+    SP("wth5", 4),
+    BTN("wth6", "No, it isn't right", "{{notHappyLink}}"),
+    SP("wth7", 8),
+    T("wth8", "A no comes straight to us and somebody from the team will be in touch."),
+    SP("wth9", 8),
+    T("wth10", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    FOOT("wth11", "You're getting this because a repair was carried out at a property managed by The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;

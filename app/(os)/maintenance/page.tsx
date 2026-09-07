@@ -9,6 +9,8 @@ import { Pill } from "@/components/Wire";
 import { PressButton } from "@/components/Bits";
 import { openDocument } from "@/lib/doc-sheet";
 import type { Contractor, WorksOrder, WorksEvent, WorksSummary, Kind, Move, Status, Urgency, PaidHow } from "@/lib/works-orders";
+import { STEPS, stepOf } from "@/lib/works-steps";
+import { WorksNow, ContractorForm, BLANK_CONTRACTOR } from "@/components/WorksNow";
 
 /**
  * Maintenance: every job on the managed book, reported through paid.
@@ -52,15 +54,19 @@ const toPence = (s: string) => Math.round(Number(String(s).replace(/[£,\s]/g, "
 /** What the row says to do next. The job's next thing, not its status. */
 function nextFor(o: WorksOrder): { text: string; hot: boolean } {
   const late = o.dueAt ? new Date(o.dueAt).getTime() < Date.now() : false;
-  switch (o.status) {
-    case "reported": return { text: o.kind === "repair" ? `Attend by ${stamp(o.dueAt)}` : `Due ${day(o.dueAt)} - book a contractor`, hot: late || o.urgency === "emergency" };
-    case "approval": return { text: `Waiting on the landlord to approve ${pounds(o.quotePence)}`, hot: late };
-    case "approved": return { text: "Book a contractor", hot: late };
-    case "scheduled": return { text: `${o.contractorName || "Contractor"} booked for ${stamp(o.scheduledAt)}`, hot: false };
-    case "done": return { text: "Waiting on the invoice", hot: false };
-    case "invoiced": return { text: `${pounds(o.invoicePence)} to settle`, hot: false };
-    case "paid": return { text: `Paid ${day(o.paidAt)}`, hot: false };
-    case "cancelled": return { text: o.cancelledReason || "Cancelled", hot: false };
+  const clock = o.kind === "repair" ? ` · attend by ${stamp(o.dueAt)}` : ` · due ${day(o.dueAt)}`;
+  switch (stepOf(o)) {
+    case "tell_landlord": return { text: `Tell the landlord${clock}`, hot: late || o.urgency === "emergency" };
+    case "arranging": return { text: "Who's arranging it?", hot: late || o.urgency === "emergency" };
+    case "landlord_follow_up": return { text: `Landlord organising · follow up ${day(o.landlordFollowUpAt)}`, hot: !!o.landlordFollowUpAt && new Date(o.landlordFollowUpAt).getTime() < Date.now() };
+    case "pick_contractor": return { text: o.status === "approval" ? `Waiting on the landlord to approve ${pounds(o.quotePence)}` : `Pick a contractor${clock}`, hot: late };
+    case "contractor_confirm": return { text: `${o.contractorName} contacted - confirmed?`, hot: late };
+    case "booking": return { text: `${o.contractorName} confirmed - waiting on a date`, hot: late };
+    case "visit": return { text: `${o.contractorName || "Contractor"} booked for ${stamp(o.scheduledAt)}`, hot: false };
+    case "aftercare": return { text: o.tenantHappy === "no" ? "Tenant not happy" : "Done - is the tenant happy?", hot: o.tenantHappy === "no" };
+    case "payment": return { text: "Who's being paid?", hot: false };
+    case "invoice": return { text: o.invoicePence != null ? `${pounds(o.invoicePence)} in - invoice the landlord` : "Waiting on the invoice", hot: false };
+    case "closed": return { text: o.status === "paid" ? `Paid ${day(o.paidAt)}` : o.status === "cancelled" ? (o.cancelledReason || "Cancelled") : `Landlord sorted it · ${day(o.landlordResolvedAt)}`, hot: false };
   }
 }
 
@@ -72,13 +78,14 @@ export default function Maintenance() {
   /* The rail's two children: Jobs (repairs and planned, with the invoices
      beside them) and Contractors. The pills row narrows within Jobs. */
   const rail = params.get("section") === "contractors" ? "contractors" : "jobs";
-  const [section, setSection] = useState<Kind | "contractors" | "invoices">("repair");
+  const [section, setSection] = useState<Kind | "contractors" | "invoices" | "accounts">("repair");
   useEffect(() => {
     if (rail === "contractors") setSection("contractors");
     else if (params.get("section") === "invoices") setSection("invoices");
+    else if (params.get("section") === "accounts") setSection("accounts");
     else setSection((cur) => (cur === "contractors" ? "repair" : cur));
   }, [rail, params]);
-  const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; live: boolean; reason?: string } | null>(null);
+  const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; live: boolean; reason?: string; canCorporate?: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
   const [raising, setRaising] = useState<Kind | null>(null);
@@ -107,13 +114,13 @@ export default function Maintenance() {
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return orders.filter((o) => {
-      if (section !== "contractors" && section !== "invoices" && o.kind !== section) return false;
+      if (section !== "contractors" && section !== "invoices" && section !== "accounts" && o.kind !== section) return false;
       if (!showClosed && !OPEN.includes(o.status)) return false;
       if (needle && !`${o.propertyName} ${o.locality} ${o.title} ${o.category} ${o.contractorName} ${o.landlord} ${o.tenant} ${o.ref}`.toLowerCase().includes(needle)) return false;
       return true;
     });
   }, [orders, section, showClosed, q]);
-  const grouped = useMemo(() => STATUS_ORDER.map((s) => ({ status: s, rows: rows.filter((r) => r.status === s) })).filter((g) => g.rows.length), [rows]);
+  const grouped = useMemo(() => STEPS.map((st) => ({ status: st.id, label: st.label, rows: rows.filter((r) => stepOf(r) === st.id) })).filter((g) => g.rows.length), [rows]);
   const s = data?.summary;
   const open = orders.find((o) => o.id === openId) ?? null;
 
@@ -171,6 +178,7 @@ export default function Maintenance() {
             ["repair", "Repairs", s?.byKind.repair],
             ["planned", "Planned maintenance", s?.byKind.planned],
             ["invoices", "Invoices", undefined],
+            ["accounts", "Accounts", orders.filter((o) => o.status === "invoiced").length || undefined],
           ] as const
         ).filter(() => rail === "jobs").map(([key, label, n]) => (
           <button
@@ -183,7 +191,7 @@ export default function Maintenance() {
             {n != null && <span className="ml-1.5 opacity-70">{n}</span>}
           </button>
         ))}
-        {section !== "contractors" && section !== "invoices" && (
+        {section !== "contractors" && section !== "invoices" && section !== "accounts" && (
           <button type="button" onClick={() => setShowClosed((v) => !v)} className="ml-auto text-[11.5px] text-muted underline transition-colors hover:text-ink">
             {showClosed ? "Hide finished jobs" : "Show finished jobs"}
           </button>
@@ -195,6 +203,8 @@ export default function Maintenance() {
 
       {section === "invoices" ? (
         <Invoices onOpen={(id) => router.push(`/maintenance/invoices/${id}`)} />
+      ) : section === "accounts" ? (
+        <Accounts orders={orders} loaded={!!data} onOpen={setOpenId} onChanged={load} />
       ) : section === "contractors" ? (
         <Contractors onChange={load} openJob={(id) => { router.push("/maintenance?section=jobs"); setOpenId(id); }} />
       ) : !data ? (
@@ -211,7 +221,7 @@ export default function Maintenance() {
           {grouped.map((g) => (
             <section key={g.status} className="rounded-2xl border border-line/80 bg-panel p-5">
               <div className="flex items-baseline justify-between gap-3">
-                <h2 className="text-[15px]">{STATUS_LABEL[g.status]}</h2>
+                <h2 className="text-[15px]">{g.label}</h2>
                 <span className="text-[11px] text-muted">{g.rows.length}</span>
               </div>
               <ul className="mt-3 divide-y divide-line/50">
@@ -256,6 +266,7 @@ export default function Maintenance() {
         <JobDrawer
           order={open}
           contractors={data?.contractors ?? []}
+          canCorporate={!!data?.canCorporate}
           onClose={() => setOpenId(null)}
           onChanged={(o) => { setData((d) => (d ? { ...d, orders: d.orders.map((x) => (x.id === o.id ? o : x)) } : d)); load(); }}
         />
@@ -280,7 +291,11 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
   const [tenant, setTenant] = useState("");
   const [tenantEmail, setTenantEmail] = useState("");
   const [landlordEmail, setLandlordEmail] = useState("");
+  const [landlordMobile, setLandlordMobile] = useState("");
   const [access, setAccess] = useState("");
+  const [place, setPlace] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
+  const [filled, setFilled] = useState<string[] | null>(null);
+  const [sent, setSent] = useState<WorksOrder | null>(null);
   const [contractorId, setContractorId] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [busy, setBusy] = useState(false);
@@ -312,6 +327,28 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
     }
   }, [props, pq, picked]);
   useEffect(() => { if (picked?.tenant) setTenant(picked.tenant); }, [picked]);
+  /* What the OS knows about the home fills the form: the tenant's name,
+     number and email, the landlord's email and mobile, the access notes on
+     file. James, 7 Sep 2026: "all of this stuff should be automated." */
+  useEffect(() => {
+    if (!picked) { setFilled(null); return; }
+    let live = true;
+    setFilled([]);
+    fetch(`/api/works-orders/property?id=${encodeURIComponent(picked.id)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => {
+      if (!live || !j.ok) return;
+      const got: string[] = [];
+      const t = j.tenant as { name: string; email: string; phone: string } | null;
+      const l = j.landlord as { name: string; email: string; phone: string } | null;
+      if (t?.name || t?.phone) { setTenant([t.name, t.phone].filter(Boolean).join(" · ")); got.push("tenant"); }
+      if (t?.email) { setTenantEmail(t.email); got.push("tenant's email"); }
+      if (l?.email) { setLandlordEmail(l.email); got.push("landlord's email"); }
+      if (l?.phone) { setLandlordMobile(l.phone); got.push("landlord's mobile"); }
+      if (j.access) { setAccess(j.access); got.push("access notes"); }
+      setPlace({ lat: j.lat ?? null, lng: j.lng ?? null });
+      setFilled(got);
+    }).catch(() => { if (live) setFilled([]); });
+    return () => { live = false; };
+  }, [picked]);
 
   const hits = useMemo(() => {
     const needle = pq.trim().toLowerCase();
@@ -336,14 +373,18 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        kind, propertyId: picked?.id ?? null, propertyName, locality: picked?.locality ?? "", landlord: picked?.landlord ?? "", tenant, tenantEmail, landlordEmail,
+        kind, propertyId: picked?.id ?? null, propertyName, locality: picked?.locality ?? "", landlord: picked?.landlord ?? "", tenant, tenantEmail, landlordEmail, landlordMobile,
+        propertyLat: place.lat, propertyLng: place.lng,
         title, description, category, urgency: kind === "repair" ? urgency : null, dueAt: kind === "planned" ? new Date(dueAt).toISOString() : null,
         reportedBy, access, contractorId: contractorId || null, scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
       }),
     }).then((x) => x.json()).catch(() => null);
     setBusy(false);
     if (!r?.ok) return setErr(r?.error ?? "Could not raise the job.");
-    onRaised(r.order);
+    /* The "message sent" moment James asked for, then straight into
+       telling the landlord. */
+    setSent(r.order);
+    setTimeout(() => onRaised(r.order), 1100);
   }
 
   const cats = kind === "repair" ? REPAIR_CATEGORIES : PLANNED_CATEGORIES;
@@ -354,6 +395,15 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
     <div className="fixed inset-0 z-[150] flex items-start justify-center overflow-y-auto p-4 sm:items-center">
       <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 cursor-default bg-ink/35" />
       <div className="fade-up relative w-full max-w-2xl rounded-3xl border border-line/80 bg-page p-6 shadow-[0_24px_60px_-20px_rgba(0,0,0,0.35)]">
+        {sent && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center rounded-3xl bg-page/95">
+            <span className="fade-up flex h-16 w-16 items-center justify-center rounded-full bg-ink text-page">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7" /></svg>
+            </span>
+            <p className="hand mt-4 text-[22px]">{kind === "repair" ? "Report sent" : "Job planned"}</p>
+            <p className="mt-1 text-[12px] text-muted">{sent.tenantEmail ? "The tenant has been told. " : ""}Now the landlord.</p>
+          </div>
+        )}
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted">{kind === "repair" ? "Repair" : "Planned maintenance"}</p>
@@ -366,9 +416,14 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
           <div className="relative sm:col-span-2">
             <label className={label}>Property</label>
             {picked ? (
-              <div className="mt-1 flex items-center justify-between gap-3 rounded-lg border border-accent-dark/50 bg-accent-soft/30 px-3 py-2.5">
-                <span className="min-w-0 truncate text-[13px]">{picked.name}{picked.locality ? `, ${picked.locality}` : ""}{picked.landlord ? ` · landlord ${picked.landlord}` : ""}</span>
-                <button type="button" onClick={() => { setPicked(null); setPq(""); }} className="text-[11px] text-muted underline">change</button>
+              <div>
+                <div className="mt-1 flex items-center justify-between gap-3 rounded-lg border border-accent-dark/50 bg-accent-soft/30 px-3 py-2.5">
+                  <span className="min-w-0 truncate text-[13px]">{picked.name}{picked.locality ? `, ${picked.locality}` : ""}{picked.landlord ? ` · landlord ${picked.landlord}` : ""}</span>
+                  <button type="button" onClick={() => { setPicked(null); setPq(""); }} className="text-[11px] text-muted underline">change</button>
+                </div>
+                <p className="mt-1 text-[11px] text-muted">
+                  {filled === null ? "Reading the property…" : filled.length === 0 ? "Nothing on file for the people here yet - fill them in below." : `Filled from the property: ${filled.join(", ")}.`}
+                </p>
               </div>
             ) : (
               <>
@@ -442,21 +497,29 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
           </div>
           <div>
             <label className={label}>Landlord's email</label>
-            <input type="email" value={landlordEmail} onChange={(e) => setLandlordEmail(e.target.value)} placeholder="For approvals over their authority" className={`mt-1 ${field}`} />
+            <input type="email" value={landlordEmail} onChange={(e) => setLandlordEmail(e.target.value)} placeholder="For the report and approvals" className={`mt-1 ${field}`} />
+          </div>
+          <div>
+            <label className={label}>Landlord's mobile</label>
+            <input value={landlordMobile} onChange={(e) => setLandlordMobile(e.target.value)} placeholder="To ring them first" className={`mt-1 ${field}`} />
           </div>
           <div className="sm:col-span-2">
             <label className={label}>Access notes</label>
             <input value={access} onChange={(e) => setAccess(e.target.value)} placeholder="Key safe, tenant works days, dog in the garden" className={`mt-1 ${field}`} />
           </div>
 
-          <div>
-            <label className={label}>Contractor, if already known</label>
-            <ContractorPick contractors={contractors} value={contractorId} onChange={setContractorId} className={`mt-1 ${field}`} />
-          </div>
-          <div>
-            <label className={label}>Booked for, if already booked</label>
-            <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className={`mt-1 ${field}`} />
-          </div>
+          {kind === "planned" && (
+            <>
+              <div>
+                <label className={label}>Contractor, if already known</label>
+                <ContractorPick contractors={contractors} value={contractorId} onChange={setContractorId} className={`mt-1 ${field}`} />
+              </div>
+              <div>
+                <label className={label}>Booked for, if already booked</label>
+                <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className={`mt-1 ${field}`} />
+              </div>
+            </>
+          )}
         </div>
 
         {err && <p className="mt-4 text-[12.5px] text-accent-dark">{err}</p>}
@@ -473,7 +536,7 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
 
 /* ── The job sheet ──────────────────────────────────────────────────────── */
 
-function JobDrawer({ order, contractors, onClose, onChanged }: { order: WorksOrder; contractors: Contractor[]; onClose: () => void; onChanged: (o: WorksOrder) => void }) {
+function JobDrawer({ order, contractors, canCorporate, onClose, onChanged }: { order: WorksOrder; contractors: Contractor[]; canCorporate: boolean; onClose: () => void; onChanged: (o: WorksOrder) => void }) {
   const [o, setO] = useState(order);
   const [events, setEvents] = useState<WorksEvent[]>([]);
   const [shown, setShown] = useState(false);
@@ -519,33 +582,35 @@ function JobDrawer({ order, contractors, onClose, onChanged }: { order: WorksOrd
     await move({ action: "file", file: { key: r.key, name: r.name, type: r.type } });
   }
 
-  const next = nextFor(o);
   const open = OPEN.includes(o.status);
   const field = "w-full rounded-lg border border-line/80 bg-box px-3 py-2 text-[13px] outline-none focus:border-ink";
   const btn = "rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] transition-colors hover:border-ink/40";
   const primary = "rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page";
 
-  /* Which buttons the job offers now. Its next thing first. */
-  const actions: { a: Move["action"]; label: string; primary?: boolean }[] = [];
+  /* The Now card fronts the workflow; these are the sheet's other tools. */
+  const actions: { a: Move["action"]; label: string }[] = [];
   if (open) {
-    if (o.status === "reported" || o.status === "approved") actions.push({ a: "assign", label: o.contractorId ? "Book a date" : "Book a contractor", primary: true });
-    if (o.status === "approval") actions.push({ a: "approve", label: "Landlord approved", primary: true });
-    if (o.status === "scheduled") actions.push({ a: "done", label: "Mark done", primary: true });
     actions.push({ a: "quote", label: o.quotePence != null ? "Change the quote" : "Add a quote" });
-    if (o.status !== "approval" && !o.approvedAt) actions.push({ a: "approve", label: "Record approval" });
-    if (o.status === "scheduled") actions.push({ a: "schedule", label: "Move the date" });
+    if (o.status === "approval") actions.push({ a: "approve", label: "Landlord approved" });
+    else if (!o.approvedAt) actions.push({ a: "approve", label: "Record approval" });
+    actions.push({ a: "assign", label: o.contractorId ? "Change the contractor" : "Set a contractor directly" });
     actions.push({ a: "cancel", label: "Cancel" });
-  } else if (o.status === "done") {
-    actions.push({ a: "invoice", label: "Add the contractor's invoice", primary: true });
+  } else if (o.status === "done" || o.status === "invoiced") {
+    if (o.invoicePence != null) actions.push({ a: "invoice", label: "Change the contractor's invoice" });
     actions.push({ a: "reopen", label: "Reopen" });
-  } else if (o.status === "invoiced") {
-    actions.push({ a: "paid", label: "Mark paid", primary: true });
-    actions.push({ a: "invoice", label: "Change the contractor's invoice" });
   } else if (o.status === "cancelled") {
-    actions.push({ a: "reopen", label: "Reopen", primary: true });
+    actions.push({ a: "reopen", label: "Reopen" });
   }
   actions.push({ a: "note", label: "Add a note" });
   actions.push({ a: "edit", label: "Edit details" });
+
+  async function invoiceLandlord() {
+    setBusy(true);
+    const r = await fetch("/api/invoices", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ orderId: o.id }) }).then((x) => x.json()).catch(() => null);
+    setBusy(false);
+    if (!r?.ok) return setErr(r?.error ?? "Could not draft the invoice.");
+    window.location.href = `/maintenance/invoices/${r.invoice.id}`;
+  }
 
   return (
     <div className="fixed inset-0 z-[130]">
@@ -570,37 +635,28 @@ function JobDrawer({ order, contractors, onClose, onChanged }: { order: WorksOrd
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          <div className={`rounded-2xl border p-4 ${next.hot ? "border-accent-dark/50 bg-accent-soft/30" : "border-line/80 bg-panel"}`}>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Next</p>
-            <p className={`mt-1 text-[14px] ${next.hot ? "font-semibold text-accent-dark" : ""}`}>{next.text}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {actions.map((x) => (
-                <button key={x.a + x.label} type="button" onClick={() => { setAct(x.a); setF({}); setErr(null); }} className={x.primary ? primary : btn}>
-                  {x.label}
-                </button>
-              ))}
-              {(o.status === "done" || o.status === "invoiced" || o.status === "paid") && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setBusy(true);
-                    const r = await fetch("/api/invoices", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ orderId: o.id }) }).then((x) => x.json()).catch(() => null);
-                    setBusy(false);
-                    if (!r?.ok) return setErr(r?.error ?? "Could not draft the invoice.");
-                    window.location.href = `/maintenance/invoices/${r.invoice.id}`;
-                  }}
-                  className={btn}
-                  title="Draft an invoice to the landlord from this job: their name, the job as the reference, and the contractor's cost as the first line"
-                >
-                  Invoice the landlord
-                </button>
-              )}
-              <label className={`${btn} cursor-pointer`}>
-                Add a file
-                <input type="file" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = ""; }} />
-              </label>
-            </div>
+          <WorksNow
+            o={o}
+            move={move}
+            busy={busy}
+            err={act ? null : err}
+            canCorporate={canCorporate}
+            onInvoiceLandlord={() => void invoiceLandlord()}
+          />
 
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted">More</span>
+            {actions.map((x) => (
+              <button key={x.a + x.label} type="button" onClick={() => { setAct(x.a); setF({}); setErr(null); }} className={btn}>
+                {x.label}
+              </button>
+            ))}
+            <label className={`${btn} cursor-pointer`}>
+              Add a file
+              <input type="file" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = ""; }} />
+            </label>
+          </div>
+          <div className={act ? "rounded-2xl border border-line/80 bg-panel p-4 mt-3" : ""}>
             {act && (
               <div className="mt-4 rounded-xl border border-line/80 bg-card p-4">
                 {act === "assign" && (
@@ -714,6 +770,10 @@ function JobDrawer({ order, contractors, onClose, onChanged }: { order: WorksOrd
                   <Fact k="Reported by" v={`${o.reportedBy || "—"} · ${day(o.reportedAt)}`} />
                   <Fact k="Tenant's email" v={o.tenantEmail || "none - not being told"} />
                   <Fact k="Landlord's email" v={o.landlordEmail || "none - not being told"} />
+                  <Fact k="Landlord's mobile" v={o.landlordMobile || "—"} />
+                  <Fact k="Landlord told" v={o.landlordToldAt ? stamp(o.landlordToldAt) : "not yet"} />
+                  <Fact k="Arranging" v={o.arranging === "landlord" ? `Landlord · follow up ${day(o.landlordFollowUpAt)}` : o.arranging === "us" ? "Us" : "—"} />
+                  <Fact k="Tenant happy" v={o.tenantHappy ? `${o.tenantHappy === "yes" ? "Yes" : "No"} · ${day(o.tenantHappyAt)}` : "not asked yet"} />
                   <Fact k="Raised by" v={o.raisedBy || "—"} />
                   <Fact k="Access" v={o.access || "—"} />
                   <Fact k="Contractor" v={o.contractorName || "not yet"} />
@@ -727,7 +787,9 @@ function JobDrawer({ order, contractors, onClose, onChanged }: { order: WorksOrd
                   <Fact k="Landlord's authority" v={pounds(o.authorityPence)} />
                   <Fact k="Quote" v={pounds(o.quotePence)} />
                   <Fact k="Approved" v={o.approvedAt ? `${o.approvedBy} · ${day(o.approvedAt)}` : "not yet"} />
+                  <Fact k="Payee" v={o.payee === "agent" ? `${o.raisedBy} (paid it themselves)` : o.payee === "contractor" ? o.contractorName : "—"} />
                   <Fact k="Invoice" v={o.invoicePence != null ? `${pounds(o.invoicePence)}${o.invoiceRef ? ` · ${o.invoiceRef}` : ""}` : "not yet"} />
+                  <Fact k="Accounts told" v={o.accountsToldAt ? day(o.accountsToldAt) : "not yet"} />
                   <Fact k="Paid" v={o.paidAt ? `${day(o.paidAt)} · ${PAID_HOW.find((h) => h.id === o.paidHow)?.label ?? ""}` : "not yet"} />
                 </dl>
               </section>
@@ -809,59 +871,73 @@ function ContractorPick({ contractors, value, onChange, className }: { contracto
   );
 }
 
-/* ── The trades book ────────────────────────────────────────────────────── */
+/* ── Accounts: the bills to pay, PayProp-ready ──────────────────────────── */
 
-const BLANK_CONTRACTOR: Partial<Contractor> = { name: "", contact: "", trade: "", phone: "", email: "", website: "", address: "", registration: "", notes: "", active: true };
-
-/** The form, used from the book and from inside a job. */
-function ContractorForm({ initial, canCorporate, onSaved, onClose, compact = false }: { initial: Partial<Contractor>; canCorporate: boolean; onSaved: (c: Contractor) => void; onClose: () => void; compact?: boolean }) {
-  const [c, setC] = useState<Partial<Contractor> & { scope?: "mine" | "corporate" }>({ ...BLANK_CONTRACTOR, ...initial, scope: initial.id ? (initial.ownerId ? "mine" : "corporate") : "mine" });
-  const [busy, setBusy] = useState(false);
+/**
+ * What accounts key into PayProp (Michael, 7 Sep 2026): every job with an
+ * invoice on it and nobody paid yet. Who, how much, which property, which
+ * landlord, the invoice number and our reference. Mark it paid here once
+ * it has gone through and it drops off. PayProp is read-only to the OS, so
+ * the payment itself is made there.
+ */
+function Accounts({ orders, loaded, onOpen, onChanged }: { orders: WorksOrder[]; loaded: boolean; onOpen: (id: string) => void; onChanged: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const field = "w-full rounded-lg border border-line/80 bg-box px-3 py-2 text-[12.5px] outline-none focus:border-ink";
-  const label = "block text-[10px] font-bold uppercase tracking-wider text-muted";
-  async function save() {
-    if (!c.name?.trim() || !c.trade?.trim()) return setErr("A name and a trade, at least.");
-    setBusy(true);
-    const r = await fetch("/api/contractors", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(c) }).then((x) => x.json()).catch(() => null);
-    setBusy(false);
-    if (!r?.ok) return setErr(r?.error ?? "Could not save.");
-    onSaved(r.contractor);
+  const rows = orders.filter((o) => o.status === "invoiced" || (o.status === "done" && o.invoicePence != null)).sort((a, b) => (a.invoicedAt ?? "").localeCompare(b.invoicedAt ?? ""));
+  const total = rows.reduce((a, o) => a + (o.invoicePence ?? 0), 0);
+  async function paid(o: WorksOrder) {
+    setBusy(o.id);
+    setErr(null);
+    const r = await fetch(`/api/works-orders/${o.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "paid", paidHow: "payprop" } satisfies Move) }).then((x) => x.json()).catch(() => null);
+    setBusy(null);
+    if (!r?.ok) return setErr(r?.error ?? "Could not mark it paid.");
+    onChanged();
   }
   return (
-    <div className={`grid gap-3 ${compact ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
-      <div><label className={label}>Company or name</label><input value={c.name ?? ""} onChange={(e) => setC({ ...c, name: e.target.value })} placeholder="JD Plumbing & Heating" className={`mt-1 ${field}`} /></div>
-      <div><label className={label}>Trade</label><input value={c.trade ?? ""} onChange={(e) => setC({ ...c, trade: e.target.value })} placeholder="Gas Safe engineer, electrician, handyman…" className={`mt-1 ${field}`} /></div>
-      <div><label className={label}>Who you ring</label><input value={c.contact ?? ""} onChange={(e) => setC({ ...c, contact: e.target.value })} placeholder="Contact name" className={`mt-1 ${field}`} /></div>
-      <div><label className={label}>Phone</label><input value={c.phone ?? ""} onChange={(e) => setC({ ...c, phone: e.target.value })} className={`mt-1 ${field}`} /></div>
-      <div><label className={label}>Email</label><input type="email" value={c.email ?? ""} onChange={(e) => setC({ ...c, email: e.target.value })} placeholder="Where the works orders go" className={`mt-1 ${field}`} /></div>
-      {!compact && (
-        <>
-          <div><label className={label}>Website</label><input value={c.website ?? ""} onChange={(e) => setC({ ...c, website: e.target.value })} placeholder="https://" className={`mt-1 ${field}`} /></div>
-          <div className="sm:col-span-2"><label className={label}>Address</label><input value={c.address ?? ""} onChange={(e) => setC({ ...c, address: e.target.value })} className={`mt-1 ${field}`} /></div>
-          <div><label className={label}>Registration</label><input value={c.registration ?? ""} onChange={(e) => setC({ ...c, registration: e.target.value })} placeholder="Gas Safe / NICEIC / NAPIT number" className={`mt-1 ${field}`} /></div>
-          <div className="sm:col-span-2 lg:col-span-3"><label className={label}>Notes</label><textarea value={c.notes ?? ""} onChange={(e) => setC({ ...c, notes: e.target.value })} rows={2} placeholder="Areas they cover, rates, hours, how they like to be booked" className={`mt-1 ${field}`} /></div>
-        </>
-      )}
-      <div className="flex flex-wrap items-center gap-4 sm:col-span-2 lg:col-span-3">
-        {canCorporate ? (
-          <label className="flex items-center gap-2 text-[12.5px]">
-            <input type="checkbox" checked={c.scope === "corporate"} onChange={(e) => setC({ ...c, scope: e.target.checked ? "corporate" : "mine" })} />
-            On the company shelf, for everyone
-          </label>
+    <div className="mt-4 space-y-4">
+      <div className="rounded-2xl border border-line/80 bg-panel p-5">
+        <h2 className="text-[15px]">To pay</h2>
+        <p className="mt-0.5 text-[11.5px] text-muted">
+          Every invoice on a job that has not been paid, with what PayProp needs. {loaded ? `${rows.length} to pay · ${pounds(total)}.` : ""} Mark it paid once it has gone through PayProp and it drops off.
+        </p>
+      </div>
+      {err && <p className="text-[12.5px] text-accent-dark">{err}</p>}
+      <div className="rounded-2xl border border-line/80 bg-panel p-5">
+        {!loaded ? (
+          <p className="text-[12.5px] text-muted">Reading…</p>
+        ) : rows.length === 0 ? (
+          <p className="text-[12.5px] text-muted">Nothing to pay. An invoice lands here the moment a contractor uploads it or an agent keys it onto a job.</p>
         ) : (
-          <span className="text-[11.5px] text-muted">Goes in your own book.</span>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[12.5px]">
+              <thead>
+                <tr className="border-b border-line/70 text-[9.5px] font-bold uppercase tracking-wider text-muted">
+                  <th className="pb-2 pr-3">Job</th><th className="pb-2 pr-3">Property</th><th className="pb-2 pr-3">Landlord</th><th className="pb-2 pr-3">Pay</th><th className="pb-2 pr-3">Invoice</th><th className="pb-2 pr-3 text-right">Amount</th><th className="pb-2 pr-3">In</th><th className="pb-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((o) => (
+                  <tr key={o.id} className="border-b border-line/40 last:border-0">
+                    <td className="py-3 pr-3"><button type="button" onClick={() => onOpen(o.id)} className="text-left hover:underline"><span className="figures text-muted">#{o.ref}</span> {o.title}</button></td>
+                    <td className="max-w-[220px] truncate py-3 pr-3">{o.propertyName}{o.locality ? `, ${o.locality}` : ""}</td>
+                    <td className="py-3 pr-3">{o.landlord || <span className="text-muted">—</span>}</td>
+                    <td className="py-3 pr-3">{o.payee === "agent" ? <>{o.raisedBy} <span className="text-muted">(paid it themselves)</span></> : o.contractorName || <span className="text-muted">—</span>}</td>
+                    <td className="py-3 pr-3 text-muted">{o.invoiceRef || "no number"}</td>
+                    <td className="figures py-3 pr-3 text-right">{pounds(o.invoicePence)}</td>
+                    <td className="py-3 pr-3 text-muted">{day(o.invoicedAt)}</td>
+                    <td className="py-3 text-right"><button type="button" disabled={busy === o.id} onClick={() => void paid(o)} className="whitespace-nowrap rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50">Paid in PayProp</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-        <label className="flex items-center gap-2 text-[12.5px]"><input type="checkbox" checked={c.active !== false} onChange={(e) => setC({ ...c, active: e.target.checked })} /> Active</label>
-        {err && <span className="text-[12px] text-accent-dark">{err}</span>}
-        <span className="ml-auto flex gap-2">
-          <button type="button" onClick={onClose} className="rounded-full border border-line/80 px-4 py-1.5 text-[12px] text-muted">Cancel</button>
-          <button type="button" disabled={busy} onClick={() => void save()} className="rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page">{busy ? "Saving…" : "Save"}</button>
-        </span>
       </div>
     </div>
   );
 }
+
+/* ── The trades book ────────────────────────────────────────────────────── */
 
 function Contractors({ onChange, openJob }: { onChange: () => void; openJob: (id: string) => void }) {
   const [data, setData] = useState<{ contractors: Contractor[]; me: string | null; canCorporate: boolean } | null>(null);
@@ -1025,7 +1101,7 @@ function ContractorProfile({ id, onClose, onEdit, openJob, canEdit }: { id: stri
 /* ── The invoicing schedule ─────────────────────────────────────────────── */
 
 type InvoiceRow = { id: string; number: string | null; status: string; toName: string; property: string; issueDate: string; dueDate: string; reference: string; orderRef: number | null; lines: { qty: number; unitPence: number; vatRate: number }[] };
-type Settings = { companyName: string; addressLines: string[]; email: string; phone: string; vatNumber: string; companyNumber: string; bankName: string; accountName: string; sortCode: string; accountNumber: string; prefix: string; termsDays: number; defaultVatRate: number; footer: string };
+type Settings = { companyName: string; addressLines: string[]; email: string; phone: string; accountsEmail: string; vatNumber: string; companyNumber: string; bankName: string; accountName: string; sortCode: string; accountNumber: string; prefix: string; termsDays: number; defaultVatRate: number; footer: string };
 
 const INVOICE_STATUS: Record<string, { label: string; tone: "neutral" | "accent" | "good" }> = {
   draft: { label: "Draft", tone: "neutral" }, issued: { label: "Produced", tone: "accent" }, sent: { label: "Sent", tone: "accent" }, paid: { label: "Paid", tone: "good" }, void: { label: "Void", tone: "neutral" },
@@ -1089,6 +1165,10 @@ function Invoices({ onOpen }: { onOpen: (id: string) => void }) {
             <input value={settings.companyName} onChange={(e) => setSettings({ ...settings, companyName: e.target.value })} placeholder="Company name" className={field} />
             <input value={settings.email} onChange={(e) => setSettings({ ...settings, email: e.target.value })} placeholder="Accounts email" className={field} />
             <input value={settings.phone} onChange={(e) => setSettings({ ...settings, phone: e.target.value })} placeholder="Phone" className={field} />
+            <div className="sm:col-span-2 lg:col-span-3">
+              <input value={settings.accountsEmail ?? ""} onChange={(e) => setSettings({ ...settings, accountsEmail: e.target.value })} placeholder="Accounts inbox - where a contractor's invoice is sent when it lands on a job" className={field} />
+              <p className="mt-1 text-[11px] text-muted">Every invoice that lands on a job goes here with the PayProp details, and sits on the Accounts list until it is marked paid.</p>
+            </div>
             <textarea value={settings.addressLines.join("\n")} onChange={(e) => setSettings({ ...settings, addressLines: e.target.value.split("\n") })} placeholder="Address, one line per line" rows={3} className={`${field} sm:col-span-2 lg:col-span-3`} />
             <input value={settings.vatNumber} onChange={(e) => setSettings({ ...settings, vatNumber: e.target.value })} placeholder="VAT number" className={field} />
             <input value={settings.companyNumber} onChange={(e) => setSettings({ ...settings, companyNumber: e.target.value })} placeholder="Company number" className={field} />

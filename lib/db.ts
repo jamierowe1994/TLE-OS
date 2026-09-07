@@ -397,6 +397,30 @@ CREATE TABLE IF NOT EXISTS os_works_orders (
 );
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenant_email   TEXT NOT NULL DEFAULT '';
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_email TEXT NOT NULL DEFAULT '';
+-- The workflow's facts (James and Michael, 7 Sep 2026): each step is
+-- derived from these, never set by hand - see stepOf in lib/works-orders.
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_mobile         TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_told_at        TIMESTAMPTZ;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS arranging               TEXT;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_follow_up_at   TIMESTAMPTZ;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_resolved_at    TIMESTAMPTZ;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS contractor_contacted_at TIMESTAMPTZ;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS contractor_confirmed_at TIMESTAMPTZ;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_arranged_at    TIMESTAMPTZ;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenant_happy            TEXT;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenant_happy_at         TIMESTAMPTZ;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenant_happy_note       TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS payee                   TEXT;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS contractor_token        TEXT;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenant_token            TEXT;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS property_lat            DOUBLE PRECISION;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS property_lng            DOUBLE PRECISION;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS accounts_told_at        TIMESTAMPTZ;
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS done_request_at         TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS os_works_orders_ctoken ON os_works_orders (contractor_token);
+CREATE INDEX IF NOT EXISTS os_works_orders_ttoken ON os_works_orders (tenant_token);
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
+ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
 CREATE INDEX IF NOT EXISTS os_works_orders_status ON os_works_orders (status, due_at);
 CREATE INDEX IF NOT EXISTS os_works_orders_property ON os_works_orders (property_id);
 CREATE TABLE IF NOT EXISTS os_works_order_events (

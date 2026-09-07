@@ -54,6 +54,12 @@ import {
   WORKS_TENANT_BOOKED,
   WORKS_TENANT_DONE,
   WORKS_LANDLORD_APPROVAL,
+  WORKS_LANDLORD_REPORT,
+  WORKS_CONTRACTOR_REPORT,
+  WORKS_TENANT_FOUND,
+  WORKS_LANDLORD_ARRANGED,
+  WORKS_CONTRACTOR_DONE_REQUEST,
+  WORKS_TENANT_HAPPY,
   INVOICE_SENT,
   SITE,
   type EmailDoc } from "@/lib/email/tle-documents";
@@ -609,6 +615,7 @@ const WORKS_SAMPLE: Record<string, string> = {
   description: "Tenant rang at 8am. Pressure gauge reads zero, boiler shows fault code F22.", quote: "£240", authority: "£150",
   agentName: "Michael Healy", agentEmail: "michael@thelettingexperts.co.uk", agentPhone: "0115 123 4567", completionNote: "PCB replaced, system repressurised and tested.",
   number: "INV-00042", toName: "Helen", total: "£264", dueDate: "21 September 2026", reference: "job #1042, boiler repair", link: `${SITE}/invoice/sample`,
+  contractorFirm: " of R. Holt Heating", contractorLink: `${SITE}/contractor/sample`, happyLink: `${SITE}/repair/sample?happy=yes`, notHappyLink: `${SITE}/repair/sample?happy=no`,
 };
 const worksEntry = (id: string, name: string, audience: CatalogEntry["audience"], trigger: string, to: string, summary: string, doc: EmailDoc, group = "Maintenance"): CatalogEntry => ({
   id, group, name, audience, trigger, fires: "lib/works-emails, from the job's own moves", to, summary, doc,
@@ -622,6 +629,12 @@ TLE_EMAILS.push(
   worksEntry("works-tenant-booked", "Contractor Booked to the Tenant", "tenant", "When a job is booked for a date", "The tenant", "Who is coming and when, and how to move it.", WORKS_TENANT_BOOKED as unknown as EmailDoc),
   worksEntry("works-tenant-done", "Job Done to the Tenant", "tenant", "When a job is marked done", "The tenant", "It's done, here's what was done, tell us if it isn't right.", WORKS_TENANT_DONE as unknown as EmailDoc),
   worksEntry("works-landlord-approval", "Quote for Approval to the Landlord", "landlord", "When a quote comes in over the landlord's authority", "The landlord", "The quote, why we're asking, and a one-word reply to go ahead.", WORKS_LANDLORD_APPROVAL as unknown as EmailDoc),
+  worksEntry("works-landlord-report", "Repair Reported to the Landlord", "landlord", "Step 1: when the agent emails the report after ringing", "The landlord", "What the tenant reported, how urgent, and the two ways forward: they arrange it, or we do.", WORKS_LANDLORD_REPORT as unknown as EmailDoc),
+  worksEntry("works-contractor-report", "Can You Take This? to the Contractor", "contractor", "Step 4: when the agent contacts a contractor about a job", "The contractor", "The job in brief and a yes-or-no. The works order follows once they say yes.", WORKS_CONTRACTOR_REPORT as unknown as EmailDoc),
+  worksEntry("works-tenant-found", "We've Found Someone to the Tenant", "tenant", "Step 5: the moment a contractor confirms, alongside the works order", "The tenant", "Who's coming, that they'll be in touch to arrange access, and what to do if they aren't.", WORKS_TENANT_FOUND as unknown as EmailDoc),
+  worksEntry("works-landlord-arranged", "Arranged to the Landlord", "landlord", "Step 6: once a date is set", "The landlord", "Who's booked and when, and that nothing is needed from them.", WORKS_LANDLORD_ARRANGED as unknown as EmailDoc),
+  worksEntry("works-contractor-done-request", "All Done? to the Contractor", "contractor", "Step 7: the day after the booked date", "The contractor", "One page to mark it done, add photos and drop in the invoice, which goes straight to accounts.", WORKS_CONTRACTOR_DONE_REQUEST as unknown as EmailDoc),
+  worksEntry("works-tenant-happy", "Are You Happy? to the Tenant", "tenant", "Step 8: when the job is marked done", "The tenant", "A yes and a no. A no comes straight back to the agent.", WORKS_TENANT_HAPPY as unknown as EmailDoc),
   worksEntry("invoice-sent", "Invoice to the Landlord", "landlord", "When an invoice is sent from Maintenance, Invoices", "Whoever the invoice is to - usually the landlord", "The figure, the due date and the button that opens the invoice page.", INVOICE_SENT as unknown as EmailDoc, "Invoices"),
 );
 

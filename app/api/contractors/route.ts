@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
-import { listContractors, getContractor, saveContractor, contractorStats, listOrders, type Contractor } from "@/lib/works-orders";
+import { listContractors, getContractor, saveContractor, contractorStats, contractorsFor, placeContractor, listOrders, getOrder, type Contractor } from "@/lib/works-orders";
+import { geocode } from "@/lib/geocode";
 
 /**
  * The trades book, two shelves: the company's contractors, which everyone
@@ -25,6 +26,12 @@ export async function GET(req: NextRequest) {
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: true, contractors: [], me: null });
   const me = subject ?? actor;
+  const forJob = req.nextUrl.searchParams.get("for");
+  if (forJob) {
+    const found = await getOrder(forJob);
+    if (!found) return NextResponse.json({ ok: false, error: "No such job." }, { status: 404 });
+    return NextResponse.json({ ok: true, ranked: await contractorsFor(found.order, me.id), placed: found.order.propertyLat != null });
+  }
   const id = req.nextUrl.searchParams.get("id");
   if (id) {
     const c = await getContractor(id);
@@ -54,6 +61,11 @@ export async function POST(req: NextRequest) {
     if (wantsCorporate && !corporate) return NextResponse.json({ ok: false, error: "Only the office can put a contractor on the company shelf." }, { status: 403 });
     const ownerId = b.id ? (await getContractor(b.id))!.ownerId : wantsCorporate ? null : me.id;
     const contractor = await saveContractor({ ...b, name: b.name, trade: b.trade, ownerId: b.id && corporate && b.scope ? (wantsCorporate ? null : me.id) : ownerId }, me.name || me.email);
+    /* Place them from their address, so the picker can say how far. Best
+       effort, after the save. */
+    if (contractor.address) {
+      geocode(contractor.address).then((g) => { if (g.ok) return placeContractor(contractor.id, g.at.lat, g.at.lng); }).catch(() => {});
+    }
     return NextResponse.json({ ok: true, contractor });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not save." }, { status: 400 });

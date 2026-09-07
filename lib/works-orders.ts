@@ -1,4 +1,5 @@
 import "server-only";
+import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
 
@@ -75,6 +76,14 @@ export const STATUSES = [
 export type Status = (typeof STATUSES)[number]["id"];
 export const OPEN_STATUSES: Status[] = ["reported", "approval", "approved", "scheduled"];
 
+/**
+ * THE STEP: what the job needs next, one thing at a time. Read from the
+ * facts, never set. James, 7 Sep 2026: "this should all feel like a
+ * workflow, so it's only one thing at a time... they're just going to chunk
+ * through one thing at a time."
+ */
+export { STEPS, stepOf, type StepId } from "@/lib/works-steps";
+
 export const PAID_HOW = [
   { id: "payprop", label: "Charged to the landlord through PayProp" },
   { id: "landlord", label: "Paid by the landlord direct" },
@@ -133,6 +142,26 @@ export interface WorksOrder {
   /** Where the step emails go. Blank means nobody is told, and the timeline says so. */
   tenantEmail: string;
   landlordEmail: string;
+  landlordMobile: string;
+  /* ── the workflow's facts (James and Michael, 7 Sep 2026) ── */
+  landlordToldAt: string | null;
+  /** Who is arranging it: the landlord with their own people, or us. */
+  arranging: "landlord" | "us" | null;
+  landlordFollowUpAt: string | null;
+  landlordResolvedAt: string | null;
+  contractorContactedAt: string | null;
+  contractorConfirmedAt: string | null;
+  landlordArrangedAt: string | null;
+  tenantHappy: "yes" | "no" | null;
+  tenantHappyAt: string | null;
+  tenantHappyNote: string;
+  /** Who gets paid: the contractor, or the agent who paid out of their own pocket. */
+  payee: "contractor" | "agent" | null;
+  contractorToken: string | null;
+  tenantToken: string | null;
+  propertyLat: number | null;
+  propertyLng: number | null;
+  accountsToldAt: string | null;
   title: string;
   description: string;
   category: string;
@@ -192,6 +221,23 @@ function toOrder(r: Row): WorksOrder {
     tenant: s(r.tenant),
     tenantEmail: s(r.tenant_email),
     landlordEmail: s(r.landlord_email),
+    landlordMobile: s(r.landlord_mobile),
+    landlordToldAt: iso(r.landlord_told_at),
+    arranging: r.arranging === "landlord" || r.arranging === "us" ? r.arranging : null,
+    landlordFollowUpAt: iso(r.landlord_follow_up_at),
+    landlordResolvedAt: iso(r.landlord_resolved_at),
+    contractorContactedAt: iso(r.contractor_contacted_at),
+    contractorConfirmedAt: iso(r.contractor_confirmed_at),
+    landlordArrangedAt: iso(r.landlord_arranged_at),
+    tenantHappy: r.tenant_happy === "yes" || r.tenant_happy === "no" ? r.tenant_happy : null,
+    tenantHappyAt: iso(r.tenant_happy_at),
+    tenantHappyNote: s(r.tenant_happy_note),
+    payee: r.payee === "contractor" || r.payee === "agent" ? r.payee : null,
+    contractorToken: r.contractor_token ? s(r.contractor_token) : null,
+    tenantToken: r.tenant_token ? s(r.tenant_token) : null,
+    propertyLat: n(r.property_lat),
+    propertyLng: n(r.property_lng),
+    accountsToldAt: iso(r.accounts_told_at),
     title: s(r.title),
     description: s(r.description),
     category: s(r.category),
@@ -222,7 +268,10 @@ function toOrder(r: Row): WorksOrder {
   };
 }
 
-const COLS = `id, ref, kind, status, property_id, property_name, locality, landlord, tenant, tenant_email, landlord_email, title, description, category, urgency,
+const COLS = `id, ref, kind, status, property_id, property_name, locality, landlord, tenant, tenant_email, landlord_email, landlord_mobile,
+  landlord_told_at, arranging, landlord_follow_up_at, landlord_resolved_at, contractor_contacted_at, contractor_confirmed_at, landlord_arranged_at,
+  tenant_happy, tenant_happy_at, tenant_happy_note, payee, contractor_token, tenant_token, property_lat, property_lng, accounts_told_at,
+  title, description, category, urgency,
   due_at, reported_by, reported_at, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence, quote_pence,
   approved_by, approved_at, completed_at, completion_note, invoice_pence, invoice_ref, invoiced_at, paid_at, paid_how,
   cancelled_reason, files, created_at, updated_at`;
@@ -298,6 +347,9 @@ export interface NewOrder {
   tenant?: string;
   tenantEmail?: string;
   landlordEmail?: string;
+  landlordMobile?: string;
+  propertyLat?: number | null;
+  propertyLng?: number | null;
   title: string;
   description?: string;
   category: string;
@@ -333,8 +385,9 @@ export async function createOrder(input: NewOrder, by: string): Promise<WorksOrd
   const [r] = await q<Row>(
     `INSERT INTO os_works_orders
        (id, kind, status, property_id, property_name, locality, landlord, tenant, tenant_email, landlord_email, title, description, category, urgency, due_at,
-        reported_by, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+        reported_by, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence,
+        landlord_mobile, contractor_token, tenant_token, property_lat, property_lng)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
      RETURNING ${COLS}`,
     [
       id, kind, status, input.propertyId ?? null, input.propertyName.trim(), (input.locality ?? "").trim(), (input.landlord ?? "").trim(),
@@ -342,6 +395,8 @@ export async function createOrder(input: NewOrder, by: string): Promise<WorksOrd
       input.title.trim(), (input.description ?? "").trim(), input.category, urgency, dueAt,
       (input.reportedBy ?? "Agent").trim(), by, input.contractorId ?? null, contractorName, input.scheduledAt ?? null,
       (input.access ?? "").trim(), Number.isFinite(input.authorityPence) ? Number(input.authorityPence) : DEFAULT_AUTHORITY_PENCE,
+      (input.landlordMobile ?? "").trim(), randomBytes(16).toString("base64url"), randomBytes(16).toString("base64url"),
+      input.propertyLat ?? null, input.propertyLng ?? null,
     ]
   );
   const order = toOrder(r);
@@ -412,6 +467,15 @@ export async function worksSummary(): Promise<WorksSummary> {
 /* ── moving a job along ─────────────────────────────────────────────────── */
 
 export type Move =
+  /* ── the workflow ── */
+  | { action: "tell_landlord"; how: "rang" | "emailed" | "both" | "text"; note?: string }
+  | { action: "arranging"; who: "landlord" | "us"; followUpAt?: string | null; note?: string }
+  | { action: "landlord_resolved"; note?: string }
+  | { action: "contact_contractor"; contractorId: string; note?: string }
+  | { action: "contractor_confirmed"; note?: string }
+  | { action: "tenant_happy"; happy: "yes" | "no"; note?: string }
+  | { action: "payee"; payee: "contractor" | "agent"; note?: string }
+  /* ── the sheet ── */
   | { action: "quote"; quotePence: number; note?: string }
   | { action: "approve"; approvedBy: string; note?: string }
   | { action: "assign"; contractorId: string; scheduledAt?: string | null; note?: string }
@@ -422,7 +486,7 @@ export type Move =
   | { action: "cancel"; reason: string }
   | { action: "reopen"; note?: string }
   | { action: "note"; note: string }
-  | { action: "edit"; fields: Partial<Pick<WorksOrder, "title" | "description" | "category" | "urgency" | "dueAt" | "tenant" | "tenantEmail" | "landlord" | "landlordEmail" | "access" | "authorityPence" | "reportedBy">> }
+  | { action: "edit"; fields: Partial<Pick<WorksOrder, "title" | "description" | "category" | "urgency" | "dueAt" | "tenant" | "tenantEmail" | "landlord" | "landlordEmail" | "landlordMobile" | "access" | "authorityPence" | "reportedBy">> }
   | { action: "file"; file: { key: string; name: string; type: string } };
 
 export const pounds = (pence: number | null | undefined) =>
@@ -442,6 +506,59 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
   let text = "";
 
   switch (move.action) {
+    case "tell_landlord": {
+      set("landlord_told_at", new Date());
+      text = `Landlord told - ${move.how === "both" ? "rang and emailed" : move.how === "rang" ? "rang them" : move.how === "text" ? "texted them" : "emailed the report"}.${move.note ? ` ${move.note}` : ""}`;
+      break;
+    }
+    case "arranging": {
+      set("arranging", move.who);
+      if (move.who === "landlord") {
+        set("landlord_follow_up_at", move.followUpAt ? new Date(move.followUpAt) : new Date(Date.now() + 3 * 86400000));
+        set("status", "approved");
+      }
+      text = move.who === "landlord" ? `The landlord is organising it with their own people. Follow up ${when(move.followUpAt ?? new Date(Date.now() + 3 * 86400000).toISOString())}.` : "We're arranging it.";
+      if (move.note) text += ` ${move.note}`;
+      break;
+    }
+    case "landlord_resolved": {
+      set("landlord_resolved_at", new Date());
+      set("status", "done");
+      set("completed_at", new Date());
+      set("completion_note", move.note?.trim() || "Resolved by the landlord's own contractor.");
+      text = `Resolved by the landlord.${move.note ? ` ${move.note}` : ""}`;
+      break;
+    }
+    case "contact_contractor": {
+      const [c] = await q<Row>(`SELECT name FROM os_contractors WHERE id = $1`, [move.contractorId]);
+      if (!c) throw new Error("No such contractor.");
+      set("contractor_id", move.contractorId);
+      set("contractor_name", s(c.name));
+      set("contractor_contacted_at", new Date());
+      set("contractor_confirmed_at", null);
+      eventKind = "contacted";
+      text = `${s(c.name)} contacted about the job.${move.note ? ` ${move.note}` : ""}`;
+      break;
+    }
+    case "contractor_confirmed": {
+      if (!o.contractorId) throw new Error("Pick a contractor first.");
+      set("contractor_confirmed_at", new Date());
+      if (o.status === "reported" || o.status === "approved") set("status", o.scheduledAt ? "scheduled" : "approved");
+      text = `${o.contractorName} confirmed they'll take it. Works order out; tenant told to expect their call.${move.note ? ` ${move.note}` : ""}`;
+      break;
+    }
+    case "tenant_happy": {
+      set("tenant_happy", move.happy);
+      set("tenant_happy_at", new Date());
+      set("tenant_happy_note", (move.note ?? "").trim());
+      text = move.happy === "yes" ? `The tenant is happy with the work.${move.note ? ` ${move.note}` : ""}` : `The tenant is NOT happy: ${move.note?.trim() || "no detail given"}. Back with the agent.`;
+      break;
+    }
+    case "payee": {
+      set("payee", move.payee);
+      text = move.payee === "agent" ? `To be paid to the agent, who paid the contractor themselves.${move.note ? ` ${move.note}` : ""}` : `To be paid to ${o.contractorName || "the contractor"}.${move.note ? ` ${move.note}` : ""}`;
+      break;
+    }
     case "quote": {
       if (!Number.isFinite(move.quotePence) || move.quotePence < 0) throw new Error("A quote needs a figure.");
       set("quote_pence", Math.round(move.quotePence));
@@ -537,6 +654,7 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
       if (f.tenantEmail != null) set("tenant_email", f.tenantEmail.trim().toLowerCase());
       if (f.landlord != null) set("landlord", f.landlord.trim());
       if (f.landlordEmail != null) set("landlord_email", f.landlordEmail.trim().toLowerCase());
+      if (f.landlordMobile != null) set("landlord_mobile", f.landlordMobile.trim());
       if (f.access != null) set("access", f.access.trim());
       if (f.reportedBy != null) set("reported_by", f.reportedBy.trim());
       if (f.authorityPence != null && Number.isFinite(f.authorityPence)) set("authority_pence", Math.round(f.authorityPence));
@@ -562,4 +680,88 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
 
 export async function logEvent(orderId: string, by: string, kind: string, text: string): Promise<void> {
   await q(`INSERT INTO os_works_order_events (id, order_id, by_name, kind, text) VALUES ($1, $2, $3, $4, $5)`, [uid(), orderId, by, kind, text]).catch(() => null);
+}
+
+/* ── the two public doors ───────────────────────────────────────────────── */
+
+export async function orderByToken(kind: "contractor" | "tenant", token: string): Promise<WorksOrder | null> {
+  if (!hasDb() || !token) return null;
+  const [r] = await q<Row>(`SELECT ${COLS} FROM os_works_orders WHERE ${kind === "contractor" ? "contractor_token" : "tenant_token"} = $1`, [token]);
+  return r ? toOrder(r) : null;
+}
+
+/* ── which contractor, for this job ─────────────────────────────────────── */
+
+/** What each category wants. Loose words, matched against the trade as typed. */
+const TRADE_WORDS: Record<string, string[]> = {
+  Plumbing: ["plumb", "heating", "gas"],
+  "Heating & boiler": ["heating", "gas", "boiler", "plumb"],
+  Electrical: ["electric", "niceic", "napit", "spark"],
+  Gas: ["gas", "heating"],
+  Appliance: ["appliance", "electric", "engineer"],
+  "Roof & gutters": ["roof", "gutter", "builder"],
+  "Windows & doors": ["glaz", "window", "door", "joiner", "carpent", "locksmith"],
+  "Locks & security": ["lock", "security"],
+  "Damp & mould": ["damp", "mould", "builder", "decorat"],
+  Decoration: ["decorat", "paint"],
+  Flooring: ["floor", "carpet"],
+  "Garden & fences": ["garden", "fenc", "landscap"],
+  Pests: ["pest"],
+  Cleaning: ["clean"],
+  Structural: ["builder", "structural", "survey"],
+  "Gas safety (CP12)": ["gas"],
+  EICR: ["electric", "niceic", "napit"],
+  EPC: ["epc", "energy", "assessor"],
+  "Boiler service": ["gas", "heating", "boiler"],
+  "Legionella risk assessment": ["legionella", "water", "assessor"],
+  "PAT test": ["pat", "electric"],
+  "Smoke & CO alarms": ["alarm", "electric", "fire"],
+  "Fire risk assessment": ["fire", "assessor"],
+  "HMO licence inspection": ["inspect", "hmo"],
+  "Property inspection": ["inspect", "inventory"],
+  "Inventory & check-in": ["inventory", "check"],
+  "Check-out": ["inventory", "check"],
+};
+
+const milesBetween = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+  const R = 3958.8;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+};
+
+export interface RankedContractor extends Contractor {
+  /** Their trade fits the job. */
+  fits: boolean;
+  /** Miles from the property, when both sides are placed. */
+  miles: number | null;
+  lat: number | null;
+  lng: number | null;
+}
+
+/** The book for one job: those whose trade fits first, nearest first within that. */
+export async function contractorsFor(order: WorksOrder, forUserId: string): Promise<RankedContractor[]> {
+  if (!hasDb()) return [];
+  const rows = await q<Row>(`SELECT * FROM os_contractors WHERE active AND (owner_id IS NULL OR owner_id = $1)`, [forUserId]);
+  const words = TRADE_WORDS[order.category] ?? [];
+  const here = order.propertyLat != null && order.propertyLng != null ? { lat: order.propertyLat, lng: order.propertyLng } : null;
+  return rows
+    .map((r) => {
+      const c = toContractor(r);
+      const lat = n(r.lat), lng = n(r.lng);
+      const trade = c.trade.toLowerCase();
+      return {
+        ...c,
+        lat, lng,
+        fits: words.length === 0 || words.some((w) => trade.includes(w)),
+        miles: here && lat != null && lng != null ? Math.round(milesBetween(here, { lat, lng }) * 10) / 10 : null,
+      };
+    })
+    .sort((a, b) => Number(b.fits) - Number(a.fits) || (a.miles ?? 9999) - (b.miles ?? 9999) || a.name.localeCompare(b.name));
+}
+
+/** Place a contractor from their address, so distance can be read. */
+export async function placeContractor(id: string, lat: number, lng: number): Promise<void> {
+  await q(`UPDATE os_contractors SET lat = $2, lng = $3 WHERE id = $1`, [id, lat, lng]).catch(() => null);
 }

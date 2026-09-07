@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { requireCapability } from "@/lib/admin";
 import { runReminders } from "@/lib/reminders";
+import { worksSweep } from "@/lib/works-sweep";
 
 /**
  * The reminders run.
@@ -28,5 +29,6 @@ export async function POST(req: NextRequest) {
   const owner = await requireCapability(req, "see:everything");
   if (!owner && !cronAuthorised(req)) return NextResponse.json({ ok: false, error: "Not authorised." }, { status: 401 });
   const run = await runReminders();
-  return NextResponse.json(run, { status: run.ok ? 200 : 503 });
+  const works = await worksSweep().catch((e) => ({ doneRequests: 0, failed: e instanceof Error ? e.message : "failed" }));
+  return NextResponse.json({ ...run, works }, { status: run.ok ? 200 : 503 });
 }

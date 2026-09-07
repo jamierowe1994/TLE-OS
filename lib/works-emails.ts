@@ -2,6 +2,9 @@ import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { sendEmail, ResendBlocked } from "@/lib/resend";
 import { renderTleEmailLive } from "@/lib/email/tle-emails";
+import { emailShell } from "@/lib/email/shell";
+import { msConnectionFor, msSendMail, MailboxNotConnected } from "@/lib/microsoft";
+import { switchOn } from "@/lib/switches";
 import { pounds, URGENCIES, type Move, type WorksOrder } from "@/lib/works-orders";
 import type { OsUser } from "@/lib/users";
 
@@ -25,11 +28,15 @@ import type { OsUser } from "@/lib/users";
  */
 
 export interface SendOutcome {
-  to: "contractor" | "tenant" | "landlord";
+  to: "contractor" | "tenant" | "landlord" | "accounts";
   sent: boolean;
   address?: string;
   reason?: string;
+  /** "own mailbox" when it went from the agent's Outlook, "public sender" otherwise. */
+  via?: string;
 }
+
+const ORIGIN = (process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/, "");
 
 const PROFILE_KEY = "tle-profile-v1";
 
@@ -62,7 +69,7 @@ async function varsFor(o: WorksOrder, me: OsUser): Promise<Record<string, string
     scheduledAt: when(o.scheduledAt),
     contractorName: c?.name ? first(c.name) : o.contractorName || "there",
     contractorPhone: c?.phone ?? "",
-    tenantName: first(o.tenant.replace(/\s*\+?\d[\d\s]{6,}\d/g, "")),
+    tenantName: first(o.tenant.replace(/\s*\+?\d[\d\s]{6,}\d/g, "").replace(/[\s·,-]+$/, "")),
     tenantPhone: (o.tenant.match(/\+?\d[\d\s]{6,}\d/) ?? [""])[0].trim(),
     landlordName: first(o.landlord),
     access: o.access || "none recorded",
@@ -73,23 +80,80 @@ async function varsFor(o: WorksOrder, me: OsUser): Promise<Record<string, string
     agentEmail: me.email,
     agentPhone: phone || me.email,
     completionNote: o.completionNote || "the work is complete.",
+    contractorFirm: c?.name && o.contractorName && first(c.name) !== o.contractorName ? ` of ${o.contractorName}` : "",
+    contractorLink: `${ORIGIN}/contractor/${o.contractorToken ?? ""}`,
+    happyLink: `${ORIGIN}/repair/${o.tenantToken ?? ""}?happy=yes`,
+    notHappyLink: `${ORIGIN}/repair/${o.tenantToken ?? ""}?happy=no`,
   };
 }
 
+/**
+ * From the agent's own mailbox when it is connected and Steve's send switch
+ * is armed (James, 7 Sep 2026: "that should send from their personal email,
+ * which will be linked up to the authenticator"), so the reply lands in
+ * their inbox and threads. Otherwise the public sender, as before.
+ */
 async function send(id: string, to: string, vars: Record<string, string>, me: OsUser, who: SendOutcome["to"]): Promise<SendOutcome> {
   const address = to.trim();
   if (!address.includes("@")) return { to: who, sent: false, reason: `no email address for the ${who}` };
+  let subject = "", html = "";
   try {
-    const { subject, html } = await renderTleEmailLive(id, vars);
+    ({ subject, html } = await renderTleEmailLive(id, vars));
+  } catch (e) {
+    return { to: who, sent: false, address, reason: e instanceof Error ? e.message : "the email could not be written" };
+  }
+  try {
+    const conn = await msConnectionFor(me.id).catch(() => null);
+    if (conn?.connected && (await switchOn("assistant_email"))) {
+      await msSendMail(me.id, { to: { email: address }, subject, body: html, rexUserId: me.rexUserId });
+      return { to: who, sent: true, address, via: "own mailbox" };
+    }
+  } catch (e) {
+    if (!(e instanceof MailboxNotConnected)) {
+      /* Their mailbox refused: fall through to the public sender rather
+         than lose the email, and say so on the timeline. */
+    }
+  }
+  try {
     await sendEmail({ to: address, subject, html, audience: "customer", replyTo: me.email });
-    return { to: who, sent: true, address };
+    return { to: who, sent: true, address, via: "public sender" };
   } catch (e) {
     return { to: who, sent: false, address, reason: e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "the email did not send" };
   }
 }
 
+/** The accounts inbox: a contractor's invoice is on a job (Michael, 7 Sep 2026). Internal shell, internal sender. */
+export async function tellAccounts(o: WorksOrder, accountsEmail: string): Promise<SendOutcome> {
+  const address = accountsEmail.trim();
+  if (!address.includes("@")) return { to: "accounts", sent: false, reason: "no accounts inbox set under Maintenance, Invoices, Who invoices are from" };
+  const payee = o.payee === "agent" ? `${o.raisedBy} (paid the contractor themselves)` : o.contractorName || "the contractor";
+  try {
+    await sendEmail({
+      to: address,
+      subject: `Invoice in: #${o.ref} ${o.title}, ${pounds(o.invoicePence)} to ${payee}`,
+      html: emailShell({
+        heading: `Invoice in on job #${o.ref}`,
+        intro: `${o.contractorName || "The contractor"}'s invoice is on the job and it is ready to key into PayProp. Nothing here has been paid.`,
+        rows: [
+          { title: o.propertyName + (o.locality ? `, ${o.locality}` : ""), detail: o.title, tone: "neutral" },
+          { title: `${pounds(o.invoicePence)} to ${payee}`, detail: `Invoice ${o.invoiceRef || "no number"} · reference #${o.ref}${o.landlord ? ` · landlord ${o.landlord}` : ""}`, tone: "attention" },
+        ],
+        rowsLead: "To pay",
+        button: "Open the job",
+        link: `${ORIGIN}/maintenance?open=${encodeURIComponent(o.id)}`,
+        image: "illustrations/email/certificates.gif",
+        footnote: "Mark it paid on the job once it has gone through PayProp, and it drops off the accounts list.",
+      }),
+      text: `Invoice in on job #${o.ref}: ${o.title} at ${o.propertyName}. ${pounds(o.invoicePence)} to ${payee}. Reference #${o.ref}. Open: ${ORIGIN}/maintenance?open=${o.id}`,
+    });
+    return { to: "accounts", sent: true, address, via: "internal sender" };
+  } catch (e) {
+    return { to: "accounts", sent: false, address, reason: e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "the email did not send" };
+  }
+}
+
 /** Which emails a move sets off. Returns every outcome, for the timeline. */
-export async function emailsForMove(o: WorksOrder, action: Move["action"] | "raised", me: OsUser): Promise<SendOutcome[]> {
+export async function emailsForMove(o: WorksOrder, action: Move["action"] | "raised" | "done_request", me: OsUser, detail: { how?: string } = {}): Promise<SendOutcome[]> {
   const out: SendOutcome[] = [];
   const vars = await varsFor(o, me);
   const contractor = await contractorOf(o.contractorId);
@@ -101,10 +165,24 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
   switch (action) {
     case "raised":
       if (o.kind === "repair") out.push(await send("works-tenant-received", o.tenantEmail, vars, me, "tenant"));
-      if (contractor) {
+      if (contractor && o.scheduledAt) {
         await contractorOrder();
-        if (o.scheduledAt) await tenantBooked();
+        await tenantBooked();
       }
+      break;
+    case "tell_landlord":
+      /* "Rang them" is a phone call, not an email. The report goes when
+         they asked for it to. */
+      if (detail.how === "emailed" || detail.how === "both") out.push(await send("works-landlord-report", o.landlordEmail, vars, me, "landlord"));
+      break;
+    case "contact_contractor":
+      if (contractor) out.push(await send("works-contractor-report", contractor.email, vars, me, "contractor"));
+      break;
+    case "contractor_confirmed":
+      /* Together, as James asked: the works order to the contractor and
+         "we've found someone" to the tenant, in the same breath. */
+      await contractorOrder();
+      out.push(await send("works-tenant-found", o.tenantEmail, vars, me, "tenant"));
       break;
     case "assign":
       await contractorOrder();
@@ -113,12 +191,18 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
     case "schedule":
       await contractorBooked();
       await tenantBooked();
+      out.push(await send("works-landlord-arranged", o.landlordEmail, vars, me, "landlord"));
+      break;
+    case "done_request":
+      if (contractor) out.push(await send("works-contractor-done-request", contractor.email, vars, me, "contractor"));
       break;
     case "quote":
       if (o.status === "approval") out.push(await send("works-landlord-approval", o.landlordEmail, vars, me, "landlord"));
       break;
     case "done":
-      out.push(await send("works-tenant-done", o.tenantEmail, vars, me, "tenant"));
+      /* The done note says what was done; the happy email asks the one
+         question. Repairs get the question; a gas safety does not. */
+      out.push(await send(o.kind === "repair" ? "works-tenant-happy" : "works-tenant-done", o.tenantEmail, vars, me, "tenant"));
       break;
     case "cancel":
       if (contractor) out.push(await send("works-contractor-cancelled", contractor.email, vars, me, "contractor"));
@@ -131,6 +215,6 @@ export async function emailsForMove(o: WorksOrder, action: Move["action"] | "rai
 
 /** One line per outcome, for the job's timeline. */
 export function outcomeLine(s: SendOutcome): string {
-  if (s.sent) return `Emailed the ${s.to} at ${s.address}.`;
-  return `The ${s.to} was not emailed: ${s.reason}.`;
+  if (s.sent) return `Emailed the ${s.to} at ${s.address}${s.via === "own mailbox" ? ", from your own mailbox" : ""}.`;
+  return `The ${s.to} was not emailed: ${(s.reason ?? "").replace(/\.+$/, "")}.`;
 }

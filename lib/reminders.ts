@@ -52,7 +52,7 @@ import type { Notice } from "@/lib/notices";
  * whose condition has cleared - a reminder can never outlive its reason.
  */
 
-export const REMINDER_KINDS = ["lead_quiet", "deck_due", "valuation_due", "plc_due", "terms_unsigned"] as const;
+export const REMINDER_KINDS = ["lead_quiet", "deck_due", "valuation_due", "plc_due", "terms_unsigned", "works_landlord_follow_up", "works_no_date", "works_tenant_unhappy", "works_landlord_untold"] as const;
 export type ReminderKind = (typeof REMINDER_KINDS)[number];
 
 export interface Reminder {
@@ -209,6 +209,42 @@ async function termsReminders(list: Person[], now: number): Promise<Reminder[]> 
   return out;
 }
 
+/**
+ * Maintenance (James and Michael, 7 Sep 2026): the follow-up when the
+ * landlord is organising, the chase when a contractor has not set a date,
+ * a tenant who said it isn't right, and a report whose landlord has not
+ * been told. Scoped to whoever raised the job, by name.
+ */
+async function worksReminders(list: Person[], now: number): Promise<Reminder[]> {
+  const rows = await q<{
+    id: string; ref: number; title: string; property_name: string; raised_by: string; status: string; arranging: string | null;
+    landlord_follow_up_at: Date | null; landlord_resolved_at: Date | null; landlord_told_at: Date | null; contractor_confirmed_at: Date | null;
+    scheduled_at: Date | null; completed_at: Date | null; tenant_happy: string | null; tenant_happy_at: Date | null; tenant_happy_note: string; created_at: Date; urgency: string | null;
+  }>(`SELECT id, ref, title, property_name, raised_by, status, arranging, landlord_follow_up_at, landlord_resolved_at, landlord_told_at, contractor_confirmed_at,
+             scheduled_at, completed_at, tenant_happy, tenant_happy_at, tenant_happy_note, created_at, urgency
+        FROM os_works_orders WHERE status NOT IN ('paid', 'cancelled')`).catch(() => []);
+  const out: Reminder[] = [];
+  for (const r of rows) {
+    const who = whose(list, r.raised_by);
+    if (!who) continue;
+    const href = `/maintenance?open=${encodeURIComponent(r.id)}`;
+    const t = (d: Date | null) => (d ? new Date(d).getTime() : 0);
+    if (!r.landlord_told_at && now - t(r.created_at) > 4 * 3600000) {
+      out.push({ id: `works_landlord_untold:${r.id}`, userId: who.id, kind: "works_landlord_untold", title: `Tell the landlord about #${r.ref} ${r.title}`, body: `${r.property_name}. Reported ${whenAgo(new Date(r.created_at).toISOString(), now)} and the landlord hasn't been told.`, href, tone: r.urgency === "emergency" ? "warn" : "none", dueAt: new Date(t(r.created_at) + 4 * 3600000).toISOString() });
+    }
+    if (r.arranging === "landlord" && !r.landlord_resolved_at && r.landlord_follow_up_at && t(r.landlord_follow_up_at) <= now) {
+      out.push({ id: `works_landlord_follow_up:${r.id}`, userId: who.id, kind: "works_landlord_follow_up", title: `Chase the landlord on #${r.ref} ${r.title}`, body: `${r.property_name}. They said they'd organise it themselves. Is it resolved?`, href, tone: now - t(r.landlord_follow_up_at) > 3 * DAY ? "warn" : "none", dueAt: new Date(r.landlord_follow_up_at).toISOString() });
+    }
+    if (r.arranging === "us" && r.contractor_confirmed_at && !r.scheduled_at && now - t(r.contractor_confirmed_at) > 2 * DAY) {
+      out.push({ id: `works_no_date:${r.id}`, userId: who.id, kind: "works_no_date", title: `No date yet on #${r.ref} ${r.title}`, body: `${r.property_name}. The contractor confirmed ${whenAgo(new Date(r.contractor_confirmed_at).toISOString(), now)} and nobody has set a date. Ring them, or type it in.`, href, tone: "warn", dueAt: new Date(t(r.contractor_confirmed_at) + 2 * DAY).toISOString() });
+    }
+    if (r.tenant_happy === "no") {
+      out.push({ id: `works_tenant_unhappy:${r.id}`, userId: who.id, kind: "works_tenant_unhappy", title: `Tenant not happy: #${r.ref} ${r.title}`, body: `${r.property_name}. ${r.tenant_happy_note || "No detail given"}. Somebody needs to ring them.`, href, tone: "warn", dueAt: new Date(t(r.tenant_happy_at) || now).toISOString() });
+    }
+  }
+  return out;
+}
+
 /* ── the run ────────────────────────────────────────────────────────────── */
 
 export interface ReminderRun {
@@ -238,6 +274,7 @@ export async function runReminders(now = Date.now()): Promise<ReminderRun> {
     { kinds: ["deck_due", "valuation_due"], run: () => appraisalReminders(list, now) },
     { kinds: ["plc_due"], run: () => plcReminders(list, now) },
     { kinds: ["terms_unsigned"], run: () => termsReminders(list, now) },
+    { kinds: ["works_landlord_follow_up", "works_no_date", "works_tenant_unhappy", "works_landlord_untold"], run: () => worksReminders(list, now) },
   ];
 
   const fresh: Reminder[] = [];

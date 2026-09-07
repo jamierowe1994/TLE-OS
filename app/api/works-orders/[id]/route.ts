@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { getOrder, moveOrder, logEvent, type Move } from "@/lib/works-orders";
-import { emailsForMove, outcomeLine } from "@/lib/works-emails";
+import { emailsForMove, outcomeLine, tellAccounts } from "@/lib/works-emails";
+import { invoiceSettings } from "@/lib/invoices";
+import { pounds } from "@/lib/works-orders";
 
 /**
  * One job: read it with its timeline, or move it along.
@@ -34,8 +36,12 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   try {
     const by = (subject ?? actor).name || (subject ?? actor).email;
     const order = await moveOrder(id, move, by);
-    const emails = await emailsForMove(order, move.action, subject ?? actor).catch(() => []);
+    const emails = await emailsForMove(order, move.action, subject ?? actor, { how: "how" in move ? move.how : undefined }).catch(() => []);
     for (const e of emails) await logEvent(order.id, "TLE OS", "email", outcomeLine(e));
+    if (move.action === "invoice") {
+      const told = await tellAccounts(order, (await invoiceSettings()).accountsEmail ?? "");
+      await logEvent(order.id, "TLE OS", "email", told.sent ? `Accounts told: ${pounds(order.invoicePence)} to pay, at ${told.address}.` : `Accounts not told: ${told.reason}.`);
+    }
     const found = await getOrder(id);
     return NextResponse.json({ ok: true, order, events: found?.events ?? [], emails });
   } catch (e) {

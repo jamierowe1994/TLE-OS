@@ -54,6 +54,8 @@ export interface InvoiceSettings {
   termsDays: number;
   defaultVatRate: number;
   footer: string;
+  /** Where "invoice in" notices go: the accounts inbox, not compliance (Michael, 7 Sep 2026). */
+  accountsEmail: string;
 }
 
 export const DEFAULT_SETTINGS: InvoiceSettings = {
@@ -71,6 +73,7 @@ export const DEFAULT_SETTINGS: InvoiceSettings = {
   termsDays: 14,
   defaultVatRate: 20,
   footer: "Please pay by bank transfer quoting the invoice number. Thank you.",
+  accountsEmail: "",
 };
 
 export interface InvoiceLine {
