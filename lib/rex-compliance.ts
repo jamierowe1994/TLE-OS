@@ -1,5 +1,6 @@
 import "server-only";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
+import { sittingTenantsByProperty } from "@/lib/rex-tenants";
 import { fetchListingBook } from "@/lib/rex-listings";
 import type { CertKey, CompProperty } from "@/lib/compliance";
 import { activeOsProperties, factsByRexId } from "@/lib/os-properties";
@@ -194,6 +195,10 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
    * chunk size and concurrency, and the answer is cached with the book. Ten
    * properties a call, six calls at a time.
    */
+  /* The sitting tenant comes off the tenancy application, not the listing -
+     see lib/rex-tenants for why. Read alongside the listings rather than
+     after them; it is one paged walk of a different service. */
+  const tenantsByProperty = await sittingTenantsByProperty().catch(() => new Map());
   const peopleByProperty = new Map<string, { landlord: string; tenants: string[] }>();
   const peopleResults = await inBatches(chunks, CONCURRENCY, async (chunk) => {
     const res = await rexCall("Listings", "search", {
@@ -279,6 +284,10 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
     /* Read above, in one batched pass over the same chunks. Blank stays
        blank: an em dash is "we did not find one", not a person. */
     const who = peopleByProperty.get(l.propertyId);
+    /* The listing's own relationship first when REX has one - it is the most
+       direct statement of who is in - then the tenancy application. */
+    const sitting = tenantsByProperty.get(l.propertyId);
+    const tenantNames = who?.tenants.length ? who.tenants : sitting?.names ?? [];
     return {
       id: l.propertyId,
       name: l.name,
@@ -286,7 +295,7 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       landlord: who?.landlord || "—",
       /* undefined is "we do not know", null is "nobody lives here". Only a
          home REX answered about can honestly say vacant. */
-      tenant: who ? (who.tenants.length ? who.tenants.join(", ") : null) : undefined,
+      tenant: tenantNames.length ? tenantNames.join(", ") : who || sitting ? null : undefined,
       hmo: mine.some((e) => HMO_TYPES.includes(e.type_id ?? "")),
       hasGas: hasGasRecord && !gasNotRequired,
       certs,
