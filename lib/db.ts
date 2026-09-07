@@ -309,6 +309,27 @@ CREATE TABLE IF NOT EXISTS os_user_prefs (
   PRIMARY KEY (user_id, key)
 );
 
+-- Smart reminders: one row per person per thing that needs doing, DERIVED
+-- from the records by lib/reminders on a schedule (a lead nobody has rung, a
+-- deck not sent before the visit, a valuation not recorded, an accepted
+-- application with no PLC pack, terms unsigned for days). The id is
+-- "<kind>:<record>", so a run refreshes rather than duplicates, and a row
+-- whose condition has cleared is deleted by the next run. Read by the bell.
+CREATE TABLE IF NOT EXISTS os_reminders (
+  id             TEXT NOT NULL,
+  user_id        TEXT NOT NULL,
+  kind           TEXT NOT NULL,
+  title          TEXT NOT NULL,
+  body           TEXT NOT NULL DEFAULT '',
+  href           TEXT,
+  tone           TEXT NOT NULL DEFAULT 'warn',
+  due_at         TIMESTAMPTZ NOT NULL,
+  first_seen_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  refreshed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (user_id, id)
+);
+CREATE INDEX IF NOT EXISTS os_reminders_user ON os_reminders (user_id, due_at DESC);
+
 -- Notes the team writes against a record (a property, a lead, a viewing).
 CREATE TABLE IF NOT EXISTS os_notes (
   id             TEXT PRIMARY KEY,

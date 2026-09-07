@@ -5,6 +5,7 @@ import type { OsUser } from "@/lib/users";
 import { listDealEvents } from "@/lib/business/deal-watch";
 import { eventSentence, eventTone, hrefFor, type DealEventKind } from "@/lib/business/deal-events";
 import type { Notice } from "@/lib/notices";
+import { remindersFor } from "@/lib/reminders";
 
 /**
  * What the bell shows, gathered from the tables where things already happen.
@@ -26,6 +27,8 @@ import type { Notice } from "@/lib/notices";
  *   campaign steps for a     see:marketing or an owner - a call step is a job
  *   person                   for the office, not for a lead's agent
  *   handover runs, chases    owners and pre-tenancy, who own those processes
+ *   reminders                the person alone - worked out from their own
+ *                            book by lib/reminders, never anybody else's
  *
  * ── Read state ────────────────────────────────────────────────────────────
  *
@@ -49,7 +52,7 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
   const office = can(me.role, "see:marketing") || me.role === "owner";
   const ops = me.role === "owner" || can(me.role, "see:pretenancy");
 
-  const [deals, steps, handovers, chases] = await Promise.all([
+  const [deals, steps, handovers, chases, reminders] = await Promise.all([
     listDealEvents({ agentEmail: whole ? null : me.email, limit }).catch(() => []),
     office
       ? q<{ id: string; campaign_id: string; subject: string; detail: string; at: Date; name: string }>(
@@ -76,9 +79,10 @@ export async function noticesFor(me: OsUser, limit = 40): Promise<Notice[]> {
           [limit]
         ).catch(() => [])
       : [],
+    remindersFor(me.id, limit).catch(() => []),
   ]);
 
-  const out: Notice[] = [];
+  const out: Notice[] = [...reminders];
 
   for (const e of deals) {
     out.push({
