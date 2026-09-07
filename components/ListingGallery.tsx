@@ -33,10 +33,13 @@ export default function ListingGallery({
      whatever is beside it; this only stops it collapsing when the column
      next to it happens to be short. */
   minFrame = 220,
+  onOpen,
 }: {
   photos: string[];
   className?: string;
   minFrame?: number;
+  /** Click the big frame: pop the set out full size at this photo. */
+  onOpen?: (at: number) => void;
 }) {
   const [at, setAt] = useState(0);
 
@@ -68,7 +71,13 @@ export default function ListingGallery({
         style={{ minHeight: minFrame }}
         className="group relative flex-1 overflow-hidden rounded-2xl outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-ink/30"
       >
-        <PropertyPhoto src={photos[at]} className="h-full w-full" />
+        {onOpen ? (
+          <button type="button" onClick={() => onOpen(at)} aria-label="Open the photos" className="block h-full w-full cursor-zoom-in">
+            <PropertyPhoto src={photos[at]} className="h-full w-full" />
+          </button>
+        ) : (
+          <PropertyPhoto src={photos[at]} className="h-full w-full" />
+        )}
 
         {count > 1 && (
           <>

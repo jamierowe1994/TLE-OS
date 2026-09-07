@@ -5,6 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PhotoBox from "@/components/PhotoBox";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import ListingGallery from "@/components/ListingGallery";
+import PhotoLightbox from "@/components/PhotoLightbox";
 import Link from "next/link";
 import EmailToTenants from "@/components/EmailToTenants";
 import ProcessTimeline from "@/components/ProcessTimeline";
@@ -203,6 +204,8 @@ export default function ListingDrawer({
    * it is (88% of rentals).
    */
   const [landlord, setLandlord] = useState<LandlordState>({ status: "idle" });
+  /* The photo set popped out full size; null when closed. */
+  const [lightbox, setLightbox] = useState<number | null>(null);
   useEffect(() => {
     if (!listing) {
       setLandlord({ status: "idle" });
@@ -525,17 +528,18 @@ export default function ListingDrawer({
                 full height of whatever is beside it and the padding stays
                 even on all four sides, because the outer p-4 is the only
                 inset in play. */}
-            <div className="flex flex-wrap items-stretch gap-5">
-              {/* Wider than the board card, not narrower. Opening a property
-                  should never show you a SMALLER photograph than the list you
-                  opened it from — and the drawer has the room. */}
+            {/* One line from a laptop up (James, 7 Sep): the photograph, the
+                facts, the landlord box. The box keeps its width; the
+                photograph is what gives way when the drawer is narrow. */}
+            <div className="flex flex-col items-stretch gap-5 lg:flex-row">
               <ListingGallery
                 photos={photos}
-                className="w-full sm:w-[380px] lg:w-[460px]"
+                className="w-full sm:w-[380px] lg:w-auto lg:min-w-[220px] lg:max-w-[460px] lg:basis-[36%] lg:shrink"
                 minFrame={300}
+                onOpen={(at) => setLightbox(at)}
               />
 
-              <div className="min-w-0 flex-1 py-2 pr-2">
+              <div className="min-w-0 flex-1 py-2 pr-2 lg:min-w-[180px]">
                 <h2 className="text-[24px] leading-tight">{listing.name}</h2>
                 <p className="mt-1 text-[12.5px] text-muted">
                   {listing.locality}
@@ -637,7 +641,7 @@ export default function ListingDrawer({
                   "whose is it and can I ring them". */}
               {/* Twice the width it had (James, 7 Sep): a name, a number and an
                   email should not be truncating in a 210px column. */}
-              <div className="hidden w-[360px] shrink-0 rounded-2xl border border-line/70 p-5 lg:block xl:w-[420px]">
+              <div className="hidden w-[250px] shrink-0 rounded-2xl border border-line/70 p-5 lg:block xl:w-[380px] 2xl:w-[420px]">
                 {/* ── Terms, as one word rather than a panel.
                     By the time a property is in Listings the terms are signed,
                     so a box asking whether to send them is a permanent
@@ -1125,20 +1129,22 @@ export default function ListingDrawer({
             )}
 
             {tab === "photos" && (
-              <Card title="Photos" icon="folder">
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {listing.image && (
-                    <div className="overflow-hidden rounded-xl border border-line/60">
-                      <PropertyPhoto src={listing.image} className="aspect-[4/3] w-full" />
-                    </div>
-                  )}
-                  {Array.from({ length: 3 }, (_, i) => (
-                    <PhotoBox
-                      key={i}
-                      refId={`listing-${listing.id}`}
-                      label={i === 0 && !listing.image ? "Add the main photo" : "Add a photo"}
-                    />
+              <Card title={photos.length ? `Photos · ${photos.length}` : "Photos"} icon="folder">
+                {/* Every photo REX holds, small, and any of them pops the set
+                    out full size (James, 7 Sep). One box after them to add. */}
+                <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 xl:grid-cols-5">
+                  {photos.map((p, i) => (
+                    <button
+                      key={p + i}
+                      type="button"
+                      onClick={() => setLightbox(i)}
+                      aria-label={`Photo ${i + 1}`}
+                      className="group overflow-hidden rounded-xl border border-line/60 transition-colors hover:border-ink"
+                    >
+                      <PropertyPhoto src={p} className="aspect-[4/3] w-full transition-transform duration-300 group-hover:scale-[1.03]" />
+                    </button>
                   ))}
+                  <PhotoBox refId={`listing-${listing.id}`} label={photos.length ? "Add a photo" : "Add the main photo"} />
                 </div>
                 <p className="mt-4 border-t border-line/60 pt-3 text-[10.5px] leading-relaxed text-muted">
                   Drop a file on any box, or click it. Nothing is stored yet — photos need
@@ -1462,6 +1468,7 @@ export default function ListingDrawer({
         agent="Kirstie"
         onBooked={(v) => setBooked((cur) => [{ when: v.when, who: v.who }, ...cur])}
       />
+      {lightbox != null && <PhotoLightbox photos={photos} start={lightbox} onClose={() => setLightbox(null)} />}
     </div>
   );
 }
