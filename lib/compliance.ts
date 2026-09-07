@@ -107,7 +107,23 @@ export type CompProperty = {
   certs: Partial<Record<CertKey, Cert>>;
   /** False when REX CRM has no property for this home and the OS is its record (6 Sep 2026). Absent = on REX. */
   onRex?: boolean;
+  /** REX's lettings service type: "Managed", "Let Only", "Rent Collect". */
+  service?: string | null;
 };
+
+/**
+ * Whose duty is it?
+ *
+ * Michael, 7 Sep 2026: once a home is let on a LET ONLY basis the certificates
+ * are the landlord's, not ours. So a let-only home is never counted as a gap
+ * and never appears in the month's chase list - the agency cannot book an
+ * engineer for a property it does not manage.
+ *
+ * It is NOT hidden. It keeps its real dates and its own filter, because a
+ * certificate falling due on a let-only home is exactly when Bond should be
+ * ringing the landlord about taking it on management.
+ */
+export const isLetOnly = (p: CompProperty): boolean => p.service === "Let Only";
 
 /**
  * What this property is REQUIRED to hold.
@@ -246,6 +262,7 @@ export function headlineCerts(p: CompProperty): CertKey[] {
 export function dueWithin(days: number, book: CompProperty[] = COMP_BOOK) {
   const out: { p: CompProperty; key: CertKey; cert: Cert | undefined; status: CertStatus }[] = [];
   for (const p of book) {
+    if (isLetOnly(p)) continue; // the landlord's duty, not ours
     for (const key of headlineCerts(p)) {
       const cert = p.certs[key];
       const s = statusOf(cert);

@@ -156,7 +156,7 @@ export async function managedCertsFor(rexUserId: string | null, book: ManagedBoo
     certificatesFor(
       book.properties
         .filter((p) => p.propertyId)
-        .map((p) => ({ propertyId: p.propertyId as string, name: p.name, locality: p.locality, epcExpiry: p.epcExpiry }))
+        .map((p) => ({ propertyId: p.propertyId as string, name: p.name, locality: p.locality, epcExpiry: p.epcExpiry, service: p.service }))
     );
 
   const h = await held<ComplianceBook>(key);

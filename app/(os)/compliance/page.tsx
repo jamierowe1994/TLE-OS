@@ -6,7 +6,7 @@ import PageHeader from "@/components/PageHeader";
 import ComplianceDrawer from "@/components/ComplianceDrawer";
 import { FlowTag } from "@/components/Wire";
 import {
-  BIG_THREE, CERT_META, COMP_BOOK, dueWithin, headlineCerts, statusOf,
+  BIG_THREE, CERT_META, COMP_BOOK, dueWithin, headlineCerts, isLetOnly, statusOf,
   type CertKey, type CertStatus, type CompProperty,
 } from "@/lib/compliance";
 
@@ -32,7 +32,7 @@ const TONE: Record<CertStatus, string> = {
   ok: "border border-line/80 text-muted",
 };
 
-function CertPill({ cert, name }: { cert: CompProperty["certs"][CertKey]; name?: string }) {
+function CertPill({ cert, name, muted = false }: { cert: CompProperty["certs"][CertKey]; name?: string; muted?: boolean }) {
   const s = statusOf(cert);
   const text =
     s === "expired"
@@ -46,7 +46,7 @@ function CertPill({ cert, name }: { cert: CompProperty["certs"][CertKey]; name?:
             : "in date";
   return (
     <span
-      className={`figures inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${TONE[s]}`}
+      className={`figures inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${muted ? "border border-line/80 text-muted/70" : TONE[s]}`}
       title={name}
     >
       {text}
@@ -54,7 +54,7 @@ function CertPill({ cert, name }: { cert: CompProperty["certs"][CertKey]; name?:
   );
 }
 
-type Filter = "all" | "expired" | "urgent" | "missing" | "ok";
+type Filter = "all" | "expired" | "urgent" | "missing" | "ok" | "letonly";
 
 export default function Compliance() {
   const [filter, setFilter] = useState<Filter>("all");
@@ -103,6 +103,9 @@ export default function Compliance() {
   const graded = useMemo(
     () =>
       BOOK.map((p) => {
+        /* Let only is the landlord's duty, so it is graded as itself and
+           counted in none of the four tiles (Michael, 7 Sep 2026). */
+        if (isLetOnly(p)) return { p, worst: "letonly" as const };
         const statuses = headlineCerts(p).map((k) => statusOf(p.certs[k]));
         const worst: CertStatus = statuses.includes("expired")
           ? "expired"
@@ -125,6 +128,7 @@ export default function Compliance() {
     urgent: graded.filter((g) => g.worst === "urgent").length,
     missing: graded.filter((g) => g.worst === "missing").length,
     ok: graded.filter((g) => g.worst === "ok" || g.worst === "watch").length,
+    letonly: graded.filter((g) => g.worst === "letonly").length,
   };
 
   const book = graded.filter(({ p, worst }) => {
@@ -142,6 +146,7 @@ export default function Compliance() {
     { key: "urgent", label: "Due in 30 days", value: counts.urgent, hint: "book the engineer this week", icon: "clock" },
     { key: "missing", label: "No record", value: counts.missing, hint: "can't prove it's safe", icon: "search" },
     { key: "ok", label: "In date", value: counts.ok, hint: "of the managed book", icon: "shield" },
+    { key: "letonly", label: "Let only", value: counts.letonly, hint: "the landlord's duty, not counted", icon: "key" },
   ];
 
   return (
@@ -160,7 +165,7 @@ export default function Compliance() {
       />
 
       {/* ── The four counts. Each is also the filter for the book below. ── */}
-      <div className="mt-10 grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div className="mt-10 grid grid-cols-2 gap-4 xl:grid-cols-5">
         {TILES.map((t) => (
           <button
             key={t.key}
@@ -293,6 +298,7 @@ export default function Compliance() {
                     <span className="block text-[10.5px] text-muted">
                       {p.locality}
                       {p.hmo && <span className="ml-1.5 font-semibold text-accent-dark">HMO</span>}
+                      {isLetOnly(p) && <span className="ml-1.5 font-semibold">Let only</span>}
                     </span>
                   </td>
                   {BIG_THREE.map((k) => (
@@ -300,7 +306,7 @@ export default function Compliance() {
                       {k === "gas" && !p.hasGas ? (
                         <span className="text-[10.5px] text-muted/60">no gas</span>
                       ) : (
-                        <CertPill cert={p.certs[k]} name={CERT_META[k].label} />
+                        <CertPill cert={p.certs[k]} name={CERT_META[k].label} muted={isLetOnly(p)} />
                       )}
                     </td>
                   ))}
@@ -308,7 +314,7 @@ export default function Compliance() {
                     {p.hmo ? (
                       <span className="flex gap-1.5">
                         {(["licence", "fire", "pat"] as CertKey[]).map((k) => (
-                          <CertPill key={k} cert={p.certs[k]} name={CERT_META[k].label} />
+                          <CertPill key={k} cert={p.certs[k]} name={CERT_META[k].label} muted={isLetOnly(p)} />
                         ))}
                       </span>
                     ) : (

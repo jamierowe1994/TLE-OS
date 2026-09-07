@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyFile from "@/components/PropertyFile";
 import { Pill } from "@/components/Wire";
-import { CERT_META, requiredCerts, statusOf, type CertKey, type CompProperty } from "@/lib/compliance";
+import { CERT_META, isLetOnly, requiredCerts, statusOf, type CertKey, type CompProperty } from "@/lib/compliance";
 import { COMPLIANCE_READERS as R, houseByListing, housesIn, pickerOption, roomLabel, tabLabel, type House } from "@/lib/houses";
 import RoomPicker from "@/components/RoomPicker";
 import { useDocumentOpen } from "@/lib/doc-sheet";
@@ -182,6 +182,15 @@ export default function ComplianceDrawer({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+          {/* Michael, 7 Sep 2026: a let-only home's certificates belong to the
+              landlord. Said once, here, rather than muting every card. */}
+          {isLetOnly(p) && (
+            <p className="mb-4 rounded-xl border border-line/70 bg-box px-4 py-3 text-[12px] leading-relaxed text-muted">
+              <span className="font-semibold text-ink">Let only.</span> These certificates are the landlord&apos;s duty,
+              not ours, so this home is not counted in the compliance totals and nobody here is chasing it. It stays
+              worth watching: a certificate falling due is the moment to ask whether they want it managed.
+            </p>
+          )}
           {/* Who an engineer has to deal with. Read from REX when the drawer
               opens, because the compliance book carries neither. */}
           <section className="mb-4 rounded-2xl border border-line/80 bg-panel p-4">

@@ -134,6 +134,10 @@ export interface CertSubject {
   name: string;
   locality: string;
   epcExpiry: string | null;
+  /** REX's lettings service type. A let-only home's certificates are the
+   *  landlord's duty, so the book carries this and lib/compliance excludes
+   *  them from the totals (Michael, 7 Sep 2026). */
+  service?: string | null;
 }
 
 /** The current rental book's certificates — the Compliance screen. */
@@ -143,7 +147,7 @@ export async function fetchComplianceBook(): Promise<ComplianceBook> {
   return certificatesFor(
     book.listings
       .filter((l) => l.propertyId)
-      .map((l) => ({ propertyId: l.propertyId as string, name: l.name, locality: l.locality, epcExpiry: l.epcExpiry }))
+      .map((l) => ({ propertyId: l.propertyId as string, name: l.name, locality: l.locality, epcExpiry: l.epcExpiry, service: l.serviceType }))
   );
 }
 
@@ -298,6 +302,7 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       tenant: tenantNames.length ? tenantNames.join(", ") : who || sitting ? null : undefined,
       hmo: mine.some((e) => HMO_TYPES.includes(e.type_id ?? "")),
       hasGas: hasGasRecord && !gasNotRequired,
+      service: l.service ?? null,
       certs,
     };
   });
