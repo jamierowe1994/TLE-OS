@@ -216,6 +216,26 @@ export const CREAM_SLIDES: SlideId[] = ["welcome", "agenda", "agent", "approach"
 
 export const isCream = (id: SlideId | undefined) => !!id && CREAM_SLIDES.includes(id);
 
+/**
+ * Which slides carry a DARK ground, and therefore white chrome over them.
+ *
+ * It is empty, and that is the answer rather than an omission: every slide in
+ * the deck is now either cream or paper. It lives here anyway, beside the list
+ * it has to agree with, because the alternative is what was here before — two
+ * slide ids ("marketing" and "questions") hardcoded in the viewer, left behind
+ * when both of those slides were converted to cream. The chrome went on
+ * painting itself white for them, so the closing slide - the one with the
+ * phone number on it - showed a white "Back", a white "Next" and a white
+ * "The Letting Experts" on a cream page. Invisible, in front of a landlord, at
+ * the exact moment they are meant to ring us.
+ *
+ * A list next to CREAM_SLIDES cannot go stale that way: converting a slide is
+ * one edit that moves an id between the two.
+ */
+export const DARK_SLIDES: SlideId[] = [];
+
+export const isDark = (id: SlideId | undefined) => !!id && DARK_SLIDES.includes(id);
+
 /* ───────────────────────── the reveal ───────────────────────── */
 
 /**

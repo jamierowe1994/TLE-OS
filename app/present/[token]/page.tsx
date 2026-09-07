@@ -43,7 +43,12 @@ export default async function PresentPage({
      deliberately carries neither. */
   if (token === "sample") {
     const { kind, style } = await searchParams;
-    const asked = DECK_KINDS.find((k) => k.id === kind)?.id ?? "pre-appraisal";
+    /* A BARE /present/sample IS THE FULL DECK. It used to be the pre-appraisal
+       one, which is five slides on purpose, and that is how a link to "the
+       presentation" went out to people who then saw a fifth of it and had no
+       way of knowing there was more. The showroom's job is to show the most
+       there is; the other two are one click away on the bar. */
+    const asked = DECK_KINDS.find((k) => k.id === kind)?.id ?? "post-appraisal";
     /* ?style= SWITCHES THE LOOK, and the picker below makes it clickable.
        James, 4 Sep: the team are split on the drawn style, so rather than
        argue it they get all three side by side and choose. The picker is on
@@ -51,10 +56,19 @@ export default async function PresentPage({
        agent sent, with no controls on it. */
     const chosen = asStyle(style);
     const deck = { ...SAMPLE_DECK, kind: asked, style: chosen };
+    /* The three decks with what each one actually renders. Counted by running
+       the same filter the viewer runs, not by counting the slide list: the
+       filter drops a slide whose data is missing, and a picker that promised
+       thirty-three where the page shows thirty-one would be a new version of
+       exactly the confusion it is here to end. */
+    const kinds = DECK_KINDS.map((k) => ({
+      ...k,
+      count: slidesFor({ ...SAMPLE_DECK, kind: k.id }).length,
+    }));
     return (
       <>
         <PresentDeck token="sample" deck={deck} slides={slidesFor(deck)} />
-        <StylePicker kind={asked} style={chosen} />
+        <StylePicker kind={asked} style={chosen} kinds={kinds} />
       </>
     );
   }

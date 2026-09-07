@@ -166,7 +166,7 @@ export const PORTAL_FOLDERS: PortalFolder[] = [
         name: "The presentation",
         blurb:
           "The deck they open from that link. Three of them: before the visit, the appraisal itself, and the follow-up.",
-        href: "/present/sample?from=admin",
+        href: "/present/sample?kind=post-appraisal&from=admin",
         caveat: "The sample deck. Real ones are minted per appraisal and carry that property's figures.",
       },
       {

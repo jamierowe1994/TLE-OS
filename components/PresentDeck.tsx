@@ -19,6 +19,12 @@ import {
 import { NEXT_STEPS } from "@/lib/present-copy";
 import { icsFor } from "@/lib/appraisal-email";
 import HandWord from "@/components/HandWord";
+import PresentContents, {
+  CONTENTS_INSET,
+  CONTENTS_LEFT,
+  CONTENTS_OFF,
+  type Chapter,
+} from "@/components/PresentContents";
 
 /**
  * The pre-appraisal deck, as the landlord sees it.
@@ -74,6 +80,7 @@ import {
   useIsPhoto,
   themeVars,
   isCream,
+  isDark,
   type IconName,
 } from "@/components/present-kit";
 import * as S from "@/components/PresentSlides";
@@ -1516,6 +1523,25 @@ function Questions({ deck, show }: { deck: Deck; show: boolean }) {
 
 /** The arrow on the Back and Next controls. Its own component only so the two
  *  buttons cannot drift apart in weight or size. */
+/** Three rules, shortening. A list, not a hamburger: this opens a contents
+ *  page rather than a site menu, and the difference is worth one glyph. */
+function ContentsIcon() {
+  return (
+    <svg
+      width={14}
+      height={14}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <path d="M4 6h16M4 12h11M4 18h7" />
+    </svg>
+  );
+}
+
 function Chevron({ dir }: { dir: "left" | "right" }) {
   return (
     <svg
@@ -1765,11 +1791,10 @@ export default function PresentDeck({
   };
 
   const here = slides[at]?.id;
-  /* Which slides carry white type, so the chrome can invert under them. The
-     list shrinks with every slide converted: the entrance went first, then the
-     Your Property divider. What is left is the closing screen and the one
-     remaining red divider. */
-  const onDark = here === "questions" || here === "marketing";
+  /* Which slides carry white type, so the chrome can invert under them. Read
+     from the list beside CREAM_SLIDES rather than named here — see DARK_SLIDES
+     for what naming them here cost. */
+  const onDark = isDark(here);
   /* The ground the bottom bar sits on: whatever the slide's own ground is, so
      the bar reads as the foot of the page rather than a panel laid over it.
      Driven by CREAM_SLIDES rather than a second list of ids here - see the
@@ -1785,7 +1810,7 @@ export default function PresentDeck({
      section that loses every one of its slides to a missing-data rule simply
      never appears - no empty chapter, and nothing to keep in step by hand. */
   const chapters = useMemo(() => {
-    const out: { id: SectionId; label: string; from: number; count: number }[] = [];
+    const out: Chapter[] = [];
     slides.forEach((s, i) => {
       const last = out[out.length - 1];
       if (last && last.id === s.section) last.count += 1;
@@ -1794,6 +1819,21 @@ export default function PresentDeck({
     return out;
   }, [slides]);
   const chapter = chapters.find((c) => at >= c.from && at < c.from + c.count);
+
+  /**
+   * WHETHER THIS DECK GETS A CONTENTS AT ALL.
+   *
+   * The pre-appraisal is five slides — who is coming, when, and why us. A
+   * contents column down the side of five slides is furniture: it takes a
+   * quarter of the screen to tell somebody there are five things, and it
+   * would put "Getting started" in a list on a deck whose whole point is that
+   * nothing is being asked for yet. The two long decks are thirty-one and
+   * thirty-three, which is where a corridor of arrow buttons stops being
+   * navigable, so the threshold sits between the two rather than at a number
+   * anybody has to remember.
+   */
+  const hasContents = slides.length >= 10;
+  const [sheet, setSheet] = useState(false);
 
   /**
    * THE TRANSITION SEAM. Nothing renders here yet, and that is deliberate.
@@ -1840,7 +1880,12 @@ export default function PresentDeck({
        to keep in step. See themeVars in present-kit. */
     <DeckStyleCtx.Provider value={asStyle(deck.style)}>
     <div
-      className="relative h-[100dvh] w-full overflow-hidden"
+      /* The inset for the contents rail lives on the frame rather than on each
+         slide: the scroller is w-full of this box, so every one of the
+         thirty-three cells narrows by exactly the rail's width and the snap
+         still lands on a whole slide. Doing it per slide would have meant
+         thirty-three chances to miss one. */
+      className={`relative h-[100dvh] w-full overflow-hidden ${hasContents ? CONTENTS_INSET : ""}`}
       style={themeVars(asStyle(deck.style))}
       data-present-style={asStyle(deck.style)}
     >
@@ -1893,6 +1938,21 @@ export default function PresentDeck({
         ))}
       </div>
 
+      {hasContents && (
+        <PresentContents
+          slides={slides}
+          chapters={chapters}
+          at={at}
+          go={go}
+          tint={tint}
+          onDark={onDark}
+          cream={cream}
+          accent={accent}
+          sheet={sheet}
+          onSheet={setSheet}
+        />
+      )}
+
       {/* ── The chapter rail ──
           There is no "1 / 29" here and there deliberately never will be again.
           James, 4 Sep: it "is making me depressed" - which is the correct
@@ -1911,7 +1971,14 @@ export default function PresentDeck({
           brochure should be able to get there, and a deck that makes them
           swipe past nine slides they did not ask for has earned being
           closed. */}
-      <div className="pointer-events-none fixed inset-x-0 top-0 flex items-center justify-end px-6 pt-7 sm:px-10 lg:px-14">
+      <div
+        className={`pointer-events-none fixed inset-x-0 top-0 flex items-center justify-end px-6 pt-7 sm:px-10 lg:px-14 ${
+          /* On a desktop the contents rail already says which part this is and
+             how far into it we are, in words. Two answers to the same question
+             on one screen is one too many. */
+          hasContents ? CONTENTS_OFF : ""
+        }`}
+      >
         <div className="flex items-center gap-4">
           {chapter?.label && (
             <span
@@ -1964,7 +2031,9 @@ export default function PresentDeck({
           rule rather than a fade - the entrance is a flat colour now, and a
           gradient over a flat ground reads as a smudge. */}
       <div
-        className="fixed inset-x-0 bottom-0 flex items-center justify-between gap-4 px-6 pb-5 pt-4 sm:px-10 lg:px-16"
+        className={`fixed inset-x-0 bottom-0 flex items-center justify-between gap-4 px-6 pb-5 pt-4 sm:px-10 lg:px-16 ${
+          hasContents ? CONTENTS_LEFT : ""
+        }`}
         style={{
           background: tint,
           borderTop: `1px solid ${onDark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.07)"}`,
@@ -1992,6 +2061,24 @@ export default function PresentDeck({
         </span>
 
         <div className="flex items-center gap-2.5">
+          {/* Contents, on everything narrower than the rail's breakpoint. It
+              sits with Back and Next rather than in a corner of its own
+              because it IS navigation, and a landlord reaching for the thumb
+              end of the screen should find all three in one place. */}
+          {hasContents && (
+            <button
+              onClick={() => setSheet(true)}
+              aria-label="Contents"
+              className={`flex items-center gap-1.5 rounded-full border px-3.5 py-2.5 text-[13px] transition-opacity sm:px-4 ${CONTENTS_OFF}`}
+              style={{
+                borderColor: onDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.15)",
+                color: onDark ? "#ffffff" : INK,
+              }}
+            >
+              <ContentsIcon />
+              <span className="hidden sm:inline">Contents</span>
+            </button>
+          )}
           <button
             onClick={() => go(at - 1)}
             disabled={at === 0}
