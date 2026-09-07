@@ -417,6 +417,22 @@ ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS property_lat            DOU
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS property_lng            DOUBLE PRECISION;
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS accounts_told_at        TIMESTAMPTZ;
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS done_request_at         TIMESTAMPTZ;
+/* The rehearsal (James, 7 Sep 2026): a job that runs the real workflow on
+   invented people, so the flow can be walked in front of somebody. Kept off
+   every real list, and its emails are captured rather than sent. */
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS rehearsal               BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE os_contractors  ADD COLUMN IF NOT EXISTS rehearsal               BOOLEAN NOT NULL DEFAULT false;
+
+CREATE TABLE IF NOT EXISTS os_rehearsal_emails (
+  id         TEXT PRIMARY KEY,
+  order_id   TEXT NOT NULL,
+  role       TEXT NOT NULL,
+  address    TEXT NOT NULL DEFAULT '',
+  subject    TEXT NOT NULL DEFAULT '',
+  html       TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_rehearsal_emails_order ON os_rehearsal_emails (order_id, created_at);
 CREATE INDEX IF NOT EXISTS os_works_orders_ctoken ON os_works_orders (contractor_token);
 CREATE INDEX IF NOT EXISTS os_works_orders_ttoken ON os_works_orders (tenant_token);
 ALTER TABLE os_contractors ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;

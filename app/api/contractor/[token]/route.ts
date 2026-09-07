@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { hasDb } from "@/lib/db";
-import { orderByToken, moveOrder, logEvent, stepOf, pounds, type WorksOrder } from "@/lib/works-orders";
+import { orderByToken, moveOrder, logEvent, markAccountsTold, stepOf, pounds, type WorksOrder } from "@/lib/works-orders";
 import { emailsForMove, outcomeLine, tellAccounts } from "@/lib/works-emails";
 import { agentFor } from "@/lib/works-agent";
 import { invoiceSettings } from "@/lib/invoices";
@@ -60,6 +60,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ token: str
         next = await moveOrder(o.id, { action: "invoice", invoicePence: Math.round(amount * 100), invoiceRef: String(form.get("ref") ?? "").trim() }, by);
         const settings = await invoiceSettings();
         const told = await tellAccounts(next, settings.accountsEmail ?? "");
+        if (told.sent) await markAccountsTold(o.id);
         await logEvent(o.id, "TLE OS", "email", told.sent ? `Accounts told: ${pounds(next.invoicePence)} to pay, at ${told.address}.` : `Accounts not told: ${told.reason}.`);
         if (me) for (const e of await emailsForMove(next, "done", me).catch(() => [])) await logEvent(o.id, "TLE OS", "email", outcomeLine(e));
       }

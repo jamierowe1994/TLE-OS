@@ -275,6 +275,51 @@ export const PORTAL_FOLDERS: PortalFolder[] = [
       },
     ],
   },
+  {
+    slug: "maintenance",
+    name: "Maintenance",
+    icon: "setting",
+    blurb:
+      "A repair walked end to end, and every side of it: the agent, the contractor on their phone, the landlord's post and the tenant's.",
+    items: [
+      {
+        kind: "open",
+        id: "maintenance-rehearsal",
+        name: "The walkthrough, and the link to send",
+        blurb:
+          "One repair from the tenant's phone call to the invoice, on four tabs. The real steps, the real contractor page and the real emails - and a capability link anybody can open without an account.",
+        href: "/admin/rehearsal",
+      },
+      {
+        kind: "email",
+        id: "maintenance-landlord-report",
+        name: "The report to the landlord",
+        blurb: "Sent when we cannot get them on the phone, or to put it in writing. Asks whether they want to organise it themselves.",
+        emailId: "works-landlord-report",
+      },
+      {
+        kind: "email",
+        id: "maintenance-tenant-found",
+        name: "Telling the tenant we have somebody",
+        blurb: "Goes the moment a contractor confirms, alongside the works order.",
+        emailId: "works-tenant-found",
+      },
+      {
+        kind: "email",
+        id: "maintenance-contractor-order",
+        name: "The works order",
+        blurb: "What the contractor gets, carrying the link to their own page for the date, the photos and the invoice.",
+        emailId: "works-contractor-order",
+      },
+      {
+        kind: "email",
+        id: "maintenance-tenant-happy",
+        name: "Asking the tenant if they are happy",
+        blurb: "One question with a yes and a no. A no comes straight back to the agent.",
+        emailId: "works-tenant-happy",
+      },
+    ],
+  },
 ];
 
 export function folderBySlug(slug: string): PortalFolder | undefined {

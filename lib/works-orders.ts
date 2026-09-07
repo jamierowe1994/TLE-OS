@@ -162,6 +162,8 @@ export interface WorksOrder {
   propertyLat: number | null;
   propertyLng: number | null;
   accountsToldAt: string | null;
+  /** A walkthrough job: real machinery, invented people, no email leaves. */
+  rehearsal: boolean;
   title: string;
   description: string;
   category: string;
@@ -238,6 +240,7 @@ function toOrder(r: Row): WorksOrder {
     propertyLat: n(r.property_lat),
     propertyLng: n(r.property_lng),
     accountsToldAt: iso(r.accounts_told_at),
+    rehearsal: r.rehearsal === true,
     title: s(r.title),
     description: s(r.description),
     category: s(r.category),
@@ -274,7 +277,7 @@ const COLS = `id, ref, kind, status, property_id, property_name, locality, landl
   title, description, category, urgency,
   due_at, reported_by, reported_at, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence, quote_pence,
   approved_by, approved_at, completed_at, completion_note, invoice_pence, invoice_ref, invoiced_at, paid_at, paid_how,
-  cancelled_reason, files, created_at, updated_at`;
+  cancelled_reason, files, rehearsal, created_at, updated_at`;
 
 /* ── contractors ────────────────────────────────────────────────────────── */
 
@@ -289,7 +292,7 @@ function toContractor(r: Row): Contractor {
 export async function listContractors(forUserId?: string | null): Promise<Contractor[]> {
   if (!hasDb()) return [];
   return (
-    await q<Row>(`SELECT * FROM os_contractors WHERE owner_id IS NULL OR owner_id = $1 ORDER BY active DESC, (owner_id IS NULL), trade, name`, [forUserId ?? ""])
+    await q<Row>(`SELECT * FROM os_contractors WHERE NOT rehearsal AND (owner_id IS NULL OR owner_id = $1) ORDER BY active DESC, (owner_id IS NULL), trade, name`, [forUserId ?? ""])
   ).map(toContractor);
 }
 
@@ -348,6 +351,7 @@ export interface NewOrder {
   tenantEmail?: string;
   landlordEmail?: string;
   landlordMobile?: string;
+  rehearsal?: boolean;
   propertyLat?: number | null;
   propertyLng?: number | null;
   title: string;
@@ -386,8 +390,8 @@ export async function createOrder(input: NewOrder, by: string): Promise<WorksOrd
     `INSERT INTO os_works_orders
        (id, kind, status, property_id, property_name, locality, landlord, tenant, tenant_email, landlord_email, title, description, category, urgency, due_at,
         reported_by, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence,
-        landlord_mobile, contractor_token, tenant_token, property_lat, property_lng)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+        landlord_mobile, contractor_token, tenant_token, property_lat, property_lng, rehearsal)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
      RETURNING ${COLS}`,
     [
       id, kind, status, input.propertyId ?? null, input.propertyName.trim(), (input.locality ?? "").trim(), (input.landlord ?? "").trim(),
@@ -396,7 +400,7 @@ export async function createOrder(input: NewOrder, by: string): Promise<WorksOrd
       (input.reportedBy ?? "Agent").trim(), by, input.contractorId ?? null, contractorName, input.scheduledAt ?? null,
       (input.access ?? "").trim(), Number.isFinite(input.authorityPence) ? Number(input.authorityPence) : DEFAULT_AUTHORITY_PENCE,
       (input.landlordMobile ?? "").trim(), randomBytes(16).toString("base64url"), randomBytes(16).toString("base64url"),
-      input.propertyLat ?? null, input.propertyLng ?? null,
+      input.propertyLat ?? null, input.propertyLng ?? null, input.rehearsal === true,
     ]
   );
   const order = toOrder(r);
@@ -415,9 +419,11 @@ export async function getOrder(id: string): Promise<{ order: WorksOrder; events:
   return { order: toOrder(r), events };
 }
 
-export async function listOrders(filter: { kind?: Kind | null; open?: boolean; propertyId?: string | null; limit?: number } = {}): Promise<WorksOrder[]> {
+export async function listOrders(filter: { kind?: Kind | null; open?: boolean; propertyId?: string | null; limit?: number; rehearsal?: boolean } = {}): Promise<WorksOrder[]> {
   if (!hasDb()) return [];
-  const where: string[] = [];
+  /* A rehearsal is never on the real list, and a real job is never on the
+     rehearsal's. Asked for explicitly, never inferred. */
+  const where: string[] = [filter.rehearsal ? "rehearsal" : "NOT rehearsal"];
   const vals: unknown[] = [];
   if (filter.kind) { vals.push(filter.kind); where.push(`kind = $${vals.length}`); }
   if (filter.open) where.push(`status IN ('reported', 'approval', 'approved', 'scheduled')`);
@@ -455,7 +461,7 @@ export async function worksSummary(): Promise<WorksSummary> {
             coalesce(sum(invoice_pence) FILTER (WHERE status = 'invoiced'), 0) AS unpaid,
             count(*) FILTER (WHERE status IN ('reported','approval','approved','scheduled') AND kind = 'repair') AS repairs,
             count(*) FILTER (WHERE status IN ('reported','approval','approved','scheduled') AND kind = 'planned') AS planned
-       FROM os_works_orders`
+       FROM os_works_orders WHERE NOT rehearsal`
   );
   return {
     open: Number(r?.open ?? 0), overdue: Number(r?.overdue ?? 0), emergencies: Number(r?.emergencies ?? 0), awaitingLandlord: Number(r?.awaiting ?? 0),
@@ -494,6 +500,12 @@ export const pounds = (pence: number | null | undefined) =>
 
 const when = (v: string | null | undefined) =>
   v ? new Date(v).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "a date to be agreed";
+
+/** Accounts have the invoice: stamped when the email actually went. */
+export async function markAccountsTold(id: string): Promise<void> {
+  if (!hasDb()) return;
+  await q(`UPDATE os_works_orders SET accounts_told_at = NOW() WHERE id = $1`, [id]).catch(() => {});
+}
 
 export async function moveOrder(id: string, move: Move, by: string): Promise<WorksOrder> {
   const cur = await getOrder(id);
@@ -743,7 +755,7 @@ export interface RankedContractor extends Contractor {
 /** The book for one job: those whose trade fits first, nearest first within that. */
 export async function contractorsFor(order: WorksOrder, forUserId: string): Promise<RankedContractor[]> {
   if (!hasDb()) return [];
-  const rows = await q<Row>(`SELECT * FROM os_contractors WHERE active AND (owner_id IS NULL OR owner_id = $1)`, [forUserId]);
+  const rows = await q<Row>(`SELECT * FROM os_contractors WHERE active AND rehearsal = $2 AND (owner_id IS NULL OR owner_id = $1)`, [forUserId, order.rehearsal]);
   const words = TRADE_WORDS[order.category] ?? [];
   const here = order.propertyLat != null && order.propertyLng != null ? { lat: order.propertyLat, lng: order.propertyLng } : null;
   return rows

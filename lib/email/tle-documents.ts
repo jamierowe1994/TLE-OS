@@ -488,7 +488,7 @@ export const LANDLORD_DECK_INVITE = {
  * lib/works-emails at send time, and every send goes on the job's timeline.
  *
  * Placeholders: {{ref}} {{title}} {{address}} {{category}} {{urgency}}
- * {{dueBy}} {{scheduledAt}} {{contractorName}} {{contractorPhone}}
+ * {{dueBy}} {{scheduledAt}} {{contractorName}} {{contractorGreeting}} {{contractorPhone}}
  * {{tenantName}} {{tenantPhone}} {{landlordName}} {{access}} {{description}}
  * {{quote}} {{authority}} {{agentName}} {{agentEmail}} {{agentPhone}}
  * {{completionNote}}
@@ -499,7 +499,7 @@ export const WORKS_CONTRACTOR_ORDER = {
   mode: "blocks",
   blocks: [
     H("wc1", "Works order #{{ref}}"),
-    T("wc2", "Hi {{contractorName}},<br><br>Please could you attend the following for us. Reply to this email with your earliest date, or a quote if the job needs one first."),
+    T("wc2", "Hi {{contractorGreeting}},<br><br>Please could you attend the following for us. Reply to this email with your earliest date, or a quote if the job needs one first."),
     T("wc3", "<strong>{{title}}</strong><br>{{address}}<br>{{category}} · {{urgency}} · attend by {{dueBy}}"),
     T("wc4", "{{description}}"),
     T("wc5", "<strong>Access:</strong> {{access}}<br><strong>Tenant:</strong> {{tenantName}} {{tenantPhone}}"),
@@ -518,7 +518,7 @@ export const WORKS_CONTRACTOR_BOOKED = {
   mode: "blocks",
   blocks: [
     H("wb1", "Booked: {{scheduledAt}}"),
-    T("wb2", "Hi {{contractorName}},<br><br>Confirming works order #{{ref}} at <strong>{{address}}</strong> on <strong>{{scheduledAt}}</strong>."),
+    T("wb2", "Hi {{contractorGreeting}},<br><br>Confirming works order #{{ref}} at <strong>{{address}}</strong> on <strong>{{scheduledAt}}</strong>."),
     T("wb3", "<strong>{{title}}</strong><br>{{category}}<br><strong>Access:</strong> {{access}}<br><strong>Tenant:</strong> {{tenantName}} {{tenantPhone}}"),
     SP("wb4", 8),
     T("wb5", "If the time moves, let us know and we'll tell the tenant. Please quote #{{ref}} on the invoice."),
@@ -535,7 +535,7 @@ export const WORKS_CONTRACTOR_CANCELLED = {
   mode: "blocks",
   blocks: [
     H("wx1", "Job #{{ref}} is cancelled"),
-    T("wx2", "Hi {{contractorName}},<br><br>Please don't attend <strong>{{address}}</strong> for <strong>{{title}}</strong>. Sorry for the change of plan."),
+    T("wx2", "Hi {{contractorGreeting}},<br><br>Please don't attend <strong>{{address}}</strong> for <strong>{{title}}</strong>. Sorry for the change of plan."),
     T("wx3", "{{description}}"),
     SP("wx4", 8),
     T("wx5", "Thanks,<br>{{agentName}}<br>The Letting Experts · {{agentPhone}}"),
@@ -654,7 +654,7 @@ export const WORKS_CONTRACTOR_REPORT = {
   mode: "blocks",
   blocks: [
     H("wcr1", "Can you take this one?"),
-    T("wcr2", "Hi {{contractorName}},<br><br>We've got a job at <strong>{{address}}</strong> and you're our first call."),
+    T("wcr2", "Hi {{contractorGreeting}},<br><br>We've got a job at <strong>{{address}}</strong> and you're our first call."),
     T("wcr3", "<strong>{{title}}</strong><br>{{category}} · {{urgency}} · attend by {{dueBy}}<br><br>{{description}}"),
     T("wcr4", "Reply <strong>yes</strong> and we'll send the works order with the tenant's details for access. If you can't, say so and we'll ask somebody else - no hard feelings."),
     SP("wcr5", 8),
@@ -671,7 +671,7 @@ export const WORKS_TENANT_FOUND = {
   mode: "blocks",
   blocks: [
     H("wtf1", "We've found someone"),
-    T("wtf2", "Hi {{tenantName}},<br><br>Good news on <strong>{{title}}</strong> (job #{{ref}}): <strong>{{contractorName}}</strong>{{contractorFirm}} has agreed to do the work."),
+    T("wtf2", "Hi {{tenantName}},<br><br>Good news on <strong>{{title}}</strong> (job #{{ref}}): <strong>{{contractorName}}</strong> has agreed to do the work."),
     T("wtf3", "They'll be in touch with you directly to arrange a time that suits you both. If you haven't heard from them within a couple of days, reply to this email or ring {{agentPhone}} and we'll chase."),
     SP("wtf4", 8),
     T("wtf5", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
@@ -703,7 +703,7 @@ export const WORKS_CONTRACTOR_DONE_REQUEST = {
   mode: "blocks",
   blocks: [
     H("wcd1", "All done at {{address}}?"),
-    T("wcd2", "Hi {{contractorName}},<br><br>If job #{{ref}}, <strong>{{title}}</strong>, is finished, the button below takes you to one page where you can mark it done, add any photos of the work, and drop in your invoice. Quote #{{ref}} on it and it goes straight to accounts."),
+    T("wcd2", "Hi {{contractorGreeting}},<br><br>If job #{{ref}}, <strong>{{title}}</strong>, is finished, the button below takes you to one page where you can mark it done, add any photos of the work, and drop in your invoice. Quote #{{ref}} on it and it goes straight to accounts."),
     SP("wcd3", 8),
     BTN("wcd4", "Mark it done and send the invoice", "{{contractorLink}}"),
     SP("wcd5", 8),

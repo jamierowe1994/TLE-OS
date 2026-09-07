@@ -12,7 +12,7 @@ export async function worksSweep(): Promise<{ doneRequests: number }> {
   if (!hasDb()) return { doneRequests: 0 };
   const rows = await q<{ id: string }>(
     `SELECT id FROM os_works_orders
-      WHERE status = 'scheduled' AND completed_at IS NULL AND done_request_at IS NULL
+      WHERE NOT rehearsal AND status = 'scheduled' AND completed_at IS NULL AND done_request_at IS NULL
         AND contractor_id IS NOT NULL AND scheduled_at < NOW() - interval '18 hours'
       LIMIT 50`
   );

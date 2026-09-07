@@ -36,13 +36,18 @@ const btn = "rounded-full border border-line/80 px-3.5 py-1.5 text-[12px] transi
 const primary = "rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page disabled:opacity-50";
 const tile = "flex-1 rounded-xl border px-4 py-3 text-left transition-colors";
 
-export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord }: {
+export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord, ranked, canAdd = true }: {
   o: WorksOrder;
   move: (m: Move) => Promise<void>;
   busy: boolean;
   err: string | null;
   canCorporate: boolean;
   onInvoiceLandlord: () => void;
+  /** Given, the trades come from the caller rather than the book's own API.
+   *  The rehearsal passes its own shelf so a shared link never shows the
+   *  real contractors or their numbers. */
+  ranked?: RankedContractor[] | null;
+  canAdd?: boolean;
 }) {
   const step = stepOf(o);
   const [f, setF] = useState<Record<string, string>>({});
@@ -73,8 +78,8 @@ export function WorksNow({ o, move, busy, err, canCorporate, onInvoiceLandlord }
         {step === "tell_landlord" && <TellLandlord o={o} f={f} setF={setF} move={move} busy={busy} />}
         {step === "arranging" && <Arranging o={o} f={f} setF={setF} move={move} busy={busy} />}
         {step === "landlord_follow_up" && <LandlordFollowUp o={o} f={f} setF={setF} move={move} busy={busy} />}
-        {step === "pick_contractor" && <PickContractor o={o} move={move} busy={busy} canCorporate={canCorporate} />}
-        {step === "contractor_confirm" && <ContractorConfirm o={o} move={move} busy={busy} canCorporate={canCorporate} />}
+        {step === "pick_contractor" && <PickContractor o={o} move={move} busy={busy} canCorporate={canCorporate} given={ranked} canAdd={canAdd} />}
+        {step === "contractor_confirm" && <ContractorConfirm o={o} move={move} busy={busy} canCorporate={canCorporate} given={ranked} canAdd={canAdd} />}
         {step === "booking" && <Booking o={o} f={f} setF={setF} move={move} busy={busy} />}
         {step === "visit" && <Visit o={o} f={f} setF={setF} move={move} busy={busy} />}
         {step === "aftercare" && <Aftercare o={o} f={f} setF={setF} move={move} busy={busy} />}
@@ -201,15 +206,16 @@ function LandlordFollowUp({ o, f, setF, move, busy }: StepProps) {
 }
 
 /** Ranked by trade and distance, off the API. Adding one refreshes the list. */
-function RankedList({ o, move, busy, canCorporate, onPicked }: { o: WorksOrder; move: (m: Move) => Promise<void>; busy: boolean; canCorporate: boolean; onPicked?: () => void }) {
-  const [ranked, setRanked] = useState<RankedContractor[] | null>(null);
+function RankedList({ o, move, busy, canCorporate, onPicked, given, canAdd = true }: { o: WorksOrder; move: (m: Move) => Promise<void>; busy: boolean; canCorporate: boolean; onPicked?: () => void; given?: RankedContractor[] | null; canAdd?: boolean }) {
+  const [ranked, setRanked] = useState<RankedContractor[] | null>(given ?? null);
   const [placed, setPlaced] = useState(true);
   const [adding, setAdding] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const load = () => {
+    if (given) { setRanked(given); return; }
     fetch(`/api/contractors?for=${encodeURIComponent(o.id)}`, { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j.ok) { setRanked(j.ranked); setPlaced(j.placed); } else setErr(j.error ?? "Could not read the book."); }).catch(() => setErr("Could not read the book."));
   };
-  useEffect(load, [o.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(load, [o.id, given]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div>
       {err && <p className="text-[12px] text-accent-dark">{err}</p>}
@@ -234,7 +240,7 @@ function RankedList({ o, move, busy, canCorporate, onPicked }: { o: WorksOrder; 
         </ul>
       )}
       {!placed && ranked && ranked.length > 0 && <p className="mt-1.5 text-[11px] text-muted">The property has no map position, so this is by trade only.</p>}
-      {adding ? (
+      {!canAdd ? null : adding ? (
         <div className="mt-3 rounded-xl border border-line/80 bg-card p-3">
           <ContractorForm initial={{ trade: o.category }} canCorporate={canCorporate} compact onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load(); }} />
         </div>
@@ -245,16 +251,16 @@ function RankedList({ o, move, busy, canCorporate, onPicked }: { o: WorksOrder; 
   );
 }
 
-function PickContractor({ o, move, busy, canCorporate }: { o: WorksOrder; move: (m: Move) => Promise<void>; busy: boolean; canCorporate: boolean }) {
-  return <RankedList o={o} move={move} busy={busy} canCorporate={canCorporate} />;
+function PickContractor({ o, move, busy, canCorporate, given, canAdd }: { o: WorksOrder; move: (m: Move) => Promise<void>; busy: boolean; canCorporate: boolean; given?: RankedContractor[] | null; canAdd?: boolean }) {
+  return <RankedList o={o} move={move} busy={busy} canCorporate={canCorporate} given={given} canAdd={canAdd} />;
 }
 
-function ContractorConfirm({ o, move, busy, canCorporate }: { o: WorksOrder; move: (m: Move) => Promise<void>; busy: boolean; canCorporate: boolean }) {
+function ContractorConfirm({ o, move, busy, canCorporate, given, canAdd }: { o: WorksOrder; move: (m: Move) => Promise<void>; busy: boolean; canCorporate: boolean; given?: RankedContractor[] | null; canAdd?: boolean }) {
   const [other, setOther] = useState(false);
   if (other) return (
     <div>
       <p className="mb-2 text-[12.5px] text-muted">{o.contractorName} is off the job once you mark somebody else contacted.</p>
-      <RankedList o={o} move={move} busy={busy} canCorporate={canCorporate} />
+      <RankedList o={o} move={move} busy={busy} canCorporate={canCorporate} given={given} canAdd={canAdd} />
       <button type="button" onClick={() => setOther(false)} className={`mt-2 ${btn}`}>Back</button>
     </div>
   );

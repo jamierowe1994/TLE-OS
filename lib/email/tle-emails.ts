@@ -610,12 +610,12 @@ The Letting Experts`
 /* One worked job, so every maintenance email previews as a real one. */
 const WORKS_SAMPLE: Record<string, string> = {
   ref: "1042", title: "Boiler not firing, no hot water", address: "41 Harewood Road, Coventry CV4 8LP", category: "Heating & boiler",
-  urgency: "Urgent", dueBy: "Thursday 10 September, 09:00", scheduledAt: "Tuesday 8 September, 10:00", contractorName: "Rob Holt",
+  urgency: "Urgent", dueBy: "Thursday 10 September, 09:00", scheduledAt: "Tuesday 8 September, 10:00", contractorName: "R. Holt Heating", contractorGreeting: "Rob",
   contractorPhone: "07700 900123", tenantName: "Marcus", tenantPhone: "07700 900456", landlordName: "Helen", access: "Tenant home after 5pm; dog in the garden",
   description: "Tenant rang at 8am. Pressure gauge reads zero, boiler shows fault code F22.", quote: "£240", authority: "£150",
   agentName: "Michael Healy", agentEmail: "michael@thelettingexperts.co.uk", agentPhone: "0115 123 4567", completionNote: "PCB replaced, system repressurised and tested.",
   number: "INV-00042", toName: "Helen", total: "£264", dueDate: "21 September 2026", reference: "job #1042, boiler repair", link: `${SITE}/invoice/sample`,
-  contractorFirm: " of R. Holt Heating", contractorLink: `${SITE}/contractor/sample`, happyLink: `${SITE}/repair/sample?happy=yes`, notHappyLink: `${SITE}/repair/sample?happy=no`,
+  contractorLink: `${SITE}/contractor/sample`, happyLink: `${SITE}/repair/sample?happy=yes`, notHappyLink: `${SITE}/repair/sample?happy=no`,
 };
 const worksEntry = (id: string, name: string, audience: CatalogEntry["audience"], trigger: string, to: string, summary: string, doc: EmailDoc, group = "Maintenance"): CatalogEntry => ({
   id, group, name, audience, trigger, fires: "lib/works-emails, from the job's own moves", to, summary, doc,

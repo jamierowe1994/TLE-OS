@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
-import { getOrder, moveOrder, logEvent, type Move } from "@/lib/works-orders";
+import { getOrder, moveOrder, logEvent, markAccountsTold, type Move } from "@/lib/works-orders";
 import { emailsForMove, outcomeLine, tellAccounts } from "@/lib/works-emails";
 import { invoiceSettings } from "@/lib/invoices";
 import { pounds } from "@/lib/works-orders";
@@ -40,6 +40,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     for (const e of emails) await logEvent(order.id, "TLE OS", "email", outcomeLine(e));
     if (move.action === "invoice") {
       const told = await tellAccounts(order, (await invoiceSettings()).accountsEmail ?? "");
+      if (told.sent) await markAccountsTold(order.id);
       await logEvent(order.id, "TLE OS", "email", told.sent ? `Accounts told: ${pounds(order.invoicePence)} to pay, at ${told.address}.` : `Accounts not told: ${told.reason}.`);
     }
     const found = await getOrder(id);

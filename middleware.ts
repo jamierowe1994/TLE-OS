@@ -226,6 +226,13 @@ export const config = {
        share token, and because everything under it is self-contained: mock
        rail, sample figures, no fetches, no writes, no session. See
        lib/preview-token.ts - that token must never gate anything real. */
-    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|api/tenant/passport|api/landlord|brand|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
+    /* `rehearsal` is the maintenance walkthrough, and it is exempt for the
+       same reason: James sends it to people who have no account. It is safe
+       because its own token is checked at the layout and again on every API
+       call, and because that API can only ever touch a job flagged
+       `rehearsal` - a real works order id in the URL opens nothing. Its
+       emails are written and kept rather than sent, so nothing anybody
+       presses in there can reach a customer. See lib/rehearsal.ts. */
+    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|rehearsal|api/rehearsal|api/tenant/passport|api/landlord|brand|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
   ],
 };

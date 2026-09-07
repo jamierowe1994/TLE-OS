@@ -222,7 +222,7 @@ async function worksReminders(list: Person[], now: number): Promise<Reminder[]> 
     scheduled_at: Date | null; completed_at: Date | null; tenant_happy: string | null; tenant_happy_at: Date | null; tenant_happy_note: string; created_at: Date; urgency: string | null;
   }>(`SELECT id, ref, title, property_name, raised_by, status, arranging, landlord_follow_up_at, landlord_resolved_at, landlord_told_at, contractor_confirmed_at,
              scheduled_at, completed_at, tenant_happy, tenant_happy_at, tenant_happy_note, created_at, urgency
-        FROM os_works_orders WHERE status NOT IN ('paid', 'cancelled')`).catch(() => []);
+        FROM os_works_orders WHERE NOT rehearsal AND status NOT IN ('paid', 'cancelled')`).catch(() => []);
   const out: Reminder[] = [];
   for (const r of rows) {
     const who = whose(list, r.raised_by);
