@@ -11,11 +11,13 @@ import PropertyPhoto from "@/components/PropertyPhoto";
  * Sits above the drawers (z-150) and closes on the backdrop.
  */
 export default function PhotoLightbox({
-  photos, start = 0, onClose,
+  photos, start = 0, onClose, name = "photo",
 }: {
   photos: string[];
   start?: number;
   onClose: () => void;
+  /** The property, for the downloaded file's name: "5b Newton Road 3.jpg". */
+  name?: string;
 }) {
   const [at, setAt] = useState(start);
   const [shown, setShown] = useState(false);
@@ -44,7 +46,21 @@ export default function PhotoLightbox({
       <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 cursor-default" />
       <div className="relative z-10 flex shrink-0 items-center justify-between px-5 py-4 text-white">
         <span className="text-[12.5px] font-medium">{at + 1} of {count}</span>
-        <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-[13px] transition-colors hover:bg-white/30">✕</button>
+        <div className="flex items-center gap-2">
+          {/* Download this photograph (James, 7 Sep): the OS fetches it from
+              REX's CDN and hands it down under the property's name. */}
+          <a
+            href={`/api/photo/download?u=${encodeURIComponent(photos[at])}&name=${encodeURIComponent(`${name} ${at + 1}`)}`}
+            aria-label="Download this photo"
+            title="Download"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 transition-colors hover:bg-white/30"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M12 4v11" /><path d="m7 11 5 5 5-5" /><path d="M5 20h14" />
+            </svg>
+          </a>
+          <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-[13px] transition-colors hover:bg-white/30">✕</button>
+        </div>
       </div>
       <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center px-14">
         {/* eslint-disable-next-line @next/next/no-img-element */}

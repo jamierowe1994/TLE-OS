@@ -1468,7 +1468,7 @@ export default function ListingDrawer({
         agent="Kirstie"
         onBooked={(v) => setBooked((cur) => [{ when: v.when, who: v.who }, ...cur])}
       />
-      {lightbox != null && <PhotoLightbox photos={photos} start={lightbox} onClose={() => setLightbox(null)} />}
+      {lightbox != null && <PhotoLightbox photos={photos} start={lightbox} name={listing.name} onClose={() => setLightbox(null)} />}
     </div>
   );
 }

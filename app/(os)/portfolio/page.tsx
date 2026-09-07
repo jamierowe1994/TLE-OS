@@ -10,6 +10,7 @@ import { Pill } from "@/components/Wire";
 import { rexContactUrl, rexListingUrl } from "@/lib/business/rex-links";
 import { housesIn, houseByListing, roomLabel, tabLabel, tenantsInOrder, pickerOption, MANAGED_READERS as R, type House } from "@/lib/houses";
 import RoomPicker from "@/components/RoomPicker";
+import PhotoLightbox from "@/components/PhotoLightbox";
 import { useDocumentOpen } from "@/lib/doc-sheet";
 import {
   CERT_META, headlineCerts, requiredCerts, statusOf,
@@ -209,7 +210,8 @@ function PropertyPanel({
   onStep: (d: number) => void;
 }) {
   const [shown, setShown] = useState(false);
-  const [at, setAt] = useState(0);
+  /* The photo set popped out full size; null when closed. */
+  const [lightbox, setLightbox] = useState<number | null>(null);
   /* "house", or a room's listing id. A plain home has no tabs. */
   const [tab, setTab] = useState<string>("house");
   /* A certificate is up from the bottom: slide aside until it goes. */
@@ -220,7 +222,7 @@ function PropertyPanel({
     return () => cancelAnimationFrame(t);
   }, []);
   useEffect(() => {
-    setAt(0);
+    setLightbox(null);
     /* Opened from a room's row or the search bar: land on that room. */
     const opened = house ? house.rooms.find((r) => r.listingId === property.listingId || (house.kind === "rooms" && roomLabel(r).toLowerCase() === roomLabel(property).toLowerCase())) : null;
     setTab(opened && house?.house?.listingId !== property.listingId ? opened.listingId : "house");
@@ -333,16 +335,27 @@ function PropertyPanel({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          <div className="relative overflow-hidden rounded-2xl border border-line/70 bg-box">
-            <PropertyPhoto src={shots[at] ?? null} alt="" className="h-[220px] w-full object-cover lg:h-[300px]" />
-            {shots.length > 1 && (
-              <>
-                <button type="button" aria-label="Previous photograph" onClick={() => setAt((n) => (n - 1 + shots.length) % shots.length)} className="absolute left-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-page/90 text-[13px] shadow-sm">‹</button>
-                <button type="button" aria-label="Next photograph" onClick={() => setAt((n) => (n + 1) % shots.length)} className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-page/90 text-[13px] shadow-sm">›</button>
-                <span className="absolute bottom-2 right-3 rounded-full bg-page/90 px-2 py-0.5 text-[10.5px] text-muted">{at + 1} of {shots.length}</span>
-              </>
-            )}
-          </div>
+          {/* Every photo, small, the same grid as the listing (James, 7 Sep);
+              any of them pops the set out full size. */}
+          {shots.length ? (
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+              {shots.map((src, i) => (
+                <button
+                  key={src + i}
+                  type="button"
+                  onClick={() => setLightbox(i)}
+                  aria-label={`Photo ${i + 1}`}
+                  className="group overflow-hidden rounded-xl border border-line/60 transition-colors hover:border-ink"
+                >
+                  <PropertyPhoto src={src} alt="" className="aspect-[4/3] w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" />
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-2xl border border-line/70 bg-box">
+              <PropertyPhoto src={null} alt="" className="h-[180px] w-full object-cover" />
+            </div>
+          )}
 
           {houseView && house ? (
             <div className="mt-5 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 lg:grid-cols-6">
@@ -481,6 +494,7 @@ function PropertyPanel({
           </div>
         </div>
       </aside>
+      {lightbox != null && <PhotoLightbox photos={shots} start={lightbox} name={house ? house.name : p.name} onClose={() => setLightbox(null)} />}
     </div>
   );
 }
