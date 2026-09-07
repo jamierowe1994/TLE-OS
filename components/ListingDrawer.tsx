@@ -635,7 +635,9 @@ export default function ListingDrawer({
 
               {/* The landlord, because the first question on any property is
                   "whose is it and can I ring them". */}
-              <div className="hidden w-[210px] shrink-0 rounded-2xl border border-line/70 p-4 lg:block">
+              {/* Twice the width it had (James, 7 Sep): a name, a number and an
+                  email should not be truncating in a 210px column. */}
+              <div className="hidden w-[360px] shrink-0 rounded-2xl border border-line/70 p-5 lg:block xl:w-[420px]">
                 {/* ── Terms, as one word rather than a panel.
                     By the time a property is in Listings the terms are signed,
                     so a box asking whether to send them is a permanent
