@@ -8,8 +8,12 @@
  * chose on 27 Aug 2026 to make DocuSeal the PRIMARY path and keep that one as a
  * fallback, so terms can still go out if one provider is down.
  *
- * DocuSeal is `jamierowe1994/docuseal` — our fork, our instance, no per-envelope
- * cost, and the same choice Fine & Country made.
+ * NOT self-hosted, despite what this comment used to say. James bought Cloud
+ * Pro on the EU region on 7 Sep 2026, so the host is `api.docuseal.eu` and
+ * `apiRoot()` below is what keeps the paths right. DocuSeal Cloud also keeps
+ * TESTING and PRODUCTION entirely apart: a key sees only its own environment's
+ * templates and webhooks, which is why the terms template had to be rebuilt in
+ * production as 763089. See [[tle-os-docuseal-cloud]] in memory.
  *
  * ── The send lock, and why it is not optional ─────────────────────────────
  *
