@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import DoodleIcon from "@/components/DoodleIcon";
 import { Pill } from "@/components/Wire";
@@ -65,7 +67,8 @@ function nextFor(o: WorksOrder): { text: string; hot: boolean } {
 type Property = { id: string; name: string; locality: string; landlord?: string; tenant?: string | null };
 
 export default function Maintenance() {
-  const [section, setSection] = useState<Kind | "contractors">("repair");
+  const router = useRouter();
+  const [section, setSection] = useState<Kind | "contractors" | "invoices">("repair");
   const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; live: boolean; reason?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
@@ -88,6 +91,7 @@ export default function Maintenance() {
       if (raise === "repair" || raise === "planned") { setSection(raise); setRaising(raise); }
       const open = sp.get("open");
       if (open) setOpenId(open);
+      if (sp.get("section") === "invoices") setSection("invoices");
     } catch { /* fine */ }
   }, []);
 
@@ -95,7 +99,7 @@ export default function Maintenance() {
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return orders.filter((o) => {
-      if (section !== "contractors" && o.kind !== section) return false;
+      if (section !== "contractors" && section !== "invoices" && o.kind !== section) return false;
       if (!showClosed && !OPEN.includes(o.status)) return false;
       if (needle && !`${o.propertyName} ${o.locality} ${o.title} ${o.category} ${o.contractorName} ${o.landlord} ${o.tenant} ${o.ref}`.toLowerCase().includes(needle)) return false;
       return true;
@@ -155,6 +159,7 @@ export default function Maintenance() {
             ["repair", "Repairs", s?.byKind.repair],
             ["planned", "Planned maintenance", s?.byKind.planned],
             ["contractors", "Contractors", data?.contractors.length],
+            ["invoices", "Invoices", undefined],
           ] as const
         ).map(([key, label, n]) => (
           <button
@@ -167,7 +172,7 @@ export default function Maintenance() {
             {n != null && <span className="ml-1.5 opacity-70">{n}</span>}
           </button>
         ))}
-        {section !== "contractors" && (
+        {section !== "contractors" && section !== "invoices" && (
           <button type="button" onClick={() => setShowClosed((v) => !v)} className="ml-auto text-[11.5px] text-muted underline transition-colors hover:text-ink">
             {showClosed ? "Hide finished jobs" : "Show finished jobs"}
           </button>
@@ -177,7 +182,9 @@ export default function Maintenance() {
       {error && <p className="mt-4 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12.5px]">{error}</p>}
       {data && !data.live && <p className="mt-4 text-[12.5px] text-muted">{data.reason}</p>}
 
-      {section === "contractors" ? (
+      {section === "invoices" ? (
+        <Invoices onOpen={(id) => router.push(`/maintenance/invoices/${id}`)} />
+      ) : section === "contractors" ? (
         <Contractors contractors={data?.contractors ?? []} onChange={load} />
       ) : !data ? (
         <p className="mt-6 text-[12.5px] text-muted">Reading the jobs…</p>
@@ -260,6 +267,8 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
   const [dueAt, setDueAt] = useState("");
   const [reportedBy, setReportedBy] = useState(kind === "repair" ? "Tenant" : "Compliance tracker");
   const [tenant, setTenant] = useState("");
+  const [tenantEmail, setTenantEmail] = useState("");
+  const [landlordEmail, setLandlordEmail] = useState("");
   const [access, setAccess] = useState("");
   const [contractorId, setContractorId] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
@@ -316,7 +325,7 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        kind, propertyId: picked?.id ?? null, propertyName, locality: picked?.locality ?? "", landlord: picked?.landlord ?? "", tenant,
+        kind, propertyId: picked?.id ?? null, propertyName, locality: picked?.locality ?? "", landlord: picked?.landlord ?? "", tenant, tenantEmail, landlordEmail,
         title, description, category, urgency: kind === "repair" ? urgency : null, dueAt: kind === "planned" ? new Date(dueAt).toISOString() : null,
         reportedBy, access, contractorId: contractorId || null, scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : null,
       }),
@@ -416,6 +425,14 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
             <label className={label}>Tenant, for access</label>
             <input value={tenant} onChange={(e) => setTenant(e.target.value)} placeholder="Name and number" className={`mt-1 ${field}`} />
           </div>
+          <div>
+            <label className={label}>Tenant's email</label>
+            <input type="email" value={tenantEmail} onChange={(e) => setTenantEmail(e.target.value)} placeholder="So they're told at each step" className={`mt-1 ${field}`} />
+          </div>
+          <div>
+            <label className={label}>Landlord's email</label>
+            <input type="email" value={landlordEmail} onChange={(e) => setLandlordEmail(e.target.value)} placeholder="For approvals over their authority" className={`mt-1 ${field}`} />
+          </div>
           <div className="sm:col-span-2">
             <label className={label}>Access notes</label>
             <input value={access} onChange={(e) => setAccess(e.target.value)} placeholder="Key safe, tenant works days, dog in the garden" className={`mt-1 ${field}`} />
@@ -511,11 +528,11 @@ function JobDrawer({ order, contractors, onClose, onChanged }: { order: WorksOrd
     if (o.status === "scheduled") actions.push({ a: "schedule", label: "Move the date" });
     actions.push({ a: "cancel", label: "Cancel" });
   } else if (o.status === "done") {
-    actions.push({ a: "invoice", label: "Add the invoice", primary: true });
+    actions.push({ a: "invoice", label: "Add the contractor's invoice", primary: true });
     actions.push({ a: "reopen", label: "Reopen" });
   } else if (o.status === "invoiced") {
     actions.push({ a: "paid", label: "Mark paid", primary: true });
-    actions.push({ a: "invoice", label: "Change the invoice" });
+    actions.push({ a: "invoice", label: "Change the contractor's invoice" });
   } else if (o.status === "cancelled") {
     actions.push({ a: "reopen", label: "Reopen", primary: true });
   }
@@ -554,6 +571,22 @@ function JobDrawer({ order, contractors, onClose, onChanged }: { order: WorksOrd
                   {x.label}
                 </button>
               ))}
+              {(o.status === "done" || o.status === "invoiced" || o.status === "paid") && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setBusy(true);
+                    const r = await fetch("/api/invoices", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ orderId: o.id }) }).then((x) => x.json()).catch(() => null);
+                    setBusy(false);
+                    if (!r?.ok) return setErr(r?.error ?? "Could not draft the invoice.");
+                    window.location.href = `/maintenance/invoices/${r.invoice.id}`;
+                  }}
+                  className={btn}
+                  title="Draft an invoice to the landlord from this job: their name, the job as the reference, and the contractor's cost as the first line"
+                >
+                  Invoice the landlord
+                </button>
+              )}
               <label className={`${btn} cursor-pointer`}>
                 Add a file
                 <input type="file" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) void upload(file); e.target.value = ""; }} />
@@ -618,7 +651,9 @@ function JobDrawer({ order, contractors, onClose, onChanged }: { order: WorksOrd
                     <input value={f.title ?? o.title} onChange={(e) => setF({ ...f, title: e.target.value })} className={`${field} sm:col-span-2`} />
                     <textarea value={f.description ?? o.description} onChange={(e) => setF({ ...f, description: e.target.value })} rows={3} className={`${field} sm:col-span-2`} />
                     <input value={f.tenant ?? o.tenant} onChange={(e) => setF({ ...f, tenant: e.target.value })} placeholder="Tenant, for access" className={field} />
+                    <input value={f.tenantEmail ?? o.tenantEmail} onChange={(e) => setF({ ...f, tenantEmail: e.target.value })} placeholder="Tenant's email" className={field} />
                     <input value={f.landlord ?? o.landlord} onChange={(e) => setF({ ...f, landlord: e.target.value })} placeholder="Landlord" className={field} />
+                    <input value={f.landlordEmail ?? o.landlordEmail} onChange={(e) => setF({ ...f, landlordEmail: e.target.value })} placeholder="Landlord's email" className={field} />
                     <input value={f.access ?? o.access} onChange={(e) => setF({ ...f, access: e.target.value })} placeholder="Access notes" className={`${field} sm:col-span-2`} />
                     <input value={f.authority ?? String(o.authorityPence / 100)} onChange={(e) => setF({ ...f, authority: e.target.value })} placeholder="£ landlord's authority" className={field} />
                     {o.kind === "repair" ? (
@@ -648,7 +683,7 @@ function JobDrawer({ order, contractors, onClose, onChanged }: { order: WorksOrd
                         : act === "cancel" ? { action: "cancel", reason: f.note ?? "" }
                         : act === "reopen" ? { action: "reopen", note: f.note }
                         : act === "note" ? { action: "note", note: f.note ?? "" }
-                        : act === "edit" ? { action: "edit", fields: { title: f.title, description: f.description, tenant: f.tenant, landlord: f.landlord, access: f.access, authorityPence: f.authority ? toPence(f.authority) : undefined, urgency: f.urgency as Urgency | undefined, dueAt: f.dueAt !== undefined ? (f.dueAt ? new Date(f.dueAt).toISOString() : null) : undefined } }
+                        : act === "edit" ? { action: "edit", fields: { title: f.title, description: f.description, tenant: f.tenant, tenantEmail: f.tenantEmail, landlord: f.landlord, landlordEmail: f.landlordEmail, access: f.access, authorityPence: f.authority ? toPence(f.authority) : undefined, urgency: f.urgency as Urgency | undefined, dueAt: f.dueAt !== undefined ? (f.dueAt ? new Date(f.dueAt).toISOString() : null) : undefined } }
                         : null;
                       if (!m) return setErr(act === "assign" ? "Pick a contractor." : act === "paid" ? "Say how it was paid." : "Fill it in first.");
                       void move(m);
@@ -672,6 +707,8 @@ function JobDrawer({ order, contractors, onClose, onChanged }: { order: WorksOrd
                   {o.kind === "repair" ? <Fact k="Urgency" v={URGENCIES.find((u) => u.id === o.urgency)?.label ?? "—"} /> : <Fact k="Due" v={day(o.dueAt)} />}
                   {o.kind === "repair" && <Fact k="Attend by" v={stamp(o.dueAt)} />}
                   <Fact k="Reported by" v={`${o.reportedBy || "—"} · ${day(o.reportedAt)}`} />
+                  <Fact k="Tenant's email" v={o.tenantEmail || "none - not being told"} />
+                  <Fact k="Landlord's email" v={o.landlordEmail || "none - not being told"} />
                   <Fact k="Raised by" v={o.raisedBy || "—"} />
                   <Fact k="Access" v={o.access || "—"} />
                   <Fact k="Contractor" v={o.contractorName || "not yet"} />
@@ -794,6 +831,134 @@ function Contractors({ contractors, onChange }: { contractors: Contractor[]; onC
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+/* ── The invoicing schedule ─────────────────────────────────────────────── */
+
+type InvoiceRow = { id: string; number: string | null; status: string; toName: string; property: string; issueDate: string; dueDate: string; reference: string; orderRef: number | null; lines: { qty: number; unitPence: number; vatRate: number }[] };
+type Settings = { companyName: string; addressLines: string[]; email: string; phone: string; vatNumber: string; companyNumber: string; bankName: string; accountName: string; sortCode: string; accountNumber: string; prefix: string; termsDays: number; defaultVatRate: number; footer: string };
+
+const INVOICE_STATUS: Record<string, { label: string; tone: "neutral" | "accent" | "good" }> = {
+  draft: { label: "Draft", tone: "neutral" }, issued: { label: "Produced", tone: "accent" }, sent: { label: "Sent", tone: "accent" }, paid: { label: "Paid", tone: "good" }, void: { label: "Void", tone: "neutral" },
+};
+const totalOf = (lines: InvoiceRow["lines"]) => lines.reduce((a, l) => { const net = Math.round((Number(l.qty) || 0) * (Number(l.unitPence) || 0)); return a + net + Math.round((net * (Number(l.vatRate) || 0)) / 100); }, 0);
+
+function Invoices({ onOpen }: { onOpen: (id: string) => void }) {
+  const [data, setData] = useState<{ invoices: InvoiceRow[]; settings: Settings | null } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = useCallback(() => {
+    fetch("/api/invoices", { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j.ok) { setData(j); setSettings(j.settings); } else setErr(j.error ?? "Could not read the invoices."); }).catch(() => setErr("Could not read the invoices."));
+  }, []);
+  useEffect(load, [load]);
+
+  async function blank() {
+    setBusy(true);
+    const r = await fetch("/api/invoices", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }).then((x) => x.json()).catch(() => null);
+    setBusy(false);
+    if (!r?.ok) return setErr(r?.error ?? "Could not draft the invoice.");
+    onOpen(r.invoice.id);
+  }
+  async function saveSettings() {
+    if (!settings) return;
+    setBusy(true);
+    const r = await fetch("/api/invoices", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(settings) }).then((x) => x.json()).catch(() => null);
+    setBusy(false);
+    if (!r?.ok) return setErr(r?.error ?? "Could not save the settings.");
+    setSettings(r.settings);
+    setShowSettings(false);
+  }
+  const field = "w-full rounded-lg border border-line/80 bg-box px-3 py-2 text-[12.5px] outline-none focus:border-ink";
+  const rows = data?.invoices ?? [];
+  const outstanding = rows.filter((r) => r.status === "issued" || r.status === "sent").reduce((a, r) => a + totalOf(r.lines), 0);
+  const overdue = rows.filter((r) => (r.status === "issued" || r.status === "sent") && r.dueDate && new Date(r.dueDate).getTime() < Date.now()).length;
+
+  return (
+    <div className="mt-4 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line/80 bg-panel p-5">
+        <div>
+          <h2 className="text-[15px]">The invoicing schedule</h2>
+          <p className="mt-0.5 text-[11.5px] text-muted">
+            Every invoice we raise, numbered in order. A draft takes its number when it is produced.
+            {data ? ` ${pounds(outstanding)} outstanding${overdue ? ` · ${overdue} overdue` : ""}.` : ""}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setShowSettings((v) => !v)} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px]">Who invoices are from</button>
+          <PressButton onClick={() => void blank()} className={`rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-page ${busy ? "opacity-50" : ""}`}>+ New invoice</PressButton>
+        </div>
+      </div>
+      {err && <p className="text-[12.5px] text-accent-dark">{err}</p>}
+
+      {showSettings && settings && (
+        <div className="rounded-2xl border border-line/80 bg-panel p-5">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Who invoices are from</p>
+          <p className="mt-1 text-[11.5px] text-muted">Copied onto every invoice when it is produced, so an old invoice keeps the details it went out with.</p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <input value={settings.companyName} onChange={(e) => setSettings({ ...settings, companyName: e.target.value })} placeholder="Company name" className={field} />
+            <input value={settings.email} onChange={(e) => setSettings({ ...settings, email: e.target.value })} placeholder="Accounts email" className={field} />
+            <input value={settings.phone} onChange={(e) => setSettings({ ...settings, phone: e.target.value })} placeholder="Phone" className={field} />
+            <textarea value={settings.addressLines.join("\n")} onChange={(e) => setSettings({ ...settings, addressLines: e.target.value.split("\n") })} placeholder="Address, one line per line" rows={3} className={`${field} sm:col-span-2 lg:col-span-3`} />
+            <input value={settings.vatNumber} onChange={(e) => setSettings({ ...settings, vatNumber: e.target.value })} placeholder="VAT number" className={field} />
+            <input value={settings.companyNumber} onChange={(e) => setSettings({ ...settings, companyNumber: e.target.value })} placeholder="Company number" className={field} />
+            <input value={settings.prefix} onChange={(e) => setSettings({ ...settings, prefix: e.target.value })} placeholder="Number prefix, e.g. INV-" className={field} />
+            <input value={settings.bankName} onChange={(e) => setSettings({ ...settings, bankName: e.target.value })} placeholder="Bank" className={field} />
+            <input value={settings.accountName} onChange={(e) => setSettings({ ...settings, accountName: e.target.value })} placeholder="Account name" className={field} />
+            <div className="grid grid-cols-2 gap-2">
+              <input value={settings.sortCode} onChange={(e) => setSettings({ ...settings, sortCode: e.target.value })} placeholder="Sort code" className={field} />
+              <input value={settings.accountNumber} onChange={(e) => setSettings({ ...settings, accountNumber: e.target.value })} placeholder="Account number" className={field} />
+            </div>
+            <input value={settings.termsDays} onChange={(e) => setSettings({ ...settings, termsDays: Number(e.target.value) || 0 })} placeholder="Payment terms, days" className={field} />
+            <input value={settings.defaultVatRate} onChange={(e) => setSettings({ ...settings, defaultVatRate: Number(e.target.value) || 0 })} placeholder="Default VAT %" className={field} />
+            <textarea value={settings.footer} onChange={(e) => setSettings({ ...settings, footer: e.target.value })} placeholder="The note at the foot of a new invoice" rows={2} className={`${field} sm:col-span-2 lg:col-span-3`} />
+          </div>
+          <div className="mt-3 flex justify-end gap-2">
+            <button type="button" onClick={() => setShowSettings(false)} className="rounded-full border border-line/80 px-4 py-1.5 text-[12px] text-muted">Cancel</button>
+            <button type="button" disabled={busy} onClick={() => void saveSettings()} className="rounded-full bg-ink px-4 py-1.5 text-[12px] font-semibold text-page">Save</button>
+          </div>
+        </div>
+      )}
+
+      <div className="rounded-2xl border border-line/80 bg-panel p-5">
+        {!data ? (
+          <p className="text-[12.5px] text-muted">Reading the schedule…</p>
+        ) : rows.length === 0 ? (
+          <p className="text-[12.5px] text-muted">No invoices yet. Draft one from a finished job, or start a blank one.</p>
+        ) : (
+          <table className="w-full text-left text-[12.5px]">
+            <thead>
+              <tr className="border-b border-line/70 text-[9.5px] font-bold uppercase tracking-wider text-muted">
+                <th className="pb-2 pr-3">Number</th><th className="pb-2 pr-3">Date</th><th className="pb-2 pr-3">To</th><th className="pb-2 pr-3">For</th><th className="pb-2 pr-3 text-right">Total</th><th className="pb-2 pr-3">Due</th><th className="pb-2">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const st = INVOICE_STATUS[r.status] ?? INVOICE_STATUS.draft;
+                const late = (r.status === "issued" || r.status === "sent") && r.dueDate && new Date(r.dueDate).getTime() < Date.now();
+                return (
+                  <tr key={r.id} onClick={() => onOpen(r.id)} className="cursor-pointer border-b border-line/40 transition-colors last:border-0 hover:bg-page">
+                    <td className="figures py-3 pr-3">{r.number ?? <span className="text-muted">draft</span>}</td>
+                    <td className="py-3 pr-3 text-muted">{day(r.issueDate)}</td>
+                    <td className="py-3 pr-3">{r.toName || <span className="text-muted">—</span>}</td>
+                    <td className="max-w-[260px] truncate py-3 pr-3 text-muted">{r.reference || r.property || "—"}</td>
+                    <td className="figures py-3 pr-3 text-right">{pounds(totalOf(r.lines))}</td>
+                    <td className={`py-3 pr-3 ${late ? "font-semibold text-accent-dark" : "text-muted"}`}>{day(r.dueDate)}</td>
+                    <td className="py-3"><Pill tone={st.tone}>{st.label}</Pill></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+      <p className="text-[11px] text-muted">
+        Produce assigns the next number and freezes the company details onto the invoice. Send emails the page they can open and print. A void invoice keeps its number, so the sequence always reads.{" "}
+        <Link href="/marketing-hub/templates" className="underline">The invoice email is editable under Marketing.</Link>
+      </p>
     </div>
   );
 }

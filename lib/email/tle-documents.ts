@@ -477,3 +477,155 @@ export const LANDLORD_DECK_INVITE = {
   ],
   branding: { showSignoff: false },
 } as const;
+
+/* ──────────────── Maintenance: the contractor, the tenant, the landlord ──────────────── */
+
+/**
+ * The works-order emails, one per step (James, 7 Sep 2026: "add the
+ * contractor and tenant emails at each step... make sure you're adding them
+ * to the marketing section so they can edit them"). Block documents, so the
+ * builder owns the words; the placeholders are filled from the job by
+ * lib/works-emails at send time, and every send goes on the job's timeline.
+ *
+ * Placeholders: {{ref}} {{title}} {{address}} {{category}} {{urgency}}
+ * {{dueBy}} {{scheduledAt}} {{contractorName}} {{contractorPhone}}
+ * {{tenantName}} {{tenantPhone}} {{landlordName}} {{access}} {{description}}
+ * {{quote}} {{authority}} {{agentName}} {{agentEmail}} {{agentPhone}}
+ * {{completionNote}}
+ */
+export const WORKS_CONTRACTOR_ORDER = {
+  subject: "Works order #{{ref}}: {{title}} at {{address}}",
+  preheader: "A job from The Letting Experts. The details are below.",
+  mode: "blocks",
+  blocks: [
+    H("wc1", "Works order #{{ref}}"),
+    T("wc2", "Hi {{contractorName}},<br><br>Please could you attend the following for us. Reply to this email with your earliest date, or a quote if the job needs one first."),
+    T("wc3", "<strong>{{title}}</strong><br>{{address}}<br>{{category}} · {{urgency}} · attend by {{dueBy}}"),
+    T("wc4", "{{description}}"),
+    T("wc5", "<strong>Access:</strong> {{access}}<br><strong>Tenant:</strong> {{tenantName}} {{tenantPhone}}"),
+    SP("wc6", 8),
+    T("wc7", "Please quote works order #{{ref}} on your invoice. Anything over the landlord's pre-authorised spend needs their yes before you go ahead, so send a quote first if it looks like more than a call-out."),
+    SP("wc8", 8),
+    T("wc9", "Thanks,<br>{{agentName}}<br>The Letting Experts · {{agentPhone}} · {{agentEmail}}"),
+    FOOT("wc10", "You're getting this because you're on The Letting Experts' trades book."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+export const WORKS_CONTRACTOR_BOOKED = {
+  subject: "Confirmed: #{{ref}} {{title}}, {{scheduledAt}}",
+  preheader: "The booking, the address and the access.",
+  mode: "blocks",
+  blocks: [
+    H("wb1", "Booked: {{scheduledAt}}"),
+    T("wb2", "Hi {{contractorName}},<br><br>Confirming works order #{{ref}} at <strong>{{address}}</strong> on <strong>{{scheduledAt}}</strong>."),
+    T("wb3", "<strong>{{title}}</strong><br>{{category}}<br><strong>Access:</strong> {{access}}<br><strong>Tenant:</strong> {{tenantName}} {{tenantPhone}}"),
+    SP("wb4", 8),
+    T("wb5", "If the time moves, let us know and we'll tell the tenant. Please quote #{{ref}} on the invoice."),
+    SP("wb6", 8),
+    T("wb7", "Thanks,<br>{{agentName}}<br>The Letting Experts · {{agentPhone}}"),
+    FOOT("wb8", "You're getting this because you're booked on a job for The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+export const WORKS_CONTRACTOR_CANCELLED = {
+  subject: "Cancelled: #{{ref}} {{title}} at {{address}}",
+  preheader: "Please don't attend. Sorry for the change.",
+  mode: "blocks",
+  blocks: [
+    H("wx1", "Job #{{ref}} is cancelled"),
+    T("wx2", "Hi {{contractorName}},<br><br>Please don't attend <strong>{{address}}</strong> for <strong>{{title}}</strong>. Sorry for the change of plan."),
+    T("wx3", "{{description}}"),
+    SP("wx4", 8),
+    T("wx5", "Thanks,<br>{{agentName}}<br>The Letting Experts · {{agentPhone}}"),
+    FOOT("wx6", "You're getting this because you were booked on a job for The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+export const WORKS_TENANT_RECEIVED = {
+  subject: "We've logged your repair: {{title}}",
+  preheader: "What happens next, and how soon.",
+  mode: "blocks",
+  blocks: [
+    H("wt1", "We've logged it"),
+    T("wt2", "Hi {{tenantName}},<br><br>Thanks for letting us know about <strong>{{title}}</strong> at {{address}}. It's logged as job #{{ref}} and we're on it."),
+    T("wt3", "We've marked it <strong>{{urgency}}</strong>, which means we aim to have somebody attend by <strong>{{dueBy}}</strong>. We'll email you the moment a contractor is booked, with the date and who to expect."),
+    T("wt4", "If it gets worse, or it's an emergency - no heating, a leak you can't stop, no power - ring us straight away on {{agentPhone}} rather than waiting for the email."),
+    SP("wt5", 8),
+    T("wt6", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    FOOT("wt7", "You're getting this because you reported a repair at a property managed by The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+export const WORKS_TENANT_BOOKED = {
+  subject: "{{contractorName}} is coming on {{scheduledAt}}",
+  preheader: "Who to expect, and when.",
+  mode: "blocks",
+  blocks: [
+    H("wtb1", "Booked: {{scheduledAt}}"),
+    T("wtb2", "Hi {{tenantName}},<br><br><strong>{{contractorName}}</strong> is booked to attend {{address}} on <strong>{{scheduledAt}}</strong> for <strong>{{title}}</strong> (job #{{ref}})."),
+    T("wtb3", "Please make sure somebody can let them in. If that time doesn't work, reply to this email or ring {{agentPhone}} and we'll move it."),
+    SP("wtb4", 8),
+    T("wtb5", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    FOOT("wtb6", "You're getting this because a contractor is booked at a property managed by The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+export const WORKS_TENANT_DONE = {
+  subject: "Done: {{title}} at {{address}}",
+  preheader: "Tell us if it isn't right.",
+  mode: "blocks",
+  blocks: [
+    H("wtd1", "That's done"),
+    T("wtd2", "Hi {{tenantName}},<br><br>Job #{{ref}}, <strong>{{title}}</strong>, is marked done: {{completionNote}}"),
+    T("wtd3", "If it isn't right, or the problem comes back, reply to this email and we'll get somebody back out."),
+    SP("wtd4", 8),
+    T("wtd5", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    FOOT("wtd6", "You're getting this because a repair was carried out at a property managed by The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+export const WORKS_LANDLORD_APPROVAL = {
+  subject: "Your approval needed: {{title}} at {{address}}, {{quote}}",
+  preheader: "A quote over your pre-authorised spend. One reply and it goes ahead.",
+  mode: "blocks",
+  blocks: [
+    H("wl1", "A quote for your approval"),
+    T("wl2", "Hi {{landlordName}},<br><br>We've had a quote of <strong>{{quote}}</strong> for <strong>{{title}}</strong> at {{address}} (job #{{ref}}). That's over the {{authority}} you've pre-authorised us to spend, so we need your yes before it goes ahead."),
+    T("wl3", "{{description}}"),
+    T("wl4", "Reply <strong>yes</strong> to this email, or ring {{agentPhone}}, and we'll book it in. If you'd rather get another quote, say so and we will."),
+    SP("wl5", 8),
+    T("wl6", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    FOOT("wl7", "You're getting this because The Letting Experts manage this property for you."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/**
+ * The invoice email. The document itself is a page (/invoice/<token>) the
+ * button opens; the email carries the figure, the due date and the way in.
+ * Placeholders: {{number}} {{toName}} {{address}} {{total}} {{dueDate}}
+ * {{reference}} {{link}} {{agentName}} {{agentPhone}}
+ */
+export const INVOICE_SENT = {
+  subject: "Invoice {{number}} from The Letting Experts: {{total}}",
+  preheader: "Due {{dueDate}}. The invoice is one click away.",
+  mode: "blocks",
+  blocks: [
+    H("in1", "Invoice {{number}}"),
+    T("in2", "Hi {{toName}},<br><br>Please find your invoice for <strong>{{reference}}</strong>{{address}}. The total is <strong>{{total}}</strong>, due by <strong>{{dueDate}}</strong>."),
+    SP("in3", 8),
+    BTN("in4", "View the invoice", "{{link}}"),
+    SP("in5", 8),
+    T("in6", "Payment details are on the invoice. If anything on it isn't right, reply to this email and we'll sort it before you pay."),
+    SP("in7", 8),
+    T("in8", "Thanks,<br>{{agentName}}<br>The Letting Experts · {{agentPhone}}"),
+    FOOT("in9", "You're getting this because The Letting Experts have raised an invoice to you."),
+  ],
+  branding: { showSignoff: false },
+} as const;

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { TLE_EMAILS } from "@/lib/email/tle-emails";
 import { hasDb, q } from "@/lib/db";
 import { SESSION_COOKIE, uid, verifySessionToken } from "@/lib/auth";
 import { CAMPAIGNS } from "@/lib/campaigns";
@@ -31,6 +32,13 @@ const STEPS = new Map(CAMPAIGNS.map((c) => [c.id, c.steps.length]));
 /** A step that exists, on a campaign that exists. Anything else is a typo or
  *  a stale tab, and storing copy against it would strand the copy. */
 function knownStep(campaignId: unknown, stepIndex: unknown): boolean {
+  /* The email catalogue (Admin, Emails and Marketing, Email templates)
+     saves here too, one document per key "email-catalog:<email id>" at
+     step 0. Refused before 7 Sep 2026, so no catalogue edit ever saved. */
+  if (typeof campaignId === "string" && campaignId.startsWith("email-catalog:")) {
+    const id = campaignId.slice("email-catalog:".length);
+    return stepIndex === 0 && TLE_EMAILS.some((e) => e.id === id && e.doc);
+  }
   const n = STEPS.get(String(campaignId));
   return n !== undefined && Number.isInteger(stepIndex) && (stepIndex as number) >= 0 && (stepIndex as number) < n;
 }

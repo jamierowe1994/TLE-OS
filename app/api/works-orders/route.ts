@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
-import { createOrder, listOrders, listContractors, worksSummary, KINDS, type Kind, type NewOrder } from "@/lib/works-orders";
+import { createOrder, listOrders, listContractors, worksSummary, logEvent, KINDS, type Kind, type NewOrder } from "@/lib/works-orders";
+import { emailsForMove, outcomeLine } from "@/lib/works-emails";
 
 /**
  * Works orders: the list, the figures, and raising one.
@@ -36,7 +37,11 @@ export async function POST(req: NextRequest) {
   try {
     const by = (subject ?? actor).name || (subject ?? actor).email;
     const order = await createOrder({ ...b, kind: b.kind ?? "repair", propertyName: b.propertyName, title: b.title, category: b.category }, by);
-    return NextResponse.json({ ok: true, order });
+    /* The step emails, after the job is safe. Each outcome goes on the
+       timeline so the sheet says who was told. */
+    const emails = await emailsForMove(order, "raised", subject ?? actor).catch(() => []);
+    for (const e of emails) await logEvent(order.id, "TLE OS", "email", outcomeLine(e));
+    return NextResponse.json({ ok: true, order, emails });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not raise the job." }, { status: 400 });
   }

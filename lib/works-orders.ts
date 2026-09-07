@@ -111,6 +111,9 @@ export interface WorksOrder {
   locality: string;
   landlord: string;
   tenant: string;
+  /** Where the step emails go. Blank means nobody is told, and the timeline says so. */
+  tenantEmail: string;
+  landlordEmail: string;
   title: string;
   description: string;
   category: string;
@@ -168,6 +171,8 @@ function toOrder(r: Row): WorksOrder {
     locality: s(r.locality),
     landlord: s(r.landlord),
     tenant: s(r.tenant),
+    tenantEmail: s(r.tenant_email),
+    landlordEmail: s(r.landlord_email),
     title: s(r.title),
     description: s(r.description),
     category: s(r.category),
@@ -198,7 +203,7 @@ function toOrder(r: Row): WorksOrder {
   };
 }
 
-const COLS = `id, ref, kind, status, property_id, property_name, locality, landlord, tenant, title, description, category, urgency,
+const COLS = `id, ref, kind, status, property_id, property_name, locality, landlord, tenant, tenant_email, landlord_email, title, description, category, urgency,
   due_at, reported_by, reported_at, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence, quote_pence,
   approved_by, approved_at, completed_at, completion_note, invoice_pence, invoice_ref, invoiced_at, paid_at, paid_how,
   cancelled_reason, files, created_at, updated_at`;
@@ -235,6 +240,8 @@ export interface NewOrder {
   locality?: string;
   landlord?: string;
   tenant?: string;
+  tenantEmail?: string;
+  landlordEmail?: string;
   title: string;
   description?: string;
   category: string;
@@ -269,13 +276,14 @@ export async function createOrder(input: NewOrder, by: string): Promise<WorksOrd
   const status: Status = input.contractorId && input.scheduledAt ? "scheduled" : "reported";
   const [r] = await q<Row>(
     `INSERT INTO os_works_orders
-       (id, kind, status, property_id, property_name, locality, landlord, tenant, title, description, category, urgency, due_at,
+       (id, kind, status, property_id, property_name, locality, landlord, tenant, tenant_email, landlord_email, title, description, category, urgency, due_at,
         reported_by, raised_by, contractor_id, contractor_name, scheduled_at, access, authority_pence)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
      RETURNING ${COLS}`,
     [
       id, kind, status, input.propertyId ?? null, input.propertyName.trim(), (input.locality ?? "").trim(), (input.landlord ?? "").trim(),
-      (input.tenant ?? "").trim(), input.title.trim(), (input.description ?? "").trim(), input.category, urgency, dueAt,
+      (input.tenant ?? "").trim(), (input.tenantEmail ?? "").trim().toLowerCase(), (input.landlordEmail ?? "").trim().toLowerCase(),
+      input.title.trim(), (input.description ?? "").trim(), input.category, urgency, dueAt,
       (input.reportedBy ?? "Agent").trim(), by, input.contractorId ?? null, contractorName, input.scheduledAt ?? null,
       (input.access ?? "").trim(), Number.isFinite(input.authorityPence) ? Number(input.authorityPence) : DEFAULT_AUTHORITY_PENCE,
     ]
@@ -358,7 +366,7 @@ export type Move =
   | { action: "cancel"; reason: string }
   | { action: "reopen"; note?: string }
   | { action: "note"; note: string }
-  | { action: "edit"; fields: Partial<Pick<WorksOrder, "title" | "description" | "category" | "urgency" | "dueAt" | "tenant" | "landlord" | "access" | "authorityPence" | "reportedBy">> }
+  | { action: "edit"; fields: Partial<Pick<WorksOrder, "title" | "description" | "category" | "urgency" | "dueAt" | "tenant" | "tenantEmail" | "landlord" | "landlordEmail" | "access" | "authorityPence" | "reportedBy">> }
   | { action: "file"; file: { key: string; name: string; type: string } };
 
 export const pounds = (pence: number | null | undefined) =>
@@ -470,7 +478,9 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
       if (f.urgency !== undefined && o.kind === "repair") { set("urgency", f.urgency); set("due_at", dueFor("repair", f.urgency, null, new Date(o.reportedAt).getTime())); }
       if (f.dueAt !== undefined && o.kind === "planned") set("due_at", f.dueAt ? new Date(f.dueAt) : null);
       if (f.tenant != null) set("tenant", f.tenant.trim());
+      if (f.tenantEmail != null) set("tenant_email", f.tenantEmail.trim().toLowerCase());
       if (f.landlord != null) set("landlord", f.landlord.trim());
+      if (f.landlordEmail != null) set("landlord_email", f.landlordEmail.trim().toLowerCase());
       if (f.access != null) set("access", f.access.trim());
       if (f.reportedBy != null) set("reported_by", f.reportedBy.trim());
       if (f.authorityPence != null && Number.isFinite(f.authorityPence)) set("authority_pence", Math.round(f.authorityPence));
@@ -494,6 +504,6 @@ export async function moveOrder(id: string, move: Move, by: string): Promise<Wor
   return next!.order;
 }
 
-async function logEvent(orderId: string, by: string, kind: string, text: string): Promise<void> {
+export async function logEvent(orderId: string, by: string, kind: string, text: string): Promise<void> {
   await q(`INSERT INTO os_works_order_events (id, order_id, by_name, kind, text) VALUES ($1, $2, $3, $4, $5)`, [uid(), orderId, by, kind, text]).catch(() => null);
 }

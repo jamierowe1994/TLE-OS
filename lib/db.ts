@@ -386,6 +386,8 @@ CREATE TABLE IF NOT EXISTS os_works_orders (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenant_email   TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_email TEXT NOT NULL DEFAULT '';
 CREATE INDEX IF NOT EXISTS os_works_orders_status ON os_works_orders (status, due_at);
 CREATE INDEX IF NOT EXISTS os_works_orders_property ON os_works_orders (property_id);
 CREATE TABLE IF NOT EXISTS os_works_order_events (
@@ -397,6 +399,46 @@ CREATE TABLE IF NOT EXISTS os_works_order_events (
   text           TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS os_works_order_events_order ON os_works_order_events (order_id, at DESC);
+
+-- Company-wide settings, one JSON document per key: "invoicing" holds who
+-- an invoice is from, the bank details, the prefix and the terms.
+CREATE TABLE IF NOT EXISTS os_settings (
+  key            TEXT PRIMARY KEY,
+  value          JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by     TEXT NOT NULL DEFAULT ''
+);
+
+-- Invoices The Letting Experts raise: drafted, PRODUCED (numbered off the
+-- sequence, the company details frozen on), sent, paid or void. Lines are
+-- JSON; totals are worked out. lib/invoices.
+CREATE SEQUENCE IF NOT EXISTS os_invoices_seq START 1;
+CREATE TABLE IF NOT EXISTS os_invoices (
+  id             TEXT PRIMARY KEY,
+  number         TEXT UNIQUE,
+  status         TEXT NOT NULL DEFAULT 'draft',
+  order_id       TEXT,
+  property       TEXT NOT NULL DEFAULT '',
+  to_name        TEXT NOT NULL DEFAULT '',
+  to_address     TEXT NOT NULL DEFAULT '',
+  to_email       TEXT NOT NULL DEFAULT '',
+  from_json      JSONB NOT NULL DEFAULT '{}'::jsonb,
+  issue_date     DATE NOT NULL DEFAULT CURRENT_DATE,
+  due_date       DATE NOT NULL DEFAULT CURRENT_DATE + 14,
+  reference      TEXT NOT NULL DEFAULT '',
+  lines          JSONB NOT NULL DEFAULT '[]'::jsonb,
+  notes          TEXT NOT NULL DEFAULT '',
+  token          TEXT NOT NULL UNIQUE,
+  created_by     TEXT NOT NULL DEFAULT '',
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  issued_at      TIMESTAMPTZ,
+  sent_at        TIMESTAMPTZ,
+  sent_to        TEXT NOT NULL DEFAULT '',
+  paid_at        TIMESTAMPTZ,
+  paid_note      TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS os_invoices_order ON os_invoices (order_id);
 
 -- Notes the team writes against a record (a property, a lead, a viewing).
 CREATE TABLE IF NOT EXISTS os_notes (

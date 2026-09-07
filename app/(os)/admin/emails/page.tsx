@@ -27,7 +27,7 @@ type Row = {
   id: string;
   group: string;
   name: string;
-  audience: "partner" | "landlord" | "internal";
+  audience: "partner" | "landlord" | "tenant" | "contractor" | "internal";
   trigger: string;
   fires: string;
   to: string;
@@ -40,6 +40,8 @@ type Row = {
 const AUDIENCE: Record<Row["audience"], { label: string; className: string }> = {
   partner: { label: "Partner", className: "border-accent-dark/40 text-accent-dark" },
   landlord: { label: "Landlord", className: "border-emerald-600/40 text-emerald-700" },
+  tenant: { label: "Tenant", className: "border-sky-600/40 text-sky-700" },
+  contractor: { label: "Contractor", className: "border-amber-600/40 text-amber-700" },
   internal: { label: "Internal", className: "border-line text-muted" },
 };
 
@@ -285,8 +287,8 @@ function Reader({ row, onClose }: { row: Row; onClose: () => void }) {
           it a stand-in step; `initial` carries the real document and wins. */}
       {building && doc && (
         <EmailBuilder
-          campaignId="email-catalog"
-          stepIndex={index}
+          campaignId={`email-catalog:${row.id}`}
+          stepIndex={0}
           step={
             {
               day: 0,

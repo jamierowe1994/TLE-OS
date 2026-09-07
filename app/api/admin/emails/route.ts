@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireOwner } from "@/lib/admin";
+import { requireOwner, requireCapability } from "@/lib/admin";
 import { TLE_EMAILS } from "@/lib/email/tle-emails";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
@@ -14,11 +14,27 @@ import { uid } from "@/lib/auth";
  */
 const CATALOG = "email-catalog";
 
-async function override(index: number) {
+/**
+ * Owner, or marketing. James, 7 Sep 2026: the maintenance and invoice
+ * emails go in "the marketing section so they can edit them" - and every
+ * customer email here is the company's words, which is Francesca's job.
+ */
+async function allowed(req: NextRequest) {
+  return (await requireOwner(req)) ?? (await requireCapability(req, "see:marketing"));
+}
+
+/**
+ * Keyed by the email's ID since 7 Sep 2026. It was keyed by position in
+ * TLE_EMAILS, which moved every time an email was added, so an edit made to
+ * one email would have surfaced on another. campaign_id carries the id.
+ */
+const keyFor = (id: string) => `${CATALOG}:${id}`;
+
+async function override(id: string) {
   if (!hasDb()) return null;
   const rows = await q<{ subject: string; blocks: Record<string, unknown>[] }>(
-    `SELECT subject, blocks FROM os_email_templates WHERE campaign_id = $1 AND step_index = $2`,
-    [CATALOG, index]
+    `SELECT subject, blocks FROM os_email_templates WHERE campaign_id = $1 AND step_index = 0`,
+    [keyFor(id)]
   ).catch(() => []);
   const row = rows[0];
   if (!row || !Array.isArray(row.blocks) || row.blocks.length === 0) return null;
@@ -40,15 +56,14 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  if (!(await requireOwner(req))) return new NextResponse(null, { status: 404 });
+  if (!(await allowed(req))) return new NextResponse(null, { status: 404 });
 
   const id = req.nextUrl.searchParams.get("id");
 
   if (id) {
     const entry = TLE_EMAILS.find((e) => e.id === id);
     if (!entry) return NextResponse.json({ ok: false, error: "No such email." }, { status: 404 });
-    const index = TLE_EMAILS.indexOf(entry);
-    const saved = entry.doc ? await override(index) : null;
+    const saved = entry.doc ? await override(entry.id) : null;
     try {
       const { subject, html } = entry.render(
         saved ? ({ ...entry.doc!, ...saved } as typeof entry.doc) : undefined
@@ -59,7 +74,7 @@ export async function GET(req: NextRequest) {
         name: entry.name,
         subject,
         html,
-        index,
+        index: TLE_EMAILS.indexOf(entry),
         /* The document as it stands, so the builder opens on what is on
            screen rather than on the version in code. */
         doc: entry.doc ? (saved ?? { subject: entry.doc.subject, blocks: entry.doc.blocks }) : null,
@@ -96,21 +111,19 @@ export async function GET(req: NextRequest) {
   });
 }
 
-/** Save Francesca's edit. Owner-only, same as reading. */
+/** Save Francesca's edit. Keyed by the email's id. */
 export async function PUT(req: NextRequest) {
-  const me = await requireOwner(req);
+  const me = await allowed(req);
   if (!me) return new NextResponse(null, { status: 404 });
 
   const body = (await req.json().catch(() => null)) as {
-    campaignId?: string;
-    stepIndex?: number;
+    id?: string;
     subject?: string;
     blocks?: Record<string, unknown>[];
   } | null;
 
-  const index = Number(body?.stepIndex);
-  const entry = TLE_EMAILS[index];
-  if (!Number.isInteger(index) || !entry?.doc) {
+  const entry = TLE_EMAILS.find((e) => e.id === body?.id);
+  if (!entry?.doc) {
     return NextResponse.json({ error: "That isn't an editable email." }, { status: 400 });
   }
   if (!Array.isArray(body?.blocks)) {
@@ -122,28 +135,25 @@ export async function PUT(req: NextRequest) {
 
   await q(
     `INSERT INTO os_email_templates (id, campaign_id, step_index, subject, blocks, updated_by)
-     VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+     VALUES ($1, $2, 0, $3, $4::jsonb, $5)
      ON CONFLICT (campaign_id, step_index) DO UPDATE
        SET subject = EXCLUDED.subject,
            blocks = EXCLUDED.blocks,
            updated_at = NOW(),
            updated_by = EXCLUDED.updated_by`,
-    [uid(), CATALOG, index, body?.subject ?? "", JSON.stringify(body.blocks), me.id]
+    [uid(), keyFor(entry.id), body?.subject ?? "", JSON.stringify(body.blocks), me.id]
   );
   return NextResponse.json({ saved: true });
 }
 
 /** Back to the words in code. The only undo anyone actually needs. */
 export async function DELETE(req: NextRequest) {
-  if (!(await requireOwner(req))) return new NextResponse(null, { status: 404 });
-  const index = Number(req.nextUrl.searchParams.get("step"));
-  if (!Number.isInteger(index)) {
+  if (!(await allowed(req))) return new NextResponse(null, { status: 404 });
+  const id = req.nextUrl.searchParams.get("id") ?? "";
+  if (!TLE_EMAILS.some((e) => e.id === id)) {
     return NextResponse.json({ error: "Which one?" }, { status: 400 });
   }
   if (!hasDb()) return NextResponse.json({ saved: false, reason: "No database here." });
-  await q(`DELETE FROM os_email_templates WHERE campaign_id = $1 AND step_index = $2`, [
-    CATALOG,
-    index,
-  ]);
+  await q(`DELETE FROM os_email_templates WHERE campaign_id = $1 AND step_index = 0`, [keyFor(id)]);
   return NextResponse.json({ saved: true, reverted: true });
 }

@@ -47,6 +47,14 @@ import {
   LANDLORD_DECK_INVITE,
   LANDLORD_SIGN_IN,
   TENANT_SIGN_IN,
+  WORKS_CONTRACTOR_ORDER,
+  WORKS_CONTRACTOR_BOOKED,
+  WORKS_CONTRACTOR_CANCELLED,
+  WORKS_TENANT_RECEIVED,
+  WORKS_TENANT_BOOKED,
+  WORKS_TENANT_DONE,
+  WORKS_LANDLORD_APPROVAL,
+  INVOICE_SENT,
   SITE,
   type EmailDoc } from "@/lib/email/tle-documents";
 
@@ -56,7 +64,7 @@ export type CatalogEntry = {
   id: string;
   group: string;
   name: string;
-  audience: "partner" | "landlord" | "tenant" | "internal";
+  audience: "partner" | "landlord" | "tenant" | "contractor" | "internal";
   trigger: string;
   /** Where it is actually sent from, so a reader can go and check. */
   fires: string;
@@ -158,6 +166,45 @@ export function renderTleEmail(id: string, vars: Record<string, string>): { subj
   if (!entry?.doc) throw new Error(`No email document for ${id}.`);
   const fill = (t: string) => t.replace(/\{\{(\w+)\}\}/g, (m, k: string) => vars[k] ?? m);
   const doc = entry.doc;
+  const filled: EmailDoc = {
+    ...doc,
+    subject: fill(doc.subject),
+    blocks: doc.blocks.map((b) => {
+      const anyB = b as unknown as Record<string, unknown>;
+      const next: Record<string, unknown> = { ...anyB };
+      for (const key of ["text", "label", "href", "url"]) {
+        if (typeof anyB[key] === "string") next[key] = fill(anyB[key] as string);
+      }
+      return next as unknown as EmailDoc["blocks"][number];
+    }),
+  };
+  return blocks(filled)();
+}
+
+/**
+ * The same, but with the builder's edit applied first. Edits are stored in
+ * os_email_templates under campaign_id "email-catalog:<id>", step 0 - keyed
+ * by the email's id since 7 Sep 2026, not its position in this list, which
+ * moved every time an email was added. The send paths call THIS, so what
+ * Francesca changed is what goes out.
+ */
+export async function renderTleEmailLive(id: string, vars: Record<string, string>): Promise<{ subject: string; html: string }> {
+  const entry = TLE_EMAILS.find((e) => e.id === id);
+  if (!entry?.doc) throw new Error(`No email document for ${id}.`);
+  let doc: EmailDoc = entry.doc;
+  try {
+    const { hasDb, q } = await import("@/lib/db");
+    if (hasDb()) {
+      const rows = await q<{ subject: string; blocks: unknown }>(
+        `SELECT subject, blocks FROM os_email_templates WHERE campaign_id = $1 AND step_index = 0`,
+        [`email-catalog:${id}`]
+      );
+      if (rows[0] && Array.isArray(rows[0].blocks)) doc = { ...doc, subject: rows[0].subject || doc.subject, blocks: rows[0].blocks as EmailDoc["blocks"] };
+    }
+  } catch {
+    /* the words in code, then */
+  }
+  const fill = (t: string) => t.replace(/\{\{(\w+)\}\}/g, (m, k: string) => vars[k] ?? m);
   const filled: EmailDoc = {
     ...doc,
     subject: fill(doc.subject),
@@ -553,7 +600,32 @@ The Letting Experts`
   },
 ];
 
-export const EMAIL_GROUPS = ["Pre-launch", "Market appraisals", "Compliance", "Pre-tenancy", "Terms of business", "Accounts", "Tools"];
+
+/* One worked job, so every maintenance email previews as a real one. */
+const WORKS_SAMPLE: Record<string, string> = {
+  ref: "1042", title: "Boiler not firing, no hot water", address: "41 Harewood Road, Coventry CV4 8LP", category: "Heating & boiler",
+  urgency: "Urgent", dueBy: "Thursday 10 September, 09:00", scheduledAt: "Tuesday 8 September, 10:00", contractorName: "Rob Holt",
+  contractorPhone: "07700 900123", tenantName: "Marcus", tenantPhone: "07700 900456", landlordName: "Helen", access: "Tenant home after 5pm; dog in the garden",
+  description: "Tenant rang at 8am. Pressure gauge reads zero, boiler shows fault code F22.", quote: "£240", authority: "£150",
+  agentName: "Michael Healy", agentEmail: "michael@thelettingexperts.co.uk", agentPhone: "0115 123 4567", completionNote: "PCB replaced, system repressurised and tested.",
+  number: "INV-00042", toName: "Helen", total: "£264", dueDate: "21 September 2026", reference: "job #1042, boiler repair", link: `${SITE}/invoice/sample`,
+};
+const worksEntry = (id: string, name: string, audience: CatalogEntry["audience"], trigger: string, to: string, summary: string, doc: EmailDoc, group = "Maintenance"): CatalogEntry => ({
+  id, group, name, audience, trigger, fires: "lib/works-emails, from the job's own moves", to, summary, doc,
+  render: (o) => blocks(withSample(o ?? doc, WORKS_SAMPLE))(),
+});
+TLE_EMAILS.push(
+  worksEntry("works-contractor-order", "Works Order to the Contractor", "contractor", "When a contractor is put on a job", "The contractor", "The job sheet by email: what, where, how urgent, access, the tenant to arrange with, and the rule that anything over the landlord's authority needs a quote first.", WORKS_CONTRACTOR_ORDER as unknown as EmailDoc),
+  worksEntry("works-contractor-booked", "Booking Confirmed to the Contractor", "contractor", "When a job is booked for a date", "The contractor", "The date, the address, the access. Short, because they have the order already.", WORKS_CONTRACTOR_BOOKED as unknown as EmailDoc),
+  worksEntry("works-contractor-cancelled", "Cancelled to the Contractor", "contractor", "When a job with a contractor on it is cancelled", "The contractor", "Don't attend, and why.", WORKS_CONTRACTOR_CANCELLED as unknown as EmailDoc),
+  worksEntry("works-tenant-received", "Repair Logged to the Tenant", "tenant", "When a repair is reported and the tenant's address is on the job", "The tenant", "It's logged, how urgent we've marked it, when to expect somebody, and what to do if it gets worse.", WORKS_TENANT_RECEIVED as unknown as EmailDoc),
+  worksEntry("works-tenant-booked", "Contractor Booked to the Tenant", "tenant", "When a job is booked for a date", "The tenant", "Who is coming and when, and how to move it.", WORKS_TENANT_BOOKED as unknown as EmailDoc),
+  worksEntry("works-tenant-done", "Job Done to the Tenant", "tenant", "When a job is marked done", "The tenant", "It's done, here's what was done, tell us if it isn't right.", WORKS_TENANT_DONE as unknown as EmailDoc),
+  worksEntry("works-landlord-approval", "Quote for Approval to the Landlord", "landlord", "When a quote comes in over the landlord's authority", "The landlord", "The quote, why we're asking, and a one-word reply to go ahead.", WORKS_LANDLORD_APPROVAL as unknown as EmailDoc),
+  worksEntry("invoice-sent", "Invoice to the Landlord", "landlord", "When an invoice is sent from Maintenance, Invoices", "Whoever the invoice is to - usually the landlord", "The figure, the due date and the button that opens the invoice page.", INVOICE_SENT as unknown as EmailDoc, "Invoices"),
+);
+
+export const EMAIL_GROUPS = ["Pre-launch", "Market appraisals", "Compliance", "Pre-tenancy", "Maintenance", "Invoices", "Terms of business", "Accounts", "Tools"];
 
 /**
  * The agent's certificate chase, filled with a real book.
