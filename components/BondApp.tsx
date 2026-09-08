@@ -11,6 +11,7 @@ import BondPlanning from "@/components/BondPlanning";
 import BondToday, { rememberSearch, type TodayData } from "@/components/BondToday";
 import { QrModal, QrPanel } from "@/components/BondQr";
 import BondProcess, { loadProcess } from "@/components/BondProcess";
+import PostcardStudio from "@/components/PostcardStudio";
 
 /**
  * Bond — the prospecting workspace.
@@ -32,7 +33,7 @@ import BondProcess, { loadProcess } from "@/components/BondProcess";
  * ever shows a placeholder as if it were a fact.
  */
 
-type Room = "today" | "doors" | "nudges" | "landlords" | "planning" | "competitors" | "lookup" | "campaigns" | "owners" | "postcards";
+type Room = "today" | "doors" | "nudges" | "landlords" | "planning" | "competitors" | "lookup" | "campaigns" | "owners" | "designs" | "postcards";
 
 /**
  * Three rooms, then More.
@@ -58,6 +59,7 @@ const ROOMS: { key: Room; label: string; icon: string; blurb: string; more?: boo
   { key: "lookup", more: true, label: "Look up", icon: "home", blurb: "Any address on the register, and add a door by hand." },
   { key: "campaigns", more: true, label: "Campaigns", icon: "megaphone", blurb: "The sequences that write to landlords, and their copy." },
   { key: "owners", more: true, label: "Owners", icon: "key", blurb: "Who owns what, from the Land Registry." },
+  { key: "designs", more: true, label: "Designs", icon: "pencil", blurb: "The cards themselves. Set a design here before anything can be sent, and send a proof to anybody who should see it first." },
   { key: "postcards", more: true, label: "Postcards", icon: "mail", blurb: "The queue of cards and letters: queued, held, sent." },
 ];
 
@@ -471,6 +473,7 @@ export default function BondApp() {
             )}
             {room === "campaigns" && <Campaigns />}
             {room === "owners" && <Owners />}
+            {room === "designs" && <PostcardStudio />}
             {room === "postcards" && <Postcards />}
           </main>
         </div>

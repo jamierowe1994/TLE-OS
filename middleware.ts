@@ -234,6 +234,6 @@ export const config = {
        `rehearsal` - a real works order id in the URL opens nothing. Its
        emails are written and kept rather than sent, so nothing anybody
        presses in there can reach a customer. See lib/rehearsal.ts. */
-    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|rehearsal|api/rehearsal|api/tenant/passport|api/landlord|brand|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
+    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|rehearsal|api/rehearsal|proof|api/tenant/passport|api/landlord|brand|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
   ],
 };
