@@ -212,37 +212,81 @@ export interface PlanningSyncResult {
 }
 
 /**
- * Read one authority. `sinceDays` looks at applications that CHANGED recently
- * (the weekly run); `months` is the first load, by application date.
+ * Read the register. National by default.
+ *
+ * ── Why national rather than council by council ───────────────────────────
+ *
+ * James, 8 Sep 2026: "we're going to need to do this literally over the whole
+ * of the UK... all the way through Scotland, all the way through to Cornwall."
+ *
+ * PlanIt does not need an authority. Measured on 8 Sep: the whole United
+ * Kingdom returns 7,261 applications in a week, and 1,193 once this module's
+ * search and application-type filters are applied - four pages. So the
+ * national query is CHEAPER than the five-council one it replaces, because
+ * the filter runs at PlanIt rather than here, and there is one query instead
+ * of one per council. 420 councils are live in PlanIt; 44 more are stale
+ * (nothing read for six weeks) and are simply absent rather than empty.
+ *
+ * ── Why the sweep's watch list no longer gates this ───────────────────────
+ *
+ * It used to keep only postcodes in `os_radar_districts`. That is the list of
+ * districts the Homesearch sweep runs over, and it stays where TLE actually
+ * trades - about forty of the country's 2,900. Planning is not bound by that:
+ * it is cheap enough to hold nationally, and a person's own patch narrows what
+ * they SEE without narrowing what we KEEP. So ingest keeps everything with a
+ * postcode, and every read path takes districts or councils to filter by.
+ *
+ * ── The three ways in ─────────────────────────────────────────────────────
+ *
+ *   recentDays    applications FIRST MADE in the last N days. New intent.
+ *                 579 nationally in ten days, two pages.
+ *   decidedDays   applications DECIDED in the last N days. This is how a
+ *                 refusal stops signalling and a permission starts. 1,290
+ *                 nationally in ten days, five pages.
+ *   from / to     an application-date window. The backfill, run a week at a
+ *                 time so no slice nears PlanIt's 5,000-result ceiling.
+ *   authority     one council, for a targeted re-read.
+ *
+ * Not `changed`, which is PlanIt's "we looked at this record again" date and
+ * returns 41,408 in ten days nationally - almost all of it re-scrapes of
+ * applications that have not moved. Measured, not assumed.
  */
-export async function syncPlanningAuthority(
-  authority: string,
-  opts: { sinceDays?: number; months?: number; maxPages?: number } = {}
+export async function syncPlanning(
+  opts: {
+    authority?: string;
+    recentDays?: number;
+    decidedDays?: number;
+    from?: string;
+    to?: string;
+    months?: number;
+    maxPages?: number;
+  } = {}
 ): Promise<PlanningSyncResult> {
-  if (!hasDb()) return { ok: false, authority, reason: "no database" };
-  if (!PLANNING_AUTHORITIES.some((a) => a.name === authority)) {
-    return { ok: false, authority, reason: `Not an authority Bond reads. Known: ${PLANNING_AUTHORITIES.map((a) => a.name).join(", ")}.` };
+  const what = opts.decidedDays ? "decided" : opts.recentDays ? "new" : opts.from ? `${opts.from} to ${opts.to ?? "now"}` : "all";
+  const label = `${opts.authority ?? "United Kingdom"}: ${what}`;
+  if (!hasDb()) return { ok: false, authority: label, reason: "no database" };
+
+  const base: Record<string, string> = { search: RECALL, app_type: REAL_TYPES };
+  if (opts.authority) base.auth = opts.authority;
+
+  if (opts.decidedDays) {
+    base.decided = String(opts.decidedDays);
+  } else if (opts.recentDays) {
+    base.recent = String(opts.recentDays);
+  } else if (opts.from) {
+    base.start_date = opts.from;
+    if (opts.to) base.end_date = opts.to;
+  } else {
+    const since = new Date();
+    since.setUTCMonth(since.getUTCMonth() - (opts.months || 18));
+    base.start_date = since.toISOString().slice(0, 10);
   }
-  const wanted = new Set((await q<{ district: string }>(`SELECT district FROM os_radar_districts`)).map((r) => r.district));
-  if (wanted.size === 0) return { ok: false, authority, reason: "no districts are being watched" };
 
-  const months = opts.months ?? 0;
-  const since = new Date();
-  since.setUTCMonth(since.getUTCMonth() - (months || 18));
-  const base: Record<string, string> = {
-    auth: authority,
-    start_date: since.toISOString().slice(0, 10),
-    search: RECALL,
-    app_type: REAL_TYPES,
-  };
-  /* The weekly run only wants what moved; the first load wants the lot. */
-  if (opts.sinceDays) base.changed = String(opts.sinceDays);
-
-  const [run] = await q<{ id: number }>(`INSERT INTO os_planning_sync (authority) VALUES ($1) RETURNING id`, [authority]);
+  const [run] = await q<{ id: number }>(`INSERT INTO os_planning_sync (authority) VALUES ($1) RETURNING id`, [label]);
   let read = 0;
   let kept = 0;
   let page = 1;
-  const maxPages = opts.maxPages ?? 6;
+  const maxPages = opts.maxPages ?? 10;
   try {
     for (; page <= maxPages; page++) {
       if (page > 1) await wait(8_000);
@@ -254,7 +298,7 @@ export async function syncPlanningAuthority(
            refilling all at once: asked back to back it returned 262, then
            188, then 115 seconds. Anything we can sit out inside this route's
            five minutes is worth waiting for, because the alternative is
-           re-fetching every page of this authority on the next run. */
+           re-fetching every page of this slice on the next run. */
         if (e instanceof RateLimited && e.retryAfter <= WAIT_OUT) {
           await wait((e.retryAfter + 3) * 1000);
           res = await planitPage({ ...base, page: String(page) });
@@ -265,8 +309,6 @@ export async function syncPlanningAuthority(
         if (!looksRelevant(rec.description, rec.app_type)) continue;
         const postcode = postcodeOf(rec);
         if (!postcode) continue;
-        const district = districtOf(postcode);
-        if (!district || !wanted.has(district)) continue;
         await q(
           `INSERT INTO os_planning_applications
              (ref, authority, uid, address, postcode, district, house_number, description,
@@ -286,11 +328,11 @@ export async function syncPlanningAuthority(
              updated_at = NOW()`,
           [
             rec.name,
-            rec.area_name ?? authority,
+            rec.area_name ?? opts.authority ?? "",
             rec.uid,
             (rec.address ?? "").trim(),
             postcode,
-            district,
+            districtOf(postcode),
             numberIn(rec.address),
             (rec.description ?? "").replace(/\s+/g, " ").trim().slice(0, 4000),
             rec.app_type,
@@ -311,12 +353,12 @@ export async function syncPlanningAuthority(
       if (page === maxPages) {
         /* Never finish quietly on a truncated read: the next run must know. */
         throw new Error(
-          `${authority} has more than ${maxPages * 300} applications to look at and the run stopped at the page cap. Read it again, or narrow the months.`
+          `${label} has more than ${maxPages * 300} applications to look at and the run stopped at the page cap. Read it again over a shorter window.`
         );
       }
     }
     await q(`UPDATE os_planning_sync SET status = 'done', rows_read = $2, rows_kept = $3, finished_at = NOW() WHERE id = $1`, [run.id, read, kept]);
-    return { ok: true, authority, read, kept, pages: page };
+    return { ok: true, authority: label, read, kept, pages: page };
   } catch (e) {
     const limited = e instanceof RateLimited;
     const reason = (e as Error).message;
@@ -326,7 +368,7 @@ export async function syncPlanningAuthority(
     );
     /* A rate limit is not a failure: what was read is kept and the next run
        picks up where this one stopped. */
-    return { ok: limited, authority, read, kept, pages: page, reason, rateLimited: limited };
+    return { ok: limited, authority: label, read, kept, pages: page, reason, rateLimited: limited };
   }
 }
 
@@ -416,7 +458,7 @@ async function readTokensToday(): Promise<number> {
  * Read the applications nobody has read yet. Batched, and it stops on the
  * daily ceiling rather than running the bill up on a bad day.
  */
-export async function readPlanning(limit = 200): Promise<{ read: number; skipped: string | null }> {
+export async function readPlanning(limit = 600): Promise<{ read: number; skipped: string | null }> {
   if (!hasDb()) return { read: 0, skipped: "no database" };
   if (!process.env.ANTHROPIC_API_KEY) return { read: 0, skipped: "no ANTHROPIC_API_KEY, so nothing was read" };
   const pending = await q<{ ref: string; description: string; address: string; app_type: string | null; app_size: string | null }>(
@@ -432,48 +474,69 @@ export async function readPlanning(limit = 200): Promise<{ read: number; skipped
   let done = 0;
   let out = 0;
 
-  for (let i = 0; i < pending.length; i += BATCH) {
-    const batch = pending.slice(i, i + BATCH);
-    const listing = batch
-      .map((a, n) => `${n + 1}. id: ${a.ref}\n   address: ${a.address}\n   type: ${a.app_type ?? "unknown"} (${a.app_size ?? "unknown size"})\n   description: ${a.description}`)
-      .join("\n\n");
-    let res;
-    try {
-      res = await client.messages.parse({
-        model: READER_MODEL,
-        max_tokens: 4000,
-        /* The brief never changes, so it caches; the applications ride after it. */
-        system: [{ type: "text", text: READER_BRIEF, cache_control: { type: "ephemeral" } }],
-        output_config: { effort: "low", format: { type: "json_schema", schema: READER_SCHEMA } },
-        messages: [{ role: "user", content: `Read these ${batch.length} planning applications.\n\n${listing}` }],
-      });
-    } catch (e) {
-      console.error("[planning] reader", (e as Error).message);
-      break;
+  const batches: (typeof pending)[] = [];
+  for (let i = 0; i < pending.length; i += BATCH) batches.push(pending.slice(i, i + BATCH));
+
+  /**
+   * Three batches at a time. Sequential was fine for sixty applications a
+   * week; a national backfill is ninety thousand, and at one batch of twenty
+   * per twelve seconds that is a fortnight. Three is deliberately modest:
+   * the point is to clear a backfill in a day, not to spend somebody's whole
+   * rate limit on a job that nobody is waiting for.
+   */
+  const LANES = 3;
+  let next = 0;
+  let stop = false;
+
+  async function lane() {
+    while (!stop) {
+      const mine = next++;
+      if (mine >= batches.length) return;
+      const batch = batches[mine];
+      const listing = batch
+        .map((a, n) => `${n + 1}. id: ${a.ref}\n   address: ${a.address}\n   type: ${a.app_type ?? "unknown"} (${a.app_size ?? "unknown size"})\n   description: ${a.description}`)
+        .join("\n\n");
+      let res;
+      try {
+        res = await client.messages.parse({
+          model: READER_MODEL,
+          max_tokens: 4000,
+          /* The brief never changes, so it caches; the applications ride after it. */
+          system: [{ type: "text", text: READER_BRIEF, cache_control: { type: "ephemeral" } }],
+          output_config: { effort: "low", format: { type: "json_schema", schema: READER_SCHEMA } },
+          messages: [{ role: "user", content: `Read these ${batch.length} planning applications.\n\n${listing}` }],
+        });
+      } catch (e) {
+        console.error("[planning] reader", (e as Error).message);
+        stop = true;
+        return;
+      }
+      out += res.usage?.output_tokens ?? 0;
+      const rows = (res.parsed_output as { applications?: ReadRow[] } | null)?.applications ?? [];
+      const seen = new Set<string>();
+      for (const row of rows) {
+        if (!batch.some((b) => b.ref === row.id) || seen.has(row.id)) continue;
+        seen.add(row.id);
+        await q(
+          `UPDATE os_planning_applications
+              SET kind = $2, homes = $3, summary = $4, to_let = $5, confident = $6, read_at = NOW(), updated_at = NOW()
+            WHERE ref = $1`,
+          [
+            row.id,
+            row.kind,
+            Number.isFinite(row.homes) ? Math.max(0, Math.trunc(row.homes)) : 0,
+            (row.summary ?? "").replace(/\s*[—–]\s*/g, " - ").slice(0, 200),
+            !!row.to_let,
+            !!row.confident,
+          ]
+        );
+        done++;
+      }
+      if (out >= READ_CAP) stop = true;
     }
-    out += res.usage?.output_tokens ?? 0;
-    const rows = (res.parsed_output as { applications?: ReadRow[] } | null)?.applications ?? [];
-    const seen = new Set<string>();
-    for (const row of rows) {
-      if (!batch.some((b) => b.ref === row.id) || seen.has(row.id)) continue;
-      seen.add(row.id);
-      await q(
-        `UPDATE os_planning_applications
-            SET kind = $2, homes = $3, summary = $4, to_let = $5, confident = $6, read_at = NOW(), updated_at = NOW()
-          WHERE ref = $1`,
-        [
-          row.id,
-          row.kind,
-          Number.isFinite(row.homes) ? Math.max(0, Math.trunc(row.homes)) : 0,
-          (row.summary ?? "").replace(/\s*[—–]\s*/g, " - ").slice(0, 200),
-          !!row.to_let,
-          !!row.confident,
-        ]
-      );
-      done++;
-    }
-    if (out >= READ_CAP) break;
   }
+
+  await Promise.all(Array.from({ length: Math.min(LANES, batches.length) }, lane));
 
   if (out > 0) {
     await q(`INSERT INTO os_planning_sync (authority, status, rows_read, rows_kept, out_tokens, finished_at) VALUES ('read', 'done', $1, $2, $3, NOW())`, [
@@ -599,6 +662,9 @@ export interface PlanningStatus {
   /** Homes the applicant will plainly live in. Counted, kept, never listed. */
   ownerOccupier: number;
   byKind: Record<string, number>;
+  /** Councils with live applications in view, busiest first. The filter people
+   *  actually reach for once the register is national. */
+  byCouncil: Array<{ authority: string; live: number }>;
   lastRun: { authority: string; status: string; rows_read: number; rows_kept: number; error: string | null; started_at: string } | null;
   reader: "ready" | "no key";
 }
@@ -606,7 +672,7 @@ export interface PlanningStatus {
 export async function planningStatus(districts?: string[]): Promise<PlanningStatus> {
   const authorities = PLANNING_AUTHORITIES;
   const reader: PlanningStatus["reader"] = process.env.ANTHROPIC_API_KEY ? "ready" : "no key";
-  if (!hasDb()) return { authorities, held: 0, unread: 0, live: 0, onTheBoard: 0, notOnTheBoard: 0, ownerOccupier: 0, byKind: {}, lastRun: null, reader };
+  if (!hasDb()) return { authorities, held: 0, unread: 0, live: 0, onTheBoard: 0, notOnTheBoard: 0, ownerOccupier: 0, byKind: {}, byCouncil: [], lastRun: null, reader };
   const scope = districts && districts.length > 0 ? districts : null;
   const [t] = await q<{ held: string; unread: string; live: string; board: string; fresh: string; own: string }>(
     `SELECT count(*) AS held,
@@ -622,6 +688,14 @@ export async function planningStatus(districts?: string[]): Promise<PlanningStat
             count(*) FILTER (WHERE kind = ANY($2::text[]) AND to_let IS FALSE) AS own
        FROM os_planning_applications
       WHERE ($1::text[] IS NULL OR district = ANY($1::text[]))`,
+    [scope, SIGNALLING as unknown as string[], LIVE_STATES, WINDOW_DAYS]
+  );
+  const councils = await q<{ authority: string; n: string }>(
+    `SELECT authority, count(*) AS n FROM os_planning_applications
+      WHERE ($1::text[] IS NULL OR district = ANY($1::text[]))
+        AND kind = ANY($2::text[]) AND to_let IS NOT FALSE
+        AND app_state = ANY($3::text[]) AND started_on >= CURRENT_DATE - $4::int
+      GROUP BY authority ORDER BY count(*) DESC LIMIT 60`,
     [scope, SIGNALLING as unknown as string[], LIVE_STATES, WINDOW_DAYS]
   );
   const kinds = await q<{ kind: string; n: string }>(
@@ -646,6 +720,7 @@ export async function planningStatus(districts?: string[]): Promise<PlanningStat
     notOnTheBoard: Number(t?.fresh ?? 0),
     ownerOccupier: Number(t?.own ?? 0),
     byKind: Object.fromEntries(kinds.map((k) => [k.kind, Number(k.n)])),
+    byCouncil: councils.map((c) => ({ authority: c.authority, live: Number(c.n) })),
     lastRun: runs[0] ? { ...runs[0], started_at: new Date(runs[0].started_at).toISOString() } : null,
     reader,
   };
@@ -658,6 +733,7 @@ export async function planningStatus(districts?: string[]): Promise<PlanningStat
  */
 export async function listPlanning(opts: {
   districts?: string[];
+  authority?: string;
   kind?: string;
   onlyNew?: boolean;
   includeDecided?: boolean;
@@ -676,12 +752,13 @@ export async function listPlanning(opts: {
        LEFT JOIN os_radar_prospects r ON r.planning_ref = a.ref
       WHERE a.kind = ANY($1::text[])
         AND ($2::text[] IS NULL OR a.district = ANY($2::text[]))
+        AND ($8::text IS NULL OR a.authority = $8)
         AND ($3::bool OR a.app_state = ANY($4::text[]))
         AND a.started_on >= CURRENT_DATE - $5::int
         AND ($6::bool = false OR r.property_key IS NULL)
         AND a.to_let IS NOT FALSE
       ORDER BY (a.kind = 'hmo') DESC, a.started_on DESC NULLS LAST
       LIMIT $7`,
-    [kinds, scope, !!opts.includeDecided, LIVE_STATES, WINDOW_DAYS, !!opts.onlyNew, Math.min(opts.limit ?? 300, 500)]
+    [kinds, scope, !!opts.includeDecided, LIVE_STATES, WINDOW_DAYS, !!opts.onlyNew, Math.min(opts.limit ?? 300, 500), opts.authority ?? null]
   );
 }

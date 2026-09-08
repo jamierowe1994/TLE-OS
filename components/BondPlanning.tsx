@@ -54,6 +54,7 @@ interface Status {
   notOnTheBoard: number;
   ownerOccupier: number;
   byKind: Record<string, number>;
+  byCouncil: Array<{ authority: string; live: number }>;
   lastRun: { authority: string; status: string; rows_read: number; rows_kept: number; error: string | null; started_at: string } | null;
   reader: "ready" | "no key";
 }
@@ -101,6 +102,7 @@ export default function BondPlanning({
   const [data, setData] = useState<{ applications: Application[]; status: Status } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [kind, setKind] = useState<Kind | "all">("all");
+  const [council, setCouncil] = useState("");
   const [showOnBoard, setShowOnBoard] = useState(false);
 
   const key = useMemo(() => districts.join(","), [districts]);
@@ -110,11 +112,12 @@ export default function BondPlanning({
     setError(null);
     const p = new URLSearchParams({ districts: key });
     if (showOnBoard) p.set("all", "1");
+    if (council) p.set("council", council);
     fetch(`/api/bond/planning?${p}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => (j.ok ? setData({ applications: j.applications, status: j.status }) : setError(j.reason ?? "Could not read the planning register.")))
       .catch(() => setError("Could not read the planning register."));
-  }, [key, showOnBoard]);
+  }, [key, showOnBoard, council]);
 
   useEffect(load, [load]);
 
@@ -160,6 +163,21 @@ export default function BondPlanning({
               <span className={kind === k ? "ml-1.5 opacity-70" : "ml-1.5 text-muted"}>{counts[k]}</span>
             </button>
           ))}
+          {(data.status.byCouncil.length > 1 || council) && (
+            <select
+              value={council}
+              onChange={(e) => setCouncil(e.target.value)}
+              title="The register is national. Narrow it to one council."
+              className="rounded-full border border-line/80 bg-panel px-3 py-1.5 text-[12px]"
+            >
+              <option value="">Every council</option>
+              {data.status.byCouncil.map((c) => (
+                <option key={c.authority} value={c.authority}>
+                  {c.authority} ({c.live})
+                </option>
+              ))}
+            </select>
+          )}
           <label className="ml-auto flex cursor-pointer items-center gap-2 text-[12px] text-muted">
             <input type="checkbox" checked={showOnBoard} onChange={(e) => setShowOnBoard(e.target.checked)} className="h-3.5 w-3.5 accent-current" />
             Include doors already on the board
@@ -186,7 +204,7 @@ export default function BondPlanning({
       {data && shown.length === 0 && (
         <div className="mt-4 rounded-2xl border border-dashed border-line/80 p-6 text-[12.5px] text-muted">
           {data.status.held === 0
-            ? "Nothing read yet. The register is read once a week, one council at a time."
+            ? "Nothing read yet. The whole country is read once a week."
             : "Nothing here for this filter. Try Everything, or include the doors already on the board."}
         </div>
       )}

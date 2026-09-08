@@ -741,3 +741,71 @@ is the number that justifies the Land Registry decision. About one application i
 postcode (rural barns and land) and those are skipped, because the district filter is the only
 thing keeping the patch clean. Central Bedfordshire spans LU and SG postcodes well outside the patch, so it
 keeps about a quarter of what it returns; that is the district filter working, not a fault.
+
+---
+
+## Planning goes national, 8 Sep 2026
+
+James: "we're going to need to do this literally over the whole of the UK... all the way through
+Scotland, all the way through to Cornwall." He also chose the scope: **planning national, the
+Homesearch sweep stays where TLE actually trades**, and this is TLE covering more ground rather
+than other agencies using Bond, so the per-person patch is enough.
+
+**It is cheaper national than it was for five councils.** PlanIt does not need an authority, and
+the filter runs at their end. Measured on 8 Sep, whole United Kingdom, after the search and
+application-type filters:
+
+| Query | Rows | Pages |
+|---|---|---|
+| Applications MADE in ten days | 579 | 2 |
+| Applications DECIDED in ten days | 1,290 | 5 |
+| A week's applications, any state | 1,193 | 4 |
+| PlanIt's `changed` in ten days | 41,408 | not used |
+
+So the weekly run for the entire country is **one call, seven pages, fifty-one seconds** -
+measured, not projected. It replaces five per-council calls that between them covered
+Northamptonshire.
+
+**Two passes, not one.** `recent` catches new intent; `decided` is how a refusal stops signalling
+and a permission starts. PlanIt's `changed` is its "we looked at this record again" date and
+returns forty-one thousand rows of re-scrapes, so it is not used. That was measured after the
+first national attempt hit the page cap and said so, which is the guard from the last section
+doing its job.
+
+**The watch list no longer gates planning.** It used to keep only postcodes in
+`os_radar_districts` - the districts the Homesearch sweep runs over, about forty of the country's
+2,900. Planning is cheap enough to hold nationally, so ingest now keeps everything with a
+postcode and the person's patch narrows what they SEE rather than what we KEEP. That separation
+is the whole reason national planning does not drag the sweep national with it.
+
+**Filtering, since the register is now national.** The room gained a council picker beside the
+kind chips, listing only councils with live work, busiest first. Postcode districts stop being
+how anyone thinks once you are past one county; councils are the unit, and the rows already carry
+`authority`, `lat` and `lon` so radius from a postcode is available later without new data.
+
+**Reading is now its own job.** `planning-reader.yml` every fifteen minutes, reading up to a
+thousand and returning at once when there is nothing. Separate from fetching because a weekly
+national fetch leaves about a thousand to read and a one-off backfill leaves ninety thousand,
+and the second must not hold up the first. The reader runs three batches at a time: measured,
+600 applications in 2m21s against 1.4 a second sequentially.
+
+**Haiku was tested and rejected.** With 803 hand-checked classifications as the reference,
+`claude-haiku-4-5` on the identical brief agreed on the kind 85.3% of the time and on
+*will they let it* only **74.6%**, and missed 12 genuine leads in 280 - including a care home
+becoming a large sui-generis HMO, where it applied the care-home exclusion mechanically instead
+of reading the direction. Most category disagreements were harmless (flats against into-homes
+carry the same signal), but a quarter of the self-build calls being wrong would either bury good
+leads or fill the list with owner-occupier homes. The saving was about £90 once and £1 a week.
+Not worth it. The reader stays on Opus; the eval script is worth keeping for the next time this
+question comes up.
+
+**What it costs national.** About £1.40 a week to run. The one-off backfill is the only large
+number: eighteen months is roughly 93,000 applications and £140 of reading, six months roughly
+31,000 and £45. `BOND_PLANNING_DAILY_TOKEN_CAP` is 250,000 output tokens, which throttles a
+backfill to about 3,300 applications a day, so **raise it for the duration of a backfill and put
+it back afterwards** - otherwise eighteen months takes a month to read.
+
+Verified on 8 Sep against the local database: the weekly national run fetched 579 new and 1,290
+decided in 51 seconds; Bath, BCP, Cornwall, Bolton, Hartlepool, Gravesham, Broxbourne and
+Ashfield all came through; the council picker filters to one council; and the six doors already
+on the board are still the only ones matched, because the sweep still only covers the patch.

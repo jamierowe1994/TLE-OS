@@ -1,12 +1,17 @@
-# The councils' planning registers, into Bond, once a week.
+# The councils' planning registers, into Bond. National.
 #
-# One authority per step, fifteen minutes apart, because PlanIt rate limits hard:
-# eight requests inside ten seconds earned a 429 asking for 262 seconds back.
-# Each step reads what changed in the last ten days, has Bond read the new
-# applications, and puts them on the board. A step that gets rate limited
-# still keeps what it read and the next week picks the rest up.
+# Measured 8 Sep 2026. The whole United Kingdom, once PlanIt's own search and
+# the application-type filter are applied: 579 applications MADE in ten days
+# (two pages) and 1,290 DECIDED in ten days (five pages). The weekly run does
+# both passes in one call, seven pages, inside PlanIt's rate limit (which
+# drains over about a quarter of an hour; see lib/planning).
 #
-# See lib/planning and docs/LANDLORD-RADAR.md.
+# Deliberately NOT PlanIt's `changed` date, which is "we looked at this record
+# again" and returns 41,408 in ten days nationally.
+#
+# The eighteen-month backfill is the heavy part: about 93,000 applications.
+# Run it by hand with `backfill_weeks`, which walks back a week at a time.
+# Reading them is a separate job - see planning-reader.yml.
 
 name: Planning registers
 
@@ -15,37 +20,42 @@ on:
     - cron: "20 6 * * 1"
   workflow_dispatch:
     inputs:
-      months:
-        description: "First load: how many months back (leave empty for the weekly run)"
+      backfill_weeks:
+        description: "Backfill: how many weeks back to walk (e.g. 78 for 18 months). Empty = the normal weekly run."
         required: false
 
 jobs:
   sync:
     runs-on: ubuntu-latest
-    strategy:
-      max-parallel: 1
-      matrix:
-        authority:
-          - West Northamptonshire
-          - North Northamptonshire
-          - Milton Keynes
-          - Bedford
-          - Central Bedfordshire
+    timeout-minutes: 330
     steps:
-      - name: Space the authorities out
-        run: sleep $(( ${{ strategy.job-index }} * 900 ))
-      - name: Read ${{ matrix.authority }}
+      - name: Read the register
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          MONTHS: ${{ inputs.months }}
+          WEEKS: ${{ inputs.backfill_weeks }}
         run: |
           set -euo pipefail
           if [ -z "${CRON_SECRET}" ]; then
             echo "CRON_SECRET is not set on this repository - nothing was read."
             exit 1
           fi
-          AUTH=$(printf '%s' "${{ matrix.authority }}" | jq -sRr @uri)
-          if [ -n "${MONTHS}" ]; then SCOPE="months=${MONTHS}"; else SCOPE="since=10"; fi
-          curl -sS -f -X POST -H "x-cron-key: ${CRON_SECRET}" --max-time 300 \
-            "https://tle-os.co.uk/api/bond/planning-sync?authority=${AUTH}&${SCOPE}" \
-            | tee -a "$GITHUB_STEP_SUMMARY"
+          BASE="https://tle-os.co.uk/api/bond/planning-sync"
+
+          if [ -z "${WEEKS}" ]; then
+            curl -sS -f -X POST -H "x-cron-key: ${CRON_SECRET}" --max-time 300 "${BASE}" \
+              | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "Backfilling ${WEEKS} weeks, a week at a time." | tee -a "$GITHUB_STEP_SUMMARY"
+          for i in $(seq 1 "${WEEKS}"); do
+            TO=$(date -u -d "-$(( (i - 1) * 7 )) days" +%Y-%m-%d)
+            FROM=$(date -u -d "-$(( i * 7 )) days" +%Y-%m-%d)
+            echo "--- ${FROM} to ${TO}"
+            # A slice that fails must not kill the backfill; the next run repeats it.
+            curl -sS -X POST -H "x-cron-key: ${CRON_SECRET}" --max-time 300 \
+              "${BASE}?from=${FROM}&to=${TO}" \
+              | python3 -c "import sys,json;d=json.load(sys.stdin);r=d.get('result',{});print('   read',r.get('read'),'kept',r.get('kept'),'|',r.get('reason') or 'ok')" \
+              || echo "   slice failed, carrying on"
+            sleep 20
+          done

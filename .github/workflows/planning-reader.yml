@@ -1,0 +1,40 @@
+# Bond reads the planning applications it has not read yet.
+#
+# Separate from fetching them on purpose. The weekly national fetch leaves
+# about a thousand to read, which one call clears. A one-off eighteen-month
+# backfill leaves about ninety thousand, and this job chews through it three
+# batches at a time without holding up anything else.
+#
+# It costs nothing when there is nothing to read: the route returns at once.
+# Every quarter of an hour, so a national backfill clears in about a day.
+#
+# See lib/planning: the daily ceiling is BOND_PLANNING_DAILY_TOKEN_CAP.
+
+name: Planning reader
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: planning-reader
+  cancel-in-progress: false
+
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read what is waiting
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "CRON_SECRET is not set on this repository - nothing was read."
+            exit 1
+          fi
+          curl -sS -f -X POST -H "x-cron-key: ${CRON_SECRET}" --max-time 300 \
+            "https://tle-os.co.uk/api/bond/planning-sync?read=1&limit=1000" \
+            | python3 -c "import sys,json;d=json.load(sys.stdin);print('read',d.get('read'),'| still unread',d['status']['unread'],'|',d.get('skipped') or 'ok')" \
+            | tee -a "$GITHUB_STEP_SUMMARY"
