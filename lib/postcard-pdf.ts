@@ -5,7 +5,7 @@ import QRCode from "qrcode";
 import { PDFDocument, rgb, type PDFFont, type PDFImage, type PDFPage } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import {
-  CARD, colourFor, illustrationFor, withExample,
+  CARD, colourFor, illustrationFor, withExample, withValues,
   type FontKey, type Layer, type PostcardDesign, type Side,
 } from "@/lib/postcard-design";
 
@@ -96,7 +96,19 @@ async function pngFor(url: string): Promise<Buffer | null> {
 }
 
 /** One side of one card, as a page. */
-async function drawSide(doc: PDFDocument, design: PostcardDesign, side: Side, faces: Faces, example: boolean) {
+interface DrawOpts {
+  /** Fill the merge fields with the example landlord, for a proof. */
+  example?: boolean;
+  /** Fill them with a real person's details, for a real card. */
+  values?: Record<string, string>;
+  /**
+   * Leave the address off. Stannp lays the address down itself, in the place
+   * its machines expect, so printing our own would put two on the card.
+   */
+  forStannp?: boolean;
+}
+
+async function drawSide(doc: PDFDocument, design: PostcardDesign, side: Side, faces: Faces, opts: DrawOpts) {
   const page = doc.addPage([mm(CARD.w + BLEED * 2), mm(CARD.h + BLEED * 2)]);
   /* Everything is placed as though the card started at 0,0; the bleed is an
      offset applied once, here. */
@@ -110,7 +122,7 @@ async function drawSide(doc: PDFDocument, design: PostcardDesign, side: Side, fa
     color: hex(side === "front" ? design.paper : "#ffffff"),
   });
 
-  const say = (t: string) => (example ? withExample(t) : t);
+  const say = (t: string) => (opts.values ? withValues(t, opts.values) : opts.example ? withExample(t) : t);
 
   for (const l of design.layers.filter((x) => x.side === side)) {
     if (l.kind === "image") {
@@ -174,19 +186,24 @@ async function drawSide(doc: PDFDocument, design: PostcardDesign, side: Side, fa
   }
 
   if (side === "back") {
-    /* Royal Mail's block and the opt-out, drawn by the card on both surfaces
-       so the print matches the screen exactly. */
     const reg = faceFor(faces, "montserrat", false);
     const bold = faceFor(faces, "montserrat", true);
-    const lines = example
-      ? ["Margaret Hollis", "18 Wellfield Terrace", "Bristol", "BS7 8HP"]
-      : ["{firstname} {lastname}", "{address1}", "{city}", "{postcode}"];
-    let y = top(14) - mm(3.3);
-    for (const [i, line] of lines.entries()) {
-      page.drawText(line, { x: ox + mm(CARD.w - 7 - 60), y, size: mm(3.3), font: i === 0 ? bold : reg, color: hex(i === 0 ? "#101014" : "#3f3d3a") });
-      y -= mm(3.3 * 1.55);
+    /* Stannp puts the address on itself; ours is only for a proof, so that
+       the person looking at it can see what the finished card holds. */
+    if (!opts.forStannp) {
+      const lines = opts.values
+        ? [`${opts.values.firstname ?? ""} ${opts.values.lastname ?? ""}`.trim(), opts.values.address1 ?? "", opts.values.city ?? "", opts.values.postcode ?? ""]
+        : opts.example
+          ? ["Margaret Hollis", "18 Wellfield Terrace", "Bristol", "BS7 8HP"]
+          : ["{firstname} {lastname}", "{address1}", "{city}", "{postcode}"];
+      let y = top(14) - mm(3.3);
+      for (const [i, line] of lines.entries()) {
+        if (!line) continue;
+        page.drawText(line, { x: ox + mm(CARD.w - 7 - 60), y, size: mm(3.3), font: i === 0 ? bold : reg, color: hex(i === 0 ? "#101014" : "#3f3d3a") });
+        y -= mm(3.3 * 1.55);
+      }
     }
-    page.drawText(withExample("Not for you? Call {phone} or write to us and we will not contact you again."), {
+    page.drawText(say("Not for you? Call {phone} or write to us and we will not contact you again."), {
       x: ox + mm(7), y: oy + mm(3.4), size: mm(2.2), font: reg, color: hex("#8b8781"),
     });
   }
@@ -198,13 +215,25 @@ async function drawSide(doc: PDFDocument, design: PostcardDesign, side: Side, fa
  * `example` fills the merge fields in, which is what a proof wants. The real
  * send passes false, so the braces survive for Stannp to fill per landlord.
  */
-export async function postcardPdf(design: PostcardDesign, opts: { example?: boolean } = {}): Promise<Uint8Array> {
+export async function postcardPdf(design: PostcardDesign, opts: DrawOpts = {}): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   doc.registerFontkit(fontkit);
   doc.setTitle(design.name);
   doc.setProducer("TLE OS");
   const faces = await loadFaces(doc);
-  await drawSide(doc, design, "front", faces, opts.example ?? true);
-  await drawSide(doc, design, "back", faces, opts.example ?? true);
+  const o = { example: opts.example ?? true, ...opts };
+  await drawSide(doc, design, "front", faces, o);
+  await drawSide(doc, design, "back", faces, o);
+  return doc.save();
+}
+
+/** One side on its own, which is what Stannp wants: a file per face. */
+export async function postcardSidePdf(design: PostcardDesign, side: Side, opts: DrawOpts = {}): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  doc.registerFontkit(fontkit);
+  doc.setTitle(`${design.name} - ${side}`);
+  doc.setProducer("TLE OS");
+  const faces = await loadFaces(doc);
+  await drawSide(doc, design, side, faces, { example: false, ...opts });
   return doc.save();
 }

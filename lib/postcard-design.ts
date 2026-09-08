@@ -53,7 +53,7 @@ export const COLOURS: { key: ColourKey; name: string; hex: string }[] = [
   { key: "paper", name: "Paper", hex: "#fbfaf7" },
 ];
 
-export type IllustrationKey = "landlord-street" | "landlord-feet-up" | "settled-tenant";
+export type IllustrationKey = "landlord-garden" | "landlord-street" | "landlord-feet-up" | "settled-tenant";
 
 /**
  * Two copies of every picture: a light one the studio draws, and the
@@ -62,6 +62,9 @@ export type IllustrationKey = "landlord-street" | "landlord-feet-up" | "settled-
  * right for print and wrong for a page that shows two of them.
  */
 export const ILLUSTRATIONS: { key: IllustrationKey; name: string; src: string; print: string }[] = [
+  /* James's third pass, 8 Sep: the feet sit into the garden rather than
+     floating clear of it, so the scene reads as one picture. */
+  { key: "landlord-garden", name: "Landlord in the garden", src: "/brand/postcard/landlord-garden.webp", print: "/brand/postcard/print/landlord-garden.png" },
   { key: "landlord-street", name: "Landlord on the street", src: "/brand/postcard/landlord-street.webp", print: "/brand/postcard/print/landlord-street.png" },
   { key: "landlord-feet-up", name: "Landlord, feet up", src: "/brand/postcard/landlord-feet-up.webp", print: "/brand/postcard/print/landlord-feet-up.png" },
   { key: "settled-tenant", name: "Tenant, settled in", src: "/brand/sitting-chair.png", print: "/brand/sitting-chair.png" },
@@ -117,6 +120,11 @@ export const MERGE_FIELDS: { key: string; label: string; example: string }[] = [
   { key: "phone", label: "Their number", example: "0117 496 0142" },
 ];
 
+/** Merge fields filled in with a real person's details. */
+export function withValues(text: string, values: Record<string, string>): string {
+  return text.replace(/\{(\w+)\}/g, (whole, key: string) => values[key] ?? whole);
+}
+
 export function withExample(text: string): string {
   return text.replace(/\{(\w+)\}/g, (whole, key: string) => MERGE_FIELDS.find((f) => f.key === key)?.example ?? whole);
 }
@@ -141,7 +149,7 @@ export const STOCK_DESIGNS: PostcardDesign[] = [
     name: "Your property could do more",
     paper: "#fbfaf7",
     layers: [
-      L({ id: "art", kind: "image", side: "front", x: 56, y: 26, w: 122, src: "landlord-street", bleeds: true }),
+      L({ id: "art", kind: "image", side: "front", x: 60, y: 22, w: 118, src: "landlord-garden", bleeds: true }),
       L({ id: "mark", kind: "wordmark", side: "front", x: 9, y: 8, w: 40 }),
       L({ id: "h1", kind: "text", side: "front", x: 9, y: 42, w: 70, text: "Your property", font: "playfair", size: 10, bold: true, colour: "ink", lineHeight: 1.08 }),
       L({ id: "h2", kind: "text", side: "front", x: 9, y: 53, w: 70, text: "could do more.", font: "playfair", size: 10, bold: true, italic: true, colour: "ink", lineHeight: 1.08 }),
