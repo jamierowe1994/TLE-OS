@@ -1,0 +1,51 @@
+# The councils' planning registers, into Bond, once a week.
+#
+# One authority per step, fifteen minutes apart, because PlanIt rate limits hard:
+# eight requests inside ten seconds earned a 429 asking for 262 seconds back.
+# Each step reads what changed in the last ten days, has Bond read the new
+# applications, and puts them on the board. A step that gets rate limited
+# still keeps what it read and the next week picks the rest up.
+#
+# See lib/planning and docs/LANDLORD-RADAR.md.
+
+name: Planning registers
+
+on:
+  schedule:
+    - cron: "20 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      months:
+        description: "First load: how many months back (leave empty for the weekly run)"
+        required: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1
+      matrix:
+        authority:
+          - West Northamptonshire
+          - North Northamptonshire
+          - Milton Keynes
+          - Bedford
+          - Central Bedfordshire
+    steps:
+      - name: Space the authorities out
+        run: sleep $(( ${{ strategy.job-index }} * 900 ))
+      - name: Read ${{ matrix.authority }}
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          MONTHS: ${{ inputs.months }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "CRON_SECRET is not set on this repository - nothing was read."
+            exit 1
+          fi
+          AUTH=$(printf '%s' "${{ matrix.authority }}" | jq -sRr @uri)
+          if [ -n "${MONTHS}" ]; then SCOPE="months=${MONTHS}"; else SCOPE="since=10"; fi
+          curl -sS -f -X POST -H "x-cron-key: ${CRON_SECRET}" --max-time 300 \
+            "https://tle-os.co.uk/api/bond/planning-sync?authority=${AUTH}&${SCOPE}" \
+            | tee -a "$GITHUB_STEP_SUMMARY"

@@ -873,6 +873,22 @@ function ProspectPanel({
                 </dd>
               </div>
             )}
+            {prospect.planning_ref && (
+              <div className="col-span-2">
+                <dt className="text-[11px] text-muted">In planning</dt>
+                <dd>
+                  {prospect.planning_summary ?? "Application on this address"}
+                  <span className="text-muted">
+                    {" "}
+                    · {prospect.planning_state?.toLowerCase()} {when(prospect.planning_on)}
+                    {prospect.planning_homes && prospect.planning_homes > 1 ? ` · ${prospect.planning_homes} homes` : ""}
+                  </span>
+                </dd>
+                <p className="mt-0.5 text-[10.5px] text-muted">
+                  From the council&rsquo;s public planning register. The work here is not finished and the door is not advertised.
+                </p>
+              </div>
+            )}
           </dl>
 
           <section className="mt-6 rounded-2xl border border-line/80 bg-panel p-4">

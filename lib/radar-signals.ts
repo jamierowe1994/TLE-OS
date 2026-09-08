@@ -30,7 +30,9 @@ export type SignalKey =
   | "added_by_hand"
   | "hmo_licence_expiring"
   | "epc_below_c"
-  | "epc_expiring";
+  | "epc_expiring"
+  | "planning_hmo"
+  | "planning_homes";
 
 export const SIGNALS: Record<SignalKey, { label: string; weight: number; why: string }> = {
   self_managing: {
@@ -117,6 +119,16 @@ export const SIGNALS: Record<SignalKey, { label: string; weight: number; why: st
     weight: 15,
     why: "The certificate is in its tenth year. Without a new one the property cannot be re-let, so a decision is coming.",
   },
+  planning_hmo: {
+    label: "HMO in planning",
+    weight: 40,
+    why: "They have asked the council to turn this into a house in multiple occupation, or to fit more people in one. Nobody does that and then manages it themselves for long: there is a licence, a fire risk assessment and a council inspection at the end of it. The strongest early signal Bond has, because the property is not on any portal yet.",
+  },
+  planning_homes: {
+    label: "Homes in planning",
+    weight: 30,
+    why: "Homes are being created here: a building going into flats, something that was not a home becoming one, or new houses on the plot. Whoever ends up owning them has to let them, and they have not chosen an agent yet.",
+  },
 };
 
 export const SIGNAL_ORDER = Object.keys(SIGNALS) as SignalKey[];
@@ -148,6 +160,8 @@ export const SIGNAL_COLOUR: Record<SignalKey, { fill: string; ink?: boolean }> =
   hmo_licence_expiring: { fill: "#9c6b00" },
   epc_below_c: { fill: "#6a994e" },
   epc_expiring: { fill: "#386641" },
+  planning_hmo: { fill: "#7b2d8e" },
+  planning_homes: { fill: "#4a7fb5" },
 };
 
 export interface Signal {
@@ -218,6 +232,13 @@ export interface Prospect {
   hmo_expires_on: string | null;
   epc_band: string | null;
   epc_registered_on: string | null;
+  /** The planning application on this door, when the register has a live one. */
+  planning_ref: string | null;
+  planning_kind: string | null;
+  planning_state: string | null;
+  planning_on: string | null;
+  planning_summary: string | null;
+  planning_homes: number | null;
   /** 0 to 100 from the certificate; null without one. */
   condition_score: number | null;
   /** The advert's photo: our archived copy when there is one, else the feed's link. */

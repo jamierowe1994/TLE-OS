@@ -149,6 +149,7 @@ const MACHINE_ROUTES = [
   "/api/bond/sales-sync",             // Bond: read the Land Registry price-paid file, monthly
   "/api/bond/hmo-sync",               // Bond: read the councils' HMO registers, monthly
   "/api/bond/epc-sync",               // Bond: read the EPC register, monthly, once there is a token
+  "/api/bond/planning-sync",          // Bond: read the councils' planning registers, weekly
   "/api/bond/nudges-sync",            // Bond: read our own book out of REX, daily, for the call list
   /* DocuSeal POSTs a signed contract here. Without this it got 307 to
      /sign-in — measured against the live site, not guessed — so the document

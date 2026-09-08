@@ -580,6 +580,9 @@ export async function refreshProspects(): Promise<{ active: number; quiet: numbe
   await matchHmoLicences();
   const { matchEpc } = await import("@/lib/epc");
   await matchEpc();
+  /* Planning: the door that is not on any portal yet. */
+  const { matchPlanning } = await import("@/lib/planning");
+  await matchPlanning().catch((e) => console.error("[radar] planning", e));
   const { rebuildLandlords } = await import("@/lib/landlords");
   await rebuildLandlords();
   const { queueSends } = await import("@/lib/bond-campaigns");
@@ -625,6 +628,12 @@ interface ProspectRow extends Record<string, unknown> {
   epc_band: string | null;
   epc_registered_on: Date | string | null;
   condition_score: number | null;
+  planning_ref: string | null;
+  planning_kind: string | null;
+  planning_state: string | null;
+  planning_on: Date | string | null;
+  planning_summary: string | null;
+  planning_homes: number | null;
   image_url: string | null;
   image_key: string | null;
   signals: Signal[];
@@ -694,6 +703,12 @@ function toProspect(r: ProspectRow): Prospect {
     epc_band: r.epc_band ?? null,
     epc_registered_on: ymd(r.epc_registered_on),
     condition_score: r.condition_score == null ? null : Number(r.condition_score),
+    planning_ref: r.planning_ref ?? null,
+    planning_kind: r.planning_kind ?? null,
+    planning_state: r.planning_state ?? null,
+    planning_on: ymd(r.planning_on),
+    planning_summary: r.planning_summary ?? null,
+    planning_homes: r.planning_homes == null ? null : Number(r.planning_homes),
     photo: r.image_key ? `/api/bond/photo/${encodeURIComponent(r.image_key)}` : r.image_url ?? null,
     signals: Array.isArray(r.signals) ? r.signals : [],
     score: r.score,

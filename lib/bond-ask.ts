@@ -193,6 +193,9 @@ function compact(p: Prospect, districts: string[]) {
       : "not known",
     epc: p.epc_band ? { band: p.epc_band, registered_on: p.epc_registered_on, condition_score: p.condition_score } : "no certificate matched",
     hmo_licence: p.hmo_licence_ref ? { ref: p.hmo_licence_ref, expires_on: p.hmo_expires_on } : null,
+    in_planning: p.planning_ref
+      ? { what: p.planning_summary, decision: p.planning_state, applied: p.planning_on, homes: p.planning_homes }
+      : null,
     company_owner: p.company ? { name: p.company.name, number: p.company.number, registered_office: p.company.address } : null,
     owner_recorded: p.owner ? { name: p.owner.name, correspondence_address: p.owner.address, source: p.owner.source } : "nobody has recorded an owner",
     front_door: p.resolved_address ? { address: p.resolved_address, confidence: p.address_confidence } : "not pinned down yet",
@@ -399,6 +402,46 @@ const campaigns: Tool = {
   }),
 };
 
+const planningTool: Tool = {
+  name: "planning",
+  description:
+    "Planning applications in the person's patch that create rental stock: a house becoming an HMO, a building going into flats, something that was not a home becoming one, new homes on a plot. These doors are NOT advertised anywhere - the council register is months ahead of the portals - so nobody else is working them. Use it for 'where should I prospect', 'who is about to become a landlord', and anything about HMOs. A row here is not on the board yet, so it carries NO signal and NO score - do not say it does. The way on is Look up in the Planning room, which pins the front door through the property register, and the signal follows. Only a row whose already_on_the_board is true is a scored prospect.",
+  input_schema: {
+    type: "object",
+    properties: {
+      kind: { type: "string", enum: ["hmo", "flats", "to_residential", "new_homes"] },
+      limit: { type: "integer", minimum: 1, maximum: 40 },
+    },
+    additionalProperties: false,
+  },
+  label: (i) => (str(i.kind) ? `Reading the ${str(i.kind) === "hmo" ? "HMO" : str(i.kind)} planning applications` : "Reading the planning register"),
+  run: async (input, ctx) => {
+    const { listPlanning, planningStatus } = await import("@/lib/planning");
+    const limit = Math.min(40, Math.max(1, Number(input.limit) || 20));
+    const [list, status] = await Promise.all([
+      listPlanning({ districts: ctx.districts, kind: str(input.kind) || undefined, limit: 200 }),
+      planningStatus(ctx.districts),
+    ]);
+    return {
+      live_in_the_patch: status.live,
+      not_on_the_board_yet: list.filter((a) => !a.property_key).length,
+      applications: list.slice(0, limit).map((a) => ({
+        what: a.summary,
+        kind: a.kind,
+        homes: a.homes,
+        address: a.address,
+        postcode: a.postcode,
+        district: a.district,
+        council: a.authority,
+        decision: a.app_state,
+        applied: a.started_on,
+        likely_to_be_let: a.to_let,
+        already_on_the_board: !!a.property_key,
+      })),
+    };
+  },
+};
+
 const activityTool: Tool = {
   name: "recent_activity",
   description: "What colleagues have done in Bond lately: stages moved, notes, appraisals booked, owners recorded.",
@@ -428,7 +471,7 @@ const nudgesTool: Tool = {
   },
 };
 
-const TOOLS: Tool[] = [patchOverview, topProspects, door, landlord, competitors, campaigns, activityTool, nudgesTool];
+const TOOLS: Tool[] = [patchOverview, topProspects, door, landlord, competitors, campaigns, activityTool, nudgesTool, planningTool];
 const BY_NAME = new Map(TOOLS.map((t) => [t.name, t]));
 const TOOL_SCHEMAS: Anthropic.Tool[] = TOOLS.map((t) => ({ name: t.name, description: t.description, input_schema: t.input_schema }));
 
@@ -440,7 +483,7 @@ function signalCatalogue(): string {
 
 const PERSONA = `You are Bond's analyst: the consult panel inside Bond, the prospecting workspace The Letting Experts use to find landlords in Northampton (NN), Milton Keynes (MK) and Bedford (MK40 to MK46). The people asking are lettings agents in the middle of a prospecting session. If somebody asks who you are, you are Bond. Say it and get on with it.
 
-WHAT BOND IS. Every day Bond sweeps the lettings and sales feeds for the patch and keeps every advert it sees. From what changes it raises SIGNALS on individual doors, and the doors with signals are the PROSPECTS. It also holds the Land Registry price paid data, the Land Registry company owner files, the council HMO registers, the EPC register, the tenancy anniversary predictor, the photo of every advert, the landlords behind the doors, who else holds the stock, and the campaign sequences that write to landlords.
+WHAT BOND IS. Every day Bond sweeps the lettings and sales feeds for the patch and keeps every advert it sees. From what changes it raises SIGNALS on individual doors, and the doors with signals are the PROSPECTS. It also holds the Land Registry price paid data, the Land Registry company owner files, the council HMO registers, the council PLANNING registers, the EPC register, the tenancy anniversary predictor, the photo of every advert, the landlords behind the doors, who else holds the stock, and the campaign sequences that write to landlords.
 
 THE SIGNALS, with their weights and why each one matters:
 ${signalCatalogue()}

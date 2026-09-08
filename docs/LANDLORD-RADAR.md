@@ -612,3 +612,132 @@ note on the contact and a line in Today's feed. It is the thing they asked for, 
 or not they ticked the updates box; the tick is recorded for later marketing. A shut door (no key,
 switch off) is written on the response as `email_error` and never fails the page. The QR modal has
 "Preview the email" and "Send me a test", which only ever sends to the person signed in.
+
+---
+
+## Planning applications, 7 Sep 2026
+
+James: "if we can go into other lead sources, I think that would be incredible... social
+media, the internet, local posts". The honest answer was that automated Facebook group and
+Marketplace monitoring is not available and not lawful - no third-party API since 2020, behind
+a login, against Meta's terms - and that the biggest untapped source in the patch is not social
+at all. It is the councils' planning registers, which are public, free, and months ahead of
+every portal. **A landlord before they are a landlord.** He picked this first.
+
+**Where it comes from.** UK PlanIt (planit.org.uk) reads every council's public register and
+serves it as free JSON. Five authorities cover the patch: West Northamptonshire, North
+Northamptonshire, Milton Keynes, Bedford and Central Bedfordshire. We keep the metadata and link
+back to the council's own page; the application documents are copyright and are not copied.
+
+**Rate limits shaped the design.** Measured on 7 Sep: eight requests inside ten seconds earns a
+429 with `Retry-After: 262`, and the budget then drains rather than refilling in one go - asked
+again it returned 188, then 115. So it is a budget over about a quarter of an hour, not a burst
+limit. One authority per call, pages eight seconds apart, a 429 under 150 seconds waited out in
+place (cheaper than re-fetching every page next run), and anything longer ends the run cleanly
+with its progress recorded. The `Planning registers` workflow runs Mondays at 06:20 and spaces
+the five authorities fifteen minutes apart, the same shape lib/epc uses for councils.
+
+The weekly run is one page per authority, so it never comes near the limit. It is the one-off
+eighteen-month first load, at four to seven pages an authority, that has to be paced - and
+because the upsert is idempotent it is safe to simply run again. Before this runs in production it is worth
+emailing andrew@planit.org.uk, who asks to be told about heavy use.
+
+**Two passes, because regexes were not good enough.** Pass one asks PlanIt for the applications
+whose words suggest homes and excludes the administrative types (discharge of conditions,
+amendments, trees, signs), then applies a broad local regex to what comes back. Its only job is
+recall. Pass two is Claude reading each description and deciding what the scheme actually is.
+
+That server-side filter is not an optimisation, it is a correctness fix. Without it an authority
+returns everything it has - West Northamptonshire alone has 5,762 applications in eighteen months
+- and the first version of this quietly stopped at a page cap after 1,800 and reported success,
+having read about the last six months and called it eighteen. A run that hits the cap now fails
+loudly.
+
+That second pass was not the first plan. The first plan was regexes all the way down, and
+measured against 300 real West Northamptonshire applications it could tell an HMO from a house
+(15 of 15) but could not tell "change of use to a dwelling" from "conversion of the garage into
+habitable accommodation", or "erection of two dwellings" from "extension to the host dwelling".
+Three tightening passes traded the false positives for false negatives and never got both. Those
+are judgement calls on English, so they go to the model: about sixty applications a week, twenty
+to a call, on the stable cached brief. Without a key the rows sit at kind `unread`, carry no
+signal, and the room says so. Nothing guesses.
+
+The reader returns four things per application: the **kind** (hmo, flats, to_residential,
+new_homes, or none), how many **homes** it creates, a one-line **summary** in an agent's words,
+and **to_let** - will whoever owns this let it, or live in it? That last one earns its place: 18
+of the 34 new-homes applications in West Northamptonshire were self-builds, replacement houses
+and an agricultural worker's dwelling. They are held and counted, never listed.
+
+**Two signals**, in lib/radar-signals like the rest: **HMO in planning** (40, the strongest thing
+Bond has, because a five-bed HMO means a licence, a fire risk assessment and a council
+inspection) and **Homes in planning** (30). Both fire on permitted, conditioned or undecided
+applications inside eighteen months.
+
+Unlike the HMO-licence and EPC matches, `matchPlanning` has **no "only if the door already
+scores" guard**. A licence or a poor certificate is a reason to prefer a door something else
+flagged; a live permission to make an HMO is a reason on its own, and the door being advertised
+nowhere is the point rather than a disqualification. A quiet door with a permission comes back
+onto the list - which is exactly what happened to 28 St Michaels Avenue NN1 4JQ on the first run.
+
+**The room.** Tools → Bond → More → Planning. The live applications in the person's patch,
+strongest kind first, each with what they applied for and a link to the council's register. A row
+here is deliberately **not** a prospect: planning gives an address as the council wrote it, which
+is not always a front door, so the way onto the board is **Look up the door** - the property
+register resolves it, and Add to the list puts it there with the application as the reason. Same
+hand-added path a colleague uses after seeing a board on a street, and it keeps one door to one
+record. Doors the sweep already knows are hidden unless the switch is on, because they carry the
+signal already.
+
+`lib/planning.ts`, `/api/bond/planning` (the room), `/api/bond/planning-sync` (cron, in
+MACHINE_ROUTES), `components/BondPlanning.tsx`, a block on the property panel, and a `planning`
+tool in Ask Bond. `BOND_PLANNING_DAILY_TOKEN_CAP` (60,000 output tokens) is its own ceiling,
+separate from Ask Bond's and Steve's.
+
+**Measured on 7 Sep, all five councils, eighteen months.** 4,290 applications came back from
+PlanIt after its own search and the administrative types were excluded; 2,529 passed the local
+recall net and were read by the model. It found **803 that create rental stock** - 102 HMO, 86
+into flats, 180 into homes and 124 new homes once the owner-occupier ones are set aside - and
+rejected 1,726 as not creating any. Every rejection checked by hand was right: garage
+conversions, annexes, extensions, an HMO reverting to a family house, a C4 HMO becoming a
+children's home. It marked itself unsure on 28 of the 803, and those show as "worth a read".
+
+The **to_let** question earned its place immediately: 159 of the 803 are homes the applicant will
+live in - 151 new-build self-builds, replacement houses and an agricultural worker's dwelling.
+They are held and counted, never listed.
+
+| Council | Held | Live in the window |
+|---|---|---|
+| West Northamptonshire | 935 | 220 |
+| Bedford | 425 | 89 |
+| North Northamptonshire | 305 | 81 |
+| Milton Keynes | 578 | 75 |
+| Central Bedfordshire | 286 | 27 |
+| **Total** | **2,529** | **492** |
+
+**492 live applications in the patch, and only 6 of them are doors the sweep already knows.** The
+other 486 are advertised nowhere, which is the whole point.
+
+The reader cost 190,671 output tokens for all 2,529 - about 75 tokens an application, roughly £5
+for the one-off load. The weekly run is around sixty applications, so a few pence.
+
+Examples from day one, none of which has ever appeared in the sweep: "House becoming a
+seven-person HMO", 25 Latchet Lane NN5 4GF, permitted 19 Dec 2025. "Five-person HMO expanding to
+eight people", 152 The Headlands NN3 2NY. "Office block converting into 83 flats", MK15 0DJ.
+"Empty pub converting into two houses with garage", MK19 7BZ.
+
+**Bedford, and a bug this turned up in the rest of Bond.** Bedford's first pass kept 4 rows out
+of 489 and the code was right to reject them: `os_radar_districts` held NN1-18 and MK1-19 but not
+**MK40-46**. `PATCH_DISTRICTS` in lib/radar does list them - James added Bedford on 2 Sep - but
+`seedPatch` only runs when the table is empty, so any database seeded before that afternoon never
+picked them up and never will. With the seven districts added, Bedford kept 425 of 489. **If
+production is in the same state then Bedford is missing from the whole of Bond**, not just
+planning: the daily sweep, the prospects, the landlords, the competitors. Silently, with no
+error. Worth checking, and the fix is
+`POST /api/radar/run?add=MK40,MK41,MK42,MK43,MK44,MK45,MK46`.
+
+**Known limits.** PlanIt returns "See source" for the applicant's name on these councils, so
+planning gives the door and the intent but not the person - the name still costs a title, which
+is the number that justifies the Land Registry decision. About one application in six carries no
+postcode (rural barns and land) and those are skipped, because the district filter is the only
+thing keeping the patch clean. Central Bedfordshire spans LU and SG postcodes well outside the patch, so it
+keeps about a quarter of what it returns; that is the district filter working, not a fault.

@@ -1769,6 +1769,63 @@ CREATE TABLE IF NOT EXISTS os_hmo_sync (
 ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS hmo_licence_ref TEXT;
 ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS hmo_expires_on DATE;
 
+-- Planning applications in the patch, from UK PlanIt (which reads every
+-- council's public register). The signal nothing else here can see: a
+-- landlord before they are a landlord. Only applications whose description
+-- mentions homes are kept, and the kind stays 'unread' until the reader in
+-- lib/planning has decided what the scheme actually is - an unread row
+-- carries no signal and says so rather than guessing.
+CREATE TABLE IF NOT EXISTS os_planning_applications (
+  ref             TEXT PRIMARY KEY,          -- PlanIt's name, unique nationally
+  authority       TEXT NOT NULL,
+  uid             TEXT,                      -- the council's own reference
+  address         TEXT NOT NULL DEFAULT '',
+  postcode        TEXT NOT NULL DEFAULT '',
+  district        TEXT,
+  house_number    TEXT,
+  description     TEXT NOT NULL DEFAULT '',
+  app_type        TEXT,
+  app_state       TEXT,
+  app_size        TEXT,
+  started_on      DATE,
+  decided_on      DATE,
+  last_changed_on DATE,
+  council_url     TEXT,
+  planit_url      TEXT,
+  lat             DOUBLE PRECISION,
+  lon             DOUBLE PRECISION,
+  kind            TEXT NOT NULL DEFAULT 'unread',
+  homes           INTEGER,
+  summary         TEXT,
+  -- Will whoever ends up owning this LET it, or live in it? A self build or a
+  -- replacement for the applicant's own house is a home, not a tenancy, and
+  -- only the ones that will be let carry a signal.
+  to_let          BOOLEAN,
+  confident       BOOLEAN,
+  read_at         TIMESTAMPTZ,
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_planning_postcode_idx ON os_planning_applications (postcode, house_number);
+CREATE INDEX IF NOT EXISTS os_planning_kind_idx ON os_planning_applications (kind, started_on DESC);
+CREATE INDEX IF NOT EXISTS os_planning_district_idx ON os_planning_applications (district, started_on DESC);
+CREATE TABLE IF NOT EXISTS os_planning_sync (
+  id          BIGSERIAL PRIMARY KEY,
+  authority   TEXT NOT NULL,
+  status      TEXT NOT NULL DEFAULT 'running',
+  rows_read   INTEGER NOT NULL DEFAULT 0,
+  rows_kept   INTEGER NOT NULL DEFAULT 0,
+  out_tokens  INTEGER NOT NULL DEFAULT 0,
+  error       TEXT,
+  started_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finished_at TIMESTAMPTZ
+);
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS planning_ref TEXT;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS planning_kind TEXT;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS planning_state TEXT;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS planning_on DATE;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS planning_summary TEXT;
+ALTER TABLE os_radar_prospects ADD COLUMN IF NOT EXISTS planning_homes INTEGER;
+
 -- Energy Performance Certificates for the patch, from the government
 -- register (needs a token). The newest certificate per door is what counts.
 CREATE TABLE IF NOT EXISTS os_epc (

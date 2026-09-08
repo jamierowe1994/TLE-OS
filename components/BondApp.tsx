@@ -7,6 +7,7 @@ import RadarBoard from "@/components/RadarBoard";
 import { PressButton } from "@/components/Bits";
 import BondAsk, { type AskFocus } from "@/components/BondAsk";
 import BondNudges from "@/components/BondNudges";
+import BondPlanning from "@/components/BondPlanning";
 import BondToday, { rememberSearch, type TodayData } from "@/components/BondToday";
 import { QrModal, QrPanel } from "@/components/BondQr";
 import BondProcess, { loadProcess } from "@/components/BondProcess";
@@ -31,7 +32,7 @@ import BondProcess, { loadProcess } from "@/components/BondProcess";
  * ever shows a placeholder as if it were a fact.
  */
 
-type Room = "today" | "doors" | "nudges" | "landlords" | "competitors" | "lookup" | "campaigns" | "owners" | "postcards";
+type Room = "today" | "doors" | "nudges" | "landlords" | "planning" | "competitors" | "lookup" | "campaigns" | "owners" | "postcards";
 
 /**
  * Three rooms, then More.
@@ -46,6 +47,13 @@ const ROOMS: { key: Room; label: string; icon: string; blurb: string; more?: boo
   { key: "doors", label: "Doors", icon: "search", blurb: "Every flagged door in the patch, on the map and in the list, with where each stands on the process." },
   { key: "nudges", label: "Nudges", icon: "call", blurb: "Landlords who have dealt with us, whose door has just moved. Ring them." },
   { key: "landlords", more: true, label: "Landlords", icon: "user", blurb: "The people and companies behind the doors, scored by opportunity." },
+  {
+    key: "planning",
+    more: true,
+    label: "Planning",
+    icon: "home",
+    blurb: "Landlords before they are landlords: who has asked the council to make homes here. None of these are advertised anywhere yet.",
+  },
   { key: "competitors", more: true, label: "Competitors", icon: "target", blurb: "Who holds the stock in your patch, and when their tenancies come round." },
   { key: "lookup", more: true, label: "Look up", icon: "home", blurb: "Any address on the register, and add a door by hand." },
   { key: "campaigns", more: true, label: "Campaigns", icon: "megaphone", blurb: "The sequences that write to landlords, and their copy." },
@@ -101,6 +109,8 @@ export default function BondApp() {
   const [nearPreset, setNearPreset] = useState<string | undefined>(undefined);
   const [filterPreset, setFilterPreset] = useState<string | undefined>(undefined);
   const [lookupPreset, setLookupPreset] = useState<string | undefined>(undefined);
+  /* Arriving from Planning: the application becomes the reason on the record. */
+  const [lookupReason, setLookupReason] = useState<string | undefined>(undefined);
   /* The process bar's pick: which step the Doors room is filtered to, and the
      doors standing at it. */
   const [step, setStep] = useState<number | null>(null);
@@ -420,6 +430,16 @@ export default function BondApp() {
                 onAsk={(key, label) => askAbout({ kind: "landlord", key, label })}
               />
             )}
+            {room === "planning" && (
+              <BondPlanning
+                districts={patch ?? []}
+                lookUp={(address, reason) => {
+                  setLookupPreset(address);
+                  setLookupReason(reason);
+                  setRoom("lookup");
+                }}
+              />
+            )}
             {room === "competitors" && (
               <Competitors
                 districts={patch ?? []}
@@ -432,6 +452,7 @@ export default function BondApp() {
             {room === "lookup" && (
               <Lookup
                 preset={lookupPreset}
+                reasonPreset={lookupReason}
                 openOnBoard={(address) => {
                   setFilterPreset(address);
                   setRoom("doors");
@@ -711,18 +732,19 @@ interface DossierData {
  * hand. The search goes to the property register; the answer is everything
  * Bond already holds about that door.
  */
-function Lookup({ openOnBoard, preset }: { openOnBoard: (address: string) => void; preset?: string }) {
+function Lookup({ openOnBoard, preset, reasonPreset }: { openOnBoard: (address: string) => void; preset?: string; reasonPreset?: string }) {
   const [query, setQuery] = useState(preset ?? "");
   const [busy, setBusy] = useState(false);
   const [candidates, setCandidates] = useState<Array<{ hs_id: string; label: string }>>([]);
   const [note, setNote] = useState<string | null>(null);
   const [dossier, setDossier] = useState<DossierData | null>(null);
-  const [reason, setReason] = useState("");
+  const [reason, setReason] = useState(reasonPreset ?? "");
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
   /* Arriving from another room with an address in hand: search it at once. */
   useEffect(() => {
+    if (reasonPreset) setReason(reasonPreset);
     if (preset && preset.trim()) {
       setQuery(preset);
       void search(undefined, preset);
