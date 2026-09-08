@@ -23,6 +23,12 @@ import {
   VIDEO_COPY,
   WHAT_WE_OFFER,
 } from "@/lib/present-copy";
+import {
+  DEMAND_STATS,
+  PORTAL_STATS,
+  statFooter,
+  type NationalStat,
+} from "@/lib/present-stats";
 import { useState } from "react";
 import type { PresentDeck as Deck } from "@/lib/present";
 import {
@@ -879,12 +885,20 @@ export function MarketingDivider({ show }: { show: boolean }) {
           </p>
         </Rise>
 
+        {/* James, 7 Sep: swap the row of houses for one of the new
+            illustrations. The street was a diagram of the market; this is the
+            work - an agent shooting a room that has been dressed for it - and
+            that is what the slide is actually announcing.
+
+            SQUARE, so it is capped far tighter than the 720px strip it
+            replaces: at the old width a 1:1 drawing would stand taller than
+            the headline above it and turn a divider into a poster. */}
         <Rise show={show} i={3}>
-          <div className="relative mx-auto mt-7 w-full max-w-[720px]">
+          <div className="relative mx-auto mt-6 w-full max-w-[400px]">
             <Art
               slot="marketing"
-              drawing="/illustrations/buildings-street.png"
-              ratio="16 / 7"
+              drawing="/brand/art/marketing-shoot.webp"
+              ratio="1 / 1"
             />
           </div>
         </Rise>
@@ -1079,19 +1093,35 @@ export function Video({ deck, show }: { deck: Deck; show: boolean }) {
 export function Brochure({ show }: { show: boolean }) {
   return (
     <CreamSlide id="brochure">
-      <div className="mx-auto w-full max-w-[980px]">
-        <div className="max-w-[720px]">
+      {/* Two columns, because one column was a headline and a paragraph on a
+          third of the screen. The drawing is not decoration here: the whole
+          claim is that somebody dresses the room before anybody photographs
+          it, and that is exactly what it shows. */}
+      <div className="mx-auto grid w-full max-w-[1180px] items-center gap-10 lg:grid-cols-[1fr_0.8fr] lg:gap-16">
+        <div>
           <HandHead eyebrow="The brochure" show={show} lines={2}>
             We sell the life,
             <br />
             not the <Emphasis show={show}>floorplan</Emphasis>
           </HandHead>
           <Rise show={show} i={2}>
-            <p className="mt-7 max-w-[640px] text-[15px] font-light leading-[1.8] text-black/65">
+            <p className="mt-7 max-w-[560px] text-[15px] font-light leading-[1.8] text-black/65">
               {BROCHURE_COPY.body}
             </p>
           </Rise>
         </div>
+        <Rise show={show} i={3} className="hidden lg:block">
+          <Art
+            slot="brochure"
+            drawing="/brand/art/brochure-room.webp"
+            /* Rounded, unlike the cut-out illustrations. This one is a whole
+               room drawn edge to edge rather than a figure on a blob, so on
+               cream it reads as an image and wants a frame; square corners on
+               it look like the drawing has been cropped by accident. */
+            className="ml-auto max-w-[420px] rounded-[24px]"
+            ratio="1 / 1"
+          />
+        </Rise>
       </div>
     </CreamSlide>
   );
@@ -1104,6 +1134,43 @@ export function Brochure({ show }: { show: boolean }) {
  * in the brand's own type rather than shown as broken tiles. A named portal in
  * type reads as deliberate; a missing logo never does.
  */
+/**
+ * A row of national figures, with whose they are printed under them.
+ *
+ * The source line is not fine print to be tucked away - it is the reason the
+ * numbers are allowed on the page at all (see lib/present-stats). A landlord
+ * who cannot tell one of these from one of ours is being misled even when both
+ * are true, so the footer says "National figures, not ours" every time.
+ */
+function Stats({ stats, show, from }: { stats: NationalStat[]; show: boolean; from: number }) {
+  return (
+    <>
+      <div className="grid gap-x-8 gap-y-7 sm:grid-cols-3">
+        {stats.map((st, n) => (
+          <Rise key={st.value + st.label} show={show} i={from + n}>
+            <div className="border-t pt-4" style={{ borderColor: "rgba(0,0,0,0.12)" }}>
+              <span
+                className="block text-[34px] leading-none sm:text-[40px]"
+                style={{ fontFamily: HAND, fontWeight: 700, color: CORAL }}
+              >
+                {st.value}
+              </span>
+              <span className="mt-2.5 block text-[13px] font-light leading-[1.5] text-black/60">
+                {st.label}
+              </span>
+            </div>
+          </Rise>
+        ))}
+      </div>
+      <Rise show={show} i={from + stats.length}>
+        <p className="mt-6 text-[11px] font-light leading-relaxed text-black/35">
+          {statFooter(stats)}
+        </p>
+      </Rise>
+    </>
+  );
+}
+
 export function Portals({ show }: { show: boolean }) {
   const LOGOS: Record<string, string> = {
     Rightmove: "/brand/rightmove.png",
@@ -1111,54 +1178,70 @@ export function Portals({ show }: { show: boolean }) {
   };
   return (
     <CreamSlide id="portals">
-      <div className="mx-auto w-full max-w-[1080px]">
-        <div className="max-w-[700px]">
+      {/* James, 7 Sep: "rather than just having small icons, we could literally
+          have the names of the brands all on the right-hand side to pad them
+          out." A strip of 24px logos under a paragraph was the thinnest thing
+          in the deck - 40% of a laptop screen, measured - and it under-sold
+          the point: the answer to "where will it appear" is four names, and
+          they should be read as a list rather than squinted at as a badge
+          rail. */}
+      <div className="mx-auto grid w-full max-w-[1180px] items-start gap-10 lg:grid-cols-[1fr_0.78fr] lg:gap-20">
+        <div>
           <HandHead eyebrow="Where it appears" show={show} lines={2}>
             Everywhere a tenant
             <br />
             is <Emphasis show={show}>looking</Emphasis>
           </HandHead>
           <Rise show={show} i={2}>
-            <p className="mt-6 max-w-[600px] text-[14.5px] font-light leading-[1.7] text-black/60">
+            <p className="mt-6 max-w-[560px] text-[14.5px] font-light leading-[1.7] text-black/60">
               {PORTALS_COPY.body}
             </p>
           </Rise>
+          <div className="mt-9">
+            <Stats stats={PORTAL_STATS} show={show} from={3} />
+          </div>
         </div>
-        <Rise show={show} i={3}>
-          <div className="mt-9 flex flex-wrap items-center gap-x-12 gap-y-6 border-t border-black/10 pt-7">
-            {PORTALS_COPY.portals.map((p) =>
-              LOGOS[p] ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={p} src={LOGOS[p]} alt={p} className="h-6 w-auto opacity-70 sm:h-7" />
-              ) : (
+
+        {/* The names, stacked and set large. The two we have marks for keep
+            them - a landlord recognises the Rightmove green before they read
+            the word - and the two we do not are set in the same hand as every
+            other heading rather than in a made-up lockup. */}
+        <Rise show={show} i={3} className="lg:pt-3">
+          <ul className="flex flex-col">
+            {PORTALS_COPY.portals.map((p, n) => (
+              <li
+                key={p}
+                className="flex items-center py-5 first:pt-0 last:pb-0"
+                style={{ borderTop: n === 0 ? "none" : "1px solid rgba(0,0,0,0.09)" }}
+              >
+                {/* The mark AND the name, never the mark on its own. The two
+                    files we hold are the app icons rather than wordmarks, so a
+                    logo-only row put a 24px green square where the other rows
+                    had a word - which is what James was looking at when he
+                    said to use the names. */}
+                {LOGOS[p] && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={LOGOS[p]} alt="" aria-hidden className="mr-3.5 h-7 w-auto shrink-0 opacity-90" />
+                )}
                 <span
-                  key={p}
-                  className="text-[16px] text-black/40"
+                  className="text-[21px] leading-none text-black/70 sm:text-[24px]"
                   style={{ fontFamily: HAND, fontWeight: 700 }}
                 >
                   {p}
                 </span>
-              )
-            )}
-          </div>
+              </li>
+            ))}
+          </ul>
         </Rise>
       </div>
     </CreamSlide>
   );
 }
 
-/**
- * Reaching the tenants who are not looking yet.
- *
- * The claim that used to carry this slide - "only 2-3% are actively looking" -
- * had no source and is gone. The argument stands without it: portal search
- * catches people already hunting, paid social reaches people who would move
- * for the right property and have not started.
- */
 export function Social({ show }: { show: boolean }) {
   return (
     <CreamSlide id="social">
-      <div className="mx-auto w-full max-w-[980px]">
+      <div className="mx-auto w-full max-w-[1080px]">
         <div className="max-w-[720px]">
           <HandHead eyebrow="Social advertising" show={show} lines={2}>
             The tenants who are
@@ -1170,6 +1253,21 @@ export function Social({ show }: { show: boolean }) {
               {SOCIAL_COPY.body}
             </p>
           </Rise>
+        </div>
+
+        {/* THE EVIDENCE, and it is not flattering. Demand at a six-year low and
+            a quarter fewer enquiries per property than a year ago is the
+            strongest argument on this slide precisely because it is the
+            uncomfortable half of the market report: it is why reaching past
+            the search results matters in 2026 in a way it did not in 2022.
+            Sourced and dated on the page - see lib/present-stats. */}
+        <div className="mt-11 border-t pt-9" style={{ borderColor: "rgba(0,0,0,0.09)" }}>
+          <Rise show={show} i={3}>
+            <p className="mb-7 text-[12.5px] font-light text-black/45">
+              Why it matters more than it used to
+            </p>
+          </Rise>
+          <Stats stats={DEMAND_STATS} show={show} from={4} />
         </div>
       </div>
     </CreamSlide>
