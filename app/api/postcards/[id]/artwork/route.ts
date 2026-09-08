@@ -13,6 +13,11 @@ import { postcardPdf, postcardSidePdf } from "@/lib/postcard-pdf";
  * ?side=front|back gives one face on its own, with no address block, which
  * is the shape Stannp wants: a file per side, and the address laid down by
  * them where their machines expect it.
+ *
+ * ?firstname= &lastname= &property= &city= &postcode= &agent= &phone= fill
+ * the merge fields with a real person, which is how a card is rendered
+ * before it is posted. Stannp cannot merge into artwork it is handed as a
+ * file, so the merge has to happen here.
  */
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -29,11 +34,16 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   const merged = req.nextUrl.searchParams.get("merged") === "1";
   const side = req.nextUrl.searchParams.get("side");
+  const q = req.nextUrl.searchParams;
+  const named = ["firstname", "lastname", "property", "city", "postcode", "agent", "phone", "anniversary"];
+  const values: Record<string, string> = {};
+  for (const k of named) { const v = q.get(k); if (v) values[k] = v; }
+  const withPerson = Object.keys(values).length > 0 ? { values } : {};
   try {
     const pdf =
       side === "front" || side === "back"
-        ? await postcardSidePdf(design, side, { example: merged, forStannp: true })
-        : await postcardPdf(design, { example: merged });
+        ? await postcardSidePdf(design, side, { example: merged, forStannp: true, ...withPerson })
+        : await postcardPdf(design, { example: merged, ...withPerson });
     return new NextResponse(Buffer.from(pdf), {
       headers: {
         "content-type": "application/pdf",
