@@ -1181,16 +1181,74 @@ const INVOICE_STATUS: Record<string, { label: string; tone: "neutral" | "accent"
 };
 const totalOf = (lines: InvoiceRow["lines"]) => lines.reduce((a, l) => { const net = Math.round((Number(l.qty) || 0) * (Number(l.unitPence) || 0)); return a + net + Math.round((net * (Number(l.vatRate) || 0)) / 100); }, 0);
 
+/**
+ * Pick a home, and the invoice arrives with the landlord on it and the fee
+ * already worked out from that home's rent and service. The same managed
+ * book the rest of Maintenance searches.
+ */
+function PropertyInvoice({ onClose, onPick }: { onClose: () => void; onPick: (id: string) => void }) {
+  const [props, setProps] = useState<Property[] | null>(null);
+  const [q, setQ] = useState("");
+  useEffect(() => {
+    fetch("/api/compliance/book", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setProps(Array.isArray(j.properties) ? j.properties : []))
+      .catch(() => setProps([]));
+  }, []);
+  const hits = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!props || needle.length < 2) return [];
+    return props.filter((p) => `${p.name} ${p.locality}`.toLowerCase().includes(needle)).slice(0, 8);
+  }, [props, q]);
+  const field = "w-full rounded-lg border border-line/80 bg-box px-3 py-2.5 text-[13px] outline-none focus:border-ink";
+  return (
+    <div className="rounded-2xl border border-line/80 bg-panel p-5">
+      <div className="flex items-baseline justify-between gap-3">
+        <div>
+          <h3 className="text-[14px]">Invoice a property</h3>
+          <p className="mt-0.5 text-[11.5px] text-muted">The landlord, the rent and the service come off the book. The fee is worked out from the rates under Finances.</p>
+        </div>
+        <button type="button" onClick={onClose} className="text-[11.5px] text-muted underline">Cancel</button>
+      </div>
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={props === null ? "Reading the book…" : "Start typing the address"} className={`mt-3 ${field}`} />
+      {hits.length > 0 && (
+        <ul className="mt-2 divide-y divide-line/50 rounded-xl border border-line/80 bg-card">
+          {hits.map((p) => (
+            <li key={p.id}>
+              <button type="button" onClick={() => onPick(p.id)} className="flex w-full flex-col px-3 py-2.5 text-left hover:bg-panel">
+                <span className="text-[13px]">{p.name}</span>
+                <span className="text-[10.5px] text-muted">{p.locality}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {props && q.trim().length > 2 && hits.length === 0 && <p className="mt-2 text-[11.5px] text-muted">Nothing on the book matches that.</p>}
+    </div>
+  );
+}
+
 function Invoices({ onOpen }: { onOpen: (id: string) => void }) {
   const [data, setData] = useState<{ invoices: InvoiceRow[]; settings: Settings | null } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [fromProperty, setFromProperty] = useState(false);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [busy, setBusy] = useState(false);
   const load = useCallback(() => {
     fetch("/api/invoices", { cache: "no-store" }).then((r) => r.json()).then((j) => { if (j.ok) { setData(j); setSettings(j.settings); } else setErr(j.error ?? "Could not read the invoices."); }).catch(() => setErr("Could not read the invoices."));
   }, []);
   useEffect(load, [load]);
+
+  /* An invoice against a home, with the fees worked out from that home's
+     rent and service (James, 7 Sep 2026). */
+  async function fromHome(id: string) {
+    setBusy(true);
+    const r = await fetch("/api/invoices", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ propertyId: id }) }).then((x) => x.json()).catch(() => null);
+    setBusy(false);
+    if (!r?.ok) return setErr(r?.error ?? "Could not draft the invoice.");
+    onOpen(r.invoice.id);
+  }
 
   async function blank() {
     setBusy(true);
@@ -1225,10 +1283,13 @@ function Invoices({ onOpen }: { onOpen: (id: string) => void }) {
         </div>
         <div className="flex gap-2">
           <button type="button" onClick={() => setShowSettings((v) => !v)} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px]">Who invoices are from</button>
+          <button type="button" onClick={() => setFromProperty(true)} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px]">+ From a property</button>
           <PressButton onClick={() => void blank()} className={`rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-page ${busy ? "opacity-50" : ""}`}>+ New invoice</PressButton>
         </div>
       </div>
       {err && <p className="text-[12.5px] text-accent-dark">{err}</p>}
+
+      {fromProperty && <PropertyInvoice onClose={() => setFromProperty(false)} onPick={(id) => { setFromProperty(false); void fromHome(id); }} />}
 
       {showSettings && settings && (
         <div className="rounded-2xl border border-line/80 bg-panel p-5">

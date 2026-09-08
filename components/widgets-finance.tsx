@@ -1,6 +1,7 @@
 "use client";
 
 import { Head, NotConnected, WIDGETS, type WidgetDef } from "@/components/widgets";
+import { FeeForecast, FeesThisMonth, ManagementFees, PortfolioGrowth, SetupFees } from "@/components/widgets-forecast";
 
 /**
  * The Finances board's registry — same machine as the dashboard, pointed at
@@ -19,37 +20,33 @@ import { Head, NotConnected, WIDGETS, type WidgetDef } from "@/components/widget
 
 export const FINANCE_WIDGETS: Record<string, WidgetDef> = {
   "fees-month": {
-    label: "Fees this month", icon: "wallet", hint: "the headline — net of VAT, both agencies",
+    label: "Fees this month", icon: "wallet", hint: "the headline, off the live book and the rates",
     defaultW: 2, defaultH: 2,
-    render: (w, h) => (
-      <>
-        <Head icon="wallet" label="Fees this month" />
-        <NotConnected needs="The company figure is live on Company figures for owners, from PayProp. This board is per person, and needs the rule for whose fee is whose." w={w} h={h} />
-      </>
-    ),
+    render: (w, h) => <FeesThisMonth w={w} h={h} />,
   },
 
+  "portfolio-growth": {
+    label: "Portfolio growth", icon: "trend-up", hint: "how the book has grown, live from REX",
+    defaultW: 2, defaultH: 2,
+    render: (w, h) => <PortfolioGrowth w={w} h={h} />,
+  },
+  "fee-forecast": {
+    label: "The year ahead", icon: "trend-up", hint: "what the book earns, where it lands, what you want",
+    defaultW: 4, defaultH: 2,
+    render: (w, h) => <FeeForecast w={w} h={h} />,
+  },
   "management-fees": {
-    label: "Management fees", icon: "key", hint: "the recurring engine, and who pays it",
+    label: "Management fees", icon: "key", hint: "the recurring engine, off the live rent roll",
     defaultW: 1, defaultH: 1,
-    render: (w, h) => (
-      <>
-        <Head icon="key" label="Management fees" />
-        <NotConnected needs="The company figure is live on Company figures for owners, from PayProp. This board is per person, and needs the rule for whose fee is whose." w={w} h={h} />
-      </>
-    ),
+    render: (w, h) => <ManagementFees w={w} h={h} />,
   },
 
   "setup-fees": {
-    label: "Set-up fees", icon: "rocket", hint: "new business landing as money",
+    label: "Set-up fees", icon: "coin", hint: "the one-off on every new let",
     defaultW: 1, defaultH: 1,
-    render: (w, h) => (
-      <>
-        <Head icon="rocket" label="Set-up fees" />
-        <NotConnected needs="The company figure is live on Company figures for owners, from PayProp. This board is per person, and needs the rule for whose fee is whose." w={w} h={h} />
-      </>
-    ),
+    render: (w, h) => <SetupFees w={w} h={h} />,
   },
+
 
   "licence-income": {
     label: "Licence income", icon: "file-contract", hint: "partners' monthly fees, and who's paid",
@@ -84,6 +81,8 @@ export const FINANCE_WIDGETS: Record<string, WidgetDef> = {
    boxes stack the right two columns, and licence income runs full-width
    underneath — no ragged edge anywhere (James, 8 Aug 2026). */
 export const FINANCE_DEFAULT_LAYOUT = [
+  { id: "f0", type: "fee-forecast", w: 4, h: 2 },
+  { id: "f7", type: "portfolio-growth", w: 2, h: 2 },
   { id: "f1", type: "fees-month", w: 2, h: 2 },
   { id: "f2", type: "management-fees", w: 1, h: 1 },
   { id: "f3", type: "setup-fees", w: 1, h: 1 },
@@ -93,6 +92,7 @@ export const FINANCE_DEFAULT_LAYOUT = [
 ];
 
 export const FINANCE_TRAY_GROUPS = [
+  { key: "forecast", label: "Growth & forecast", icon: "trend-up", types: ["fee-forecast", "portfolio-growth"] },
   { key: "income", label: "Fee income", icon: "wallet", types: ["fees-month", "management-fees", "setup-fees", "earnings"] },
   { key: "partners", label: "Partners", icon: "file-contract", types: ["licence-income"] },
   { key: "risk", label: "Risk & flow", icon: "bank", types: ["arrears", "money-held", "occupancy"] },

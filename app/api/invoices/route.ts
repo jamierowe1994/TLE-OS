@@ -8,7 +8,9 @@ import { createInvoice, listInvoices, invoiceSettings, saveInvoiceSettings, type
  * The invoicing schedule.
  *
  * GET  → every invoice, newest first, and the settings (who they are from).
- * POST → a new draft: { orderId } writes it from a job; otherwise blank.
+ * POST → a new draft: { orderId } writes it from a job, { propertyId } from a
+ *        home on the managed book with its fees already worked out, and
+ *        neither leaves it blank.
  * PUT  → the settings. Any member of staff can read; owners and
  *        pre-tenancy can change the company details.
  */
@@ -27,7 +29,7 @@ export async function POST(req: NextRequest) {
   const { actor, subject } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   if (!hasDb()) return NextResponse.json({ ok: false, error: "No database on this environment." }, { status: 503 });
-  const b = (await req.json().catch(() => ({}))) as { orderId?: string | null; toName?: string; toAddress?: string; toEmail?: string; property?: string };
+  const b = (await req.json().catch(() => ({}))) as { orderId?: string | null; propertyId?: string | null; toName?: string; toAddress?: string; toEmail?: string; property?: string };
   try {
     const by = (subject ?? actor).name || (subject ?? actor).email;
     const invoice = await createInvoice(b, by);

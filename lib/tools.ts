@@ -42,7 +42,7 @@
 
 export type ToolStatus = "live" | "building";
 export type ToolAccess = "included" | "paid";
-export type ToolGroupKey = "prospecting";
+export type ToolGroupKey = "prospecting" | "money";
 
 export interface ToolGroup {
   key: ToolGroupKey;
@@ -51,6 +51,12 @@ export interface ToolGroup {
 }
 
 export const TOOL_GROUPS: ToolGroup[] = [
+  {
+    key: "money",
+    label: "Getting paid",
+    blurb:
+      "Raising what you are owed, and knowing what the book is going to earn.",
+  },
   {
     key: "prospecting",
     label: "Prospecting",
@@ -82,6 +88,28 @@ export interface Tool {
 }
 
 export const TOOLS: Tool[] = [
+  {
+    key: "invoicing",
+    name: "Invoicing",
+    blurb:
+      "Raise an invoice against a home and it works the fees out for you, off that home's rent and service. Number it, print it, send it.",
+    icon: "coin",
+    href: "/maintenance?section=invoices",
+    status: "live",
+    access: "included",
+    group: "money",
+  },
+  {
+    key: "forecast",
+    name: "Forecast",
+    blurb:
+      "What the book earns now, how it has grown, and where the next twelve months land against what you want to hit.",
+    icon: "analytics",
+    href: "/finances",
+    status: "live",
+    access: "included",
+    group: "money",
+  },
   {
     key: "launchpad",
     name: "Launch Pad",

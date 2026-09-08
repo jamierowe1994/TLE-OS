@@ -230,7 +230,7 @@ const plusDays = (d: Date, n: number) => new Date(d.getTime() + n * 86400000).to
  * through at no VAT - the agent adds the fee line and changes what they
  * like before producing it.
  */
-export async function createInvoice(input: { orderId?: string | null; toName?: string; toAddress?: string; toEmail?: string; property?: string }, by: string): Promise<Invoice> {
+export async function createInvoice(input: { orderId?: string | null; propertyId?: string | null; toName?: string; toAddress?: string; toEmail?: string; property?: string }, by: string): Promise<Invoice> {
   const settings = await invoiceSettings();
   const id = uid();
   const token = randomBytes(18).toString("base64url");
@@ -254,6 +254,38 @@ export async function createInvoice(input: { orderId?: string | null; toName?: s
     const cost = o.invoicePence ?? o.quotePence;
     if (cost != null) lines.push({ id: uid(), description: `${o.title}${o.contractorName ? ` - ${o.contractorName}` : ""}`, qty: 1, unitPence: cost, vatRate: 0 });
   }
+  /**
+   * An invoice for a property rather than a job (James, 7 Sep 2026: "generate
+   * it attached to a property, and then it will work out all of the fees for
+   * them"). The landlord, the rent and the service come off the managed book;
+   * the rates come off the fee basis. Every line is priced, so nothing has to
+   * be worked out by hand - and if the rates are not set yet, the invoice is
+   * still drafted with the right people on it and no lines.
+   */
+  if (!input.orderId && input.propertyId) {
+    const { managedBookFor } = await import("@/lib/managed-book-cache");
+    const { feeBasis } = await import("@/lib/finance-forecast");
+    const [{ book }, basis] = await Promise.all([managedBookFor(null), feeBasis()]);
+    const p = book.properties.find((x) => x.propertyId === input.propertyId || x.listingId === input.propertyId);
+    if (p) {
+      property = property || [p.name, p.locality].filter(Boolean).join(", ");
+      toName = toName || p.landlord?.name || "";
+      toEmail = toEmail || p.landlord?.email || "";
+      reference = reference || `${p.name}${p.service ? ` · ${p.service}` : ""}`;
+      const rentPence = Math.round((p.rentMonthly ?? 0) * 100);
+      const rate = p.service === "Managed" ? basis.managementPct : p.service === "Rent Collect" ? basis.rentCollectPct : null;
+      if (rate != null && rentPence) {
+        lines.push({
+          id: uid(),
+          description: `${p.service} fee, ${rate}% of £${(rentPence / 100).toLocaleString("en-GB")} rent`,
+          qty: 1,
+          unitPence: Math.round((rentPence * rate) / 100),
+          vatRate: settings.defaultVatRate,
+        });
+      }
+    }
+  }
+
   const [r] = await q<Row>(
     `INSERT INTO os_invoices (id, status, order_id, property, to_name, to_address, to_email, from_json, issue_date, due_date, reference, lines, notes, token, created_by)
      VALUES ($1, 'draft', $2, $3, $4, $5, $6, '{}'::jsonb, $7, $8, $9, $10::jsonb, $11, $12, $13)
