@@ -55,10 +55,16 @@ export const COLOURS: { key: ColourKey; name: string; hex: string }[] = [
 
 export type IllustrationKey = "landlord-street" | "landlord-feet-up" | "settled-tenant";
 
-export const ILLUSTRATIONS: { key: IllustrationKey; name: string; src: string }[] = [
-  { key: "landlord-street", name: "Landlord on the street", src: "/brand/postcard/landlord-street.png" },
-  { key: "landlord-feet-up", name: "Landlord, feet up", src: "/brand/postcard/landlord-feet-up.png" },
-  { key: "settled-tenant", name: "Tenant, settled in", src: "/brand/sitting-chair.png" },
+/**
+ * Two copies of every picture: a light one the studio draws, and the
+ * full-resolution original the printer gets. The screen copies are WebP at
+ * 900px and about 100KB; the originals are two megabytes of PNG, which is
+ * right for print and wrong for a page that shows two of them.
+ */
+export const ILLUSTRATIONS: { key: IllustrationKey; name: string; src: string; print: string }[] = [
+  { key: "landlord-street", name: "Landlord on the street", src: "/brand/postcard/landlord-street.webp", print: "/brand/postcard/print/landlord-street.png" },
+  { key: "landlord-feet-up", name: "Landlord, feet up", src: "/brand/postcard/landlord-feet-up.webp", print: "/brand/postcard/print/landlord-feet-up.png" },
+  { key: "settled-tenant", name: "Tenant, settled in", src: "/brand/sitting-chair.png", print: "/brand/sitting-chair.png" },
 ];
 
 /* ── layers ─────────────────────────────────────────────────────────────── */

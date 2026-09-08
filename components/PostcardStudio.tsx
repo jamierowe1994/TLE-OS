@@ -180,6 +180,16 @@ export default function PostcardStudio() {
         ))}
         <span className="ml-auto flex items-center gap-2">
           {said && <span className="text-[11.5px] text-muted">{said}</span>}
+          <a
+            href={faults.length || dirty ? undefined : `/api/postcards/${design.id}/artwork?merged=1`}
+            target="_blank"
+            rel="noreferrer"
+            aria-disabled={faults.length > 0 || dirty}
+            title={dirty ? "Save first - the artwork is drawn from what is saved" : faults.length ? "Fix the card first" : "A4 PDF at print size with 3mm bleed"}
+            className={`rounded-full border border-line/80 px-4 py-2 text-[12.5px] transition-colors hover:border-ink ${faults.length || dirty ? "pointer-events-none opacity-40" : ""}`}
+          >
+            Print artwork
+          </a>
           <button type="button" disabled={busy || faults.length > 0} onClick={() => setShowProof((v) => !v)} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] transition-colors hover:border-ink disabled:opacity-40">
             Send a proof
           </button>
@@ -249,7 +259,8 @@ export default function PostcardStudio() {
 
           <p className="mt-3 text-[11px] leading-relaxed text-muted">
             Drag anything. Arrow keys nudge half a millimetre, with shift five. The dashed border is the 5mm trim, and on the back the
-            shaded block is Royal Mail&apos;s - keep out of both.
+            shaded block is Royal Mail&apos;s - keep out of both. Print artwork gives you the PDF a printer gets: both sides,
+            A6 with 3mm of bleed, the type still type and the picture at full resolution.
           </p>
 
           {faults.length > 0 && (
