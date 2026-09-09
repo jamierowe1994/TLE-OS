@@ -33,6 +33,32 @@ import { switchOn } from "@/lib/switches";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+/**
+ * GET /api/tenant/passport/invite?email=...
+ *
+ * Has this tenant been sent one, and what is their link? Asked by the agent's
+ * screen so the button can say Send or Resend truthfully (James, 9 Sep 2026).
+ * Reads only - it never mints and never sends, so opening a record cannot
+ * quietly email somebody.
+ */
+export async function GET(req: NextRequest) {
+  const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
+  const me = userId ? await findUserById(userId) : null;
+  if (!me) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
+
+  const email = (req.nextUrl.searchParams.get("email") ?? "").trim();
+  if (!email) return NextResponse.json({ ok: true, sent: false, path: null, invitedAt: null });
+
+  const existing = await findPassportByEmail(email, me.id).catch(() => null);
+  return NextResponse.json({
+    ok: true,
+    sent: Boolean(existing?.invitedAt),
+    exists: Boolean(existing),
+    invitedAt: existing?.invitedAt ?? null,
+    path: existing ? `/tenant/passport/${existing.token}` : null,
+  });
+}
+
 export async function POST(req: NextRequest) {
   const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
   const me = userId ? await findUserById(userId) : null;

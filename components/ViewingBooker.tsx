@@ -204,7 +204,31 @@ export default function ViewingBooker({
     return at.toISOString();
   })();
 
-  const { appts } = useDiary();
+  const { appts: allAppts } = useDiary();
+  /**
+   * WHOSE DIARY IS ON THE GRID.
+   *
+   * James, 9 Sep 2026: booking a viewing was showing every agent's
+   * appointments at once, so a slot that is free for you looked taken because
+   * somebody in another office was out. The diary read is shared and stays
+   * business-wide - it is the same cached book the calendar uses - so the
+   * narrowing happens here, on the name the booking is FOR.
+   *
+   * Matched on the first name too, because REX writes "Lauren Engley" on a
+   * calendar and the OS may hold "Lauren". An appointment whose owner we
+   * cannot read at all is kept rather than dropped: a slot wrongly shown as
+   * busy costs a phone call, one wrongly shown as free costs a double booking.
+   */
+  const appts = useMemo(() => {
+    const want = agent.trim().toLowerCase();
+    if (!want) return allAppts;
+    const first = want.split(" ")[0];
+    return allAppts.filter((a) => {
+      const who = (a.agent ?? "").trim().toLowerCase();
+      if (!who) return true;
+      return who === want || who.split(" ")[0] === first;
+    });
+  }, [allAppts, agent]);
   const [profile] = usePref<BaseProfile | null>(PROFILE_KEY, null);
 
   /**
