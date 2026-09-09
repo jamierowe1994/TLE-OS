@@ -63,6 +63,20 @@ export interface OsListing {
    * more than half the book.
    */
   images: string[];
+  /** Where it is, exactly. Populated on every current rental (9 Sep 2026),
+   *  which is what makes a radius search around a tenant honest. */
+  lat: number | null;
+  lng: number | null;
+  postcode: string | null;
+  /**
+   * House, flat, bungalow - REX's property subcategory.
+   *
+   * Populated on 168 of 266 current rentals, so the filter offers "any" and a
+   * home with none is never hidden by a type filter it cannot answer. REX has
+   * NO bedroom field at all - checked against the model - so there is no beds
+   * filter to build from this source.
+   */
+  propertyType: string | null;
   /** Managed / Let Only / Rent Collect — what we actually do for this landlord. */
   serviceType: string | null;
   tenant: string | null;
@@ -107,6 +121,12 @@ interface RexAddress {
   adr_building?: { name?: string | null } | string | null;
   adr_suburb_or_town?: string | null;
   adr_postcode?: string | null;
+  /* MEASURED 9 Sep 2026: latitude, longitude and postcode are populated on
+     266 of 266 current rentals, so a radius search around a tenant's own
+     address is exact rather than town-level. */
+  adr_latitude?: string | number | null;
+  adr_longitude?: string | number | null;
+  property_subcategory?: { text?: string | null } | null;
 }
 
 interface RexListing extends Record<string, unknown> {
@@ -218,9 +238,14 @@ function toListing(l: RexListing): OsListing {
       ? l.lettings_service_type
       : (l.lettings_service_type?.text ?? null);
 
+  const p2 = l.property;
   return {
     id: String(l.id ?? ""),
     propertyId: l.property?.id != null ? String(l.property.id) : null,
+    lat: num(p2?.adr_latitude),
+    lng: num(p2?.adr_longitude),
+    postcode: p2?.adr_postcode ?? null,
+    propertyType: p2?.property_subcategory?.text ?? null,
     name,
     locality,
     rent: num(l.price_rent),

@@ -17,6 +17,7 @@ import PropertyFacts from "@/components/PropertyFacts";
 import ReferToAgent, { isSalesIntent, SALES_TAGS } from "@/components/ReferToAgent";
 import SignaturePanel, { type Signer } from "@/components/SignaturePanel";
 import ViewingBooker from "@/components/ViewingBooker";
+import TenantPropertySearch from "@/components/TenantPropertySearch";
 import LogTouch, { type LogMode } from "@/components/LogTouch";
 import { touchIcon, touchSentence, whenAgo, type LeadTouch, type Spine, type SpineId } from "@/lib/lead-spine";
 import { Pill } from "@/components/Wire";
@@ -500,6 +501,19 @@ export default function LeadDrawer({
 
   // Editable state, seeded per lead — the wireframe should feel like software,
   // not a picture of software.
+  /* Who is looking at this, for the booker's diary and the passport's
+     "sent by". Asked once when the drawer opens. */
+  const [me, setMe] = useState<{ name?: string; email?: string } | null>(null);
+  useEffect(() => {
+    if (!lead) return;
+    let live = true;
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (live && j?.user) setMe({ name: j.user.name, email: j.user.email }); })
+      .catch(() => { /* the drawer works without it */ });
+    return () => { live = false; };
+  }, [lead]);
+
   const detail = useMemo(() => (lead ? leadDetail(lead) : null), [lead]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
@@ -508,6 +522,40 @@ export default function LeadDrawer({
   const [draft, setDraft] = useState("");
   const [renaming, setRenaming] = useState<string | null>(null);
   const [contact, setContact] = useState({ phone: "", email: "", area: "" });
+
+  /* Read only - this never mints and never sends. */
+  const passportEmail = (contact.email || lead?.email || "").trim();
+  useEffect(() => {
+    if (!lead || !passportEmail || leadSide(lead) !== "tenant") { setPassport(null); return; }
+    let live = true;
+    setPassportSaid(null);
+    fetch(`/api/tenant/passport/invite?email=${encodeURIComponent(passportEmail)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (live && j?.ok) setPassport({ sent: Boolean(j.sent), invitedAt: j.invitedAt ?? null, path: j.path ?? null }); })
+      .catch(() => { /* the card just offers Send */ });
+    return () => { live = false; };
+  }, [lead, passportEmail]);
+
+  async function sendPassport(again: boolean) {
+    if (!lead || passportBusy || !passportEmail) return;
+    setPassportBusy(true);
+    setPassportSaid(null);
+    try {
+      const j = await fetch("/api/tenant/passport/invite", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: lead.name, email: passportEmail, again }),
+      }).then((r) => r.json());
+      if (!j.ok) throw new Error(j.error ?? "That did not send.");
+      setPassport({ sent: true, invitedAt: j.invitedAt ?? new Date().toISOString(), path: j.path ?? null });
+      setPassportSaid(j.alreadySent ? "Already sent - use Resend to send it again." : "Sent.");
+    } catch (e) {
+      setPassportSaid(e instanceof Error ? e.message : "That did not send.");
+    } finally {
+      setPassportBusy(false);
+    }
+  }
+
   /** The name, editable for people the OS owns. */
   const [personName, setPersonName] = useState("");
   /** What happened to the last edit — saved, saved-but-not-mirrored, or failed. */
@@ -584,6 +632,12 @@ export default function LeadDrawer({
   );
   useEffect(() => setShowProcess(false), [lead?.id]);
   const [booking, setBooking] = useState(false);
+  /* The tenant passport, sent by hand. There is an automatic send off a booked
+     viewing; James, 9 Sep: an agent must also be able to send it whenever they
+     like, see whether it already went, and copy the link to paste anywhere. */
+  const [passport, setPassport] = useState<{ sent: boolean; invitedAt: string | null; path: string | null } | null>(null);
+  const [passportBusy, setPassportBusy] = useState(false);
+  const [passportSaid, setPassportSaid] = useState<string | null>(null);
   const [signing, setSigning] = useState(false);
   const [booked, setBooked] = useState<LeadViewing[]>([]);
   const [handingOff, setHandingOff] = useState(false);
@@ -1075,11 +1129,64 @@ export default function LeadDrawer({
                         </button>
                         <button
                           type="button"
-                          onClick={() => advanceTo("viewing")}
+                          /* It used to call advanceTo alone, which moved the
+                             rail and opened nothing - the button looked dead
+                             (James, 9 Sep 2026). Open the booker, and let the
+                             stage follow the booking like the other one. */
+                          onClick={() => {
+                            setBookMode("viewing");
+                            setBooking(true);
+                            advanceTo("viewing");
+                          }}
                           className="flex-1 rounded-xl bg-accent-dark px-3 py-2.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90"
                         >
                           Book viewing
                         </button>
+                      </div>
+
+                      {/* The passport, by hand. It goes automatically off a
+                          booked viewing; this is for the tenant who has not
+                          booked one yet, or who lost the email. The link is
+                          theirs alone and can be handed over any way. */}
+                      <div className="w-full shrink-0 rounded-xl border border-line/70 p-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <DoodleIcon name="user" size={14} className="shrink-0 text-accent-dark" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[12px] font-semibold">Tenant passport</span>
+                            <span className="block text-[10.5px] text-muted">
+                              {!passportEmail
+                                ? "No email on this lead yet"
+                                : passport === null
+                                  ? "Checking…"
+                                  : passport.sent
+                                    ? `Sent ${passport.invitedAt ? new Date(passport.invitedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : ""}`
+                                    : "Not sent yet"}
+                            </span>
+                          </span>
+                          {passportEmail && passport?.path && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard?.writeText(`${window.location.origin}${passport.path}`);
+                                setPassportSaid("Link copied.");
+                              }}
+                              className="rounded-full border border-line/80 px-3 py-1.5 text-[11px] font-semibold transition-colors hover:border-ink/40"
+                            >
+                              Copy link
+                            </button>
+                          )}
+                          {passportEmail && (
+                            <button
+                              type="button"
+                              disabled={passportBusy}
+                              onClick={() => void sendPassport(Boolean(passport?.sent))}
+                              className="rounded-full bg-ink px-3.5 py-1.5 text-[11px] font-semibold text-page disabled:opacity-50"
+                            >
+                              {passportBusy ? "Sending…" : passport?.sent ? "Resend" : "Send passport"}
+                            </button>
+                          )}
+                        </div>
+                        {passportSaid && <p className="mt-2 text-[11px] text-muted">{passportSaid}</p>}
                       </div>
                     </div>
                   ) : (
@@ -1329,18 +1436,41 @@ export default function LeadDrawer({
 
                 {tab === "properties" && (
                   <>
-                    {isTenant && shortlist.length > 0 && (
-                      <div className="mb-4 flex justify-end">
-                        <PressButton
-                          onClick={() => setEmailing(true)}
-                          className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-2 text-[11.5px] font-semibold text-page"
-                        >
-                          <DoodleIcon name="mail" size={13} />
-                          Email properties
-                        </PressButton>
-                      </div>
-                    )}
-                    {shortlist.length ? (
+                    {/* A tenant gets the LIVE book, filtered - not a
+                        shortlist somebody guessed at. James, 9 Sep 2026:
+                        "we don't know if they're going to be interested in
+                        them yet". Shortlisting is still here, as something
+                        you do from a result, and sending the list is what
+                        the shortlist is FOR. */}
+                    {isTenant ? (
+                      <>
+                        {shortlist.length > 0 && (
+                          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line/70 px-3 py-2.5">
+                            <span className="text-[12px]">
+                              <span className="font-semibold">{shortlist.length}</span> on the list for {lead.name.split(" ")[0]}
+                            </span>
+                            <PressButton
+                              onClick={() => setEmailing(true)}
+                              className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-3.5 py-1.5 text-[11.5px] font-semibold text-page"
+                            >
+                              <DoodleIcon name="mail" size={13} />
+                              Email properties
+                            </PressButton>
+                          </div>
+                        )}
+                        <TenantPropertySearch
+                          origin={lead.lat != null && lead.lng != null ? { lat: lead.lat, lng: lead.lng } : null}
+                          originLabel={contact.area || lead.area || ""}
+                          originListingId={lead.listingId != null ? String(lead.listingId) : null}
+                          shortlisted={shortlist.map((p) => p.id)}
+                          onShortlist={(l) => {
+                            setAdded((cur) => (cur.includes(l.id) ? cur : [...cur, l.id]));
+                            setJustAdded(true);
+                          }}
+                          onBook={() => { setBookMode("viewing"); setBooking(true); }}
+                        />
+                      </>
+                    ) : shortlist.length ? (
                       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                         {shortlist.map((p) => (
                           <div key={p.id} className="overflow-hidden rounded-2xl border border-line/60">
@@ -1357,9 +1487,7 @@ export default function LeadDrawer({
                         ))}
                       </div>
                     ) : (
-                      <Empty>
-                        Nothing matched yet — add a property to shortlist it against this lead.
-                      </Empty>
+                      <Empty>Nothing attached to this record yet.</Empty>
                     )}
 
                     {/* Confirmation is the point: attaching a property is the
@@ -1788,7 +1916,10 @@ export default function LeadDrawer({
           phone: contact.phone || lead.phone,
         }}
         properties={shortlist.length ? shortlist : LISTINGS.slice(0, 4)}
-        agent={lead.agent === "Unassigned" ? "Kirstie" : lead.agent}
+        /* Whose diary the grid shows. An unassigned lead is being booked by
+           whoever is looking at it, not by a name typed into the source in
+           August. */
+        agent={lead.agent && lead.agent !== "Unassigned" ? lead.agent : (me?.name ?? "")}
         onBooked={async (v) => {
           setBooked((cur) => [
             {
