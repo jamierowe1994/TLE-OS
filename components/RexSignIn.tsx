@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import { Pill } from "@/components/Wire";
 
 /**
  * Connecting yourself to REX.
@@ -23,12 +24,13 @@ type Session = {
   reason?: string;
 };
 
-const when = (iso?: string) =>
-  iso
-    ? new Date(iso).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })
-    : "";
+/* The expiry date used to be on the tile - "good until Wednesday, 23
+   September". James, 9 Sep: it reads as a warning about something that is
+   working. The token renews itself whenever they use the OS, so the honest
+   state is Live; the only time a date is worth saying is the day before it
+   actually runs out, which expiringSoon already covers. */
 
-export default function RexSignIn() {
+export default function RexSignIn({ onChange }: { onChange?: () => void } = {}) {
   const [s, setS] = useState<Session | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -63,6 +65,7 @@ export default function RexSignIn() {
         setPassword("");
         setOpen(false);
         await load();
+        onChange?.();
       }
     } catch {
       setError("That didn't work.");
@@ -75,24 +78,28 @@ export default function RexSignIn() {
     "w-full rounded-lg border border-line/80 bg-card px-3 py-2 text-[12.5px] outline-none focus:border-ink";
 
   return (
-    <div className="rounded-2xl border border-line/80 bg-panel p-5">
+    <div className="rounded-2xl border border-line/70 p-4">
       <div className="flex flex-wrap items-center gap-3">
-        <DoodleIcon name="user" size={16} className="text-accent-dark" />
-        <div className="min-w-0">
-          <h3 className="text-[14px]">Your REX sign-in</h3>
-          <p className="text-[11.5px] text-muted">
-            {s?.connected
-              ? `Connected as ${s.email} — good until ${when(s.expiresAt)}`
-              : (s?.reason ?? "Not connected. Anything written to REX would go under the office account.")}
-          </p>
+        <DoodleIcon name="home" size={18} className="shrink-0 text-accent-dark" />
+        <div className="min-w-0 flex-1">
+          <span className="block text-[13px] font-semibold">REX</span>
+          <span className="block text-[11px] text-muted">
+            {s === null
+              ? "Checking…"
+              : s.connected
+                ? `Signed in as ${s.email} - everything the OS writes carries your name`
+                : (s.reason ?? "Properties, listings and compliance - sign in so your name is on the work")}
+          </span>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        {s?.connected && <Pill tone="good">Live</Pill>}
+        <div className="flex items-center gap-2">
           {s?.connected && (
             <button
               type="button"
               onClick={async () => {
                 await fetch("/api/rex/session", { method: "DELETE" });
                 load();
+                onChange?.();
               }}
               className="rounded-full border border-line/80 px-3 py-1.5 text-[11.5px] hover:border-ink/40"
             >

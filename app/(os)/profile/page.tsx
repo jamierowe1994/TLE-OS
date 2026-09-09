@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import CustomAttributes from "@/components/CustomAttributes";
@@ -25,7 +25,7 @@ import {
  * hangs off. Everything else is theirs to write.
  */
 
-type TabKey = "info" | "appearance" | "custom" | "compliance" | "connections" | "portals" | "ads";
+type TabKey = "info" | "appearance" | "custom" | "compliance" | "connections" | "ads";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "info", label: "Profile information" },
@@ -37,7 +37,8 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "custom", label: "Custom" },
   { key: "compliance", label: "Personal compliance" },
   { key: "connections", label: "Connections" },
-  { key: "portals", label: "Portals" },
+  /* "Portals" USED to be here - the customer-facing fronts. James, 9 Sep:
+     an agent has no reason to look at them from their own profile. */
   { key: "ads", label: "Ads" },
   /* "The wiring" USED to be here. It has moved to /admin — James: "they don't
      need to see that, that's for my referencing and testing." An agent's own
@@ -101,14 +102,79 @@ const DEFAULT_PROFILE: Profile = {
    shows nothing at all when the Hub has no package for them — which is the
    honest answer for the five partners whose record is blank. */
 
-const CONNECTIONS = [
-  { id: "m365", name: "Microsoft 365", what: "Your diary and email — powers the calendar and every send", state: "off", icon: "calendar" },
-  { id: "rex", name: "REX", what: "Properties, listings and compliance records", state: "on", icon: "home" },
-  { id: "payprop", name: "PayProp", what: "Rent, fees and landlord payments", state: "on", icon: "wallet" },
-  { id: "ghl", name: "GoHighLevel", what: "Facebook & Instagram leads land in your inbox", state: "on", icon: "megaphone" },
-  { id: "whatsapp", name: "WhatsApp Business", what: "Message applicants where they actually reply", state: "off", icon: "message" },
-  { id: "docusign", name: "DocuSign", what: "Terms of business and tenancy signatures", state: "off", icon: "file-contract" },
-];
+/**
+ * WHAT AN AGENT CONNECTS THEMSELVES, and nothing else.
+ *
+ * James, 9 Sep 2026: PayProp, GoHighLevel and DocuSign were on this list and
+ * should not have been - those are wired once at business level, not per
+ * person, so an agent seeing a Connect button for them is being offered a job
+ * that is not theirs. Three remain, and each one is a real account of theirs:
+ * their mailbox, their REX sign-in, their WhatsApp.
+ *
+ * These tiles used to be a wireframe whose buttons only flipped a label. They
+ * now read the live answer from /api/setup, which is the same source the
+ * setup wizard uses, so "Live" means live.
+ */
+
+
+/**
+ * One connection, in the shape all three share.
+ *
+ * "Live" rather than "Connected", because the word has to mean the OS asked
+ * just now and got an answer - not that somebody once pressed a button
+ * (James, 9 Sep 2026).
+ */
+function ConnectionTile({
+  icon, name, what, live, pending, note, onConnect, onDisconnect,
+}: {
+  icon: string;
+  name: string;
+  what: string;
+  live: boolean;
+  pending: boolean;
+  note?: string;
+  onConnect?: () => void;
+  onDisconnect?: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="rounded-2xl border border-line/70 p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <DoodleIcon name={icon} size={18} className="shrink-0 text-accent-dark" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] font-semibold">{name}</span>
+          <span className="block text-[11px] text-muted">{what}</span>
+        </span>
+        {pending ? (
+          <span className="text-[11px] text-muted">Checking…</span>
+        ) : live ? (
+          <Pill tone="good">Live</Pill>
+        ) : onConnect ? null : (
+          <Pill tone="neutral">Not connected</Pill>
+        )}
+        {!pending && live && onDisconnect && (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={async () => { setBusy(true); await onDisconnect(); setBusy(false); }}
+            className="text-[11px] font-semibold text-muted transition-colors hover:text-ink disabled:opacity-50"
+          >
+            Disconnect
+          </button>
+        )}
+        {!pending && !live && onConnect && (
+          <PressButton
+            onClick={onConnect}
+            className="press-ring rounded-full bg-accent-dark px-4 py-2 text-[11.5px] font-semibold text-page"
+          >
+            Connect
+          </PressButton>
+        )}
+      </div>
+      {note && <p className="mt-2 text-[11px] leading-relaxed text-muted">{note}</p>}
+    </div>
+  );
+}
 
 export default function ProfilePage() {
   const [tab, setTab] = useState<TabKey>("info");
@@ -134,6 +200,17 @@ export default function ProfilePage() {
       alive = false;
     };
   }, []);
+  /* Whether their mailbox and REX are actually connected, asked of the
+     server rather than remembered in the page. */
+  const [setup, setSetup] = useState<{ emailConnected?: boolean; rexConnected?: boolean } | null>(null);
+  const loadSetup = useCallback(() => {
+    fetch("/api/setup", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => setSetup(j && j.ok ? j : {}))
+      .catch(() => setSetup({}));
+  }, []);
+  useEffect(() => { loadSetup(); }, [loadSetup]);
+
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
   const [saved, setSaved] = useState(false);
   /** Geocoding the Hub's address after they accept it. */
@@ -142,7 +219,6 @@ export default function ProfilePage() {
   const [darkBg, setDarkBg] = useState(DARK_BG_DEFAULT);
   const [darkBox, setDarkBox] = useState(DARK_BOX_DEFAULT);
   const [accent, setAccent] = useState("");
-  const [connections, setConnections] = useState(CONNECTIONS);
 
   /* Who you are, and the accent you picked, now follow the account. Theme
      stays browser-first — it paints before React runs, and a
@@ -584,106 +660,40 @@ export default function ProfilePage() {
         {tab === "connections" && (
           <div className="max-w-2xl">
             <p className="mb-4 text-[12.5px] leading-relaxed text-muted">
-              What your OS is plugged into. Microsoft 365 is the big one — it&apos;s what
-              makes the diary yours and the emails really send.
+              The three accounts that are yours rather than the agency’s. Everything else the
+              OS talks to is connected once for the whole business, so there is nothing for you
+              to do about it.
             </p>
 
-            {/* First, because it's the one that decides whose NAME ends up on
-                the work. The others decide what the OS can do; this decides
-                who it says did it. */}
-            <div className="mb-5">
-              <RexSignIn />
-            </div>
-            <ul className="space-y-2.5">
-              {connections.map((c) => (
-                <li key={c.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-line/70 p-4">
-                  <DoodleIcon name={c.icon} size={18} className="shrink-0 text-accent-dark" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[13px] font-semibold">{c.name}</span>
-                    <span className="block text-[11px] text-muted">{c.what}</span>
-                  </span>
-                  {c.state === "on" ? (
-                    <>
-                      <Pill tone="good">Connected</Pill>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setConnections((cur) => cur.map((x) => (x.id === c.id ? { ...x, state: "off" } : x)))
-                        }
-                        className="text-[11px] font-semibold text-muted transition-colors hover:text-ink"
-                      >
-                        Disconnect
-                      </button>
-                    </>
-                  ) : (
-                    <PressButton
-                      onClick={() =>
-                        setConnections((cur) => cur.map((x) => (x.id === c.id ? { ...x, state: "on" } : x)))
-                      }
-                      className="press-ring rounded-full bg-accent-dark px-4 py-2 text-[11.5px] font-semibold text-page"
-                    >
-                      Connect
-                    </PressButton>
-                  )}
-                </li>
-              ))}
-            </ul>
-            <p className="mt-4 text-[10.5px] leading-relaxed text-muted">
-              Wireframe — the buttons flip the label; the OAuth flows land with sign-in.
-            </p>
-          </div>
-        )}
+            <div className="space-y-2.5 pb-20 sm:pb-0">
+              {/* Their mailbox and diary. Real OAuth: it hands off to Microsoft
+                  and comes back, and the pill is read from the stored token. */}
+              <ConnectionTile
+                icon="calendar"
+                name="Microsoft 365"
+                what="Your diary and email - the calendar is yours and sends really go out"
+                live={setup?.emailConnected === true}
+                pending={setup === null}
+                onConnect={() => { window.location.href = "/api/auth/microsoft/start?from=profile"; }}
+                onDisconnect={async () => {
+                  await fetch("/api/auth/microsoft/disconnect", { method: "POST" }).catch(() => null);
+                  loadSetup();
+                }}
+              />
 
-        {/* ══ PORTALS — the customer-facing fronts, previewable from here. ══ */}
-        {tab === "portals" && (
-          <div className="max-w-2xl">
-            <p className="mb-4 text-[12.5px] leading-relaxed text-muted">
-              The two customer fronts of the OS — brand red, corporate type, no
-              illustrations, deliberately NOT this product&apos;s look. Preview them
-              exactly as a customer sees them.
-            </p>
-            <div className="grid gap-4 sm:grid-cols-2">
-              {(
-                [
-                  {
-                    title: "Tenant portal",
-                    who: "Sent with the GDPR welcome when a tenant is registered.",
-                    what: "Their viewings (reschedulable), homes picked for them, offers online, guides, and the landlord-facing profile builder.",
-                    href: "/tenant/welcome",
-                  },
-                  {
-                    title: "Landlord portal",
-                    who: "Sent when the terms of business come back signed.",
-                    what: "The letting's progress and offers, the sitting tenant and rent, compliance certificates, upkeep approvals, documents down and up.",
-                    href: "/landlord/welcome",
-                  },
-                ]
-              ).map((c) => (
-                <div key={c.title} className="rounded-2xl border border-line/70 p-5">
-                  <p className="flex items-center gap-2 text-[14px] font-semibold">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#e31f36] text-[9px] font-extrabold text-white">
-                      TLE
-                    </span>
-                    {c.title}
-                  </p>
-                  <p className="mt-2 text-[11px] font-semibold text-accent-dark">{c.who}</p>
-                  <p className="mt-1.5 text-[12px] leading-relaxed text-muted">{c.what}</p>
-                  <a
-                    href={c.href}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-4 inline-flex items-center gap-2 rounded-full bg-[#e31f36] px-4 py-2 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
-                  >
-                    Open the preview →
-                  </a>
-                </div>
-              ))}
+              {/* REX signs in with their own credentials, so it brings its own
+                  form. Same tile shape as the other two. */}
+              <RexSignIn onChange={loadSetup} />
+
+              <ConnectionTile
+                icon="message"
+                name="WhatsApp Business"
+                what="Message applicants where they actually reply"
+                live={false}
+                pending={false}
+                note="Not switched on yet. When it is, this is where you will connect your own number."
+              />
             </div>
-            <p className="mt-4 text-[10.5px] leading-relaxed text-muted">
-              Both sit outside the office access code — customers get their own doors
-              (magic link → password). Sign-in and per-customer data land with the
-              database.
-            </p>
           </div>
         )}
 

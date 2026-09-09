@@ -36,6 +36,12 @@ export default function PersonalCompliance() {
   const [doneAt, setDoneAt] = useState(today());
   const [note, setNote] = useState("");
   const [link, setLink] = useState("");
+  /* James, 9 Sep 2026: marking it done was not enough - the certificate has to
+     land on their file. The document goes into the agency's own store and the
+     link we keep points at it, so "where it is" can be the thing itself rather
+     than a Dropbox URL that dies. */
+  const [fileName, setFileName] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,6 +61,7 @@ export default function PersonalCompliance() {
     setDoneAt(i.doneAt ?? today());
     setNote(i.note);
     setLink(i.link);
+    setFileName("");
     setError(null);
   }
 
@@ -203,11 +210,47 @@ export default function PersonalCompliance() {
                 Runs out {expiryFor(doneAt, marking.requirement.renewsMonths)}.
               </p>
             )}
+            <label className="mt-3 flex cursor-pointer items-center gap-2.5 rounded-xl border border-dashed border-line/80 px-3 py-2.5 text-[12.5px] transition-colors hover:border-ink/40">
+              <DoodleIcon name="upload" size={14} className="shrink-0 text-accent-dark" />
+              <span className="min-w-0 flex-1 truncate">
+                {uploading ? "Uploading\u2026" : fileName || "Upload the certificate (optional)"}
+              </span>
+              {fileName && !uploading && (
+                <span className="shrink-0 text-[11px] font-semibold text-muted">Replace</span>
+              )}
+              <input
+                type="file"
+                accept="application/pdf,image/*"
+                className="hidden"
+                disabled={uploading}
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!f || !marking) return;
+                  setUploading(true);
+                  setError(null);
+                  try {
+                    const body = new FormData();
+                    body.set("file", f);
+                    body.set("scope", "document");
+                    body.set("ref", `agent-compliance-${marking.requirement.id}`);
+                    const j = await fetch("/api/r2/upload", { method: "POST", body }).then((r) => r.json());
+                    if (!j.ok) throw new Error(j.error ?? "That did not upload.");
+                    setLink(j.url);
+                    setFileName(j.name ?? f.name);
+                  } catch (err) {
+                    setError(err instanceof Error ? err.message : "That did not upload.");
+                  } finally {
+                    setUploading(false);
+                  }
+                }}
+              />
+            </label>
             <input
               value={link}
-              onChange={(e) => setLink(e.target.value)}
-              placeholder="A link to where it is (optional)"
-              className="mt-3 block w-full rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[13px] outline-none focus:border-ink"
+              onChange={(e) => { setLink(e.target.value); setFileName(""); }}
+              placeholder="Or paste a link to where it is (optional)"
+              className="mt-2 block w-full rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[13px] outline-none focus:border-ink"
             />
             <textarea
               value={note}
