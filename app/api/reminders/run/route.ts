@@ -9,10 +9,11 @@ import { worksSweep } from "@/lib/works-sweep";
  *
  *   curl -X POST -H "x-cron-key: $CRON_SECRET" https://tle-os.co.uk/api/reminders/run
  *
- * Every ten minutes from a Railway cron. Works out, for every person with
- * an OS account, what on their book needs them today (lib/reminders), writes
- * it to os_reminders, and clears whatever has been dealt with since. An
- * owner can also press it to see the run's own account of itself.
+ * Hourly at five past, from the os-cron-reminders service on Railway. Works
+ * out, for every person with an OS account, what on their book needs them
+ * today (lib/reminders), writes it to os_reminders, and clears whatever has
+ * been dealt with since. An owner can also press it to see the run's own
+ * account of itself.
  */
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
