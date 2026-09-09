@@ -6,46 +6,146 @@ import { districtOf } from "@/lib/ma-research";
 /**
  * HMO licences, from the councils' public registers.
  *
- * Every licensing council must publish a register. West Northamptonshire
- * publishes a redacted PDF each month: category, households, people, licence
- * date, address, postcode, the issuing body, a reference, and the expiry.
- * No holder name in the redacted file. That is still plenty: an HMO is a
- * portfolio landlord's property by definition, and a licence about to run
- * out is a landlord with council paperwork ahead of them.
+ * ── The one fact that shapes all of this ──────────────────────────────────
  *
- * ── How the file is found ─────────────────────────────────────────────────
+ * Every licensing council must keep a register under s.232 of the Housing
+ * Act 2004, and the statutory register has to carry the licence holder's
+ * name and address. What a council chooses to PUBLISH is a different
+ * question, and the answer is different in every council. Checked by hand
+ * on 9 September 2026, against the real files rather than the council's
+ * description of them:
+ *
+ *   Camden          name AND correspondence address, plus the manager's,
+ *                   over an open data API. Complete, and free.
+ *   Leicester       first and last name, no address. Free CSV.
+ *   Milton Keynes   Licence Holder and Manager/Agent columns, in an XLSX.
+ *   West Northants  redacted PDF: no name at all.
+ *   Bristol         addresses only; the full register on request.
+ *   Enfield         the full register, for a fee of £129.40.
+ *
+ * So a national Bond cannot assume one shape. The register catalogue below
+ * records, per council, what is actually in the published file, so that the
+ * Owners room can say "free name here, £7 title needed there" honestly
+ * instead of guessing.
+ *
+ * ── Read the notice before using a name ───────────────────────────────────
+ *
+ * Camden stamps every row of its register with a warning that it is not
+ * intended for marketing and that nobody in it has consented to that use.
+ * Postal marketing does not need consent - PECR does not cover post - but
+ * UK GDPR still does, and a publisher saying this out loud weighs against
+ * us in the legitimate interests balancing test. `notice` carries that text
+ * so nothing downstream can use a name without it being visible. James
+ * decides whether a register with a notice is used at all; the sync holds
+ * the data either way, because knowing who owns a door is also how we avoid
+ * paying £7 to find out.
+ *
+ * ── How the West Northants PDF is read ────────────────────────────────────
  *
  * The PDF's name carries the month, so the link is read off the council's
  * register page each run rather than pinned. If the page changes shape the
- * run fails loudly with the page URL, and nothing is written.
- *
- * ── How it is read ────────────────────────────────────────────────────────
- *
- * pdf-parse with a page renderer that keeps a space between text items -
- * its default runs cells together ("Mandatory6627/02/2023...") and nothing
- * can be parsed out of that. With spaces, each licence is one match of a
- * single pattern. Measured on the February 2026 file: 1,122 licences, 41 of
- * them expiring between September and December 2026.
- *
- * Other councils in the patch (Milton Keynes, Bedford, North Northants)
- * publish differently and are not read yet; the sync reports which councils
- * it knows about.
+ * run fails loudly with the page URL, and nothing is written. pdf-parse with
+ * a page renderer that keeps a space between text items - its default runs
+ * cells together ("Mandatory6627/02/2023...") and nothing can be parsed out
+ * of that. Measured on the February 2026 file: 1,122 licences, 41 of them
+ * expiring between September and December 2026.
  */
+
+/** How the council publishes it. Only `pdf` is read so far. */
+export type RegisterFormat = "pdf" | "csv" | "xlsx" | "api" | "search" | "request";
+
+/** What the PUBLISHED register carries about the person behind the door. */
+export type HolderData =
+  /** Name and a correspondence address: enough to post to, on its own. */
+  | "name_and_address"
+  /** A name but nowhere to send it. Still worth having: it turns a £7 title
+   *  from a discovery into a confirmation, and it finds portfolios. */
+  | "name_only"
+  /** Published redacted. The name exists on the statutory register but not
+   *  in the file, so it is a written request or nothing. */
+  | "none"
+  /** Supplied on request, usually free, usually as a spreadsheet. */
+  | "on_request"
+  /** Supplied for a fee. */
+  | "paid";
 
 interface RegisterSource {
   council: string;
   page: string;
-  /** Finds the current PDF link on the page. */
-  link: RegExp;
+  format: RegisterFormat;
+  /** The file or endpoint itself, where the council publishes one directly. */
+  data?: string;
+  /** Finds the current file on the page, when the name moves with the month. */
+  link?: RegExp;
+  holder: HolderData;
+  /** Only where the council prints one. Shown wherever a name from here is. */
+  notice?: string;
+  /** ISO date this was last checked by hand, and how. Empty means the entry
+   *  came from the council's own description and has not been opened yet. */
+  checked?: string;
 }
 
+/**
+ * The councils Bond knows how to read, or knows what it would find.
+ *
+ * Ordered by what TLE actually touches: the flagged doors sit in Northants,
+ * Milton Keynes and Bedford; the managed book reaches Edinburgh, Bristol,
+ * Devon, Leicester, Coventry and London. Scotland and Wales are not in here
+ * at all, and that is deliberate - both already run a single national
+ * landlord register, so they are a different and much easier problem than
+ * England's 300-odd councils. See the note in bond.ts.
+ */
 export const HMO_REGISTERS: RegisterSource[] = [
   {
     council: "West Northamptonshire",
     page: "https://www.westnorthants.gov.uk/private-housing-tenants-and-landlords/houses-multiple-occupation-hmos/hmo-public-register-and",
     link: /href="([^"]*HMO[^"]*Register[^"]*\.pdf)"/i,
+    format: "pdf",
+    holder: "none",
+    checked: "2026-09-09: read; 1,120 licences held, no holder name in the file",
   },
+  {
+    council: "Camden",
+    page: "https://opendata.camden.gov.uk/Housing/HMO-Licensing-Register/x43g-c2rf",
+    data: "https://opendata.camden.gov.uk/api/v3/views/x43g-c2rf/query.csv",
+    format: "api",
+    holder: "name_and_address",
+    notice:
+      "Camden: this register is intended for identifying licensed HMOs and management arrangements. It is not intended for marketing purposes and nobody named in it has consented to that use.",
+    checked: "2026-09-09: fetched; name_of_licence_holder, address_of_licence_holder, name_of_person_managing, address_of_manager, lat/long",
+  },
+  {
+    council: "Leicester",
+    page: "https://data.leicester.gov.uk/explore/dataset/public-register-of-licenced-hmos/",
+    data: "https://data.leicester.gov.uk/explore/dataset/public-register-of-licenced-hmos/download/?format=csv",
+    format: "csv",
+    holder: "name_only",
+    checked: "2026-09-09: fetched; 884 rows, landlord_first_name and landlord_last_name, no address",
+  },
+  {
+    council: "Milton Keynes",
+    page: "https://www.milton-keynes.gov.uk/housing/houses-multiple-occupation-hmo",
+    data: "https://www.milton-keynes.gov.uk/sites/default/files/2025-02/HMOs%20Licensed%20Public%20Register.xlsx",
+    format: "xlsx",
+    holder: "name_and_address",
+    checked: "2026-09-09: fetched; Licence Holder and Manager/Agent columns, holder address alongside",
+  },
+  /* Known of, not yet opened. The holder column is what the council says it
+     publishes, so treat it as a lead to check rather than a fact. */
+  { council: "North Northamptonshire", page: "https://www.northnorthants.gov.uk/licensing/licensing-register", format: "search", holder: "name_only" },
+  { council: "Bedford", page: "https://www.bedford.gov.uk/housing/houses-multiple-occupation-hmo/hmo-licensing", format: "xlsx", holder: "name_only" },
+  { council: "Bristol", page: "https://www.bristol.gov.uk/licences-permits/register-of-licensed-properties", format: "request", holder: "on_request" },
+  { council: "Enfield", page: "https://www.enfield.gov.uk/services/housing/houses-in-multiple-occupation", format: "request", holder: "paid" },
+  { council: "Coventry", page: "https://www.coventry.gov.uk/licensing-regulation/hmo-licensing/16", format: "search", holder: "name_only" },
+  { council: "Warwick", page: "https://www.warwickdc.gov.uk/downloads/download/1372/hmo_public_register", format: "csv", holder: "name_only" },
+  { council: "Hounslow", page: "https://data.hounslow.gov.uk/@london-borough-of-hounslow/register-of-licensed-hmos", format: "csv", holder: "name_only" },
+  { council: "Barnet", page: "https://www.data.gov.uk/dataset/hmo-register", format: "csv", holder: "name_only" },
 ];
+
+/** Councils whose published register is enough to write to somebody. */
+export const REGISTERS_WITH_A_NAME = HMO_REGISTERS.filter(
+  (r) => r.holder === "name_and_address" || r.holder === "name_only"
+);
 
 const ROW =
   /(Mandatory|Additional|TEN|Selective)\s+(\d+)\s+(\d+)\s+(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+([A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2})\s+(.+?)\s+(\S+)\s+(\d{2}\/\d{2}\/\d{4})/g;
@@ -108,6 +208,11 @@ export async function syncHmoRegister(council: string, opts: { localPdf?: string
   if (!hasDb()) return { ok: false, reason: "no database" };
   const src = HMO_REGISTERS.find((r) => r.council === council);
   if (!src) return { ok: false, reason: `No register known for ${council}. Known: ${HMO_REGISTERS.map((r) => r.council).join(", ")}.` };
+  /* The catalogue knows about more councils than the reader can open. Say so
+     plainly rather than failing halfway through a run. */
+  if (!opts.localPdf && (src.format !== "pdf" || !src.link)) {
+    return { ok: false, reason: `${council} publishes its register as ${src.format}, and only the PDF reader is built. Nothing was written.` };
+  }
   const wanted = new Set((await q<{ district: string }>(`SELECT district FROM os_radar_districts`)).map((r) => r.district));
 
   const [run] = await q<{ id: number }>(`INSERT INTO os_hmo_sync (council, file_name) VALUES ($1, $2) RETURNING id`, [council, opts.localPdf ?? ""]);
@@ -121,7 +226,7 @@ export async function syncHmoRegister(council: string, opts: { localPdf?: string
       const page = await fetch(src.page, { cache: "no-store", headers: { "User-Agent": "Mozilla/5.0 TLE-OS Bond" }, signal: AbortSignal.timeout(30_000) });
       if (!page.ok) throw new Error(`The register page answered ${page.status}: ${src.page}`);
       const html = await page.text();
-      const m = src.link.exec(html);
+      const m = src.link!.exec(html);
       if (!m) throw new Error(`No register PDF link found on ${src.page}`);
       const url = new URL(m[1], src.page).toString();
       file = decodeURIComponent(url.split("/").pop() ?? "register.pdf");

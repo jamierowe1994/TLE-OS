@@ -35,7 +35,13 @@ export async function POST(req: NextRequest) {
   const p = req.nextUrl.searchParams;
   if (p.get("match")) return NextResponse.json({ ok: true, ...(await matchHmoLicences()) });
   const local = process.env.NODE_ENV !== "production" ? p.get("local") ?? undefined : undefined;
-  const councils = p.get("council") ? [p.get("council")!] : HMO_REGISTERS.map((r) => r.council);
+  /* The catalogue lists every council Bond knows of; only some have a reader.
+     A run with no council named does the ones that can actually be read, so a
+     nightly sync does not report eleven failures for registers nobody has
+     written a parser for yet. Naming one explicitly still says why it cannot. */
+  const councils = p.get("council")
+    ? [p.get("council")!]
+    : HMO_REGISTERS.filter((r) => r.format === "pdf" && r.link).map((r) => r.council);
   const results = [];
   for (const c of councils) results.push({ council: c, ...(await syncHmoRegister(c, { localPdf: local })) });
   const ok = results.every((r) => r.ok);
