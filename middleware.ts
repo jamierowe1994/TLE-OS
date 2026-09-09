@@ -177,6 +177,14 @@ const MACHINE_ROUTES = [
      in x-cron-key and fails shut without one, like the other crons. It only
      ever runs in shadow: live reads, nothing written. */
   "/api/handover/scan",
+  /* The reminders, hourly. This was the bug the whole comment above is about,
+     found 9 Sep 2026: the route had been written and never scheduled, and
+     the moment it was scheduled it would have answered 307 to /sign-in, which
+     a scheduler reads as success. Nothing would have run and nothing would
+     have complained. Meets the precondition: with no CRON_SECRET the key
+     comparison fails and the route answers 401, so the redirect was never
+     what protected it. */
+  "/api/reminders/run",
 ];
 
 export async function middleware(req: NextRequest) {
