@@ -308,11 +308,11 @@ export default function Leads() {
         /* Three layers, not one picture: the wash goes behind the rule, she
            sits on it, and the pot stands on it. See components/LeadsScene. */
         illustrationNode={<LeadsScene />}
-        illustrationHeight={250}
+        illustrationHeight={315}
         /* She is half as wide again as she is tall, where this header's fixed
            text reserve was measured against tall narrow line art. Given the
            aspect it works the room out rather than assuming it. */
-        illustrationAspect={0.7815}
+        illustrationAspect={0.7336}
         /* The underside of her thigh breaks from her legs at 0.670 of the
            artwork — measured off the file, not guessed — so that is where the
            rule goes under her. Her legs and the plant hang below it. */

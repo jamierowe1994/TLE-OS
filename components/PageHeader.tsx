@@ -221,7 +221,10 @@ export default function PageHeader({
      same reason the seat clearance is: the numbers are computed, and Tailwind
      can only see class names it was built with. */
   const SCALES = [0.5, 0.68, 0.88, 1];
-  const wideArt = typeof illustrationAspect === "number" && illustrationAspect > 0.75;
+  /* Told the aspect, work the room out from it - narrow art as much as wide.
+     The fixed steps were measured against roughly 0.7, and the seated lady at
+     0.73 is wider than that: at the fixed 315 the blurb ran 78px under her. */
+  const wideArt = typeof illustrationAspect === "number";
   const artClass = wideArt ? `art-room-${Math.round(illustrationHeight)}-${Math.round(illustrationAspect * 1000)}` : "";
   /* flushRight pins the art to the very corner, so there is no inset to
      reserve. Getting this wrong reserves room that is not there and stops the

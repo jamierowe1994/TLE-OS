@@ -54,14 +54,21 @@ export default function HomeScene({ className = "" }: { className?: string }) {
         :root[data-accent="blush"] .home-scene { background-image: url(/illustrations/home/blush.webp) }
         :root[data-accent="red"]   .home-scene { background-image: url(/illustrations/home/red.webp) }
       `}</style>
-      {/* Dropped so the DOG lands on the rule. The scene is deliberately
-          taller than the header: the window runs off the top and is cut by
-          the window edge, which is the whole point of this artwork. */}
-      <span
-        aria-hidden
-        className={`home-scene absolute left-0 right-0 block h-full ${className}`}
-        style={{ top: `${BELOW_RULE * 100}%` }}
-      />
+      {/* Clipped AT the rule.
+          The box's bottom edge is the line, and overflow-hidden is what makes
+          the drawing stop dead there: the sofa front and the man's trailing
+          leg carry on in the artwork and are simply cut, rather than hanging
+          into the search row. Above, nothing clips - the window runs off the
+          top of the page and is cut by the window edge instead.
+
+          Inside it the scene is dropped so the DOG lands on the line, since
+          he is lying on the sill and that is what the drawing rests on. */}
+      <span aria-hidden className="absolute inset-0 block overflow-hidden">
+        <span
+          className={`home-scene absolute left-0 right-0 block h-full ${className}`}
+          style={{ top: `${BELOW_RULE * 100}%` }}
+        />
+      </span>
     </>
   );
 }

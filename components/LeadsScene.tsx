@@ -27,7 +27,7 @@
 const RULE = 0.6682;
 /** How far the watercolour reaches across it, so the line is put back over
  *  exactly that span and no further. */
-const WASH = { from: 0, to: 0.9387 };
+const WASH = { from: 0, to: 1 };
 
 /* This box's bottom edge IS the rule, so everything is pushed down by
    whatever sits above the line. One offset, because one canvas. */
