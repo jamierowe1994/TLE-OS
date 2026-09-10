@@ -30,7 +30,7 @@ import { hasDb, q } from "@/lib/db";
 /* v4, and the bump is load-bearing: CompProperty now carries `service`, and a
    v3 blob has none, so every let-only home would read as an ordinary managed
    one and be counted as a gap again (7 Sep 2026). */
-const CACHE_KEY = "compliance:v4";
+const CACHE_KEY = "compliance:v5";
 export const FRESH_MS = 60 * 60 * 1000;
 export const STALE_MS = 24 * 60 * 60 * 1000;
 

@@ -216,7 +216,27 @@ export type PresentFees = {
   headline: string | null;
   /** The service level the headline belongs to, when there is more than one. */
   headlineFor: string | null;
-  rows: { label: string; amount: string; note: string | null }[];
+  /**
+   * `amount` is what the slide PRINTS; `pct` and `oneOff` are the same number
+   * in a form arithmetic can be done on.
+   *
+   * Both, rather than one, because they answer different questions and a regex
+   * over the display string would be a silent failure waiting to happen: the
+   * day somebody writes "10% of rent collected (plus VAT)" the parse returns
+   * 10 and the slide quietly prints a fee that is not the fee. The rate card
+   * is typed once; what it costs on THIS property is derived.
+   *
+   * Either may be absent - an office quoting "on application" still has a row.
+   */
+  rows: {
+    label: string;
+    amount: string;
+    note: string | null;
+    /** Percentage of the rent, where the fee is one. */
+    pct?: number | null;
+    /** A flat fee in pounds, where it is one. */
+    oneOff?: number | null;
+  }[];
   /** What is NOT in the fee. Stated here so it is never a surprise later. */
   excluded: string[];
   /** VAT, tie-ins, anything a landlord would rightly want in writing. */
@@ -886,13 +906,45 @@ export const STANDARD_FEES: PresentFees = {
     /* The only row note that survives, because it is corroborated: the Rent &
        Legal Protection slide says it is included as standard on the Experts
        Management Service, at no extra cost. */
-    { label: "Fully managed", amount: "10% of rent", note: "Rent & Legal Protection included" },
-    { label: "Rent collection", amount: "7% of rent", note: null },
-    { label: "Tenant find", amount: "£750 one-off", note: null },
+    { label: "Fully managed", amount: "10% of rent", note: "Rent & Legal Protection included", pct: 10 },
+    { label: "Rent collection", amount: "7% of rent", note: null, pct: 7 },
+    { label: "Tenant find", amount: "\u00a3750 one-off", note: null, oneOff: 750 },
   ],
   excluded: [],
   note: null,
 };
+
+/**
+ * WHAT A RATE COSTS ON ONE PROPERTY.
+ *
+ * A rate card is an abstraction and a landlord has to do the sum in their head
+ * while the agent is still talking - which is the thing James objected to
+ * about the source deck's service comparison in the first place. Once a rent
+ * has been agreed the deck can do it for them, and every figure here is
+ * arithmetic on two numbers we already hold: no estimate, no assumption.
+ *
+ * ── What it deliberately does NOT say ─────────────────────────────────────
+ *
+ * Anything about VAT, and therefore anything about what a landlord is left
+ * with. Whether the fee is quoted plus or including VAT is not confirmed
+ * (James is "90% sure it's plus", which is not a number that goes in front of
+ * a landlord), and a net-income figure computed on the wrong side of that is
+ * out by a fifth on the one page where being straight about money is the whole
+ * argument. The slide restates the rate; the terms of business settle VAT.
+ */
+export function feeOnRent(
+  row: { pct?: number | null; oneOff?: number | null },
+  rentPcm: number
+): { month: number; year: number } | null {
+  if (!rentPcm) return null;
+  if (row.pct != null) return { month: (rentPcm * row.pct) / 100, year: (rentPcm * row.pct * 12) / 100 };
+  /* A one-off is not a monthly cost and must never be divided into one. */
+  if (row.oneOff != null) return { month: 0, year: row.oneOff };
+  return null;
+}
+
+/** Pounds, rounded, the way every slide prints them. */
+export const money = (n: number) => `\u00a3${Math.round(n).toLocaleString("en-GB")}`;
 
 /* ───────────────────────── the sample ───────────────────────── */
 

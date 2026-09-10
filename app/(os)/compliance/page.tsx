@@ -31,7 +31,7 @@ const TONE: Record<CertStatus, string> = {
   ok: "border border-line/80 text-muted",
 };
 
-function CertPill({ cert, name, muted = false }: { cert: CompProperty["certs"][CertKey]; name?: string; muted?: boolean }) {
+function CertPill({ cert, name }: { cert: CompProperty["certs"][CertKey]; name?: string }) {
   const s = statusOf(cert);
   const text =
     s === "expired"
@@ -45,7 +45,7 @@ function CertPill({ cert, name, muted = false }: { cert: CompProperty["certs"][C
             : "in date";
   return (
     <span
-      className={`figures inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${muted ? "border border-line/80 text-muted/70" : TONE[s]}`}
+      className={`figures inline-block whitespace-nowrap rounded-full px-2.5 py-1 text-[10.5px] font-semibold ${TONE[s]}`}
       title={name}
     >
       {text}
@@ -53,7 +53,7 @@ function CertPill({ cert, name, muted = false }: { cert: CompProperty["certs"][C
   );
 }
 
-type Filter = "all" | "expired" | "urgent" | "missing" | "ok" | "letonly";
+type Filter = "all" | "expired" | "urgent" | "missing" | "ok";
 
 export default function Compliance() {
   const [filter, setFilter] = useState<Filter>("all");
@@ -92,9 +92,16 @@ export default function Compliance() {
 
   /* The book carries one record per leased listing, so a home let three
      times came three times; the page shows each home once. */
+  /* One row per home, and let-only homes are not on this screen at all.
+     James, 10 Sep 2026: "if they're let-only, just ignore them completely...
+     the idea should be that we're only showing compliance that we'd actually
+     need to sort ourselves." A certificate we cannot book an engineer for is
+     not a job, and a job list full of things you cannot do stops being read. */
   const BOOK = useMemo(() => {
     const seen = new Set<string>();
-    return source.properties.filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)));
+    return source.properties.filter((p) =>
+      seen.has(p.id) || isLetOnly(p) ? false : (seen.add(p.id), true)
+    );
   }, [source.properties]);
   const urgent = useMemo(() => dueWithin(30, BOOK), [BOOK]);
 
@@ -102,9 +109,6 @@ export default function Compliance() {
   const graded = useMemo(
     () =>
       BOOK.map((p) => {
-        /* Let only is the landlord's duty, so it is graded as itself and
-           counted in none of the four tiles (Michael, 7 Sep 2026). */
-        if (isLetOnly(p)) return { p, worst: "letonly" as const };
         const statuses = headlineCerts(p).map((k) => statusOf(p.certs[k]));
         const worst: CertStatus = statuses.includes("expired")
           ? "expired"
@@ -127,7 +131,6 @@ export default function Compliance() {
     urgent: graded.filter((g) => g.worst === "urgent").length,
     missing: graded.filter((g) => g.worst === "missing").length,
     ok: graded.filter((g) => g.worst === "ok" || g.worst === "watch").length,
-    letonly: graded.filter((g) => g.worst === "letonly").length,
   };
 
   const book = graded.filter(({ p, worst }) => {
@@ -145,7 +148,6 @@ export default function Compliance() {
     { key: "urgent", label: "Due in 30 days", value: counts.urgent, hint: "book the engineer this week", icon: "clock" },
     { key: "missing", label: "No record", value: counts.missing, hint: "can't prove it's safe", icon: "search" },
     { key: "ok", label: "In date", value: counts.ok, hint: "of the managed book", icon: "shield" },
-    { key: "letonly", label: "Let only", value: counts.letonly, hint: "the landlord's duty, not counted", icon: "key" },
   ];
 
   return (
@@ -201,6 +203,7 @@ export default function Compliance() {
             {urgent.map(({ p, key, cert, status }) => {
               const ok = `${p.id}:${key}`;
               const days = cert?.expires ?? null;
+              const over = days == null ? 0 : Math.abs(days);
               const expiry = days == null ? null : new Date(Date.now() + days * 86400000);
               return (
                 <li key={ok}>
@@ -210,11 +213,16 @@ export default function Compliance() {
                     className="grid w-full grid-cols-[74px_minmax(0,1fr)] items-center gap-x-4 gap-y-2 py-3 text-left transition-colors hover:bg-accent-soft/20 md:grid-cols-[74px_minmax(0,1fr)_200px_130px]"
                   >
                     <span className="text-center">
-                      <span className={`figures block text-[22px] leading-none ${status === "expired" ? "text-accent-dark" : ""}`}>
-                        {status === "expired" ? Math.abs(days!) : days}
+                      {/* Past two years, days stop meaning anything: "3,729
+                          days over" reads as a broken number rather than a
+                          certificate that ran out in 2016, which is what it
+                          is. Years past that point, and the expiry date is in
+                          its own column either way. */}
+                      <span className={`figures block leading-none ${over > 730 ? "text-[19px]" : "text-[22px]"} ${status === "expired" ? "text-accent-dark" : ""}`}>
+                        {status !== "expired" ? days : over > 730 ? Math.floor(over / 365) : over}
                       </span>
                       <span className="block text-[9px] font-semibold uppercase tracking-wide text-muted">
-                        {status === "expired" ? "days over" : "days left"}
+                        {status !== "expired" ? "days left" : over > 730 ? "years over" : "days over"}
                       </span>
                     </span>
                     <span className="min-w-0">
@@ -296,7 +304,6 @@ export default function Compliance() {
                     <span className="block text-[10.5px] text-muted">
                       {p.locality}
                       {p.hmo && <span className="ml-1.5 font-semibold text-accent-dark">HMO</span>}
-                      {isLetOnly(p) && <span className="ml-1.5 font-semibold">Let only</span>}
                     </span>
                   </td>
                   {BIG_THREE.map((k) => (
@@ -304,7 +311,7 @@ export default function Compliance() {
                       {k === "gas" && !p.hasGas ? (
                         <span className="text-[10.5px] text-muted/60">no gas</span>
                       ) : (
-                        <CertPill cert={p.certs[k]} name={CERT_META[k].label} muted={isLetOnly(p)} />
+                        <CertPill cert={p.certs[k]} name={CERT_META[k].label} />
                       )}
                     </td>
                   ))}
@@ -312,7 +319,7 @@ export default function Compliance() {
                     {p.hmo ? (
                       <span className="flex gap-1.5">
                         {(["licence", "fire", "pat"] as CertKey[]).map((k) => (
-                          <CertPill key={k} cert={p.certs[k]} name={CERT_META[k].label} muted={isLetOnly(p)} />
+                          <CertPill key={k} cert={p.certs[k]} name={CERT_META[k].label} />
                         ))}
                       </span>
                     ) : (

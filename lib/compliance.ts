@@ -109,6 +109,9 @@ export type CompProperty = {
   onRex?: boolean;
   /** REX's lettings service type: "Managed", "Let Only", "Rent Collect". */
   service?: string | null;
+  /** REX PM holds an active letting agreement on this home, which is the
+   *  agency managing it whatever the listing does or does not say. */
+  managedByPm?: boolean;
 };
 
 /**
@@ -119,11 +122,33 @@ export type CompProperty = {
  * and never appears in the month's chase list - the agency cannot book an
  * engineer for a property it does not manage.
  *
- * It is NOT hidden. It keeps its real dates and its own filter, because a
- * certificate falling due on a let-only home is exactly when Bond should be
- * ringing the landlord about taking it on management.
+ * James, 10 Sep 2026, went further: a let-only home should not be on this
+ * screen at all. "The idea should be that we're only showing compliance that
+ * we'd actually need to sort ourselves." So it is now dropped from the book
+ * rather than shown in a tile of its own - the certificate is real, but it is
+ * not a job anybody here can do, and a list of jobs you cannot do is a list
+ * people stop reading.
+ *
+ * REX PM's agreement wins over a stale listing: a home the agency holds an
+ * active letting agreement on is managed, whatever an old let-only advert
+ * says, so `managedByPm` is checked before the service type.
  */
-export const isLetOnly = (p: CompProperty): boolean => p.service === "Let Only";
+export const isLetOnly = (p: CompProperty): boolean =>
+  p.service === "Let Only" && !p.managedByPm;
+
+/**
+ * Ours to sort, or somebody else's?
+ *
+ * Not the inverse of let-only: a home with no service type recorded ANYWHERE
+ * and no letting agreement in REX PM is a home nobody has told us we manage,
+ * and it is honest to say so rather than to guess either way.
+ */
+export function whoseJob(p: CompProperty): "ours" | "landlord" | "unknown" {
+  if (p.managedByPm) return "ours";
+  if (p.service === "Let Only") return "landlord";
+  if (p.service) return "ours";
+  return "unknown";
+}
 
 /**
  * What this property is REQUIRED to hold.

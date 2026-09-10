@@ -164,10 +164,29 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
      property for but does not mark as let comes in under its REX property,
      so its REX certificates are read like any other. */
   const osProps = await activeOsProperties().catch(() => []);
-  const listings = [...subjects];
-  const present = new Set(subjects.map((l) => String(l.propertyId)));
+  /* One row per property.
+     A home REX has listed twice - re-let, or advertised by two branches -
+     arrived twice, and the book carried 664 rows for 520 homes. The screen
+     de-duplicated for display, so nobody saw double, but every count taken
+     from the book (the blurb's "homes", the tiles, the chase list) counted
+     those homes twice. Keep the subject that knows its service type: that is
+     the whole point of the merge below. */
+  const listings: CertSubject[] = [];
+  const at = new Map<string, number>();
+  for (const s of subjects) {
+    const id = String(s.propertyId);
+    const held = at.get(id);
+    if (held == null) { at.set(id, listings.length); listings.push(s); continue; }
+    if (!listings[held].service && s.service) listings[held] = { ...listings[held], service: s.service };
+  }
+  const present = new Set(at.keys());
+  /* REX PM holds an active letting agreement on these, which IS the agency
+     managing the home - so they are ours to chase even when no listing spells
+     out a service type. */
+  const pmManaged = new Set<string>();
   for (const o of osProps) {
     const id = o.rexPropertyId ?? o.id;
+    pmManaged.add(String(id));
     if (present.has(id)) continue;
     present.add(id);
     listings.push({ propertyId: id, name: o.name || o.address, locality: o.locality, epcExpiry: null });
@@ -213,9 +232,31 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
     return res.ok ? (rexRows(res.result) as Row[]) : [];
   }).catch(() => [] as Row[][]);
 
+  /**
+   * The service type, off the same rows.
+   *
+   * It used to come only from the current rental book, so a home that is not
+   * on the market right now had none - 541 of 664 rows carried `service:
+   * null`, and "let only is the landlord's duty" could not be applied to any
+   * of them. This call already asks REX for every listing on every property in
+   * the book, past ones included, so the answer is sitting in the response we
+   * have: reading it costs nothing and more than doubles the coverage.
+   *
+   * A home let on both bases over its life keeps BOTH, and counts as ours -
+   * the safe way round, since dropping a managed home from the chase list is
+   * the expensive mistake and carrying a let-only one is merely noise.
+   */
+  const serviceByProperty = new Map<string, Set<string>>();
   for (const row of peopleResults.flat()) {
     const pid = String((row.property as Row | null)?.id ?? row.property_id ?? "");
     if (!pid) continue;
+    const raw = row.lettings_service_type as string | { text?: string } | null | undefined;
+    const svc = (typeof raw === "string" ? raw : (raw?.text ?? "")).trim();
+    if (svc) {
+      const set = serviceByProperty.get(pid);
+      if (set) set.add(svc);
+      else serviceByProperty.set(pid, new Set([svc]));
+    }
     const relns = ((row.related ?? {}) as Row).contact_reln_listing;
     if (!Array.isArray(relns)) continue;
     const landlords: string[] = [];
@@ -246,6 +287,20 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
     if (list) list.push(e);
     else byProperty.set(key, [e]);
   }
+
+  /**
+   * One service type per home: the listing's own, else whatever REX's other
+   * listings for that property say. "Let Only" only wins when every listing
+   * agrees, because one managed let is enough to make the home ours.
+   */
+  const serviceOf = (pid: string, own: string | null | undefined): string | null => {
+    if (own) return own;
+    const seen = serviceByProperty.get(pid);
+    if (!seen || !seen.size) return null;
+    const all = [...seen];
+    const managed = all.find((s) => !/let\s*only/i.test(s));
+    return managed ?? all[0];
+  };
 
   let withCertificate = 0;
   let gasUnknown = 0;
@@ -302,7 +357,8 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       tenant: tenantNames.length ? tenantNames.join(", ") : who || sitting ? null : undefined,
       hmo: mine.some((e) => HMO_TYPES.includes(e.type_id ?? "")),
       hasGas: hasGasRecord && !gasNotRequired,
-      service: l.service ?? null,
+      service: serviceOf(String(l.propertyId), l.service),
+      managedByPm: pmManaged.has(String(l.propertyId)),
       certs,
     };
   });
