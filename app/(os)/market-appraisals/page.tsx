@@ -172,9 +172,11 @@ export default function MarketAppraisals() {
       <PageHeader
         title="Market Appraisals"
         blurb="Booked, prepared, appraised, won. Everything between a landlord saying yes to a visit and signing terms."
-        illustration="/illustrations/people/real-estate-agent.svg"
-        /* The line runs straight through her. She is framed by it rather than
-           standing on it, so there is no weight to bend it. */
+        illustration="/illustrations/thinking-man.png"
+        illustrationHeight={215}
+        /* The artwork is cropped at the thigh, so its bottom edge IS the rule:
+           with no seat and no dip he is dropped by nothing and the crop lands
+           exactly on the line, which reads as him standing behind it. */
         lineBreak="none"
         actions={
           <div className="flex items-center gap-2">

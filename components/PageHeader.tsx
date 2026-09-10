@@ -103,6 +103,20 @@ export default function PageHeader({
   /** Illustration height — it stands on the rule and reaches most of the way
    *  up, stopping short of the top. */
   illustrationHeight = 190,
+  /**
+   * width ÷ height of the artwork, for art that is WIDER than the roughly
+   * 0.7 this header has always assumed.
+   *
+   * The text block reserves the figure's footprint as right-padding, in fixed
+   * steps that were measured against tall, narrow line drawings. A wide piece
+   * — the seated lady is 1.145, half as wide again as she is tall — overruns
+   * that reserve and the blurb runs under her. Given the aspect, the reserve
+   * is computed from the real width instead of assumed, at every breakpoint.
+   *
+   * Only ever widens. Pages that do not pass it keep the measured steps
+   * exactly as they were.
+   */
+  illustrationAspect,
   /** How the rule behaves where the figure meets it. */
   lineBreak = "dip",
   /**
@@ -144,8 +158,14 @@ export default function PageHeader({
    * cropped to his legs because his hands rest on the ledge and his top half
    * has nothing behind it, where someone stood on the line is against the wall
    * head to foot.
+   *
+   * Left undefined it follows the seat: a seated figure casts, anyone else
+   * does not. Pass it explicitly to overrule that either way — `false` on a
+   * seated figure whose artwork carries a painted background, because the
+   * mask is the file's ALPHA and a coloured wash would throw the shape of
+   * the wash rather than the shape of a person.
    */
-  shadow = false,
+  shadow,
   /** Pin the figure hard into the corner instead of the standard inset —
    *  the dashboard's window lives in the corner of the room. */
   flushRight = false,
@@ -166,6 +186,7 @@ export default function PageHeader({
   /** A live illustration (e.g. the window scene) in place of a static file. */
   illustrationNode?: React.ReactNode;
   illustrationHeight?: number;
+  illustrationAspect?: number;
   lineBreak?: LineBreak;
   seat?: number;
   seatCut?: { left: number; right: number };
@@ -183,6 +204,18 @@ export default function PageHeader({
   const dipWidth = Math.round(illustrationHeight * (lineBreak === "sink" ? 0.82 : 0.66));
 
   const seated = typeof seat === "number";
+  /* Undefined means "follow the seat"; an explicit value wins. */
+  const castsShadow = shadow ?? seated;
+
+  /* The figure's own footprint, at each breakpoint's scale, plus how far it
+     is inset from the right and a little air. Written as real CSS for the
+     same reason the seat clearance is: the numbers are computed, and Tailwind
+     can only see class names it was built with. */
+  const SCALES = [0.5, 0.68, 0.88, 1];
+  const wideArt = typeof illustrationAspect === "number" && illustrationAspect > 0.75;
+  const artClass = wideArt ? `art-room-${Math.round(illustrationHeight)}-${Math.round(illustrationAspect * 1000)}` : "";
+  const inset = seated ? [20, 32, 158, 166] : [20, 32, 48, 56];
+  const reserve = SCALES.map((sc, i) => Math.round(illustrationHeight * (illustrationAspect ?? 0.7) * sc) + inset[i] + 14);
   const hanging = typeof grip === "number";
   /* Where the rule crosses the artwork, and therefore how far the figure has
      to drop for that point to land on it. A seated figure is cut roughly in
@@ -276,6 +309,14 @@ export default function PageHeader({
           }
         `}</style>
       )}
+      {wideArt && (
+        <style>{`
+          .${artClass} { padding-right: ${reserve[0]}px }
+          @media (min-width: 640px) { .${artClass} { padding-right: ${reserve[1]}px } }
+          @media (min-width: 1024px) { .${artClass} { padding-right: ${reserve[2]}px } }
+          @media (min-width: 1280px) { .${artClass} { padding-right: ${reserve[3]}px } }
+        `}</style>
+      )}
       {seated && (
         <style>{`
           .${seatClass} { margin-top: ${clearance[0]}px; margin-bottom: ${footroom[0]}px }
@@ -296,7 +337,9 @@ export default function PageHeader({
           className={`self-start pl-2 pt-[68px] ${
             !hasArt
               ? ""
-              : seated
+              : wideArt
+                ? artClass
+                : seated
                 ? /* A seated figure is set in from the corner from lg up, so
                      his footprint starts further left and the blurb has to
                      stop sooner or it runs under his arm. */
@@ -373,7 +416,7 @@ export default function PageHeader({
                 </div>
               ) : (
                 <span className="relative block h-full">
-                  {(seated || shadow) && (
+                  {castsShadow && (
                     /*
                      * The shadow his legs throw on the wall below the ledge.
                      *

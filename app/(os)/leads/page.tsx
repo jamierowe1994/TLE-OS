@@ -304,15 +304,23 @@ export default function Leads() {
                 }.${source.onFile ? ` ${source.onFile.toLocaleString("en-GB")} kept on file in the OS.` : ""}`
               : (source.reason ?? "New enquiries from the portals, your ads and the website.")
         }
-        illustration="/illustrations/sitting-man.png"
-        illustrationHeight={260}
-        /* His braced hands stop at 0.554 of the artwork — measured off the
-           file, not guessed — so that is where the rule goes under him. */
-        seat={0.554}
-        /* His braced hands rest ON the ledge, so they must not cast. */
-        seatCut={{ left: 18, right: 24 }}
-        /* No dip and no break: he is sitting ON the line, and his own body
-           hides it where he is. A trough would read as the line sagging. */
+        illustration="/illustrations/sitting-lady.png"
+        illustrationHeight={250}
+        /* She is half as wide again as she is tall, where this header's fixed
+           text reserve was measured against tall narrow line art. Given the
+           aspect it works the room out rather than assuming it. */
+        illustrationAspect={1.145}
+        /* The underside of her thigh breaks from her legs at 0.670 of the
+           artwork — measured off the file, not guessed — so that is where the
+           rule goes under her. Her legs and the plant hang below it. */
+        seat={0.67}
+        /* No shadow, unlike the line-art man she replaces. The shadow is the
+           file's own ALPHA used as a mask, and this artwork carries a painted
+           pink wash behind her - so it would throw the shape of the wash
+           rather than the shape of a person. */
+        shadow={false}
+        /* No dip and no break: she is sitting ON the line, and her own body
+           hides it where she is. A trough would read as the line sagging. */
         lineBreak="none"
         /* The bar under the header is the list's search - one search per
            page (James, 6 Sep 2026). */
