@@ -1,8 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { fetchDiary, type DiaryBook } from "@/lib/rex-diary";
 import { hasDb, q } from "@/lib/db";
 import { rexConfigured } from "@/lib/rex";
 import type { Appt, ApptKind } from "@/lib/diary";
+import { scopeFor } from "@/lib/scope";
+import { whoIs } from "@/lib/admin";
 
 /**
  * The team's diary, cached — same manners as leads and listings.
@@ -59,19 +61,21 @@ async function store(entry: Cached): Promise<void> {
  * you have to see the thing you just saved, and the REX pull is the slow half
  * that the cache exists for. This is one indexed query against our own table.
  */
-async function ours(): Promise<Appt[]> {
+async function ours(authorId: string | null): Promise<Appt[]> {
   if (!hasDb()) return [];
   try {
     const rows = await q<{
       id: string; starts_at: Date; mins: number; kind: string;
-      title: string; where_at: string; who: string; author_name: string;
+      title: string; where_at: string; who: string; author_name: string; author_id: string | null;
     }>(
-      `SELECT id, starts_at, mins, kind, title, where_at, who, author_name
+      `SELECT id, starts_at, mins, kind, title, where_at, who, author_name, author_id
          FROM os_appointments
         WHERE starts_at > NOW() - INTERVAL '21 days'
           AND starts_at < NOW() + INTERVAL '60 days'
           AND rex_event_id IS NULL
-        ORDER BY starts_at`
+          AND ($1::text IS NULL OR author_id = $1)
+        ORDER BY starts_at`,
+      [authorId]
     );
 
     const midnight = new Date();
@@ -127,12 +131,49 @@ function refresh(): Promise<Cached> {
   return refreshing;
 }
 
-export async function GET() {
+/**
+ * WHOSE diary is this?
+ *
+ * It used to be everybody's. This route took no request, asked nothing about
+ * who was calling, and handed the whole office's calendar to anyone signed in
+ * - so an agent could read every colleague's afternoon, and the Viewings
+ * screen offered them an "All agents" picker to do it with. James, 10 Sep
+ * 2026: "other agents shouldn't be able to see this. They should only be able
+ * to see their own diary."
+ *
+ * The REX pull stays whole and shared, because it is the slow half and one
+ * office-wide fetch every two minutes is the point of the cache. The FILTER
+ * happens per request, on the way out.
+ *
+ * Matching is on the calendar owner's mailbox, never the name - see the note
+ * on Appt.agentEmail. An entry we cannot attribute is withheld from a scoped
+ * view rather than shown: showing somebody else's appointment is the failure
+ * that matters, and an agent noticing a gap will ask.
+ */
+function forScope(book: DiaryBook, email: string | null): DiaryBook {
+  if (!email) return book;
+  const want = email.toLowerCase();
+  const appts = book.appts.filter((a) => (a.agentEmail ?? "").toLowerCase() === want);
+  return { ...book, appts, agents: [...new Set(appts.map((a) => a.agent).filter(Boolean))] };
+}
+
+export async function GET(req: NextRequest) {
+  const scope = await scopeFor(req);
+  const { actor } = await whoIs(req);
+  if (!actor) {
+    return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
+  }
+  /* An owner sees the business; everybody else sees their own mailbox. The
+     picker on the Viewings screen is drawn from `everything`, so it simply
+     does not appear for an agent. */
+  const mineOnly = !scope.everything;
+  const email = mineOnly ? (actor.email ?? "").toLowerCase() : null;
+
   /* Ours are read OUTSIDE the cache, every time. The two-minute hold exists
      for the slow REX pull; applying it to our own table would mean saving a
      travel buffer and watching the diary insist it isn't there for another
      minute and a half. */
-  const mine = await ours();
+  const mine = await ours(mineOnly ? actor.id : null);
 
   if (!rexConfigured()) {
     /* No REX here, so the client is showing the sample book. Hand our own
@@ -143,6 +184,7 @@ export async function GET() {
       ok: true,
       live: false,
       mine,
+      everything: scope.everything,
       reason: "REX isn't connected here.",
     });
   }
@@ -150,18 +192,18 @@ export async function GET() {
   const held = memory ?? (await readStored());
   const age = held ? Date.now() - held.at : Infinity;
   if (held && age < FRESH_MS) {
-    return NextResponse.json({ ok: true, live: true, ...merged(held.book, mine), ageMs: age });
+    return NextResponse.json({ ok: true, live: true, ...merged(forScope(held.book, email), mine), everything: scope.everything, ageMs: age });
   }
   if (held && age < STALE_MS) {
     void refresh();
-    return NextResponse.json({ ok: true, live: true, ...merged(held.book, mine), ageMs: age, stale: true });
+    return NextResponse.json({ ok: true, live: true, ...merged(forScope(held.book, email), mine), everything: scope.everything, ageMs: age, stale: true });
   }
   try {
     const fresh = await refresh();
-    return NextResponse.json({ ok: true, live: true, ...merged(fresh.book, mine), ageMs: 0 });
+    return NextResponse.json({ ok: true, live: true, ...merged(forScope(fresh.book, email), mine), everything: scope.everything, ageMs: 0 });
   } catch (e) {
     if (held) {
-      return NextResponse.json({ ok: true, live: true, ...merged(held.book, mine), ageMs: age, stale: true });
+      return NextResponse.json({ ok: true, live: true, ...merged(forScope(held.book, email), mine), everything: scope.everything, ageMs: age, stale: true });
     }
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Couldn't reach REX." }, { status: 502 });
   }

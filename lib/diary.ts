@@ -41,6 +41,15 @@ export type Appt = {
   where: string;
   who: string;
   agent: string;
+  /**
+   * The agent's mailbox, which is who the entry BELONGS to.
+   *
+   * Names are not identity: two people share a first name, a name is typed
+   * differently in two systems, and matching on one is how an agent ends up
+   * looking at somebody else's afternoon. The calendar's owner email is the
+   * only thing REX gives us that is actually the person, so scoping uses it.
+   */
+  agentEmail?: string;
   /** Where it is, roughly — so a booking calendar can say how far this
    *  appointment is from the one being booked. Town-level is enough. */
   lat?: number;

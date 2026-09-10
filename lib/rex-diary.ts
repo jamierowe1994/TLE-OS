@@ -145,6 +145,7 @@ function toAppt(e: RexEvent): Appt | null {
     where: priv ? "" : loc,
     who: priv ? "" : who,
     agent: owner.name,
+    agentEmail: owner.email || undefined,
     ...(Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : {}),
     // We do NOT know from a calendar entry whether the confirmations went,
     // nor whether the property has a sitting tenant. Both are left undefined

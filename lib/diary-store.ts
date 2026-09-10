@@ -25,6 +25,9 @@ interface DiaryState {
   live: boolean;
   loading: boolean;
   agents: string[];
+  /** True only for an owner: the whole office's diary, and the agent picker
+   *  that goes with it. An agent's book is their own and needs no filter. */
+  everything: boolean;
   /** Why the diary is not live, for the screens to say so. */
   error: string | null;
 }
@@ -32,7 +35,7 @@ interface DiaryState {
 /** The server (and first client) snapshot must be the SAME object every
  *  time it's read — returning a fresh literal makes React re-render forever
  *  looking for a stable value. */
-const INITIAL: DiaryState = { appts: [], live: false, loading: true, agents: [], error: null };
+const INITIAL: DiaryState = { appts: [], live: false, loading: true, agents: [], everything: false, error: null };
 
 let state: DiaryState = INITIAL;
 const listeners = new Set<() => void>();
@@ -49,7 +52,7 @@ function load(): Promise<void> {
     .then((j) => {
       if (j.ok && j.live && Array.isArray(j.appts)) {
         // Live book — the server has already merged our own appointments in.
-        set({ appts: j.appts, live: true, loading: false, agents: j.agents ?? [], error: null });
+        set({ appts: j.appts, live: true, loading: false, agents: j.agents ?? [], everything: Boolean(j.everything), error: null });
       } else if (j.ok && Array.isArray(j.mine)) {
         /* No REX on this environment. Appointments made HERE are real and
            still show; nothing stands in for the rest. */
@@ -58,6 +61,7 @@ function load(): Promise<void> {
           live: false,
           loading: false,
           agents: state.agents,
+          everything: Boolean(j.everything),
           error: j.reason ?? "REX isn't connected on this environment.",
         });
       } else {

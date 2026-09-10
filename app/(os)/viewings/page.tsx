@@ -68,7 +68,7 @@ export default function Viewings() {
   /** "apptId:label" for anything sent from the drawer this session. */
   const [sentExtra, setSentExtra] = useState<Set<string>>(new Set());
 
-  const { appts: DIARY, live, loading } = useDiary();
+  const { appts: DIARY, live, loading, everything } = useDiary();
 
   /** Whoever actually appears in this book, in name order. */
   const agents = useMemo(
@@ -249,7 +249,10 @@ export default function Viewings() {
         )}
 
         <div className="ml-auto flex flex-wrap items-center gap-2.5">
-          {agents.length > 1 && (
+          {/* Only an owner has a book to filter. Everybody else is looking at
+              their own diary, so a picker offering colleagues by name would be
+              offering something the server will not answer for anyway. */}
+          {everything && agents.length > 1 && (
             <PickOne
               label="All agents"
               icon="user"
