@@ -145,8 +145,19 @@ export async function fetchViewingsFor(listingId: string, propertyId: string | n
 }
 
 /** Kept for good, then the viewers who are not yet leads become leads. */
-export async function recordViewings(viewings: Viewing[]): Promise<void> {
-  if (!hasDb() || !viewings.length) return;
+export async function recordViewings(incoming: Viewing[]): Promise<void> {
+  if (!hasDb() || !incoming.length) return;
+  /* One id, once per statement.
+     REX returns the same event on every calendar it sits on, so a sweep of the
+     whole office picks an accompanied viewing up two or three times, and
+     Postgres refuses the write outright: "ON CONFLICT DO UPDATE command cannot
+     affect row a second time". The whole batch fails, not the duplicate - which
+     is why the nightly sweep wrote nothing at all for three days while looking,
+     from the outside, like it had run. Last one in wins; they are the same
+     event, so it makes no difference which. */
+  const byId = new Map<string, Viewing>();
+  for (const v of incoming) byId.set(v.id, v);
+  const viewings = [...byId.values()];
   const cols = viewings.map((v) => [v.id, v.listingId, v.propertyId, v.startsAt, v.endsAt, v.mins, v.kind, v.title, v.status, v.cancelled, v.agent, JSON.stringify(v.contacts), v.feedbackId, JSON.stringify(v)]);
   const width = cols[0].length;
   const values = cols.map((_, i) => `(${Array.from({ length: width }, (__, j) => `$${i * width + j + 1}`).join(", ")})`).join(",\n");
