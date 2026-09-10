@@ -148,6 +148,26 @@ h1, h2, h3, h4, h5 {
 }
 .fade-up { animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+/* The page arriving.
+
+   The rail and the top bar never move - Shell lives in the layout, so React
+   keeps that DOM across a navigation and only the content below is swapped.
+   This is what makes the swap read as the new screen rising into the same
+   frame rather than a different page being pasted in.
+
+   Keyed on the PATH, not the query string, so switching Leads between tenant
+   and landlord filters the list in place instead of replaying the whole
+   screen at somebody who only changed a filter.
+
+   Ends at `transform: none` rather than translateY(0). A transform that stays
+   applied makes the element a containing block for anything `fixed` inside
+   it, and the drawers and the document sheet are fixed. */
+@keyframes page-flow {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: none; }
+}
+.page-flow { animation: page-flow 0.36s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
 /* The welcome. The drawing arrives first and settles; the words follow a beat
    later, so it reads as one gesture rather than two things appearing at once.
    Slower and further than fade-up — this is the one moment in the app that is
@@ -421,6 +441,7 @@ h1, h2, h3, h4, h5 {
   .deck-leave,
   .deck-land,
   .fade-up,
+  .page-flow,
   .intro-rise,
   .intro-rise-late,
   .paint-spread,

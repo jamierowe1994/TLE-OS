@@ -36,19 +36,42 @@ function NavLink({
   active,
   collapsed,
   currentHref,
+  open,
+  onToggle,
 }: {
   item: NavItem;
   active: boolean;
   collapsed: boolean;
   currentHref: string;
+  /** Opened by hand, rather than by being the section you are standing in. */
+  open: boolean;
+  onToggle: () => void;
 }) {
-  // Children reveal when the section is active — an always-open tree is just
-  // a longer list, and a click-to-open one hides where you already are.
-  const showChildren = Boolean(item.children && active && !collapsed);
+  /*
+   * A section with children OPENS rather than navigating.
+   *
+   * It used to reveal them only once you were already inside the section,
+   * which meant the only way to see that Leads has a tenant side and a
+   * landlord side was to load the leads page first and find out (James, 10
+   * Sep 2026). Now the parent is a button: it reveals what is underneath and
+   * goes nowhere, and you choose the side you actually wanted.
+   *
+   * Still open while you are standing in the section, so walking into Leads
+   * from anywhere else does not fold the children away behind you.
+   */
+  const hasKids = Boolean(item.children?.length);
+  const showChildren = Boolean(hasKids && !collapsed && (active || open));
+  const asButton = hasKids && !collapsed;
+  const Parent = (asButton ? "button" : Link) as React.ElementType;
   return (
     <>
-      <Link
-        href={item.href}
+      {/* Collapsed, there is nowhere to reveal children TO, so the rail falls
+          back to a plain link rather than offering a click that does nothing
+          anybody can see. */}
+      <Parent
+        {...(asButton
+          ? { type: "button" as const, onClick: onToggle, "aria-expanded": showChildren }
+          : { href: item.href })}
         title={collapsed ? item.label : undefined}
         /* The handle the new-starter tour hangs its spotlight on. The href is
            already unique per item, so this carries no new source of truth -
@@ -59,7 +82,7 @@ function NavLink({
         // The icon NEVER moves on collapse — padding stays constant and only
         // the label folds away, which is what makes the animation read as one
         // smooth motion instead of everything re-arranging at once.
-        className={`hand flex items-center rounded-xl px-3 py-2.5 text-[13.5px] transition-colors ${
+        className={`hand flex w-full items-center rounded-xl px-3 py-2.5 text-left text-[13.5px] transition-colors ${
           active ? "bg-accent-soft/50 font-medium" : "text-muted hover:bg-page hover:text-ink"
         }`}
       >
@@ -75,7 +98,15 @@ function NavLink({
         >
           {item.label}
         </span>
-      </Link>
+        {asButton && (
+          <span
+            aria-hidden
+            className={`ml-auto text-[10px] text-muted transition-transform duration-200 ${showChildren ? "rotate-180" : ""}`}
+          >
+            ▾
+          </span>
+        )}
+      </Parent>
 
       {showChildren && (
         <div className="fade-up ml-[26px] flex flex-col gap-0.5 border-l border-line/70 pl-2.5">
@@ -105,6 +136,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const currentHref = search.toString() ? `${pathname}?${search}` : pathname;
   const router = useRouter();
   const [profileOpen, setProfileOpen] = useState(false);
+  /* Which section has been opened BY HAND. The section you are standing in is
+     open anyway, so this only ever holds one you have reached for from
+     somewhere else - which is the whole point of it. */
+  const [openSection, setOpenSection] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [accent, setAccent] = useState("");
   const [theme, setTheme] = useState<ThemeChoice>("auto");
@@ -258,6 +293,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               active={pathname.startsWith(item.href)}
               collapsed={collapsed}
               currentHref={currentHref}
+              open={openSection === item.href}
+              onToggle={() => setOpenSection((o) => (o === item.href ? null : item.href))}
             />
           ))}
 
@@ -278,6 +315,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               active={pathname.startsWith(item.href)}
               collapsed={collapsed}
               currentHref={currentHref}
+              open={openSection === item.href}
+              onToggle={() => setOpenSection((o) => (o === item.href ? null : item.href))}
             />
           ))}
 
@@ -302,6 +341,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                   active={pathname.startsWith(item.href)}
                   collapsed={collapsed}
                   currentHref={currentHref}
+                  open={openSection === item.href}
+                  onToggle={() => setOpenSection((o) => (o === item.href ? null : item.href))}
                 />
               ))}
             </>
@@ -451,7 +492,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             the last column of a wide table was ending up under him, so the
             content stops 84px short and nothing collides. */}
         <main data-os-content className="w-full flex-1 px-5 pb-28 pt-8 lg:px-10 xl:pr-[84px] 2xl:pl-14">
-          {children}
+          {/* Keyed on the path so the screen replays when you actually change
+              screen, and not when a filter changes the query string. */}
+          <div key={pathname} className="page-flow">
+            {children}
+          </div>
         </main>
       </div>
     </div>
