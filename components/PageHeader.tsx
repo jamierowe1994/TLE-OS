@@ -146,6 +146,18 @@ export default function PageHeader({
    * exactly as they were.
    */
   illustrationAspect,
+  /**
+   * Slide the artwork sideways, in pixels. Positive is right.
+   *
+   * The inset is chosen by KIND - flush, seated, standing - which is right for
+   * every one of them and exact for none. A wide scene wants a few pixels the
+   * other way from a tall figure at the same inset, and the dashboard's
+   * vignette was losing its right-hand corner off the edge of the masthead
+   * (James, 10 Sep 2026). This is the per-page adjustment, and it moves the
+   * whole wrapper, so the dip in the rule travels with the figure rather than
+   * staying where the figure used to be.
+   */
+  illustrationNudge = 0,
   /** How the rule behaves where the figure meets it. */
   lineBreak = "dip",
   /**
@@ -252,6 +264,7 @@ export default function PageHeader({
   backdrop?: string;
   backdropWidth?: number;
   illustrationAspect?: number;
+  illustrationNudge?: number;
   lineBreak?: LineBreak;
   seat?: number;
   seatCut?: { left: number; right: number };
@@ -557,7 +570,16 @@ export default function PageHeader({
                     "right-5 sm:right-8 lg:right-[158px] xl:right-[166px]"
                   : "right-5 sm:right-8 lg:right-12 xl:right-14"
             }`}
-            style={{ height: illustrationHeight }}
+            style={{
+              height: illustrationHeight,
+              /* `translate`, not `transform`: the wrapper already carries a
+                 Tailwind scale per breakpoint, and an inline transform would
+                 clobber it and render the figure at full size on a phone. The
+                 individual property composes with it instead, and lands before
+                 the scale - so the nudge scales down with everything else,
+                 which is what you want. */
+              ...(illustrationNudge ? { translate: `${illustrationNudge}px` } : null),
+            }}
           >
             <div
               className="relative h-full"

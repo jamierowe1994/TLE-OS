@@ -75,10 +75,19 @@ export default function Dashboard() {
            politely above it - the bottom 6% goes under and is erased, which
            takes the front of the rug and a little of his shoe. That is what
            makes it sit in the page rather than on it. */
-        seat={0.94}
+        /* Down again on 10 Sep: 6% under the line was the rug's front edge,
+           and James wanted more of it in the page. 12% takes the rug and the
+           foot of the chair, which is what sits him in the room rather than
+           on the rule. */
+        seat={0.88}
         illustrationCrop
         lineBreak="none"
-        flushRight
+        /* Off the right edge, and back from it.
+           flushRight pinned the scene to right-0 and the masthead cropped its
+           corner - James, 10 Sep: "it feels like it's getting the edge cut
+           off". It keeps the standard inset now and comes in a further 34px,
+           so the whole vignette is inside the frame. */
+        illustrationNudge={-34}
         /* Customise rides the search row — one line of chrome, not two. */
         actions={
           <button

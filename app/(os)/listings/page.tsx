@@ -72,6 +72,19 @@ function statusOf(l: SampleListing): { label: string; tone: "good" | "accent" | 
   return { label: "Draft", tone: "accent" };
 }
 
+/** One labelled fact in a listing row: the icon, the caption, the value. */
+function Fact({ icon, label, value, title }: { icon: string; label: string; value: string; title?: string }) {
+  return (
+    <span className="flex items-center gap-2">
+      <DoodleIcon name={icon} size={13} className="shrink-0 text-accent-dark" />
+      <span className="min-w-0">
+        <span className="block whitespace-nowrap text-[9px] font-semibold uppercase tracking-wide text-muted">{label}</span>
+        <span className="figures block truncate text-[12px]" title={title}>{value}</span>
+      </span>
+    </span>
+  );
+}
+
 /** How many viewings the diary knows about for this address. */
 function viewingsFor(name: string): number {
   return DIARY.filter((a) => a.kind === "viewing" && a.what.includes(name)).length;
@@ -460,7 +473,7 @@ export default function Listings() {
             Nothing matches{period === "any" ? "" : " in that window"} — widen the rent band or clear the filters.
           </p>
         )}
-        <div className={view === "tiles" ? "grid gap-3 sm:grid-cols-2 xl:grid-cols-3" : "space-y-4"}>
+        <div className={`cascade ${view === "tiles" ? "grid gap-3 sm:grid-cols-2 xl:grid-cols-3" : "space-y-4"}`}>
         {board.map((l) => {
           const st = statusOf(l);
           const views = viewingsFor(l.name);
@@ -494,86 +507,70 @@ export default function Listings() {
                   }
                 />
 
-                <div className={view === "tiles" ? "min-w-0 flex-1 px-1 pb-1" : "min-w-0 flex-1 py-2 pr-2"}>
-                  {/* The chips — only what changes decisions. No 'For sale',
-                      no 'Sponsored': everything here is a rental, ours. */}
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <Pill tone={st.tone}>{st.label}</Pill>
-                    {l.tenant && <Pill tone="neutral">Tenanted</Pill>}
-                    {l.imageCount === 0 && <Pill tone="accent">No photos</Pill>}
-                    {l.epcExpiry == null && <Pill tone="neutral">EPC not filed</Pill>}
-                  </div>
-
-                  <h3 className="hand mt-2 truncate text-[19px] leading-tight">{l.name}</h3>
-                  <p className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-muted">
-                    <DoodleIcon name="home-1" size={12} className="shrink-0" />
-                    {l.locality}
-                  </p>
-
-                  {/* The fact row, each cell its own little column. */}
-                  <div className={`mt-4 border-t border-line/50 pt-3 ${
+                <div
+                  className={
                     view === "tiles"
-                      ? "grid grid-cols-2 gap-x-4 gap-y-3"
-                      : "flex flex-wrap items-center gap-x-6 gap-y-2"
-                  }`}>
-                    <span className="flex items-center gap-2">
-                      <DoodleIcon name="calendar" size={13} className="shrink-0 text-accent-dark" />
-                      <span>
-                        <span className="block text-[9px] font-semibold uppercase tracking-wide text-muted">
-                          Available from
-                        </span>
-                        <span className="figures block text-[12px]">{l.availableFrom ?? "Now"}</span>
-                      </span>
-                    </span>
-                    {view !== "tiles" && <span className="hidden h-7 w-px bg-line/60 sm:block" />}
-                    <span className="flex items-center gap-2">
-                      <DoodleIcon name="bed.png" size={13} className="shrink-0 text-accent-dark" />
-                      <span>
-                        <span className="block text-[9px] font-semibold uppercase tracking-wide text-muted">
-                          Bedrooms
-                        </span>
-                        <span
-                          className="figures block text-[12px]"
-                          title="Not in REX's listing projection — captured at the take-on"
-                        >
-                          —
-                        </span>
-                      </span>
-                    </span>
-                    {view !== "tiles" && <span className="hidden h-7 w-px bg-line/60 sm:block" />}
-                    <span className="flex items-center gap-2">
-                      <DoodleIcon name="key" size={13} className="shrink-0 text-accent-dark" />
-                      <span>
-                        <span className="block text-[9px] font-semibold uppercase tracking-wide text-muted">
-                          Viewings so far
-                        </span>
-                        <span className="figures block text-[12px]">{views}</span>
-                      </span>
-                    </span>
-                    {view !== "tiles" && <span className="hidden h-7 w-px bg-line/60 sm:block" />}
-                    <span className="flex items-center gap-2">
-                      <DoodleIcon name="folder" size={13} className="shrink-0 text-accent-dark" />
-                      <span>
-                        <span className="block text-[9px] font-semibold uppercase tracking-wide text-muted">
-                          Photos
-                        </span>
-                        <span className="figures block text-[12px]">{l.imageCount}</span>
-                      </span>
-                    </span>
-                  </div>
-                </div>
+                      ? "min-w-0 flex-1 px-1 pb-1"
+                      : /* ── One row, read across ──────────────────────────
+                           The name truncated on its own line, the four facts
+                           stacked underneath it, and the rent pinned right -
+                           which left a lake of white between the address and
+                           the price and pushed the card taller than it needed
+                           to be. James, 10 Sep 2026: "we have a load of white
+                           space between the property name and the price per
+                           month... I would rather utilise that space and make
+                           this more of a grid... a bit more like applications."
 
-                {/* The money, top right, unmissable. */}
-                <div className="shrink-0 text-right">
+                           So the facts move UP beside the name and become
+                           columns, with the rent as the last one. Fixed
+                           widths from md up so every card's columns line up
+                           down the page - that is what makes it read as a
+                           table rather than as five cards that happen to be
+                           stacked. Below md they wrap, because six columns in
+                           a phone's width is not a table either. */
+                        "grid min-w-0 flex-1 items-center gap-x-4 gap-y-3 py-1 md:grid-cols-[minmax(0,1.35fr)_112px_78px_74px_66px_104px]"
+                  }
+                >
+                  <span className="min-w-0">
+                    {/* The chips — only what changes decisions. No 'For sale',
+                        no 'Sponsored': everything here is a rental, ours. */}
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <Pill tone={st.tone}>{st.label}</Pill>
+                      {l.tenant && <Pill tone="neutral">Tenanted</Pill>}
+                      {l.imageCount === 0 && <Pill tone="accent">No photos</Pill>}
+                      {l.epcExpiry == null && <Pill tone="neutral">EPC not filed</Pill>}
+                    </span>
+                    <span className="hand mt-1.5 block truncate text-[17px] leading-tight">{l.name}</span>
+                    <span className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-muted">
+                      <DoodleIcon name="home-1" size={12} className="shrink-0" />
+                      <span className="truncate">{l.locality}</span>
+                    </span>
+                  </span>
+
+                  {/* The facts, each its own column. Same four as before and
+                      in the same order; they are beside the address now
+                      instead of under it. */}
+                  <Fact icon="calendar" label="Available from" value={l.availableFrom ?? "Now"} />
+                  <Fact
+                    icon="bed.png"
+                    label="Bedrooms"
+                    value="—"
+                    title="Not in REX's listing projection — captured at the take-on"
+                  />
+                  <Fact icon="key" label="Viewings" value={String(views)} />
+                  <Fact icon="folder" label="Photos" value={String(l.imageCount)} />
+
                   {/* A third of the book — mostly drafts — carries no rent at
-                      all. A bare "£" reads as broken; "Rent not set" reads as
+                      all. A bare "£" reads as broken; "rent not set" reads as
                       a job to do, which is what it is. */}
-                  <p className="figures text-[22px] leading-none">
-                    {l.rent == null ? "—" : `£${l.rent.toLocaleString("en-GB")}`}
-                  </p>
-                  <p className="mt-0.5 text-[10px] text-muted">
-                    {l.rent == null ? "rent not set" : rentPeriodLabel(l)}
-                  </p>
+                  <span className="md:text-right">
+                    <span className="figures block text-[20px] leading-none">
+                      {l.rent == null ? "—" : `£${l.rent.toLocaleString("en-GB")}`}
+                    </span>
+                    <span className="mt-0.5 block text-[10px] text-muted">
+                      {l.rent == null ? "rent not set" : rentPeriodLabel(l)}
+                    </span>
+                  </span>
                 </div>
               </div>
             </button>

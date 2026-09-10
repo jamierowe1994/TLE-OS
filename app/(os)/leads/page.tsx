@@ -65,12 +65,28 @@ export default function Leads() {
    * the boxes are for "what has come in and who have I not rung". See
    * components/LeadGroups.
    */
+  /* Groups is the resting shape on a SIDE, and not offered at all on All
+     leads. James, 10 Sep 2026: "the groups under All Leads shouldn't be
+     visible on All Leads, but it should be visible on Tenants... when we
+     first sign into it, it'll always go to Groups unless they click it."
+     Groups asks "what has come in and who have I not rung", which is a
+     question about one pipe - the tenant side or the landlord side. Asked of
+     both at once it is a box of everybody, which is the list again with more
+     scrolling. Held per side below, so a switch to List is remembered while
+     you are on that side and a fresh sign-in starts at Groups. */
   const [view, setView] = useState<"list" | "groups">("list");
   const [fSource, setFSource] = useState<string | null>(null);
   const [fAgent, setFAgent] = useState<string | null>(null);
   const [fStage, setFStage] = useState<string | null>(null);
   const params = useSearchParams();
   const side = params.get("side"); // "tenant" | "landlord" | null (both)
+
+  /* All leads has no Groups, so it is always the list. A side rests on Groups
+     until somebody says otherwise, and changing side forgets that they did -
+     the choice belongs to the question, not to the session. */
+  useEffect(() => {
+    setView(side ? "groups" : "list");
+  }, [side]);
 
   /* ── The real book, out of REX. Until it answers we show the demo one, so
         the page never renders empty; `live` says which you're looking at. ── */
@@ -303,7 +319,8 @@ export default function Leads() {
            Pushed down 4% so the pavement runs into the line and is erased by
            it, the same as every other scene. */
         illustration="/illustrations/to-let-row.webp"
-        illustrationHeight={200}
+        illustrationHeight={240}
+        illustrationNudge={26}
         illustrationAspect={2.6615}
         seat={0.96}
         illustrationCrop
@@ -318,14 +335,16 @@ export default function Leads() {
             {/* The shape switch sits BEFORE the button that makes a lead, and
                 the marker slides between them - the same control as every
                 other choice of two in the OS. */}
-            <Segmented
-              value={view}
-              onChange={setView}
-              options={[
-                { id: "list" as const, label: "List", icon: <DoodleIcon name="list" size={13} /> },
-                { id: "groups" as const, label: "Groups", icon: <DoodleIcon name="grid" size={13} /> },
-              ]}
-            />
+            {side && (
+              <Segmented
+                value={view}
+                onChange={setView}
+                options={[
+                  { id: "list" as const, label: "List", icon: <DoodleIcon name="list" size={13} /> },
+                  { id: "groups" as const, label: "Groups", icon: <DoodleIcon name="grid" size={13} /> },
+                ]}
+              />
+            )}
             <PressButton
               onClick={() => setCreating(true)}
               className="flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page"

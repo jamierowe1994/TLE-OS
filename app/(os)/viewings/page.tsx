@@ -158,7 +158,8 @@ export default function Viewings() {
     const state = commState(a);
     const outcome = OUTCOMES[a.id];
     return (
-      <li>
+      /* fade-up so the cascade on the <ul> has something to stagger. */
+      <li className="fade-up">
         <button
           type="button"
           onClick={() => setOpenId(a.id)}
@@ -217,7 +218,10 @@ export default function Viewings() {
            the ground line in the drawing IS the bottom edge of the file,
            which is what lands it on the rule rather than near it. */
         backdrop="/illustrations/houses-row.webp"
-        backdropWidth={470}
+        /* The street reads as a street rather than a strip of scenery behind
+           her (James, 10 Sep 2026: "make the houses behind her a bit
+           bigger"). Still the same drawing standing on the same rule. */
+        backdropWidth={620}
         /**
          * He rides ON the rule, and stays put while he does it.
          *
@@ -242,7 +246,6 @@ export default function Viewings() {
          * sagging under a scooter, which is the wrong physics for the joke.
          */
         lineBreak="none"
-        shadow
         /* One row of chrome, under the blurb, in the same order as Listings,
            Market Appraisals and Applications: the shape switch first because
            it changes the whole screen, then the things that only narrow what
@@ -344,7 +347,7 @@ export default function Viewings() {
           </div>
           <Legend past={past} />
           {past ? (
-            <ul>
+            <ul className="cascade">
               {rows.map((a) => (
                 <Row key={a.id} a={a} showDay />
               ))}
@@ -363,7 +366,7 @@ export default function Viewings() {
                       {list.length} viewing{list.length === 1 ? "" : "s"}
                     </span>
                   </div>
-                  <ul>
+                  <ul className="cascade">
                     {list.map((a) => (
                       <Row key={a.id} a={a} />
                     ))}

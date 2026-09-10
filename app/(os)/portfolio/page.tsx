@@ -686,7 +686,8 @@ export default function Portfolio() {
            Pushed down 4% so the pavement runs into the line and is erased by
            it, the same as the other scenes. */
         illustration="/illustrations/street.webp"
-        illustrationHeight={200}
+        illustrationHeight={218}
+        illustrationNudge={26}
         illustrationAspect={3.11}
         seat={0.96}
         illustrationCrop

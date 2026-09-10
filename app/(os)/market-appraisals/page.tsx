@@ -186,9 +186,24 @@ export default function MarketAppraisals() {
            live. A new drawing gets a new name from here on, and the old file
            is deleted, so a swap can never be masked by a cache. */
         illustration="/illustrations/appraisals-desk.webp"
-        illustrationHeight={330}
+        /**
+         * Sunk to the middle of the desk legs.
+         *
+         * He stood at 330 with 0.96 above the rule - 317px of artwork over the
+         * line and 13 under it, which is a man behind a shelf rather than one
+         * at a desk that carries on below. 620 x 0.5 buried half of him but
+         * put the cut at the TOP of the legs and made him too big with it;
+         * James, 10 Sep 2026: "make him a touch smaller and then bring him up
+         * slightly... where the line cuts it off, it should be going about
+         * halfway through the legs of the desk."
+         *
+         * Smaller (620 → 520) and the seat lifted (0.5 → 0.58), which is both
+         * halves of that: less of him overall, and the line crossing further
+         * down the legs rather than at their top. 302px above the rule.
+         */
+        illustrationHeight={520}
+        seat={0.58}
         illustrationAspect={0.9704}
-        seat={0.96}
         illustrationCrop
         lineBreak="none"
         actions={

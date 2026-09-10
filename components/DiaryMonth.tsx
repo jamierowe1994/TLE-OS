@@ -227,7 +227,7 @@ export default function DiaryMonth({
   return (
     <div className="fade-up mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
       {/* ── The month ────────────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-line/80 bg-panel p-5">
+      <div className="rounded-2xl border border-line/80 bg-page p-5">
         <div className="flex items-center gap-3">
           <h2 className="whitespace-nowrap text-[17px] leading-none">{monthLabel}</h2>
           <div className="flex items-center gap-1">
@@ -332,7 +332,7 @@ export default function DiaryMonth({
 
       {/* ── The chosen day, then the week ahead ──────────────────────── */}
       <div className="flex flex-col gap-4">
-        <div className="rounded-2xl border border-line/80 bg-panel p-5">
+        <div className="rounded-2xl border border-line/80 bg-page p-5">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line/70 pb-3">
             <h2 className="text-[17px] leading-tight">{fmtFull(selDate)}</h2>
             {selNear && <Pill tone={selected === 0 ? "accent" : "neutral"}>{selNear}</Pill>}
@@ -383,7 +383,7 @@ export default function DiaryMonth({
           )}
         </div>
 
-        <div className="rounded-2xl border border-line/80 bg-box p-5">
+        <div className="rounded-2xl border border-line/80 bg-page p-5">
           <div className="flex flex-wrap items-baseline gap-3">
             <h3 className="text-[14px] leading-none">The week ahead</h3>
             <span className="ml-auto text-[11px] text-muted">
@@ -403,7 +403,7 @@ export default function DiaryMonth({
                   className={`rounded-xl border px-2 py-2.5 text-center transition-colors ${
                     isSel
                       ? "border-accent-dark/40 bg-accent-soft/60"
-                      : "border-line/70 bg-panel hover:border-ink"
+                      : "border-line/70 bg-page hover:border-ink"
                   }`}
                 >
                   <span className="block text-[10.5px] text-muted">
@@ -430,7 +430,7 @@ export default function DiaryMonth({
             <button
               type="button"
               onClick={onOpenWeek}
-              className="mt-3 flex w-full items-center gap-2.5 rounded-xl border border-line/70 bg-panel px-3.5 py-2.5 text-left transition-colors hover:border-ink"
+              className="mt-3 flex w-full items-center gap-2.5 rounded-xl border border-line/70 bg-page px-3.5 py-2.5 text-left transition-colors hover:border-ink"
             >
               <DoodleIcon name="calendar" size={16} className="shrink-0 text-accent-dark" />
               <span className="hand text-[12.5px]">Open the week grid</span>

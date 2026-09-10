@@ -150,7 +150,32 @@ h1, h2, h3, h4, h5 {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.fade-up { animation: fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.fade-up { animation: fade-up 0.58s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ── One at a time ────────────────────────────────────────────────────────
+   James, 10 Sep 2026: "the box will fly in, and then the individual listings
+   will fly in individually... it should almost cascade in, so it's not just
+   one block moving in."
+
+   A delay per child on whatever is already animating in - the cards carry
+   their own fade-up, this only staggers when each one starts. Capped at the
+   fourteenth: a book of 268 listings would otherwise have the last one
+   arriving twelve seconds after the first, and nobody scrolls to watch an
+   animation finish. Everything past the cap simply arrives with it. */
+.cascade > *:nth-child(1)  { animation-delay: 0.06s; }
+.cascade > *:nth-child(2)  { animation-delay: 0.11s; }
+.cascade > *:nth-child(3)  { animation-delay: 0.16s; }
+.cascade > *:nth-child(4)  { animation-delay: 0.21s; }
+.cascade > *:nth-child(5)  { animation-delay: 0.26s; }
+.cascade > *:nth-child(6)  { animation-delay: 0.31s; }
+.cascade > *:nth-child(7)  { animation-delay: 0.36s; }
+.cascade > *:nth-child(8)  { animation-delay: 0.41s; }
+.cascade > *:nth-child(9)  { animation-delay: 0.46s; }
+.cascade > *:nth-child(10) { animation-delay: 0.51s; }
+.cascade > *:nth-child(11) { animation-delay: 0.56s; }
+.cascade > *:nth-child(12) { animation-delay: 0.61s; }
+.cascade > *:nth-child(13) { animation-delay: 0.66s; }
+.cascade > *:nth-child(n+14) { animation-delay: 0.7s; }
 
 /* The page arriving.
 
@@ -204,20 +229,28 @@ h1, h2, h3, h4, h5 {
   from { transform: translateY(0); }
   to   { transform: translateY(112%); }
 }
+/* The body's exit, and the one place in the app allowed to be abrupt. It fell
+   34px and faded, which is a polite dissolve; James asked for "a little bit
+   more dramatically". It drops more than twice as far now and gets out of the
+   way early, so the masthead's fall is the thing you watch. */
 @keyframes body-fall {
   from { opacity: 1; transform: none; }
-  to   { opacity: 0; transform: translateY(34px); }
+  to   { opacity: 0; transform: translateY(78px); }
 }
 
-.os-mast-frame { animation: mast-window 0.62s linear both; }
-.os-mast { animation: mast-rise 0.62s cubic-bezier(0.16, 1, 0.3, 1) both; }
+/* Slower on the way up. James, 10 Sep 2026: "the top section drops up
+   perfectly... we almost want to slow it down a little bit, just a touch."
+   0.62 → 0.78, and the clip's hold moves with it so the block still arrives
+   before anything of it shows below the line. */
+.os-mast-frame { animation: mast-window 0.78s linear both; }
+.os-mast { animation: mast-rise 0.78s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
 /* Leaving. The frame's clip is held shut for the whole fall, so the block
    goes behind the line rather than over whatever is under it. */
 .page-leaving .os-mast-frame { animation: none; clip-path: inset(-100vh 0 0 0); }
 .page-leaving .os-mast { animation: mast-fall 0.42s cubic-bezier(0.5, 0, 0.9, 0.3) both; }
 .page-leaving .page-flow > *:not(.os-mast-frame),
-.page-leaving > *:not(.os-mast-frame) { animation: body-fall 0.36s cubic-bezier(0.5, 0, 0.9, 0.3) both; }
+.page-leaving > *:not(.os-mast-frame) { animation: body-fall 0.3s cubic-bezier(0.6, 0, 0.95, 0.35) both; }
 
 /* A tile that is still waiting on its figures is not drawn at all - not faded,
    not skeletal. It rises when it has something to say. */
@@ -517,6 +550,7 @@ h1, h2, h3, h4, h5 {
   .intro-rise-late,
   .paint-spread,
   .toast-in { animation: none; }
+  .cascade > * { animation-delay: 0s; }
   .reveal-rise { animation: none; opacity: 1; }
   .art { transition: none; }
 }
