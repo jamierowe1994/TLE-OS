@@ -169,6 +169,14 @@ export default function PageHeader({
   /** Pin the figure hard into the corner instead of the standard inset —
    *  the dashboard's window lives in the corner of the room. */
   flushRight = false,
+  /**
+   * How deep the masthead is, before the rule.
+   *
+   * 232 everywhere, so every page starts in the same place. The dashboard
+   * asks for more because its scene is a full painted vignette rather than a
+   * figure, and at 232 the rule cut through the top of the man's head.
+   */
+  minHeight = 232,
   /** The search bar under the rule. On by default; pages that aren't about
    *  finding things (the profile) turn it off. */
   search = true,
@@ -194,6 +202,7 @@ export default function PageHeader({
   sprite?: { src: string; frames: number; aspect: number; fps?: number };
   shadow?: boolean;
   flushRight?: boolean;
+  minHeight?: number;
   search?: boolean;
   searchValue?: string;
   onSearch?: (v: string) => void;
@@ -331,7 +340,10 @@ export default function PageHeader({
       {/* 232, not 212: at 212 the notification button sat ON the top of the
           dashboard's window frame. The figure hangs off the rule, so giving the
           masthead 20px more height is what buys the air above its head. */}
-      <div className="fade-up relative flex min-h-[232px] items-end justify-between gap-6 border-b border-line/80 pt-8">
+      <div
+        className="fade-up relative flex items-end justify-between gap-6 border-b border-line/80 pt-8"
+        style={{ minHeight }}
+      >
         {/* The right padding is the figure's footprint reserved in advance.
             The figure is absolutely positioned, so it can't push the text out
             of its way — without this the blurb runs underneath it the moment

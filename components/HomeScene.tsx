@@ -38,6 +38,16 @@
  */
 export const HOME_SCENE_ASPECT = 1600 / 717;
 
+/**
+ * How far the dog, the sofa and his trailing leg hang BELOW the coloured
+ * backdrop, as a fraction of the canvas. Measured on all three renders and
+ * the same in each: backdrop bottom 0.976, artwork bottom 0.998.
+ *
+ * The scene is dropped by this so the backdrop meets the rule and the rest
+ * crosses it.
+ */
+const BLOB_OVERHANG = 0.0235;
+
 export default function HomeScene({ className = "" }: { className?: string }) {
   return (
     <>
@@ -51,7 +61,16 @@ export default function HomeScene({ className = "" }: { className?: string }) {
         :root[data-accent="blush"] .home-scene { background-image: url(/illustrations/home/blush.webp) }
         :root[data-accent="red"]   .home-scene { background-image: url(/illustrations/home/red.webp) }
       `}</style>
-      <span aria-hidden className={`home-scene absolute inset-0 block ${className}`} />
+      {/* Dropped so the BACKDROP lands on the rule, not the artwork's lowest
+          pixel. The dog and the sofa sit 2.3% below the backdrop in all three
+          renders, and James wants them over the line - which is what the
+          drawing implies, and what stops the whole scene hovering a few
+          pixels clear of it. */}
+      <span
+        aria-hidden
+        className={`home-scene absolute left-0 right-0 block h-full ${className}`}
+        style={{ top: `${BLOB_OVERHANG * 100}%` }}
+      />
     </>
   );
 }

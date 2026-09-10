@@ -51,6 +51,10 @@ export default function Dashboard() {
            under. Its base is now the canvas floor, so it stands ON the rule
            instead of floating over it. */
         illustrationHeight={330}
+        /* Deeper than the standard 232: at 232 the rule cut through the top
+           of his head. This is the scene's height plus a little air, so he
+           fits whole and the dog still breaks the line. */
+        minHeight={340}
         lineBreak="none"
         flushRight
         /* Customise rides the search row — one line of chrome, not two. */
