@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import BentoDash from "@/components/BentoDash";
 import PageHeader from "@/components/PageHeader";
-import HomeScene, { HOME_SCENE_ASPECT } from "@/components/HomeScene";
 import { DASH_TRAY_GROUPS, DEFAULT_LAYOUT, WIDGETS } from "@/components/widgets";
 
 /**
@@ -60,22 +59,25 @@ export default function Dashboard() {
       <PageHeader
         title={greeting(name)}
         blurb="Here's what's happening with your lettings business today."
-        /* James's painted scene, in whichever accent the person picked - the
-           file is chosen in CSS off the data-accent already on <html>, so it
-           is right on the first frame. See components/HomeScene.
+        /* The window scene, with the line running through it at the DOG -
+           he is lying on the sill and that is what the drawing rests on. The
+           sofa front and the man's trailing leg carry on for another 6% below
+           him and are cut off at the rule rather than hanging into the page.
+           The top is left open on purpose: the window runs off the top of the
+           page and is cut by the window edge, which is the point of it.
 
-           NOTE: this replaces WindowScene, which drew the sky from the live
-           Manchester weather. The painted sky cannot do that. The component
-           is still in the repo if that turns out to be a loss worth having
-           back. */
-        illustrationNode={<HomeScene />}
-        illustrationAspect={HOME_SCENE_ASPECT}
-        /* Deliberately taller than the header, which is the point of this
-           artwork: the window runs off the top of the page and is cut by the
-           window edge, the dog sits on the rule, and the sofa front and his
-           trailing leg carry on underneath it. 560 leaves his head about 30px
-           clear of the cut. */
-        illustrationHeight={450}
+           480 keeps the artwork the same width on screen as the version it
+           replaces, so the greeting still gets its one line.
+
+           This used to be three files and a component, because the coloured
+           backdrop was recoloured to each accent. James's new artwork has no
+           backdrop at all, so there is nothing left to tint and nothing left
+           for the component to do. */
+        illustration="/illustrations/home/window.webp"
+        illustrationHeight={480}
+        illustrationAspect={1.2026}
+        seat={0.939}
+        illustrationCrop
         lineBreak="none"
         flushRight
         /* Customise rides the search row — one line of chrome, not two. */
