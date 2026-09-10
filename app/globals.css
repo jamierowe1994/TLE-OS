@@ -170,7 +170,10 @@ h1, h2, h3, h4, h5 {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: none; }
 }
-.page-flow { animation: page-flow 0.36s cubic-bezier(0.22, 1, 0.36, 1) both; }
+/* No movement of its own any more. The masthead rises and the rows reveal;
+   a third animation over the top of both only smeared them. The class stays
+   because it is what `page-leaving` hangs off. */
+.page-flow { animation: none; }
 
 /* ---------------------------------------------------------------------------
    Changing screen, as one movement.
@@ -186,40 +189,44 @@ h1, h2, h3, h4, h5 {
    rise.
    --------------------------------------------------------------------------- */
 @keyframes mast-window {
-  from { clip-path: inset(-100vh 0 0 0); }
-  to   { clip-path: inset(-100vh 0 -100vh 0); }
+  /* Held SHUT until the block has arrived. It used to open over the whole
+     rise, so the masthead was visible below the rule on its way up and read
+     as sliding in from outside rather than coming out from under the line
+     (James, 10 Sep 2026). Nothing shows until it is home. */
+  0%, 92% { clip-path: inset(-100vh 0 0 0); }
+  100%    { clip-path: inset(-100vh 0 -100vh 0); }
 }
 @keyframes mast-rise {
-  from { transform: translateY(100%); }
-  to   { transform: none; }
+  from { transform: translateY(112%); }
+  to   { transform: translateY(0); }
 }
 @keyframes mast-fall {
-  from { transform: none; }
-  to   { transform: translateY(100%); }
+  from { transform: translateY(0); }
+  to   { transform: translateY(112%); }
 }
 @keyframes body-fall {
   from { opacity: 1; transform: none; }
-  to   { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 0; transform: translateY(34px); }
 }
 
-.os-mast-frame { animation: mast-window 0.46s linear both; }
-.os-mast { animation: mast-rise 0.46s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.os-mast-frame { animation: mast-window 0.62s linear both; }
+.os-mast { animation: mast-rise 0.62s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
 /* Leaving. The frame's clip is held shut for the whole fall, so the block
    goes behind the line rather than over whatever is under it. */
 .page-leaving .os-mast-frame { animation: none; clip-path: inset(-100vh 0 0 0); }
-.page-leaving .os-mast { animation: mast-fall 0.3s cubic-bezier(0.55, 0, 0.9, 0.35) both; }
+.page-leaving .os-mast { animation: mast-fall 0.42s cubic-bezier(0.5, 0, 0.9, 0.3) both; }
 .page-leaving .page-flow > *:not(.os-mast-frame),
-.page-leaving > *:not(.os-mast-frame) { animation: body-fall 0.26s ease-in both; }
+.page-leaving > *:not(.os-mast-frame) { animation: body-fall 0.36s cubic-bezier(0.5, 0, 0.9, 0.3) both; }
 
 /* A tile that is still waiting on its figures is not drawn at all - not faded,
    not skeletal. It rises when it has something to say. */
 .reveal-held { opacity: 0; }
 @keyframes reveal-rise {
-  from { opacity: 0; transform: translateY(20px); }
+  from { opacity: 0; transform: translateY(34px); }
   to   { opacity: 1; transform: none; }
 }
-.reveal-rise { animation: reveal-rise 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.reveal-rise { animation: reveal-rise 0.54s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
 /* The welcome. The drawing arrives first and settles; the words follow a beat
    later, so it reads as one gesture rather than two things appearing at once.

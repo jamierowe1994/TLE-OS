@@ -245,13 +245,17 @@ export default function Applications() {
             ? `${scope.label}'s applications on REX's four statuses, live. The eight pre-tenancy stages open once one is accepted.`
             : "Every application on REX's four statuses, live. The eight pre-tenancy stages open once one is accepted."
         }
-        /* She STANDS on the rule - full length, feet at the bottom edge of
-           the artwork - so the bottom of the frame is the line and the rule
-           dips under her weight rather than running straight through. */
+        /* The line runs THROUGH her, at the waist. She is drawn full length
+           and set at twice the shared height, so 250 still shows above the
+           rule - the same as every other screen - and the rest is cut off
+           rather than hanging below it. No dip and no shadow: the line is not
+           bearing her weight, it is crossing her. */
         illustration="/illustrations/applicant.webp"
+        illustrationHeight={500}
         illustrationAspect={0.34}
-        shadow
-        lineBreak="dip"
+        seat={0.5}
+        illustrationCrop
+        lineBreak="none"
       />
 
       {/* ── The gap worth acting on, counted live. ── */}

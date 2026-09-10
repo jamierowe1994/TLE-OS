@@ -100,6 +100,7 @@ export default function PageHeader({
   blurb,
   illustration,
   illustrationDark,
+  illustrationCrop = false,
   illustrationNode,
   /** Illustration height — it stands on the rule and reaches most of the way
    *  up, stopping short of the top. */
@@ -219,6 +220,16 @@ export default function PageHeader({
    *  just inverting - the listings lamp comes on. Both are rendered and CSS
    *  picks; see .art-dark in globals. */
   illustrationDark?: string;
+  /**
+   * Cut the artwork off at the rule.
+   *
+   * For a figure the line runs THROUGH rather than under: she is drawn full
+   * length, set so the rule crosses her, and everything below it is simply
+   * not there. Different from a seated figure, whose legs hang below on
+   * purpose - so this also cancels the room the masthead makes for legs, and
+   * the shadow, neither of which means anything to a figure cut in half.
+   */
+  illustrationCrop?: boolean;
   /** A live illustration (e.g. the window scene) in place of a static file. */
   illustrationNode?: React.ReactNode;
   illustrationHeight?: number;
@@ -243,7 +254,7 @@ export default function PageHeader({
 
   const seated = typeof seat === "number";
   /* Undefined means "follow the seat"; an explicit value wins. */
-  const castsShadow = shadow ?? seated;
+  const castsShadow = shadow ?? (seated && !illustrationCrop);
 
   /* The figure's own footprint, at each breakpoint's scale, plus how far it
      is inset from the right and a little air. Written as real CSS for the
@@ -271,7 +282,7 @@ export default function PageHeader({
      with it or they hold on to nothing. Applies to anyone meeting the line —
      a hanging fist, a seat, or a pair of feet. */
   const below = illustrationHeight * (1 - cross) + DROP[lineBreak];
-  const legs = seated ? illustrationHeight * (1 - cross) : 0;
+  const legs = seated && !illustrationCrop ? illustrationHeight * (1 - cross) : 0;
   /* The figure is scaled down at each breakpoint, so the legs hang shorter
      there too and the clearance has to follow. Written as real CSS because the
      numbers are computed — Tailwind can only see class names it was built
@@ -403,7 +414,7 @@ export default function PageHeader({
           because a seated figure's legs hang BELOW the rule on purpose and a
           standing clip would cut her feet off. */}
       <div
-        className={`os-mast-frame fade-up relative border-b border-line/80 ${seated ? seatClass : "mb-5"}`}
+        className={`os-mast-frame relative border-b border-line/80 ${seated ? seatClass : "mb-5"}`}
         style={{ minHeight }}
       >
       <div
@@ -474,7 +485,12 @@ export default function PageHeader({
             }`}
             style={{ height: illustrationHeight }}
           >
-            <div className="relative h-full">
+            <div
+              className="relative h-full"
+              /* Bottom only: the top has to stay open, because the artwork is
+                 meant to run off the top of the masthead. */
+              style={illustrationCrop ? { clipPath: "inset(-100vh 0 0 0)" } : undefined}
+            >
               <LineDip width={dipWidth} mode={lineBreak} />
               {sprite ? (
                 /* The frames are a background, not an <img>, because only a
