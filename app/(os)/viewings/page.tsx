@@ -127,22 +127,25 @@ export default function Viewings() {
       <PageHeader
         title="Viewings"
         blurb="Every viewing opens into its whole story: the property, who's coming, whether someone lives there — and whether every confirmation actually went."
-        illustration="/illustrations/scooter.gif"
+        illustration="/illustrations/scooter.webp"
+        illustrationAspect={0.7623}
         /**
          * He rides ON the rule, and stays put while he does it.
          *
-         * The source is 480x480 with the figure floating in the middle of it,
-         * so it is CROPPED to its own ink before it gets here - 178x243, the
-         * bottom edge being exactly where the wheels meet the ground. That is
-         * the convention every other illustration here already follows (their
-         * ink bbox equals their file size), and it is what lets the default
-         * anchoring work: with no `seat`, PageHeader puts the rule at the
-         * bottom of the artwork, which is now the tyres.
+         * James's own clip, keyed off its black plate. The MP4 carries no
+         * alpha - h264 cannot - and the background was pure (0,0,0), so the
+         * transparency is cut per frame: flood the background in from the
+         * border, and ALSO take any sealed pocket of the same pure black,
+         * because the gap between her leg, the stem and the deck is enclosed
+         * by the drawing and a flood from the edge can never reach it. Her
+         * hair, the backpack and the scooter body are all darker than most of
+         * her and every one of them survives, because they are nowhere near
+         * 0 - the darkest thing kept is around 25 against a background of 0.
          *
-         * Measured across all forty frames before cropping: the bottom of the
-         * ink sits at y=359-360 every single frame, so the wheels never leave
-         * the ground - the 25px of movement is his leg kicking back, not the
-         * scooter travelling. That is what makes it read as riding on the spot
+         * Cropped to the union of every frame's ink, so she does not jitter
+         * inside her own box. Measured on the finished loop: the bottom of
+         * the ink moves 8px across 31 frames, which is her back foot kicking
+         * - the wheels stay on the ground, so it reads as riding on the spot
          * rather than drifting off the side of the page.
          *
          * `lineBreak="none"` on purpose: DROP is 0 for it, so the rule stays
