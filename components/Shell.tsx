@@ -324,8 +324,15 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             /* No fade-up. The rail is persistent chrome, not page content
                arriving: the profile row beneath it does not fade either, and
                anything that needs an animation to run before it is legible is
-               invisible in a background tab. */
-            <div className="mb-3 overflow-hidden rounded-2xl border border-line/70 bg-accent-soft/45 p-3.5">
+               invisible in a background tab.
+
+               Hidden on a short window. The rail is a fixed 100vh box with
+               overflow-hidden and no scroll, so anything that does not fit is
+               simply cut off - and the thing directly below this is the
+               profile, which is how somebody signs out. On a 13" laptop that
+               would have traded the sign-out button for a slogan. It appears
+               when there is genuinely room for it and never competes. */
+            <div className="mb-3 hidden overflow-hidden rounded-2xl border border-line/70 bg-accent-soft/45 p-3.5 [@media(min-height:900px)]:block">
               <p className="hand text-[14px] leading-[1.15] text-ink">
                 More great
                 <br />

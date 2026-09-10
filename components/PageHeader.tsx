@@ -216,6 +216,30 @@ export default function PageHeader({
     [1, 0],
   ].map(([scale, factor]) => Math.round(legs * scale * factor) + 20);
 
+  /*
+   * ── Room for his shoes ───────────────────────────────────────────────────
+   *
+   * From lg up the search row deliberately does NOT clear the figure: it sits
+   * its usual 20px under the rule and his legs hang past it into the empty
+   * middle of the row. What that never accounted for is what comes AFTER the
+   * row. On Leads the table card follows immediately, paints its own
+   * background, and lands across his trainers - so the man is sitting on the
+   * line with his feet cut off (James, 10 Sep 2026).
+   *
+   * So the row also carries a margin BELOW it, exactly as deep as the part of
+   * him that hangs past its bottom edge, plus a little air so the shoes are
+   * not touching the card either.
+   *
+   * Zero at the widths where `clearance` already pushes the row clear of his
+   * feet - there is nothing left hanging to make room for, and a gap there
+   * would just be a hole in the page.
+   */
+  const ROW = 42; // the search row itself: py-2.5 on 13px text, both sides.
+  const footroom = [0.5, 0.68, 0.88, 1].map((scale, i) => {
+    const past = Math.round(legs * scale) - clearance[i] - ROW;
+    return past > 0 ? past + 12 : 0;
+  });
+
   /* The strip is scaled to the element's width, so each frame ends up exactly
      illustrationHeight tall and the run is that times the frame count. Stepping
      to the full run rather than one frame short is deliberate: steps() never
@@ -254,10 +278,10 @@ export default function PageHeader({
       )}
       {seated && (
         <style>{`
-          .${seatClass} { margin-top: ${clearance[0]}px }
-          @media (min-width: 640px) { .${seatClass} { margin-top: ${clearance[1]}px } }
-          @media (min-width: 1024px) { .${seatClass} { margin-top: ${clearance[2]}px } }
-          @media (min-width: 1280px) { .${seatClass} { margin-top: ${clearance[3]}px } }
+          .${seatClass} { margin-top: ${clearance[0]}px; margin-bottom: ${footroom[0]}px }
+          @media (min-width: 640px) { .${seatClass} { margin-top: ${clearance[1]}px; margin-bottom: ${footroom[1]}px } }
+          @media (min-width: 1024px) { .${seatClass} { margin-top: ${clearance[2]}px; margin-bottom: ${footroom[2]}px } }
+          @media (min-width: 1280px) { .${seatClass} { margin-top: ${clearance[3]}px; margin-bottom: ${footroom[3]}px } }
         `}</style>
       )}
       {/* 232, not 212: at 212 the notification button sat ON the top of the

@@ -173,6 +173,9 @@ export default function MarketAppraisals() {
         title="Market Appraisals"
         blurb="Booked, prepared, appraised, won. Everything between a landlord saying yes to a visit and signing terms."
         illustration="/illustrations/people/real-estate-agent.svg"
+        /* The line runs straight through her. She is framed by it rather than
+           standing on it, so there is no weight to bend it. */
+        lineBreak="none"
         actions={
           <div className="flex items-center gap-2">
             <label className="sr-only" htmlFor="ma-period">Date range</label>
@@ -211,39 +214,6 @@ export default function MarketAppraisals() {
       <div className="mt-10">
         <FlowTag from="Leads" to="Listings" />
       </div>
-
-      {/* The banner has to follow the book. Once a real appraisal is on this
-          screen, "sample rows, not live" is itself a false statement — and it
-          is the sentence an agent uses to decide whether to trust the row in
-          front of them. So it says which rows are stand-ins rather than
-          condemning the whole page. */}
-      <p className="fade-up mt-4 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12px] leading-relaxed">
-        {live === null ? (
-          /* Loading is its own sentence. Falling through to "nothing has been
-             booked" while the answer is still in flight states something false
-             — briefly, confidently, and to the one person most likely to have
-             just booked something. */
-          <span className="text-muted">Checking what&apos;s been booked…</span>
-        ) : live.length > 0 ? (
-          /* This used to promise "the four unmarked rows are samples". The
-             four hardcoded stand-ins were removed when the store went live,
-             so the sentence had been describing rows that do not exist -
-             printed, in bold, on the screen an agent uses to decide what to
-             trust. Every row here is now real, and it says so. */
-          <>
-            <span className="font-semibold">
-              {live.length === 1 ? "One appraisal" : `${live.length} appraisals`} booked through the OS.
-            </span>{" "}
-            Every row is real - booked from a landlord lead on Leads and carried through to terms.
-          </>
-        ) : (
-          <>
-            <span className="font-semibold">Nothing booked yet.</span> Book an appraisal
-            from a landlord lead on Leads and it appears here, at Booked, with the lead
-            still linked both ways.
-          </>
-        )}
-      </p>
 
       {/* ── The spine ──────────────────────────────────────────────────────
           Still tabs, and still one row, but drawn as the journey it is: an
