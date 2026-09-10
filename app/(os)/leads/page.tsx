@@ -243,19 +243,29 @@ export default function Leads() {
                 }.${source.onFile ? ` ${source.onFile.toLocaleString("en-GB")} kept on file in the OS.` : ""}`
               : (source.reason ?? "New enquiries from the portals, your ads and the website.")
         }
-        /* Her hair starts at 0.004 of the artwork, so like appraisals this
-           one cannot bleed off the top without taking her head. 330 is the
-           same height the other two scenes stand at.
+        /* James's row of houses with the To Let board (10 Sep 2026), in place
+           of the seated scene.
 
-           Pushed down 4% so the shadows under the chair run into the line and
-           are erased by it.
+           SIZED BY WIDTH, like the street on Portfolio, and for the same
+           reason: at 2.66 wide, standing it at the seated scenes' 330 would
+           run it 878px across and leave the blurb a column. What sets the
+           number here is the footprint rather than the height - the text
+           block reserves the artwork's width as padding, and this page's
+           blurb is generated live from the REX counts, so it is the longest
+           on the OS and the first to wrap when that padding grows.
 
-           This replaces the three-layer composition entirely. That existed to
-           put a separate plant and watercolour on the line behind her; James's
-           scene has all of it drawn in, so the component and its files go. */
-        illustration="/illustrations/leads-scene.webp"
-        illustrationHeight={330}
-        illustrationAspect={1.2825}
+           160 puts it at 426px, within three pixels of the 423 the seated
+           scene occupied. The masthead therefore measures exactly what it did
+           before the swap and nothing else on the page moves. 200, to match
+           the street, took it to 532 and pushed the rule down 59px - which on
+           the one week we have spent getting every masthead to the same depth
+           would have been the wrong trade for a slightly bigger drawing.
+
+           Pushed down 4% so the pavement runs into the line and is erased by
+           it, the same as every other scene. */
+        illustration="/illustrations/to-let-row.webp"
+        illustrationHeight={160}
+        illustrationAspect={2.6615}
         seat={0.96}
         illustrationCrop
         lineBreak="none"
