@@ -178,7 +178,13 @@ export default function MarketAppraisals() {
            Pushed down 4% so the shadows under his feet run into the line and
            are erased by it, rather than the whole scene stopping politely
            above the rule. */
-        illustration="/illustrations/appraisals.webp"
+        /* Named for the artwork, not the page. The first appraisals scene was
+           overwritten in place at this same path, so every browser that had
+           loaded the page kept serving the old one for the four hours the
+           cache-control allows - James saw the wrong man long after it went
+           live. A new drawing gets a new name from here on, and the old file
+           is deleted, so a swap can never be masked by a cache. */
+        illustration="/illustrations/appraisals-desk.webp"
         illustrationHeight={330}
         illustrationAspect={0.9704}
         seat={0.96}
