@@ -357,6 +357,9 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       tenant: tenantNames.length ? tenantNames.join(", ") : who || sitting ? null : undefined,
       hmo: mine.some((e) => HMO_TYPES.includes(e.type_id ?? "")),
       hasGas: hasGasRecord && !gasNotRequired,
+      /* A gas entry of any kind IS an answer, including one marked not
+         required - somebody looked. REX PM's category can answer it below. */
+      gasAnswered: hasGasRecord,
       service: serviceOf(String(l.propertyId), l.service),
       managedByPm: pmManaged.has(String(l.propertyId)),
       certs,
@@ -371,7 +374,7 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
     const f = facts.get(p.id);
     if (!f) continue;
     if (f.hmo) p.hmo = true;
-    if (f.noGas && p.certs.gas?.expires == null) p.hasGas = false;
+    if (f.noGas && p.certs.gas?.expires == null) { p.hasGas = false; p.gasAnswered = true; }
   }
 
   /* Homes REX CRM has no property for. The OS is their record: its own
@@ -386,7 +389,7 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
     p.certs = extraCerts.get(p.id) ?? {};
     p.onRex = false;
     const o = extra.find((x) => x.id === p.id);
-    if (o) { p.hmo = o.hmo; p.hasGas = !o.noGas; }
+    if (o) { p.hmo = o.hmo; p.hasGas = !o.noGas; p.gasAnswered = o.noGas || Boolean(p.certs.gas); }
   }
   for (const o of extra) {
     if (listings.some((l) => l.propertyId === o.id)) continue;
@@ -399,6 +402,7 @@ export async function certificatesFor(subjects: CertSubject[]): Promise<Complian
       tenant: undefined,
       hmo: o.hmo,
       hasGas: !o.noGas,
+      gasAnswered: o.noGas || Boolean(certs.gas),
       certs,
       onRex: false,
     });

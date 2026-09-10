@@ -112,6 +112,16 @@ export type CompProperty = {
   /** REX PM holds an active letting agreement on this home, which is the
    *  agency managing it whatever the listing does or does not say. */
   managedByPm?: boolean;
+  /**
+   * Has anybody actually told us whether this home has a gas supply?
+   *
+   * `hasGas` collapses two different situations into one false: "the terms of
+   * business say there is no gas" and "nobody has ever said". Both are out of
+   * the gas figures, and rightly - but only one of them is a job. Of 101 homes
+   * with no gas duty on 10 Sep 2026, 95 had a positive answer on file and 6
+   * did not, and the screen was calling all 101 unknown.
+   */
+  gasAnswered?: boolean;
 };
 
 /**

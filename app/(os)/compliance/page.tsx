@@ -109,10 +109,11 @@ export default function Compliance() {
     );
   }, [source.properties]);
   const urgent = useMemo(() => dueWithin(30, BOOK), [BOOK]);
-  /* Scoped the same way as everything else: a home with no gas record is
-     unknown, not exempt, and only the ones we manage are ours to find out
-     about. */
-  const gasUnknown = useMemo(() => BOOK.filter((p) => !p.hasGas).length, [BOOK]);
+  /* Two different things, and they were being reported as one. A home whose
+     terms of business say there is no gas is settled; a home nobody has ever
+     answered for is a job. Both sit outside the gas figures. */
+  const gasUnknown = useMemo(() => BOOK.filter((p) => !p.hasGas && !p.gasAnswered).length, [BOOK]);
+  const noGas = useMemo(() => BOOK.filter((p) => !p.hasGas && p.gasAnswered).length, [BOOK]);
 
   // Per-property worst status, for the tiles and the filter.
   const graded = useMemo(
@@ -172,7 +173,7 @@ export default function Compliance() {
                    the managed book - and printing that total above a list
                    scoped to what we manage is how the page and Susan's sheet
                    ended up quoting different numbers for the same question. */
-                `Live from REX — ${BOOK.length} homes we manage, ${gasUnknown} of them with no gas record at all, which means unknown rather than exempt. Let-only homes are the landlord's duty and are not on this screen.`
+                `Live from REX — ${BOOK.length} homes we manage. ${noGas} have no gas supply, from the signed terms or REX PM's own record; ${gasUnknown} have nobody's answer either way, which is unknown rather than exempt. Let-only homes are the landlord's duty and are not on this screen.`
               : (source.reason ?? "Every certificate on every home, and the button that fixes each one.")
         }
         illustration="/illustrations/notioly/home-caring.svg"
