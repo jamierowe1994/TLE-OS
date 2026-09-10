@@ -132,17 +132,14 @@ export default function Applications() {
   );
   const open = all.find((a) => a.id === openId) ?? null;
 
-  /* The measurement, live. Counted over the applications on screen so the
-     number always agrees with what's in front of you. */
-  const rtr = useMemo(() => {
-    const live = all.filter((a) => a.status === "received" || a.status === "communicated");
-    const people = live.flatMap((a) => a.applicants);
-    return {
-      applications: live.length,
-      unanswered: people.filter((p) => p.keyInfo?.rightToRent !== true).length,
-      people: people.length,
-    };
-  }, [all]);
+  /* The right-to-rent banner that used to sit here - "34 of 120 people on
+     the 92 open applications have no recorded right-to-rent answer" - was
+     removed on 10 Sep 2026. James: "that's a me problem, not an agent
+     problem". It measured a gap in how the JotForm collects the answer, not
+     anything the agent reading the screen could act on, and a permanent red
+     panel about somebody else's plumbing is how a screen teaches people to
+     ignore its warnings. The per-application check on each row stays, because
+     that one IS theirs to chase. */
 
   const defs = useMemo<ColumnDef<Application>[]>(
     () => [
@@ -257,24 +254,6 @@ export default function Applications() {
         illustrationCrop
         lineBreak="none"
       />
-
-      {/* ── The gap worth acting on, counted live. ── */}
-      {rtr.unanswered > 0 && (
-        <div className="fade-up mt-4 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-5 lg:max-w-[80%]">
-          <p className="text-[9.5px] font-bold uppercase tracking-wider text-accent-dark">
-            Right to rent
-          </p>
-          <p className="mt-2 text-[13.5px] leading-relaxed">
-            <span className="figures font-semibold">{rtr.unanswered}</span> of {rtr.people} people
-            on the {rtr.applications} open applications have no recorded right-to-rent answer.
-          </p>
-          <p className="mt-1.5 text-[11.5px] leading-relaxed text-muted">
-            The JotForm asks the lead applicant only, and writes the answer as prose into the
-            notes field rather than a column. Everyone who applies through the portal form is
-            asked individually.
-          </p>
-        </div>
-      )}
 
       {/* ── The pipeline: how many sit at each status. ── */}
       <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
