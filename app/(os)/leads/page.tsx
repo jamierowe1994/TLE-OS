@@ -312,11 +312,11 @@ export default function Leads() {
         /* She is half as wide again as she is tall, where this header's fixed
            text reserve was measured against tall narrow line art. Given the
            aspect it works the room out rather than assuming it. */
-        illustrationAspect={1.145}
+        illustrationAspect={0.7815}
         /* The underside of her thigh breaks from her legs at 0.670 of the
            artwork — measured off the file, not guessed — so that is where the
            rule goes under her. Her legs and the plant hang below it. */
-        seat={0.67}
+        seat={0.668}
         /* No dip and no break: she is sitting ON the line, and her own body
            hides it where she is. A trough would read as the line sagging. */
         lineBreak="none"
