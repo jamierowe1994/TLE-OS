@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
 import { ROLES, ROLE_LABEL } from "@/lib/roles";
+import { mailboxProblem } from "@/lib/mailbox-outcome";
 
 /* Both role pickers on this screen used to be a hand-typed list of five
    options. It was already wrong before this change — `pretenancy` existed and
@@ -84,6 +85,27 @@ export default function PreLaunch() {
      message, the URL or anywhere it could be shoulder-read off a shared
      screen without being asked for. */
   const [magic, setMagic] = useState<{ email: string; url: string } | null>(null);
+
+  /* Coming back from Microsoft.
+     ─────────────────────────────
+     This board sent people off to connect a mailbox and then ignored the
+     answer entirely: a success and a failure both landed here as a silent
+     page with a query string on it, which is indistinguishable from the thing
+     having crashed - and that is exactly how it was reported. The outcome is
+     read once, said out loud, and then taken off the URL so a refresh does
+     not repeat a message about something that happened ten minutes ago. */
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const mail = p.get("mail");
+    if (!mail) return;
+    const problem = mailboxProblem(mail);
+    setFlash(problem ?? `Mailbox connected${p.get("as") ? ` as ${p.get("as")}` : ""}.`);
+    p.delete("mail");
+    p.delete("as");
+    p.delete("detail");
+    const rest = p.toString();
+    window.history.replaceState({}, "", window.location.pathname + (rest ? `?${rest}` : ""));
+  }, []);
   /* What each person will BE when they redeem, keyed by address.
      Held per row rather than as one setting because a pilot list is mixed —
      Susan runs the business, Kirstie is pre-tenancy, the partners are agents —
@@ -237,7 +259,21 @@ export default function PreLaunch() {
       </div>
     );
   }
-  if (!d) return <p className="text-[12.5px] text-muted">Loading…</p>;
+  /* The board loads behind a fetch, and coming back from Microsoft is exactly
+     the moment somebody is staring at it waiting to be told what happened. So
+     the outcome shows on the loading state too, rather than only once the
+     figures have arrived. */
+  if (!d)
+    return (
+      <>
+        {flash && (
+          <p className="fade-up mb-4 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12.5px]">
+            {flash}
+          </p>
+        )}
+        <p className="text-[12.5px] text-muted">Loading…</p>
+      </>
+    );
 
   const unused = d.usage.filter((u) => u.views === 0);
   const onPilot = d.candidates.filter((c) => c.invited);

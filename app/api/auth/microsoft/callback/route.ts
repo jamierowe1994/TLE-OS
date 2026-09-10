@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
+import { publicOrigin } from "@/lib/origin";
 import {
   msExchangeCode,
   msGetMe,
@@ -41,7 +42,11 @@ export const runtime = "nodejs";
  */
 function back(req: NextRequest, params: Record<string, string>) {
   const dest = msReturnPath(req.cookies.get(MS_RETURN_COOKIE)?.value);
-  const url = new URL(dest, req.nextUrl.origin);
+  /* publicOrigin, NOT req.nextUrl.origin. Behind Railway's proxy the request's
+     own origin is the internal host, so this sent people to localhost:8080 -
+     a browser error page, at the exact moment they had just done as they were
+     asked. lib/origin.ts exists because of this and this route missed it. */
+  const url = new URL(dest, publicOrigin(req));
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   const res = NextResponse.redirect(url);
   res.cookies.delete(MS_STATE_COOKIE);
@@ -59,14 +64,32 @@ export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code") ?? "";
   const state = req.nextUrl.searchParams.get("state") ?? "";
   const expected = req.cookies.get(MS_STATE_COOKIE)?.value ?? "";
-  if (!code || !state || !expected) return back(req, { mail: "state" });
+
+  /* One line, on the way past, whatever happens. Nobody has ever connected a
+     mailbox here, and a flow that fails identically for four different reasons
+     cannot be diagnosed from a screenshot. The values are never logged - a
+     nonce is a credential for the next ten seconds - only whether they turned
+     up and whether they were the same length, which is what separates "the
+     cookie did not survive the trip" from "there were two tabs". */
+  const stateCookies = req.cookies.getAll().filter((c) => c.name === MS_STATE_COOKIE).length;
+  const note = (reason: string) =>
+    console.warn(
+      `[ms-callback] ${reason}`,
+      JSON.stringify({ hasCode: !!code, hasState: !!state, hasCookie: !!expected, stateCookies, sameLength: state.length === expected.length })
+    );
+
+  if (!code) { note("no code from Microsoft"); return back(req, { mail: "nocode" }); }
+  /* No cookie is overwhelmingly the ten-minute expiry, so it says so; the
+     other cause is a cookie that did not survive the round trip, and
+     stateCookies in the log tells the two apart. */
+  if (!expected || !state) { note("no nonce to check against"); return back(req, { mail: "expired" }); }
 
   const a = Buffer.from(state);
   const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return back(req, { mail: "state" });
+  if (a.length !== b.length || !timingSafeEqual(a, b)) { note("nonce did not match"); return back(req, { mail: "mismatch" }); }
   /* The nonce carries who asked for it. Same browser, different person, is
      still the wrong person. */
-  if (state.split(".")[0] !== userId) return back(req, { mail: "state" });
+  if (state.split(".")[0] !== userId) { note("nonce belongs to another account"); return back(req, { mail: "wronguser" }); }
 
   try {
     const tokens = await msExchangeCode(code);

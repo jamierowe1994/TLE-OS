@@ -16,6 +16,7 @@ import { useSetup } from "@/lib/setup-store";
 import { firstUnfinished, isStepDone, STEP_ORDER, type SetupStepId } from "@/lib/setup";
 import { readAccent } from "@/lib/accents";
 import { readTheme, type ThemeChoice } from "@/lib/theme";
+import { mailboxProblem } from "@/lib/mailbox-outcome";
 
 /**
  * The five questions, and the order they are asked in.
@@ -26,16 +27,6 @@ import { readTheme, type ThemeChoice } from "@/lib/theme";
  * show this to Susan, and the one guarantee worth having is that what she sees
  * is what a new starter gets.
  */
-
-/** What Microsoft told us on the way back, in English. */
-const MAIL_PROBLEM: Record<string, string> = {
-  denied: "Microsoft would not allow that. If you cancelled, you can skip this and connect it later.",
-  state: "That took too long and the sign-in expired. Try connecting again.",
-  norefresh:
-    "Microsoft connected but did not grant a lasting permission, so it would stop working within the hour. Try again, and accept the permissions it asks for.",
-  failed: "Something went wrong connecting Microsoft. You can skip this and try later from your profile.",
-  signin: "You were signed out on the way back. Sign in and try again.",
-};
 
 type Screen = "welcome" | SetupStepId | "finished";
 
@@ -99,10 +90,10 @@ export default function Wizard({
     setScreen(started ? next : "welcome");
   }, [ready, dry, mail, view]);
 
-  const mailProblem = useMemo(() => {
-    if (!mail || mail === "connected") return null;
-    return MAIL_PROBLEM[mail] ?? "That did not connect. You can skip this and try later.";
-  }, [mail]);
+  /* The words live in lib/mailbox-outcome so the admin board says the same
+     thing. Two screens describing one failure differently is how a support
+     call starts. */
+  const mailProblem = useMemo(() => mailboxProblem(mail), [mail]);
 
   const done = useMemo(
     () =>
