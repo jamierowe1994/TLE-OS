@@ -509,7 +509,20 @@ export default function PageHeader({
               down from it and the rule stays where it is. */}
           {/* balance, so a greeting that will not fit on one line breaks into
               two even ones rather than leaving a single orphaned word. */}
-          <h1 className="text-balance leading-tight" style={{ fontSize: titleSize }}>{title}</h1>
+          {/* One size on every page, and it gives way on a phone.
+
+             42 is the agreed number and it is what every desktop masthead
+             uses. It cannot survive a 390px screen unchanged: "Market
+             Appraisals" is 233px wide at 42px, the artwork starts 170px in,
+             and the two collided - the title won, refused to shrink below its
+             longest word, and pushed the page 32px sideways (10 Sep 2026).
+
+             min() keeps 42 wherever there is room for it - 8.5vw passes 42px
+             at 494px wide, so every real desktop and tablet is untouched - and
+             lets the number fall away only on the screens that cannot hold it.
+             The pages still all match each other, which is what the one number
+             was for. */}
+          <h1 className="text-balance leading-tight" style={{ fontSize: `min(${titleSize}px, 8.5vw)` }}>{title}</h1>
           <p className="mt-2.5 max-w-md text-[13px] text-muted">{blurb}</p>
           {/* The page's own controls, in the gap between the blurb and the
               rule - pushed down to sit just above the line rather than

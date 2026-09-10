@@ -476,13 +476,21 @@ export default function Listings() {
               // when the gap between the arcs is uneven.
               className="fade-up block-pop block w-full rounded-2xl border border-line/60 bg-box p-2 text-left hover:border-ink"
             >
-              <div className={view === "tiles" ? "flex flex-col gap-3" : "flex gap-4"}>
+              {/* The list card STACKS on a phone.
+
+                  Side by side it is a 224px photograph that cannot shrink, the
+                  details, and the price column that cannot shrink either -
+                  which needs more than a 390px screen has, so the page scrolled
+                  sideways (10 Sep 2026). Below sm the photograph goes full
+                  width on top, exactly as the tiles view already does; from sm
+                  up nothing changes. */}
+              <div className={view === "tiles" ? "flex flex-col gap-3" : "flex flex-col gap-3 sm:flex-row sm:gap-4"}>
                 <PropertyPhoto
                   src={l.image}
                   className={
                     view === "tiles"
                       ? "h-40 w-full shrink-0 rounded-[14px]"
-                      : "h-40 w-56 shrink-0 rounded-[14px] sm:h-44 sm:w-64"
+                      : "h-40 w-full shrink-0 rounded-[14px] sm:h-44 sm:w-64"
                   }
                 />
 

@@ -262,7 +262,20 @@ export function DataTable<T extends { id: string }>({
   maxHeight?: number;
 }) {
   return (
-    <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight }}>
+    /* `relative` is not decoration.
+
+       A wide table scrolls inside this box, which is the whole point of it -
+       but overflow only clips descendants whose CONTAINING BLOCK is inside the
+       scroller, and an absolutely-positioned element with no positioned
+       ancestor here resolves its containing block to something further up the
+       page. Every SourceMark carries an `sr-only` span, sr-only is
+       position:absolute, and on a phone those eight spans sat at x=667 in the
+       page's own coordinates - unclipped, unseen, and dragging the document
+       668px wide so Leads scrolled sideways on a 390px screen.
+
+       Making the scroller positioned brings them back inside it. Nothing moves
+       visually: sr-only is a 1px clipped box either way. */
+    <div className="relative overflow-x-auto overflow-y-auto" style={{ maxHeight }}>
       <table className="w-full text-left text-[12.5px]">
         <thead className="sticky top-0 z-10 bg-page">
           <tr className="border-b border-line/70">

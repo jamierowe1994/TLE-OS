@@ -192,7 +192,11 @@ export default function MarketAppraisals() {
         illustrationCrop
         lineBreak="none"
         actions={
-          <div className="flex items-center gap-2">
+          /* flex-wrap, like every other actions row. Without it the date
+             picker and the view switch are one unbreakable 233px block, which
+             on a 390px screen would not fit beside the reserved artwork and
+             took the page 32px sideways (10 Sep 2026). */
+          <div className="flex flex-wrap items-center gap-2">
             {/* Was a native <select>, which looked exactly like what it was
                 next to hand-drawn pills. See components/PickOne. */}
             <PickOne
