@@ -117,6 +117,22 @@ export default function PageHeader({
    */
   illustrationHeight = 250,
   /**
+   * A wide strip of scenery drawn BEHIND the figure, and well behind it.
+   *
+   * It is set dressing, not a subject: small, drained of most of its colour,
+   * and lifted a few pixels off the rule so the line passes IN FRONT of it.
+   * That last part is what buys the distance — near things occlude far ones,
+   * and a street sat exactly on the rule reads as standing beside the figure
+   * rather than half a mile behind him.
+   *
+   * It fades out to the left rather than stopping, because the blurb runs
+   * underneath it at narrow widths and a hard edge crossing a sentence is the
+   * collision the house rules forbid. Below lg it is not drawn at all — there
+   * is no room there for scenery that isn't saying anything.
+   */
+  backdrop,
+  backdropWidth = 460,
+  /**
    * width ÷ height of the artwork, for art that is WIDER than the roughly
    * 0.7 this header has always assumed.
    *
@@ -233,6 +249,8 @@ export default function PageHeader({
   /** A live illustration (e.g. the window scene) in place of a static file. */
   illustrationNode?: React.ReactNode;
   illustrationHeight?: number;
+  backdrop?: string;
+  backdropWidth?: number;
   illustrationAspect?: number;
   lineBreak?: LineBreak;
   seat?: number;
@@ -421,6 +439,33 @@ export default function PageHeader({
         className="os-mast flex h-full items-end justify-between gap-6 pt-8"
         style={{ minHeight }}
       >
+        {/* The scenery, first in the DOM so everything else paints over it.
+            No .art class: it is already pale, and inverting a pale drawing on
+            the charcoal page turns it dark and leaves nothing to see. */}
+        {backdrop && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={backdrop}
+            alt=""
+            aria-hidden
+            className="art-figure pointer-events-none absolute right-0 hidden select-none lg:block"
+            style={{
+              width: backdropWidth,
+              /* Lifted clear of the rule and dropped back in the mix. Sat ON
+                 the line at full strength it read as a row of houses standing
+                 beside the figure rather than behind him (James, 10 Sep 2026:
+                 "too close to the line ... they're right in the front"). A few
+                 pixels of daylight under it puts the rule in FRONT of the
+                 street, which is the whole depth cue - near things occlude far
+                 ones - and the opacity and the drained colour do the rest. */
+              bottom: 10,
+              opacity: 0.4,
+              filter: "saturate(0.7)",
+              WebkitMaskImage: "linear-gradient(to right, transparent, #000 38%)",
+              maskImage: "linear-gradient(to right, transparent, #000 38%)",
+            }}
+          />
+        )}
         {/* The right padding is the figure's footprint reserved in advance.
             The figure is absolutely positioned, so it can't push the text out
             of its way — without this the blurb runs underneath it the moment

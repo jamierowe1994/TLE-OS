@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import DiaryCalendar from "@/components/DiaryCalendar";
+import DiaryMonth from "@/components/DiaryMonth";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
+import PickOne from "@/components/PickOne";
+import Segmented from "@/components/Segmented";
 import ViewingDrawer, { type Outcome } from "@/components/ViewingDrawer";
 import { FlowTag, Ghost, Pill } from "@/components/Wire";
-import { minutesOf, VIEWING_OUTCOMES, type Appt } from "@/lib/diary";
+import { KIND_META, minutesOf, VIEWING_OUTCOMES, type Appt, type ApptKind } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 
 /**
@@ -46,20 +49,57 @@ function Legend({ past }: { past?: boolean }) {
 }
 
 export default function Viewings() {
+  /**
+   * The calendar is the DEFAULT shape of this page (James, 10 Sep 2026).
+   *
+   * The list only ever answered "what is left today"; the question agents
+   * actually arrive with is "what have I got on the 23rd", and no amount of
+   * scrolling a today-first list answers that. The list is still here — it is
+   * the better read once you know which day you care about — but you now
+   * choose it rather than being given it.
+   */
+  const [view, setView] = useState<"calendar" | "diary">("calendar");
   const [tab, setTab] = useState<"diary" | "recent">("diary");
   const [openId, setOpenId] = useState<string | null>(null);
   const [calOpen, setCalOpen] = useState(false);
+  /** Narrowing, shared by both shapes so switching view keeps your place. */
+  const [fAgent, setFAgent] = useState<string | null>(null);
+  const [fKind, setFKind] = useState<ApptKind | null>(null);
   /** "apptId:label" for anything sent from the drawer this session. */
   const [sentExtra, setSentExtra] = useState<Set<string>>(new Set());
 
   const { appts: DIARY, live, loading } = useDiary();
-  const viewings = DIARY.filter((a) => a.kind === "viewing");
+
+  /** Whoever actually appears in this book, in name order. */
+  const agents = useMemo(
+    () => [...new Set(DIARY.map((a) => a.agent).filter(Boolean))].sort(),
+    [DIARY]
+  );
+  /** Only the kinds that are really in the diary — an empty filter row is a
+   *  promise the data cannot keep. */
+  const kinds = useMemo(
+    () =>
+      (Object.keys(KIND_META) as ApptKind[]).filter((k) => DIARY.some((a) => a.kind === k)),
+    [DIARY]
+  );
+
+  /**
+   * The calendar shows the WHOLE day — viewings, appraisals, travel and the
+   * private blocks in between. A calendar that draws only viewings tells an
+   * agent an afternoon is free when it is nothing of the sort.
+   */
+  const monthAppts = useMemo(
+    () => DIARY.filter((a) => (!fAgent || a.agent === fAgent) && (!fKind || a.kind === fKind)),
+    [DIARY, fAgent, fKind]
+  );
+
+  const viewings = DIARY.filter((a) => a.kind === "viewing" && (!fAgent || a.agent === fAgent));
   const upcoming = viewings.filter((a) => a.day >= 0).sort(
     (a, b) => a.day - b.day || minutesOf(a.start) - minutesOf(b.start)
   );
   const recent = viewings.filter((a) => a.day < 0).sort((a, b) => b.day - a.day);
   const days = [...new Set(upcoming.map((a) => a.day))];
-  const open = viewings.find((a) => a.id === openId) ?? null;
+  const open = DIARY.find((a) => a.id === openId) ?? null;
 
   /** The row's state at a glance: every message gone, or something missing. */
   function commState(a: Appt) {
@@ -132,6 +172,13 @@ export default function Viewings() {
            still in the repo if a better capture turns up. */
         illustration="/illustrations/scooter-still.webp"
         illustrationAspect={0.6486}
+        /* A street for him to be riding down, standing on the same rule he
+           does. James's own artwork, trimmed to its ink — the file already
+           carried alpha, so the paper it was drawn on came off cleanly and
+           the ground line in the drawing IS the bottom edge of the file,
+           which is what lands it on the rule rather than near it. */
+        backdrop="/illustrations/houses-row.webp"
+        backdropWidth={470}
         /**
          * He rides ON the rule, and stays put while he does it.
          *
@@ -159,26 +206,81 @@ export default function Viewings() {
         shadow
       />
 
-      <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          {(["diary", "recent"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              className={`hand rounded-full px-4 py-2 text-[12.5px] transition-colors ${
-                tab === t
-                  ? "bg-accent-soft/60 font-medium text-accent-dark"
-                  : "text-muted hover:text-ink"
-              }`}
-            >
-              {t === "diary" ? `Diary · ${upcoming.length}` : `Feedback · ${recent.length}`}
-            </button>
-          ))}
+      {/* ── What shape, then what's in it, then who for. ──────────────
+          The shape switch is first and on its own: it changes the whole
+          screen, and the two things beside it only narrow what is already
+          there. */}
+      <div className="mt-10 flex flex-wrap items-center gap-x-3 gap-y-2.5">
+        <Segmented
+          options={[
+            {
+              id: "calendar",
+              label: "Calendar",
+              icon: <DoodleIcon name="calendar" size={14} />,
+            },
+            { id: "diary", label: "Diary", icon: <DoodleIcon name="list" size={14} /> },
+          ]}
+          value={view}
+          onChange={setView}
+        />
+
+        {/* Upcoming or done-with is a question about a LIST. The calendar
+            already shows both, in the only order a calendar has. */}
+        {view === "diary" && (
+          <>
+            <span className="hidden h-5 w-px bg-line sm:block" />
+            <div className="flex items-center gap-1">
+              {(["diary", "recent"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTab(t)}
+                  className={`hand rounded-full px-4 py-2 text-[12.5px] transition-colors ${
+                    tab === t
+                      ? "bg-accent-soft/60 font-medium text-accent-dark"
+                      : "text-muted hover:text-ink"
+                  }`}
+                >
+                  {t === "diary" ? `Diary · ${upcoming.length}` : `Feedback · ${recent.length}`}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className="ml-auto flex flex-wrap items-center gap-2.5">
+          {agents.length > 1 && (
+            <PickOne
+              label="All agents"
+              icon="user"
+              options={agents.map((a) => ({ id: a, label: a }))}
+              value={fAgent}
+              onChange={setFAgent}
+            />
+          )}
+          {/* Kind only narrows the calendar — the list is viewings by
+              definition, and a filter that greys out its own screen is a
+              trap. */}
+          {view === "calendar" && kinds.length > 1 && (
+            <PickOne
+              label="Everything"
+              icon="grid"
+              options={kinds.map((k) => ({ id: k, label: KIND_META[k].label }))}
+              value={fKind}
+              onChange={setFKind}
+            />
+          )}
         </div>
       </div>
 
-      {tab === "diary" ? (
+      {view === "calendar" ? (
+        <DiaryMonth
+          appts={monthAppts}
+          loading={loading}
+          onOpen={(a) => setOpenId(a.id)}
+          onOpenWeek={() => setCalOpen(true)}
+        />
+      ) : tab === "diary" ? (
         <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
           <Legend />
           {days.map((d) => {
@@ -226,20 +328,25 @@ export default function Viewings() {
       )}
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <button
-          type="button"
-          onClick={() => setCalOpen(true)}
-          className="flex items-center gap-3 rounded-2xl border border-line/80 bg-box p-5 text-left transition-colors hover:border-ink"
-        >
-          <DoodleIcon name="calendar" size={22} className="shrink-0 text-accent-dark" />
-          <span className="min-w-0">
-            <span className="hand block text-[14px]">Week calendar</span>
-            <span className="block text-[11px] text-muted">
-              The full grid — every appointment, clickable through to its file.
+        {/* In the calendar the week grid is already offered under the week
+            strip, where it belongs. Two doors to the same room reads as two
+            rooms. */}
+        {view === "diary" && (
+          <button
+            type="button"
+            onClick={() => setCalOpen(true)}
+            className="flex items-center gap-3 rounded-2xl border border-line/80 bg-box p-5 text-left transition-colors hover:border-ink"
+          >
+            <DoodleIcon name="calendar" size={22} className="shrink-0 text-accent-dark" />
+            <span className="min-w-0">
+              <span className="hand block text-[14px]">Week calendar</span>
+              <span className="block text-[11px] text-muted">
+                The full grid — every appointment, clickable through to its file.
+              </span>
             </span>
-          </span>
-          <span className="ml-auto text-[13px] text-muted">→</span>
-        </button>
+            <span className="ml-auto text-[13px] text-muted">→</span>
+          </button>
+        )}
         <Ghost
           label="Landlord feedback report"
           detail="Every viewing and its outcome, per property — the thing landlords chase for."

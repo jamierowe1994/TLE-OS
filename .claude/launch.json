@@ -45,6 +45,20 @@
         "3281"
       ],
       "port": 3281
+    },
+    {
+      "name": "tle-os-viewings",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "DATABASE_URL=postgres://postgres:radar@localhost:55432/tleos",
+        "NEXT_DIST_DIR=.next-viewings",
+        "npx",
+        "next",
+        "dev",
+        "-p",
+        "3286"
+      ],
+      "port": 3286
     }
   ]
 }
