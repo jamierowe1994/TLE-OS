@@ -8,7 +8,6 @@ import { contactToLead, type ContactRow } from "@/lib/contacts-as-leads";
 import LeadDrawer from "@/components/LeadDrawer";
 import NewLeadPanel from "@/components/NewLeadPanel";
 import PageHeader from "@/components/PageHeader";
-import LeadsScene from "@/components/LeadsScene";
 import SourceMark from "@/components/SourceMark";
 import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
 import { Pill } from "@/components/Wire";
@@ -305,17 +304,21 @@ export default function Leads() {
                 }.${source.onFile ? ` ${source.onFile.toLocaleString("en-GB")} kept on file in the OS.` : ""}`
               : (source.reason ?? "New enquiries from the portals, your ads and the website.")
         }
-        /* Three layers, not one picture: the watercolour behind, her, and the
-           plant with its pot on the line. Composed so the canvas STOPS at the
-           rule - nothing below it, because anything below is hidden the
-           moment the masthead starts to fall and she would lose her legs on
-           every navigation. See components/LeadsScene. */
-        illustrationNode={<LeadsScene />}
-        illustrationHeight={250}
-        /* Told the aspect, the header works the text's room out from the
-           artwork's real width rather than assuming a tall narrow drawing. */
-        illustrationAspect={1.0979}
-        /* No dip: the line is not bearing her weight, it is where she ends. */
+        /* Her hair starts at 0.004 of the artwork, so like appraisals this
+           one cannot bleed off the top without taking her head. 330 is the
+           same height the other two scenes stand at.
+
+           Pushed down 4% so the shadows under the chair run into the line and
+           are erased by it.
+
+           This replaces the three-layer composition entirely. That existed to
+           put a separate plant and watercolour on the line behind her; James's
+           scene has all of it drawn in, so the component and its files go. */
+        illustration="/illustrations/leads-scene.webp"
+        illustrationHeight={330}
+        illustrationAspect={1.2825}
+        seat={0.96}
+        illustrationCrop
         lineBreak="none"
         /* The bar under the header is the list's search - one search per
            page (James, 6 Sep 2026). */
