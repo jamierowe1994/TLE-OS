@@ -7,6 +7,7 @@ import PageHeader from "@/components/PageHeader";
 import DoodleIcon from "@/components/DoodleIcon";
 import PickOne from "@/components/PickOne";
 import Segmented from "@/components/Segmented";
+import StageTabs from "@/components/StageTabs";
 import { Pill } from "@/components/Wire";
 import {
   MA_STAGES,
@@ -220,46 +221,21 @@ export default function MarketAppraisals() {
         }
       />
 
-      {/* ── The spine ──────────────────────────────────────────────────────
-          Still tabs, and still one row, but drawn as the journey it is: an
-          icon, the count, the stage, and a chevron pointing at what comes
-          next. The counts are the whole reason to look, so they are the
-          biggest thing in the box rather than a number tucked after a word.
-
-          Deliberately NOT the percentage deltas in the mockup. We do not hold
-          a previous period to compare against, and a made-up "↑20%" on a
-          screen an agent uses to decide who to chase is worse than no figure
-          at all. */}
-      <nav className="fade-up mt-4 -mx-1 flex gap-1 overflow-x-auto px-1 pb-1" aria-label="Appraisal stages">
-        {[{ id: "open" as const, label: "All open", icon: "analytics", count: openCount, blurb: "Everything still in play" },
+      {/* ── The spine. Shared with Listings and Applications since 10 Sep;
+             the reasoning lives in components/StageTabs. ── */}
+      <StageTabs
+        label="Appraisal stages"
+        allId="open"
+        value={filter}
+        onChange={setFilter}
+        stages={[
+          { id: "open" as const, label: "All open", icon: "analytics", count: openCount, blurb: "Everything still in play" },
           ...OPEN_STAGES.map((st) => ({
             id: st.id, label: st.label, icon: STAGE_ICON[st.id] ?? "doc",
             count: counts.get(st.id) ?? 0, blurb: st.blurb,
-          }))].map((st, i, arr) => {
-          const on = filter === st.id;
-          return (
-            <div key={st.id} className="flex shrink-0 items-center">
-              <button
-                type="button"
-                onClick={() => setFilter(on && st.id !== "open" ? "open" : st.id)}
-                title={st.blurb}
-                className={`min-w-[124px] rounded-2xl border px-3.5 py-3 text-left transition-colors ${
-                  on ? "border-accent-dark bg-accent-soft/60" : "border-line/80 bg-panel hover:border-ink/40"
-                }`}
-              >
-                <span className={`flex items-center gap-1.5 ${on ? "text-accent-dark" : "text-muted"}`}>
-                  <DoodleIcon name={st.icon} size={14} />
-                  <span className="figures text-[19px] font-semibold leading-none text-ink">{st.count}</span>
-                </span>
-                <span className="mt-1.5 block text-[11.5px] leading-tight">{st.label}</span>
-              </button>
-              {i < arr.length - 1 && (
-                <span aria-hidden className="px-0.5 text-[11px] text-muted/50">›</span>
-              )}
-            </div>
-          );
-        })}
-      </nav>
+          })),
+        ]}
+      />
 
       <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
         <div className="mb-3 flex items-baseline justify-between gap-3">

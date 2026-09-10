@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
+import StageTabs from "@/components/StageTabs";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import ApplicationDrawer, { type Check } from "@/components/ApplicationDrawer";
 import HandoffPanel from "@/components/HandoffPanel";
@@ -28,11 +29,13 @@ import type { Application } from "@/lib/applications";
  */
 
 const STAGES = [
-  { key: "received", label: "Received", blurb: "In, and not yet put to the landlord." },
-  { key: "communicated", label: "Communicated", blurb: "With the landlord, waiting on their decision." },
-  { key: "accepted", label: "Accepted", blurb: "Landlord has said yes — the deal opens from here." },
-  { key: "unsuccessful", label: "Unsuccessful", blurb: "Turned down, or the applicant withdrew." },
-];
+  { key: "received", label: "Received", icon: "message", blurb: "In, and not yet put to the landlord." },
+  { key: "communicated", label: "Communicated", icon: "mail", blurb: "With the landlord, waiting on their decision." },
+  { key: "accepted", label: "Accepted", icon: "checklist", blurb: "Landlord has said yes — the deal opens from here." },
+  { key: "unsuccessful", label: "Unsuccessful", icon: "cross", blurb: "Turned down, or the applicant withdrew." },
+] as const;
+
+type StageKey = (typeof STAGES)[number]["key"];
 
 const gbp = (n: number | null) => (n == null ? "—" : `£${n.toLocaleString("en-GB")}`);
 
@@ -104,7 +107,10 @@ export default function Applications() {
     const wanted = new URLSearchParams(window.location.search).get("open");
     if (wanted) setOpenId(wanted);
   }, []);
-  const [showClosed, setShowClosed] = useState(false);
+  /* "open" is every application still in play. Unsuccessful is a stage like
+     any other now, reached by clicking it, so the old show/hide toggle went
+     with it - two ways to say the same thing, one of which was a link. */
+  const [stage, setStage] = useState<StageKey | "open">("open");
   /* Whose book this is - "the whole business" for an owner, the agent's own
      name otherwise - so the page can say so rather than leave somebody to
      wonder why they see less than they used to. */
@@ -127,8 +133,11 @@ export default function Applications() {
 
   const all = apps ?? [];
   const rows = useMemo(
-    () => (showClosed ? all : all.filter((a) => a.status !== "unsuccessful")),
-    [all, showClosed]
+    () =>
+      stage === "open"
+        ? all.filter((a) => a.status !== "unsuccessful")
+        : all.filter((a) => a.status === stage),
+    [all, stage]
   );
   const open = all.find((a) => a.id === openId) ?? null;
 
@@ -255,48 +264,52 @@ export default function Applications() {
         lineBreak="none"
       />
 
-      {/* ── The pipeline: how many sit at each status. ── */}
-      <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-[15px]">Pipeline</h2>
-          <p className="text-[11px] text-muted">
-            {apps === null ? "loading…" : `${all.length} applications`}
-          </p>
-        </div>
-        <div className="grid grid-cols-4 gap-3">
-          {STAGES.map((s, i) => {
-            const n = all.filter((a) => a.status === s.key).length;
-            return (
-              <div key={s.key} title={s.blurb}>
-                <div className="flex items-center gap-1.5">
-                  <span className={`h-2 w-2 rounded-full ${n ? "bg-accent" : "bg-line"}`} />
-                  <span className="text-[9px] font-bold uppercase tracking-wider text-muted">
-                    {i + 1}
-                  </span>
-                </div>
-                <p className="figures mt-1.5 text-[22px] leading-none">{n || "—"}</p>
-                <p className="mt-1 text-[10px] leading-tight text-muted">{s.label}</p>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {/* ── The pipeline, and the filter for it. Same shape as Market
+             Appraisals and Listings - see components/StageTabs. It used to be
+             four numbers that looked clickable and were not. ── */}
+      <StageTabs
+        label="Application statuses"
+        allId="open"
+        value={stage}
+        onChange={setStage}
+        stages={[
+          {
+            id: "open" as const,
+            label: "All open",
+            icon: "analytics",
+            count: all.filter((a) => a.status !== "unsuccessful").length,
+            blurb: "Everything still in play",
+          },
+          ...STAGES.map((st) => ({
+            id: st.key,
+            label: st.label,
+            icon: st.icon,
+            count: all.filter((a) => a.status === st.key).length,
+            blurb: st.blurb,
+          })),
+        ]}
+      />
 
       {/* ── The applications. The open one takes the full pop-out. ── */}
       <div className="mt-4">
         <div className="fade-up min-w-0 rounded-2xl border border-line/80 bg-panel p-5">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2.5">
             <h2 className="text-[15px]">
-              {showClosed ? "All applications" : "Open applications"}
+              {stage === "open"
+                ? "Open applications"
+                : STAGES.find((st) => st.key === stage)?.label}
+              <span className="figures ml-1.5 text-muted">({rows.length})</span>
             </h2>
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setShowClosed((v) => !v)}
-                className="text-[11.5px] text-muted underline transition-colors hover:text-ink"
-              >
-                {showClosed ? "Hide unsuccessful" : "Show unsuccessful"}
-              </button>
+              {stage !== "open" && (
+                <button
+                  type="button"
+                  onClick={() => setStage("open")}
+                  className="text-[11.5px] text-muted underline transition-colors hover:text-ink"
+                >
+                  Show all open
+                </button>
+              )}
               <ColumnCustomiser cols={cols} />
             </div>
           </div>
@@ -353,7 +366,7 @@ export default function Applications() {
                 : null,
             ].filter((x): x is NonNullable<typeof x> => x !== null),
           }}
-          stages={STAGES}
+          stages={[...STAGES]}
           checklist={checksFor(open)}
           // Only once the landlord has said yes. Before that there is no deal
           // to hand over, and offering one invites somebody to jump the gun.

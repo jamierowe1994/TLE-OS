@@ -4,6 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
+import PickOne from "@/components/PickOne";
+import Segmented from "@/components/Segmented";
+import StageTabs from "@/components/StageTabs";
 import ListingDrawer from "@/components/ListingDrawer";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { Pill } from "@/components/Wire";
@@ -39,6 +42,10 @@ type SampleListing = {
   epcExpiry: string | null;
   epcRating?: string | null;
   daysOnMarket: number | null;
+  /** The day it went live, ISO. Absent on the static fallback, which is why
+   *  the date window treats "no date" as never-published rather than as a
+   *  row to hide. */
+  publishedAt?: string | null;
   lastUpdated: string | null;
   imageCount: number;
   image: string | null;
@@ -68,6 +75,43 @@ function statusOf(l: SampleListing): { label: string; tone: "good" | "accent" | 
 /** How many viewings the diary knows about for this address. */
 function viewingsFor(name: string): number {
   return DIARY.filter((a) => a.kind === "viewing" && a.what.includes(name)).length;
+}
+
+/**
+ * When it went on the market.
+ *
+ * Same shape and the same words as the appraisal board's window, because it
+ * is the same question asked of a different record - James, 10 Sep 2026:
+ * "listings and market appraisals very similarly... it'll say Date Listed."
+ * A listing with no go-live date has never been published, which is worth
+ * seeing, so it survives every window except the ones about when something
+ * happened.
+ */
+const PERIODS = [
+  /* "Date listed" rather than "Any date": PickOne prints the chosen row's
+     label on the button, and with `neutral` the any-row IS the resting state -
+     so the resting word has to be the control's own name, or the screen shows
+     a filter called "Any date" and never says what date it means. James, 10
+     Sep: "on that one, it'll say Date Listed." */
+  { id: "any", label: "Date listed" },
+  { id: "month", label: "This month" },
+  { id: "30", label: "Last 30 days" },
+  { id: "older", label: "Older than 90 days" },
+] as const;
+type PeriodId = (typeof PERIODS)[number]["id"];
+
+function listedIn(iso: string | null | undefined, period: PeriodId): boolean {
+  if (period === "any") return true;
+  if (!iso) return period !== "older";
+  const at = new Date(iso).getTime();
+  if (Number.isNaN(at)) return true;
+  const now = Date.now();
+  if (period === "30") return at >= now - 30 * 864e5;
+  if (period === "older") return at < now - 90 * 864e5;
+  const d = new Date();
+  const from = new Date(d.getFullYear(), d.getMonth(), 1).getTime();
+  const to = new Date(d.getFullYear(), d.getMonth() + 1, 1).getTime();
+  return at >= from && at < to;
 }
 
 const RENT_BANDS = [
@@ -226,8 +270,14 @@ export default function Listings() {
   const [sort, setSort] = useState<string | null>(null);
   const [rentBand, setRentBand] = useState<string | null>(null);
   const [loc, setLoc] = useState<string | null>(null);
-  /** The one question asked all day: what can I put someone in NOW. */
-  const [availableOnly, setAvailableOnly] = useState(false);
+  /* Available used to be a switch of its own, because it answers the one
+     question asked all day - what can I put someone in NOW. It is a stage on
+     the tabs now, which answers the same question and three others beside it,
+     and two controls for one filter is how a screen starts to disagree with
+     itself. */
+  const [stage, setStage] = useState<"all" | "Available" | "Let agreed" | "Draft">("all");
+  const [period, setPeriod] = useState<PeriodId>("any");
+  const [view, setView] = useState<"list" | "tiles">("list");
 
   /* ── The real book, out of REX. The static export stands in until it
         answers, so the page never renders empty. ── */
@@ -277,6 +327,16 @@ export default function Listings() {
     [LISTINGS]
   );
 
+  /* Counted once, read twice. The blurb used to say "98 published and 170
+     drafts" over tabs that said 58 available, 48 let agreed and 162 drafts -
+     both right, counting different things, on the same screen. A let-agreed
+     draft is one house, and it cannot be in two of these. */
+  const byStage = useMemo(() => {
+    const out = { Available: 0, "Let agreed": 0, Draft: 0 } as Record<string, number>;
+    for (const l of LISTINGS) out[statusOf(l).label] = (out[statusOf(l).label] ?? 0) + 1;
+    return out;
+  }, [LISTINGS]);
+
   const board = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const band = RENT_BANDS.find((b) => b.id === rentBand);
@@ -288,7 +348,8 @@ export default function Listings() {
       // "Available" is what the status chip already means — published and not
       // let agreed. Defined once, in statusOf, so the switch and the chip can
       // never drift apart and show a house the other disagrees with.
-      if (availableOnly && statusOf(l).label !== "Available") return false;
+      if (stage !== "all" && statusOf(l).label !== stage) return false;
+      if (!listedIn(l.publishedAt, period)) return false;
       return true;
     });
     // Most recent is the resting order (REX's own lastUpdated already leads);
@@ -297,7 +358,7 @@ export default function Listings() {
     if (sort === "rent-low") rows.sort((a, b) => (monthly(a) ?? 1e9) - (monthly(b) ?? 1e9));
     else if (sort === "rent-high") rows.sort((a, b) => (monthly(b) ?? 0) - (monthly(a) ?? 0));
     return rows;
-  }, [LISTINGS, q, sort, rentBand, loc, availableOnly]);
+  }, [LISTINGS, q, sort, rentBand, loc, stage, period]);
 
   return (
     <>
@@ -307,7 +368,7 @@ export default function Listings() {
           book.loading
             ? "Fetching the rental book from REX…"
             : book.live
-              ? `Live from REX — ${C.currentRentals} current rentals, ${C.published} published to the portals and ${C.draft} still drafts.`
+              ? `Live from REX — ${C.currentRentals} current rentals: ${byStage.Available} available, ${byStage["Let agreed"]} let agreed and ${byStage.Draft} still drafts.`
               : (book.reason ?? "Manage your properties and their marketing.")
         }
         /* Cropped at the bottom in the artwork itself, so the frame's bottom
@@ -327,21 +388,25 @@ export default function Listings() {
            houses. Nothing else stands between the agent and the board. */
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {/* A switch, not a dropdown, because it answers the one question
-                asked all day — what can I put someone in NOW. Outline only:
-                a filled pill would out-shout the four dropdowns beside it and
-                the point is a quiet marker that a filter is on. */}
-            <button
-              type="button"
-              onClick={() => setAvailableOnly((v) => !v)}
-              aria-pressed={availableOnly}
-              className={`avail-toggle flex items-center gap-2 rounded-full border px-4 py-2.5 text-[13px] transition-colors ${
-                availableOnly ? "avail-on" : "border-line/80 hover:border-ink/40"
-              }`}
-            >
-              <span className="avail-dot" aria-hidden />
-              Available only
-            </button>
+            {/* Date listed, then list or tiles - the same two controls, in the
+                same order, as Market Appraisals and Applications. */}
+            <PickOne
+              label="Date listed"
+              icon="calendar"
+              options={PERIODS.map((x) => ({ id: x.id, label: x.label }))}
+              value={period}
+              onChange={(v) => setPeriod((v ?? "any") as PeriodId)}
+              clearable={false}
+              neutral="any"
+            />
+            <Segmented
+              value={view}
+              onChange={setView}
+              options={[
+                { id: "list" as const, title: "List view", icon: <DoodleIcon name="list" size={14} /> },
+                { id: "tiles" as const, title: "Tile view", icon: <DoodleIcon name="grid" size={14} /> },
+              ]}
+            />
             <FilterPanel
               active={[sort, rentBand, loc].filter(Boolean).length}
               onClear={() => { setSort(null); setRentBand(null); setLoc(null); }}
@@ -361,8 +426,41 @@ export default function Listings() {
         }
       />
 
-      {/* ── The board: one card per house, full width, no clutter. ── */}
-      <div className="mt-6 space-y-4">
+      {/* ── The stages, and the filter for them. Same component and the same
+             row as Market Appraisals and Applications. ── */}
+      <StageTabs
+        label="Listing statuses"
+        allId="all"
+        value={stage}
+        onChange={setStage}
+        flow={false}
+        stages={[
+          { id: "all" as const, label: "All listings", icon: "analytics", count: LISTINGS.length, blurb: "Everything on the rental book" },
+          { id: "Available" as const, label: "Available", icon: "home", count: byStage.Available, blurb: "Published, and not let agreed - what you can put somebody in now" },
+          { id: "Let agreed" as const, label: "Let agreed", icon: "key", count: byStage["Let agreed"], blurb: "Taken, and working through to a tenancy" },
+          { id: "Draft" as const, label: "Draft", icon: "doc", count: byStage.Draft, blurb: "Not on the portals yet" },
+        ]}
+      />
+
+      {/* ── The board, in the same panel the other two boards use. ── */}
+      <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <h2 className="text-[15px]">
+            {stage === "all" ? "All listings" : stage}
+            <span className="figures ml-1.5 text-muted">({board.length})</span>
+          </h2>
+          {stage !== "all" && (
+            <button type="button" onClick={() => setStage("all")} className="text-[11.5px] text-muted underline transition-colors hover:text-ink">
+              Show all listings
+            </button>
+          )}
+        </div>
+        {board.length === 0 && (
+          <p className="py-6 text-[12.5px] text-muted">
+            Nothing matches{period === "any" ? "" : " in that window"} — widen the rent band or clear the filters.
+          </p>
+        )}
+        <div className={view === "tiles" ? "grid gap-3 sm:grid-cols-2 xl:grid-cols-3" : "space-y-4"}>
         {board.map((l) => {
           const st = statusOf(l);
           const views = viewingsFor(l.name);
@@ -378,13 +476,17 @@ export default function Listings() {
               // when the gap between the arcs is uneven.
               className="fade-up block-pop block w-full rounded-2xl border border-line/60 bg-box p-2 text-left hover:border-ink"
             >
-              <div className="flex gap-4">
+              <div className={view === "tiles" ? "flex flex-col gap-3" : "flex gap-4"}>
                 <PropertyPhoto
                   src={l.image}
-                  className="h-40 w-56 shrink-0 rounded-[14px] sm:h-44 sm:w-64"
+                  className={
+                    view === "tiles"
+                      ? "h-40 w-full shrink-0 rounded-[14px]"
+                      : "h-40 w-56 shrink-0 rounded-[14px] sm:h-44 sm:w-64"
+                  }
                 />
 
-                <div className="min-w-0 flex-1 py-2 pr-2">
+                <div className={view === "tiles" ? "min-w-0 flex-1 px-1 pb-1" : "min-w-0 flex-1 py-2 pr-2"}>
                   {/* The chips — only what changes decisions. No 'For sale',
                       no 'Sponsored': everything here is a rental, ours. */}
                   <div className="flex flex-wrap items-center gap-1.5">
@@ -401,7 +503,11 @@ export default function Listings() {
                   </p>
 
                   {/* The fact row, each cell its own little column. */}
-                  <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-line/50 pt-3">
+                  <div className={`mt-4 border-t border-line/50 pt-3 ${
+                    view === "tiles"
+                      ? "grid grid-cols-2 gap-x-4 gap-y-3"
+                      : "flex flex-wrap items-center gap-x-6 gap-y-2"
+                  }`}>
                     <span className="flex items-center gap-2">
                       <DoodleIcon name="calendar" size={13} className="shrink-0 text-accent-dark" />
                       <span>
@@ -411,7 +517,7 @@ export default function Listings() {
                         <span className="figures block text-[12px]">{l.availableFrom ?? "Now"}</span>
                       </span>
                     </span>
-                    <span className="hidden h-7 w-px bg-line/60 sm:block" />
+                    {view !== "tiles" && <span className="hidden h-7 w-px bg-line/60 sm:block" />}
                     <span className="flex items-center gap-2">
                       <DoodleIcon name="bed.png" size={13} className="shrink-0 text-accent-dark" />
                       <span>
@@ -426,7 +532,7 @@ export default function Listings() {
                         </span>
                       </span>
                     </span>
-                    <span className="hidden h-7 w-px bg-line/60 sm:block" />
+                    {view !== "tiles" && <span className="hidden h-7 w-px bg-line/60 sm:block" />}
                     <span className="flex items-center gap-2">
                       <DoodleIcon name="key" size={13} className="shrink-0 text-accent-dark" />
                       <span>
@@ -436,7 +542,7 @@ export default function Listings() {
                         <span className="figures block text-[12px]">{views}</span>
                       </span>
                     </span>
-                    <span className="hidden h-7 w-px bg-line/60 sm:block" />
+                    {view !== "tiles" && <span className="hidden h-7 w-px bg-line/60 sm:block" />}
                     <span className="flex items-center gap-2">
                       <DoodleIcon name="folder" size={13} className="shrink-0 text-accent-dark" />
                       <span>
@@ -466,11 +572,7 @@ export default function Listings() {
           );
         })}
 
-        {!board.length && (
-          <p className="rounded-2xl border border-dashed border-line py-10 text-center text-[12.5px] text-muted">
-            Nothing matches — widen the rent band or clear the filters.
-          </p>
-        )}
+        </div>
       </div>
 
       <p className="mt-4 text-[11px] leading-relaxed text-muted">
