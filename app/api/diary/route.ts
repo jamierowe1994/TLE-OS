@@ -150,30 +150,54 @@ function refresh(): Promise<Cached> {
  * view rather than shown: showing somebody else's appointment is the failure
  * that matters, and an agent noticing a gap will ask.
  */
-function forScope(book: DiaryBook, email: string | null): DiaryBook {
-  if (!email) return book;
-  const want = email.toLowerCase();
-  const appts = book.appts.filter((a) => (a.agentEmail ?? "").toLowerCase() === want);
+function forScope(book: DiaryBook, who: { email: string | null; name: string | null }): DiaryBook {
+  if (!who.email && !who.name) return book;
+  const email = who.email?.toLowerCase() ?? null;
+  const name = who.name?.trim().toLowerCase() ?? null;
+  const appts = book.appts.filter((a) => {
+    const owner = (a.agentEmail ?? "").toLowerCase();
+    if (email) return owner === email;
+    /* Only reachable when an owner is previewing somebody who has no OS
+       account - there is no mailbox to match, so the REX name is all there
+       is. Their own deliberate action, on their own screen. */
+    return (a.agent ?? "").trim().toLowerCase() === name;
+  });
   return { ...book, appts, agents: [...new Set(appts.map((a) => a.agent).filter(Boolean))] };
 }
 
 export async function GET(req: NextRequest) {
   const scope = await scopeFor(req);
-  const { actor } = await whoIs(req);
+  const { actor, subject, viewingAs } = await whoIs(req);
   if (!actor) {
     return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   }
   /* An owner sees the business; everybody else sees their own mailbox. The
      picker on the Viewings screen is drawn from `everything`, so it simply
-     does not appear for an agent. */
+     does not appear for an agent.
+
+     WHOSE mailbox is the subject's, not the caller's. An owner viewing as
+     somebody is asking to see THEIR day; filtering by the owner's own address
+     would have shown James an empty diary and called it Rhiannon's. */
+  /* Viewing as somebody the OS cannot identify at all - no account and no REX
+     record. Falling through would filter by the OWNER's mailbox and present
+     the owner's own day as theirs, which is worse than an empty screen. */
+  if (viewingAs && !subject) {
+    return NextResponse.json({
+      ok: true, live: false, mine: [], everything: false,
+      reason: "No diary: this person has no account here and no REX record to read one from.",
+    });
+  }
   const mineOnly = !scope.everything;
-  const email = mineOnly ? (actor.email ?? "").toLowerCase() : null;
+  const person = viewingAs && subject ? subject : actor;
+  const who = mineOnly
+    ? { email: (person.email ?? "").toLowerCase() || null, name: scope.label || null }
+    : { email: null, name: null };
 
   /* Ours are read OUTSIDE the cache, every time. The two-minute hold exists
      for the slow REX pull; applying it to our own table would mean saving a
      travel buffer and watching the diary insist it isn't there for another
      minute and a half. */
-  const mine = await ours(mineOnly ? actor.id : null);
+  const mine = await ours(mineOnly ? person.id : null);
 
   if (!rexConfigured()) {
     /* No REX here, so the client is showing the sample book. Hand our own
@@ -192,18 +216,18 @@ export async function GET(req: NextRequest) {
   const held = memory ?? (await readStored());
   const age = held ? Date.now() - held.at : Infinity;
   if (held && age < FRESH_MS) {
-    return NextResponse.json({ ok: true, live: true, ...merged(forScope(held.book, email), mine), everything: scope.everything, ageMs: age });
+    return NextResponse.json({ ok: true, live: true, ...merged(forScope(held.book, who), mine), everything: scope.everything, ageMs: age });
   }
   if (held && age < STALE_MS) {
     void refresh();
-    return NextResponse.json({ ok: true, live: true, ...merged(forScope(held.book, email), mine), everything: scope.everything, ageMs: age, stale: true });
+    return NextResponse.json({ ok: true, live: true, ...merged(forScope(held.book, who), mine), everything: scope.everything, ageMs: age, stale: true });
   }
   try {
     const fresh = await refresh();
-    return NextResponse.json({ ok: true, live: true, ...merged(forScope(fresh.book, email), mine), everything: scope.everything, ageMs: 0 });
+    return NextResponse.json({ ok: true, live: true, ...merged(forScope(fresh.book, who), mine), everything: scope.everything, ageMs: 0 });
   } catch (e) {
     if (held) {
-      return NextResponse.json({ ok: true, live: true, ...merged(forScope(held.book, email), mine), everything: scope.everything, ageMs: age, stale: true });
+      return NextResponse.json({ ok: true, live: true, ...merged(forScope(held.book, who), mine), everything: scope.everything, ageMs: age, stale: true });
     }
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Couldn't reach REX." }, { status: 502 });
   }
