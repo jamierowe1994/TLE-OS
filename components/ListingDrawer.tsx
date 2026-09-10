@@ -79,13 +79,16 @@ type LandlordState =
   | { status: "none" }
   | { status: "problem"; says: string };
 
-type TabKey = "home" | "property" | "marketing" | "photos" | "compliance" | "documents";
+type TabKey = "home" | "viewings" | "property" | "marketing" | "photos" | "compliance" | "documents";
 
 /* Property and Marketing are EDIT tabs — the facts they hold moved up into
    the header, so the tab is where you go to change them, not to read them.
    Home is the working view: applications on the left, viewings on the right. */
 const TABS: { key: TabKey; label: string }[] = [
-  { key: "home", label: "Applications & viewings" },
+  /* Two lists, not one board. James, 10 Sep 2026: viewings and applications
+     are separate jobs and reading them side by side made both cramped. */
+  { key: "home", label: "Applications" },
+  { key: "viewings", label: "Viewings" },
   { key: "property", label: "Property" },
   { key: "marketing", label: "Marketing" },
   { key: "photos", label: "Photos" },
@@ -350,6 +353,27 @@ export default function ListingDrawer({
     const seen = new Map<string, { id: string; name: string; phone: string; note: string }>();
     const here = (a: { what: string; where: string }) =>
       `${a.what} ${a.where}`.toLowerCase().includes((listing?.name ?? "\u0000").toLowerCase());
+    /* This listing's own diary out of REX first. The shared diary below only
+       holds what the OS itself booked, so on a property REX has run sixteen
+       viewings on it said "nobody has viewed this property yet" and sent the
+       agent off to search - with the sixteen people sitting on the tab next
+       to it. */
+    if (!otherTenants) {
+      for (const v of [...(viewings?.upcoming ?? []), ...(viewings?.past ?? [])]) {
+        if (v.cancelled) continue;
+        for (const c of v.contacts) {
+          const key = c.name.trim().toLowerCase();
+          if (!key || seen.has(key)) continue;
+          const when = new Date(v.startsAt);
+          seen.set(key, {
+            id: c.id,
+            name: c.name,
+            phone: c.phone ?? "",
+            note: `${when.getTime() > Date.now() ? "Viewing booked" : "Viewed"} ${when.toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`,
+          });
+        }
+      }
+    }
     for (const a of liveDiary) {
       if (a.kind !== "viewing" || !a.who) continue;
       if (!otherTenants && !here(a)) continue;
@@ -367,10 +391,20 @@ export default function ListingDrawer({
     const all = [...seen.values()];
     const q = tenantQuery.trim().toLowerCase();
     return q ? all.filter((c) => c.name.toLowerCase().includes(q)) : all.slice(0, otherTenants ? 40 : 12);
-  }, [liveDiary, listing?.name, otherTenants, tenantQuery]);
+  }, [liveDiary, listing?.name, otherTenants, tenantQuery, viewings]);
   const [reviewing, setReviewing] = useState(false);
   const [draftRent, setDraftRent] = useState("");
   const [draftTenants, setDraftTenants] = useState<TenantIn[]>([]);
+  /* Anybody on the offer who is NOT in the list below - picked from an
+     enquiry, say. They get a chip so the sheet still shows who it is for;
+     everyone else is already visible, ticked, in the list itself. */
+  const offSheet = useMemo(
+    () =>
+      draftTenants.filter(
+        (t) => !candidates.some((c) => c.id === t.fromId || c.name.trim().toLowerCase() === t.name.trim().toLowerCase())
+      ),
+    [draftTenants, candidates]
+  );
 
   /* The portal write-up, and the only thing on this screen that writes to REX.
      `saved` holds what REX confirmed on the way back, so the panel shows the
@@ -527,6 +561,13 @@ export default function ListingDrawer({
                     {c.phone && <a href={`tel:${c.phone.replace(/\s+/g, "")}`} className="text-muted hover:text-ink">{c.phone}</a>}
                     {c.email && <a href={`mailto:${c.email}`} className="text-muted hover:text-ink">{c.email}</a>}
                     {c.leadId && <a href={`/leads?open=${encodeURIComponent(c.leadId)}`} className="rounded-full border border-line/80 px-2.5 py-0.5 text-[11px] hover:border-ink/40">Open the lead</a>}
+                    <button
+                      type="button"
+                      onClick={() => applyFor({ id: c.id, name: c.name, phone: c.phone })}
+                      className="rounded-full border border-accent-dark/50 px-2.5 py-0.5 text-[11px] font-semibold text-accent-dark hover:border-accent-dark"
+                    >
+                      Make an application
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -537,6 +578,21 @@ export default function ListingDrawer({
       </li>
     );
   };
+
+  /**
+   * Start an application from a named person.
+   *
+   * James, 10 Sep 2026: "we'll have an applications list separately, so we can
+   * click on a tenant and make an application". The offer sheet already
+   * insists an offer is attached to somebody we hold a record for - this just
+   * arrives with that person already picked, from wherever their name was on
+   * screen, rather than making the agent find them again in a list.
+   */
+  function applyFor(p: { id: string; name: string; phone?: string | null }) {
+    setDraftTenants([{ name: p.name, number: "", mobile: p.phone ?? "", situation: "", fromId: p.id }]);
+    setDraftRent(listing?.rent ? String(listing.rent) : "");
+    setOffering(true);
+  }
 
   /** The step decides what the button does, same as on a lead. */
   function fire() {
@@ -919,9 +975,15 @@ export default function ListingDrawer({
                 }`}
               >
                 {t.label}
-                {t.key === "home" && offers.length + booked.length > 0 && (
+                {/* Each tab counts its own now that they are two lists. */}
+                {t.key === "home" && (offers.length + (liveApps?.length ?? 0)) > 0 && (
                   <span className="figures ml-1.5 text-[10.5px] text-muted">
-                    {offers.length + booked.length}
+                    {offers.length + (liveApps?.length ?? 0)}
+                  </span>
+                )}
+                {t.key === "viewings" && (booked.length + (viewings?.upcoming.length ?? 0)) > 0 && (
+                  <span className="figures ml-1.5 text-[10.5px] text-muted">
+                    {booked.length + (viewings?.upcoming.length ?? 0)}
                   </span>
                 )}
                 {tab === t.key && (
@@ -940,8 +1002,8 @@ export default function ListingDrawer({
                 {enquiries.length ? (
                   <ul className="divide-y divide-line/40">
                     {enquiries.slice(0, 12).map((e) => (
-                      <li key={e.id}>
-                        <a href={`/leads?open=${encodeURIComponent(e.id)}`} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 py-2.5 transition-colors hover:bg-box sm:grid-cols-[minmax(0,1.2fr)_110px_minmax(0,1fr)_90px]">
+                      <li key={e.id} className="flex items-center gap-2">
+                        <a href={`/leads?open=${encodeURIComponent(e.id)}`} className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 py-2.5 transition-colors hover:bg-box sm:grid-cols-[minmax(0,1.2fr)_110px_minmax(0,1fr)_90px]">
                           <span className="min-w-0">
                             <span className="hand block truncate text-[13px]">{e.name}</span>
                             <span className="block truncate text-[10.5px] text-muted">{[e.phone, e.email].filter(Boolean).join(" · ") || "No contact details"}</span>
@@ -950,6 +1012,15 @@ export default function ListingDrawer({
                           <span className="hidden min-w-0 truncate text-[11px] text-muted sm:block">{e.message || "—"}</span>
                           <span className="text-right text-[11px] text-muted">{e.received}</span>
                         </a>
+                        {/* An enquirer is a tenant we hold a file on, so an
+                            application can start right here. */}
+                        <button
+                          type="button"
+                          onClick={() => applyFor({ id: e.id, name: e.name, phone: e.phone })}
+                          className="shrink-0 rounded-full border border-line/80 px-2.5 py-1 text-[10.5px] font-semibold text-muted transition-colors hover:border-accent-dark hover:text-accent-dark"
+                        >
+                          Apply
+                        </button>
                       </li>
                     ))}
                     {enquiries.length > 12 && (
@@ -963,8 +1034,8 @@ export default function ListingDrawer({
               </div>
             )}
             {tab === "home" && (
-              <div className="grid gap-4 lg:grid-cols-2">
-                {/* ── Left: the applications, accumulating as they land. ── */}
+              <div className="grid gap-4">
+                {/* The applications on this listing, on their own tab. */}
                 <Card
                   title="Applications"
                   icon="coin"
@@ -1027,8 +1098,11 @@ export default function ListingDrawer({
                     </p>
                   )}
                 </Card>
+              </div>
+            )}
 
-                {/* ── Right: the viewings, coming and gone. ── */}
+            {tab === "viewings" && (
+              <div className="grid gap-4">
                 <div className="space-y-4">
                   <Card
                     title="Upcoming viewings"
@@ -1365,7 +1439,7 @@ export default function ListingDrawer({
         <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
           <button
             aria-label="Close"
-            onClick={() => setOffering(false)}
+            onClick={() => { setOffering(false); setDraftTenants([]); setDraftRent(""); }}
             className="absolute inset-0 cursor-default bg-ink/45"
           />
           <div className="fade-up relative flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
@@ -1402,8 +1476,30 @@ export default function ListingDrawer({
                 <p className="mb-2.5 text-[11.5px] text-muted">
                   {otherTenants
                     ? "Anyone we hold a record for."
-                    : "People who have viewed this property — nearly always one of these."}
+                    : candidates.length
+                      ? "People who have viewed this property — nearly always one of these."
+                      : "Add anybody else with Find other tenants."}
                 </p>
+
+                {/* Who is already on the offer. The list below is drawn from
+                    the diary, so somebody picked from an enquiry or a viewing
+                    record won't appear in it - they show here instead, and can
+                    be taken off the same way. */}
+                {offSheet.length > 0 && (
+                  <div className="mb-2.5 flex flex-wrap gap-1.5">
+                    {offSheet.map((t) => (
+                      <button
+                        key={t.fromId || t.name}
+                        type="button"
+                        onClick={() => setDraftTenants((cur) => cur.filter((x) => x.fromId !== t.fromId))}
+                        className="flex items-center gap-1.5 rounded-full border border-accent-dark bg-accent-soft/50 px-3 py-1 text-[11.5px] font-semibold text-accent-dark"
+                      >
+                        {t.name}
+                        <span aria-hidden className="text-[13px] leading-none">&times;</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {otherTenants && (
                   <input
@@ -1417,7 +1513,9 @@ export default function ListingDrawer({
 
                 <div className="space-y-1.5">
                   {candidates.map((c) => {
-                    const on = draftTenants.some((t) => t.fromId === c.id);
+                    const on = draftTenants.some(
+                      (t) => t.fromId === c.id || t.name.trim().toLowerCase() === c.name.trim().toLowerCase()
+                    );
                     return (
                       <button
                         key={c.id}
@@ -1425,7 +1523,9 @@ export default function ListingDrawer({
                         onClick={() =>
                           setDraftTenants((cur) =>
                             on
-                              ? cur.filter((t) => t.fromId !== c.id)
+                              ? cur.filter(
+                                  (t) => t.fromId !== c.id && t.name.trim().toLowerCase() !== c.name.trim().toLowerCase()
+                                )
                               : [...cur, { name: c.name, number: "", mobile: c.phone, situation: "", fromId: c.id }]
                           )
                         }
@@ -1444,7 +1544,7 @@ export default function ListingDrawer({
                       </button>
                     );
                   })}
-                  {!candidates.length && (
+                  {!candidates.length && !(offSheet.length && !otherTenants) && (
                     <p className="rounded-xl border border-dashed border-line px-3 py-4 text-center text-[11.5px] text-muted">
                       {otherTenants
                         ? "Nobody matches that."

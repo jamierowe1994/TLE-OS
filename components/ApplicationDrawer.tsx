@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import PropertyFile from "@/components/PropertyFile";
 import { Pill } from "@/components/Wire";
+import { rexContactUrl } from "@/lib/business/rex-links";
 import StageSpine, { type SpineStop } from "@/components/StageSpine";
 import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
 
@@ -56,9 +57,21 @@ export interface AppActivity {
   note?: boolean;
 }
 
+/** One person on the application, and how to reach them. */
+export interface AppPerson {
+  name: string;
+  contactId: string | null;
+  email: string | null;
+  phone: string | null;
+  isPrimary: boolean;
+}
+
 export interface AppRecord {
   id: string;
   tenant: string;
+  /** Everyone on it, so their name can be a way through to their file rather
+   *  than dead text (James, 10 Sep 2026). */
+  applicants?: AppPerson[];
   property: string;
   /** REX property id, when the application carries one - the property file hangs off it. */
   propertyId?: string | null;
@@ -109,6 +122,54 @@ const NEXT_ACTION: Record<string, { do: string; who: string }> = {
   unsuccessful: { do: "Nothing outstanding. Tell them why if they haven't been told.", who: "—" },
 };
 
+/** The people on an application, and the ways through to each of them. */
+function Applicants({ people, leadIds }: { people: AppPerson[]; leadIds: Record<string, string> }) {
+  return (
+    <ul className="mt-2 space-y-2">
+      {people.map((p, i) => {
+        const lead = p.contactId ? leadIds[p.contactId] : null;
+        return (
+          <li key={(p.contactId ?? "") + i} className="rounded-xl border border-line/70 bg-panel px-3.5 py-2.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="text-[12.5px] font-semibold">{p.name}</span>
+              {p.isPrimary && <Pill tone="neutral">Lead applicant</Pill>}
+              {p.phone && (
+                <a href={`tel:${p.phone.replace(/\s+/g, "")}`} className="text-[11.5px] text-muted hover:text-ink">{p.phone}</a>
+              )}
+              {p.email && (
+                <a href={`mailto:${p.email}`} className="truncate text-[11.5px] text-muted hover:text-ink">{p.email}</a>
+              )}
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {lead && (
+                <a
+                  href={`/leads?open=${encodeURIComponent(lead)}`}
+                  className="rounded-full bg-ink px-3 py-1 text-[11px] font-semibold text-page"
+                >
+                  Open their file
+                </a>
+              )}
+              {p.contactId && (
+                <a
+                  href={rexContactUrl(p.contactId)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-line/80 px-3 py-1 text-[11px] font-semibold transition-colors hover:border-ink/40"
+                >
+                  Open in REX
+                </a>
+              )}
+              {!lead && !p.contactId && (
+                <span className="text-[11px] text-muted">No contact record on this application.</span>
+              )}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export default function ApplicationDrawer({
   app,
   stages,
@@ -124,6 +185,29 @@ export default function ApplicationDrawer({
   onClose: () => void;
 }) {
   const [shown, setShown] = useState(false);
+  /* The people on this application, and which of them the OS already has a
+     lead for. Asked once when the drawer opens. */
+  const [whoOpen, setWhoOpen] = useState(false);
+  const [leadIds, setLeadIds] = useState<Record<string, string>>({});
+  /* Everyone on the application; falls back to the single name the record
+     carries, so an application with no applicant rows still shows somebody. */
+  const people: AppPerson[] = app?.applicants?.length
+    ? app.applicants
+    : app
+      ? [{ name: app.tenant, contactId: null, email: null, phone: null, isPrimary: true }]
+      : [];
+
+  useEffect(() => {
+    const ids = people.map((p) => p.contactId).filter((x): x is string => Boolean(x));
+    if (!ids.length) { setLeadIds({}); return; }
+    let live = true;
+    fetch(`/api/leads/by-contact?ids=${encodeURIComponent(ids.join(","))}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (live && j?.ok) setLeadIds(j.leads ?? {}); })
+      .catch(() => { /* the panel still offers REX */ });
+    return () => { live = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app?.id]);
   const [draft, setDraft] = useState("");
   /* The thread, from the OS. REX gives the milestones above; this is what
      people typed, and it comes back on every open rather than living and
@@ -231,7 +315,25 @@ export default function ApplicationDrawer({
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
                 Application — stage {cur + 1} of {stages.length}
               </p>
-              <p className="hand mt-1 truncate text-[20px] leading-tight">{app.tenant}</p>
+              {/* The tenant's name is the way through to them. It used to be
+                  plain text, so an accepted application named somebody an
+                  agent then had to go and find by hand (James, 10 Sep 2026). */}
+              {people.length ? (
+                <button
+                  type="button"
+                  onClick={() => setWhoOpen((o) => !o)}
+                  className="hand mt-1 flex max-w-full items-center gap-1.5 truncate text-left text-[20px] leading-tight underline decoration-line decoration-2 underline-offset-4 transition-colors hover:decoration-ink"
+                  title="Their details"
+                >
+                  <span className="truncate">{app.tenant}</span>
+                  {people.length > 1 && (
+                    <span className="shrink-0 text-[12px] text-muted">+{people.length - 1}</span>
+                  )}
+                  <span className="shrink-0 text-[11px] text-muted">{whoOpen ? "▴" : "▾"}</span>
+                </button>
+              ) : (
+                <p className="hand mt-1 truncate text-[20px] leading-tight">{app.tenant}</p>
+              )}
               <p className="mt-1 truncate text-[12px] text-muted">
                 {app.property} · {app.locality}
               </p>
@@ -268,6 +370,15 @@ export default function ApplicationDrawer({
             </button>
           </div>
         </div>
+
+        {whoOpen && people.length > 0 && (
+          <div className="shrink-0 border-b border-line/70 bg-box px-6 py-4">
+            <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">
+              {people.length === 1 ? "The applicant" : `The applicants · ${people.length}`}
+            </p>
+            <Applicants people={people} leadIds={leadIds} />
+          </div>
+        )}
 
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="grid gap-5 p-6 xl:grid-cols-[1fr_1fr]">

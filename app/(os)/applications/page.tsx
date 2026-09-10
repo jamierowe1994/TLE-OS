@@ -346,6 +346,13 @@ export default function Applications() {
           app={{
             id: open.id,
             tenant: (open.applicants.find((p) => p.isPrimary) ?? open.applicants[0])?.name ?? "—",
+            applicants: open.applicants.map((p) => ({
+              name: p.name,
+              contactId: p.contactId,
+              email: p.email,
+              phone: p.phone,
+              isPrimary: p.isPrimary,
+            })),
             property: open.property,
             propertyId: open.propertyId,
             locality: open.locality,
