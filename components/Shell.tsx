@@ -153,11 +153,21 @@ export default function Shell({ children }: { children: React.ReactNode }) {
    * are on the way to; the class it puts on the content is what the CSS
    * hangs the fall off.
    *
-   * Cleared by the pathname changing rather than by a second timer, so a
-   * slow route cannot leave the page stuck face down.
+   * Cleared by the URL changing rather than by a second timer, so a slow
+   * route cannot leave the page stuck face down.
+   *
+   * ⚠️ THE WHOLE URL, not the pathname. body-fall ends at opacity 0 with
+   * `both`, so the page is HELD invisible until this clears - and it used to
+   * clear on `pathname`, which does not change when a nav child differs only
+   * by its query string. Leads (All / Tenant / Landlord) and Maintenance
+   * (Jobs / Contractors) are exactly that shape, so the first click from
+   * another screen worked and every click between siblings played the fall
+   * and then stayed face down. James, 10 Sep 2026: "the first click works...
+   * as I try to scroll through the different ones, it doesn't load anything."
+   * It had loaded. It was lying at the bottom of the animation.
    */
   const [leaving, setLeaving] = useState<string | null>(null);
-  useEffect(() => { setLeaving(null); }, [pathname]);
+  useEffect(() => { setLeaving(null); }, [currentHref]);
   const EXIT_MS = 260;
   const goTo = useCallback(
     (href: string) => {
