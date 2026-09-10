@@ -499,7 +499,7 @@ export default function Listings() {
       {/* The street, running off the bottom of the page. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/illustrations/buildings-street.png"
+        src="/illustrations/street.webp"
         alt=""
         aria-hidden
         className="art art-figure pointer-events-none ml-auto mt-8 hidden w-[420px] opacity-90 lg:block"

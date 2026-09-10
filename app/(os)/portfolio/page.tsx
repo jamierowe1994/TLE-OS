@@ -677,7 +677,19 @@ export default function Portfolio() {
       <PageHeader
         title="Portfolio"
         blurb={blurb}
-        illustration="/illustrations/buildings-street.png"
+        /* A street, so it is short and wide rather than tall - 3.11 against
+           the roughly 1.2 of the scene pages. Sized by WIDTH rather than the
+           shared 250 height: at 250 it would run 777px across and squeeze the
+           blurb into a column. 200 puts it at 622, which leaves the text its
+           full measure.
+
+           Pushed down 4% so the pavement runs into the line and is erased by
+           it, the same as the other scenes. */
+        illustration="/illustrations/street.webp"
+        illustrationHeight={200}
+        illustrationAspect={3.11}
+        seat={0.96}
+        illustrationCrop
         /* The bar under the header IS the book's filter - one search per
            page (James, 6 Sep 2026), not a global bar above and a second box
            in the pill row. */
