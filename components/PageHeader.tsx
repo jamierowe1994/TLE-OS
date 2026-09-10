@@ -259,44 +259,22 @@ export default function PageHeader({
      with. Keyed by the numbers themselves, so two identical headers share one
      rule and two different ones never collide. */
   const seatClass = `seat-${Math.round(illustrationHeight)}-${Math.round((seat ?? 0) * 1000)}`;
-  /* From lg up, a seated figure is set in far enough to clear the page's
-     action button, so the search row does not move for him at all: it sits
-     the same 20px under the rule it does on every other page (James, 6 Sep
-     2026 - every header the same height, every search row in the same place)
-     and his legs hang past it into the empty middle of the row, which is what
-     dangling legs do. Below lg there is no room to set him in beside the
-     search box, so there the row clears his feet completely (factor 1) and
-     he stays in the corner. */
-  const clearance = [
-    [0.5, 1],
-    [0.68, 1],
-    [0.88, 0],
-    [1, 0],
-  ].map(([scale, factor]) => Math.round(legs * scale * factor) + 20);
-
   /*
-   * ── Room for his shoes ───────────────────────────────────────────────────
+   * ── Room for the legs ────────────────────────────────────────────────────
    *
-   * From lg up the search row deliberately does NOT clear the figure: it sits
-   * its usual 20px under the rule and his legs hang past it into the empty
-   * middle of the row. What that never accounted for is what comes AFTER the
-   * row. On Leads the table card follows immediately, paints its own
-   * background, and lands across his trainers - so the man is sitting on the
-   * line with his feet cut off (James, 10 Sep 2026).
+   * A seated figure hangs below the rule, and whatever comes next paints its
+   * own background straight across the feet - which is how the man on Leads
+   * ended up sitting on the line with his trainers cut off (James, 10 Sep
+   * 2026). The masthead carries a bottom margin as deep as the part of the
+   * figure that hangs past it, plus a little air so the shoes are not
+   * touching the card either.
    *
-   * So the row also carries a margin BELOW it, exactly as deep as the part of
-   * him that hangs past its bottom edge, plus a little air so the shoes are
-   * not touching the card either.
-   *
-   * Zero at the widths where `clearance` already pushes the row clear of his
-   * feet - there is nothing left hanging to make room for, and a gap there
-   * would just be a hole in the page.
+   * This used to be spread across the search row's own margins either side of
+   * a row height that had to be guessed at 42px. That row has moved to the
+   * top of the page, so the margin belongs to the masthead now, and it is one
+   * measured number instead of three estimated ones.
    */
-  const ROW = 42; // the search row itself: py-2.5 on 13px text, both sides.
-  const footroom = [0.5, 0.68, 0.88, 1].map((scale, i) => {
-    const past = Math.round(legs * scale) - clearance[i] - ROW;
-    return past > 0 ? past + 12 : 0;
-  });
+  const gap = SCALES.map((sc) => (seated ? Math.round(legs * sc) + 14 : 20));
 
   /* The strip is scaled to the element's width, so each frame ends up exactly
      illustrationHeight tall and the run is that times the frame count. Stepping
@@ -344,17 +322,60 @@ export default function PageHeader({
       )}
       {seated && (
         <style>{`
-          .${seatClass} { margin-top: ${clearance[0]}px; margin-bottom: ${footroom[0]}px }
-          @media (min-width: 640px) { .${seatClass} { margin-top: ${clearance[1]}px; margin-bottom: ${footroom[1]}px } }
-          @media (min-width: 1024px) { .${seatClass} { margin-top: ${clearance[2]}px; margin-bottom: ${footroom[2]}px } }
-          @media (min-width: 1280px) { .${seatClass} { margin-top: ${clearance[3]}px; margin-bottom: ${footroom[3]}px } }
+          .${seatClass} { margin-bottom: ${gap[0]}px }
+          @media (min-width: 640px) { .${seatClass} { margin-bottom: ${gap[1]}px } }
+          @media (min-width: 1024px) { .${seatClass} { margin-bottom: ${gap[2]}px } }
+          @media (min-width: 1280px) { .${seatClass} { margin-bottom: ${gap[3]}px } }
         `}</style>
       )}
+      {/* ── The top bar ──────────────────────────────────────────────────
+          Search on the left, notifications hard right, above everything.
+
+          It used to sit UNDER the rule, which cost a whole row of height
+          directly below the masthead - and that row was what the artwork had
+          to be shrunk to make space for. Up here it takes no height from the
+          scene at all, and the masthead below can be shallower for it.
+
+          z-30 because the illustration deliberately overflows the masthead
+          upwards and would otherwise paint straight over both of them. */}
+      {(search || true) && (
+        <div className="relative z-30 mb-1 flex items-center justify-between gap-3">
+          {search ? (
+            onSearch ? (
+              /* A page that filters its own list (Listings, Leads) passes
+                 onSearch and keeps its own bar. Everywhere else the bar is
+                 the one search: any property, lead, application or deal,
+                 opened on its screen. */
+              <label className="flex w-full max-w-sm items-center gap-2.5 rounded-full border border-line/80 px-4 py-2 transition-colors focus-within:border-ink">
+                <DoodleIcon name="search" size={14} className="shrink-0 text-muted" />
+                <input
+                  type="text"
+                  placeholder={searchPlaceholder}
+                  value={searchValue}
+                  onChange={(e) => onSearch(e.target.value)}
+                  className="w-full bg-transparent text-[12.5px] outline-none placeholder:text-muted/70"
+                />
+              </label>
+            ) : (
+              <GlobalSearch placeholder={searchPlaceholder} />
+            )
+          ) : (
+            <span />
+          )}
+          {/* The page's own actions sit up here too, so nothing is left
+              stranded in a row of its own under the rule. */}
+          <div className="flex shrink-0 items-center gap-3">
+            {actions}
+            <NotificationBell compact />
+          </div>
+        </div>
+      )}
+
       {/* 232, not 212: at 212 the notification button sat ON the top of the
           dashboard's window frame. The figure hangs off the rule, so giving the
           masthead 20px more height is what buys the air above its head. */}
       <div
-        className="fade-up relative flex items-end justify-between gap-6 border-b border-line/80 pt-8"
+        className={`fade-up relative flex items-end justify-between gap-6 border-b border-line/80 pt-8 ${seated ? seatClass : "mb-5"}`}
         style={{ minHeight }}
       >
         {/* The right padding is the figure's footprint reserved in advance.
@@ -362,7 +383,7 @@ export default function PageHeader({
             of its way — without this the blurb runs underneath it the moment
             the window narrows. Each step matches the scale below. */}
         <div
-          className={`self-start pl-2 pt-[68px] ${
+          className={`self-start pl-2 pt-[26px] ${
             !hasArt
               ? ""
               : wideArt
@@ -387,10 +408,6 @@ export default function PageHeader({
           <h1 className="text-balance leading-tight" style={{ fontSize: titleSize }}>{title}</h1>
           <p className="mt-2.5 max-w-md text-[13px] text-muted">{blurb}</p>
         </div>
-
-        {/* Notifications, top right and nothing else up there. Live since
-            5 Sep 2026 - see components/NotificationBell. */}
-        <NotificationBell />
 
         {/* The figure, hard right, standing on the rule.
 
@@ -510,30 +527,6 @@ export default function PageHeader({
         )}
       </div>
 
-      {/* Search sits UNDER the rule, in the same column it always did — it
-          belongs to the work below, not to the masthead above. */}
-      {(search || actions) && (
-        <div className={`flex flex-wrap items-center justify-between gap-3 ${seated ? seatClass : "mt-5"}`}>
-          {/* A page that filters its own list (Listings) passes onSearch and
-              keeps its bar. Everywhere else the bar is the one search: any
-              property, lead, application or deal, opened on its screen.
-              It was a read-only drawing until 5 Sep. */}
-          {search && onSearch && (
-            <label className="flex w-full max-w-xs items-center gap-2.5 rounded-full border border-line/80 px-4 py-2.5 transition-colors focus-within:border-ink">
-              <DoodleIcon name="search" size={15} className="shrink-0 text-muted" />
-              <input
-                type="text"
-                placeholder={searchPlaceholder}
-                value={searchValue}
-                onChange={(e) => onSearch(e.target.value)}
-                className="w-full bg-transparent text-[13px] outline-none placeholder:text-muted/70"
-              />
-            </label>
-          )}
-          {search && !onSearch && <GlobalSearch placeholder={searchPlaceholder} />}
-          {actions}
-        </div>
-      )}
     </>
   );
 }

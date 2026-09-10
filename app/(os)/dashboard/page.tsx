@@ -52,8 +52,10 @@ export default function Dashboard() {
            trailing leg carry on underneath it. 560 leaves his head about 30px
            clear of the cut. */
         illustrationHeight={470}
-        /* Deeper than the standard 232 so his head clears. */
-        minHeight={340}
+        /* Only a little deeper than the standard 232. The search bar moving
+           to the top gave back the row that used to sit under the rule, so
+           the masthead needs far less of its own depth to clear his head. */
+        minHeight={240}
         lineBreak="none"
         flushRight
         /* Customise rides the search row — one line of chrome, not two. */
@@ -64,7 +66,10 @@ export default function Dashboard() {
             className={`flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-medium transition-colors ${
               customising
                 ? "bg-accent-dark font-semibold text-page"
-                : "border border-line/80 text-muted hover:border-ink hover:text-ink"
+                : /* bg-page, not transparent: this now sits in the top bar,
+                     over the illustration, and a see-through button on a
+                     painted window is unreadable. */
+                  "border border-line/80 bg-page text-muted hover:border-ink hover:text-ink"
             }`}
           >
             {customising ? "Done" : "✨ Customise"}

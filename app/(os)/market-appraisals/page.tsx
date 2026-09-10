@@ -193,7 +193,8 @@ export default function MarketAppraisals() {
             </select>
             {/* List or tiles. Two ways of reading the same rows: a list to
                 work down, tiles to take in. Nothing is hidden in either. */}
-            <div className="flex items-center rounded-full border border-line/80 p-0.5">
+            {/* bg-panel: it sits in the top bar over the illustration now. */}
+            <div className="flex items-center rounded-full border border-line/80 bg-panel p-0.5">
               {([["list", "list"], ["tiles", "grid"]] as const).map(([id, icon]) => (
                 <button
                   key={id}
