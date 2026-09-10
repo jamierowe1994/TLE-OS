@@ -21,6 +21,7 @@ import {
   type SignalKey,
   type Stage,
 } from "@/lib/radar-signals";
+import PickOne from "@/components/PickOne";
 
 /**
  * Landlord Radar — the board and the panel beside it.
@@ -533,18 +534,15 @@ export default function RadarBoard({
                 className="w-full bg-transparent text-[12.5px] outline-none placeholder:text-muted/70"
               />
             </label>
-            <select
-              value={radius}
-              onChange={(e) => setRadius(Number(e.target.value))}
-              title="Radius around the address"
-              className="rounded-full border border-line/80 bg-transparent px-3 py-2.5 text-[12px] text-muted outline-none hover:text-ink"
-            >
-              {[0.25, 0.5, 1, 2, 3, 5].map((m) => (
-                <option key={m} value={m}>{m} mile{m === 1 ? "" : "s"}</option>
-              ))}
-            </select>
-            <Filter label="All districts" options={districts} value={fDistrict} onChange={setFDistrict} />
-            <Filter label="All agents" options={agents} value={fAgent} onChange={setFAgent} />
+            <PickOne
+              label="Radius"
+              options={[0.25, 0.5, 1, 2, 3, 5].map((m) => ({ id: String(m), label: `${m} mile${m === 1 ? "" : "s"}` }))}
+              value={String(radius)}
+              onChange={(v) => setRadius(Number(v ?? 1))}
+              clearable={false}
+            />
+            <PickOne label="All districts" options={districts.map((o) => ({ id: o, label: o }))} value={fDistrict} onChange={setFDistrict} />
+            <PickOne label="All agents" options={agents.map((o) => ({ id: o, label: o }))} value={fAgent} onChange={setFAgent} />
             {view === "list" && (
               <Filter label="Open" options={[...STAGES]} value={fStage} onChange={setFStage} render={(st) => STAGE_LABEL[st as Stage]} />
             )}
@@ -658,16 +656,13 @@ export default function RadarBoard({
                 <p className="flex items-center gap-2.5 text-[11px] text-muted">
                   Showing {book.length ? page * perPage + 1 : 0}-{Math.min((page + 1) * perPage, book.length)} of{" "}
                   {book.length} properties
-                  <select
-                    value={perPage}
-                    onChange={(e) => setPerPage(Number(e.target.value))}
-                    className="rounded-full border border-line/80 bg-transparent px-2.5 py-1 text-[11px] outline-none transition-colors hover:border-ink/40"
-                    title="Properties per page"
-                  >
-                    {[25, 50, 100].map((n) => (
-                      <option key={n} value={n}>{n} a page</option>
-                    ))}
-                  </select>
+                  <PickOne
+                    label="A page"
+                    options={[25, 50, 100].map((n) => ({ id: String(n), label: `${n} a page` }))}
+                    value={String(perPage)}
+                    onChange={(v) => setPerPage(Number(v ?? 50))}
+                    clearable={false}
+                  />
                 </p>
                 <div className="flex items-center gap-2">
                   <PressButton

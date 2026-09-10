@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import PickOne from "@/components/PickOne";
 
 /**
  * The filter row every people-picker shares: a name search, and a radius
@@ -117,17 +118,13 @@ export default function PeopleFilterBar({
         />
       </label>
 
-      <select
-        value={filters.miles}
-        onChange={(e) => onChange({ ...filters, miles: Number(e.target.value) })}
-        className="rounded-full border border-line/80 bg-transparent px-3 py-2 text-[12px] outline-none"
-      >
-        {[1, 3, 5, 10, 20].map((m) => (
-          <option key={m} value={m}>
-            within {m} mi
-          </option>
-        ))}
-      </select>
+      <PickOne
+        value={String(filters.miles)}
+        onChange={(v) => onChange({ ...filters, miles: Number(v ?? 5) })}
+        clearable={false}
+        label="Distance"
+        options={[1, 3, 5, 10, 20].map((m) => ({ id: String(m), label: `within ${m} mi` }))}
+      />
 
       {busy && (
         <span className="block h-3.5 w-3.5 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
