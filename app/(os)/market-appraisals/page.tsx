@@ -165,17 +165,22 @@ export default function MarketAppraisals() {
 
   return (
     <>
-      {/* The only OS page that had no illustration, which is most of why it
-          read flat beside every other screen. She is the drawn set already in
-          use, standing on the rule like the rest - the house treatment, not a
-          new one invented here. */}
       <PageHeader
         title="Market Appraisals"
         blurb="Booked, prepared, appraised, won. Everything between a landlord saying yes to a visit and signing terms."
-        illustration="/illustrations/thinking-man.png"
-        /* The artwork is cropped at the thigh, so its bottom edge IS the rule:
-           with no seat and no dip he is dropped by nothing and the crop lands
-           exactly on the line, which reads as him standing behind it. */
+        /* His hair starts at 0.003 of the artwork - there is no empty margin
+           above him at all - so this one cannot bleed off the top the way the
+           dashboard does without taking his head with it. 330 matches the
+           dashboard's height and still clears the top of the page.
+
+           Pushed down 4% so the shadows under his feet run into the line and
+           are erased by it, rather than the whole scene stopping politely
+           above the rule. */
+        illustration="/illustrations/appraisals.webp"
+        illustrationHeight={330}
+        illustrationAspect={1.2292}
+        seat={0.96}
+        illustrationCrop
         lineBreak="none"
         actions={
           <div className="flex items-center gap-2">
