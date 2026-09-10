@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import NotificationBell from "@/components/NotificationBell";
@@ -38,6 +38,7 @@ function NavLink({
   currentHref,
   open,
   onToggle,
+  go,
 }: {
   item: NavItem;
   active: boolean;
@@ -46,6 +47,8 @@ function NavLink({
   /** Opened by hand, rather than by being the section you are standing in. */
   open: boolean;
   onToggle: () => void;
+  /** Plays the page out before it changes. See `goTo` in Shell. */
+  go: (href: string) => void;
 }) {
   /*
    * A section with children OPENS rather than navigating.
@@ -71,7 +74,7 @@ function NavLink({
       <Parent
         {...(asButton
           ? { type: "button" as const, onClick: onToggle, "aria-expanded": showChildren }
-          : { href: item.href })}
+          : { href: item.href, onClick: (e: React.MouseEvent) => { e.preventDefault(); go(item.href); } })}
         title={collapsed ? item.label : undefined}
         /* The handle the new-starter tour hangs its spotlight on. The href is
            already unique per item, so this carries no new source of truth -
@@ -116,6 +119,7 @@ function NavLink({
               <Link
                 key={c.href}
                 href={c.href}
+                onClick={(e) => { e.preventDefault(); go(c.href); }}
                 className={`rounded-lg px-2.5 py-1.5 text-[12.5px] transition-colors ${
                   on ? "font-medium text-accent-dark" : "text-muted hover:text-ink"
                 }`}
@@ -140,6 +144,29 @@ export default function Shell({ children }: { children: React.ReactNode }) {
      open anyway, so this only ever holds one you have reached for from
      somewhere else - which is the whole point of it. */
   const [openSection, setOpenSection] = useState<string | null>(null);
+  /*
+   * Changing screen is a movement, not a swap.
+   *
+   * React unmounts the old page the instant the route changes, so there is
+   * nothing left to animate out - the only way to show it leaving is to play
+   * the fall FIRST and navigate when it lands. `leaving` holds the href we
+   * are on the way to; the class it puts on the content is what the CSS
+   * hangs the fall off.
+   *
+   * Cleared by the pathname changing rather than by a second timer, so a
+   * slow route cannot leave the page stuck face down.
+   */
+  const [leaving, setLeaving] = useState<string | null>(null);
+  useEffect(() => { setLeaving(null); }, [pathname]);
+  const EXIT_MS = 260;
+  const goTo = useCallback(
+    (href: string) => {
+      if (href === currentHref) return;
+      setLeaving(href);
+      window.setTimeout(() => router.push(href), EXIT_MS);
+    },
+    [currentHref, router]
+  );
   const [collapsed, setCollapsed] = useState(false);
   const [accent, setAccent] = useState("");
   const [theme, setTheme] = useState<ThemeChoice>("auto");
@@ -300,6 +327,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               currentHref={currentHref}
               open={openSection === item.href}
               onToggle={() => setOpenSection((o) => (o === item.href ? null : item.href))}
+              go={goTo}
             />
           ))}
 
@@ -322,6 +350,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               currentHref={currentHref}
               open={openSection === item.href}
               onToggle={() => setOpenSection((o) => (o === item.href ? null : item.href))}
+              go={goTo}
             />
           ))}
 
@@ -348,6 +377,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                   currentHref={currentHref}
                   open={openSection === item.href}
                   onToggle={() => setOpenSection((o) => (o === item.href ? null : item.href))}
+                  go={goTo}
                 />
               ))}
             </>
@@ -356,39 +386,6 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
         {/* ── Profile, at the foot ── */}
         <div className="mt-auto">
-          {/* A small word before the profile.
-              Not an advert and not a notification - the OS has a bell for
-              things that need doing. This is the line the brand actually runs
-              on, in the one bit of the rail that was empty, and it is the
-              LAST thing above the name so it reads as a sign-off rather than
-              as another nav item competing with the real ones.
-
-              It goes when the rail collapses: at 68px wide it would be a
-              coloured smudge, and the point of collapsing is to get the words
-              out of the way. */}
-          {!collapsed && (
-            /* No fade-up. The rail is persistent chrome, not page content
-               arriving: the profile row beneath it does not fade either, and
-               anything that needs an animation to run before it is legible is
-               invisible in a background tab.
-
-               Hidden on a short window. The rail is a fixed 100vh box with
-               overflow-hidden and no scroll, so anything that does not fit is
-               simply cut off - and the thing directly below this is the
-               profile, which is how somebody signs out. On a 13" laptop that
-               would have traded the sign-out button for a slogan. It appears
-               when there is genuinely room for it and never competes. */
-            <div className="mb-3 hidden overflow-hidden rounded-2xl border border-line/70 bg-accent-soft/45 p-3.5 [@media(min-height:900px)]:block">
-              <p className="hand text-[14px] leading-[1.15] text-ink">
-                More great
-                <br />
-                landlords ahead.
-              </p>
-              <p className="mt-1.5 text-[10.5px] leading-relaxed text-ink/60">
-                Same mission. Bigger impact.
-              </p>
-            </div>
-          )}
           {profileOpen && !collapsed && (
             <div className="fade-up mb-2 rounded-2xl border border-line/80 bg-panel p-3">
               {/* ONE door, not three.
@@ -499,7 +496,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <main data-os-content className="w-full flex-1 px-5 pb-28 pt-8 lg:px-10 xl:pr-[84px] 2xl:pl-14">
           {/* Keyed on the path so the screen replays when you actually change
               screen, and not when a filter changes the query string. */}
-          <div key={pathname} className="page-flow">
+          <div key={pathname} className={`page-flow ${leaving ? "page-leaving" : ""}`}>
             {children}
           </div>
         </main>

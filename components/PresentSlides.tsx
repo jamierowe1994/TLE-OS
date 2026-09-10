@@ -30,7 +30,7 @@ import {
   type NationalStat,
 } from "@/lib/present-stats";
 import { useState } from "react";
-import type { PresentDeck as Deck } from "@/lib/present";
+import { deckKind, feeOnRent, money, type PresentDeck as Deck } from "@/lib/present";
 import {
   CORAL,
   CreamSlide,
@@ -1925,6 +1925,22 @@ export function Fees({ deck, show }: { deck: Deck; show: boolean }) {
   const f = deck.fees;
   if (!f || (!f.rows.length && !f.headline)) return null;
 
+  /* THE FEE ON THIS PROPERTY, once there is a rent to put it against.
+     Only on the post-appraisal deck, and that is the point: before the visit
+     there is no figure, so the rate card stands on its own; after it, a
+     landlord should not have to do 10% of £1,300 in their head while somebody
+     is still talking. See feeOnRent for what this deliberately does not say. */
+  /* THE KIND DECIDES, not the data - the same rule the slide list follows.
+     A deck object carries whatever has been recorded against the appraisal, so
+     an agent who took a figure at the visit and then sent the APPRAISAL deck
+     rather than the post-appraisal one had "On £1,300 a month" printed on a
+     page whose whole premise is that no figure has been agreed yet. Caught in
+     the sample, which carries a valuation for every kind on purpose. */
+  const rent = deckKind(deck) === "post-appraisal" ? (deck.valuation?.rent ?? 0) : 0;
+  const priced = rent
+    ? f.rows.map((r) => ({ row: r, cost: feeOnRent(r, rent) })).filter((x) => x.cost)
+    : [];
+
   return (
     <CreamSlide id="fees">
       <div className="mx-auto w-full max-w-[1160px]">
@@ -1950,36 +1966,41 @@ export function Fees({ deck, show }: { deck: Deck; show: boolean }) {
                 with the invented exclusions removed that was a promise the
                 slide no longer kept - on the one page where being straight
                 about the fee is the entire argument. */}
+            {/* Says what is actually below it. It used to read "everything
+                below is what that includes", which described the row notes and
+                not the schedule - and once the second column arrived it was
+                introducing a price list as a list of inclusions. */}
             <p className="mt-3 text-[14.5px] font-light text-black/55">
-              on {f.headlineFor}. Everything below is what that includes
-              {f.excluded.length > 0 ? ", and what it does not." : "."}
+              on {f.headlineFor}. The whole schedule is below
+              {priced.length > 0 ? ", and what each one comes to on your rent" : ""}
+              {f.excluded.length > 0 ? ", with what it does not cover." : "."}
             </p>
           </Rise>
         )}
 
-        <div className="mt-7 grid gap-x-14 gap-y-7 lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="mt-8 grid gap-x-14 gap-y-8 lg:grid-cols-[1.15fr_0.85fr]">
           {f.rows.length > 0 && (
             <Rise show={show} i={3}>
               <ul>
                 {f.rows.map((r, n) => (
                   <li
                     key={r.label}
-                    className="flex items-baseline justify-between gap-6 py-2.5"
+                    className="flex items-baseline justify-between gap-6 py-3.5"
                     style={{ borderTop: n === 0 ? "none" : "1px solid rgba(0,0,0,0.07)" }}
                   >
                     <span className="min-w-0">
                       <span
-                        className="block text-[14.5px]"
+                        className="block text-[16px]"
                         style={{ fontFamily: HAND, fontWeight: 700 }}
                       >
                         {r.label}
                       </span>
                       {r.note && (
-                        <span className="block text-[12px] font-light text-black/45">{r.note}</span>
+                        <span className="block text-[12.5px] font-light text-black/45">{r.note}</span>
                       )}
                     </span>
                     <span
-                      className="shrink-0 text-[16px]"
+                      className="shrink-0 text-[17px]"
                       style={{ fontFamily: HAND, fontWeight: 700, color: CORAL }}
                     >
                       {r.amount}
@@ -1990,30 +2011,74 @@ export function Fees({ deck, show }: { deck: Deck; show: boolean }) {
             </Rise>
           )}
 
-          {f.excluded.length > 0 && (
-            <Rise show={show} i={4}>
-              <div className="rounded-2xl px-5 py-4" style={{ background: TINTS[0] }}>
-                <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-black/45">
-                  Not included
-                </h3>
-                <ul className="mt-2.5 space-y-1.5">
-                  {f.excluded.map((e) => (
-                    <li key={e} className="flex items-start gap-2.5">
-                      <span className="mt-[7px] h-[3px] w-[3px] shrink-0 rounded-full bg-black/30" />
-                      <span className="text-[12.5px] font-light leading-[1.5] text-black/60">
-                        {e}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </Rise>
-          )}
+          <div className="flex flex-col gap-6">
+            {/* WHAT THAT IS, IN POUNDS, ON THEIR PROPERTY. The rate card above
+                is the office's; this column is theirs. A one-off has no
+                monthly figure and is never divided into one - a tenant find
+                shown as "£62 a month" would be a fee nobody is charging. */}
+            {priced.length > 0 && (
+              <Rise show={show} i={4}>
+                <div className="rounded-2xl px-5 py-5" style={{ background: TINTS[0] }}>
+                  <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-black/45">
+                    On {money(rent)} a month
+                  </h3>
+                  <ul className="mt-3.5">
+                    {priced.map(({ row, cost }, n) => (
+                      <li
+                        key={row.label}
+                        className="flex items-baseline justify-between gap-5 py-2.5"
+                        style={{ borderTop: n === 0 ? "none" : "1px solid rgba(0,0,0,0.09)" }}
+                      >
+                        <span className="text-[12.5px] font-light text-black/60">{row.label}</span>
+                        <span className="shrink-0 text-right">
+                          <span
+                            className="block text-[15px] leading-none"
+                            style={{ fontFamily: HAND, fontWeight: 700 }}
+                          >
+                            {row.pct != null ? `${money(cost!.month)} a month` : money(cost!.year)}
+                          </span>
+                          <span className="mt-1 block text-[11px] font-light text-black/40">
+                            {row.pct != null ? `${money(cost!.year)} a year` : "one-off"}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  {/* VAT is not settled and this slide will not guess at it.
+                      Deferring in one line is honest; a net figure computed on
+                      the wrong side of it would be out by a fifth. */}
+                  <p className="mt-4 text-[11px] font-light leading-relaxed text-black/40">
+                    VAT and any set-up fee are set out in the terms of business.
+                  </p>
+                </div>
+              </Rise>
+            )}
+
+            {f.excluded.length > 0 && (
+              <Rise show={show} i={5}>
+                <div className="rounded-2xl px-5 py-4" style={{ background: TINTS[1] }}>
+                  <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-black/45">
+                    Not included
+                  </h3>
+                  <ul className="mt-2.5 space-y-1.5">
+                    {f.excluded.map((e) => (
+                      <li key={e} className="flex items-start gap-2.5">
+                        <span className="mt-[7px] h-[3px] w-[3px] shrink-0 rounded-full bg-black/30" />
+                        <span className="text-[12.5px] font-light leading-[1.5] text-black/60">
+                          {e}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </Rise>
+            )}
+          </div>
         </div>
 
         {f.note && (
-          <Rise show={show} i={5}>
-            <p className="mt-6 border-t border-black/10 pt-3.5 text-[12px] font-light leading-relaxed text-black/50">
+          <Rise show={show} i={6}>
+            <p className="mt-7 border-t border-black/10 pt-4 text-[12px] font-light leading-relaxed text-black/50">
               {f.note}
             </p>
           </Rise>

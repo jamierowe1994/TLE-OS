@@ -12,6 +12,7 @@ import {
   VISIT_STEPS,
   WHY_TLE,
   initialsOf,
+  money,
   type PresentDeck as Deck,
   type SectionId,
   type SlideId,
@@ -1196,7 +1197,9 @@ function Market({ deck, show }: { deck: Deck; show: boolean }) {
 function Valuation({ deck, show }: { deck: Deck; show: boolean }) {
   const v = deck.valuation;
   if (!v?.rent) return null;
-  const money = (n: number) => `£${Math.round(n).toLocaleString("en-GB")}`;
+  const c = deck.comparables;
+  const m = deck.market;
+
   /* Only the terms actually agreed. A row reading "Fee -" invites the
      question it fails to answer. */
   const terms = [
@@ -1204,6 +1207,59 @@ function Valuation({ deck, show }: { deck: Deck; show: boolean }) {
     v.feePct != null ? { label: "Management fee", value: `${v.feePct}% of rent` } : null,
     v.setupFee != null ? { label: "Set-up fee", value: `${money(v.setupFee)} one-off` } : null,
   ].filter(Boolean) as { label: string; value: string }[];
+
+  /**
+   * THE THREE FIGURES AROUND THE FIGURE.
+   *
+   * The slide was one number and three terms - 31% of a laptop screen,
+   * measured, and the emptiest page in the deck. It is also the page a
+   * landlord opened the whole thing for, so the answer is not decoration: it
+   * is the context that makes one number mean something.
+   *
+   * Every one is either arithmetic on the agreed rent or a figure already
+   * snapshotted onto the deck. Nothing is estimated, and nothing here is a
+   * net-of-fee number - see feeOnRent for why VAT rules that out.
+   *
+   * The year figure carries its own condition in the label. "£15,600 a year"
+   * on its own is a promise about occupancy nobody can make; "if it is let for
+   * a full year" is the same arithmetic with the assumption said out loud.
+   */
+  const context = [
+    { value: money(v.rent * 12), label: "a year, if it is let for a full year" },
+    m?.medianRent
+      ? {
+          value: money(m.medianRent),
+          label: `the middle asking rent in ${m.area}`,
+        }
+      : null,
+    c && c.rows.length
+      ? {
+          value: String(c.basedOn || c.rows.length),
+          label: "comparable lets nearby behind the figure",
+        }
+      : null,
+  ].filter(Boolean) as { value: string; label: string }[];
+
+  /**
+   * THE WORKING, drawn.
+   *
+   * The comparables slide already lists the evidence; this puts the agreed
+   * figure ON it, which is the one thing a landlord actually wants to check.
+   *
+   * The scale spans the evidence AND the rent rather than just the evidence,
+   * because the agreed figure is genuinely sometimes above the range - a
+   * better property than the ones that let, or a range built from mixed sizes.
+   * A bar the marker fell off the end of would be worse than no bar: it would
+   * look like a rendering fault rather than a number with a reason behind it,
+   * and the reason belongs in the note the agent writes.
+   */
+  const band = c && c.guideLow && c.guideHigh ? { low: c.guideLow, high: c.guideHigh } : null;
+  const lo = band ? Math.min(band.low, v.rent) : 0;
+  const hi = band ? Math.max(band.high, v.rent) : 0;
+  const pad = band ? Math.max(40, (hi - lo) * 0.12) : 0;
+  const from = lo - pad;
+  const span = hi + pad - from || 1;
+  const at = (n: number) => `${((n - from) / span) * 100}%`;
 
   return (
     <CreamSlide id="valuation">
@@ -1223,26 +1279,96 @@ function Valuation({ deck, show }: { deck: Deck; show: boolean }) {
           </h2>
         </Rise>
 
-        {terms.length > 0 && (
-          <Rise show={show} i={2}>
-            <dl className="mt-9 flex flex-wrap gap-x-14 gap-y-5 border-t border-black/10 pt-5">
-              {terms.map((t) => (
-                <div key={t.label}>
-                  <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/40">
-                    {t.label}
-                  </dt>
-                  <dd className="mt-1 text-[17px]" style={{ fontFamily: HAND, fontWeight: 700 }}>
-                    {t.value}
-                  </dd>
+        <div className="mt-8 grid gap-x-14 gap-y-8 lg:grid-cols-[1fr_0.9fr]">
+          <div>
+            {context.length > 0 && (
+              <Rise show={show} i={2}>
+                <dl className="grid gap-x-10 gap-y-5 sm:grid-cols-3">
+                  {context.map((x) => (
+                    <div key={x.label} className="border-t pt-3.5" style={{ borderColor: "rgba(0,0,0,0.12)" }}>
+                      <dt className="text-[24px] leading-none" style={{ fontFamily: HAND, fontWeight: 700 }}>
+                        {x.value}
+                      </dt>
+                      <dd className="mt-2 text-[12px] font-light leading-[1.45] text-black/50">
+                        {x.label}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </Rise>
+            )}
+
+            {terms.length > 0 && (
+              <Rise show={show} i={3}>
+                <dl className="mt-9 flex flex-wrap gap-x-14 gap-y-5 border-t border-black/10 pt-5">
+                  {terms.map((t) => (
+                    <div key={t.label}>
+                      <dt className="text-[11px] font-semibold uppercase tracking-[0.14em] text-black/40">
+                        {t.label}
+                      </dt>
+                      <dd className="mt-1 text-[17px]" style={{ fontFamily: HAND, fontWeight: 700 }}>
+                        {t.value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </Rise>
+            )}
+          </div>
+
+          {band && (
+            <Rise show={show} i={4}>
+              <div className="rounded-2xl px-6 py-6" style={{ background: TINTS[0] }}>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-black/45">
+                  Where it sits against the evidence
+                </p>
+                <div className="relative mt-9 h-[3px] rounded-full" style={{ background: "rgba(0,0,0,0.12)" }}>
+                  <span
+                    className="absolute inset-y-0 rounded-full"
+                    style={{ left: at(band.low), right: `calc(100% - ${at(band.high)})`, background: "rgba(0,0,0,0.28)" }}
+                  />
+                  {/* The agreed figure, sitting on its own working. */}
+                  <span
+                    className="absolute -top-[5px] h-[13px] w-[13px] -translate-x-1/2 rounded-full"
+                    style={{ left: at(v.rent), background: CORAL, boxShadow: "0 0 0 4px var(--p-tint)" }}
+                  />
+                  <span
+                    className="absolute -top-[30px] -translate-x-1/2 whitespace-nowrap text-[13px]"
+                    style={{ left: at(v.rent), fontFamily: HAND, fontWeight: 700, color: CORAL }}
+                  >
+                    {money(v.rent)}
+                  </span>
                 </div>
-              ))}
-            </dl>
-          </Rise>
-        )}
+                <div className="mt-3.5 flex justify-between text-[11.5px] font-light text-black/45">
+                  <span>{money(band.low)}</span>
+                  <span>{money(band.high)}</span>
+                </div>
+                {/* WHERE IT SITS, said in words as well as drawn.
+                    The marker genuinely lands outside the band sometimes - a
+                    better property than the ones that let, or a range built
+                    from mixed sizes - and a dot floating past the end of a bar
+                    with no sentence next to it reads as a rendering fault
+                    rather than as a figure with a reason. The reason itself is
+                    the agent's note at the foot of the slide; this only states
+                    the relationship, which is a fact rather than a defence. */}
+                <p className="mt-4 text-[11.5px] font-light leading-[1.5] text-black/45">
+                  The range that {c!.basedOn || c!.rows.length} comparable properties nearby actually let
+                  at.{" "}
+                  {v.rent > band.high
+                    ? "Your figure sits above it."
+                    : v.rent < band.low
+                      ? "Your figure sits below it."
+                      : "Your figure sits inside it."}
+                  {c?.caveat ? ` ${c.caveat}` : ""}
+                </p>
+              </div>
+            </Rise>
+          )}
+        </div>
 
         {v.note && (
-          <Rise show={show} i={3}>
-            <p className="mt-7 max-w-[640px] text-[13px] font-light leading-relaxed text-black/55">
+          <Rise show={show} i={5}>
+            <p className="mt-8 max-w-[720px] border-t border-black/10 pt-4 text-[13px] font-light leading-relaxed text-black/55">
               {v.note}
             </p>
           </Rise>
@@ -1921,9 +2047,13 @@ export default function PresentDeck({
               on the first screen tells a landlord how much is left rather than
               what they are looking at. Shown at every width now — a phone is
               the device that most needs telling. */}
+          {/* The words go on a phone. The mark is ~130px wide in the opposite
+              corner and the segments take another 90, which at 390px leaves
+              the label nowhere to go but underneath the logo - and nothing may
+              collide. The segments alone still answer "how far in am I". */}
           {chapter?.label && (
             <span
-              className="max-w-[45vw] truncate text-[12.5px]"
+              className="hidden max-w-[45vw] truncate text-[12.5px] sm:block"
               style={{ color: onDark ? "rgba(255,255,255,0.85)" : "rgba(0,0,0,0.5)" }}
             >
               {chapter.label}

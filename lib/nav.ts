@@ -56,30 +56,37 @@ export const FRONT: NavItem[] = [
 
 /** BACK OFFICE — the book being run. */
 export const BACK: NavItem[] = [
-  { href: "/compliance", label: "Compliance", icon: "shield" },
-  /* Works orders: repairs and planned jobs on the managed book, reported
-     through paid. Next to Compliance because a gas safety is both. */
+  /**
+   * Portfolio holds the book, and everything done TO the book hangs off it.
+   *
+   * Compliance, Maintenance and Inspections were three top-level entries, and
+   * with Emails, Portfolio, Finances and Tools beside them the back office was
+   * seven doors deep - James, 10 Sep 2026: "our sidebar is now getting pretty
+   * full". They are not seven separate ideas. Three of them are questions you
+   * ask about a property you already hold: is it safe, is it broken, and has
+   * anybody been round. That is Portfolio's own subject, so they sit under it
+   * the way Jobs and Contractors sit under Maintenance.
+   *
+   * Finances and Tools stay out, on his instruction and on the same logic:
+   * money is not a fact about a building, and Tools is where the doors nobody
+   * has knocked on yet are worked.
+   */
   {
-    href: "/maintenance",
-    label: "Maintenance",
-    icon: "setting",
-    /* Two jobs in one room (James, 7 Sep 2026, "a bit like we have with
-       leads"): the jobs themselves, and the book of people who do them. */
+    href: "/portfolio",
+    label: "Portfolio",
+    icon: "folder",
     children: [
-      { href: "/maintenance?section=jobs", label: "Jobs" },
-      { href: "/maintenance?section=contractors", label: "Contractors" },
+      /* The book itself first, because the parent opens the dropdown rather
+         than navigating - without this there is no way to the directory. */
+      { href: "/portfolio", label: "Properties" },
+      { href: "/compliance", label: "Compliance" },
+      { href: "/maintenance", label: "Maintenance" },
+      { href: "/inspections", label: "Inspections" },
     ],
   },
-  /* Straight after Maintenance, because they feed each other: a visit is
-     where most planned work is found, and a works order is what a finding
-     becomes. Its own screen rather than a third child of Maintenance - the
-     job there is a thing that is broken, and the job here is getting into
-     somebody's home with their permission. */
-  { href: "/inspections", label: "Inspections", icon: "search" },
   /* Back office rather than Marketing: this is the audit of what already goes
      out under our name, not a place to write anything new. */
   { href: "/emails", label: "Emails", icon: "mail" },
-  { href: "/portfolio", label: "Portfolio", icon: "folder" },
   { href: "/finances", label: "Finances", icon: "wallet" },
   /* Tools used to sit second in FRONT, above Leads, and the argument for it
      was good: everything in FRONT assumes somebody already put their hand up,
@@ -88,14 +95,7 @@ export const BACK: NavItem[] = [
      James moved it here on 30 Aug while writing the new-starter tour, and the
      reason overrides that argument rather than disagreeing with it. FRONT is
      what an agent opens every morning in the order the day runs; prospecting
-     is a thing you go and do deliberately, not a thing waiting for you. Second
-     in the rail gave it the weight of a daily queue it does not have, and it
-     is the one screen in the rail still marked `shell` in lib/screens.ts —
-     a new agent met an empty room two clicks into their first tour.
-
-     Last in the back office, not first: Compliance → Emails → Portfolio →
-     Finances is the running of the book, and Tools is what you reach for once
-     that book needs feeding. */
+     is a thing you go and do deliberately, not a thing waiting for you. */
   { href: "/tools", label: "Tools", icon: "rocket" },
   /* Marketing is deliberately NOT here. It's a different workspace for a
      different person, reached from the door — a nav that lists everything
@@ -286,7 +286,18 @@ export type AgentRoute = (typeof AGENT_ROUTES)[number];
  * trusted. Called once at module load in lib/screens.ts.
  */
 export function navRoutesMismatch(): string[] {
-  const nav = AGENT_NAV.map((n) => n.href).sort();
+  /* Children count as being in the rail. Compliance, Maintenance and
+     Inspections moved under Portfolio on 10 Sep; they are still reachable,
+     still their own screens, and a check that only looked at the top level
+     would have called all three missing the moment they were nested. Query
+     strings are stripped: /leads?side=tenant is the Leads screen. */
+  const nav = [
+    ...new Set(
+      AGENT_NAV.flatMap((n) => [n.href, ...(n.children ?? []).map((c) => c.href)]).map(
+        (h) => h.split("?")[0]
+      )
+    ),
+  ].sort();
   const listed = [...AGENT_ROUTES].sort();
   return [
     ...nav.filter((h) => !listed.includes(h as AgentRoute)).map((h) => `${h} is in the rail but not in AGENT_ROUTES`),
