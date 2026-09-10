@@ -5,7 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import ComplianceDrawer from "@/components/ComplianceDrawer";
 import {
-  BIG_THREE, CERT_META, COMP_BOOK, dueWithin, headlineCerts, isLetOnly, statusOf,
+  BIG_THREE, CERT_META, COMP_BOOK, dueWithin, headlineCerts, isOurs, statusOf,
   type CertKey, type CertStatus, type CompProperty,
 } from "@/lib/compliance";
 
@@ -97,13 +97,22 @@ export default function Compliance() {
      the idea should be that we're only showing compliance that we'd actually
      need to sort ourselves." A certificate we cannot book an engineer for is
      not a job, and a job list full of things you cannot do stops being read. */
+  /* One row per home, and only the homes this agency is answerable for.
+     James, 10 Sep 2026: "we shouldn't be including any let-onlys in
+     compliance", and the figures here have to match the breakdown sheet
+     Susan reads, which is scoped to the REX PM managed book with let-only
+     stripped out. Same question asked once - see isOurs(). */
   const BOOK = useMemo(() => {
     const seen = new Set<string>();
     return source.properties.filter((p) =>
-      seen.has(p.id) || isLetOnly(p) ? false : (seen.add(p.id), true)
+      seen.has(p.id) || !isOurs(p) ? false : (seen.add(p.id), true)
     );
   }, [source.properties]);
   const urgent = useMemo(() => dueWithin(30, BOOK), [BOOK]);
+  /* Scoped the same way as everything else: a home with no gas record is
+     unknown, not exempt, and only the ones we manage are ours to find out
+     about. */
+  const gasUnknown = useMemo(() => BOOK.filter((p) => !p.hasGas).length, [BOOK]);
 
   // Per-property worst status, for the tiles and the filter.
   const graded = useMemo(
@@ -158,7 +167,12 @@ export default function Compliance() {
           source.loading
             ? "Reading every certificate on every home from REX…"
             : source.live && source.counts
-              ? `Live from REX — ${source.counts.entries} certificate records across ${source.counts.properties} homes, ${source.counts.withCertificate} with the document itself on file. Gas is only shown where REX holds a record: ${source.counts.gasUnknown} homes have none, which means unknown, not exempt.`
+              ? /* The count has to be the homes ON THIS SCREEN. The book REX
+                   answers about is wider - every current listing as well as
+                   the managed book - and printing that total above a list
+                   scoped to what we manage is how the page and Susan's sheet
+                   ended up quoting different numbers for the same question. */
+                `Live from REX — ${BOOK.length} homes we manage, ${gasUnknown} of them with no gas record at all, which means unknown rather than exempt. Let-only homes are the landlord's duty and are not on this screen.`
               : (source.reason ?? "Every certificate on every home, and the button that fixes each one.")
         }
         illustration="/illustrations/notioly/home-caring.svg"

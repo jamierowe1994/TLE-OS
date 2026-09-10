@@ -1,7 +1,7 @@
 import "server-only";
 import {
   BIG_THREE,
-  isLetOnly,
+  isOurs,
   requiredCerts,
   statusOf,
   CERT_META,
@@ -225,7 +225,7 @@ export function buildTracker(
   /* Michael, 7 Sep 2026: once a home is let on a let-only basis its
      certificates are the landlord's duty. Nobody here can book an engineer
      for it, so it never enters his chase list or his counts. */
-  const ours = rawBook.filter((p) => !isLetOnly(p));
+  const ours = rawBook.filter(isOurs);
   const duplicateAddresses = sameAddress(ours);
   const book = byProperty(ours);
   const collapsed = ours.length - book.length;

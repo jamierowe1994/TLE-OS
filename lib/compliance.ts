@@ -129,26 +129,30 @@ export type CompProperty = {
  * not a job anybody here can do, and a list of jobs you cannot do is a list
  * people stop reading.
  *
- * REX PM's agreement wins over a stale listing: a home the agency holds an
- * active letting agreement on is managed, whatever an old let-only advert
- * says, so `managedByPm` is checked before the service type.
+ * Let only wins over everything, REX PM's letting agreement included. I had
+ * this the other way round for half a day, reasoning that an active agreement
+ * is more current than an old advert. James overruled it the same afternoon -
+ * "we shouldn't be including any let-onlys in compliance" - and he is right
+ * that a rule carrying an exception is not one anybody can hold in their head.
+ * If REX says let only, it is the landlord's.
  */
-export const isLetOnly = (p: CompProperty): boolean =>
-  p.service === "Let Only" && !p.managedByPm;
+export const isLetOnly = (p: CompProperty): boolean => p.service === "Let Only";
 
 /**
- * Ours to sort, or somebody else's?
+ * The homes this agency is answerable for.
  *
- * Not the inverse of let-only: a home with no service type recorded ANYWHERE
- * and no letting agreement in REX PM is a home nobody has told us we manage,
- * and it is honest to say so rather than to guess either way.
+ * The compliance screen and the breakdown sheet Susan reads have to be the
+ * same question asked once, or the two disagree in a meeting. The sheet's
+ * scope is "managed in REX PM, let-only stripped out", so that is the scope
+ * here too:
+ *
+ *   - REX PM holds an active letting agreement  → ours to chase
+ *   - REX says let only                          → the landlord's, always
+ *   - neither                                    → nobody has told us we manage
+ *     it, so it is not a job anybody here can be given
  */
-export function whoseJob(p: CompProperty): "ours" | "landlord" | "unknown" {
-  if (p.managedByPm) return "ours";
-  if (p.service === "Let Only") return "landlord";
-  if (p.service) return "ours";
-  return "unknown";
-}
+export const isOurs = (p: CompProperty): boolean =>
+  Boolean(p.managedByPm) && !isLetOnly(p);
 
 /**
  * What this property is REQUIRED to hold.
@@ -287,7 +291,7 @@ export function headlineCerts(p: CompProperty): CertKey[] {
 export function dueWithin(days: number, book: CompProperty[] = COMP_BOOK) {
   const out: { p: CompProperty; key: CertKey; cert: Cert | undefined; status: CertStatus }[] = [];
   for (const p of book) {
-    if (isLetOnly(p)) continue; // the landlord's duty, not ours
+    if (!isOurs(p)) continue; // not a job anybody here can be given
     for (const key of headlineCerts(p)) {
       const cert = p.certs[key];
       const s = statusOf(cert);

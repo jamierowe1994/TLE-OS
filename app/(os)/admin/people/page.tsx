@@ -7,6 +7,7 @@ import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
 import { loadAdmin, when, type AdminData, type Person } from "@/lib/admin-client";
 import { ROLES, ROLE_LABEL, ROLE_BLURB } from "@/lib/roles";
+import PickOne from "@/components/PickOne";
 
 /**
  * The list, filtered and ordered. Pure, so the rules are readable in one
@@ -282,17 +283,17 @@ export default function AdminPeople() {
                the search box down to about sixty pixels. */
             className="w-full min-w-0 rounded-xl border border-line/80 bg-panel px-3.5 py-2 text-[12.5px] sm:w-auto sm:flex-1"
           />
-          <label className="text-[11.5px] text-muted" htmlFor="people-order">Order</label>
-          <select
-            id="people-order"
+          <PickOne
+            label="Order"
             value={order}
-            onChange={(e) => setOrder(e.target.value as "recent" | "stale" | "name")}
-            className="rounded-xl border border-line/80 bg-panel px-2.5 py-2 text-[11.5px]"
-          >
-            <option value="recent">Signed in most recently</option>
-            <option value="stale">Longest since they signed in</option>
-            <option value="name">Name, A to Z</option>
-          </select>
+            onChange={(v) => setOrder((v ?? "recent") as "recent" | "stale" | "name")}
+            clearable={false}
+            options={[
+              { id: "recent", label: "Signed in most recently" },
+              { id: "stale", label: "Longest since they signed in" },
+              { id: "name", label: "Name, A to Z" },
+            ]}
+          />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {chips.map((c) => (

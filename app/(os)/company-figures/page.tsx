@@ -29,6 +29,7 @@ import Arrears from "@/app/(os)/company-figures/tabs/arrears";
 import Compliance from "@/app/(os)/company-figures/tabs/compliance";
 import AssistantTab from "@/app/(os)/company-figures/tabs/assistant";
 import Diagnostics from "@/app/(os)/company-figures/tabs/diagnostics";
+import PickOne from "@/components/PickOne";
 
 /* ------------------------------- tabs ------------------------------- */
 
@@ -379,18 +380,13 @@ function AdminShell({
               sources are otherwise refreshed on a schedule, and "is this
               today's number?" is the first thing asked on a call. */}
           <Freshness />
-          <select
+          <PickOne
             value={month}
-            onChange={(e) => setMonth(e.target.value)}
-            className="rounded-lg border border-line bg-card px-2.5 py-1.5 text-[13px] outline-none focus:border-accent"
-            aria-label="Month"
-          >
-            {monthOptions.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setMonth(v ?? month)}
+            clearable={false}
+            label="Month"
+            options={monthOptions.map((m) => ({ id: m.value, label: m.label }))}
+          />
           <a
             href="/dashboard"
             className="btn-press flex items-center gap-1.5 rounded-lg border border-line bg-card px-3 py-1.5 text-[13px] font-medium text-muted transition hover:text-ink"
