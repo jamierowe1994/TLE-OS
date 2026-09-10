@@ -8,6 +8,7 @@ import { contactToLead, type ContactRow } from "@/lib/contacts-as-leads";
 import LeadDrawer from "@/components/LeadDrawer";
 import NewLeadPanel from "@/components/NewLeadPanel";
 import PageHeader from "@/components/PageHeader";
+import LeadsScene from "@/components/LeadsScene";
 import SourceMark from "@/components/SourceMark";
 import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
 import { Pill } from "@/components/Wire";
@@ -304,7 +305,9 @@ export default function Leads() {
                 }.${source.onFile ? ` ${source.onFile.toLocaleString("en-GB")} kept on file in the OS.` : ""}`
               : (source.reason ?? "New enquiries from the portals, your ads and the website.")
         }
-        illustration="/illustrations/sitting-lady.png"
+        /* Three layers, not one picture: the wash goes behind the rule, she
+           sits on it, and the pot stands on it. See components/LeadsScene. */
+        illustrationNode={<LeadsScene />}
         illustrationHeight={250}
         /* She is half as wide again as she is tall, where this header's fixed
            text reserve was measured against tall narrow line art. Given the
@@ -314,11 +317,6 @@ export default function Leads() {
            artwork — measured off the file, not guessed — so that is where the
            rule goes under her. Her legs and the plant hang below it. */
         seat={0.67}
-        /* No shadow, unlike the line-art man she replaces. The shadow is the
-           file's own ALPHA used as a mask, and this artwork carries a painted
-           pink wash behind her - so it would throw the shape of the wash
-           rather than the shape of a person. */
-        shadow={false}
         /* No dip and no break: she is sitting ON the line, and her own body
            hides it where she is. A trough would read as the line sagging. */
         lineBreak="none"

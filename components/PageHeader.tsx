@@ -411,7 +411,14 @@ export default function PageHeader({
                    the field sized the ratio box wrong and the figure drifted
                    ~300px off the corner while the bell (plain right-0 in the
                    same container) sat true. Pixels can't be misread. */
-                <div className="relative h-full" style={{ width: illustrationHeight }}>
+                /* Square unless the scene says otherwise. A layered scene
+                   needs its box to be the artwork's real shape, or the
+                   percentage offsets inside it are measured against the
+                   wrong width. */
+                <div
+                  className="relative h-full"
+                  style={{ width: Math.round(illustrationHeight * (illustrationAspect ?? 1)) }}
+                >
                   {illustrationNode}
                 </div>
               ) : (

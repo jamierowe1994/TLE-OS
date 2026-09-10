@@ -4,7 +4,7 @@ import { useState } from "react";
 import BentoDash from "@/components/BentoDash";
 import BlendVideo from "@/components/BlendVideo";
 import PageHeader from "@/components/PageHeader";
-import WindowScene from "@/components/WindowScene";
+import HomeScene, { HOME_SCENE_ASPECT } from "@/components/HomeScene";
 import { DASH_TRAY_GROUPS, DEFAULT_LAYOUT, WIDGETS } from "@/components/widgets";
 
 /**
@@ -33,10 +33,17 @@ export default function Dashboard() {
       <PageHeader
         title={greeting()}
         blurb="Here's what's happening with your lettings business today."
-        /* translate-x cancels the empty margin drawn inside the artwork
-           itself (its ink stops 26/520 short of its own right edge), so the
-           frame genuinely touches the corner instead of hovering near it. */
-        illustrationNode={<WindowScene className="translate-x-[9px]" />}
+        /* James's painted scene, in whichever accent the person picked - the
+           file is chosen in CSS off the data-accent already on <html>, so it
+           is right on the first frame. See components/HomeScene.
+
+           NOTE: this replaces WindowScene, which drew the sky from the live
+           Manchester weather. The painted sky cannot do that. The component
+           is still in the repo if that turns out to be a loss worth having
+           back. */
+        illustrationNode={<HomeScene />}
+        illustrationAspect={HOME_SCENE_ASPECT}
+        illustrationHeight={210}
         lineBreak="none"
         flushRight
         /* Customise rides the search row — one line of chrome, not two. */
