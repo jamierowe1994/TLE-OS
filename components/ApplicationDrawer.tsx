@@ -258,7 +258,6 @@ export default function ApplicationDrawer({
     };
   }, [onClose]);
 
-  const cur = stages.findIndex((s) => s.key === app.stageKey);
   const action = NEXT_ACTION[app.stageKey];
   const thread = [...(app.activity ?? []), ...(comments ?? [])];
   const ticked = checklist.filter((c) => c.done).length;
@@ -313,7 +312,9 @@ export default function ApplicationDrawer({
             <PropertyPhoto src={app.image} className="h-14 w-16 shrink-0 rounded-lg" />
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Application — stage {cur + 1} of {stages.length}
+                {journey?.ok && journey.stops
+                  ? `Application — ${(journey.stops.find((x) => x.state === "current") ?? journey.stops[journey.stops.length - 1])?.label ?? "in progress"}`
+                  : "Application"}
               </p>
               {/* The tenant's name is the way through to them. It used to be
                   plain text, so an accepted application named somebody an
@@ -338,7 +339,7 @@ export default function ApplicationDrawer({
                 {app.property} · {app.locality}
               </p>
               <p className="truncate text-[12px] text-muted">
-                {app.rent} · moves {app.moveIn} · with {app.agent}
+                {app.rent} · moves {app.moveIn}
               </p>
             </div>
           </div>
@@ -435,9 +436,6 @@ export default function ApplicationDrawer({
                       </ul>
                     </div>
                   )}
-                  {outstanding > 0 && (
-                    <p className="mt-3 text-[11px] text-muted">{outstanding} of {checklist.length} checks still to tick</p>
-                  )}
                 </div>
               ) : action ? (
                 <div className="rounded-2xl border border-line/80 bg-panel p-5">
@@ -462,23 +460,37 @@ export default function ApplicationDrawer({
                 <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
                   Where it&apos;s up to
                 </p>
-                {/* Across, like Kirstie's: REX's three stops, then her eight,
-                    read from the same place her board reads them. Until the
-                    journey lands, REX's own stages stand in. */}
-                <StageSpine
-                  compact
-                  stops={
-                    journey?.ok && journey.stops
-                      ? journey.stops
-                      : stages.map((s, i) => ({
-                          id: s.key,
-                          label: s.label,
-                          sub: i === cur ? s.blurb : null,
-                          tone: "none" as const,
-                          state: i < cur ? ("done" as const) : i === cur ? ("current" as const) : ("upcoming" as const),
-                        }))
-                  }
-                />
+                {/* Across, like Kirstie's: REX's stops, then her eight, read
+                    from the same place her board reads them.
+
+                    REX's four statuses used to stand in until the journey
+                    landed, so the drawer opened on Received → Communicated →
+                    Accepted → Unsuccessful and then redrew itself as something
+                    else entirely. James, 10 Sep 2026: "it shows a four-part
+                    process still... it loads up, and then it will change it
+                    through to the actual four systems. Don't show the four-part
+                    process, because that makes no sense."
+
+                    He is right, and not only because it flickers: those four
+                    are REX's answer to "has the landlord said yes", and this
+                    box is answering "where is this deal". Showing one while
+                    fetching the other is a wrong answer, briefly - and a wrong
+                    answer somebody might act on. It says it is checking. */}
+                {journey?.ok && journey.stops ? (
+                  <StageSpine compact stops={journey.stops} />
+                ) : journey && !journey.ok ? (
+                  <p className="mt-3 text-[12px] text-muted">
+                    {journey.error ?? "Couldn't read where this is up to."}
+                  </p>
+                ) : (
+                  <p className="mt-3 flex items-center gap-2 text-[12px] text-muted">
+                    <span
+                      aria-hidden
+                      className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark"
+                    />
+                    Checking where this is up to&hellip;
+                  </p>
+                )}
                 {journey?.ok && journey.deal && (
                   <p className="mt-1 text-[11px] text-muted">
                     Kirstie&apos;s deal:{" "}

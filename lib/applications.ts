@@ -137,6 +137,12 @@ export interface Application {
   id: string;
   status: string;
   statusLabel: string;
+  /**
+   * Where it has actually got to, as opposed to which of REX's four statuses
+   * it is on. Filled by the list route from Propoly's deals; absent on a
+   * record read any other way, in which case statusLabel is all there is.
+   */
+  stageLabel?: string;
   listingId: number | null;
   /** The PROPERTY, not the listing. Compliance certificates hang off this. */
   propertyId: string | null;

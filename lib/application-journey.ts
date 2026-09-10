@@ -3,7 +3,7 @@ import { buildHandoff } from "@/lib/deal-handoff";
 import { latestHandover } from "@/lib/handover";
 import { getCase } from "@/lib/plc-store";
 import { PLC_STATES } from "@/lib/plc";
-import { getAllPropolyDeals, type BusinessDeal } from "@/lib/business/propoly-deals";
+import { dealStatusLabel, getAllPropolyDeals, type BusinessDeal } from "@/lib/business/propoly-deals";
 import { getOverlays, getMeta } from "@/lib/business/deal-store";
 import { derivePortalStage } from "@/lib/business/deal-stage";
 import { eventsForDeal } from "@/lib/business/deal-watch";
@@ -304,4 +304,36 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
   const history = deal ? await eventsForDeal(deal.app.id).catch(() => []) : [];
 
   return { stops, actions, flags, deal: dealInfo, plc: plcInfo, handover: run ? { mode: run.mode, status: run.status, at: run.startedAt } : null, history };
+}
+
+/**
+ * Where each application actually is, for a LIST.
+ *
+ * journeyFor() is the truth, and it is expensive - a handoff, a handover run,
+ * a PLC case and Propoly's deals, per application. Asking it 157 times to
+ * fill a column is not on. This answers the same question with one call.
+ *
+ * James, 10 Sep 2026: "we don't want communicated, we want where they are in
+ * that process... 'Accepted' is great, but where is accepted?" REX's four
+ * statuses answer "has the landlord said yes", which is a real question for
+ * the two ends and no answer at all in the middle. So the ends keep REX's
+ * word, and an accepted application is described by its DEAL, which is where
+ * it has actually got to.
+ *
+ * An accepted application with no deal is not a stage, it is a job: nothing
+ * was handed over.
+ */
+export async function stageLabels(apps: Application[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const accepted = apps.filter((a) => a.status === "accepted");
+  const all = accepted.length ? await deals().catch(() => null) : null;
+
+  for (const a of apps) {
+    if (a.status === "received") { out.set(a.id, "Not put to landlord"); continue; }
+    if (a.status === "communicated") { out.set(a.id, "Landlord decision"); continue; }
+    if (a.status === "unsuccessful") { out.set(a.id, "Unsuccessful"); continue; }
+    const deal = all ? findDeal(a, all) : null;
+    out.set(a.id, deal ? dealStatusLabel(deal.statusKey) : all ? "Handover due" : "Accepted");
+  }
+  return out;
 }

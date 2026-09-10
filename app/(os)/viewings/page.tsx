@@ -7,6 +7,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import PickOne from "@/components/PickOne";
 import Segmented from "@/components/Segmented";
+import StageTabs from "@/components/StageTabs";
 import ViewingDrawer, { type Outcome } from "@/components/ViewingDrawer";
 import { FlowTag, Ghost, Pill } from "@/components/Wire";
 import { KIND_META, minutesOf, VIEWING_OUTCOMES, type Appt, type ApptKind } from "@/lib/diary";
@@ -20,6 +21,15 @@ import { useDiary } from "@/lib/diary-store";
  */
 
 const OUTCOMES: Record<string, Outcome> = VIEWING_OUTCOMES;
+
+/** What the panel calls itself, per stage. */
+const STAGE_TITLE: Record<string, string> = {
+  upcoming: "All upcoming",
+  today: "Today",
+  week: "Next 7 days",
+  due: "Feedback due",
+  in: "Feedback in",
+};
 
 function dayName(offset: number): string {
   if (offset === 0) return "Today";
@@ -59,7 +69,20 @@ export default function Viewings() {
    * choose it rather than being given it.
    */
   const [view, setView] = useState<"calendar" | "diary">("calendar");
-  const [tab, setTab] = useState<"diary" | "recent">("diary");
+  /**
+   * Which question the list is answering.
+   *
+   * Two hand-drawn pills, "Diary · 41" and "Feedback · 12", asked this before
+   * - the same question the other three boards ask with StageTabs, drawn a
+   * fourth way. Today and the next seven days are on it now because they are
+   * what an agent actually arrives asking, and a today-first list never
+   * answered them.
+   *
+   * NOT a date dropdown as well. The other boards carry one because their
+   * records are not sorted by date on the screen; these are, and two controls
+   * for one filter is how a screen starts to disagree with itself.
+   */
+  const [stage, setStage] = useState<"upcoming" | "today" | "week" | "due" | "in">("upcoming");
   const [openId, setOpenId] = useState<string | null>(null);
   const [calOpen, setCalOpen] = useState(false);
   /** Narrowing, shared by both shapes so switching view keeps your place. */
@@ -98,7 +121,23 @@ export default function Viewings() {
     (a, b) => a.day - b.day || minutesOf(a.start) - minutesOf(b.start)
   );
   const recent = viewings.filter((a) => a.day < 0).sort((a, b) => b.day - a.day);
-  const days = [...new Set(upcoming.map((a) => a.day))];
+  /* One place decides what each stage holds, so the count on a tab and the
+     rows under it can never disagree. "Due" is a viewing that has happened
+     and nobody has written down what was said - the only one of these that is
+     a job rather than a view. */
+  const buckets = useMemo(() => {
+    const been = recent;
+    return {
+      upcoming,
+      today: upcoming.filter((a) => a.day === 0),
+      week: upcoming.filter((a) => a.day >= 0 && a.day <= 7),
+      due: been.filter((a) => !OUTCOMES[a.id]),
+      in: been.filter((a) => Boolean(OUTCOMES[a.id])),
+    };
+  }, [upcoming, recent]);
+  const rows = buckets[stage];
+  const past = stage === "due" || stage === "in";
+  const days = [...new Set(rows.map((a) => a.day))];
   const open = DIARY.find((a) => a.id === openId) ?? null;
 
   /** The row's state at a glance: every message gone, or something missing. */
@@ -204,13 +243,13 @@ export default function Viewings() {
          */
         lineBreak="none"
         shadow
-      />
-
-      {/* ── What shape, then what's in it, then who for. ──────────────
-          The shape switch is first and on its own: it changes the whole
-          screen, and the two things beside it only narrow what is already
-          there. */}
-      <div className="mt-10 flex flex-wrap items-center gap-x-3 gap-y-2.5">
+        /* One row of chrome, under the blurb, in the same order as Listings,
+           Market Appraisals and Applications: the shape switch first because
+           it changes the whole screen, then the things that only narrow what
+           is already on it. It used to sit in a row of its own below the
+           header, which is a fourth arrangement of the same three controls. */
+        actions={
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
         <Segmented
           options={[
             {
@@ -224,31 +263,7 @@ export default function Viewings() {
           onChange={setView}
         />
 
-        {/* Upcoming or done-with is a question about a LIST. The calendar
-            already shows both, in the only order a calendar has. */}
-        {view === "diary" && (
-          <>
-            <span className="hidden h-5 w-px bg-line sm:block" />
-            <div className="flex items-center gap-1">
-              {(["diary", "recent"] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setTab(t)}
-                  className={`hand rounded-full px-4 py-2 text-[12.5px] transition-colors ${
-                    tab === t
-                      ? "bg-accent-soft/60 font-medium text-accent-dark"
-                      : "text-muted hover:text-ink"
-                  }`}
-                >
-                  {t === "diary" ? `Diary · ${upcoming.length}` : `Feedback · ${recent.length}`}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-
-        <div className="ml-auto flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           {/* Only an owner has a book to filter. Everybody else is looking at
               their own diary, so a picker offering colleagues by name would be
               offering something the server will not answer for anyway. */}
@@ -274,7 +289,29 @@ export default function Viewings() {
             />
           )}
         </div>
-      </div>
+          </div>
+        }
+      />
+
+      {/* ── The stages, and the filter for them. Same component and the same
+             row as Listings, Market Appraisals and Applications. Picking one
+             is a question about a LIST, so it puts you in the list - the
+             calendar has only the order a calendar has, and cannot show you
+             "feedback still owed" at all. ── */}
+      <StageTabs
+        label="Viewing stages"
+        allId="upcoming"
+        value={stage}
+        onChange={(id) => { setStage(id); setView("diary"); }}
+        flow={false}
+        stages={[
+          { id: "upcoming" as const, label: "All upcoming", icon: "analytics", count: buckets.upcoming.length, blurb: "Everything still to happen" },
+          { id: "today" as const, label: "Today", icon: "clock", count: buckets.today.length, blurb: "What is left today" },
+          { id: "week" as const, label: "Next 7 days", icon: "calendar", count: buckets.week.length, blurb: "The week ahead" },
+          { id: "due" as const, label: "Feedback due", icon: "message", count: buckets.due.length, blurb: "Been, and nobody has written down what was said" },
+          { id: "in" as const, label: "Feedback in", icon: "checklist", count: buckets.in.length, blurb: "Ready for the landlord" },
+        ]}
+      />
 
       {view === "calendar" ? (
         <DiaryMonth
@@ -283,50 +320,67 @@ export default function Viewings() {
           onOpen={(a) => setOpenId(a.id)}
           onOpenWeek={() => setCalOpen(true)}
         />
-      ) : tab === "diary" ? (
-        <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
-          <Legend />
-          {days.map((d) => {
-            const list = upcoming.filter((a) => a.day === d);
-            return (
-              <div key={d} className="mb-5 last:mb-0">
-                <div className="flex items-baseline gap-3 border-b border-line/70 pb-2">
-                  <h2 className={`text-[15px] ${d === 0 ? "text-accent-dark" : ""}`}>
-                    {dayName(d)}
-                  </h2>
-                  <span className="text-[10.5px] text-muted">{dayDate(d)}</span>
-                  <span className="ml-auto text-[10.5px] text-muted">
-                    {list.length} viewing{list.length === 1 ? "" : "s"}
-                  </span>
-                </div>
-                <ul>
-                  {list.map((a) => (
-                    <Row key={a.id} a={a} />
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
-          {!upcoming.length && (
-            <p className="py-8 text-center text-[12.5px] text-muted">
-              Nothing booked — the listings page is where viewings start.
-            </p>
-          )}
-        </div>
       ) : (
         <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <h2 className="text-[15px]">Recent feedback</h2>
-            <span className="text-[11px] text-muted">
-              What the applicant said, ready for the landlord
-            </span>
+          <div className="mb-3 flex items-baseline justify-between gap-3">
+            <h2 className="text-[15px]">
+              {STAGE_TITLE[stage]}
+              <span className="figures ml-1.5 text-muted">({rows.length})</span>
+            </h2>
+            {stage === "in" && (
+              <span className="text-[11px] text-muted">
+                What the applicant said, ready for the landlord
+              </span>
+            )}
+            {stage !== "upcoming" && stage !== "in" && (
+              <button
+                type="button"
+                onClick={() => setStage("upcoming")}
+                className="text-[11.5px] text-muted underline transition-colors hover:text-ink"
+              >
+                Show all upcoming
+              </button>
+            )}
           </div>
-          <Legend past />
-          <ul>
-            {recent.map((a) => (
-              <Row key={a.id} a={a} showDay />
-            ))}
-          </ul>
+          <Legend past={past} />
+          {past ? (
+            <ul>
+              {rows.map((a) => (
+                <Row key={a.id} a={a} showDay />
+              ))}
+            </ul>
+          ) : (
+            days.map((d) => {
+              const list = rows.filter((a) => a.day === d);
+              return (
+                <div key={d} className="mb-5 last:mb-0">
+                  <div className="flex items-baseline gap-3 border-b border-line/70 pb-2">
+                    <h2 className={`text-[15px] ${d === 0 ? "text-accent-dark" : ""}`}>
+                      {dayName(d)}
+                    </h2>
+                    <span className="text-[10.5px] text-muted">{dayDate(d)}</span>
+                    <span className="ml-auto text-[10.5px] text-muted">
+                      {list.length} viewing{list.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <ul>
+                    {list.map((a) => (
+                      <Row key={a.id} a={a} />
+                    ))}
+                  </ul>
+                </div>
+              );
+            })
+          )}
+          {!rows.length && (
+            <p className="py-8 text-center text-[12.5px] text-muted">
+              {stage === "due"
+                ? "Nothing waiting on feedback. Rare, and good."
+                : stage === "in"
+                  ? "No feedback recorded yet."
+                  : "Nothing booked — the listings page is where viewings start."}
+            </p>
+          )}
         </div>
       )}
 

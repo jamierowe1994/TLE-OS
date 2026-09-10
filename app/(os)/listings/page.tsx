@@ -490,7 +490,7 @@ export default function Listings() {
                   className={
                     view === "tiles"
                       ? "h-40 w-full shrink-0 rounded-[14px]"
-                      : "h-40 w-full shrink-0 rounded-[14px] sm:h-44 sm:w-64"
+                      : "h-40 w-full shrink-0 rounded-[14px] sm:h-24 sm:w-32"
                   }
                 />
 

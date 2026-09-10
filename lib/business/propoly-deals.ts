@@ -94,6 +94,10 @@ const STATUS_INFO: Record<string, { label: string; stage: ApplicationStage; orde
   signing_and_move_in_monies: { label: "Signing & move-in monies", stage: "accepted", order: 4 },
   cancelled: { label: "Cancelled", stage: "unsuccessful", order: 99 },
 };
+/** Propoly's status key in the words a person would use. */
+export const dealStatusLabel = (key: string): string =>
+  STATUS_INFO[key]?.label ?? key.replace(/_/g, " ");
+
 const ACTIVE_STATUSES = [
   "start_deal",
   "holding_fee",

@@ -10,6 +10,7 @@ import {
 } from "@/lib/applications";
 import { rexConfigured, rexWritesLocked } from "@/lib/rex";
 import { scopeFor } from "@/lib/scope";
+import { stageLabels } from "@/lib/application-journey";
 
 /**
  * GET  /api/applications?limit=100  → the live book from REX, newest first
@@ -44,8 +45,14 @@ export async function GET(req: NextRequest) {
 
   try {
     const applications = await getApplications(limit, scope.rexUserId);
+    /* Where each one has actually GOT TO, rather than which of REX's four
+       statuses it is on. One Propoly call for the whole page - see
+       stageLabels(). It never fails the request: a list that says
+       "Accepted" is worse than one that says "Signing & move-in monies",
+       but it is far better than no list. */
+    const stages = await stageLabels(applications).catch(() => new Map<string, string>());
     return NextResponse.json({
-      applications,
+      applications: applications.map((a) => ({ ...a, stageLabel: stages.get(a.id) ?? a.statusLabel })),
       scope: scope.label,
       everything: scope.everything,
       pulledAt: new Date().toISOString(),

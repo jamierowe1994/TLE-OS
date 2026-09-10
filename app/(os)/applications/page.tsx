@@ -173,13 +173,17 @@ export default function Applications() {
       },
       {
         key: "property", label: "Property",
+        /* The photograph was 36x44 - James, 10 Sep 2026: "the photos are tiny,
+           you can barely see the property, and it's all very statistical."
+           Listings comes down a little and this comes up, so a property looks
+           like a property on both, and both read photo-first, left to right. */
         render: (a) => (
-          <span className="flex items-center gap-2.5">
-            <PropertyPhoto src={a.image} className="h-9 w-11 shrink-0 rounded-md" />
+          <span className="flex items-center gap-3">
+            <PropertyPhoto src={a.image} className="h-24 w-32 shrink-0 rounded-lg" />
             {/* Truncated, not nowrap: a long address used to push the whole
                 table past the panel's edge and the Status column off the
                 screen (James, 6 Sep 2026). */}
-            <span className="min-w-0 max-w-[200px]">
+            <span className="min-w-0 max-w-[240px]">
               <span className="block truncate" title={a.property}>{a.property}</span>
               <span className="block truncate text-[10.5px] text-muted">{a.locality}</span>
             </span>
@@ -191,17 +195,6 @@ export default function Applications() {
         render: (a) => (a.offerAmount ? `${gbp(a.offerAmount)} pcm` : "—"),
       },
       {
-        key: "affordability", label: "Rent / income", cell: "figures whitespace-nowrap",
-        render: (a) =>
-          a.affordabilityPct == null ? (
-            <span className="text-muted">—</span>
-          ) : (
-            <span className={a.affordabilityPct > 40 ? "text-accent-dark" : undefined}>
-              {a.affordabilityPct.toFixed(0)}%
-            </span>
-          ),
-      },
-      {
         key: "moveIn", label: "Move-in", cell: "whitespace-nowrap text-muted",
         /* "28 Sep 2026", not the ISO string REX hands back - it read as a
            database field, and it was the widest thing in the column. */
@@ -209,33 +202,14 @@ export default function Applications() {
       },
       {
         key: "stage", label: "Status", cell: "whitespace-nowrap",
+        /* stageLabel is where the DEAL has got to; statusLabel is REX's
+           four-bucket answer, kept only as the fallback for a record the list
+           route could not describe. */
         render: (a) => (
-          <Pill tone={a.status === "accepted" ? "accent" : "neutral"}>{a.statusLabel}</Pill>
+          <Pill tone={a.status === "accepted" ? "accent" : "neutral"}>
+            {a.stageLabel ?? a.statusLabel}
+          </Pill>
         ),
-      },
-      {
-        key: "checks", label: "Checks", cell: "whitespace-nowrap",
-        render: (a) => {
-          const checks = checksFor(a);
-          const done = checks.filter((c) => c.done).length;
-          return (
-            <span className="flex items-center gap-1">
-              {checks.map((c, i) => (
-                <span
-                  key={i}
-                  className={`h-1.5 w-1.5 rounded-full ${c.done ? "bg-accent" : "bg-line"}`}
-                />
-              ))}
-              <span className="ml-1.5 text-[10px] text-muted">{done}/{checks.length}</span>
-            </span>
-          );
-        },
-      },
-      {
-        key: "agent", label: "With", cell: "whitespace-nowrap text-muted",
-        /* First name only: the full name was the column that pushed the
-           table past the panel, and the drawer says who in full. */
-        render: (a) => (a.agent ? a.agent.split(" ")[0] : "—"),
       },
     ],
     []
@@ -248,8 +222,8 @@ export default function Applications() {
         title="Applications"
         blurb={
           scope && !scope.everything
-            ? `${scope.label}'s applications on REX's four statuses, live. The eight pre-tenancy stages open once one is accepted.`
-            : "Every application on REX's four statuses, live. The eight pre-tenancy stages open once one is accepted."
+            ? `${scope.label}'s applications, live. Status is where the deal has actually got to, not which of REX's four buckets it sits in.`
+            : "Every application, live. Status is where the deal has actually got to, not which of REX's four buckets it sits in."
         }
         /* The line runs THROUGH her, at the waist. She is drawn full length
            and set at twice the shared height, so 250 still shows above the
