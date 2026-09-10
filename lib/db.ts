@@ -456,6 +456,104 @@ CREATE TABLE IF NOT EXISTS os_works_order_events (
 );
 CREATE INDEX IF NOT EXISTS os_works_order_events_order ON os_works_order_events (order_id, at DESC);
 
+-- ── Inspections ──────────────────────────────────────────────────────────
+-- Every visit we make to a home we manage: the check-in, the periodic
+-- visits through the tenancy, the HMO check, the check-out. Written to
+-- answer three questions at once - when is one DUE, has the tenant GIVEN
+-- PERMISSION for us to come, and what did we find - because the first two
+-- are the ones that end up in front of a solicitor. Every permission is a
+-- row with a timestamp and the tenant's own words, never a tick.
+-- lib/inspections. Framework built 10 Sep 2026, cadence still to be
+-- settled with Michael: the rules live in os_settings under "inspections"
+-- so his answer is a settings change, not a deploy.
+CREATE SEQUENCE IF NOT EXISTS os_inspections_ref START 1;
+CREATE TABLE IF NOT EXISTS os_inspections (
+  id                   TEXT PRIMARY KEY,
+  ref                  INTEGER NOT NULL DEFAULT nextval('os_inspections_ref'),
+  kind                 TEXT NOT NULL DEFAULT 'interim',
+  status               TEXT NOT NULL DEFAULT 'due',
+  -- The home. property_id is REX's; os_property_id is ours, for the homes
+  -- REX CRM has no property for.
+  property_id          TEXT,
+  os_property_id       TEXT,
+  listing_id           TEXT,
+  property_name        TEXT NOT NULL DEFAULT '',
+  locality             TEXT NOT NULL DEFAULT '',
+  landlord             TEXT NOT NULL DEFAULT '',
+  landlord_email       TEXT NOT NULL DEFAULT '',
+  tenant               TEXT NOT NULL DEFAULT '',
+  tenant_email         TEXT NOT NULL DEFAULT '',
+  tenant_phone         TEXT NOT NULL DEFAULT '',
+  -- What the cadence was measured from, and what it produced.
+  tenancy_start        DATE,
+  due_at               TIMESTAMPTZ,
+  -- ── permission to enter ──
+  -- The tenant has quiet enjoyment. We ask, they answer, and both the ask
+  -- and the answer are kept: notice_hours is what we gave them, offered
+  -- is the slots we put in front of them.
+  notice_hours         INTEGER NOT NULL DEFAULT 24,
+  access_method        TEXT NOT NULL DEFAULT 'tenant_present',
+  offered              JSONB NOT NULL DEFAULT '[]'::jsonb,
+  access_token         TEXT,
+  access_asked_at      TIMESTAMPTZ,
+  access_reply         TEXT,
+  access_replied_at    TIMESTAMPTZ,
+  access_note          TEXT NOT NULL DEFAULT '',
+  -- ── the visit ──
+  booked_at            TIMESTAMPTZ,
+  tenant_confirmed_at  TIMESTAMPTZ,
+  landlord_told_at     TIMESTAMPTZ,
+  inspector_id         TEXT,
+  inspector            TEXT NOT NULL DEFAULT '',
+  visited_at           TIMESTAMPTZ,
+  no_access_at         TIMESTAMPTZ,
+  no_access_reason     TEXT NOT NULL DEFAULT '',
+  -- ── the report ──
+  condition            TEXT,
+  summary              TEXT NOT NULL DEFAULT '',
+  reported_at          TIMESTAMPTZ,
+  report_sent_at       TIMESTAMPTZ,
+  closed_at            TIMESTAMPTZ,
+  cancelled_reason     TEXT NOT NULL DEFAULT '',
+  files                JSONB NOT NULL DEFAULT '[]'::jsonb,
+  raised_by            TEXT NOT NULL DEFAULT '',
+  rehearsal            BOOLEAN NOT NULL DEFAULT false,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_inspections_status   ON os_inspections (status, due_at);
+CREATE INDEX IF NOT EXISTS os_inspections_property ON os_inspections (property_id);
+CREATE INDEX IF NOT EXISTS os_inspections_os_prop  ON os_inspections (os_property_id);
+CREATE INDEX IF NOT EXISTS os_inspections_token    ON os_inspections (access_token);
+
+-- What was found, room by room. An action here is what turns an inspection
+-- into a works order, and works_order_id is that link once it is raised.
+CREATE TABLE IF NOT EXISTS os_inspection_findings (
+  id              TEXT PRIMARY KEY,
+  inspection_id   TEXT NOT NULL,
+  room            TEXT NOT NULL DEFAULT '',
+  item            TEXT NOT NULL DEFAULT '',
+  condition       TEXT NOT NULL DEFAULT 'good',
+  note            TEXT NOT NULL DEFAULT '',
+  action          TEXT NOT NULL DEFAULT 'none',
+  responsible     TEXT,
+  works_order_id  TEXT,
+  photos          JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by      TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS os_inspection_findings_insp ON os_inspection_findings (inspection_id, created_at);
+
+CREATE TABLE IF NOT EXISTS os_inspection_events (
+  id             TEXT PRIMARY KEY,
+  inspection_id  TEXT NOT NULL,
+  at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  by_name        TEXT NOT NULL DEFAULT '',
+  kind           TEXT NOT NULL DEFAULT 'note',
+  text           TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS os_inspection_events_insp ON os_inspection_events (inspection_id, at DESC);
+
 -- Company-wide settings, one JSON document per key: "invoicing" holds who
 -- an invoice is from, the bank details, the prefix and the terms.
 CREATE TABLE IF NOT EXISTS os_settings (

@@ -735,3 +735,68 @@ export const WORKS_TENANT_HAPPY = {
   ],
   branding: { showSignoff: false },
 } as const;
+
+/* ── Inspections (10 Sep 2026) ────────────────────────────────────────────
+   Three documents, and the first one is the important one: the tenant is
+   being ASKED, not told. It is their home, the notice we owe them is on the
+   page, and the answer comes back in their own words through a link of
+   their own - so what we hold afterwards is a permission with a timestamp
+   rather than a note saying somebody rang. Wording still to go past Michael. */
+
+/* To the tenant: may we come, and which of these dates suits? */
+export const INSPECTION_TENANT_ACCESS = {
+  subject: "Can we visit {{address}}? Choose a time",
+  preheader: "A routine visit to the property. Pick whichever date suits, or tell us none of them do.",
+  mode: "blocks",
+  blocks: [
+    H("ita1", "Can we pop round?"),
+    T("ita2", "Hi {{tenantName}},<br><br>We look after {{address}} for the landlord, and part of that is calling in every so often to check the property is in good order and to pick up anything that needs putting right. It usually takes about {{howLong}}."),
+    T("ita3", "<strong>These are the times we can do:</strong><br>{{slots}}"),
+    SP("ita4", 8),
+    BTN("ita5", "Choose a time", "{{accessLink}}"),
+    SP("ita6", 8),
+    T("ita7", "If none of them work, use the same link to tell us - we will find another time. You are welcome to be there; if you would rather not be, let us know on the link and we will let ourselves in with the keys we hold. We will not come without your agreement, and you will get at least {{noticeHours}} hours notice either way."),
+    SP("ita8", 8),
+    T("ita9", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    FOOT("ita10", "You're getting this because you rent a property managed by The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/* To the tenant once a time is agreed: the notice, in writing. */
+export const INSPECTION_TENANT_BOOKED = {
+  subject: "Visit confirmed: {{whenPretty}}",
+  preheader: "Confirming the property visit we agreed.",
+  mode: "blocks",
+  blocks: [
+    H("itb1", "That's in the diary"),
+    T("itb2", "Hi {{tenantName}},<br><br>Confirming that <strong>{{inspector}}</strong> will call at {{address}} on <strong>{{whenPretty}}</strong> for a routine property visit. This email is your written notice of it."),
+    T("itb3", "There is nothing you need to do. If anything has been bothering you about the property, that visit is a good moment to point it out - or reply to this email now and we will have it on the list before we arrive."),
+    T("itb4", "If the time stops working, reply and we will move it."),
+    SP("itb5", 8),
+    T("itb6", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    FOOT("itb7", "You're getting this because you rent a property managed by The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/* To the landlord after the visit: how their property is. */
+export const INSPECTION_LANDLORD_REPORT = {
+  subject: "Property visit at {{address}}: {{conditionWord}}",
+  preheader: "How your property is being kept, and anything that needs doing.",
+  mode: "blocks",
+  blocks: [
+    H("ilr1", "We've been round"),
+    T("ilr2", "Hi {{landlordName}},<br><br>{{inspector}} visited {{address}} on {{whenPretty}}. Overall the property is <strong>{{conditionWord}}</strong>."),
+    T("ilr3", "{{summary}}"),
+    T("ilr4", "<strong>What we found</strong><br>{{findings}}"),
+    SP("ilr5", 8),
+    BTN("ilr6", "See the full report", "{{reportLink}}"),
+    SP("ilr7", 8),
+    T("ilr8", "Anything marked for you to decide on will come to you as a separate quote before any work starts. Everything else we will handle."),
+    SP("ilr9", 8),
+    T("ilr10", "Thanks,<br>{{agentName}}<br>The Letting Experts"),
+    FOOT("ilr11", "You're getting this because The Letting Experts manage this property for you."),
+  ],
+  branding: { showSignoff: false },
+} as const;

@@ -60,6 +60,9 @@ import {
   WORKS_LANDLORD_ARRANGED,
   WORKS_CONTRACTOR_DONE_REQUEST,
   WORKS_TENANT_HAPPY,
+  INSPECTION_TENANT_ACCESS,
+  INSPECTION_TENANT_BOOKED,
+  INSPECTION_LANDLORD_REPORT,
   INVOICE_SENT,
   SITE,
   type EmailDoc } from "@/lib/email/tle-documents";
@@ -638,7 +641,28 @@ TLE_EMAILS.push(
   worksEntry("invoice-sent", "Invoice to the Landlord", "landlord", "When an invoice is sent from Maintenance, Invoices", "Whoever the invoice is to - usually the landlord", "The figure, the due date and the button that opens the invoice page.", INVOICE_SENT as unknown as EmailDoc, "Invoices"),
 );
 
-export const EMAIL_GROUPS = ["Pre-launch", "Market appraisals", "Compliance", "Pre-tenancy", "Maintenance", "Invoices", "Terms of business", "Accounts", "Tools"];
+/* One worked visit, so the inspection emails preview as real ones. */
+const INSPECTION_SAMPLE: Record<string, string> = {
+  address: "41 Harewood Road, Coventry CV4 8LP", tenantName: "Marcus", landlordName: "Helen", inspector: "Rhiannon Dodge",
+  howLong: "20 minutes", noticeHours: "24", whenPretty: "Tuesday 22 September at 10:00", conditionWord: "in good order",
+  slots: "Tuesday 22 September, 10:00<br>Wednesday 23 September, 14:00<br>Friday 25 September, 09:30",
+  summary: "The property is being looked after. The garden is tidy, no damp anywhere and the alarms all tested fine.",
+  findings: "Kitchen - extractor fan noisy, we will get somebody out.<br>Bathroom - sealant around the bath going black, on the list.<br>Outside - gutter above the front door needs clearing.",
+  accessLink: `${SITE}/visit/sample`, reportLink: `${SITE}/inspections?open=sample`,
+  agentName: "Rhiannon Dodge", agentPhone: "0115 123 4567",
+};
+const inspectionEntry = (id: string, name: string, audience: CatalogEntry["audience"], trigger: string, to: string, summary: string, doc: EmailDoc): CatalogEntry => ({
+  id, group: "Inspections", name, audience, trigger, fires: "lib/inspection-emails, from the inspection's own moves", to, summary, doc,
+  render: (o) => blocks(withSample(o ?? doc, INSPECTION_SAMPLE))(),
+});
+TLE_EMAILS.push(
+  inspectionEntry("inspection-tenant-access", "Can We Visit? to the Tenant", "tenant", "When an agent asks the tenant for access on an inspection", "The tenant", "The ask, not the telling: why we come, how long it takes, the dates on offer and a link to choose one or say none of them work. Their answer is what the OS keeps as the permission.", INSPECTION_TENANT_ACCESS as unknown as EmailDoc),
+  inspectionEntry("inspection-tenant-booked", "Visit Confirmed to the Tenant", "tenant", "When a date is agreed and confirmed", "The tenant", "The date in writing, which is the notice, plus an invitation to raise anything bothering them before we arrive.", INSPECTION_TENANT_BOOKED as unknown as EmailDoc),
+  inspectionEntry("inspection-landlord-report", "Visit Report to the Landlord", "landlord", "When the report is sent from the inspection sheet", "The landlord", "How their property is being kept, what we found room by room, and what happens next about each of it.", INSPECTION_LANDLORD_REPORT as unknown as EmailDoc),
+);
+
+
+export const EMAIL_GROUPS = ["Pre-launch", "Market appraisals", "Compliance", "Pre-tenancy", "Maintenance", "Inspections", "Invoices", "Terms of business", "Accounts", "Tools"];
 
 /**
  * The agent's certificate chase, filled with a real book.

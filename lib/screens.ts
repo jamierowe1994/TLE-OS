@@ -216,6 +216,24 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     ],
   },
 
+  "/inspections": {
+    purpose: "Every visit we owe the managed book, the tenant's permission to make it, and what was found.",
+    does: [
+      "Read the Due list, which is worked out from the cadence against today - not a stored schedule.",
+      "Press Raise it on a due home to open the visit and start the workflow.",
+      "Ask the tenant, which offers them dates by email and gives them their own link to answer on.",
+      "Book the date, confirm it in writing, mark the visit done or record that you could not get in.",
+      "Write the report room by room and send it to the landlord.",
+    ],
+    wiring: "partial",
+    caveats: [
+      "The cadence - three months then every six - is a sensible guess and has not been signed off by Michael yet. It is a settings document, so it changes without a deploy.",
+      "A finding marked for a works order does not raise one yet. Raise it on Maintenance and it carries from there.",
+      "The Due list needs REX for the managed book. Where REX is not connected the screen says so rather than showing an empty board.",
+      "No photographs on a finding yet, and no printable report - the landlord gets the findings in the email.",
+    ],
+  },
+
   "/emails": {
     purpose:
       "Everything sent under the company's name, from REX's own send log — the automation and the agents kept apart.",

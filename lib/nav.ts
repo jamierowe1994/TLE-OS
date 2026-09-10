@@ -66,6 +66,12 @@ export const BACK: NavItem[] = [
       { href: "/maintenance?section=contractors", label: "Contractors" },
     ],
   },
+  /* Straight after Maintenance, because they feed each other: a visit is
+     where most planned work is found, and a works order is what a finding
+     becomes. Its own screen rather than a third child of Maintenance - the
+     job there is a thing that is broken, and the job here is getting into
+     somebody's home with their permission. */
+  { href: "/inspections", label: "Inspections", icon: "search" },
   /* Back office rather than Marketing: this is the audit of what already goes
      out under our name, not a place to write anything new. */
   { href: "/emails", label: "Emails", icon: "mail" },
@@ -233,6 +239,7 @@ export const AGENT_ROUTES = [
   "/applications",
   "/compliance",
   "/maintenance",
+  "/inspections",
   "/emails",
   "/portfolio",
   "/finances",
