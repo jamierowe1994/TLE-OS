@@ -177,6 +177,15 @@ export default function PageHeader({
    * figure, and at 232 the rule cut through the top of the man's head.
    */
   minHeight = 232,
+  /**
+   * The title's size.
+   *
+   * 30 everywhere, because every page's masthead is meant to read the same.
+   * The dashboard is the exception James asked for: its title is a greeting
+   * rather than a label, it is the first thing anybody sees in the morning,
+   * and it carries the page on its own.
+   */
+  titleSize = 30,
   /** The search bar under the rule. On by default; pages that aren't about
    *  finding things (the profile) turn it off. */
   search = true,
@@ -203,6 +212,7 @@ export default function PageHeader({
   shadow?: boolean;
   flushRight?: boolean;
   minHeight?: number;
+  titleSize?: number;
   search?: boolean;
   searchValue?: string;
   onSearch?: (v: string) => void;
@@ -372,7 +382,9 @@ export default function PageHeader({
               40px lower than a three-line one and every page started
               somewhere different (James, 6 Sep 2026). The blurb now flows
               down from it and the rule stays where it is. */}
-          <h1 className="text-[30px] leading-tight">{title}</h1>
+          {/* balance, so a greeting that will not fit on one line breaks into
+              two even ones rather than leaving a single orphaned word. */}
+          <h1 className="text-balance leading-tight" style={{ fontSize: titleSize }}>{title}</h1>
           <p className="mt-2.5 max-w-md text-[13px] text-muted">{blurb}</p>
         </div>
 

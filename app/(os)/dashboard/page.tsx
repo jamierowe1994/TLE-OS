@@ -32,6 +32,9 @@ export default function Dashboard() {
     <>
       <PageHeader
         title={greeting()}
+        /* The greeting carries this page, and at 30 it read as a label rather
+           than a welcome. Sized off James's reference. */
+        titleSize={42}
         blurb="Here's what's happening with your lettings business today."
         /* James's painted scene, in whichever accent the person picked - the
            file is chosen in CSS off the data-accent already on <html>, so it
@@ -48,7 +51,7 @@ export default function Dashboard() {
            window edge, the dog sits on the rule, and the sofa front and his
            trailing leg carry on underneath it. 560 leaves his head about 30px
            clear of the cut. */
-        illustrationHeight={560}
+        illustrationHeight={470}
         /* Deeper than the standard 232 so his head clears. */
         minHeight={340}
         lineBreak="none"
