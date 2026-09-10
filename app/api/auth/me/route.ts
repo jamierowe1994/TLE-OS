@@ -68,6 +68,12 @@ export async function GET(req: NextRequest) {
        owner now hold that too — support and developer among them. */
     canAdmin: can(actor?.role, "admin:open"),
     role: actor?.role ?? null,
+    /* What the SUBJECT is, so the rail can be drawn as theirs while an owner
+       views as them (lib/nav railFor). Null when nobody is being viewed, so
+       the ordinary case is unchanged and cannot be got wrong by omission.
+       Permission is still decided on `role` above - this only says what to
+       draw. */
+    subjectRole: viewingAs && subject && subject.id !== actor?.id ? subject.role : null,
     anyUsers: (await countUsers()) > 0,
     hasDb: true,
   }, { headers: noStore });

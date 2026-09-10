@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import NotificationBell from "@/components/NotificationBell";
 import DoodleIcon from "@/components/DoodleIcon";
 import { readTheme, type ThemeChoice } from "@/lib/theme";
-import { FRONT, BACK, workspacesFor, type NavItem } from "@/lib/nav";
+import { FRONT, BACK, railFor, type NavItem } from "@/lib/nav";
 
 /**
  * The OS chrome. The rail is its own encapsulated card — a thin outline the
@@ -152,13 +152,18 @@ export default function Shell({ children }: { children: React.ReactNode }) {
      five of the six roles and drew a link into James's admin for every one of
      them. Undefined until we know — see the render below. */
   const [role, setRole] = useState<string | null | undefined>(undefined);
+  /* Whose screens to DRAW, when an owner is viewing as somebody. Null the
+     rest of the time. See railFor in lib/nav for why this is separate from
+     the role above, which is still what decides permission. */
+  const [subjectRole, setSubjectRole] = useState<string | null>(null);
   const [me, setMe] = useState<{ name?: string; email?: string; photo?: string | null } | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/me")
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: { role?: string | null; user?: { name?: string; email?: string; photo?: string | null } } | null) => {
+      .then((j: { role?: string | null; subjectRole?: string | null; user?: { name?: string; email?: string; photo?: string | null } } | null) => {
         setRole(j?.role ?? null);
+        setSubjectRole(j?.subjectRole ?? null);
         /* The SUBJECT, not the actor — while viewing as somebody, the foot
            should show whose screen you are looking at, which is the whole
            point of the red banner above it agreeing. */
@@ -170,7 +175,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   /* Empty until /api/auth/me answers, so nothing is drawn optimistically and
      then taken away — which reads as a glitch to everyone and as a demotion to
      the person it happens to. */
-  const mine = role === undefined ? [] : workspacesFor(role);
+  const mine = role === undefined ? [] : railFor(role, subjectRole);
 
   useEffect(() => {
     const saved = localStorage.getItem("os-accent") ?? "";  // instant paint; the account copy syncs via usePref on the profile

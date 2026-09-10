@@ -211,6 +211,34 @@ export function workspacesFor(role: string | null | undefined): Workspace[] {
 }
 
 /**
+ * The rail an owner sees while VIEWING AS somebody else.
+ *
+ * James, 10 Sep 2026: it should be "an exact replica of exactly what they
+ * would see". Until now it was not - `/api/auth/me` reports the ACTOR's role,
+ * deliberately, so that an owner keeps his own permissions mid-session, and
+ * the sidebar was built from it. The data on every screen was Francesca's and
+ * the rail down the left was still James's, so the one thing view-as is for -
+ * checking that somebody's account is set up right - was the one thing it
+ * could not show. Kirstie's Pre-tenancy board simply was not there.
+ *
+ * So the rail is built from the SUBJECT, and the owner's Admin entry is put
+ * back on top of it. That entry is not a decoration: it is the way back. The
+ * red banner carries "Stop viewing as", but a rail that offered no door of
+ * his own would leave an owner inside somebody else's OS with one control.
+ *
+ * Permission is untouched - it is still decided on the actor everywhere it
+ * matters, and every write is refused outright while a view-as is open (see
+ * lib/view-as). This changes what is DRAWN, not what is allowed.
+ */
+export function railFor(actorRole: string | null | undefined, subjectRole?: string | null): Workspace[] {
+  if (!subjectRole || subjectRole === actorRole) return workspacesFor(actorRole);
+  const theirs = WORKSPACES.filter((w) => w.primaryFor?.includes(asRole(subjectRole)) && can(subjectRole, w.needs));
+  if (!can(actorRole, "admin:open")) return theirs;
+  const admin = WORKSPACES.find((w) => w.href === "/admin");
+  return admin ? [...theirs, admin] : theirs;
+}
+
+/**
  * Every screen an ordinary agent can reach from the rail.
  *
  * Admin is excluded on purpose. This is what the assistant is allowed to send

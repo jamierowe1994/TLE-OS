@@ -3,6 +3,8 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import { Pill } from "@/components/Wire";
+import { ROLE_LABEL } from "@/lib/roles";
+import { when } from "@/lib/admin-client";
 
 /**
  * One person's file.
@@ -14,19 +16,28 @@ import { Pill } from "@/components/Wire";
  * A failed pull says so. It must never render as 0 — "this agent has no
  * properties" is a very different and much more alarming statement than "we
  * could not reach REX", and an owner would act on the first one.
+ *
+ * ── Everybody has a file now (10 Sep 2026) ───────────────────────────────
+ *
+ * The route takes a REX id OR an OS account id. Susan, Francesca, Kirstie and
+ * Michael are not REX lettings agents, so under the old REX-only address they
+ * had no file at all — which meant the four people whose screens most need
+ * checking were the four an owner could not open or view as. Where there is
+ * no REX record there is no book, and the page says that in a sentence rather
+ * than drawing eight zeros.
  */
 
 type Counted = { total: number | null; failed: boolean };
 type Data = {
-  person: { rexId: string; name: string; email: string; photo: string | null; position: string | null; phone: string | null };
-  account: { id: string; role: string; hasPhoto: boolean; createdAt: string } | null;
+  person: { rexId: string | null; name: string; email: string; photo: string | null; position: string | null; phone: string | null; onRex: boolean };
+  account: { id: string; role: string; hasPhoto: boolean; createdAt: string; rexUserId: string | null; lastSeenAt: string | null } | null;
   book: {
     listings: Counted; onMarket: Counted; managed: Counted;
     properties: Counted; contacts: Counted; leads: Counted;
     appraisals: Counted; applications: Counted;
     recentListings: Array<{ id: string; address: string; status: string | null; rent: number | null }>;
     pulledAt: string;
-  };
+  } | null;
   audit: Array<{ id: string; kind: string; at: string }>;
 };
 
@@ -43,18 +54,18 @@ function Count({ label, c }: { label: string; c: Counted }) {
   );
 }
 
-export default function PersonPage({ params }: { params: Promise<{ rexId: string }> }) {
-  const { rexId } = use(params);
+export default function PersonPage({ params }: { params: Promise<{ who: string }> }) {
+  const { who } = use(params);
   const [d, setD] = useState<Data | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/admin/person/${rexId}`)
+    fetch(`/api/admin/person/${who}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then(setD)
       .catch(() => setErr("Couldn't load that person."));
-  }, [rexId]);
+  }, [who]);
 
   /* Works whether or not they have an OS account. Most of the team has not
      been invited yet, and the people worth testing as are exactly those. */
@@ -95,15 +106,22 @@ export default function PersonPage({ params }: { params: Promise<{ rexId: string
         <div className="min-w-0 flex-1">
           <h1 className="hand text-[24px] leading-tight">{p.name}</h1>
           <p className="mt-1 text-[12.5px] text-muted">
-            {p.email} · REX {p.rexId}
+            {p.email}
+            {p.rexId ? ` · REX ${p.rexId}` : " · not in REX"}
             {p.position ? ` · ${p.position}` : ""}
             {p.phone ? ` · ${p.phone}` : ""}
           </p>
           <p className="mt-2 flex flex-wrap items-center gap-1.5">
             {d.account ? (
               <>
-                <Pill tone="accent">Has an account</Pill>
+                <Pill tone="accent">{ROLE_LABEL[d.account.role as keyof typeof ROLE_LABEL] ?? d.account.role}</Pill>
                 {!d.account.hasPhoto && <Pill tone="neutral">No headshot</Pill>}
+                {d.account.lastSeenAt ? (
+                  <span className="text-[11.5px] text-muted">Last in {when(d.account.lastSeenAt)}</span>
+                ) : (
+                  <Pill tone="accent">Never signed in</Pill>
+                )}
+                {!d.account.rexUserId && <Pill tone="neutral">Not linked to REX</Pill>}
               </>
             ) : (
               <Pill tone="neutral">Not invited yet</Pill>
@@ -122,6 +140,16 @@ export default function PersonPage({ params }: { params: Promise<{ rexId: string
         )}
       </header>
 
+      {!d.book ? (
+        /* No REX record, so there is no book to count. Said in a sentence,
+           because eight zeros would read as "this person does nothing". */
+        <p className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5 text-[12.5px] text-muted">
+          {p.name.split(" ")[0]} isn&apos;t a REX lettings agent, so there is no book of listings,
+          leads or appraisals to show. Their work lives on their own screens — press
+          &ldquo;View as&rdquo; above to see exactly what they see.
+        </p>
+      ) : (
+      <>
       <div className="fade-up mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Count label="On the market" c={d.book.onMarket} />
         <Count label="Let & managed" c={d.book.managed} />
@@ -163,6 +191,8 @@ export default function PersonPage({ params }: { params: Promise<{ rexId: string
           here too.
         </p>
       </section>
+      </>
+      )}
     </>
   );
 }

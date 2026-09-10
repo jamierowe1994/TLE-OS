@@ -1,7 +1,7 @@
 import "server-only";
 import { hashPassword, uid, verifyPassword } from "@/lib/auth";
 import { hasDb, q } from "@/lib/db";
-import { asRole } from "@/lib/roles";
+import { asRole, type Role } from "@/lib/roles";
 
 /**
  * The people who work here — stored in `os_users`, which the OS owns
@@ -16,7 +16,28 @@ export interface OsUser {
   id: string;
   email: string;
   name: string;
-  role: "owner" | "agent";
+  /**
+   * What they are, as stored. EVERY role, not two of them.
+   *
+   * ── The bug this fixes (10 Sep 2026) ──────────────────────────────────
+   *
+   * This was typed `"owner" | "agent"` and `toUser` below flattened anything
+   * else to "agent". Six roles went into the database and two came out of it,
+   * so the moment Susan, Francesca, Kirstie or Michael signed in the OS
+   * believed they were ordinary agents: `/api/auth/me` reported "agent",
+   * `can()` was asked about a role they do not hold, and every capability
+   * they had been given evaluated to false.
+   *
+   * What that looked like from their side is exactly what James reported -
+   * Susan with no Company figures, Francesca with no Marketing, Kirstie with
+   * no Pre-tenancy board - while Permissions and the People list both showed
+   * the role set correctly, because those read the column with raw SQL and
+   * never came through here.
+   *
+   * `asRole` still falls back to "agent" for anything unrecognised, so an
+   * unknown value in the column is as safe as it was before.
+   */
+  role: Role;
   photo: string | null;
   createdAt: string;
   /** Their REX AccountUser id — what every figure is scoped by. Null until
@@ -41,7 +62,7 @@ function toUser(r: Row): OsUser {
     id: r.id,
     email: r.email,
     name: r.name,
-    role: r.role === "owner" ? "owner" : "agent",
+    role: asRole(r.role),
     photo: r.photo,
     createdAt: new Date(r.created_at).toISOString(),
     rexUserId: r.rex_user_id ?? null,
