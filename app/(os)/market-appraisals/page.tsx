@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import DoodleIcon from "@/components/DoodleIcon";
+import PickOne from "@/components/PickOne";
+import Segmented from "@/components/Segmented";
 import { Pill } from "@/components/Wire";
 import {
   MA_STAGES,
@@ -184,36 +186,26 @@ export default function MarketAppraisals() {
         lineBreak="none"
         actions={
           <div className="flex items-center gap-2">
-            <label className="sr-only" htmlFor="ma-period">Date range</label>
-            <select
-              id="ma-period"
+            {/* Was a native <select>, which looked exactly like what it was
+                next to hand-drawn pills. See components/PickOne. */}
+            <PickOne
+              label="Any date"
+              icon="calendar"
+              options={PERIODS.map((p) => ({ id: p.id, label: p.label }))}
               value={period}
-              onChange={(e) => setPeriod(e.target.value as PeriodId)}
-              className="rounded-full border border-line/80 bg-panel px-3.5 py-2 text-[12px] outline-none transition-colors focus:border-ink"
-            >
-              {PERIODS.map((p) => (
-                <option key={p.id} value={p.id}>{p.label}</option>
-              ))}
-            </select>
+              onChange={setPeriod}
+            />
             {/* List or tiles. Two ways of reading the same rows: a list to
-                work down, tiles to take in. Nothing is hidden in either. */}
-            {/* bg-panel: it sits in the top bar over the illustration now. */}
-            <div className="flex items-center rounded-full border border-line/80 bg-panel p-0.5">
-              {([["list", "list"], ["tiles", "grid"]] as const).map(([id, icon]) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setView(id)}
-                  aria-pressed={view === id}
-                  aria-label={id === "list" ? "List view" : "Tile view"}
-                  className={`rounded-full px-2.5 py-1.5 transition-colors ${
-                    view === id ? "bg-accent-dark text-white" : "text-muted hover:text-ink"
-                  }`}
-                >
-                  <DoodleIcon name={icon} size={14} />
-                </button>
-              ))}
-            </div>
+                work down, tiles to take in. Nothing is hidden in either.
+                The marker SLIDES between them - see components/Segmented. */}
+            <Segmented
+              value={view}
+              onChange={setView}
+              options={[
+                { id: "list" as const, title: "List view", icon: <DoodleIcon name="list" size={14} /> },
+                { id: "tiles" as const, title: "Tile view", icon: <DoodleIcon name="grid" size={14} /> },
+              ]}
+            />
           </div>
         }
       />
