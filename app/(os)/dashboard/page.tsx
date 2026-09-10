@@ -45,11 +45,12 @@ export default function Dashboard() {
         illustrationAspect={HOME_SCENE_ASPECT}
         /* Big, and deliberately taller than the header.
            Measured off James's reference: the scene runs about 62% of the
-           content width, which at this artwork's 1.798 makes it ~400 tall
-           against a 232 header - so it carries on up past the top of the page
-           and is cut off by the window, and the notification bell (z-30) sits
-           over it rather than under. That overhang is the point of it. */
-        illustrationHeight={400}
+           content width. At the trimmed canvas's 2.23 that is ~330 tall
+           against a 232 header, so it still carries on up past the top of the
+           page and the notification bell (z-30) sits over it rather than
+           under. Its base is now the canvas floor, so it stands ON the rule
+           instead of floating over it. */
+        illustrationHeight={330}
         lineBreak="none"
         flushRight
         /* Customise rides the search row — one line of chrome, not two. */
