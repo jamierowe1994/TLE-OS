@@ -24,7 +24,7 @@
  */
 
 /** Where the rule crosses the canvas. */
-const RULE = 0.6682;
+const RULE = 1;
 /** How far the watercolour reaches across it, so the line is put back over
  *  exactly that span and no further. */
 const WASH = { from: 0, to: 1 };

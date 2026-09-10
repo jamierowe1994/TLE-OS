@@ -305,23 +305,17 @@ export default function Leads() {
                 }.${source.onFile ? ` ${source.onFile.toLocaleString("en-GB")} kept on file in the OS.` : ""}`
               : (source.reason ?? "New enquiries from the portals, your ads and the website.")
         }
-        /* Three layers, not one picture: the wash goes behind the rule, she
-           sits on it, and the pot stands on it. See components/LeadsScene. */
+        /* Three layers, not one picture: the watercolour behind, her, and the
+           plant with its pot on the line. Composed so the canvas STOPS at the
+           rule - nothing below it, because anything below is hidden the
+           moment the masthead starts to fall and she would lose her legs on
+           every navigation. See components/LeadsScene. */
         illustrationNode={<LeadsScene />}
-        /* Taller than the shared 250 on purpose: she SITS, so only 0.668 of
-           her is above the rule. 374 puts that at 250, which is what every
-           other screen shows above the line. */
-        illustrationHeight={374}
-        /* She is half as wide again as she is tall, where this header's fixed
-           text reserve was measured against tall narrow line art. Given the
-           aspect it works the room out rather than assuming it. */
-        illustrationAspect={0.7336}
-        /* The underside of her thigh breaks from her legs at 0.670 of the
-           artwork — measured off the file, not guessed — so that is where the
-           rule goes under her. Her legs and the plant hang below it. */
-        seat={0.668}
-        /* No dip and no break: she is sitting ON the line, and her own body
-           hides it where she is. A trough would read as the line sagging. */
+        illustrationHeight={250}
+        /* Told the aspect, the header works the text's room out from the
+           artwork's real width rather than assuming a tall narrow drawing. */
+        illustrationAspect={1.0979}
+        /* No dip: the line is not bearing her weight, it is where she ends. */
         lineBreak="none"
         /* The bar under the header is the list's search - one search per
            page (James, 6 Sep 2026). */

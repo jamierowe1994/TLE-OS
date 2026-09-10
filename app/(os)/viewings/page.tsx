@@ -127,8 +127,11 @@ export default function Viewings() {
       <PageHeader
         title="Viewings"
         blurb="Every viewing opens into its whole story: the property, who's coming, whether someone lives there — and whether every confirmation actually went."
-        illustration="/illustrations/scooter.webp"
-        illustrationAspect={0.7623}
+        /* The still, not the clip. The loop keyed cleanly but the source was
+           soft, and 496K of soft is worse than 34K of sharp. scooter.webp is
+           still in the repo if a better capture turns up. */
+        illustration="/illustrations/scooter-still.webp"
+        illustrationAspect={0.6486}
         /**
          * He rides ON the rule, and stays put while he does it.
          *

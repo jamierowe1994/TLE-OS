@@ -59,24 +59,23 @@ export default function Dashboard() {
       <PageHeader
         title={greeting(name)}
         blurb="Here's what's happening with your lettings business today."
-        /* The window scene, with the line running through it at the DOG -
-           he is lying on the sill and that is what the drawing rests on. The
-           sofa front and the man's trailing leg carry on for another 6% below
-           him and are cut off at the rule rather than hanging into the page.
-           The top is left open on purpose: the window runs off the top of the
-           page and is cut by the window edge, which is the point of it.
+        /* Its bottom edge is the rug, so the rug IS the rule and nothing
+           sits below the line - which is what the fall needs. Anything under
+           the rule is hidden the moment the masthead starts to drop, so a
+           figure that hangs below it loses its legs the instant you navigate.
+           Every illustration in the OS now stops at the line for that reason.
 
-           480 keeps the artwork the same width on screen as the version it
-           replaces, so the greeting still gets its one line.
-
-           This used to be three files and a component, because the coloured
-           backdrop was recoloured to each accent. James's new artwork has no
-           backdrop at all, so there is nothing left to tint and nothing left
-           for the component to do. */
-        illustration="/illustrations/home/window.webp"
-        illustrationHeight={480}
-        illustrationAspect={1.2026}
-        seat={0.939}
+           Bigger than the shared 250 because it is the home screen and the
+           scene is wide rather than tall - 330 gives it about 458 across,
+           which still leaves the greeting its one line. */
+        illustration="/illustrations/home/armchair.webp"
+        illustrationHeight={330}
+        illustrationAspect={1.3879}
+        /* Pushed down so the rug runs INTO the line rather than stopping
+           politely above it - the bottom 6% goes under and is erased, which
+           takes the front of the rug and a little of his shoe. That is what
+           makes it sit in the page rather than on it. */
+        seat={0.94}
         illustrationCrop
         lineBreak="none"
         flushRight
