@@ -43,17 +43,13 @@ export default function Dashboard() {
            back. */
         illustrationNode={<HomeScene />}
         illustrationAspect={HOME_SCENE_ASPECT}
-        /* Big, and deliberately taller than the header.
-           Measured off James's reference: the scene runs about 62% of the
-           content width. At the trimmed canvas's 2.23 that is ~330 tall
-           against a 232 header, so it still carries on up past the top of the
-           page and the notification bell (z-30) sits over it rather than
-           under. Its base is now the canvas floor, so it stands ON the rule
-           instead of floating over it. */
-        illustrationHeight={330}
-        /* Deeper than the standard 232: at 232 the rule cut through the top
-           of his head. This is the scene's height plus a little air, so he
-           fits whole and the dog still breaks the line. */
+        /* Deliberately taller than the header, which is the point of this
+           artwork: the window runs off the top of the page and is cut by the
+           window edge, the dog sits on the rule, and the sofa front and his
+           trailing leg carry on underneath it. 560 leaves his head about 30px
+           clear of the cut. */
+        illustrationHeight={560}
+        /* Deeper than the standard 232 so his head clears. */
         minHeight={340}
         lineBreak="none"
         flushRight

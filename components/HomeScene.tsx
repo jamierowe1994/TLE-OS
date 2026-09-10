@@ -26,27 +26,20 @@
  * which matters on a phone.
  */
 
-/**
- * width ÷ height of the shared canvas. The header needs it to size the box.
- *
- * The canvas is trimmed to what is VISIBLE, not to getbbox(): these files
- * carry a fringe of alpha-1 pixels out to their very edge, and trimming to
- * that left 12.6% of nothing under the artwork - which is why the scene
- * floated above the rule instead of standing on it, and why the three were
- * not even aligned with each other (their visible bottoms were at 0.874,
- * 0.882 and 0.950).
- */
-export const HOME_SCENE_ASPECT = 1600 / 717;
+/** width ÷ height of the artwork. The header needs it to size the box. */
+export const HOME_SCENE_ASPECT = 1374 / 1066;
 
 /**
- * How far the dog, the sofa and his trailing leg hang BELOW the coloured
- * backdrop, as a fraction of the canvas. Measured on all three renders and
- * the same in each: backdrop bottom 0.976, artwork bottom 0.998.
+ * How much of the scene sits BELOW the rule, as a fraction of the canvas.
  *
- * The scene is dropped by this so the backdrop meets the rule and the rest
- * crosses it.
+ * The line goes under the DOG - he is lying on the sill and that is what the
+ * drawing rests on. Below him the sofa front and the man's trailing leg carry
+ * on for another 5.7%, and those pass under the line rather than stopping at
+ * it, which is what James asked for.
+ *
+ * The scene is dropped by this so the dog meets the rule.
  */
-const BLOB_OVERHANG = 0.0235;
+const BELOW_RULE = 1 - 0.943;
 
 export default function HomeScene({ className = "" }: { className?: string }) {
   return (
@@ -61,15 +54,13 @@ export default function HomeScene({ className = "" }: { className?: string }) {
         :root[data-accent="blush"] .home-scene { background-image: url(/illustrations/home/blush.webp) }
         :root[data-accent="red"]   .home-scene { background-image: url(/illustrations/home/red.webp) }
       `}</style>
-      {/* Dropped so the BACKDROP lands on the rule, not the artwork's lowest
-          pixel. The dog and the sofa sit 2.3% below the backdrop in all three
-          renders, and James wants them over the line - which is what the
-          drawing implies, and what stops the whole scene hovering a few
-          pixels clear of it. */}
+      {/* Dropped so the DOG lands on the rule. The scene is deliberately
+          taller than the header: the window runs off the top and is cut by
+          the window edge, which is the whole point of this artwork. */}
       <span
         aria-hidden
         className={`home-scene absolute left-0 right-0 block h-full ${className}`}
-        style={{ top: `${BLOB_OVERHANG * 100}%` }}
+        style={{ top: `${BELOW_RULE * 100}%` }}
       />
     </>
   );
