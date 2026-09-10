@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { registerOpen } from "@/lib/open-record";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -72,6 +72,10 @@ type Listing = {
   id: string; name: string; locality: string; rent: number | null; image: string | null;
 };
 const LISTINGS = rexSample.listings as Listing[];
+
+type TaskRow = {
+  id: string; title: string; detail: string; dueAt: string | null; done: boolean; kind: string; createdBy: string;
+};
 
 const Empty = ({ children }: { children: React.ReactNode }) => (
   <p className="py-6 text-center text-[12px] text-muted">{children}</p>
@@ -516,6 +520,63 @@ export default function LeadDrawer({
 
   const detail = useMemo(() => (lead ? leadDetail(lead) : null), [lead]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  /* The REAL tasks, from os_tasks. The list above is the wireframe's, still
+     rendered for records that have none of their own so the tab is not empty
+     on a demo lead; anything an agent actually creates lands here and comes
+     back tomorrow. */
+  const [realTasks, setRealTasks] = useState<TaskRow[] | null>(null);
+  /**
+   * ACCESS, asked at the moment it matters.
+   *
+   * James, 9 Sep 2026: when a viewing is booked on a home somebody lives in,
+   * offer to chase the sitting tenant for access rather than leaving the
+   * agent to remember. The trigger is the property record, not the key
+   * register: REX's register says only that a key set exists and lives in the
+   * office - measured across 1,500 sets, every location is "Office" and every
+   * description is "Imported data" - so it cannot tell us access is via the
+   * tenant. Who lives there can.
+   */
+  const [access, setAccess] = useState<
+    { property: string; propertyId: string; when: string; tenants: { name: string; email: string; phone: string }[] } | null
+  >(null);
+
+  /** Live listings the agent has put on this tenant's list, as objects. */
+  const [addedListings, setAddedListings] = useState<Listing[]>([]);
+  const [newTask, setNewTask] = useState("");
+  const [taskBusy, setTaskBusy] = useState(false);
+
+  const loadTasks = useCallback(() => {
+    if (!lead) return;
+    fetch(`/api/tasks?lead=${encodeURIComponent(lead.id)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (j?.ok) setRealTasks(j.tasks as TaskRow[]); })
+      .catch(() => setRealTasks([]));
+  }, [lead]);
+  useEffect(() => { setRealTasks(null); setNewTask(""); loadTasks(); }, [loadTasks]);
+
+  async function addTask(title: string, detail = "", kind = "general") {
+    if (!lead || !title.trim()) return;
+    setTaskBusy(true);
+    try {
+      const j = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ title, detail, kind, leadId: lead.id, listingId: lead.listingId ?? null }),
+      }).then((r) => r.json());
+      if (j?.ok) { setRealTasks((cur) => [j.task as TaskRow, ...(cur ?? [])]); setNewTask(""); }
+    } finally {
+      setTaskBusy(false);
+    }
+  }
+
+  async function toggleTask(t: TaskRow) {
+    setRealTasks((cur) => (cur ?? []).map((x) => (x.id === t.id ? { ...x, done: !x.done } : x)));
+    await fetch("/api/tasks", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: t.id, done: !t.done }),
+    }).catch(() => loadTasks());
+  }
   const [notes, setNotes] = useState<Note[]>([]);
   const [docs, setDocs] = useState<Doc[]>([]);
   const [tags, setTags] = useState<string[]>([]);
@@ -774,9 +835,13 @@ export default function LeadDrawer({
   if (!lead || !detail) return null;
 
   const isTenant = leadSide(lead) === "tenant";
-  const shortlist = LISTINGS.filter(
-    (l) => detail.interested.includes(l.id) || added.includes(l.id)
-  );
+  /* A tenant's list is built from the LIVE book by the search below, so the
+     objects come back with the click rather than being looked up in a sample
+     file whose ids do not match (which silently emptied the list). Anyone
+     else still reads the demo book, which is all they have. */
+  const shortlist = isTenant
+    ? addedListings
+    : LISTINGS.filter((l) => detail.interested.includes(l.id) || added.includes(l.id));
 
   const track = trackFor(lead);
 
@@ -919,7 +984,8 @@ export default function LeadDrawer({
           <div className="hidden items-center gap-1 sm:flex">
             {TABS.map((t) => {
               const count =
-                t.key === "tasks" ? tasks.filter((x) => !x.done).length
+                t.key === "tasks"
+                  ? tasks.filter((x) => !x.done).length + (realTasks ?? []).filter((x) => !x.done).length
                 : t.key === "documents" ? docs.length
                 : t.key === "properties" ? shortlist.length
                 : 0;
@@ -1318,6 +1384,53 @@ export default function LeadDrawer({
 
                 {tab === "tasks" && (
                   <>
+                    {/* Real tasks, kept. Anything typed here is still here
+                        tomorrow, which the wireframe's were not. */}
+                    <form
+                      onSubmit={(e) => { e.preventDefault(); void addTask(newTask); }}
+                      className="mb-4 flex max-w-xl gap-2"
+                    >
+                      <input
+                        value={newTask}
+                        onChange={(e) => setNewTask(e.target.value)}
+                        placeholder="Add a task…"
+                        className="min-w-0 flex-1 rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink"
+                      />
+                      <button
+                        type="submit"
+                        disabled={taskBusy || !newTask.trim()}
+                        className="rounded-full bg-ink px-4 py-2 text-[12px] font-semibold text-page disabled:opacity-40"
+                      >
+                        Add
+                      </button>
+                    </form>
+                    {realTasks && realTasks.length > 0 && (
+                      <ul className="mb-4 max-w-xl space-y-2.5">
+                        {realTasks.map((t) => (
+                          <li key={t.id}>
+                            <button
+                              type="button"
+                              onClick={() => void toggleTask(t)}
+                              className="flex w-full items-start gap-2.5 text-left"
+                            >
+                              <span
+                                className={`mt-0.5 flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[9px] transition-colors ${
+                                  t.done ? "border-accent-dark bg-accent-soft text-accent-dark" : "border-line"
+                                }`}
+                              >
+                                {t.done && "✓"}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className={`block text-[12.5px] ${t.done ? "text-muted line-through opacity-60" : ""}`}>
+                                  {t.title}
+                                </span>
+                                {t.detail && <span className="block text-[10.5px] text-muted">{t.detail}</span>}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                     <ul className="max-w-xl space-y-2.5">
                       {tasks.map((t) => (
                         <li key={t.id}>
@@ -1464,6 +1577,7 @@ export default function LeadDrawer({
                           originListingId={lead.listingId != null ? String(lead.listingId) : null}
                           shortlisted={shortlist.map((p) => p.id)}
                           onShortlist={(l) => {
+                            setAddedListings((cur) => (cur.some((x) => x.id === l.id) ? cur : [...cur, l as unknown as Listing]));
                             setAdded((cur) => (cur.includes(l.id) ? cur : [...cur, l.id]));
                             setJustAdded(true);
                           }}
@@ -1904,6 +2018,58 @@ export default function LeadDrawer({
         properties={shortlist}
       />
 
+      {/* The prompt. Deliberately not a modal: the booking is done and this
+          is an offer, so it sits in the corner and can be ignored. */}
+      {access && (
+        <div className="fade-up fixed bottom-5 right-5 z-[140] w-[min(94vw,380px)] rounded-2xl border border-line/80 bg-panel p-4 shadow-[0_18px_50px_-20px_rgba(0,0,0,0.4)]">
+          <div className="flex items-start gap-2.5">
+            <DoodleIcon name="key" size={17} className="mt-0.5 shrink-0 text-accent-dark" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-semibold">Somebody lives there</p>
+              <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
+                {access.tenants[0].name}
+                {access.tenants.length > 1 ? ` and ${access.tenants.length - 1} other${access.tenants.length > 2 ? "s" : ""}` : ""}
+                {" "}
+                {access.tenants.length > 1 ? "live" : "lives"} at {access.property}. Ask before the viewing on {access.when}?
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={taskBusy}
+                  onClick={async () => {
+                    await addTask(
+                      `Ask ${access.tenants[0].name} for access to ${access.property}`,
+                      `Viewing ${access.when}. ${access.tenants.map((t) => [t.name, t.phone, t.email].filter(Boolean).join(" · ")).join(" | ")}`,
+                      "viewing access"
+                    );
+                    setAccess(null);
+                  }}
+                  className="rounded-full bg-ink px-3.5 py-1.5 text-[11.5px] font-semibold text-page disabled:opacity-50"
+                >
+                  Add a task
+                </button>
+                {access.tenants[0].email && (
+                  <a
+                    href={`mailto:${access.tenants[0].email}?subject=${encodeURIComponent(`Access for a viewing at ${access.property}`)}&body=${encodeURIComponent(`Hi ${access.tenants[0].name.split(" ")[0]},\n\nWe have a viewing booked at ${access.property} on ${access.when}. Is that all right with you?\n\nKind regards\nThe Letting Experts`)}`}
+                    onClick={() => setAccess(null)}
+                    className="rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] font-semibold transition-colors hover:border-ink/40"
+                  >
+                    Email them
+                  </a>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setAccess(null)}
+                  className="rounded-full px-2 py-1.5 text-[11.5px] text-muted transition-colors hover:text-ink"
+                >
+                  Not now
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <ViewingBooker
         open={booking}
         onClose={() => setBooking(false)}
@@ -1921,6 +2087,19 @@ export default function LeadDrawer({
            August. */
         agent={lead.agent && lead.agent !== "Unassigned" ? lead.agent : (me?.name ?? "")}
         onBooked={async (v) => {
+          /* Who lives there? Asked once, after the booking is safely made, so
+             a slow lookup can never hold up the thing the agent came to do. */
+          if (v.propertyId) {
+            fetch(`/api/property/people?id=${encodeURIComponent(v.propertyId)}`, { cache: "no-store" })
+              .then((r) => r.json())
+              .then((j) => {
+                const tenants = Array.isArray(j?.tenants) ? j.tenants : [];
+                if (j?.ok && tenants.length) {
+                  setAccess({ property: v.property, propertyId: v.propertyId as string, when: v.whenPretty || v.when, tenants });
+                }
+              })
+              .catch(() => { /* no prompt is better than a wrong one */ });
+          }
           setBooked((cur) => [
             {
               id: `vw${cur.length + 1}${v.when}`,

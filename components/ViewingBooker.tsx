@@ -25,6 +25,9 @@ import { usePref } from "@/lib/prefs-store";
 
 type Listing = {
   id: string; name: string; locality: string; rent: number | null; image: string | null;
+  /** REX's property behind the listing, where the caller knows it. Carried so
+   *  a booking can say WHICH home, not just its address. */
+  propertyId?: string | null;
 };
 
 function startOfDay(d: Date) {
@@ -126,6 +129,11 @@ export default function ViewingBooker({
     whenPretty: string;
     startsAt: string | null;
     minutes: number;
+    /** The REX property, so the record can ask who lives there before the
+     *  agent turns up (James, 9 Sep 2026). Null on an appraisal or take-on,
+     *  where the address is the landlord's own. */
+    propertyId: string | null;
+    listingId: string | null;
   }) => void;
 }) {
   const today = useMemo(() => startOfDay(new Date()), []);
@@ -542,6 +550,8 @@ export default function ViewingBooker({
       whenPretty,
       startsAt,
       minutes: mins,
+      propertyId: null,
+      listingId: null,
     });
     onClose();
   }
@@ -1104,6 +1114,8 @@ export default function ViewingBooker({
                   onBooked({
                     when: whenLabel,
                     property: toLandlord ? (address || "Visit") : property!.name,
+                    propertyId: toLandlord ? null : (property?.propertyId ?? null),
+                    listingId: toLandlord ? null : (property?.id ?? null),
                     locality: mode === "appraisal" ? "Market appraisal" : mode === "takeon" ? "Take-on visit" : property!.locality,
                     who: chosen?.name ?? "",
                     whenPretty,

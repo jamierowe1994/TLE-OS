@@ -1151,6 +1151,29 @@ ALTER TABLE os_scheduled_sends ADD COLUMN IF NOT EXISTS html TEXT;
 
 -- Results of slow REX/PayProp walks, so a deploy doesn't cost minutes of
 -- empty screens before the first figure appears.
+-- What an agent owes somebody. Small, deliberate, and theirs: the lead
+-- drawer's Tasks tab was sample rows held in React state, so ticking one did
+-- nothing (9 Sep 2026). A task can hang off a lead, a property or a viewing,
+-- or off nothing at all.
+CREATE TABLE IF NOT EXISTS os_tasks (
+  id             TEXT PRIMARY KEY,
+  user_id        TEXT NOT NULL,
+  title          TEXT NOT NULL,
+  detail         TEXT NOT NULL DEFAULT '',
+  due_at         TIMESTAMPTZ,
+  done_at        TIMESTAMPTZ,
+  -- what it is about, any or none of these
+  lead_id        TEXT,
+  property_id    TEXT,
+  listing_id     TEXT,
+  /** Free label for where it came from: "viewing access", "chase". */
+  kind           TEXT NOT NULL DEFAULT 'general',
+  created_by     TEXT NOT NULL DEFAULT '',
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_tasks_user ON os_tasks (user_id, done_at, due_at);
+CREATE INDEX IF NOT EXISTS os_tasks_lead ON os_tasks (lead_id, created_at DESC);
+
 -- The viewings ledger: every diary event REX holds against a listing that
 -- the OS has read, kept (lib/rex-viewings.ts). Who came, when, who took it.
 CREATE TABLE IF NOT EXISTS os_viewings (
