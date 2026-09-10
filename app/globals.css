@@ -27,7 +27,11 @@
      toggle went with it. */
   --ink: #101014;
   --muted: #6b6b70;
-  --line: #cdc9c0;
+  /* Neutral, not beige. It was #cdc9c0 - R205 G201 B192, a warm cast - and
+     with four bordered tiles side by side on white paper it read as a pink
+     tint on the boxes themselves (James, 10 Sep 2026). Same lightness,
+     no hue. */
+  --line: #c9c9c9;
   --page: #ffffff;
   --card: #ffffff;
   /* The faintest grey — a 50, maybe a 100, never more — so the nav and the
@@ -78,7 +82,7 @@
      bubbles actually describe an edge instead of hinting at one. */
   --ink: #f4f3f0;
   --muted: #b6b4ae;
-  --line: #524e49;
+  --line: #4f4f4f;   /* neutral in the dark too, for the same reason */
   /* Charcoal is adjustable: Profile → Appearance writes --dark-page and
      --dark-box (ten hundred-steps each); these are the fallbacks — a warm
      charcoal, never black, and boxes a clear lift above the page. */
