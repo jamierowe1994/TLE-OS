@@ -308,7 +308,10 @@ export default function Leads() {
         /* Three layers, not one picture: the wash goes behind the rule, she
            sits on it, and the pot stands on it. See components/LeadsScene. */
         illustrationNode={<LeadsScene />}
-        illustrationHeight={315}
+        /* Taller than the shared 250 on purpose: she SITS, so only 0.668 of
+           her is above the rule. 374 puts that at 250, which is what every
+           other screen shows above the line. */
+        illustrationHeight={374}
         /* She is half as wide again as she is tall, where this header's fixed
            text reserve was measured against tall narrow line art. Given the
            aspect it works the room out rather than assuming it. */

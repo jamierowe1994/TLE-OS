@@ -149,7 +149,6 @@ export default function Viewings() {
          * dead flat and reads as the road he is on. A dip would have the line
          * sagging under a scooter, which is the wrong physics for the joke.
          */
-        illustrationHeight={160}
         lineBreak="none"
         shadow
       />

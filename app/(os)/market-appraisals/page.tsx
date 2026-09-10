@@ -173,7 +173,6 @@ export default function MarketAppraisals() {
         title="Market Appraisals"
         blurb="Booked, prepared, appraised, won. Everything between a landlord saying yes to a visit and signing terms."
         illustration="/illustrations/thinking-man.png"
-        illustrationHeight={215}
         /* The artwork is cropped at the thigh, so its bottom edge IS the rule:
            with no seat and no dip he is dropped by nothing and the crop lands
            exactly on the line, which reads as him standing behind it. */

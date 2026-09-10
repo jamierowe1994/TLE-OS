@@ -249,7 +249,6 @@ export default function Applications() {
            the artwork - so the bottom of the frame is the line and the rule
            dips under her weight rather than running straight through. */
         illustration="/illustrations/applicant.webp"
-        illustrationHeight={260}
         illustrationAspect={0.34}
         shadow
         lineBreak="dip"

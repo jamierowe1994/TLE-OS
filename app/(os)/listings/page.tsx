@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import ListingDrawer from "@/components/ListingDrawer";
@@ -83,67 +84,135 @@ const SORTS = [
 ];
 
 /** The dropdown chip — same grammar as the leads bar. */
-function Filter({
-  label,
-  options,
-  value,
-  onChange,
+/**
+ * One button, every filter behind it.
+ *
+ * There were four controls in a row - a sort, a rent band, a locality and the
+ * availability switch - and each one opened its own little menu. Four buttons
+ * that all mean "narrow this list" is four things to read before you can do
+ * the one thing, and it got worse every time a filter was added (James, 10
+ * Sep 2026).
+ *
+ * ── Why it is portalled ──────────────────────────────────────────────────
+ *
+ * The panel is rendered into <body>, not beside the button. The controls now
+ * live inside the masthead, which animates and carries a clip-path, and a
+ * menu positioned inside that is at the mercy of whatever its ancestors are
+ * doing - which is how a dropdown ends up underneath the page instead of over
+ * it. Out at the body it has nothing above it to be trapped by, and it is
+ * placed from the button's own measured position.
+ */
+function FilterPanel({
+  groups,
+  active,
+  onClear,
 }: {
-  label: string;
-  options: { id: string; label: string }[];
-  value: string | null;
-  onChange: (v: string | null) => void;
+  groups: {
+    label: string;
+    options: { id: string; label: string }[];
+    value: string | null;
+    onChange: (v: string | null) => void;
+  }[];
+  active: number;
+  onClear: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const current = options.find((o) => o.id === value);
+  const [at, setAt] = useState<{ top: number; left: number } | null>(null);
+  const btn = useRef<HTMLButtonElement | null>(null);
+
+  const place = useCallback(() => {
+    const r = btn.current?.getBoundingClientRect();
+    if (r) setAt({ top: r.bottom + 8, left: r.left });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const close = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("keydown", close);
+    /* Follows the button rather than freezing where it was opened - the page
+       under it still scrolls. */
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("keydown", close);
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, place]);
+
   return (
-    <div className="relative">
+    <>
       <button
+        ref={btn}
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-3.5 py-2 text-[12px] transition-colors ${
-          current
+        aria-expanded={open}
+        className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-4 py-2.5 text-[13px] transition-colors ${
+          active
             ? "border-accent-dark bg-accent-soft/50 font-semibold text-accent-dark"
-            : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
+            : "border-line/80 bg-panel text-muted hover:border-ink/40 hover:text-ink"
         }`}
       >
-        {current?.label ?? label}
-        <span className="text-[9px]">▾</span>
+        <DoodleIcon name="setting" size={14} />
+        Filter
+        {active > 0 && (
+          <span className="figures rounded-full bg-accent-dark px-1.5 text-[10px] font-bold text-page">{active}</span>
+        )}
       </button>
-      {open && (
+
+      {open && at && createPortal(
         <>
           <button
             type="button"
-            aria-label="Close"
+            aria-label="Close filters"
             onClick={() => setOpen(false)}
-            className="fixed inset-0 z-[60] cursor-default"
+            className="fixed inset-0 z-[200] cursor-default"
           />
-          <div className="fade-up absolute right-0 top-full z-[70] mt-1.5 min-w-[180px] rounded-2xl border border-line/80 bg-card p-1.5 shadow-[0_16px_40px_-14px_rgba(0,0,0,0.3)]">
-            <button
-              type="button"
-              onClick={() => { onChange(null); setOpen(false); }}
-              className={`block w-full rounded-lg px-3 py-2 text-left text-[12px] transition-colors hover:bg-accent-soft/40 ${
-                value === null ? "font-semibold text-accent-dark" : ""
-              }`}
-            >
-              {label}
-            </button>
-            {options.map((o) => (
-              <button
-                key={o.id}
-                type="button"
-                onClick={() => { onChange(o.id); setOpen(false); }}
-                className={`block w-full whitespace-nowrap rounded-lg px-3 py-2 text-left text-[12px] transition-colors hover:bg-accent-soft/40 ${
-                  value === o.id ? "font-semibold text-accent-dark" : ""
-                }`}
-              >
-                {o.label}
-              </button>
+          <div
+            data-filter-panel
+            className="fade-up fixed z-[201] max-h-[70vh] w-[268px] overflow-auto rounded-2xl border border-line/80 bg-card p-3 shadow-[0_18px_44px_-14px_rgba(0,0,0,0.34)]"
+            style={{ top: at.top, left: at.left }}
+          >
+            <div className="mb-2 flex items-center justify-between gap-3 px-1">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Filter</p>
+              {active > 0 && (
+                <button type="button" onClick={onClear} className="text-[11.5px] text-accent-dark underline">
+                  Clear all
+                </button>
+              )}
+            </div>
+            {groups.map((g) => (
+              <div key={g.label} className="mb-2 last:mb-0">
+                <p className="px-1 pb-1 text-[11px] font-semibold text-muted">{g.label}</p>
+                <button
+                  type="button"
+                  onClick={() => g.onChange(null)}
+                  className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-[12.5px] transition-colors hover:bg-accent-soft/40 ${
+                    g.value === null ? "font-semibold text-accent-dark" : ""
+                  }`}
+                >
+                  Any
+                </button>
+                {g.options.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => g.onChange(o.id)}
+                    className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-[12.5px] transition-colors hover:bg-accent-soft/40 ${
+                      g.value === o.id ? "font-semibold text-accent-dark" : ""
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
-        </>
+        </>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 
@@ -249,7 +318,6 @@ export default function Listings() {
         /* Same drawing with the lamp ON, for the dark. Not an inversion - a
            second artwork, which is why it is worth the extra file. */
         illustrationDark="/illustrations/reading-listings-dark.webp"
-        illustrationHeight={230}
         illustrationAspect={1.121}
         lineBreak="none"
         searchValue={q}
@@ -274,9 +342,15 @@ export default function Listings() {
               <span className="avail-dot" aria-hidden />
               Available only
             </button>
-            <Filter label="Most recent" options={SORTS} value={sort} onChange={setSort} />
-            <Filter label="Rent" options={RENT_BANDS} value={rentBand} onChange={setRentBand} />
-            <Filter label="Location" options={localities} value={loc} onChange={setLoc} />
+            <FilterPanel
+              active={[sort, rentBand, loc].filter(Boolean).length}
+              onClear={() => { setSort(null); setRentBand(null); setLoc(null); }}
+              groups={[
+                { label: "Sort by", options: SORTS, value: sort, onChange: setSort },
+                { label: "Rent", options: RENT_BANDS, value: rentBand, onChange: setRentBand },
+                { label: "Location", options: localities, value: loc, onChange: setLoc },
+              ]}
+            />
             <button
               type="button"
               className="hand flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] text-page transition-opacity hover:opacity-90"

@@ -103,7 +103,18 @@ export default function PageHeader({
   illustrationNode,
   /** Illustration height — it stands on the rule and reaches most of the way
    *  up, stopping short of the top. */
-  illustrationHeight = 190,
+  /**
+   * How tall the artwork stands.
+   *
+   * 250 is the ONE size, and it means 250 above the rule: that is what fills
+   * the masthead, and it is what the eye compares between screens. A figure
+   * that hangs below the line (a seat) is set taller so the part above it
+   * still comes to 250 - see Leads. Only the dashboard differs, and that is a
+   * painted vignette meant to bleed off the top rather than a figure standing
+   * on the line (James, 10 Sep 2026: the others were 160, 190, 215, 230 and
+   * 260, which read as five different screens).
+   */
+  illustrationHeight = 250,
   /**
    * width ÷ height of the artwork, for art that is WIDER than the roughly
    * 0.7 this header has always assumed.
