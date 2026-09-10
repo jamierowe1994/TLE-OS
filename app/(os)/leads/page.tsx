@@ -13,6 +13,9 @@ import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/compo
 import { Pill } from "@/components/Wire";
 import { LEADS, STAGE_TONE, leadSide, type Lead } from "@/lib/leads-sample";
 import PickOne from "@/components/PickOne";
+import Segmented from "@/components/Segmented";
+import DoodleIcon from "@/components/DoodleIcon";
+import LeadGroups from "@/components/LeadGroups";
 
 /**
  * Leads: one inbox for every channel, with the record open beside it.
@@ -54,6 +57,15 @@ export default function Leads() {
   // Stacks of 25 — enough by default, more when they want a long scroll.
   const [perPage, setPerPage] = useState(25);
   const [q, setQ] = useState("");
+  /**
+   * Table, or the three boxes.
+   *
+   * James, 10 Sep 2026: "a different view next to the new lead button". They
+   * are two questions, not two skins - the table is for looking something up,
+   * the boxes are for "what has come in and who have I not rung". See
+   * components/LeadGroups.
+   */
+  const [view, setView] = useState<"list" | "groups">("list");
   const [fSource, setFSource] = useState<string | null>(null);
   const [fAgent, setFAgent] = useState<string | null>(null);
   const [fStage, setFStage] = useState<string | null>(null);
@@ -221,6 +233,27 @@ export default function Leads() {
   );
   const cols = useColumns<Lead>("leads", defs);
 
+  /**
+   * What was read, and what was left out of it.
+   *
+   * Moved off the masthead (10 Sep 2026) but NOT dropped: a list of 500 under
+   * a count of 90,022 needs saying out loud, or the difference reads as leads
+   * going missing. Live from the same response the list came from - never a
+   * remembered number.
+   */
+  const scanNote = useMemo(() => {
+    if (!source.live || source.loading) return null;
+    const bits: string[] = [];
+    if (source.scanned) bits.push(`Showing the ${source.scanned.toLocaleString("en-GB")} most recent`);
+    if (source.setAside) {
+      const aside = source.setAside.sales + source.setAside.unclear;
+      if (aside) bits.push(`${aside.toLocaleString("en-GB")} set aside as sales or unclear`);
+      if (source.setAside.blank) bits.push(`${source.setAside.blank.toLocaleString("en-GB")} with no details at all`);
+    }
+    if (source.onFile) bits.push(`${source.onFile.toLocaleString("en-GB")} kept on file in the OS`);
+    return bits.length ? `${bits.join(". ")}.` : null;
+  }, [source]);
+
   const pages = Math.max(1, Math.ceil(book.length / perPage));
   const rows = book.slice(page * perPage, page * perPage + perPage);
 
@@ -228,19 +261,25 @@ export default function Leads() {
     <>
       <PageHeader
         title={side === "tenant" ? "Tenant leads" : side === "landlord" ? "Landlord leads" : "Leads"}
+        /* The headline only.
+           
+           This used to carry the whole scan report - how many were read, how
+           many set aside as sales or unclear, how many arrived with no details,
+           how many are kept on file. Every one of those is worth saying: they
+           are what explains a list of 500 sitting under a count of 90,000, and
+           dropping them would have somebody report the gap as a fault.
+           
+           But they describe the LIST, not the page, and in the masthead they
+           ran the blurb to six lines in a column narrowed by the artwork. They
+           now sit directly above the table, where the thing they are talking
+           about actually is. See `scanNote` below. */
         blurb={
           source.loading
             ? "Fetching today's enquiries from REX…"
             : source.live
               ? `Live from REX${
-                  source.total ? ` — ${source.total.toLocaleString("en-GB")} enquiries on record` : ""
-                }. Showing the ${source.scanned?.toLocaleString("en-GB") ?? ""} most recent, ${
-                  source.setAside
-                    ? `with ${(source.setAside.sales + source.setAside.unclear).toLocaleString("en-GB")} set aside as sales or unclear${
-                        source.setAside.blank ? ` and ${source.setAside.blank.toLocaleString("en-GB")} with no details at all` : ""
-                      }`
-                    : ""
-                }.${source.onFile ? ` ${source.onFile.toLocaleString("en-GB")} kept on file in the OS.` : ""}`
+                  source.total ? ` - ${source.total.toLocaleString("en-GB")} enquiries on record` : ""
+                }.`
               : (source.reason ?? "New enquiries from the portals, your ads and the website.")
         }
         /* James's row of houses with the To Let board (10 Sep 2026), in place
@@ -264,7 +303,7 @@ export default function Leads() {
            Pushed down 4% so the pavement runs into the line and is erased by
            it, the same as every other scene. */
         illustration="/illustrations/to-let-row.webp"
-        illustrationHeight={160}
+        illustrationHeight={200}
         illustrationAspect={2.6615}
         seat={0.96}
         illustrationCrop
@@ -275,18 +314,54 @@ export default function Leads() {
         onSearch={setQ}
         searchPlaceholder="Search leads…"
         actions={
-          <PressButton
-            onClick={() => setCreating(true)}
-            className="flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page"
-          >
-            <span className="text-[15px] leading-none">+</span> New lead
-          </PressButton>
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* The shape switch sits BEFORE the button that makes a lead, and
+                the marker slides between them - the same control as every
+                other choice of two in the OS. */}
+            <Segmented
+              value={view}
+              onChange={setView}
+              options={[
+                { id: "list" as const, label: "List", icon: <DoodleIcon name="list" size={13} /> },
+                { id: "groups" as const, label: "Groups", icon: <DoodleIcon name="grid" size={13} /> },
+              ]}
+            />
+            <PressButton
+              onClick={() => setCreating(true)}
+              className="flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page"
+            >
+              <span className="text-[15px] leading-none">+</span> New lead
+            </PressButton>
+          </div>
         }
       />
 
       <AddedHere refreshKey={addedTick} />
 
       <div className="mt-4">
+        {view === "groups" ? (
+          <>
+            <div className="fade-up rounded-2xl border border-line/80 bg-panel px-5 py-4">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <PickOne label="All sources" options={sources.map((o) => ({ id: o, label: o }))} value={fSource} onChange={setFSource} />
+                <PickOne label="All agents" options={agents.map((o) => ({ id: o, label: o }))} value={fAgent} onChange={setFAgent} />
+                <PickOne label="All stages" options={stages.map((o) => ({ id: o, label: o }))} value={fStage} onChange={setFStage} />
+              </div>
+              {scanNote && <p className="mt-3 text-[11px] leading-relaxed text-muted">{scanNote}</p>}
+            </div>
+
+            {/* The whole filtered book, not a page of it - each box does its
+                own limiting, and paging a set of three boxes would mean "New
+                today" ending halfway down page two. */}
+            <div className="mt-4">
+              <LeadGroups
+                leads={book}
+                activeId={openId}
+                onOpen={(l) => setOpenId(l.id === openId ? null : l.id)}
+              />
+            </div>
+          </>
+        ) : (
         <div className="fade-up min-w-0 rounded-2xl border border-line/80 bg-panel p-5">
           {/* Filters, with the column customiser at the end of the row. */}
           {/* The search itself is the bar under the header - one search per
@@ -297,6 +372,9 @@ export default function Leads() {
             <PickOne label="All stages" options={stages.map((o) => ({ id: o, label: o }))} value={fStage} onChange={setFStage} />
             <ColumnCustomiser cols={cols} />
           </div>
+
+          {/* The scan report, next to the list it is about. */}
+          {scanNote && <p className="mt-3 text-[11px] leading-relaxed text-muted">{scanNote}</p>}
 
           <div className="mt-4">
             <DataTable
@@ -358,7 +436,7 @@ export default function Leads() {
             </div>
           </div>
         </div>
-
+        )}
       </div>
 
       <LeadDrawer lead={open} onClose={() => setOpenId(null)} onStep={step} />

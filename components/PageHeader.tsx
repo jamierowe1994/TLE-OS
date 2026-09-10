@@ -362,7 +362,23 @@ export default function PageHeader({
       )}
       {wideArt && (
         <style>{`
-          .${artClass} { padding-right: ${reserve[0]}px }
+          /* Clamped on the smallest screens, and only there.
+
+             The reserve is worked out as height x aspect, which assumes the
+             art is drawn at the height it was given. On a phone it is not: the
+             wrapper is height-limited and the picture is scaled on top of
+             that, so the street on Portfolio occupies 165px while this line
+             was reserving 345 - most of a 390px screen, handed to something
+             that is not there. The masthead then measured 552px wide and the
+             page scrolled sideways (found 10 Sep 2026 when the Leads houses
+             were made bigger; Portfolio and Listings had it already).
+
+             46% is measured, not picked: it is what the art actually takes at
+             this size. min() means it can only ever reserve LESS, never more,
+             so no larger screen can be changed by it - and the clamp is left
+             off every other breakpoint, where the art really is drawn at the
+             size the formula assumes. */
+          .${artClass} { padding-right: min(${reserve[0]}px, 46%) }
           @media (min-width: 640px) { .${artClass} { padding-right: ${reserve[1]}px } }
           @media (min-width: 1024px) { .${artClass} { padding-right: ${reserve[2]}px } }
           @media (min-width: 1280px) { .${artClass} { padding-right: ${reserve[3]}px } }
