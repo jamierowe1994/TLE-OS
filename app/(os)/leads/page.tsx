@@ -12,6 +12,7 @@ import SourceMark from "@/components/SourceMark";
 import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
 import { Pill } from "@/components/Wire";
 import { LEADS, STAGE_TONE, leadSide, type Lead } from "@/lib/leads-sample";
+import PickOne from "@/components/PickOne";
 
 /**
  * Leads: one inbox for every channel, with the record open beside it.
@@ -23,68 +24,6 @@ import { LEADS, STAGE_TONE, leadSide, type Lead } from "@/lib/leads-sample";
 
 /** A filter that filters: pick a value, the list narrows, the chip wears
  *  the choice; "All …" hands the rows back. */
-function Filter({
-  label,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  options: string[];
-  value: string | null;
-  onChange: (v: string | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-3.5 py-2 text-[12px] transition-colors ${
-          value
-            ? "border-accent-dark bg-accent-soft/50 font-semibold text-accent-dark"
-            : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
-        }`}
-      >
-        {value ?? label}
-        <span className="text-[9px]">▾</span>
-      </button>
-      {open && (
-        <>
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={() => setOpen(false)}
-            className="fixed inset-0 z-[60] cursor-default"
-          />
-          <div className="fade-up absolute left-0 top-full z-[70] mt-1.5 max-h-72 min-w-[170px] overflow-y-auto rounded-2xl border border-line/80 bg-card p-1.5 shadow-[0_16px_40px_-14px_rgba(0,0,0,0.3)]">
-            <button
-              type="button"
-              onClick={() => { onChange(null); setOpen(false); }}
-              className={`block w-full rounded-lg px-3 py-2 text-left text-[12px] transition-colors hover:bg-accent-soft/40 ${
-                value === null ? "font-semibold text-accent-dark" : ""
-              }`}
-            >
-              {label}
-            </button>
-            {options.map((o) => (
-              <button
-                key={o}
-                type="button"
-                onClick={() => { onChange(o); setOpen(false); }}
-                className={`block w-full whitespace-nowrap rounded-lg px-3 py-2 text-left text-[12px] transition-colors hover:bg-accent-soft/40 ${
-                  value === o ? "font-semibold text-accent-dark" : ""
-                }`}
-              >
-                {o}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
 
 interface LeadSource {
   leads: Lead[];
@@ -343,9 +282,9 @@ export default function Leads() {
           {/* The search itself is the bar under the header - one search per
               page (James, 6 Sep 2026). This row is only the filters. */}
           <div className="flex flex-wrap items-center gap-2.5">
-            <Filter label="All sources" options={sources} value={fSource} onChange={setFSource} />
-            <Filter label="All agents" options={agents} value={fAgent} onChange={setFAgent} />
-            <Filter label="All stages" options={stages} value={fStage} onChange={setFStage} />
+            <PickOne label="All sources" options={sources.map((o) => ({ id: o, label: o }))} value={fSource} onChange={setFSource} />
+            <PickOne label="All agents" options={agents.map((o) => ({ id: o, label: o }))} value={fAgent} onChange={setFAgent} />
+            <PickOne label="All stages" options={stages.map((o) => ({ id: o, label: o }))} value={fStage} onChange={setFStage} />
             <ColumnCustomiser cols={cols} />
           </div>
 

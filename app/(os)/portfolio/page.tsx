@@ -17,6 +17,7 @@ import {
   type CertKey, type CertStatus, type CompProperty,
 } from "@/lib/compliance";
 import type { ManagedBook, ManagedLandlord, ManagedProperty, Party } from "@/lib/portfolio-types";
+import PickOne from "@/components/PickOne";
 
 /**
  * Portfolio — the managed book. Every property the business looks after,
@@ -123,57 +124,6 @@ const needsLook = (s: CertSummary | null) => !!s && (s.worst === "expired" || s.
 /* ---------------------------------------------------------------- bits -- */
 
 /** The dropdown chip — same grammar as Listings and Leads. */
-function Filter({
-  label, options, value, onChange,
-}: {
-  label: string;
-  options: { id: string; label: string }[];
-  value: string | null;
-  onChange: (v: string | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const current = options.find((o) => o.id === value);
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-3.5 py-2 text-[12px] transition-colors ${
-          current
-            ? "border-accent-dark bg-accent-soft/50 font-semibold text-accent-dark"
-            : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
-        }`}
-      >
-        {current?.label ?? label}
-        <span className="text-[9px]">▾</span>
-      </button>
-      {open && (
-        <>
-          <button type="button" aria-label="Close" onClick={() => setOpen(false)} className="fixed inset-0 z-[60] cursor-default" />
-          <div className="fade-up absolute left-0 top-full z-[70] mt-1.5 max-h-[60vh] min-w-[200px] overflow-y-auto rounded-2xl border border-line/80 bg-card p-1.5 shadow-[0_16px_40px_-14px_rgba(0,0,0,0.3)]">
-            <button
-              type="button"
-              onClick={() => { onChange(null); setOpen(false); }}
-              className={`block w-full rounded-lg px-3 py-2 text-left text-[12px] transition-colors hover:bg-accent-soft/40 ${value === null ? "font-semibold text-accent-dark" : ""}`}
-            >
-              {label}
-            </button>
-            {options.map((o) => (
-              <button
-                key={o.id}
-                type="button"
-                onClick={() => { onChange(o.id); setOpen(false); }}
-                className={`block w-full whitespace-nowrap rounded-lg px-3 py-2 text-left text-[12px] transition-colors hover:bg-accent-soft/40 ${value === o.id ? "font-semibold text-accent-dark" : ""}`}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
 
 function StatCard({ label, value, hint }: { label: string; value: React.ReactNode; hint?: React.ReactNode }) {
   return (
@@ -780,9 +730,9 @@ export default function Portfolio() {
               ))}
             </div>
             <span className="hidden h-6 w-px bg-line/80 sm:block" />
-            <Filter label="Service" options={services} value={service} onChange={setService} />
-            {everything && <Filter label="Agent" options={agents} value={agent} onChange={setAgent} />}
-            <Filter label="Town" options={towns} value={town} onChange={setTown} />
+            <PickOne label="Service" options={services} value={service} onChange={setService} />
+            {everything && <PickOne label="Agent" options={agents} value={agent} onChange={setAgent} />}
+            <PickOne label="Town" options={towns} value={town} onChange={setTown} />
             <button
               type="button"
               disabled={certs.status !== "ready"}
@@ -795,7 +745,7 @@ export default function Portfolio() {
             <button type="button" onClick={() => setNotOnRexOnly((v) => !v)} className={pillClass(notOnRexOnly)} title="Homes REX PM manages that REX either has no property for, or does not mark as let">
               Not on REX
             </button>
-            <Filter label="Sort" options={SORTS} value={sort} onChange={setSort} />
+            <PickOne label="Sort" options={SORTS} value={sort} onChange={setSort} />
           </div>
 
           {book && filtering && (

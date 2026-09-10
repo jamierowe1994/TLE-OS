@@ -28,18 +28,37 @@ export default function PickOne<T extends string>({
   value,
   onChange,
   icon,
+  clearable = true,
+  neutral,
 }: {
-  /** Shown when nothing is chosen, and as the menu's heading. */
+  /** Shown on the button when nothing is chosen, and as the "any" row. */
   label: string;
   options: { id: T; label: string }[];
-  value: T;
-  onChange: (v: T) => void;
+  value: T | null;
+  onChange: (v: T | null) => void;
   icon?: string;
+  /**
+   * Whether the list carries an "any" row that clears the choice.
+   *
+   * True for a filter, which always has an unfiltered state. False where the
+   * options already include their own catch-all and null is not a value the
+   * page can hold - the appraisals date range being exactly that.
+   */
+  clearable?: boolean;
+  /**
+   * The option that means "not filtered", where one of the options IS the
+   * catch-all rather than null being it. Without this the appraisals picker
+   * lights up as an active filter while it is showing every date, which is
+   * the opposite of what the highlight is for.
+   */
+  neutral?: T;
 }) {
   const [open, setOpen] = useState(false);
   const [at, setAt] = useState<{ top: number; left: number; width: number } | null>(null);
   const btn = useRef<HTMLButtonElement | null>(null);
   const current = options.find((o) => o.id === value);
+  /* On means NARROWED. Null is not narrowed, and neither is the catch-all. */
+  const on = value !== null && value !== neutral;
 
   const place = useCallback(() => {
     const r = btn.current?.getBoundingClientRect();
@@ -70,7 +89,11 @@ export default function PickOne<T extends string>({
         className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-4 py-2.5 text-[12.5px] transition-colors ${
           open
             ? "border-ink bg-panel text-ink"
-            : "border-line/80 bg-panel text-muted hover:border-ink/40 hover:text-ink"
+            : on
+              ? /* A filter that is ON has to look on, or somebody reads a
+                   narrowed list as the whole book. */
+                "border-accent-dark bg-accent-soft/50 font-semibold text-accent-dark"
+              : "border-line/80 bg-panel text-muted hover:border-ink/40 hover:text-ink"
         }`}
       >
         {icon && <DoodleIcon name={icon} size={13} />}
@@ -91,6 +114,18 @@ export default function PickOne<T extends string>({
             className="fade-up fixed z-[201] max-h-[60vh] overflow-auto rounded-2xl border border-line/80 bg-card p-1.5 shadow-[0_18px_44px_-14px_rgba(0,0,0,0.34)]"
             style={{ top: at.top, left: at.left, minWidth: Math.max(at.width, 168) }}
           >
+            {clearable && (
+              <button
+                type="button"
+                onClick={() => { onChange(null); setOpen(false); }}
+                className={`flex w-full items-center justify-between gap-4 rounded-lg px-3 py-2 text-left text-[12.5px] transition-colors hover:bg-accent-soft/40 ${
+                  value === null ? "font-semibold text-accent-dark" : ""
+                }`}
+              >
+                {label}
+                {value === null && <span aria-hidden className="text-[11px]">✓</span>}
+              </button>
+            )}
             {options.map((o) => (
               <button
                 key={o.id}

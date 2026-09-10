@@ -170,17 +170,17 @@ export default function MarketAppraisals() {
       <PageHeader
         title="Market Appraisals"
         blurb="Booked, prepared, appraised, won. Everything between a landlord saying yes to a visit and signing terms."
-        /* His hair starts at 0.003 of the artwork - there is no empty margin
-           above him at all - so this one cannot bleed off the top the way the
-           dashboard does without taking his head with it. 330 matches the
-           dashboard's height and still clears the top of the page.
+        /* His hair starts near the very top of the artwork, so this one
+           cannot bleed off the top the way the dashboard does without taking
+           his head with it. 330 matches the height the other two scenes
+           stand at.
 
            Pushed down 4% so the shadows under his feet run into the line and
            are erased by it, rather than the whole scene stopping politely
            above the rule. */
         illustration="/illustrations/appraisals.webp"
         illustrationHeight={330}
-        illustrationAspect={1.2292}
+        illustrationAspect={0.9704}
         seat={0.96}
         illustrationCrop
         lineBreak="none"
@@ -193,7 +193,11 @@ export default function MarketAppraisals() {
               icon="calendar"
               options={PERIODS.map((p) => ({ id: p.id, label: p.label }))}
               value={period}
-              onChange={setPeriod}
+              onChange={(v) => setPeriod((v ?? "any") as PeriodId)}
+              /* PERIODS carries its own "Any date", and the page cannot hold
+                 null, so no second any row. */
+              clearable={false}
+              neutral="any"
             />
             {/* List or tiles. Two ways of reading the same rows: a list to
                 work down, tiles to take in. Nothing is hidden in either.
