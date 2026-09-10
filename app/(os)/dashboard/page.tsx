@@ -43,7 +43,13 @@ export default function Dashboard() {
            back. */
         illustrationNode={<HomeScene />}
         illustrationAspect={HOME_SCENE_ASPECT}
-        illustrationHeight={210}
+        /* Big, and deliberately taller than the header.
+           Measured off James's reference: the scene runs about 62% of the
+           content width, which at this artwork's 1.798 makes it ~400 tall
+           against a 232 header - so it carries on up past the top of the page
+           and is cut off by the window, and the notification bell (z-30) sits
+           over it rather than under. That overhang is the point of it. */
+        illustrationHeight={400}
         lineBreak="none"
         flushRight
         /* Customise rides the search row — one line of chrome, not two. */

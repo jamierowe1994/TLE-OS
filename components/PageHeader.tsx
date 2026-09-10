@@ -214,7 +214,10 @@ export default function PageHeader({
   const SCALES = [0.5, 0.68, 0.88, 1];
   const wideArt = typeof illustrationAspect === "number" && illustrationAspect > 0.75;
   const artClass = wideArt ? `art-room-${Math.round(illustrationHeight)}-${Math.round(illustrationAspect * 1000)}` : "";
-  const inset = seated ? [20, 32, 158, 166] : [20, 32, 48, 56];
+  /* flushRight pins the art to the very corner, so there is no inset to
+     reserve. Getting this wrong reserves room that is not there and stops the
+     title a breakpoint's worth of space short of the artwork. */
+  const inset = flushRight ? [0, 0, 0, 0] : seated ? [20, 32, 158, 166] : [20, 32, 48, 56];
   const reserve = SCALES.map((sc, i) => Math.round(illustrationHeight * (illustrationAspect ?? 0.7) * sc) + inset[i] + 14);
   const hanging = typeof grip === "number";
   /* Where the rule crosses the artwork, and therefore how far the figure has
