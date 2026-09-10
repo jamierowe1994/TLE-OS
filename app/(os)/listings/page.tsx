@@ -246,6 +246,9 @@ export default function Listings() {
            nothing and the crop lands exactly on the line, which reads as her
            sitting behind it. */
         illustration="/illustrations/reading-listings.webp"
+        /* Same drawing with the lamp ON, for the dark. Not an inversion - a
+           second artwork, which is why it is worth the extra file. */
+        illustrationDark="/illustrations/reading-listings-dark.webp"
         illustrationHeight={230}
         illustrationAspect={1.121}
         lineBreak="none"

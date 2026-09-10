@@ -99,6 +99,7 @@ export default function PageHeader({
   title,
   blurb,
   illustration,
+  illustrationDark,
   illustrationNode,
   /** Illustration height — it stands on the rule and reaches most of the way
    *  up, stopping short of the top. */
@@ -203,6 +204,10 @@ export default function PageHeader({
   title: string;
   blurb: string;
   illustration?: string;
+  /** A second artwork for dark mode, where the drawing changes rather than
+   *  just inverting - the listings lamp comes on. Both are rendered and CSS
+   *  picks; see .art-dark in globals. */
+  illustrationDark?: string;
   /** A live illustration (e.g. the window scene) in place of a static file. */
   illustrationNode?: React.ReactNode;
   illustrationHeight?: number;
@@ -531,8 +536,8 @@ export default function PageHeader({
                     aria-hidden
                     className={`art relative h-full w-auto${
                       /* Filled figure art must not be inverted — see .art-figure */
-                      illustration?.endsWith(".png") ? " art-figure" : ""
-                    }`}
+                      /\.(png|webp)$/.test(illustration ?? "") ? " art-figure" : ""
+                    }${illustrationDark ? " art-light" : ""}`}
                     /* Seated or hanging: drop them by everything below the
                        point the rule crosses, so it passes exactly through the
                        seat — or through the gripping fist. */
@@ -540,6 +545,16 @@ export default function PageHeader({
                       below ? { transform: `translateY(${Math.round(below)}px)` } : undefined
                     }
                   />
+                  {illustrationDark && (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={illustrationDark}
+                      alt=""
+                      aria-hidden
+                      className="art art-figure art-dark relative h-full w-auto"
+                      style={below ? { transform: `translateY(${Math.round(below)}px)` } : undefined}
+                    />
+                  )}
                 </span>
               )}
             </div>

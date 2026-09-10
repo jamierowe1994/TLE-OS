@@ -245,16 +245,13 @@ export default function Applications() {
             ? `${scope.label}'s applications on REX's four statuses, live. The eight pre-tenancy stages open once one is accepted.`
             : "Every application on REX's four statuses, live. The eight pre-tenancy stages open once one is accepted."
         }
-        /* She hangs off the rule by one fist, swinging — which is why the
-           pipeline below was pulled in: her body dangles down that gutter.
-           0.05 is where her fist is in the artwork, measured off the frames. */
-        sprite={{ src: "/illustrations/hanging-strip.webp", frames: 30, aspect: 0.653, fps: 12 }}
-        /* 230, down from 300: at 300 her feet reached the pipeline panel and
-           everything under the rule had to be pulled in to 80% to miss her.
-           At 230 she ends above the pipeline, which runs full width again
-           (James, 6 Sep 2026: the applications screen looked cut off). */
-        illustrationHeight={230}
-        grip={0.0428}
+        /* She STANDS on the rule - full length, feet at the bottom edge of
+           the artwork - so the bottom of the frame is the line and the rule
+           dips under her weight rather than running straight through. */
+        illustration="/illustrations/applicant.webp"
+        illustrationHeight={260}
+        illustrationAspect={0.34}
+        shadow
         lineBreak="dip"
       />
 

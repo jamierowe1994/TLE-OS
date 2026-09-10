@@ -260,6 +260,14 @@ h1, h2, h3, h4, h5 {
    SVG, filled figures ship as PNG. */
 :root[data-theme="dark"] .art-figure { filter: none; }
 
+/* A second artwork for the dark, where one exists - the listings lamp is off
+   by day and on at night. Light is the ABSENCE of data-theme (lib/theme
+   resolves "auto" in JavaScript and only ever stamps dark), so these two
+   rules are the whole mechanism; no media query can disagree with them. */
+.art-dark { display: none; }
+:root[data-theme="dark"] .art-dark { display: block; }
+:root[data-theme="dark"] .art-light { display: none; }
+
 /* The dashboard window's figure is drawn inline rather than shipped as a file,
    so she has no fills of her own — she was painted in --page, which is white by
    day and charcoal at night. That is what turned her face and her jumper black.
