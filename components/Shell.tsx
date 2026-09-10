@@ -310,6 +310,32 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
         {/* ── Profile, at the foot ── */}
         <div className="mt-auto">
+          {/* A small word before the profile.
+              Not an advert and not a notification - the OS has a bell for
+              things that need doing. This is the line the brand actually runs
+              on, in the one bit of the rail that was empty, and it is the
+              LAST thing above the name so it reads as a sign-off rather than
+              as another nav item competing with the real ones.
+
+              It goes when the rail collapses: at 68px wide it would be a
+              coloured smudge, and the point of collapsing is to get the words
+              out of the way. */}
+          {!collapsed && (
+            /* No fade-up. The rail is persistent chrome, not page content
+               arriving: the profile row beneath it does not fade either, and
+               anything that needs an animation to run before it is legible is
+               invisible in a background tab. */
+            <div className="mb-3 overflow-hidden rounded-2xl border border-line/70 bg-accent-soft/45 p-3.5">
+              <p className="hand text-[14px] leading-[1.15] text-ink">
+                More great
+                <br />
+                landlords ahead.
+              </p>
+              <p className="mt-1.5 text-[10.5px] leading-relaxed text-ink/60">
+                Same mission. Bigger impact.
+              </p>
+            </div>
+          )}
           {profileOpen && !collapsed && (
             <div className="fade-up mb-2 rounded-2xl border border-line/80 bg-panel p-3">
               {/* ONE door, not three.
