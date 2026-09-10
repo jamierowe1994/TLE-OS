@@ -130,17 +130,62 @@ export default function KnowledgeHub() {
     }
   }
 
+  /**
+   * An HTML guide, turned into plain writing.
+   *
+   * James's first guide arrived as an HTML artefact (10 Sep 2026: "I have
+   * actually done our first guide, which is an artefact, but we need to be
+   * making sure that we're uploading these consistently"). Pasting one of those
+   * into the box gets you a screenful of tags, so the obvious thing happened:
+   * somebody would have retyped it, and the next one would have been retyped
+   * differently.
+   *
+   * Deliberately CRUDE, and it is worth saying why. It is not a converter; it
+   * pulls out the headings, the paragraphs and the list items in the order they
+   * appear and drops everything else. The result is meant to be read and tidied
+   * by the person who wrote it, in the editor they are already looking at - not
+   * saved unseen. Style, layout and images are not carried across because the
+   * reader page has its own, and a guide that arrives carrying somebody else's
+   * design is the inconsistency this is here to remove.
+   *
+   * Done with the browser's own parser rather than regular expressions over the
+   * markup, so a comment, a script or an attribute containing angle brackets
+   * cannot become body text.
+   */
+  function fromHtml(html: string): string {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    doc.querySelectorAll("script, style, noscript, svg, nav, footer").forEach((n) => n.remove());
+    const out: string[] = [];
+    doc.body.querySelectorAll("h1, h2, h3, h4, p, li, blockquote").forEach((el) => {
+      const text = (el.textContent ?? "").replace(/\s+/g, " ").trim();
+      if (!text) return;
+      const tag = el.tagName.toLowerCase();
+      if (tag === "li") out.push(`- ${text}`);
+      else if (tag.startsWith("h")) out.push(`# ${text}`);
+      else out.push(text);
+    });
+    return out.join("\n\n");
+  }
+
   function onUpload(file: File) {
-    if (!/\.(txt|md|markdown)$/i.test(file.name)) {
-      setNote("Text files only (.txt or .md). Paste from a PDF or Word document instead.");
+    const isHtml = /\.(html?|htm)$/i.test(file.name);
+    if (!isHtml && !/\.(txt|md|markdown)$/i.test(file.name)) {
+      setNote("Text (.txt, .md) or a web page (.html). Paste from a PDF or Word document instead.");
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
-      const text = typeof reader.result === "string" ? reader.result : "";
+      const raw = typeof reader.result === "string" ? reader.result : "";
+      const text = isHtml ? fromHtml(raw) : raw;
+      if (!text.trim()) {
+        setNote("There was no readable text in that file.");
+        return;
+      }
       setContent((cur) => (cur.trim() ? `${cur}\n\n${text}` : text));
       if (!title.trim()) setTitle(file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " "));
-      setNote(null);
+      /* Said out loud, because the point of the note is that they read what
+         came out before they save it. */
+      setNote(isHtml ? "Pulled the words out. Read it through before you save - headings came across as # lines." : null);
     };
     reader.readAsText(file);
   }
@@ -302,7 +347,7 @@ export default function KnowledgeHub() {
               <div>
                 <h2 className="hand text-[20px]">{editing === "new" ? "Write something down" : "Edit"}</h2>
                 <p className="mt-0.5 text-[11.5px] text-muted">
-                  {note ?? "Plain writing. Blank lines make paragraphs, a line starting with - makes a list, # makes a heading."}
+                  {note ?? "Plain writing. Blank lines make paragraphs, a line starting with - makes a list, # makes a heading. A .txt, .md or .html file drops straight in."}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -362,12 +407,12 @@ export default function KnowledgeHub() {
               <div className="flex items-center gap-3 text-[11.5px] text-muted">
                 <span className="figures">{content.length.toLocaleString("en-GB")} / 20,000</span>
                 <button type="button" onClick={() => fileRef.current?.click()} className="font-semibold hover:text-ink">
-                  Add a .txt or .md file
+                  Add a file
                 </button>
                 <input
                   ref={fileRef}
                   type="file"
-                  accept=".txt,.md,.markdown"
+                  accept=".txt,.md,.markdown,.html,.htm"
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0];

@@ -136,9 +136,13 @@ const GROUPS: Array<{
       /* Where Steve's knowledge is written. The same screen Susan, Francesca,
          Michael and Kirstie get as a workspace of their own. */
       { href: "/knowledge", label: "Knowledge", needs: "edit:knowledge" },
+      /* Where a post to everybody is written. Next to Knowledge because it is
+         the same people; separate from it because a post interrupts and a
+         knowledge entry waits to be asked for. */
+      { href: "/newsroom", label: "Newsroom", needs: "edit:knowledge" },
       /* Next to Steve on purpose: these are written for HIS Guides tab, and
          sit here only while they are being drafted and checked. */
-      { href: "/admin/guides", label: "Guides", needs: "see:reports" },
+      { href: "/guides", label: "Guides", needs: "see:reports" },
     ],
   },
 ];

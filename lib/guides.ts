@@ -3,16 +3,16 @@
  *
  * ── Why there is a catalogue and not just some pages ──────────────────────
  *
- * These live under Admin for now, which is James's alone, so the first
- * readers are James and whoever he shows. They are not written for him. Every
- * one of them is written for somebody on their first morning who has never
- * seen the OS, and the plan is that they end up on Steve's Guides shelf -
- * which today says "Guides are on their way" and lists nothing.
+ * Every one of these is written for somebody on their first morning who has
+ * never seen the OS. They used to live under /admin, which is owner-only, so
+ * the one finished guide in the product could not be opened by a single person
+ * it was written for. They now sit at /guides, and Steve's Guides shelf lists
+ * them alongside the ones typed into /knowledge.
  *
- * That move is a one-liner as long as the shelf is DATA rather than a folder
- * of routes somebody has to remember to link. Hence this file: the panel in
- * HelpDock can map over `GUIDES` the same way /admin/guides does, and a guide
- * written next month appears in both places without either being edited.
+ * That works because the shelf is DATA rather than a folder of routes somebody
+ * has to remember to link: /api/knowledge/guides maps over `GUIDES` the same
+ * way /guides does, and a guide written next month appears in both places
+ * without either being edited.
  *
  * ── `ready` is not decoration ─────────────────────────────────────────────
  *

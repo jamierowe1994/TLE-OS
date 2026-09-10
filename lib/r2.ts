@@ -152,6 +152,40 @@ export const SCOPES = {
        change, but it is a resource decision rather than a policy one. */
     maxBytes: 25 * 1024 * 1024,
   },
+  /**
+   * What somebody attaches to a question for Steve.
+   *
+   * James, 10 Sep 2026: "offering them the ability to upload documentation,
+   * which we should be able to receive."
+   *
+   * Its own prefix rather than `document`, for the same reason `library` is its
+   * own: `document` is where compliance certificates, ID and proof of ownership
+   * are filed, and a scope is the only thing standing between "an agent
+   * attached a screenshot to a question" and "an agent filed a screenshot as an
+   * EICR". These are working files somebody sent us to look at, and they are
+   * kept apart from evidence.
+   *
+   * Smaller ceiling than the rest. The thing this catches is a photograph of a
+   * screen, a certificate somebody cannot make sense of, or a spreadsheet - not
+   * a deck. Anything larger is a conversation, not an attachment.
+   */
+  support: {
+    prefix: "support",
+    types: [
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/heic",
+      "text/plain",
+      "text/csv",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ],
+    maxBytes: 10 * 1024 * 1024,
+  },
 } as const;
 
 export type Scope = keyof typeof SCOPES;

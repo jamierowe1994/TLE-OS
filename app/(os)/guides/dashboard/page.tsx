@@ -42,7 +42,7 @@ export default function DashboardGuide() {
   return (
     <article className="py-2">
       <Link
-        href="/admin/guides"
+        href="/guides"
         className="text-[11.5px] text-muted underline decoration-line underline-offset-2 transition-colors hover:text-ink"
       >
         ← All guides
@@ -392,7 +392,7 @@ export default function DashboardGuide() {
 
       <div className="fade-up mt-9 border-t border-line/70 pt-6">
         <Link
-          href="/admin/guides"
+          href="/guides"
           className="text-[12px] text-muted underline decoration-line underline-offset-2 transition-colors hover:text-ink"
         >
           ← All guides

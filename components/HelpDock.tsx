@@ -5,7 +5,10 @@ import { usePathname } from "next/navigation";
 import AssistantCharacter, { type Mood } from "@/components/AssistantCharacter";
 import { captureScreen } from "@/lib/screenshot";
 import AssistantSays, { type Screen } from "@/components/AssistantSays";
+import DoodleIcon from "@/components/DoodleIcon";
+import Segmented from "@/components/Segmented";
 import { fillFrontCompose, getOpenListing, getOpenSurfaces } from "@/lib/open-record";
+import { whenAgo } from "@/lib/lead-spine";
 
 /**
  * The character in the corner, and what he says.
@@ -29,6 +32,37 @@ import { fillFrontCompose, getOpenListing, getOpenSurfaces } from "@/lib/open-re
  * differently from a form. The second answer is the genuinely useful one — it
  * is every agent telling us, before they have been disappointed by anything,
  * what they expect to struggle with.
+ *
+ * ── Four tabs, because it broadcasts as well as answers ───────────────────
+ *
+ * James, 10 Sep 2026: "we want to make this a bit more of a broadcast feature.
+ * We obviously need help, guides, and the ability to give feedback, but I also
+ * think the news could be a nice thing."
+ *
+ * Every one of the first three tabs is a way for an agent to PULL something out
+ * of us. Nothing in the product could push, so "the OS does X now" reached
+ * people by somebody sending an email, or not at all. News is the other
+ * direction, and it is the reason the character in the corner can carry a red
+ * dot: there is finally something for him to be carrying.
+ *
+ * ── The chat line is one control, not three ───────────────────────────────
+ *
+ * A pill with the attach button inside it on the left and the send button
+ * inside it on the right, rather than a field with a button next to it. James
+ * asked for "the actual chat function as a circle box with things on either
+ * side" - and the shape is doing a job: it says that attaching a file and
+ * sending a message are the same action, which is exactly right, because a
+ * file with nothing typed IS a message and gets sent as one.
+ *
+ * ── What is deliberately NOT at the bottom any more ───────────────────────
+ *
+ * There used to be a paragraph under the input explaining where his answers
+ * came from and that everything goes to James. It was true and it was in the
+ * worst possible place: a permanent block of small print under the one control
+ * somebody came here to use. Gone, on James's instruction. The one part that
+ * could not simply be dropped - that he cannot answer on his own when there is
+ * no key - is now said in his own voice, in the thread, where a person reads it
+ * once instead of looking at it every time.
  *
  * ── Two things carried from the old ReportBug ─────────────────────────────
  *
@@ -98,6 +132,63 @@ function heard(text: string): Mood | null {
   return null;
 }
 
+type Tab = "help" | "guides" | "news" | "feedback";
+
+/** The strip across the top. Ids are the tour's, and must not be renamed. */
+const TABS: { id: Tab; label: string }[] = [
+  { id: "help", label: "Chat" },
+  { id: "guides", label: "Guides" },
+  { id: "news", label: "News" },
+  { id: "feedback", label: "Feedback" },
+];
+
+/**
+ * Three questions to press instead of a blank box.
+ *
+ * Not decoration and not a menu: an empty input with a cursor in it asks
+ * somebody to work out what this thing is capable of before they have used it
+ * once, and most people answer that by closing the panel. Each of these is a
+ * question he can genuinely answer from what is written down - a suggestion he
+ * fails is worse than no suggestion.
+ */
+const OPENERS: { icon: string; text: string }[] = [
+  { icon: "home", text: "How do I put a property on the market?" },
+  { icon: "checklist", text: "Where do I find my applications?" },
+  { icon: "shield", text: "What certificates does a home need?" },
+];
+
+/** A file on its way up, or already there. */
+type Attached = {
+  name: string;
+  size: number;
+  type: string;
+  /** Set once it is in the bucket. Absent while uploading or if it failed. */
+  key?: string;
+  error?: string;
+};
+
+/** What the office has published, and what the industry is saying. */
+type Post = {
+  id: string;
+  title: string;
+  body: string;
+  kind: string;
+  pinned: boolean;
+  link: string;
+  author: string;
+  publishedAt: string;
+};
+type Headline = { title: string; link: string; at: string | null; blurb: string };
+
+const POST_BADGE: Record<string, string> = {
+  announcement: "Announcement",
+  release: "New in the OS",
+  reminder: "Reminder",
+};
+
+/** The newest post this browser has already been shown. See NEWS_SEEN below. */
+const NEWS_SEEN = "os-news-seen";
+
 type Line = {
   role: "agent" | "assistant";
   text: string;
@@ -111,6 +202,8 @@ type Line = {
   sealed?: string;
   /** Set once the button has been pressed, so it cannot be pressed twice. */
   settled?: string;
+  /** Files that went up with this message. Only ever on an agent's line. */
+  files?: Attached[];
 };
 
 /** Mirrors ActionProposal server-side, narrowed to what the card draws. */
@@ -161,11 +254,13 @@ export default function HelpDock() {
   const path = usePathname();
   const [signedIn, setSignedIn] = useState(false);
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"help" | "guides" | "feedback">("help");
-  /* The shelf: whatever the knowledge hub has marked as a guide. Read when
-     the tab is opened, so the panel costs nothing on screens where nobody
+  const [tab, setTab] = useState<Tab>("help");
+  /* The shelf: every guide, built or written - see /api/knowledge/guides. Read
+     when the tab is opened, so the panel costs nothing on screens where nobody
      looks at it. */
-  const [shelf, setShelf] = useState<{ id: string; title: string; section: string; blurb: string; minutes: number }[] | null>(null);
+  const [shelf, setShelf] = useState<
+    { id: string; title: string; section: string; blurb: string; minutes: number; href: string; form: string }[] | null
+  >(null);
   useEffect(() => {
     if (tab !== "guides" || shelf !== null) return;
     fetch("/api/knowledge/guides", { cache: "no-store" })
@@ -174,9 +269,52 @@ export default function HelpDock() {
       .catch(() => setShelf([]));
   }, [tab, shelf]);
 
+  /* ── The newsroom ─────────────────────────────────────────────────────────
+     Two lists, deliberately not merged: what the office published, then what
+     the industry is saying. An agent has to be able to tell a change to their
+     own system from a headline about somebody else's business, and one blended
+     feed takes that away. */
+  const [posts, setPosts] = useState<Post[] | null>(null);
+  const [headlines, setHeadlines] = useState<Headline[] | null>(null);
+  useEffect(() => {
+    if (tab !== "news" || headlines !== null) return;
+    fetch("/api/news", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { items?: Headline[] } | null) => setHeadlines(j?.items?.slice(0, 4) ?? []))
+      .catch(() => setHeadlines([]));
+  }, [tab, headlines]);
+
+  /**
+   * The red dot, and why it is in localStorage.
+   *
+   * "Seen" is per BROWSER rather than per person on the server. That is a real
+   * limitation - James on his phone gets the dot again after clearing it on his
+   * laptop - and it is the right trade for this particular thing. The
+   * alternative is a preference row per user per read, which means the dot
+   * cannot work at all on a machine with no database, which means the tab
+   * cannot be driven before it ships. A notification dot is not a figure;
+   * being briefly wrong about one costs nobody anything.
+   */
+  const [unseen, setUnseen] = useState(0);
+  const markSeen = useCallback((list: Post[]) => {
+    const newest = list.reduce((a, p) => (p.publishedAt > a ? p.publishedAt : a), "");
+    if (newest) {
+      try {
+        window.localStorage.setItem(NEWS_SEEN, newest);
+      } catch {
+        /* Private browsing. The dot simply comes back, which is the harmless
+           end of getting this wrong. */
+      }
+    }
+    setUnseen(0);
+  }, []);
+
   const [lines, setLines] = useState<Line[]>([]);
   const [stage, setStage] = useState<"ask" | "onboarding-name" | "onboarding-help">("ask");
   const [draft, setDraft] = useState("");
+  /* Files chosen for the message being written. Cleared when it is sent. */
+  const [files, setFiles] = useState<Attached[]>([]);
+  const picker = useRef<HTMLInputElement | null>(null);
   const [busy, setBusy] = useState(false);
   const [live, setLive] = useState(false);
   /* The screens he is allowed to send anyone to. Comes from the server rather
@@ -218,6 +356,33 @@ export default function HelpDock() {
       )
       .catch(() => {});
   }, []);
+
+  /**
+   * The board, read once the moment we know somebody is there.
+   *
+   * On mount rather than when the tab is opened, because the whole point of the
+   * dot is that it appears BEFORE anybody opens anything. One small request per
+   * full page load - the shell survives client navigation, so this does not run
+   * again as somebody moves round the OS.
+   */
+  useEffect(() => {
+    if (!signedIn) return;
+    fetch("/api/news/posts", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { posts?: Post[] } | null) => {
+        const list = j?.posts ?? [];
+        setPosts(list);
+        let seen = "";
+        try {
+          seen = window.localStorage.getItem(NEWS_SEEN) ?? "";
+        } catch {
+          /* Nothing readable means everything is new, which is the safe way
+             round for a first visit and harmless for any other. */
+        }
+        setUnseen(list.filter((p) => p.publishedAt > seen).length);
+      })
+      .catch(() => setPosts([]));
+  }, [signedIn]);
 
   useEffect(() => {
     if (!signedIn || !path) return;
@@ -269,6 +434,12 @@ export default function HelpDock() {
     else if (was !== "idle" && !sent) setMood("idle");
   }, [open, tab, kind, sent]);
   const settle = useCallback(() => setMood(resting.current), []);
+
+  /* Looking at the news is what counts as having seen it. Not opening the
+     panel - somebody who opens Chat has not read anything. */
+  useEffect(() => {
+    if (open && tab === "news" && posts) markSeen(posts);
+  }, [open, tab, posts, markSeen]);
 
   /**
    * A reaction: a mood held for a moment, then back to rest.
@@ -346,7 +517,7 @@ export default function HelpDock() {
     const onCommand = (e: Event) => {
       const d = (e as CustomEvent).detail as {
         open?: boolean;
-        tab?: "help" | "guides" | "feedback";
+        tab?: Tab;
         perform?: boolean;
       };
       if (d?.tab) setTab(d.tab);
@@ -459,11 +630,68 @@ export default function HelpDock() {
     ]);
   }
 
-  async function say() {
-    const text = draft.trim();
-    if (!text || busy) return;
+  /**
+   * Taking a file in.
+   *
+   * Straight up to the bucket as it is chosen, not held until Send. Two
+   * reasons, and the second is the important one: a 6MB photograph from a
+   * phone takes a few seconds, and doing that after the person has pressed
+   * Send means Send appears to hang; and a file that is going to be refused -
+   * wrong type, too big, storage not configured on this environment - should
+   * say so while they are still looking at it, not swallow their question.
+   *
+   * The chip shows the file with a spinner, then without, then with the reason
+   * if it failed. Nothing about the message is blocked by a failed upload: the
+   * question still sends, with whatever did arrive.
+   */
+  async function attach(chosen: FileList | null) {
+    if (!chosen?.length) return;
+    /* Four is the cap the server enforces too. This is a question, not a
+       submission. */
+    const room = Math.max(0, 4 - files.length);
+    const list = Array.from(chosen).slice(0, room);
+    if (!list.length) return;
+
+    const at = files.length;
+    setFiles((f) => [...f, ...list.map((x) => ({ name: x.name, size: x.size, type: x.type }))]);
+
+    await Promise.all(
+      list.map(async (file, i) => {
+        const form = new FormData();
+        form.append("file", file);
+        form.append("scope", "support");
+        /* Keyed by the conversation, so everything one person sent while
+           asking one thing sits under one prefix. */
+        form.append("ref", `steve-${thread.current}`);
+        const r = await fetch("/api/r2/upload", { method: "POST", body: form })
+          .then((x) => x.json())
+          .catch(() => null);
+        setFiles((f) =>
+          f.map((x, j) =>
+            j === at + i
+              ? r?.ok
+                ? { ...x, key: r.key as string }
+                : { ...x, error: (r?.error as string) ?? "That didn't upload." }
+              : x
+          )
+        );
+      })
+    );
+  }
+
+  /** `override` is a suggestion being pressed: sent as typed, without a
+   *  round trip through the input's state. */
+  async function say(override?: string) {
+    const text = (override ?? draft).trim();
+    /* Sent, and only sent, once every chosen file has finished one way or the
+       other. Otherwise a key that arrives a moment later is attached to
+       nothing. */
+    const uploading = files.some((f) => !f.key && !f.error);
+    const sending = files.filter((f) => f.key);
+    if ((!text && !sending.length) || busy || uploading) return;
     setDraft("");
-    setLines((l) => [...l, { role: "agent", text }]);
+    setFiles([]);
+    setLines((l) => [...l, { role: "agent", text, files: sending }]);
     setBusy(true);
     setMood("thinking");
 
@@ -484,6 +712,9 @@ export default function HelpDock() {
              the only moment it needs to be true is the instant Send is
              pressed. */
           surfaces: getOpenSurfaces(),
+          /* Keys only. The file itself went up on its own, through the one
+             route that decides what may be stored. */
+          attachments: sending.map((f) => ({ key: f.key, name: f.name, type: f.type, size: f.size })),
         }),
     })
       .then((x) => (x.ok ? x.json() : null))
@@ -539,7 +770,7 @@ export default function HelpDock() {
        him deserves a face first: a thank-you gets the hop, a "this is broken"
        gets the droop, a "this makes no sense" gets the head-scratch. The
        reply is on screen either way; the face is the acknowledgement. */
-    const felt = heard(text);
+    const felt = text ? heard(text) : null;
     if (felt) react(felt, 2800);
     else react("talking", 1400);
 
@@ -623,24 +854,36 @@ export default function HelpDock() {
     }, 2400);
   }
 
-  const pill = (on: boolean) =>
-    `rounded-full border px-3 py-1 text-[11.5px] transition-colors ${
-      on ? "border-accent-dark bg-accent-dark text-white" : "border-line/80 text-muted hover:text-ink"
-    }`;
+  /** A file size somebody can read, rather than bytes. */
+  const weigh = (n: number) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))}KB` : `${(n / 1024 / 1024).toFixed(1)}MB`);
+
+  const uploading = files.some((f) => !f.key && !f.error);
+  const canSend = !busy && !uploading && (Boolean(draft.trim()) || files.some((f) => f.key));
 
   return (
     <>
       <button
         type="button"
         onClick={toggle}
-        title="Steve — help and feedback"
-        aria-label="Steve — help and feedback"
+        title="Steve — help, guides and news"
+        aria-label="Steve — help, guides and news"
         aria-expanded={open}
         data-hide-from-shot
         data-os-steve
         className="fixed bottom-2 right-3 z-[190] text-ink transition-transform hover:scale-105 active:scale-95"
       >
         <AssistantCharacter mood={mood} size={76} loop={performing} />
+        {/* Something to carry. The dot is only ever there because there is
+            genuinely something unread — see the note on `unseen`. */}
+        {unseen > 0 && !open && (
+          <span
+            aria-hidden
+            className="absolute right-2 top-3 grid h-[19px] min-w-[19px] place-items-center rounded-full bg-accent-dark px-1 text-[10.5px] font-semibold text-white shadow-[0_2px_6px_rgba(0,0,0,0.25)]"
+          >
+            {unseen}
+          </span>
+        )}
+        <span className="sr-only">{unseen > 0 ? `${unseen} unread` : ""}</span>
       </button>
 
       {open && (
@@ -649,7 +892,7 @@ export default function HelpDock() {
              than beside it, and so the bubble does not sit directly over him. */
           data-hide-from-shot
           data-os-steve-bubble
-          className="fade-up fixed bottom-[104px] right-[68px] z-[190] w-[min(340px,calc(100vw-2.5rem))]"
+          className="fade-up fixed bottom-[104px] right-[68px] z-[190] w-[min(392px,calc(100vw-2.5rem))]"
         >
           <div className="relative rounded-[22px] border border-line/80 bg-panel p-4 shadow-[0_20px_50px_-16px_rgba(0,0,0,0.4)]">
             {/* The tail. Two stacked squares — the outer one carries the border
@@ -659,27 +902,12 @@ export default function HelpDock() {
             <span className="absolute -bottom-[1px] right-9 h-4 w-4 rotate-45 bg-panel" />
 
             <div className="relative">
-              {/* Wraps, because three pills and Clear do not fit across a
-                  340px bubble on a phone. */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                <button type="button" onClick={() => setTab("help")} className={pill(tab === "help")}>
-                  Need help?
-                </button>
-                <button type="button" onClick={() => setTab("guides")} className={pill(tab === "guides")}>
-                  Guides
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTab("feedback")}
-                  data-os-feedback
-                  className={pill(tab === "feedback")}
-                >
-                  Give feedback
-                </button>
-                {/* Only once there is something to clear, and never mid-answer.
-                    Set apart from the tab pills rather than dressed as another
-                    one: those switch what you are looking at, this changes
-                    something. */}
+              {/* Who this is, and the two things that are not a tab: clearing
+                  the chat, and closing. Set apart from the strip below rather
+                  than dressed as more of it — those switch what you are looking
+                  at, these change something. */}
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-muted">Steve</p>
                 {tab === "help" && lines.length > 0 && !busy && (
                   <button
                     type="button"
@@ -690,7 +918,25 @@ export default function HelpDock() {
                     {cleared ? "Cleared" : "Clear"}
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={toggle}
+                  aria-label="Close"
+                  className={`${tab === "help" && lines.length > 0 && !busy ? "" : "ml-auto"} grid h-6 w-6 place-items-center rounded-full text-muted transition-colors hover:bg-box hover:text-ink`}
+                >
+                  <DoodleIcon name="cross" size={9} />
+                </button>
               </div>
+
+              {/* The strip. The same sliding control as every other choice of
+                  three or four in the OS — a marker that travels rather than an
+                  accent that blinks from one pill to the next. */}
+              <Segmented
+                className="mt-2 w-full"
+                options={TABS}
+                value={tab}
+                onChange={(t) => setTab(t)}
+              />
 
               {tab === "help" ? (
                 <>
@@ -698,14 +944,43 @@ export default function HelpDock() {
                     ref={scroller}
                     className="mt-3 max-h-[42vh] space-y-2 overflow-y-auto pr-0.5"
                   >
+                    {/* What he is, said once, in the thread. This used to be a
+                        permanent block under the input; it only ever needed to
+                        be said when it is true. */}
+                    {!live && (
+                      <p className="rounded-xl border border-line/70 bg-box/60 px-3 py-2 text-[11px] leading-relaxed text-muted">
+                        I can&apos;t answer on my own just now. Everything you ask goes to James, and
+                        the answers become the guides.
+                      </p>
+                    )}
                     {lines.map((l, i) =>
                       l.role === "agent" ? (
-                        <p
-                          key={i}
-                          className="ml-8 rounded-2xl rounded-br-md bg-accent-soft px-3 py-2 text-[12.5px] text-accent-dark"
-                        >
-                          {l.text}
-                        </p>
+                        <div key={i} className="ml-8">
+                          {l.text && (
+                            <p className="rounded-2xl rounded-br-md bg-accent-soft px-3 py-2 text-[12.5px] text-accent-dark">
+                              {l.text}
+                            </p>
+                          )}
+                          {/* What they sent, still openable afterwards. A file
+                              that vanishes the moment it is sent leaves nobody
+                              able to check what actually went. */}
+                          {l.files && l.files.length > 0 && (
+                            <div className="mt-1 flex flex-wrap justify-end gap-1.5">
+                              {l.files.map((f) => (
+                                <a
+                                  key={f.key}
+                                  href={`/api/r2/file?key=${encodeURIComponent(f.key ?? "")}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="flex max-w-full items-center gap-1.5 rounded-full border border-accent-dark/30 bg-accent-soft/60 px-2.5 py-1 text-[10.5px] text-accent-dark transition-colors hover:border-accent-dark"
+                                >
+                                  <DoodleIcon name="doc" size={11} />
+                                  <span className="truncate">{f.name}</span>
+                                </a>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         <div key={i}>
                           <AssistantSays text={l.text} screens={screens} />
@@ -800,9 +1075,112 @@ export default function HelpDock() {
                         Having a look…
                       </p>
                     )}
+
+                    {/* Three things to press, until somebody has asked
+                        something of their own. They go the moment the
+                        conversation is real. */}
+                    {stage === "ask" && lines.length <= 1 && !busy && (
+                      <div className="space-y-1.5 pt-1">
+                        {OPENERS.map((o) => (
+                          <button
+                            key={o.text}
+                            type="button"
+                            onClick={() => say(o.text)}
+                            className="flex w-full items-center gap-2.5 rounded-full border border-line/80 bg-box/70 px-3 py-2 text-left text-[11.5px] transition-colors hover:border-accent-dark/50 hover:bg-accent-soft/40"
+                          >
+                            <DoodleIcon name={o.icon} size={13} className="text-accent-dark" />
+                            <span className="min-w-0 flex-1">{o.text}</span>
+                            <span aria-hidden className="text-[9px] text-muted">›</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
-                  <div className="mt-2.5 flex gap-2">
+                  {/* Chosen files, above the line they will go with.
+                      A file that arrived is a pill. A file that was REFUSED is
+                      not: it takes the full width and puts the reason on its
+                      own line underneath. Squeezed into a pill beside a
+                      sentence like "storage isn't configured on this
+                      environment", the name truncates to "Gas saf…" - and
+                      which file failed is the one thing the person needs to
+                      know. */}
+                  {files.length > 0 && (
+                    <div className="mt-2.5 flex flex-wrap gap-1.5">
+                      {files.map((f, i) =>
+                        f.error ? (
+                          <div
+                            key={`${f.name}-${i}`}
+                            className="flex w-full items-start gap-1.5 rounded-xl border border-red-400/50 bg-red-500/[0.07] px-2.5 py-1.5 text-[10.5px] text-red-600 dark:text-red-400"
+                          >
+                            <DoodleIcon name="info" size={11} className="mt-[1px] shrink-0" />
+                            <span className="min-w-0 flex-1">
+                              <span className="block break-words font-semibold">{f.name}</span>
+                              <span className="mt-0.5 block leading-relaxed opacity-90">{f.error}</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setFiles((x) => x.filter((_, j) => j !== i))}
+                              aria-label={`Remove ${f.name}`}
+                              className="mt-[1px] shrink-0 transition-colors hover:text-ink"
+                            >
+                              <DoodleIcon name="cross" size={8} />
+                            </button>
+                          </div>
+                        ) : (
+                          <span
+                            key={`${f.name}-${i}`}
+                            className="flex max-w-full items-center gap-1.5 rounded-full border border-line/80 bg-box px-2.5 py-1 text-[10.5px] text-muted"
+                          >
+                            <DoodleIcon name="doc" size={11} className="shrink-0" />
+                            <span className="truncate">{f.name}</span>
+                            <span className="shrink-0 opacity-70">{f.key ? weigh(f.size) : "sending…"}</span>
+                            <button
+                              type="button"
+                              onClick={() => setFiles((x) => x.filter((_, j) => j !== i))}
+                              aria-label={`Remove ${f.name}`}
+                              className="shrink-0 transition-colors hover:text-ink"
+                            >
+                              <DoodleIcon name="cross" size={8} />
+                            </button>
+                          </span>
+                        )
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── The line ────────────────────────────────────────────
+                      One control: attach on the left, send on the right, both
+                      inside the pill. The border lives on the pill, so the
+                      whole thing lights up together when you type in it. */}
+                  <div className="mt-2.5 flex items-center gap-1 rounded-full border border-line/80 bg-box p-1 transition-colors focus-within:border-ink">
+                    <input
+                      ref={picker}
+                      type="file"
+                      multiple
+                      accept=".pdf,.png,.jpg,.jpeg,.webp,.heic,.txt,.csv,.doc,.docx,.xls,.xlsx"
+                      onChange={(e) => {
+                        attach(e.target.files);
+                        /* Reset, so choosing the same file twice in a row
+                           fires a change event the second time. */
+                        e.target.value = "";
+                      }}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => picker.current?.click()}
+                      disabled={stage !== "ask" || files.length >= 4}
+                      title={
+                        files.length >= 4
+                          ? "Four files is the limit for one question"
+                          : "Attach a document or a photograph"
+                      }
+                      aria-label="Attach a file"
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted transition-colors hover:bg-panel hover:text-ink disabled:opacity-30 disabled:hover:bg-transparent"
+                    >
+                      <DoodleIcon name="upload" size={14} />
+                    </button>
                     <input
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
@@ -817,54 +1195,67 @@ export default function HelpDock() {
                             ? "What you'd like a hand with"
                             : "Ask Steve anything…"
                       }
-                      className="min-w-0 flex-1 rounded-lg border border-line/80 bg-box px-2.5 py-2 text-[12.5px]"
+                      /* pr-2 so a long question does not run right up under
+                         the send button as it scrolls. */
+                      className="min-w-0 flex-1 bg-transparent pl-1 pr-2 text-[12.5px] outline-none placeholder:text-muted"
                     />
                     <button
                       type="button"
-                      onClick={say}
-                      disabled={busy || !draft.trim()}
-                      className="rounded-lg bg-accent-dark px-3.5 py-2 text-[12.5px] font-semibold text-white disabled:opacity-40"
+                      onClick={() => say()}
+                      disabled={!canSend}
+                      aria-label="Send"
+                      title={uploading ? "Waiting for the file" : "Send"}
+                      className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-accent-dark text-white transition-opacity disabled:opacity-30"
                     >
-                      Send
+                      {/* Drawn rather than an icon file: it is a 10px arrow and
+                          the set has no arrow in it. */}
+                      <svg viewBox="0 0 12 12" className="h-3 w-3" aria-hidden>
+                        <path
+                          d="M6 10.5V2M6 2 2.5 5.5M6 2l3.5 3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
                     </button>
                   </div>
-                  {/* Says which of the two he currently is. Claiming to answer
-                      when the key is missing, or claiming not to when it is
-                      there, are both worse than the extra line of state. */}
-                  <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
-                    {live
-                      ? "I answer from what the business has written down, and I'll say so when it isn't covered. Everything you ask goes to James either way."
-                      : "I can't answer on my own just now — everything you ask goes to James, and the answers become the help centre."}
-                  </p>
                 </>
               ) : tab === "guides" ? (
                 /**
-                 * The shelf, before there is anything on it.
+                 * The shelf.
                  *
-                 * James asked for the tab now and the guides later. An empty tab
-                 * is a promise, so it says what it is for and what to do in the
-                 * meantime rather than showing a spinner or a blank panel that
-                 * reads as broken. It deliberately does not invent categories or
-                 * dummy titles: a list of guides that do not open is worse than
-                 * an honest empty shelf, and this whole assistant is built on
-                 * not implying something works when it does not.
+                 * Both kinds of guide, in one list: the built walkthroughs and
+                 * anything the office has typed into /knowledge and ticked. It
+                 * deliberately does not invent categories or dummy titles — a
+                 * list of guides that do not open is worse than an honest empty
+                 * shelf, and this whole assistant is built on not implying
+                 * something works when it does not.
                  */
                 <div className="mt-3">
                   {shelf && shelf.length > 0 ? (
                     <>
-                      <p className="text-[13.5px]">Guides</p>
-                      <p className="mt-1.5 text-[12px] leading-relaxed text-muted">
+                      <p className="text-[12px] leading-relaxed text-muted">
                         Written by the office, to read at your own pace.
                       </p>
-                      <ul className="mt-3 divide-y divide-line/60">
+                      <ul className="mt-2.5 max-h-[46vh] space-y-1.5 overflow-y-auto pr-0.5">
                         {shelf.map((g) => (
-                          <li key={g.id}>
-                            <a href={`/knowledge/${g.id}`} className="block py-2.5 transition-colors hover:text-accent-dark">
-                              <span className="block text-[12.5px] font-semibold">{g.title}</span>
-                              <span className="block text-[10.5px] text-muted">
-                                {g.section} · {g.minutes} min read
+                          <li key={`${g.form}-${g.id}`}>
+                            <a
+                              href={g.href}
+                              className="block rounded-xl border border-line/80 bg-box/50 px-3 py-2.5 transition-colors hover:border-accent-dark/50 hover:bg-accent-soft/30"
+                            >
+                              <span className="flex items-baseline gap-2">
+                                <span className="min-w-0 flex-1 text-[12.5px] font-semibold">{g.title}</span>
+                                <span className="shrink-0 text-[10px] text-muted">{g.minutes} min</span>
                               </span>
-                              {g.blurb && <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">{g.blurb}</span>}
+                              <span className="mt-0.5 block text-[10px] uppercase tracking-[0.07em] text-muted">
+                                {g.section} · {g.form === "walkthrough" ? "Walkthrough" : "Written"}
+                              </span>
+                              {g.blurb && (
+                                <span className="mt-1 block text-[11.5px] leading-snug text-muted">{g.blurb}</span>
+                              )}
                             </a>
                           </li>
                         ))}
@@ -872,45 +1263,130 @@ export default function HelpDock() {
                     </>
                   ) : (
                     <>
-                  <p className="text-[13.5px]">{shelf === null ? "Reading the shelf…" : "Guides are on their way"}</p>
-                  <p className="mt-1.5 text-[12px] leading-relaxed text-muted">
-                    Written walkthroughs and training you can read at your own pace, rather
-                    than having to ask. Nothing is filed here yet.
-                  </p>
+                      <p className="text-[13.5px]">
+                        {shelf === null ? "Reading the shelf…" : "Guides are on their way"}
+                      </p>
+                      <p className="mt-1.5 text-[12px] leading-relaxed text-muted">
+                        Written walkthroughs and training you can read at your own pace, rather
+                        than having to ask. Nothing is filed here yet.
+                      </p>
+                      <p className="mt-2.5 text-[12px] leading-relaxed text-muted">
+                        Until then, ask me under{" "}
+                        <button
+                          type="button"
+                          onClick={() => setTab("help")}
+                          className="underline decoration-line underline-offset-2 hover:text-ink"
+                        >
+                          Chat
+                        </button>{" "}
+                        - and what people ask is what gets written first, so it is worth asking.
+                      </p>
                     </>
                   )}
-                  {!shelf?.length && (
-                  <p className="mt-2.5 text-[12px] leading-relaxed text-muted">
-                    Until then, ask me under{" "}
-                    <button
-                      type="button"
-                      onClick={() => setTab("help")}
-                      className="underline decoration-line underline-offset-2 hover:text-ink"
-                    >
-                      Need help?
-                    </button>{" "}
-                    - and what people ask is what gets written first, so it is worth asking.
-                  </p>
-                  )}
 
-                  {/* The one thing genuinely on the shelf. The tour tells people
-                      they can pick it up again from here, so it has to be here:
-                      a promise made during onboarding and not kept is the first
-                      thing somebody learns about the product. */}
-                  <div className="mt-4 border-t border-line/70 pt-3">
+                  {/* The tour tells people they can pick it up again from here,
+                      so it has to be here: a promise made during onboarding and
+                      not kept is the first thing somebody learns about the
+                      product. */}
+                  <div className="mt-3.5 border-t border-line/70 pt-3">
                     <p className="text-[12px] font-semibold">Showing you round</p>
                     <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
                       The walkthrough you were offered when you first signed in.
                     </p>
                     <button
                       type="button"
-                      onClick={() =>
-                        window.dispatchEvent(new CustomEvent("os-tour"))
-                      }
+                      onClick={() => window.dispatchEvent(new CustomEvent("os-tour"))}
                       className="mt-2.5 rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] transition-colors hover:border-ink/40"
                     >
                       Run it again
                     </button>
+                  </div>
+                </div>
+              ) : tab === "news" ? (
+                /**
+                 * The board.
+                 *
+                 * Us first, then the industry, under their own headings. See the
+                 * note by `posts` for why they are not one list.
+                 */
+                <div className="mt-3 max-h-[52vh] space-y-3 overflow-y-auto pr-0.5">
+                  {posts === null ? (
+                    <p className="text-[12px] text-muted">Reading the board…</p>
+                  ) : posts.length === 0 ? (
+                    <p className="text-[12px] leading-relaxed text-muted">
+                      Nothing from the office just now. Changes to the OS, and anything everybody
+                      needs to know, land here.
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {posts.map((p) => (
+                        <li
+                          key={p.id}
+                          className={`rounded-xl border bg-box/50 p-3 ${
+                            p.pinned ? "border-accent-dark/45" : "border-line/80"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.07em] text-accent-dark">
+                              {POST_BADGE[p.kind] ?? "Announcement"}
+                            </span>
+                            {p.pinned && <DoodleIcon name="star" size={11} className="text-accent-dark" />}
+                            <span className="ml-auto shrink-0 text-[10px] text-muted">
+                              {whenAgo(p.publishedAt)}
+                            </span>
+                          </div>
+                          <p className="mt-1.5 text-[12.5px] font-semibold leading-snug">{p.title}</p>
+                          {p.body && (
+                            <p className="mt-1 whitespace-pre-wrap text-[11.5px] leading-relaxed text-muted">
+                              {p.body}
+                            </p>
+                          )}
+                          <div className="mt-1.5 flex items-center gap-3">
+                            {p.link && (
+                              <a
+                                href={p.link}
+                                className="text-[11px] font-semibold text-accent-dark underline decoration-accent-dark/40 underline-offset-2"
+                              >
+                                Take a look
+                              </a>
+                            )}
+                            {p.author && <span className="text-[10px] text-muted">{p.author}</span>}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <div className="border-t border-line/70 pt-3">
+                    <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                      <DoodleIcon name="megaphone" size={12} />
+                      From the industry
+                    </p>
+                    {headlines === null ? (
+                      <p className="mt-2 text-[11.5px] text-muted">Reading the feed…</p>
+                    ) : headlines.length === 0 ? (
+                      <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
+                        The feed didn&apos;t answer just now.
+                      </p>
+                    ) : (
+                      <ul className="mt-2 divide-y divide-line/60">
+                        {headlines.map((h) => (
+                          <li key={h.link}>
+                            <a
+                              href={h.link}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block py-2 transition-colors hover:text-accent-dark"
+                            >
+                              <span className="block text-[11.5px] font-semibold leading-snug">{h.title}</span>
+                              <span className="mt-0.5 block text-[10px] text-muted">
+                                Landlord Today{h.at ? ` · ${whenAgo(h.at)}` : ""}
+                              </span>
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </div>
               ) : sent ? (
@@ -924,42 +1400,35 @@ export default function HelpDock() {
                   {/* Three kinds, not one. A pilot produces far more "confusing"
                       than "broken", and collapsing them means the most useful
                       signal — where people get lost — arrives disguised as a
-                      defect and gets closed as "works as designed". */}
-                  <div className="mt-3 flex gap-1.5">
-                    {[
-                      ["bug", "Broken"],
-                      ["confusing", "Confusing"],
-                      ["idea", "Idea"],
-                    ].map(([k, label]) => (
-                      <button key={k} type="button" onClick={() => setKind(k)} className={pill(kind === k)}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
+                      defect and gets closed as "works as designed".
+
+                      The same sliding control as the tabs above: a choice of
+                      three is a choice of three wherever it appears. */}
+                  <Segmented
+                    className="mt-3 w-full"
+                    options={[
+                      { id: "bug", label: "Broken" },
+                      { id: "confusing", label: "Confusing" },
+                      { id: "idea", label: "Idea" },
+                    ]}
+                    value={kind}
+                    onChange={setKind}
+                  />
                   <textarea
                     value={fb}
                     onChange={(e) => setFb(e.target.value)}
                     rows={4}
                     placeholder="What were you doing, and what happened?"
-                    className="mt-3 w-full rounded-lg border border-line/80 bg-box p-2.5 text-[12.5px]"
+                    className="mt-3 w-full rounded-2xl border border-line/80 bg-box p-3 text-[12.5px] outline-none transition-colors focus:border-ink"
                   />
-                  <div className="mt-2 flex gap-2">
-                    <button
-                      type="button"
-                      disabled={busy || !fb.trim()}
-                      onClick={sendFeedback}
-                      className="flex-1 rounded-lg bg-accent-dark py-2 text-[12.5px] font-semibold text-white disabled:opacity-40"
-                    >
-                      {busy ? "Sending…" : "Send"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={toggle}
-                      className="rounded-lg border border-line/80 px-3 py-2 text-[12px]"
-                    >
-                      Close
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    disabled={busy || !fb.trim()}
+                    onClick={sendFeedback}
+                    className="mt-2 w-full rounded-full bg-accent-dark py-2.5 text-[12.5px] font-semibold text-white transition-opacity disabled:opacity-40"
+                  >
+                    {busy ? "Sending…" : "Send it"}
+                  </button>
                 </>
               )}
             </div>

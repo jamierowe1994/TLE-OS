@@ -41,6 +41,21 @@ export type LogRole = "agent" | "assistant";
  */
 export type LogKind = "ask" | "onboarding-name" | "onboarding-help" | "cleared";
 
+/**
+ * A file somebody sent with their question.
+ *
+ * The key, not the file. Everything in the bucket is served through
+ * /api/r2/file, which signs a link that dies in five minutes - so a log row
+ * read months later still resolves, and a row copied out of a database dump
+ * grants nobody anything.
+ */
+export interface LogAttachment {
+  key: string;
+  name: string;
+  type: string;
+  size: number;
+}
+
 export interface LogLine {
   id: string;
   userId: string;
@@ -50,6 +65,8 @@ export interface LogLine {
   text: string;
   path: string;
   kind: LogKind;
+  /** Only ever on an agent's line, and empty on nearly all of them. */
+  attachments: LogAttachment[];
   createdAt: string;
 }
 
@@ -62,6 +79,7 @@ interface Row extends Record<string, unknown> {
   text: string;
   path: string;
   kind: string;
+  attachments: LogAttachment[] | null;
   created_at: string;
 }
 
@@ -74,10 +92,11 @@ const toLine = (r: Row): LogLine => ({
   text: r.text,
   path: r.path,
   kind: (r.kind as LogKind) ?? "ask",
+  attachments: Array.isArray(r.attachments) ? r.attachments : [],
   createdAt: r.created_at,
 });
 
-const COLS = `id, user_id, user_email, thread, role, text, path, kind,
+const COLS = `id, user_id, user_email, thread, role, text, path, kind, attachments,
               created_at::text AS created_at`;
 
 /** Append one line. Never throws — a failed log must not eat the reply. */
@@ -91,15 +110,16 @@ export async function logLine(p: {
   kind?: LogKind;
   inTokens?: number;
   outTokens?: number;
+  attachments?: LogAttachment[];
 }): Promise<void> {
   if (!hasDb()) return;
   try {
     await q(
       `INSERT INTO os_assistant_log
-         (id, user_id, user_email, thread, role, text, path, kind, in_tokens, out_tokens)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+         (id, user_id, user_email, thread, role, text, path, kind, in_tokens, out_tokens, attachments)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)`,
       [uid(), p.userId, p.userEmail, p.thread, p.role, p.text, p.path ?? "", p.kind ?? "ask",
-       p.inTokens ?? 0, p.outTokens ?? 0]
+       p.inTokens ?? 0, p.outTokens ?? 0, JSON.stringify(p.attachments ?? [])]
     );
   } catch {
     /* Losing a log line is a shame. Losing the answer because the log failed

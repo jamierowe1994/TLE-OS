@@ -180,6 +180,14 @@ const WORKSPACES: Workspace[] = [
     href: "/knowledge", label: "Knowledge", icon: "note",
     needs: "edit:knowledge", primaryFor: ["marketing", "pretenancy", "support", "super_admin", "compliance"],
   },
+  /* The newsroom (10 Sep). The same people, and deliberately a separate door
+     from Knowledge: one is permanent and asked for, the other goes out and puts
+     a dot on every agent's screen. See the note at the top of the page for why
+     writing both in one editor is a bad idea. */
+  {
+    href: "/newsroom", label: "Newsroom", icon: "megaphone",
+    needs: "edit:knowledge",
+  },
   /* Michael's screen (item 11, 5 Sep): what every agent has to hold, and
      where each stands. His first screen; the owner's via the admin rail. */
   {

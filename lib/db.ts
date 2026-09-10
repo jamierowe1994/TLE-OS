@@ -1447,6 +1447,47 @@ ALTER TABLE os_assistant_log ADD COLUMN IF NOT EXISTS in_tokens INTEGER NOT NULL
 ALTER TABLE os_assistant_log ADD COLUMN IF NOT EXISTS out_tokens INTEGER NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS os_assistant_log_user ON os_assistant_log (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS os_assistant_log_time ON os_assistant_log (created_at DESC);
+-- What was attached to the question. [{ key, name, type, size }] on the
+-- AGENT's line, because the file belongs to what they asked rather than to
+-- what he said back.
+--
+-- On the line and not in a table of its own: an attachment has no life apart
+-- from the message it came with, nothing ever queries across them, and a
+-- second table would mean a join on every read of the console for a column
+-- that is empty on all but a handful of rows.
+ALTER TABLE os_assistant_log ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+-- The newsroom: what the office broadcasts to everybody.
+--
+-- James, 10 Sep 2026: "we want to make this a bit more of a broadcast feature…
+-- I also think the news could be a nice thing… We also need a news section,
+-- which we want to launch and say to the news section."
+--
+-- Deliberately NOT the same thing as /api/news, which reads Landlord Today's
+-- RSS feed. That is the industry talking; this is US talking, and the two sit
+-- one above the other in Steve's News tab under their own headings. Mixing
+-- them into one list would mean an agent could not tell a change to their own
+-- system from a headline about somebody else's.
+--
+-- The pinned flag outranks the date, for the one post that has to stay at the
+-- top while it matters. The until date retires a post on its own: a "the OS is down at
+-- 6pm on Thursday" notice that is still the top item on Friday is worse than
+-- no notice, and nobody remembers to go back and delete it.
+CREATE TABLE IF NOT EXISTS os_news_posts (
+  id            TEXT PRIMARY KEY,
+  title         TEXT NOT NULL,
+  body          TEXT NOT NULL DEFAULT '',
+  -- announcement | release | reminder
+  kind          TEXT NOT NULL DEFAULT 'announcement',
+  pinned        BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Optional "read more": a screen in the OS, or a guide.
+  link          TEXT NOT NULL DEFAULT '',
+  author        TEXT NOT NULL DEFAULT '',
+  published_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  until         TIMESTAMPTZ,
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_news_posts_time ON os_news_posts (published_at DESC);
 
 -- People, as the TEG Team Hub knows them.
 --

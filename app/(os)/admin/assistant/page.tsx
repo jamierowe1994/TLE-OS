@@ -5,6 +5,7 @@ import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
 import AssistantCharacter from "@/components/AssistantCharacter";
+import DoodleIcon from "@/components/DoodleIcon";
 import SteveRepertoire from "@/components/SteveRepertoire";
 
 /**
@@ -59,6 +60,8 @@ type Line = {
   text: string;
   path: string;
   kind: string;
+  /** Files somebody sent with the question. See lib/assistant-log. */
+  attachments?: { key: string; name: string; type: string; size: number }[];
   createdAt: string;
 };
 
@@ -221,6 +224,31 @@ export default function AssistantConsole() {
                   <span className="shrink-0 text-[11px] text-muted">{when(q.createdAt)}</span>
                 </div>
                 <p className="mt-1.5 text-[13px]">{q.text}</p>
+                {/* The other half of "which we should be able to receive". A
+                    file attached to a question is no use sitting in a bucket:
+                    this is where somebody actually opens it. The link is signed
+                    for five minutes when it is followed. */}
+                {q.attachments && q.attachments.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {q.attachments.map((a) => (
+                      <a
+                        key={a.key}
+                        href={`/api/r2/file?key=${encodeURIComponent(a.key)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex max-w-full items-center gap-1.5 rounded-full border border-line/80 bg-box px-2.5 py-1 text-[11px] text-muted transition-colors hover:border-ink hover:text-ink"
+                      >
+                        <DoodleIcon name="doc" size={11} />
+                        <span className="truncate">{a.name}</span>
+                        <span className="shrink-0 opacity-70">
+                          {a.size < 1024 * 1024
+                            ? `${Math.max(1, Math.round(a.size / 1024))}KB`
+                            : `${(a.size / 1024 / 1024).toFixed(1)}MB`}
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                )}
               </li>
             ))}
           </ul>

@@ -8,10 +8,12 @@ import {
   myHistory,
   isOnboarded,
   clearChat,
+  type LogAttachment,
   type LogKind,
 } from "@/lib/assistant-log";
 import { ask, budget, assistantConfigured } from "@/lib/assistant-brain";
 import { AGENT_NAV } from "@/lib/nav";
+import { keyIsOurs } from "@/lib/r2";
 
 /**
  * Talking to the assistant.
@@ -107,9 +109,16 @@ export async function POST(req: NextRequest) {
     path?: string;
     openListingId?: string;
     surfaces?: unknown;
+    attachments?: unknown;
   };
+  const attachments = readAttachments(b.attachments);
   const text = (b.text ?? "").trim();
-  if (!text) return NextResponse.json({ error: "Say something first." }, { status: 400 });
+  /* A file on its own is a message. Somebody who attaches a certificate and
+     presses send without typing has said something, and refusing it because
+     the box was empty would be the panel arguing with them. */
+  if (!text && !attachments.length) {
+    return NextResponse.json({ error: "Say something first." }, { status: 400 });
+  }
 
   const kind: LogKind =
     b.kind === "onboarding-name" || b.kind === "onboarding-help" ? b.kind : "ask";
@@ -125,7 +134,28 @@ export async function POST(req: NextRequest) {
   const surfaces = readSurfaces(b.surfaces);
   const common = { userId, userEmail: me.email, thread, path };
 
-  await logLine({ ...common, role: "agent", text: text.slice(0, 4000), kind });
+  await logLine({
+    ...common,
+    role: "agent",
+    text: text.slice(0, 4000) || `[${attachments.length === 1 ? "a file" : `${attachments.length} files`}]`,
+    kind,
+    attachments,
+  });
+
+  /* ── What happens to a file ────────────────────────────────────────────
+     He cannot read it. The model gets the name and the type and nothing
+     else, because handing a PDF of somebody's tenancy to a model is a
+     decision James has not made and is not one to make by accident here.
+     What the file DOES do is reach a person: it is on the question in the
+     console, which is the whole of "which we should be able to receive".
+     Saying so in the reply, rather than letting him answer as though he had
+     read it, is the difference between a system that is young and one that
+     is lying. */
+  const noted = attachments.length
+    ? `\n\n[The person attached ${attachments
+        .map((a) => `"${a.name}"`)
+        .join(", ")}. You cannot open files. Say plainly that you can see it has come through and that it has gone to the office with their question, then answer whatever you can from what they typed.]`
+    : "";
 
   const canned = scripted(kind, text);
   if (canned) {
@@ -147,7 +177,7 @@ export async function POST(req: NextRequest) {
 
   let answer;
   try {
-    answer = await ask(history, text, { scope, path, openListingId, surfaces });
+    answer = await ask(history, text + noted, { scope, path, openListingId, surfaces });
   } catch (e) {
     /* A model outage must not lose the question — it is still logged above,
        and it is still a guide somebody needed. */
@@ -183,6 +213,35 @@ export async function POST(req: NextRequest) {
     ...(answer.proposal
       ? { proposal: answer.proposal, sealed: sealPayload(answer.proposal) }
       : {}),
+  });
+}
+
+/**
+ * The files that came with the question, checked rather than believed.
+ *
+ * The browser has already uploaded them through /api/r2/upload, which is the
+ * only party that decides what may be stored - so what arrives here is a claim
+ * about what was stored, and a claim is not evidence. Every key is tested
+ * against the bucket's own prefixes before it is written to a row that a link
+ * will later be signed from.
+ *
+ * Four at most, because the panel is a speech bubble and this is a question,
+ * not a submission.
+ */
+function readAttachments(raw: unknown): LogAttachment[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, 4).flatMap((r): LogAttachment[] => {
+    const a = r as Record<string, unknown>;
+    const key = typeof a.key === "string" ? a.key : "";
+    if (!keyIsOurs(key)) return [];
+    return [
+      {
+        key: key.slice(0, 300),
+        name: typeof a.name === "string" ? a.name.slice(0, 160) : "file",
+        type: typeof a.type === "string" ? a.type.slice(0, 100) : "",
+        size: typeof a.size === "number" && Number.isFinite(a.size) ? Math.max(0, Math.round(a.size)) : 0,
+      },
+    ];
   });
 }
 

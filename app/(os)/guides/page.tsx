@@ -43,7 +43,7 @@ export default function GuidesPage() {
               g.ready ? (
                 <Link
                   key={g.slug}
-                  href={`/admin/guides/${g.slug}`}
+                  href={`/guides/${g.slug}`}
                   className="block-pop rounded-2xl border border-line/80 bg-panel p-5"
                 >
                   <div className="flex flex-wrap items-baseline gap-2.5">

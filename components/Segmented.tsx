@@ -21,6 +21,16 @@
  * so the marker is 1/n of the track and travels by its own width. No
  * measuring, no ResizeObserver, and nothing to go wrong when a label is
  * longer than its neighbour.
+ *
+ * That holds only while every option can actually SHRINK to 1/n. A button's
+ * padding cannot shrink, so a long label plus wide padding sets a floor, and
+ * one option wider than its neighbours puts the marker permanently out of step
+ * with the thing it is marking - by 6px on Steve's four tabs, which is exactly
+ * the kind of fault that reads as "slightly wrong" and never gets reported.
+ *
+ * So the padding narrows once there are four. It is the only number here that
+ * has to give, and a strip of four in a 392px speech bubble wants tighter
+ * padding in any case.
  */
 export default function Segmented<T extends string>({
   options,
@@ -56,7 +66,9 @@ export default function Segmented<T extends string>({
           aria-selected={o.id === value}
           title={o.title}
           onClick={() => onChange(o.id)}
-          className={`relative z-[1] flex flex-1 basis-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-4 py-1.5 text-[12.5px] transition-colors duration-200 ${
+          className={`relative z-[1] flex min-w-0 flex-1 basis-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full ${
+            n >= 4 ? "px-2.5" : "px-4"
+          } py-1.5 text-[12.5px] transition-colors duration-200 ${
             o.id === value ? "font-semibold text-page" : "text-muted hover:text-ink"
           }`}
         >
