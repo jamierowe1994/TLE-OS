@@ -155,7 +155,6 @@ export default function Viewings() {
       />
 
       <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
-        <FlowTag from="The shared diary — 365 calendar once sign-in lands" />
         <div className="flex items-center gap-2">
           {(["diary", "recent"] as const).map((t) => (
             <button

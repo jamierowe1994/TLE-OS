@@ -241,30 +241,13 @@ export default function Listings() {
               ? `Live from REX — ${C.currentRentals} current rentals, ${C.published} published to the portals and ${C.draft} still drafts.`
               : (book.reason ?? "Manage your properties and their marketing.")
         }
-        /* She is drawn already cut off at a ledge — her arm rests on it and
-           everything below is gone — so the artwork carries the occlusion
-           itself and needs no clipping. Left at the default anchor, her flat
-           bottom edge lands exactly on the rule, which is what makes her read
-           as sat behind it rather than pasted on top.
-        
-           lineBreak="none" because she is LEANING, not bearing down. A dip
-           would say her weight is on the line; the whole joke is that she has
-           popped up behind it. */
-        illustration="/illustrations/hiding.png"
-        illustrationHeight={132}
-        shadow
-        /* Measured off the artwork: her HAIR is cut at 384 of 424 tall, and
-           her hand reaches 39px lower to 423. Anchoring the rule at 0.906
-           puts the line where the hair stops, so the hair meets it and the
-           hand drops below — which is the whole illusion, a hand hooked over
-           the ledge she has popped up behind.
-        
-           Cutting the shadow's left 27% removes it from that hand and nothing
-           else: below the hair line the hand is the only ink on the page, so
-           the trim cannot take anything it shouldn't. A hand resting ON the
-           line must not cast onto the wall beneath it. */
-        seat={0.906}
-        seatCut={{ left: 27, right: 0 }}
+        /* Cropped at the bottom in the artwork itself, so the frame's bottom
+           edge IS the rule: no seat and no dip means she is dropped by
+           nothing and the crop lands exactly on the line, which reads as her
+           sitting behind it. */
+        illustration="/illustrations/reading-listings.webp"
+        illustrationHeight={230}
+        illustrationAspect={1.121}
         lineBreak="none"
         searchValue={q}
         onSearch={setQ}

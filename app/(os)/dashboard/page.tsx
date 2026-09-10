@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import BentoDash from "@/components/BentoDash";
 import BlendVideo from "@/components/BlendVideo";
 import PageHeader from "@/components/PageHeader";
@@ -16,25 +16,50 @@ import { DASH_TRAY_GROUPS, DEFAULT_LAYOUT, WIDGETS } from "@/components/widgets"
  * how to render deeper as it's given more room.
  */
 
-/** Four bands, matching the portal's greeting — the OS should feel awake. */
-function greeting(): string {
+/**
+ * Four bands, matching the portal's greeting — the OS should feel awake.
+ *
+ * ── Whose name (10 Sep 2026) ─────────────────────────────────────────────
+ *
+ * It was the word "James", typed in, for everybody: every agent who has ever
+ * signed in has been greeted by the owner's name, and an owner viewing as
+ * somebody else - which is exactly when you are checking that their account
+ * looks right - was greeted as himself on their dashboard.
+ *
+ * The name comes from /api/auth/me, which reports the SUBJECT, so it is
+ * theirs while a view-as is open and their own the rest of the time. Until
+ * it answers there is no name at all rather than a guess: a greeting that
+ * says the wrong name for half a second is worse than one that arrives a
+ * moment late.
+ */
+function greeting(name: string): string {
   const h = new Date().getHours();
-  if (h < 5) return "Still up, James?";
-  if (h < 12) return "Good morning, James";
-  if (h < 17) return "Good afternoon, James";
-  if (h < 22) return "Good evening, James";
-  return "Still up, James?";
+  const who = name ? `, ${name}` : "";
+  if (h < 5) return name ? `Still up, ${name}?` : "Still up?";
+  if (h < 12) return `Good morning${who}`;
+  if (h < 17) return `Good afternoon${who}`;
+  if (h < 22) return `Good evening${who}`;
+  return name ? `Still up, ${name}?` : "Still up?";
 }
 
 export default function Dashboard() {
   const [customising, setCustomising] = useState(false);
+  const [name, setName] = useState("");
+  useEffect(() => {
+    let gone = false;
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { user?: { name?: string } | null } | null) => {
+        const first = (j?.user?.name ?? "").trim().split(/\s+/)[0] ?? "";
+        if (!gone) setName(first);
+      })
+      .catch(() => {});
+    return () => { gone = true; };
+  }, []);
   return (
     <>
       <PageHeader
-        title={greeting()}
-        /* The greeting carries this page, and at 30 it read as a label rather
-           than a welcome. Sized off James's reference. */
-        titleSize={42}
+        title={greeting(name)}
         blurb="Here's what's happening with your lettings business today."
         /* James's painted scene, in whichever accent the person picked - the
            file is chosen in CSS off the data-accent already on <html>, so it
@@ -51,11 +76,7 @@ export default function Dashboard() {
            window edge, the dog sits on the rule, and the sofa front and his
            trailing leg carry on underneath it. 560 leaves his head about 30px
            clear of the cut. */
-        illustrationHeight={470}
-        /* Only a little deeper than the standard 232. The search bar moving
-           to the top gave back the row that used to sit under the rule, so
-           the masthead needs far less of its own depth to clear his head. */
-        minHeight={240}
+        illustrationHeight={450}
         lineBreak="none"
         flushRight
         /* Customise rides the search row — one line of chrome, not two. */

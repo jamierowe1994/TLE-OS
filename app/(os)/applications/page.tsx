@@ -6,7 +6,7 @@ import PropertyPhoto from "@/components/PropertyPhoto";
 import ApplicationDrawer, { type Check } from "@/components/ApplicationDrawer";
 import HandoffPanel from "@/components/HandoffPanel";
 import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/components/TableColumns";
-import { FlowTag, Pill } from "@/components/Wire";
+import { Pill } from "@/components/Wire";
 import type { Application } from "@/lib/applications";
 
 /**
@@ -257,10 +257,6 @@ export default function Applications() {
         grip={0.0428}
         lineBreak="dip"
       />
-
-      <div className="mt-10">
-        <FlowTag from="REX" to="REX" />
-      </div>
 
       {/* ── The gap worth acting on, counted live. ── */}
       {rtr.unanswered > 0 && (

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import DoodleIcon from "@/components/DoodleIcon";
-import { FlowTag, Pill } from "@/components/Wire";
+import { Pill } from "@/components/Wire";
 import {
   MA_STAGES,
   OPEN_STAGES,
@@ -214,10 +214,6 @@ export default function MarketAppraisals() {
         }
       />
 
-      <div className="mt-10">
-        <FlowTag from="Leads" to="Listings" />
-      </div>
-
       {/* ── The spine ──────────────────────────────────────────────────────
           Still tabs, and still one row, but drawn as the journey it is: an
           icon, the count, the stage, and a chevron pointing at what comes
@@ -379,32 +375,6 @@ export default function MarketAppraisals() {
         )}
       </div>
 
-      {/* The three notes, in a box rather than loose under the page.
-          Same words - they earn their place, they are the rules this screen
-          runs on - but a bordered aside reads as a footnote instead of as
-          three more things to do. */}
-      <aside className="fade-up mt-4 rounded-2xl border border-line/70 bg-box p-5">
-        <p className="hand mb-2.5 text-[14px]">A quick note</p>
-        <ul className="space-y-1.5 text-[11px] leading-relaxed text-muted">
-          <li>
-            <span className="font-semibold text-ink">Leads ends where this begins.</span> Booking an
-            appraisal closes the lead drawer and opens the new record here at Booked - the
-            lead isn&apos;t deleted, it&apos;s handed on, and the link is kept both ways.
-            Booking the same lead again moves the appointment rather than making a second
-            appraisal.
-          </li>
-          <li>
-            <span className="font-semibold text-ink">&ldquo;Awaiting valuation&rdquo; is derived, not
-            stored.</span> An appointment that has passed with no figure recorded shows itself.
-            Nothing schedules it and nothing can forget to move it.
-          </li>
-          <li>
-            <span className="font-semibold text-ink">Click an appraisal</span> for its best-price
-            guide and the comparables behind it. Research loads one property at a time,
-            on your ask - it is a real sweep of the book, not a cached number.
-          </li>
-        </ul>
-      </aside>
     </>
   );
 }

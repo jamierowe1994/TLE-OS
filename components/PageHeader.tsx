@@ -172,20 +172,23 @@ export default function PageHeader({
   /**
    * How deep the masthead is, before the rule.
    *
-   * 232 everywhere, so every page starts in the same place. The dashboard
-   * asks for more because its scene is a full painted vignette rather than a
-   * figure, and at 232 the rule cut through the top of the man's head.
+   * ONE number, everywhere. Measured across the pages rather than picked:
+   * they were landing between 232 and 270 depending on how long the blurb ran
+   * and whether the page had its own controls, so the rule sat somewhere
+   * different on every screen. 268 clears the tallest of them, so they all
+   * hit the floor rather than their own content height (James, 10 Sep 2026).
    */
-  minHeight = 232,
+  minHeight = 268,
   /**
    * The title's size.
    *
-   * 30 everywhere, because every page's masthead is meant to read the same.
-   * The dashboard is the exception James asked for: its title is a greeting
-   * rather than a label, it is the first thing anybody sees in the morning,
-   * and it carries the page on its own.
+   * 42 EVERYWHERE. It was 30, with the dashboard alone at 42, and a masthead
+   * that is one size on the home screen and another on the other forty-five
+   * is the kind of drift that makes an app feel assembled rather than
+   * designed (James, 10 Sep 2026). The prop stays so a page CAN differ, but
+   * nothing should without a reason worth writing down.
    */
-  titleSize = 30,
+  titleSize = 42,
   /** The search bar under the rule. On by default; pages that aren't about
    *  finding things (the profile) turn it off. */
   search = true,
@@ -362,12 +365,11 @@ export default function PageHeader({
           ) : (
             <span />
           )}
-          {/* The page's own actions sit up here too, so nothing is left
-              stranded in a row of its own under the rule. */}
-          <div className="flex shrink-0 items-center gap-3">
-            {actions}
-            <NotificationBell compact />
-          </div>
+          {/* Notifications and nothing else. The page's own actions used to
+              sit here, which put a different set of controls in the same
+              place on every screen - the one thing this bar exists not to
+              do. They live in the masthead now, on the page they belong to. */}
+          <NotificationBell compact />
         </div>
       )}
 
@@ -383,7 +385,7 @@ export default function PageHeader({
             of its way — without this the blurb runs underneath it the moment
             the window narrows. Each step matches the scale below. */}
         <div
-          className={`self-start pl-2 pt-[26px] ${
+          className={`flex flex-col self-stretch pb-4 pl-2 pt-[26px] ${
             !hasArt
               ? ""
               : wideArt
@@ -407,6 +409,10 @@ export default function PageHeader({
               two even ones rather than leaving a single orphaned word. */}
           <h1 className="text-balance leading-tight" style={{ fontSize: titleSize }}>{title}</h1>
           <p className="mt-2.5 max-w-md text-[13px] text-muted">{blurb}</p>
+          {/* The page's own controls, in the gap between the blurb and the
+              rule - pushed down to sit just above the line rather than
+              floating in the middle of it. Same place on every screen. */}
+          {actions && <div className="mt-auto flex flex-wrap items-center gap-2.5 pt-6">{actions}</div>}
         </div>
 
         {/* The figure, hard right, standing on the rule.

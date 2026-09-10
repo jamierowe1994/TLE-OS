@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import ComplianceDrawer from "@/components/ComplianceDrawer";
-import { FlowTag } from "@/components/Wire";
 import {
   BIG_THREE, CERT_META, COMP_BOOK, dueWithin, headlineCerts, isLetOnly, statusOf,
   type CertKey, type CertStatus, type CompProperty,
@@ -191,7 +190,6 @@ export default function Compliance() {
       <div className="fade-up block-pop mt-6 rounded-2xl border border-line/80 bg-box p-5 hover:border-ink">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-[15px]">Coming out of compliance — the next month</h2>
-          <FlowTag from="REX compliance entries" />
         </div>
         {urgent.length ? (
           <ul className="divide-y divide-line/40">

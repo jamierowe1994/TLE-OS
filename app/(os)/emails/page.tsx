@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
-import { FlowTag, Pill } from "@/components/Wire";
+import { Pill } from "@/components/Wire";
 import type { EmailAudit } from "@/lib/email-audit";
 
 /**
@@ -137,10 +137,6 @@ export default function Emails() {
         title="Emails"
         blurb="Everything sent under the company's name, from REX's own send log — the automation and the agents, kept apart."
       />
-
-      <div className="mt-10">
-        <FlowTag from="REX" to="here" />
-      </div>
 
       {error && (
         <p className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5 text-[12.5px] text-muted">

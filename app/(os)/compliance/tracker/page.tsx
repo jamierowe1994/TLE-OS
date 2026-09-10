@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
-import { FlowTag, Pill } from "@/components/Wire";
+import { Pill } from "@/components/Wire";
 import type { ChaseRow, QueuedReminder, TrackerBook } from "@/lib/compliance-tracker";
 
 /**
@@ -104,10 +104,6 @@ export default function ComplianceTracker() {
         title="Compliance tracker"
         blurb="What is outstanding, what is coming, and who to chase — across the whole book."
       />
-
-      <div className="mt-10">
-        <FlowTag from="REX" to="here" />
-      </div>
 
       {error && (
         <p className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5 text-[12.5px] text-muted">
