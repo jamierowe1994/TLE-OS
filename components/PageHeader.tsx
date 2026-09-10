@@ -376,8 +376,22 @@ export default function PageHeader({
       {/* 232, not 212: at 212 the notification button sat ON the top of the
           dashboard's window frame. The figure hangs off the rule, so giving the
           masthead 20px more height is what buys the air above its head. */}
+      {/* ── The frame, and the block inside it ──────────────────────────
+          The frame is STATIC and owns the rule. The block inside it is what
+          moves: on the way out it falls and the frame's clip swallows it at
+          the line, on the way in it rises back through. If the rule lived on
+          the moving element the line itself would slide down the page, which
+          is the one thing that must not happen.
+
+          The clip is animated rather than applied: at rest it has to be open,
+          because a seated figure's legs hang BELOW the rule on purpose and a
+          standing clip would cut her feet off. */}
       <div
-        className={`fade-up relative flex items-end justify-between gap-6 border-b border-line/80 pt-8 ${seated ? seatClass : "mb-5"}`}
+        className={`os-mast-frame fade-up relative border-b border-line/80 ${seated ? seatClass : "mb-5"}`}
+        style={{ minHeight }}
+      >
+      <div
+        className="os-mast flex h-full items-end justify-between gap-6 pt-8"
         style={{ minHeight }}
       >
         {/* The right padding is the figure's footprint reserved in advance.
@@ -531,6 +545,7 @@ export default function PageHeader({
             </div>
           </div>
         )}
+      </div>
       </div>
 
     </>

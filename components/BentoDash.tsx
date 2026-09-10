@@ -5,6 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
 import type { WidgetDef } from "@/components/widgets";
 import { usePref } from "@/lib/prefs-store";
+import Reveal from "@/components/Reveal";
 
 /**
  * The bento board: the dashboard as a grid of widgets the agent owns.
@@ -400,7 +401,7 @@ export default function BentoDash({
           const isDragged = dragged?.id === item.id;
           const sizes = def.sizes ?? DEFAULT_SIZES;
           return (
-            <section
+            <Reveal
               key={item.id}
               data-bid={item.id}
               onPointerDown={(e) => {
@@ -410,13 +411,10 @@ export default function BentoDash({
                 const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
                 beginDrag(e, item.id, false, r.width, r.height);
               }}
-              /* No ring in the resting state. James, 10 Sep 2026: he wanted to
-                 see the board without the edge colouring, so the border only
-                 exists while you are moving tiles - where you genuinely need
-                 to see where each one begins and ends. */
-              className={`relative rounded-2xl bg-box p-5 ${
+              index={idx}
+              className={`relative rounded-2xl border bg-box p-5 ${
                 customise
-                  ? `cursor-grab select-none border border-dashed border-ink/40 ${
+                  ? `cursor-grab select-none border-dashed border-ink/40 ${
                       /* The wiggle rests while anything is being moved or
                          resized — hands need still targets. */
                       drag?.moved || resize ? "" : "wiggle"
@@ -429,7 +427,7 @@ export default function BentoDash({
                   /* The slab is the board's hover language — it went missing
                      on 8 Aug when the request was to drop it from the WIDE
                      chart boxes, and I took it off every tile instead. */
-                  : "block-pop fade-up overflow-hidden"
+                  : "block-pop overflow-hidden border-line/80 hover:border-ink"
               }`}
               style={{
                 gridColumn: `span ${item.w} / span ${item.w}`,
@@ -516,7 +514,7 @@ export default function BentoDash({
                   )}
                 </>
               )}
-            </section>
+            </Reveal>
           );
         })}
 

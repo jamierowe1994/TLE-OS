@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import type { Appt } from "@/lib/diary";
+import { useReportReady } from "@/lib/reveal";
 
 /**
  * One live copy of the diary, shared by every screen that shows it.
@@ -88,7 +89,7 @@ export function refreshDiary(): Promise<void> {
 /** The diary, live where possible. Safe to call from any client component. */
 export function useDiary(): DiaryState {
   if (typeof window !== "undefined") start();
-  return useSyncExternalStore(
+  const snap = useSyncExternalStore(
     (l) => {
       listeners.add(l);
       return () => listeners.delete(l);
@@ -98,4 +99,7 @@ export function useDiary(): DiaryState {
     // hydration and the swap happens as a normal update afterwards.
     () => INITIAL
   );
+  /* Holds the surrounding tile until the diary answers - see lib/reveal. */
+  useReportReady(!snap.loading);
+  return snap;
 }

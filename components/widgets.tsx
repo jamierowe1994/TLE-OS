@@ -20,6 +20,7 @@ import type { Lead } from "@/lib/leads-sample";
 import type { Notice } from "@/lib/notices";
 import type { Application } from "@/lib/applications";
 import type { OsListing } from "@/lib/rex-listings";
+import { useReportReady } from "@/lib/reveal";
 
 /**
  * The widget registry — every box the dashboard can hold.
@@ -845,6 +846,9 @@ function useShared<T>(
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  /* Holds the tile until the figures land. One line here rather than one in
+     every widget - see lib/reveal. */
+  useReportReady(!state.loading);
   return state;
 }
 

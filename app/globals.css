@@ -172,6 +172,55 @@ h1, h2, h3, h4, h5 {
 }
 .page-flow { animation: page-flow 0.36s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+/* ---------------------------------------------------------------------------
+   Changing screen, as one movement.
+
+   The rail, the search bar and the rule never move. What moves is the block
+   inside the masthead and the body under it: on the way out they fall, the
+   masthead's own frame swallowing its block at the line; on the way in the
+   masthead rises back through and the body follows it up.
+
+   The clip is ANIMATED rather than applied, because at rest it has to be
+   open: a seated figure's legs hang below the rule on purpose, and a standing
+   clip would cut her feet off. It closes for the fall and opens over the
+   rise.
+   --------------------------------------------------------------------------- */
+@keyframes mast-window {
+  from { clip-path: inset(-100vh 0 0 0); }
+  to   { clip-path: inset(-100vh 0 -100vh 0); }
+}
+@keyframes mast-rise {
+  from { transform: translateY(100%); }
+  to   { transform: none; }
+}
+@keyframes mast-fall {
+  from { transform: none; }
+  to   { transform: translateY(100%); }
+}
+@keyframes body-fall {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(22px); }
+}
+
+.os-mast-frame { animation: mast-window 0.46s linear both; }
+.os-mast { animation: mast-rise 0.46s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Leaving. The frame's clip is held shut for the whole fall, so the block
+   goes behind the line rather than over whatever is under it. */
+.page-leaving .os-mast-frame { animation: none; clip-path: inset(-100vh 0 0 0); }
+.page-leaving .os-mast { animation: mast-fall 0.3s cubic-bezier(0.55, 0, 0.9, 0.35) both; }
+.page-leaving .page-flow > *:not(.os-mast-frame),
+.page-leaving > *:not(.os-mast-frame) { animation: body-fall 0.26s ease-in both; }
+
+/* A tile that is still waiting on its figures is not drawn at all - not faded,
+   not skeletal. It rises when it has something to say. */
+.reveal-held { opacity: 0; }
+@keyframes reveal-rise {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: none; }
+}
+.reveal-rise { animation: reveal-rise 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
 /* The welcome. The drawing arrives first and settles; the words follow a beat
    later, so it reads as one gesture rather than two things appearing at once.
    Slower and further than fade-up — this is the one moment in the app that is
@@ -446,10 +495,14 @@ h1, h2, h3, h4, h5 {
   .deck-land,
   .fade-up,
   .page-flow,
+  .os-mast,
+  .os-mast-frame,
+  .reveal-rise,
   .intro-rise,
   .intro-rise-late,
   .paint-spread,
   .toast-in { animation: none; }
+  .reveal-rise { animation: none; opacity: 1; }
   .art { transition: none; }
 }
 
