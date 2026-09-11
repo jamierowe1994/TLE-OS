@@ -15,11 +15,14 @@ export default function SignTile({
   label,
   sub,
   icon,
+  variant = "tile",
 }: {
   appraisalId: string;
   label: string;
   sub: string;
   icon: string;
+  /** "button": the big call to action on the "Your next step" card (11 Sep 2026). */
+  variant?: "tile" | "button";
 }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -46,6 +49,23 @@ export default function SignTile({
     } finally {
       setBusy(false);
     }
+  }
+
+  if (variant === "button") {
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={open}
+          disabled={busy}
+          className="inline-flex items-center gap-3 rounded-full bg-accent-dark px-7 py-3.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+        >
+          {busy ? "Opening…" : label}
+          <span aria-hidden>→</span>
+        </button>
+        {note && <p className="mt-2.5 text-[12px] text-muted">{note}</p>}
+      </div>
+    );
   }
 
   return (

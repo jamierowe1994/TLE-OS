@@ -19,6 +19,7 @@ export default function MessageTile({
   label,
   sub,
   icon,
+  variant = "tile",
 }: {
   appraisalId: string | null;
   agentName: string | null;
@@ -26,6 +27,8 @@ export default function MessageTile({
   label: string;
   sub: string;
   icon: string;
+  /** "button": the dark pill on the agent card and the next-step card (11 Sep 2026). Same sheet. */
+  variant?: "tile" | "button";
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -73,18 +76,29 @@ export default function MessageTile({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="flex flex-col items-center rounded-2xl border border-line/60 bg-white px-3 py-4 text-center transition-colors hover:border-ink/40"
-      >
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
-          <DoodleIcon name={icon} size={18} />
-        </span>
-        <span className="mt-3 text-[13px] font-semibold leading-tight">{label}</span>
-        <span className="mt-1 text-[11.5px] leading-snug text-muted">{thread.length ? `${thread.length} in your thread` : sub}</span>
-        <span className="mt-2.5 text-[13px] text-muted">›</span>
-      </button>
+      {variant === "button" ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="inline-flex shrink-0 items-center gap-2.5 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+        >
+          <DoodleIcon name={icon} size={15} className="text-white" />
+          {label}
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="flex flex-col items-center rounded-2xl border border-line/60 bg-white px-3 py-4 text-center transition-colors hover:border-ink/40"
+        >
+          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+            <DoodleIcon name={icon} size={18} />
+          </span>
+          <span className="mt-3 text-[13px] font-semibold leading-tight">{label}</span>
+          <span className="mt-1 text-[11.5px] leading-snug text-muted">{thread.length ? `${thread.length} in your thread` : sub}</span>
+          <span className="mt-2.5 text-[13px] text-muted">›</span>
+        </button>
+      )}
 
       {open && (
         <div className="fixed inset-0 z-[130]">

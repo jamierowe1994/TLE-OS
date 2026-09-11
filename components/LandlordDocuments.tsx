@@ -80,7 +80,7 @@ export default function LandlordDocuments({
             <option key={k.id} value={k.id}>{k.label}</option>
           ))}
         </select>
-        <label className={`inline-flex cursor-pointer items-center gap-2 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 ${busy ? "opacity-60" : ""}`}>
+        <label className={`inline-flex cursor-pointer items-center gap-2 rounded-full bg-accent-dark px-4 py-2 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 ${busy ? "opacity-60" : ""}`}>
           {busy ? "Uploading…" : "Upload"}
           <DoodleIcon name="upload" size={13} className="text-white" />
           <input

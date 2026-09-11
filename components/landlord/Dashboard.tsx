@@ -1,22 +1,40 @@
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
-import PropertyHero from "@/components/landlord/PropertyHero";
+import PropertyPhoto from "@/components/PropertyPhoto";
 import SignTile from "@/components/landlord/SignTile";
 import MessageTile from "@/components/landlord/MessageTile";
 import type { LandlordView, ViewStep } from "@/lib/landlord-view";
 
 /**
- * The landlord dashboard, to James's reference of 2 Sep.
+ * The landlord dashboard, to James's mock of 11 Sep 2026: light, airy,
+ * minimal, with room around everything.
  *
- * Top: the greeting, and the agent top right. Then the property beside the
- * next steps. Then the journey - the spine - across the middle, which is the
- * thing that decides what the rest of the page says. Then documents, the
- * snapshot and recent activity. Everything is derived from the view; the
- * sample and the live home feed the same shape.
+ * Top: the greeting, and the agent top right. Then the property (top left)
+ * beside the one next step, on a soft pink card. Then the journey - the
+ * spine - across the middle, which decides what the rest of the page says.
+ * Then documents, the snapshot, and what the portal becomes once the
+ * property is let, on sage. The let step by step and the offers appear
+ * between the spine and that row only once they exist.
+ *
+ * Nothing here is a button to nowhere: the next step signs through DocuSeal
+ * or opens the message sheet, "Message" opens the same sheet, and the few
+ * links scroll to a section on this page. Everything is derived from the
+ * view; the sample and the live home feed the same shape.
  */
 
-const panel = "rounded-[20px] border border-line/70 bg-panel p-5";
-const label = "text-[10.5px] font-semibold uppercase tracking-wide text-muted";
+const card = "rounded-[22px] border border-line/60 bg-white";
+const eyebrow = "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted";
+const cta =
+  "inline-flex items-center gap-3 rounded-full bg-accent-dark px-7 py-3.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90";
+/* Sage, for things that are done and for what comes after the let. */
+const SAGE_INK = "#56634a";
+const SAGE_WASH = "#f1f4ec";
+
+/** The time of day in London, whatever the server's clock says. */
+function partOfDay(): string {
+  const h = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: "Europe/London" }).format(new Date()));
+  return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+}
 
 export default function LandlordDashboard({
   view: v,
@@ -29,126 +47,169 @@ export default function LandlordDashboard({
   /** Properties we already look after, from the page. */
   managed?: React.ReactNode;
 }) {
-  const first = v.greeting;
   const agentFirst = v.agent?.name.split(/\s+/)[0] ?? "your agent";
+  /* The one next step: signing, when there is a contract to sign, because
+     nothing else moves until it is done; otherwise the first in the stage's
+     order. The rest are quiet links under it. */
+  const hero =
+    v.steps.find((s) => s.id === "sign" && ((s.action === "sign" && v.appraisalId) || s.href)) ?? v.steps[0] ?? null;
+  const others = v.steps.filter((s) => s !== hero && s.href && !s.action);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* ── greeting and the agent ── */}
-      <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
-        <div className="px-1 pt-1">
-          <h1 className="text-[36px] leading-none">{first}</h1>
-          <p className="mt-2 text-[13.5px] text-muted">{v.intro}</p>
+      <div className="grid items-start gap-6 lg:grid-cols-[1fr_auto]">
+        <div className="pt-2">
+          <p className={eyebrow}>{partOfDay()}</p>
+          <h1 className="mt-2 text-[44px] leading-[1.05]">{v.greeting}</h1>
+          <p className="mt-3 max-w-xl text-[14.5px] text-muted">{v.intro}</p>
         </div>
         {v.agent && (
-          <div className="flex flex-wrap items-center gap-3 rounded-[20px] border border-line/70 bg-panel px-4 py-3 lg:self-start" data-search>
+          <div id="messages" className={`${card} flex flex-wrap items-center gap-4 px-5 py-4`} data-search>
             {v.agent.photo ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={v.agent.photo} alt="" className="h-11 w-11 shrink-0 rounded-full object-cover" />
+              <img src={v.agent.photo} alt="" className="h-16 w-16 shrink-0 rounded-full object-cover" />
             ) : (
-              <span className="hand flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[20px] text-accent-dark">
+              <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[24px] font-semibold text-accent-dark">
                 {v.agent.name[0]}
               </span>
             )}
-            <div className="min-w-0 flex-1">
-              <p className="whitespace-nowrap text-[13.5px] leading-tight">
-                <span className="text-muted">Your letting agent</span>{" "}
-                <span className="font-semibold">{v.agent.name}</span>
-              </p>
-              <p className="mt-0.5 truncate text-[10.5px] text-muted">
-                {[v.agent.email, v.agent.phone].filter(Boolean).join("  •  ")}
+            <div className="min-w-0">
+              <p className="text-[11.5px] text-muted">Your letting agent</p>
+              <p className="text-[19px] font-bold leading-tight">{v.agent.name}</p>
+              <p className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted">
+                {v.agent.phone && (
+                  <a href={`tel:${v.agent.phone.replace(/\s+/g, "")}`} className="flex items-center gap-1.5 hover:text-ink">
+                    <DoodleIcon name="call" size={13} />
+                    {v.agent.phone}
+                  </a>
+                )}
+                {v.agent.email && (
+                  <a href={`mailto:${v.agent.email}`} className="flex items-center gap-1.5 hover:text-ink">
+                    <DoodleIcon name="mail" size={13} />
+                    {v.agent.email}
+                  </a>
+                )}
               </p>
             </div>
-            {v.agent.email && (
-              <a
-                href={`mailto:${v.agent.email}?subject=${encodeURIComponent(`About ${v.property.address}`)}`}
-                className="inline-flex shrink-0 items-center gap-2 rounded-full border border-line/70 px-3.5 py-1.5 text-[12px] font-semibold transition-colors hover:border-ink/40"
-              >
-                Message {agentFirst}
-                <DoodleIcon name="message" size={12} />
-              </a>
-            )}
+            <div className="lg:ml-4">
+              <MessageTile
+                variant="button"
+                appraisalId={v.appraisalId ?? null}
+                agentName={v.agent.name}
+                messages={v.messages ?? []}
+                label={`Message ${agentFirst}`}
+                sub=""
+                icon="message"
+              />
+            </div>
           </div>
         )}
       </div>
 
-      {/* ── the property, and the next steps ── */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.55fr)]">
-        <section className={`${panel} flex min-w-0 flex-col`} data-search>
-          {/* The address keeps at least 60% of the row, so on a phone the
-              drawing drops beneath it rather than squeezing it into one word
-              a line. */}
-          <div className="flex flex-wrap items-start gap-4">
-            <div className="min-w-[60%] flex-1">
-              <span className="inline-block rounded-full bg-accent-soft px-3 py-1 text-[10.5px] font-semibold uppercase tracking-wide text-accent-dark">
-                {v.property.state}
-              </span>
-              <h2 className="mt-3 text-[28px] leading-tight">{v.property.address}</h2>
+      {/* ── the property, and the next step ── */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <section id="property" className={`${card} p-5`} data-search>
+          <div className="flex h-full flex-col gap-6 sm:flex-row">
+            <div className="relative h-[200px] w-full shrink-0 overflow-hidden rounded-2xl bg-accent-soft/70 sm:h-auto sm:min-h-[210px] sm:w-[220px]">
+              {v.property.image ? (
+                <PropertyPhoto src={v.property.image} alt="" className="absolute inset-0 h-full w-full object-cover" />
+              ) : (
+                <>
+                  {/* No photograph until take-on, so the drawing stands in. */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/illustrations/maintenance-house.webp" alt="" className="absolute inset-0 h-full w-full object-contain p-4" />
+                  <span className="absolute bottom-3 left-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-muted">
+                    Photos come at take-on
+                  </span>
+                </>
+              )}
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col py-1">
+              <h2 className="text-[26px] leading-tight">{v.property.address}</h2>
               {v.property.facts.length > 0 && (
-                <p className="mt-2.5 flex flex-wrap items-center gap-x-2 text-[12.5px] text-muted">
+                <p className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-muted">
                   <DoodleIcon name="home" size={14} />
                   {v.property.facts.map((f, i) => (
-                    <span key={f} className="flex items-center gap-2">
+                    <span key={f} className="flex items-center gap-2.5">
                       {i > 0 && <span className="text-line">•</span>}
                       {f}
                     </span>
                   ))}
                 </p>
               )}
-            </div>
-            <div className="flex h-[128px] w-[128px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent-soft/60">
-              <PropertyHero image={v.property.image} lat={v.property.lat} lng={v.property.lng} className="h-full w-full object-cover" />
-            </div>
-          </div>
-
-          <div className="mt-5 flex flex-wrap items-end gap-x-8 gap-y-4">
-            <div>
-              <p className={label}>{v.property.rent.caption}</p>
-              <p className="figures mt-1 text-[28px] leading-none">
-                {v.property.rent.figure ?? "—"}
-                {v.property.rent.figure && <span className="text-[11px] font-normal text-muted"> {v.property.rent.unit}</span>}
-              </p>
-            </div>
-            {v.property.valuedOn && (
-              <div className="border-l border-line/60 pl-8">
-                <p className={label}>Valued on</p>
-                <p className="mt-1 text-[15px] font-semibold">{v.property.valuedOn}</p>
+              <div className="my-5 h-px bg-line/50" />
+              <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
+                <div>
+                  <p className="text-[12px] text-muted">{v.property.rent.caption}</p>
+                  <p className="figures mt-1 text-[30px] leading-none">
+                    {v.property.rent.figure ?? "—"}
+                    {v.property.rent.figure && <span className="text-[11.5px] font-normal text-muted"> {v.property.rent.unit}</span>}
+                  </p>
+                </div>
+                {v.property.valuedOn && (
+                  <div className="border-l border-line/60 pl-8">
+                    <p className="text-[12px] text-muted">Valued on</p>
+                    <p className="mt-1 text-[15px] font-semibold">{v.property.valuedOn}</p>
+                  </div>
+                )}
               </div>
-            )}
-            <span className="ml-auto inline-flex items-center gap-2 rounded-full border border-line/70 px-4 py-2 text-[12.5px] font-semibold text-muted">
-              View property details <span className="text-[11px]">›</span>
-            </span>
+              <a
+                href="#snapshot"
+                className="mt-6 inline-flex items-center gap-2 self-start rounded-full border border-line/70 px-4 py-2 text-[12.5px] font-semibold transition-colors hover:border-ink/40 sm:mt-auto sm:self-end"
+              >
+                View property details <span aria-hidden>→</span>
+              </a>
+            </div>
           </div>
         </section>
 
-        <section className="rounded-[20px] border border-line/70 bg-panel p-5" data-search>
-          <h2 className="text-[17px]">Next steps</h2>
-          <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
-            {v.steps.map((s) =>
-              s.action === "sign" && v.appraisalId ? (
-                <SignTile key={s.id} appraisalId={v.appraisalId} label={s.label} sub={s.sub} icon={s.icon} />
-              ) : s.action === "message" ? (
-                <MessageTile
-                  key={s.id}
-                  appraisalId={v.appraisalId ?? null}
-                  agentName={v.agent?.name ?? null}
-                  messages={v.messages ?? []}
-                  label={s.label}
-                  sub={s.sub}
-                  icon={s.icon}
-                />
-              ) : (
-                <StepTile key={s.id} s={s} />
-              )
-            )}
-          </div>
+        <section className="relative overflow-hidden rounded-[22px] bg-accent-soft/80 p-7" data-search>
+          {/* The soft curves bottom right: the palette's clay and pink, low. */}
+          <span aria-hidden className="pointer-events-none absolute -bottom-24 -right-16 h-72 w-72 rounded-full bg-accent/15" />
+          <span aria-hidden className="pointer-events-none absolute -bottom-36 right-24 h-72 w-72 rounded-full bg-white/40" />
+          <p className={`${eyebrow} relative`}>Your next step</p>
+          {hero ? (
+            <div className="relative mt-5">
+              <div className="flex items-start gap-5">
+                <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/70 text-accent-dark">
+                  <DoodleIcon name={hero.icon} size={24} />
+                </span>
+                <div className="min-w-0">
+                  <h2 className="text-[30px] leading-tight">{hero.label}</h2>
+                  <p className="mt-2 max-w-md text-[14px] leading-relaxed text-muted">{hero.sub}</p>
+                </div>
+              </div>
+              <div className="mt-7">
+                <HeroAction s={hero} v={v} />
+              </div>
+              {others.length > 0 && (
+                <p className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-muted">
+                  <span>Also:</span>
+                  {others.map((s) =>
+                    s.external ? (
+                      <a key={s.id} href={s.href!} target="_blank" rel="noreferrer" className="font-semibold text-ink underline decoration-line underline-offset-4 hover:decoration-ink">
+                        {s.label}
+                      </a>
+                    ) : (
+                      <Link key={s.id} href={s.href!} className="font-semibold text-ink underline decoration-line underline-offset-4 hover:decoration-ink">
+                        {s.label}
+                      </Link>
+                    )
+                  )}
+                </p>
+              )}
+            </div>
+          ) : (
+            <p className="relative mt-5 text-[14px] text-muted">Nothing needs you right now. We&rsquo;ll let you know when something does.</p>
+          )}
         </section>
       </div>
 
       {/* ── the spine ── */}
-      <section className={panel} data-search>
-        <h2 className="text-[17px]">Your letting journey</h2>
-        <ol className="mt-6 grid grid-cols-3 gap-y-6 sm:grid-cols-6">
+      <section id="journey" className={`${card} p-6`} data-search>
+        <h2 className="text-[18px]">Your letting journey</h2>
+        <ol className="mt-7 grid grid-cols-3 gap-y-6 sm:grid-cols-6">
           {v.journey.map((s, i) => {
             const prevDone = i > 0 && v.journey[i - 1].state === "done";
             return (
@@ -158,25 +219,25 @@ export default function LandlordDashboard({
                     stops sit per row and a line would run in from nowhere. */}
                 {i > 0 && (
                   <span
-                    className={`absolute left-[-50%] right-[50%] top-[13px] ${i === 3 ? "hidden sm:block" : ""} ${
+                    className={`absolute left-[-50%] right-[50%] top-[14px] ${i === 3 ? "hidden sm:block" : ""} ${
                       prevDone && s.state !== "upcoming" ? "h-0.5 bg-accent-dark" : "h-0 border-t-2 border-dashed border-line"
                     }`}
                   />
                 )}
                 <span
-                  className={`relative z-[1] flex h-7 w-7 items-center justify-center rounded-full ${
+                  className={`relative z-[1] flex h-[30px] w-[30px] items-center justify-center rounded-full ${
                     s.state === "done"
                       ? "bg-accent-dark text-white"
                       : s.state === "current"
-                        ? "border-[3px] border-accent-dark bg-panel"
-                        : "border-2 border-dashed border-line bg-panel"
+                        ? "border-[3px] border-accent-dark bg-white"
+                        : "border-2 border-line bg-white"
                   }`}
                 >
-                  {s.state === "done" && <DoodleIcon name="checklist" size={12} className="text-white" />}
+                  {s.state === "done" && <span className="text-[13px] leading-none">✓</span>}
                   {s.state === "current" && <span className="h-2.5 w-2.5 rounded-full bg-accent-dark" />}
                 </span>
-                <p className={`mt-2.5 text-[12px] ${s.state === "upcoming" ? "text-muted" : "font-semibold"}`}>{s.label}</p>
-                <p className="text-[11px] text-muted">{s.sub}</p>
+                <p className={`mt-3 text-[12.5px] ${s.state === "upcoming" ? "text-muted" : "font-semibold"}`}>{s.label}</p>
+                <p className="mt-0.5 text-[11.5px] text-muted">{s.sub}</p>
               </li>
             );
           })}
@@ -188,16 +249,16 @@ export default function LandlordDashboard({
           tenant's home, in the landlord's words. Present only once a deal
           exists in Propoly. */}
       {v.progress && (
-        <section className={panel} id="progress" data-search>
+        <section className={`${card} p-6`} id="progress" data-search>
           <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <h2 className="text-[17px]">Your let, step by step</h2>
+            <h2 className="text-[18px]">Your let, step by step</h2>
             <span className="text-[11.5px] text-muted">
               {v.progress.tenants}
               {v.progress.moveIn ? `  •  moving in ${new Date(v.progress.moveIn).toLocaleDateString("en-GB", { day: "numeric", month: "long" })}` : ""}
               {v.progress.rentPcm != null ? `  •  £${Math.round(v.progress.rentPcm).toLocaleString("en-GB")} per month` : ""}
             </span>
           </div>
-          <ol className="mt-4 flex gap-1 overflow-x-auto pb-2">
+          <ol className="mt-5 flex gap-1 overflow-x-auto pb-2">
             {v.progress.stages.map((s, i) => (
               <li key={s.key} className="flex min-w-[96px] flex-1 flex-col">
                 <div className="flex items-center">
@@ -207,7 +268,7 @@ export default function LandlordDashboard({
                         ? "border-accent-dark bg-accent-soft text-accent-dark"
                         : s.state === "current"
                           ? "border-accent-dark bg-accent-dark text-white"
-                          : "border-line bg-panel text-muted"
+                          : "border-line bg-white text-muted"
                     }`}
                   >
                     {s.state === "done" ? "✓" : i + 1}
@@ -218,12 +279,12 @@ export default function LandlordDashboard({
               </li>
             ))}
           </ol>
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <div className="rounded-xl bg-box p-4">
-              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">Now</p>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            <div className="rounded-2xl p-4" style={{ background: SAGE_WASH }}>
+              <p className="text-[10.5px] font-semibold uppercase tracking-wide" style={{ color: SAGE_INK }}>Now</p>
               <p className="mt-1 text-[13px] leading-relaxed">{v.progress.now}</p>
             </div>
-            <div className="rounded-xl bg-accent-soft p-4">
+            <div className="rounded-2xl bg-accent-soft p-4">
               <p className="text-[10.5px] font-semibold uppercase tracking-wide text-accent-dark">What happens next</p>
               <p className="mt-1 text-[13px] leading-relaxed">{v.progress.next}</p>
             </div>
@@ -232,21 +293,20 @@ export default function LandlordDashboard({
       )}
 
       {/* ── offers, once there are any ──
-          Every application on the property, the accepted one first. The
-          landlord reads the amount, who, when they want to move and what they
-          asked for - which is the conversation the agent would otherwise have
-          on the phone, with nothing to look back at. */}
+          Every application on the property, the accepted one first: the
+          amount, who, when they want to move and what they asked for - the
+          conversation the agent would otherwise have on the phone. */}
       {v.offers && v.offers.length > 0 && (
-        <section className={panel} id="offers" data-search>
+        <section className={`${card} p-6`} id="offers" data-search>
           <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-[17px]">Offers</h2>
+            <h2 className="text-[18px]">Offers</h2>
             <span className="text-[11.5px] text-muted">
               {v.offers.length} on your property  •  your agent will talk you through them
             </span>
           </div>
           <ul className="mt-3 divide-y divide-line/60">
             {v.offers.map((o) => (
-              <li key={o.id} className="flex flex-wrap items-start gap-x-4 gap-y-1 py-3">
+              <li key={o.id} className="flex flex-wrap items-start gap-x-4 gap-y-1 py-3.5">
                 <span className="w-36 shrink-0 text-[15px] font-semibold">{o.amount}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[13px]">
@@ -261,14 +321,9 @@ export default function LandlordDashboard({
                 </span>
                 <span
                   className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                    o.status === "accepted"
-                      ? "bg-[#e8f5ec] text-[#1e7a3c]"
-                      : o.status === "with-you"
-                        ? "bg-[#fff1e6] text-[#b4610d]"
-                        : o.status === "unsuccessful"
-                          ? "bg-[#f3f3f1] text-muted line-through"
-                          : "bg-[#f3f3f1] text-muted"
+                    o.status === "unsuccessful" ? "bg-[#f3f3f1] text-muted line-through" : o.status === "with-you" ? "bg-accent-soft text-accent-dark" : "bg-[#f3f3f1] text-muted"
                   }`}
+                  style={o.status === "accepted" ? { background: SAGE_WASH, color: SAGE_INK } : undefined}
                 >
                   {o.statusLabel}
                 </span>
@@ -278,28 +333,29 @@ export default function LandlordDashboard({
         </section>
       )}
 
-      {/* ── documents, snapshot, activity ── */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <section className={`${panel} flex flex-col`} id="documents" data-search>
-          <h2 className="text-[17px]">Documents</h2>
-          <ul className="mt-3 space-y-2.5">
+      {/* ── documents, snapshot, and what comes after the let ── */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <section className={`${card} flex flex-col p-6`} id="documents" data-search>
+          <h2 className="text-[18px]">Your documents</h2>
+          <ul className="mt-4 divide-y divide-line/50">
             {v.documents.map((d) => (
-              <li key={d.title} className="flex items-center gap-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-line/60 bg-white text-muted">
-                  <DoodleIcon name={d.state === "uploaded" ? "shield" : "doc"} size={13} />
+              <li key={d.title} className="flex items-center gap-3 py-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line/60 text-muted">
+                  <DoodleIcon name={d.state === "uploaded" ? "shield" : "doc"} size={15} />
                 </span>
                 <span className="min-w-0 flex-1">
                   {d.href ? (
-                    <a href={d.href} target="_blank" rel="noreferrer" className="block truncate text-[13px] font-semibold hover:underline">{d.title}</a>
+                    <a href={d.href} target="_blank" rel="noreferrer" className="block truncate text-[13.5px] font-semibold hover:underline">{d.title}</a>
                   ) : (
-                    <span className="block truncate text-[13px] font-semibold">{d.title}</span>
+                    <span className="block truncate text-[13.5px] font-semibold">{d.title}</span>
                   )}
-                  <span className="block truncate text-[11.5px] text-muted">{d.sub}</span>
+                  <span className={`block truncate text-[12px] ${d.state === "missing" ? "text-accent-dark" : "text-muted"}`}>{d.sub}</span>
                 </span>
                 <span
-                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] ${
-                    d.state === "uploaded" ? "bg-[#e8f5ec] text-[#1e7a3c]" : d.state === "missing" ? "bg-[#fff1e6] text-[#b4610d]" : "bg-[#f3f3f1] text-muted"
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${
+                    d.state === "missing" ? "bg-accent-soft text-accent-dark" : d.state === "uploaded" ? "" : "bg-[#f3f3f1] text-muted"
                   }`}
+                  style={d.state === "uploaded" ? { background: SAGE_WASH, color: SAGE_INK } : undefined}
                 >
                   {d.state === "uploaded" ? "✓" : d.state === "missing" ? "!" : "…"}
                 </span>
@@ -309,14 +365,19 @@ export default function LandlordDashboard({
           <div className="mt-auto pt-4">{upload}</div>
         </section>
 
-        <section className={panel} data-search>
-          <h2 className="text-[17px]">Property snapshot</h2>
-          <div className="mt-3 flex items-center gap-6">
+        <section className={`${card} p-6`} id="snapshot" data-search>
+          <h2 className="flex items-center gap-2.5 text-[18px]">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+              <DoodleIcon name="home" size={14} />
+            </span>
+            Property snapshot
+          </h2>
+          <div className="mt-5 flex items-center gap-6">
             <div className="flex shrink-0 flex-col items-center">
-              <p className={label}>Readiness</p>
+              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">Readiness</p>
               <Ring pct={v.snapshot.readinessPct} />
             </div>
-            <dl className="min-w-0 flex-1 space-y-2">
+            <dl className="min-w-0 flex-1 space-y-2.5 border-l border-line/50 pl-6">
               {v.snapshot.lines.map(([k, val]) => (
                 <div key={k} className="flex items-baseline justify-between gap-3 text-[12.5px]">
                   <dt className="text-muted">{k}</dt>
@@ -325,30 +386,41 @@ export default function LandlordDashboard({
               ))}
             </dl>
           </div>
-          <p className="mt-3 text-[12px] text-muted">{v.snapshot.note}</p>
+          <p className="mt-4 text-[12px] text-muted">{v.snapshot.note}</p>
         </section>
 
-        <section className={panel} data-search>
-          <h2 className="text-[17px]">Recent activity</h2>
-          {v.activity.length ? (
-            <ol className="mt-3 space-y-3">
-              {v.activity.map((a, i) => (
-                <li key={`${a.title}-${i}`} className="relative flex gap-3">
-                  {i < v.activity.length - 1 && <span className="absolute left-[15px] top-8 h-[calc(100%-8px)] w-px bg-line/60" />}
-                  <span className="relative z-[1] flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
-                    <DoodleIcon name={a.icon} size={13} />
+        {/* What the portal becomes once the property is let. Words about the
+            future, on purpose: maintenance on the landlord's side is not
+            built yet, so there is no button that pretends it is. */}
+        <section
+          id="maintenance"
+          className="relative min-h-[260px] overflow-hidden rounded-[22px] p-6"
+          style={{ background: SAGE_WASH }}
+          data-search
+        >
+          <div className="relative z-[1] flex items-center gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/80" style={{ color: SAGE_INK }}>
+              <DoodleIcon name="setting" size={17} />
+            </span>
+            <h2 className="text-[18px] leading-snug">After your property is let</h2>
+          </div>
+          {/* Only the words beside the picture are narrowed, so the title
+              keeps one line and nothing runs into the drawing. */}
+          <div className="relative z-[1] max-w-[56%]">
+            <p className="mt-3 text-[12.5px] leading-relaxed text-muted">This portal will also be your maintenance hub. You&rsquo;ll be able to:</p>
+            <ul className="mt-3 space-y-2">
+              {["Report maintenance requests", "Track ongoing works", "View certificates and compliance"].map((t) => (
+                <li key={t} className="flex items-center gap-2.5 text-[12.5px]">
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/80 text-[10px] font-bold" style={{ color: SAGE_INK }}>
+                    ✓
                   </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[13px] font-semibold">{a.title}</span>
-                    <span className="block text-[11.5px] text-muted">{a.sub}</span>
-                  </span>
-                  <span className="shrink-0 text-[11px] text-muted">{a.date}</span>
+                  {t}
                 </li>
               ))}
-            </ol>
-          ) : (
-            <p className="mt-4 text-[12.5px] text-muted">Nothing yet. What happens on the property shows up here.</p>
-          )}
+            </ul>
+          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/art/family-home.png" alt="" className="pointer-events-none absolute -bottom-2 -right-3 w-[40%] max-w-[200px]" />
         </section>
       </div>
 
@@ -357,25 +429,33 @@ export default function LandlordDashboard({
   );
 }
 
-function StepTile({ s }: { s: ViewStep }) {
-  const cls = `flex flex-col items-center rounded-2xl border border-line/60 bg-white px-3 py-4 text-center transition-colors ${
-    s.href ? "hover:border-ink/40" : "opacity-50"
-  }`;
-  const inner = (
-    <>
-      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
-        <DoodleIcon name={s.icon} size={18} />
-      </span>
-      <span className="mt-3 text-[13px] font-semibold leading-tight">{s.label}</span>
-      <span className="mt-1 text-[11.5px] leading-snug text-muted">{s.sub}</span>
-      <span className="mt-2.5 text-[13px] text-muted">›</span>
-    </>
-  );
-  if (!s.href) return <div className={cls}>{inner}</div>;
+/** The call to action on the next-step card: the real action behind the step, or nothing. */
+function HeroAction({ s, v }: { s: ViewStep; v: LandlordView }) {
+  if (s.action === "sign" && v.appraisalId) {
+    return <SignTile variant="button" appraisalId={v.appraisalId} label={s.label} sub={s.sub} icon={s.icon} />;
+  }
+  if (s.action === "message") {
+    return (
+      <MessageTile
+        variant="button"
+        appraisalId={v.appraisalId ?? null}
+        agentName={v.agent?.name ?? null}
+        messages={v.messages ?? []}
+        label={s.label}
+        sub={s.sub}
+        icon={s.icon}
+      />
+    );
+  }
+  if (!s.href) return null;
   return s.external ? (
-    <a href={s.href} target="_blank" rel="noreferrer" className={cls}>{inner}</a>
+    <a href={s.href} target="_blank" rel="noreferrer" className={cta}>
+      {s.label} <span aria-hidden>→</span>
+    </a>
   ) : (
-    <Link href={s.href} className={cls}>{inner}</Link>
+    <Link href={s.href} className={cta}>
+      {s.label} <span aria-hidden>→</span>
+    </Link>
   );
 }
 
@@ -385,7 +465,7 @@ function Ring({ pct }: { pct: number }) {
   const r = 40;
   const c = 2 * Math.PI * r;
   return (
-    <div className="relative mt-1.5 h-[96px] w-[96px]">
+    <div className="relative mt-2 h-[100px] w-[100px]">
       <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
         <circle cx="50" cy="50" r={r} fill="none" stroke="var(--line)" strokeOpacity="0.45" strokeWidth="8" />
         <circle
