@@ -401,7 +401,7 @@ export default function Leads() {
       <div className="mt-4">
         {view === "groups" ? (
           <>
-            <div className="fade-up rounded-2xl border border-line/80 bg-panel px-5 py-4">
+            <div className="fade-up relative z-20 rounded-2xl border border-line/80 bg-panel px-5 py-4">
               <div className="flex flex-wrap items-center gap-2.5">
                 <PickOne label="All sources" options={sources.map((o) => ({ id: o, label: o }))} value={fSource} onChange={setFSource} />
                 <PickOne label="All agents" options={agents.map((o) => ({ id: o, label: o }))} value={fAgent} onChange={setFAgent} />

@@ -20,7 +20,7 @@ import { rexCall } from "@/lib/rex";
 /** Bumped whenever the parsing changes, so enquiries read by an older
  *  parser are read again (the first one missed OnTheMarket's HTML-only
  *  messages and saved them as empty). */
-export const ENQUIRY_VERSION = 2;
+export const ENQUIRY_VERSION = 3;
 
 export type Enquiry = {
   /** Their own words, in full. Empty when the portal sent none. */
@@ -45,6 +45,7 @@ export function parseEnquiry(plain: string): { message: string; fields: Array<[s
     if (!m) continue;
     const label = m[1].trim();
     if (/^message$/i.test(label)) {
+      /* A URL on its own is tracking, not a message. */
       /* The message runs from here to the next labelled line or the end, and
          can be several paragraphs. */
       const rest = [m[2]];
@@ -53,7 +54,7 @@ export function parseEnquiry(plain: string): { message: string; fields: Array<[s
         rest.push(lines[j]);
         i = j;
       }
-      message = rest.join("\n").trim();
+      message = rest.filter((l) => !/^\s*https?:\/\/\S+\s*$/i.test(l)).join("\n").trim();
       continue;
     }
     const value = m[2].trim();
@@ -127,11 +128,18 @@ export async function readEnquiry(rexLeadId: string): Promise<Enquiry | null> {
     const snip = /Message:\s*([\s\S]*)$/i.exec(r.body_snippet ?? "");
     if (snip) message = snip[1].replace(/\s+/g, " ").trim();
   }
+  /* GetAgent's "Message:" is GetAgent's own email - a reminder, a greeting
+     to the branch, its terms - with nothing the landlord wrote. What it does
+     carry is the property: Address, Bedrooms, Estimated value, the quoted
+     fee, as labelled lines. Those are the enquiry; the message is not. */
+  const source = r.lead_source?.text ?? null;
+  if (/getagent/i.test(source ?? "") || /getagent\.co\.uk/i.test(plain.slice(0, 600))) message = "";
+
   const t = Number(r.system_ctime ?? 0);
   return {
     message,
     fields,
     receivedAt: t ? new Date(t * 1000).toISOString() : null,
-    source: r.lead_source?.text ?? null,
+    source,
   };
 }

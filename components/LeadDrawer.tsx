@@ -1144,7 +1144,11 @@ export default function LeadDrawer({
   ];
 
   /* The address to look the property up by, on a landlord lead. */
-  const propAddress = real(prop.address) || real(contact.area) || real(lead.preferred) || real(lead.address);
+  const enqField = (re: RegExp) => enquiry?.fields.find(([k]) => re.test(k))?.[1] ?? "";
+  const propAddress = real(prop.address) || real(contact.area) || real(lead.preferred) || real(lead.address) || real(enqField(/^(property )?address$/i));
+  /* What the portal said about the property, shown when there is no message
+     and used by the fill: GetAgent sends Address, Bedrooms, Estimated value. */
+  const enqFacts = (enquiry?.fields ?? []).filter(([k]) => /address|bedroom|estimated|fee|requirement|price|budget|move/i.test(k) && !/email|phone|listinglink|listing id/i.test(k));
   async function fillPage() {
     if (filling) return;
     if (!propAddress) { setFillNote("Put the property's address on the lead first, then try again."); return; }
@@ -1159,7 +1163,9 @@ export default function LeadDrawer({
       /* What the lookups are sure of wins; what only the agent knows stays. */
       const next: PropertyFactsData = {
         ...prop, ...found,
-        type: found.type || prop.type, beds: found.beds ?? prop.beds, baths: prop.baths, receptions: prop.receptions,
+        type: found.type || prop.type,
+        beds: found.beds ?? prop.beds ?? (Number(enqField(/^bedrooms?$/i)) || null),
+        baths: prop.baths, receptions: prop.receptions,
         image: found.image ?? prop.image, rexPropertyId: found.rexPropertyId ?? prop.rexPropertyId,
         matched: found.matched === "rex" ? "rex" : prop.matched === "rex" ? "rex" : found.matched,
       };
@@ -1527,6 +1533,15 @@ export default function LeadDrawer({
                           <p className="mt-2 text-[12.5px] text-muted">Reading their enquiry from REX…</p>
                         ) : enqMessage ? (
                           <p className="mt-2 max-h-[140px] overflow-y-auto whitespace-pre-line pr-1 text-[14.5px] leading-relaxed">{enqMessage}</p>
+                        ) : enqFacts.length ? (
+                          <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12.5px]">
+                            {enqFacts.map(([k, v]) => (
+                              <div key={k} className="min-w-0">
+                                <dt className="text-[10.5px] text-muted">{k}</dt>
+                                <dd className="truncate font-semibold">{v}</dd>
+                              </div>
+                            ))}
+                          </dl>
                         ) : (
                           <p className="mt-2 text-[12.5px] text-muted">They sent no message with this enquiry.</p>
                         )}
@@ -1741,6 +1756,15 @@ export default function LeadDrawer({
                           <p className="mt-2 text-[12.5px] text-muted">Reading their enquiry from REX…</p>
                         ) : enqMessage ? (
                           <p className="mt-2 max-h-[140px] overflow-y-auto whitespace-pre-line pr-1 text-[14.5px] leading-relaxed">{enqMessage}</p>
+                        ) : enqFacts.length ? (
+                          <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12.5px]">
+                            {enqFacts.map(([k, v]) => (
+                              <div key={k} className="min-w-0">
+                                <dt className="text-[10.5px] text-muted">{k}</dt>
+                                <dd className="truncate font-semibold">{v}</dd>
+                              </div>
+                            ))}
+                          </dl>
                         ) : (
                           <p className="mt-2 text-[12.5px] text-muted">They sent no message with this enquiry.</p>
                         )}
