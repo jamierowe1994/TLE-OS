@@ -333,8 +333,11 @@ export default function LandlordDashboard({
         </section>
       )}
 
-      {/* ── documents, snapshot, and what comes after the let ── */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      {/* ── documents, snapshot, and what comes after the let ──
+          minmax(0,1fr) on a phone: a bare one-column grid sizes its track to
+          the widest content (the upload picker), and the page scrolled
+          sideways by 19px. */}
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-3">
         <section className={`${card} flex flex-col p-6`} id="documents" data-search>
           <h2 className="text-[18px]">Your documents</h2>
           <ul className="mt-4 divide-y divide-line/50">
