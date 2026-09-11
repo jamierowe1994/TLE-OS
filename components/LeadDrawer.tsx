@@ -2214,7 +2214,7 @@ export default function LeadDrawer({
                     {/* The agent on the phone, standing on the card's bottom edge, from xl up. */}
                     <div className="relative hidden self-stretch xl:block">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src="/brand/art/on-the-phone.webp" alt="" aria-hidden className="pointer-events-none absolute bottom-[-34px] left-1/2 w-[290px] max-w-none -translate-x-1/2" />
+                      <img src="/brand/art/new-lead.webp" alt="" aria-hidden className="pointer-events-none absolute bottom-[-30px] left-1/2 w-[340px] max-w-none -translate-x-1/2" />
                     </div>
 
                     <aside className="rounded-2xl border border-line/40 bg-white p-5">
