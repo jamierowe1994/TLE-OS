@@ -1160,11 +1160,15 @@ export default function LeadDrawer({
       }).then((r) => r.json());
       if (!j?.ok) throw new Error(j?.error ?? "The lookups did not answer.");
       const found = j.property as PropertyFactsData;
+      /* Bedrooms: the landlord's own figure (the enquiry) beats the register's -
+         they know their house - and a disagreement is said, not hidden. */
+      const enqBeds = Number(enqField(/^bedrooms?$/i)) || null;
+      const bedsNote = enqBeds && found.beds != null && found.beds !== enqBeds ? ` The landlord said ${enqBeds} bedrooms; the property register has ${found.beds}, so ${enqBeds} is used.` : "";
       /* What the lookups are sure of wins; what only the agent knows stays. */
       const next: PropertyFactsData = {
         ...prop, ...found,
         type: found.type || prop.type,
-        beds: found.beds ?? prop.beds ?? (Number(enqField(/^bedrooms?$/i)) || null),
+        beds: enqBeds ?? found.beds ?? prop.beds,
         baths: prop.baths, receptions: prop.receptions,
         image: found.image ?? prop.image, rexPropertyId: found.rexPropertyId ?? prop.rexPropertyId,
         matched: found.matched === "rex" ? "rex" : prop.matched === "rex" ? "rex" : found.matched,
@@ -1172,7 +1176,7 @@ export default function LeadDrawer({
       changeProp(next);
       setNearMisses(j.nearMisses ?? []);
       const filled: string[] = j.filled ?? [], missing: string[] = j.missing ?? [];
-      setFillNote(`${filled.length ? `Filled in ${filled.join(", ")}.` : "Nothing new found."}${missing.length ? ` Could not find ${missing.join("; ")}.` : ""}`);
+      setFillNote(`${filled.length ? `Filled in ${filled.join(", ")}.` : "Nothing new found."}${missing.length ? ` Could not find ${missing.join("; ")}.` : ""}${bedsNote}`);
       if (next.address && next.address !== contact.area) {
         setContact((c) => ({ ...c, area: next.address! }));
         void saveField({ address: next.address, ...(next.postcode ? { postcode: next.postcode } : {}) });
