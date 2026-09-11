@@ -689,6 +689,22 @@ export default function LeadDrawer({
   /* The pop-outs: activity, the property finder, the more menu, removal. */
   const [activityOpen, setActivityOpen] = useState(false);
   const [enquiryOpen, setEnquiryOpen] = useState(false);
+  /* How tall the notes box is: whatever they last dragged it to, on this
+     machine, for every lead. */
+  const notesBox = useRef<HTMLDivElement | null>(null);
+  const [notesH, setNotesH] = useState<number>(260);
+  useEffect(() => {
+    try {
+      const v = Number(localStorage.getItem("tle-lead-notes-h"));
+      if (v >= 160 && v <= 1200) setNotesH(v);
+    } catch { /* private window */ }
+  }, []);
+  const rememberNotesH = () => {
+    const h = notesBox.current?.getBoundingClientRect().height;
+    if (!h || Math.abs(h - notesH) < 2) return;
+    setNotesH(h);
+    try { localStorage.setItem("tle-lead-notes-h", String(Math.round(h))); } catch { /* fine */ }
+  };
   /* Sending the passport walks through frames (James, 11 Sep 2026): is this
      the right address, sending, sent. */
   const [passportFlow, setPassportFlow] = useState<"ask" | "sending" | "sent" | "failed" | null>(null);
@@ -2440,10 +2456,17 @@ export default function LeadDrawer({
               its own column, only when it has to. No "lead summary" card —
               the agent's own notes ARE the summary. ── */}
           <div
-            className={`mt-3 flex min-h-[200px] flex-1 flex-col rounded-3xl border border-line/80 bg-card p-5 ${
+            ref={notesBox}
+            style={{ height: notesH }}
+            onPointerUp={rememberNotesH}
+            className={`relative mt-3 flex shrink-0 flex-col rounded-3xl border border-line/80 bg-card p-5 [resize:vertical] overflow-hidden ${
               appraisalTakesOver ? "hidden" : ""
             }`}
           >
+            {/* The grab handle: drag the bottom edge and it stays that size on
+                every lead (James, 11 Sep 2026). The box carries CSS resize; this
+                only draws where to grab. */}
+            <span aria-hidden className="pointer-events-none absolute bottom-1.5 left-1/2 h-1 w-10 -translate-x-1/2 rounded-full bg-line" />
             <h3 className="mb-4 flex items-center gap-2.5 text-[15px] font-semibold">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
                 <DoodleIcon name="note" size={14} />

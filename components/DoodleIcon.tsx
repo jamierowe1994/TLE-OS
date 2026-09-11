@@ -39,8 +39,11 @@ export default function DoodleIcon({
         maskImage: url,
         WebkitMaskRepeat: "no-repeat",
         maskRepeat: "no-repeat",
-        WebkitMaskSize: "contain",
-        maskSize: "contain",
+        /* 90%, not contain: the drawings run to the very edge of their
+           viewBox, and at 13px the top stroke of a head or a speech bubble
+           was being lost to anti-aliasing (James, 11 Sep 2026). */
+        WebkitMaskSize: "90%",
+        maskSize: "90%",
         WebkitMaskPosition: "center",
         maskPosition: "center",
       }}

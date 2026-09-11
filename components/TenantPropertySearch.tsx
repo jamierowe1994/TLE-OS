@@ -90,7 +90,8 @@ export default function TenantPropertySearch({
   const [type, setType] = useState("");
   const [maxRent, setMaxRent] = useState<number | null>(null);
   const [within, setWithin] = useState<number | null>(5);
-  const [showMap, setShowMap] = useState(mapSide);
+  /* The map is up from the start; hiding it is the option (James, 11 Sep 2026). */
+  const [showMap, setShowMap] = useState(true);
 
   useEffect(() => {
     let live = true;
@@ -173,13 +174,11 @@ export default function TenantPropertySearch({
   const clear = () => { setQ(""); setTown(""); setType(""); setMaxRent(null); setWithin(5); };
   const filtered = Boolean(q || town || type || maxRent != null || (centre && within !== 5));
 
-  const field =
-    "rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink";
 
   const list = (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <label className="flex flex-1 items-center gap-2 rounded-xl border border-line/80 px-3 py-2 focus-within:border-ink">
+        <label className="flex h-9 min-w-[200px] flex-1 items-center gap-2 rounded-full border border-line/80 px-3.5 focus-within:border-ink">
           <DoodleIcon name="search" size={13} className="shrink-0 text-muted" />
           <input
             value={q}
@@ -188,31 +187,35 @@ export default function TenantPropertySearch({
             className="w-full min-w-0 bg-transparent text-[12.5px] outline-none placeholder:text-muted/70"
           />
         </label>
-        <select value={town} onChange={(e) => setTown(e.target.value)} className={field}>
-          <option value="">Anywhere</option>
-          {towns.map(([t, n]) => <option key={t} value={t}>{t} ({n})</option>)}
-        </select>
-        <select value={type} onChange={(e) => setType(e.target.value)} className={field}>
-          <option value="">Any type</option>
-          {types.map(([t, n]) => <option key={t} value={t}>{t} ({n})</option>)}
-        </select>
-        <select
-          value={maxRent ?? ""}
-          onChange={(e) => setMaxRent(e.target.value ? Number(e.target.value) : null)}
-          className={field}
-        >
-          <option value="">Any rent</option>
-          {[600, 800, 1000, 1250, 1500, 2000, 3000].map((n) => (
-            <option key={n} value={n}>Up to {money(n)}</option>
-          ))}
-        </select>
+        <Pick
+          icon="target"
+          label="Anywhere"
+          value={town}
+          options={towns.map(([t, n]) => ({ value: t, label: t, count: n }))}
+          onChange={setTown}
+        />
+        <Pick
+          icon="home"
+          label="Any type"
+          value={type}
+          options={types.map(([t, n]) => ({ value: t, label: t, count: n }))}
+          onChange={setType}
+        />
+        <Pick
+          icon="coin"
+          label="Any rent"
+          value={maxRent ? String(maxRent) : ""}
+          options={[600, 800, 1000, 1250, 1500, 2000, 3000].map((n) => ({ value: String(n), label: `Up to ${money(n)}` }))}
+          onChange={(v) => setMaxRent(v ? Number(v) : null)}
+        />
         {!mapSide && (
         <button
           type="button"
           onClick={() => setShowMap((m) => !m)}
-          className={`rounded-full border px-3.5 py-2 text-[11.5px] font-semibold transition-colors ${showMap ? "border-ink bg-ink text-page" : "border-line/80 hover:border-ink"}`}
+          className={`flex h-9 items-center gap-2 rounded-full border px-4 text-[12px] font-semibold transition-colors ${showMap ? "border-line/80 text-muted hover:text-ink" : "border-ink bg-ink text-page"}`}
         >
-          {showMap ? "Hide map" : "Map"}
+          <DoodleIcon name="search" size={13} />
+          {showMap ? "Hide map" : "Show map"}
         </button>
         )}
       </div>
@@ -440,4 +443,75 @@ function SearchMap({
     );
   }
   return <div ref={holder} className={`${tall ? "h-[64vh] min-h-[380px]" : "h-[320px]"} w-full overflow-hidden rounded-2xl border border-line/70 ${className}`} />;
+}
+
+
+/**
+ * The three filters as the OS's own pills rather than the browser's select
+ * (James, 11 Sep 2026): a pill that opens a list, a tick on the one chosen,
+ * the count beside each, and "Any" at the top to clear it.
+ */
+function Pick({
+  icon,
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+  options: { value: string; label: string; count?: number }[];
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    window.addEventListener("pointerdown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => { window.removeEventListener("pointerdown", onDown); window.removeEventListener("keydown", onKey); };
+  }, [open]);
+  const on = value !== "";
+  const shown = options.find((o) => o.value === value)?.label ?? label;
+  return (
+    <div ref={box} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className={`flex h-9 items-center gap-2 whitespace-nowrap rounded-full border px-4 text-[12px] transition-colors ${
+          on ? "border-brown bg-brown font-semibold text-white" : "border-line/80 text-ink hover:border-ink/40"
+        }`}
+      >
+        <DoodleIcon name={icon} size={13} />
+        {shown}
+        <span className="text-[8px] opacity-70">▾</span>
+      </button>
+      {open && (
+        <div className="frame-grow absolute left-0 top-full z-30 mt-1.5 w-60 rounded-2xl border border-line/80 bg-card p-1.5 shadow-[0_18px_40px_-16px_rgba(16,16,20,0.35)]">
+          <ul className="max-h-64 overflow-y-auto">
+            {[{ value: "", label }, ...options].map((o) => {
+              const picked = o.value === value;
+              return (
+                <li key={o.value || "any"}>
+                  <button
+                    type="button"
+                    onClick={() => { onChange(o.value); setOpen(false); }}
+                    className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[12.5px] transition-colors hover:bg-page ${picked ? "font-semibold" : ""}`}
+                  >
+                    <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-[1.5px] text-[9px] ${picked ? "border-brown bg-brown text-white" : "border-line"}`}>{picked && "✓"}</span>
+                    <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                    {o.count != null && <span className="figures text-[10.5px] text-muted">{o.count}</span>}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
 }
