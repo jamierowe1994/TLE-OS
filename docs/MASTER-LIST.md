@@ -30,6 +30,11 @@
 > - **Open a listing, press Book a viewing: "Who's viewing?" lists sample applicants (Sarah Johnson, Tom Williams...) from `lib/leads-sample.ts`, not REX, and the agent is always "Kirstie".** Nothing is saved - the booking lives on that screen until it closes. (Booking from a lead is the real path.)
 > - **DONE 11 Sep: HIDDEN FOR THE PILOT.** All three ways in on a listing (the step's Book a viewing, Arrange viewing, Book viewing) are gone; the step says to book from the lead or in REX. Switch: `LISTING_BOOKER_LIVE` in `lib/viewing-sends.ts`.
 
+> **ROUND 3 - THREE THINGS I CAN'T FINISH ON MY OWN (11 SEP)**
+> - **POSTCARDS CAN'T USE MANROPE OR INTER YET.** The print file embeds real font files and we don't have these two. **Say yes and I'll download them from Google Fonts** (4 files, about 0.5MB, free SIL Open Font Licence) and add them. The new palette colours are already in the postcard designer.
+> - **THE TERMS-SIGNING PAGE IS DOCUSEAL'S, NOT OURS.** Its colours and logo are set in DocuSeal's own account settings (Settings, Personalization), so that's a job for whoever holds the DocuSeal login.
+> - **THE DECKS ARE YOURS** (you said leave /present alone). They still run on Lora, Ms Madi and Shantell. Tell me when I can move them to Manrope and Inter.
+
 > **DECISION NEEDED FROM YOU, OR IT BLOCKS**
 > - **A1 - WHO IS IN THE PILOT.** Eleven items cannot start until agents can sign in. **This is the single biggest blocker.**
 > - **D8 - STANNP IS LIVE.** A postcard sent from Bond is really printed and posted. Confirm, or I put it back into test mode.
@@ -67,7 +72,7 @@ Tick them off by number. Rounds 1 and 2 run at the same time: Round 1 is mine, R
 | 12 | **DONE 11 Sep - awaiting push.** Tokens for the palette; `data-surface` on the landlord and tenant shells; brown buttons and pink washes on both, clay accent for landlords, sage for tenants. Change a surface in one place in globals.css. Was: **Each surface gets its own colour settings** - the OS, the landlord sign-in and portal, the tenant sign-in and portal - all drawn from one extended palette, with sage and dark brown brought in to balance the pink and give contrast |
 | 13 | **DONE 11 Sep - awaiting push.** Every catalogue email already said who it was for; the letterhead now follows it - landlord and tenant emails on pink with brown headings and button, team and trade emails keep the red, all on Manrope and Inter. **Also fixed: production never had the logo address set, so every landlord and tenant email went out with no TLE logo and a serif fallback - they now carry the logo.** Was: **Give the email template a switch for who it is for**, so an agent's email and a landlord's email each take their own colours. Today one template serves both and cannot tell them apart. |
 | 14 | Emails, the landlord portal (reads colour settings - clean) and the tenant portal (41 colours and one font hardcoded - the bigger job) in the new colours and fonts, previewed before anything goes |
-| 15 | Landlord-facing documents in the new colours and fonts: invoice, terms signing, the decks, postcards |
+| 15 | **PART DONE 11 Sep - awaiting push.** The invoice (brown heading and marks) and the tenant and landlord pages it opens from (pink ground); the palette colours in the postcard designer. **Not done: postcard fonts (need the font files), DocuSeal's signing page (DocuSeal's settings), the decks (yours) - see the top.** Was: Landlord-facing documents in the new colours and fonts: invoice, terms signing, the decks, postcards |
 
 ### Round 4 - pilot readiness (Claude, with you where marked)
 | # | What |

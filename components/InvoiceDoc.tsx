@@ -92,9 +92,11 @@ export default function InvoiceDoc({ inv, onChange }: { inv: DocData; onChange?:
 
   return (
     <div className={`inv ${inv.status === "draft" ? "inv-draft" : ""}`}>
+      {/* A landlord's document, so the landlord palette (11 Sep 2026): brown
+          heading and marks, pink and clay where it is being edited. */}
       <style>{`
         .inv { background:#fff; color:#101014; font-family: var(--font-body, Inter, system-ui, sans-serif); font-size: 13px; line-height: 1.5; padding: 48px 52px; max-width: 800px; margin: 0 auto; min-height: 1000px; position: relative; }
-        .inv h1 { font-size: 30px; font-weight: 500; letter-spacing: 0; margin: 0; }
+        .inv h1 { font-family: var(--font-heading, Manrope, Inter, sans-serif); font-size: 30px; font-weight: 800; letter-spacing: -0.02em; margin: 0; color: #56423e; }
         .inv-muted { color: #6b6b70; }
         .inv-small { font-size: 11px; }
         .inv-row { display: flex; justify-content: space-between; gap: 32px; }
@@ -110,11 +112,11 @@ export default function InvoiceDoc({ inv, onChange }: { inv: DocData; onChange?:
         .inv-foot { margin-top: 36px; padding-top: 16px; border-top: 1px solid #cdc9c0; }
         .inv-ph { color: #b6b4ae; font-style: italic; }
         .inv-edit { outline: none; border-bottom: 1px dashed transparent; border-radius: 2px; min-width: 1em; display: inline-block; }
-        .inv-edit:hover { background: #ffe4df66; border-bottom-color: #de968f; }
-        .inv-edit:focus { background: #ffe4df99; border-bottom-color: #a85a51; }
+        .inv-edit:hover { background: #fdefec; border-bottom-color: #cfa096; }
+        .inv-edit:focus { background: #fdefec; border-bottom-color: #56423e; }
         .inv-edit:empty:before { content: attr(data-placeholder); color: #b6b4ae; font-style: italic; }
-        .inv-stamp { position: absolute; top: 44px; right: 52px; border: 2px solid #a85a51; color: #a85a51; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; font-size: 11px; padding: 4px 10px; transform: rotate(-6deg); }
-        .inv-del { border: 0; background: none; color: #a85a51; cursor: pointer; font-size: 14px; padding: 0 4px; }
+        .inv-stamp { position: absolute; top: 44px; right: 52px; border: 2px solid #56423e; color: #56423e; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; font-size: 11px; padding: 4px 10px; transform: rotate(-6deg); }
+        .inv-del { border: 0; background: none; color: #56423e; cursor: pointer; font-size: 14px; padding: 0 4px; }
         .inv-add { border: 1px dashed #cdc9c0; background: none; color: #6b6b70; cursor: pointer; font-size: 12px; padding: 8px 12px; border-radius: 8px; margin-top: 8px; width: 100%; text-align: left; }
         @media print { .inv { padding: 0; min-height: 0; } .inv-add, .inv-del { display: none; } .inv-edit { border: 0; background: none; } }
       `}</style>

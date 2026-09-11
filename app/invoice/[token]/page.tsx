@@ -15,7 +15,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ token:
   const inv = await getInvoiceByToken(token);
   if (!inv || inv.status === "draft") notFound();
   return (
-    <main style={{ minHeight: "100vh", background: "#f2f0eb", padding: "24px 12px 48px", fontFamily: "var(--font-body)" }}>
+    <main style={{ minHeight: "100vh", background: "#fdefec", padding: "24px 12px 48px", fontFamily: "var(--font-body)" }}>
       <div style={{ maxWidth: 800, margin: "0 auto 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }} className="inv-bar">
         <span style={{ fontSize: 12, color: "#6b6b70" }}>{inv.from.companyName} · Invoice {inv.number}</span>
         <PrintButton />

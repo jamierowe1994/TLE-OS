@@ -11,7 +11,9 @@
  * this kind of email normally loses people.
  */
 
-const RED = "#e31f36";
+/* The tenant palette's call to action (11 Sep 2026). A literal, not the
+   surface token: this page stands in for an email, and email has no CSS vars. */
+const CTA = "#56423e";
 
 const VIEWING = {
   first: "Sophie",
@@ -56,7 +58,7 @@ export default function FeedbackEmailPreview() {
       >
         <tbody>
           <tr>
-            <td style={{ background: RED, padding: "18px 28px" }}>
+            <td style={{ background: CTA, padding: "18px 28px" }}>
               <span style={{ color: "#fff", fontSize: 15, fontWeight: 700, letterSpacing: "-0.01em" }}>
                 The Letting Experts
               </span>
@@ -114,7 +116,7 @@ export default function FeedbackEmailPreview() {
                 href="/tenant/feedback"
                 style={{
                   display: "block",
-                  background: RED,
+                  background: CTA,
                   color: "#ffffff",
                   textDecoration: "none",
                   textAlign: "center",

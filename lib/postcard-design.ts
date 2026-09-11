@@ -36,6 +36,9 @@ export const ADDRESS_ZONE = { x: 76, y: 28, w: 66, h: 44 } as const;
 export type FontKey = "playfair" | "lora" | "shantell" | "script" | "montserrat";
 
 export const FONTS: { key: FontKey; name: string; css: string; note: string }[] = [
+  /* Manrope and Inter (the type since 11 Sep 2026) are NOT offered here yet:
+     lib/postcard-pdf embeds a real TTF for every face in the print file, and
+     lib/fonts has none for them. Add the files and both entries together. */
   { key: "playfair", name: "Playfair", css: "var(--font-postcard), Georgia, serif", note: "The high-contrast serif from the mock-up" },
   { key: "lora", name: "Lora", css: "var(--font-display), Georgia, serif", note: "The brand's supporting serif" },
   { key: "shantell", name: "Shantell", css: "var(--font-shantell), cursive", note: "The OS hand, used for our own headings" },
@@ -43,7 +46,7 @@ export const FONTS: { key: FontKey; name: string; css: string; note: string }[] 
   { key: "montserrat", name: "Montserrat", css: "var(--font-montserrat), system-ui, sans-serif", note: "Body copy" },
 ];
 
-export type ColourKey = "ink" | "muted" | "clay" | "sage" | "paper";
+export type ColourKey = "ink" | "muted" | "clay" | "sage" | "paper" | "brown" | "pink" | "softclay" | "softsage";
 
 export const COLOURS: { key: ColourKey; name: string; hex: string }[] = [
   { key: "ink", name: "Ink", hex: "#101014" },
@@ -51,6 +54,12 @@ export const COLOURS: { key: ColourKey; name: string; hex: string }[] = [
   { key: "clay", name: "Clay", hex: "#c76f4f" },
   { key: "sage", name: "Sage", hex: "#7d9075" },
   { key: "paper", name: "Paper", hex: "#fbfaf7" },
+  /* The extended palette (11 Sep 2026), alongside the originals for the
+     same reason as the fonts above. */
+  { key: "brown", name: "Dark brown", hex: "#56423e" },
+  { key: "pink", name: "Light pink", hex: "#fdefec" },
+  { key: "softclay", name: "Palette clay", hex: "#cfa096" },
+  { key: "softsage", name: "Palette sage", hex: "#b3bea5" },
 ];
 
 export type IllustrationKey = "landlord-garden" | "landlord-street" | "landlord-feet-up" | "settled-tenant";
@@ -235,7 +244,10 @@ export function faultsIn(d: PostcardDesign): DesignFault[] {
 
 export const isSendable = (d: PostcardDesign) => faultsIn(d).length === 0;
 
-export const fontFor = (k: FontKey | undefined) => FONTS.find((f) => f.key === k) ?? FONTS[0];
+/* A layer with no font keeps Playfair, named rather than FONTS[0]: the list
+   now opens with Manrope, and a saved card must not change face by itself. */
+export const fontFor = (k: FontKey | undefined) =>
+  FONTS.find((f) => f.key === k) ?? FONTS.find((f) => f.key === "playfair")!;
 export const colourFor = (k: ColourKey | undefined) => COLOURS.find((c) => c.key === k) ?? COLOURS[0];
 export const illustrationFor = (k: IllustrationKey | undefined) => ILLUSTRATIONS.find((i) => i.key === k) ?? ILLUSTRATIONS[0];
 
