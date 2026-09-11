@@ -347,7 +347,7 @@ export default function Leads() {
             )}
             <PressButton
               onClick={() => setCreating(true)}
-              className="flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page"
+              className="flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-page"
             >
               <span className="text-[15px] leading-none">+</span> New lead
             </PressButton>

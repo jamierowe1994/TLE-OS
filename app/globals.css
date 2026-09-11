@@ -60,7 +60,15 @@
 :root[data-accent="red"] {
   --accent: #e31f36;
   --accent-dark: #c11a2e;
-  --accent-soft: #fef2f2;
+  /* Was #fef2f2, which is a white with a rumour of pink in it. Every tinted
+     surface in the OS is this token at 20-70% opacity, so a near-white soft
+     tone means picking Red changes the icons and leaves every FILL looking
+     like the clay theme's washed-out cousin - James, 10 Sep 2026: "I'm in the
+     red at the moment and we're still using a lot of the pinks... they need
+     to be a little bit more red to make sure it feels like we're actually
+     using the red." Same distance from its accent as Clay's soft is from
+     Clay, so a fill reads as the colour that was chosen. */
+  --accent-soft: #fbd8db;
 }
 
 

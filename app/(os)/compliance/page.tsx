@@ -176,8 +176,16 @@ export default function Compliance() {
                 `Live from REX — ${BOOK.length} homes we manage. ${noGas} have no gas supply, from the signed terms or REX PM's own record; ${gasUnknown} have nobody's answer either way, which is unknown rather than exempt. Let-only homes are the landlord's duty and are not on this screen.`
               : (source.reason ?? "Every certificate on every home, and the button that fixes each one.")
         }
-        illustration="/illustrations/notioly/home-caring.svg"
-        lineBreak="dip"
+        /* James's own artwork, trimmed to its ink so the drawing's own
+           ground line IS the bottom edge of the file - that is what lands it
+           ON the rule rather than near it. A wide scene, so the aspect is
+           passed and the text block reserves the real width instead of the
+           measured steps for a tall figure. */
+        illustration="/illustrations/compliance-selfie.webp"
+        illustrationHeight={250}
+        illustrationAspect={1.7998}
+        illustrationNudge={-10}
+        lineBreak="none"
       />
 
       {/* ── The four counts. Each is also the filter for the book below. ── */}

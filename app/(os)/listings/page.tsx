@@ -431,7 +431,7 @@ export default function Listings() {
             />
             <button
               type="button"
-              className="hand flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] text-page transition-opacity hover:opacity-90"
+              className="hand flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] text-page transition-opacity hover:opacity-90"
             >
               <span className="text-base leading-none">+</span> Add new listing
             </button>

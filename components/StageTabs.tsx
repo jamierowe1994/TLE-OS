@@ -56,7 +56,7 @@ export default function StageTabs<T extends string>({
 }) {
   return (
     <nav
-      className="fade-up mt-4 -mx-1 flex gap-1 overflow-x-auto px-1 pb-1"
+      className="fade-up mt-4 -mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1"
       aria-label={label}
     >
       {stages.map((st, i, arr) => {
@@ -83,7 +83,7 @@ export default function StageTabs<T extends string>({
               <span className="mt-1.5 block text-[11.5px] leading-tight">{st.label}</span>
             </button>
             {flow && i < arr.length - 1 && (
-              <span aria-hidden className="px-0.5 text-[11px] text-muted/50">
+              <span aria-hidden className="px-1.5 text-[11px] text-muted/50">
                 &rsaquo;
               </span>
             )}

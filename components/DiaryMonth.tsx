@@ -332,7 +332,7 @@ export default function DiaryMonth({
 
       {/* ── The chosen day, then the week ahead ──────────────────────── */}
       <div className="flex flex-col gap-4">
-        <div className="rounded-2xl border border-line/80 bg-page p-5">
+        <div className="rounded-2xl border border-line/80 bg-panel p-5">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line/70 pb-3">
             <h2 className="text-[17px] leading-tight">{fmtFull(selDate)}</h2>
             {selNear && <Pill tone={selected === 0 ? "accent" : "neutral"}>{selNear}</Pill>}
@@ -383,7 +383,7 @@ export default function DiaryMonth({
           )}
         </div>
 
-        <div className="rounded-2xl border border-line/80 bg-page p-5">
+        <div className="rounded-2xl border border-line/80 bg-panel p-5">
           <div className="flex flex-wrap items-baseline gap-3">
             <h3 className="text-[14px] leading-none">The week ahead</h3>
             <span className="ml-auto text-[11px] text-muted">
