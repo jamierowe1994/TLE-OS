@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Lora, Manrope, Montserrat, Ms_Madi, Oooh_Baby, Shantell_Sans } from "next/font/google";
+import { Boogaloo, Cherry_Bomb_One, Delicious_Handrawn, Handlee, Inter, Lora, Manrope, Montserrat, Ms_Madi, Oooh_Baby, Shantell_Sans } from "next/font/google";
 import "./globals.css";
 
 /**
@@ -30,6 +30,13 @@ const ooohBaby = Oooh_Baby({
   variable: "--font-oooh-baby",
   display: "swap",
 });
+
+/* The rest of the title-font trial (components/TitleFontPicker). Loaded only
+   while James picks; one weight each. */
+const delicious = Delicious_Handrawn({ subsets: ["latin"], weight: "400", variable: "--font-delicious", display: "swap" });
+const cherry = Cherry_Bomb_One({ subsets: ["latin"], weight: "400", variable: "--font-cherry", display: "swap" });
+const boogaloo = Boogaloo({ subsets: ["latin"], weight: "400", variable: "--font-boogaloo", display: "swap" });
+const handlee = Handlee({ subsets: ["latin"], weight: "400", variable: "--font-handlee", display: "swap" });
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -123,7 +130,7 @@ export default function RootLayout({
     // heading silently falls back to system fonts.
     <html
       lang="en"
-      className={`${manrope.variable} ${inter.variable} ${ooohBaby.variable} ${montserrat.variable} ${shantell.variable} ${msMadi.variable} ${lora.variable}`}
+      className={`${manrope.variable} ${inter.variable} ${ooohBaby.variable} ${delicious.variable} ${cherry.variable} ${boogaloo.variable} ${handlee.variable} ${montserrat.variable} ${shantell.variable} ${msMadi.variable} ${lora.variable}`}
     >
       <body className="antialiased">{children}</body>
     </html>

@@ -79,6 +79,23 @@
   letter-spacing: 0;
 }
 
+/* The title-font picker (components/TitleFontPicker) - the same trial, one
+   face at a time. No attribute means Oooh Baby, above. */
+:root[data-title-font="delicious"] .os-type { --font-heading: var(--font-delicious), var(--font-manrope), cursive; }
+:root[data-title-font="cherry"] .os-type { --font-heading: var(--font-cherry), var(--font-manrope), cursive; }
+:root[data-title-font="boogaloo"] .os-type { --font-heading: var(--font-boogaloo), var(--font-manrope), cursive; }
+:root[data-title-font="handlee"] .os-type { --font-heading: var(--font-handlee), var(--font-manrope), cursive; }
+:root[data-title-font="manrope"] .os-type { --font-heading: var(--font-manrope), var(--font-inter), system-ui, sans-serif; }
+/* Manrope has the weights the scripts lack, so it gets its extrabold back. */
+:root[data-title-font="manrope"] .os-type :is(h1, h2, .hand):not(.type-admin .type-admin *) {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+:root[data-title-font="manrope"] .os-type :is(h3, h4, h5):not(.type-admin .type-admin *) {
+  font-weight: 700;
+  letter-spacing: -0.012em;
+}
+
 /* ---------------------------------------------------------------------------
    EACH CUSTOMER SURFACE RUNS ITS OWN COLOURS (James, 11 Sep 2026).
    The OS keeps each agent's accent choice (data-accent on <html>). The
