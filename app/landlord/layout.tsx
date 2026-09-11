@@ -113,10 +113,13 @@ export default async function LandlordLayout({ children }: { children: React.Rea
           )}
         </nav>
 
-        <main className="mx-auto max-w-[1280px] px-5 pb-12 pt-8 sm:px-10">{children}</main>
+        {/* No max width and no centring (James, 11 Sep): the boxes scale with
+            the window like the search bar does, and everything starts on the
+            search bar's left edge - the same px-5 / sm:px-10 as the header. */}
+        <main className="px-5 pb-12 pt-8 sm:px-10">{children}</main>
 
         <footer>
-          <div className="mx-auto flex max-w-[1280px] flex-wrap items-center justify-between gap-3 px-5 py-6 text-[11.5px] text-muted sm:px-10">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-6 text-[11.5px] text-muted sm:px-10">
             <span>The Letting Experts · thelettingexperts.co.uk</span>
             <span className="flex gap-4">
               <a href="#" className="transition-colors hover:text-ink">Privacy and your data</a>

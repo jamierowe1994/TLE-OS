@@ -30,12 +30,6 @@ const cta =
 const SAGE_INK = "#56634a";
 const SAGE_WASH = "#f1f4ec";
 
-/** The time of day in London, whatever the server's clock says. */
-function partOfDay(): string {
-  const h = Number(new Intl.DateTimeFormat("en-GB", { hour: "numeric", hourCycle: "h23", timeZone: "Europe/London" }).format(new Date()));
-  return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
-}
-
 export default function LandlordDashboard({
   view: v,
   upload,
@@ -59,9 +53,9 @@ export default function LandlordDashboard({
     <div className="space-y-6">
       {/* ── greeting and the agent ── */}
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_auto]">
+        {/* Just "Hello, Raj" - the "Good afternoon" above it read oddly (James, 11 Sep). */}
         <div className="pt-2">
-          <p className={eyebrow}>{partOfDay()}</p>
-          <h1 className="mt-2 text-[44px] leading-[1.05]">{v.greeting}</h1>
+          <h1 className="text-[44px] leading-[1.05]">{v.greeting}</h1>
           <p className="mt-3 max-w-xl text-[14.5px] text-muted">{v.intro}</p>
         </div>
         {v.agent && (
