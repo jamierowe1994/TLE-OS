@@ -74,8 +74,8 @@
 
 /* ---------------------------------------------------------------------------
    EACH CUSTOMER SURFACE RUNS ITS OWN COLOURS (James, 11 Sep 2026).
-   The OS keeps each agent's accent choice (data-accent on <html>). The
-   landlord and tenant surfaces stamp data-surface on their shell, which
+   The OS runs the house clay for every agent (the accent picker went on
+   11 Sep 2026 - "not going to be cohesive"). The landlord and tenant surfaces stamp data-surface on their shell, which
    redefines the same three tokens for everything inside, so an agent's red
    never leaks into a landlord's page. Change a surface's look here, and only
    here. Buttons and calls to action are the brown on both - the contrast the
@@ -93,31 +93,6 @@
   --accent: var(--pal-sage);
   --accent-dark: var(--pal-brown);
   --accent-soft: var(--pal-pink);
-}
-
-/* ---------------------------------------------------------------------------
-   Accent customisation: every agent gets to pick their palette. The switcher
-   in the profile menu stamps data-accent on <html>; clay is the default and
-   needs no attribute. Everything downstream uses the tokens, so a theme is
-   three variables, not a restyle.
---------------------------------------------------------------------------- */
-:root[data-accent="blush"] {
-  --accent: #f0b3bb;
-  --accent-dark: #b06a74;
-  --accent-soft: #fdeef0;
-}
-:root[data-accent="red"] {
-  --accent: #e31f36;
-  --accent-dark: #c11a2e;
-  /* Was #fef2f2, which is a white with a rumour of pink in it. Every tinted
-     surface in the OS is this token at 20-70% opacity, so a near-white soft
-     tone means picking Red changes the icons and leaves every FILL looking
-     like the clay theme's washed-out cousin - James, 10 Sep 2026: "I'm in the
-     red at the moment and we're still using a lot of the pinks... they need
-     to be a little bit more red to make sure it feels like we're actually
-     using the red." Same distance from its accent as Clay's soft is from
-     Clay, so a fill reads as the colour that was chosen. */
-  --accent-soft: #fbd8db;
 }
 
 

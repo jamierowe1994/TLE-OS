@@ -9,12 +9,10 @@ import {
   StepLook,
   StepRex,
   Welcome,
-  chooseAccent,
   chooseTheme,
 } from "@/components/setup/steps";
 import { useSetup } from "@/lib/setup-store";
 import { firstUnfinished, isStepDone, STEP_ORDER, type SetupStepId } from "@/lib/setup";
-import { readAccent } from "@/lib/accents";
 import { readTheme, type ThemeChoice } from "@/lib/theme";
 import { mailboxProblem } from "@/lib/mailbox-outcome";
 
@@ -48,7 +46,6 @@ export default function Wizard({
 
   const [screen, setScreen] = useState<Screen | null>(null);
   const [direction, setDirection] = useState<"forward" | "back">("forward");
-  const [accent, setAccent] = useState("");
   const [theme, setTheme] = useState<ThemeChoice>("auto");
 
   /* Decided ONCE, on the first load that has an answer. Recomputing it as
@@ -63,7 +60,6 @@ export default function Wizard({
   const dry = replay || forceDemo;
 
   useEffect(() => {
-    setAccent(readAccent());
     setTheme(readTheme() ?? "auto");
   }, []);
 
@@ -160,12 +156,7 @@ export default function Wizard({
 
       {screen === "look" && (
         <StepLook
-          accent={accent}
           theme={theme}
-          onAccent={(id) => {
-            setAccent(id);
-            chooseAccent(id, !forceDemo);
-          }}
           onTheme={(t, e) => {
             setTheme(t);
             chooseTheme(t, { x: e.clientX, y: e.clientY }, !forceDemo);

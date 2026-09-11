@@ -45,12 +45,6 @@ const TABS: { key: TabKey; label: string }[] = [
      Connections tab stays; the environment switches are not theirs. */
 ];
 
-const ACCENTS = [
-  { id: "", label: "Warm Clay", dot: "#de968f" },
-  { id: "blush", label: "Blush", dot: "#f0b3bb" },
-  { id: "red", label: "Classic Red", dot: "#e31f36" },
-];
-
 const PROFILE_KEY = "tle-profile-v1";
 
 type Profile = {
@@ -218,13 +212,10 @@ export default function ProfilePage() {
   const [theme, setTheme] = useState<ThemeChoice>("auto");
   const [darkBg, setDarkBg] = useState(DARK_BG_DEFAULT);
   const [darkBox, setDarkBox] = useState(DARK_BOX_DEFAULT);
-  const [accent, setAccent] = useState("");
-
-  /* Who you are, and the accent you picked, now follow the account. Theme
+  /* Who you are follows the account. Theme
      stays browser-first — it paints before React runs, and a
      round-trip would mean a flash of the wrong colour on every load. */
   const [storedProfile, storeProfile] = usePref<Profile | null>(PROFILE_KEY, null);
-  const [storedAccent, storeAccent] = usePref<string>("os-accent", "");
   const prefsHome = usePrefsHome();
 
   /* Who is actually signed in. The page used to never ask, which is how a
@@ -254,11 +245,6 @@ export default function ProfilePage() {
   }, [storedProfile]);
 
   useEffect(() => {
-    setAccent(storedAccent ?? "");
-    if (storedAccent) document.documentElement.dataset.accent = storedAccent;
-  }, [storedAccent]);
-
-  useEffect(() => {
     setTheme(readTheme() ?? "auto");
     setDarkBg(readDarkStep(DARK_BG_KEY, DARK_BG_DEFAULT));
     setDarkBox(readDarkStep(DARK_BOX_KEY, DARK_BOX_DEFAULT));
@@ -284,12 +270,6 @@ export default function ProfilePage() {
     setTheme(t);
     writeTheme(t);
     applyTheme(t);
-  }
-  function pickAccent(id: string) {
-    setAccent(id);
-    storeAccent(id);
-    if (id) document.documentElement.dataset.accent = id;
-    else delete document.documentElement.dataset.accent;
   }
 
   const initials = profile.name.split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase() || "TLE";
@@ -629,27 +609,9 @@ export default function ProfilePage() {
               </>
             )}
 
-
-
-            <p className={`${label} mt-7`}>Your accent</p>
-            <div className="flex gap-3">
-              {ACCENTS.map((a) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  onClick={() => pickAccent(a.id)}
-                  className={`flex items-center gap-2.5 rounded-full border px-4 py-2.5 text-[12.5px] transition-colors ${
-                    accent === a.id ? "border-accent-dark" : "border-line/70 hover:border-ink/40"
-                  }`}
-                >
-                  <span className="h-5 w-5 rounded-full border border-ink/10" style={{ backgroundColor: a.dot }} />
-                  {a.label}
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
-              Every chart, button and highlight follows your pick — the whole OS, not a stripe.
-            </p>
+            {/* The accent picker lived here until 11 Sep 2026. James: "it's not
+                going to be cohesive" - the OS runs the house clay for everyone
+                now, and the choice that stays is light or dark. */}
           </div>
         )}
 

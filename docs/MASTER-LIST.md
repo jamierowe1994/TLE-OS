@@ -105,8 +105,8 @@ it and the dark brown gives contrast**, used where they are needed rather than e
 | Dark brown | `#56423E` | **Accent** - buttons, calls to action, headings |
 | ~~Pale green~~ | ~~`#EAF6DC`~~ | **Dropped** |
 
-The OS's existing accents stay as the agent's own choice (Warm Clay `#DE968F`, Blush `#F0B3BB`, Classic Red
-`#E31F36`); sage and brown join them as supporting and contrast colours. **The email template is shared
+The OS runs Warm Clay `#DE968F` for every agent - the Blush and Classic Red picker was removed on 11 Sep 2026
+("not going to be cohesive"); light or dark stays the agent's choice. Sage and brown join clay as supporting and contrast colours. **The email template is shared
 between agent and customer emails and cannot tell them apart, so it needs a "who is this for" switch
 before each can take its own colours - item 13.**
 

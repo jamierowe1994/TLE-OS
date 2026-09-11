@@ -3,7 +3,6 @@
 import { useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import RexDino from "@/components/RexDino";
-import { ACCENTS, ACCENT_KEY, applyAccent } from "@/lib/accents";
 import {
   applyDarkPalette,
   applyTheme,
@@ -323,15 +322,11 @@ export function StepHow({ onNext }: { onNext: () => void }) {
    takes effect on Save is a swatch you have to trust; this one you can see. */
 
 export function StepLook({
-  accent,
   theme,
-  onAccent,
   onTheme,
   onNext,
 }: {
-  accent: string;
   theme: ThemeChoice;
-  onAccent: (id: string) => void;
   onTheme: (t: ThemeChoice, e: React.MouseEvent) => void;
   onNext: () => void;
 }) {
@@ -348,30 +343,6 @@ export function StepLook({
         No wrong answers here, and it is all in your profile if you change your
         mind.
       </Blurb>
-
-      <p className={`${LABEL} mt-6 block`}>Accent</p>
-      <div className="mt-2 flex gap-2.5">
-        {ACCENTS.map((a) => {
-          const on = a.id === accent;
-          return (
-            <button
-              key={a.id || "clay"}
-              type="button"
-              onClick={() => onAccent(a.id)}
-              aria-pressed={on}
-              className={`flex flex-1 flex-col items-center gap-2 rounded-xl border px-2 py-3 transition-colors ${
-                on ? "border-ink/50 bg-box" : "border-line/80 hover:border-ink/30"
-              }`}
-            >
-              <span
-                className="h-7 w-7 rounded-full border border-black/10"
-                style={{ backgroundColor: a.dot }}
-              />
-              <span className="text-[11px] leading-tight">{a.label}</span>
-            </button>
-          );
-        })}
-      </div>
 
       <p className={`${LABEL} mt-6 block`}>Light or dark</p>
       <div className="mt-2 flex gap-2.5">
@@ -402,27 +373,10 @@ export function StepLook({
 }
 
 /* Applying a look, in one place so the step and the page cannot disagree
-   about what "chose an accent" means. Exported because the page owns the
-   state and the step only reports clicks. */
-
-/* `persist` is false in the public preview. The colour still changes on
-   screen, because seeing it is the entire point of the step - but a page
-   shared with somebody outside the company does not call our API. */
-export function chooseAccent(id: string, persist = true) {
-  applyAccent(id);
-  try {
-    localStorage.setItem(ACCENT_KEY, id);
-  } catch {
-    /* private browsing; the account copy below still carries it */
-  }
-  if (!persist) return;
-  void fetch("/api/prefs", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ key: ACCENT_KEY, value: id }),
-  }).catch(() => {});
-}
-
+   about what "chose a theme" means. Exported because the page owns the
+   state and the step only reports clicks. `persist` is false in the public
+   preview: the screen still changes, because seeing it is the point of the
+   step, but a page shared outside the company does not call our API. */
 export function chooseTheme(
   choice: ThemeChoice,
   origin?: { x: number; y: number },

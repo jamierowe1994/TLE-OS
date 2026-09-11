@@ -19,18 +19,6 @@ import { FRONT, BACK, railFor, type NavItem } from "@/lib/nav";
  * has to be able to read the same list in order to send anyone to a screen.
  */
 
-/** Clay is the house default; the attribute only exists for the others. */
-const ACCENTS = [
-  { id: "", label: "Warm Clay", dot: "#de968f" },
-  { id: "blush", label: "Blush", dot: "#f0b3bb" },
-  { id: "red", label: "Classic Red", dot: "#e31f36" },
-];
-
-function applyAccent(id: string) {
-  if (id) document.documentElement.dataset.accent = id;
-  else delete document.documentElement.dataset.accent;
-}
-
 function NavLink({
   item,
   active,
@@ -208,7 +196,6 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     });
   }, [pathname]);
   const [collapsed, setCollapsed] = useState(false);
-  const [accent, setAccent] = useState("");
   const [theme, setTheme] = useState<ThemeChoice>("auto");
   /* The one extra screen this person holds, if any — James gets Admin, Susan
      gets Company figures, Kirstie Pre-tenancy, Francesca Marketing, an agent
@@ -245,9 +232,12 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const mine = role === undefined ? [] : railFor(role, subjectRole);
 
   useEffect(() => {
-    const saved = localStorage.getItem("os-accent") ?? "";  // instant paint; the account copy syncs via usePref on the profile
-    setAccent(saved);
-    applyAccent(saved);
+    /* The accent picker is gone (11 Sep 2026): the OS runs the house clay
+       for everyone. Anyone who had chosen Blush or Red before that would
+       otherwise keep it on this browser for ever, so the choice is cleared
+       here rather than merely no longer offered. */
+    delete document.documentElement.dataset.accent;
+    try { localStorage.removeItem("os-accent"); } catch {}
     setCollapsed(localStorage.getItem("os-nav-collapsed") === "1");
     setTheme(readTheme() ?? "auto");
   }, []);
@@ -284,12 +274,6 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         detail: { choice: next, origin: { x: e.clientX, y: e.clientY } },
       })
     );
-  }
-
-  function pickAccent(id: string) {
-    setAccent(id);
-    localStorage.setItem("os-accent", id);
-    applyAccent(id);
   }
 
   function toggleCollapsed() {
