@@ -14,8 +14,7 @@ import { useEffect, useRef, useState } from "react";
 const KEY = "tle-title-font";
 
 const OPTIONS = [
-  { key: "oooh", label: "Oooh Baby", note: "The one on now", sample: "var(--font-oooh-baby)" },
-  { key: "delicious", label: "Delicious Handrawn", note: "Marker, hand-drawn", sample: "var(--font-delicious)" },
+  { key: "architects", label: "Architects Daughter", note: "Drafting-table hand", sample: "var(--font-architects)" },
   { key: "cherry", label: "Cherry Bomb One", note: "Round and bubbly", sample: "var(--font-cherry)" },
   { key: "boogaloo", label: "Boogaloo", note: "Chunky, condensed", sample: "var(--font-boogaloo)" },
   { key: "handlee", label: "Handlee", note: "Neat handwriting", sample: "var(--font-handlee)" },
@@ -24,15 +23,15 @@ const OPTIONS = [
 
 type Face = (typeof OPTIONS)[number]["key"];
 
-/** "oooh" is the default in the CSS, so it means no attribute at all. */
+/** "architects" is the default in the CSS, so it means no attribute at all. */
 function apply(face: Face) {
   const root = document.documentElement;
-  if (face === "oooh") root.removeAttribute("data-title-font");
+  if (face === "architects") root.removeAttribute("data-title-font");
   else root.setAttribute("data-title-font", face);
 }
 
 export default function TitleFontPicker() {
-  const [face, setFace] = useState<Face>("oooh");
+  const [face, setFace] = useState<Face>("architects");
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement | null>(null);
 

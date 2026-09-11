@@ -61,7 +61,9 @@
 }
 
 /* ---------------------------------------------------------------------------
-   TRIAL, 11 Sep 2026 (James): Oooh Baby on the OS's own headings.
+   TRIAL, 11 Sep 2026 (James): a hand-drawn face on the OS's own headings -
+   Architects Daughter by default (Oooh Baby and Delicious Handrawn tried
+   and dropped the same day).
    Scoped to .os-type, which only the agents' shell carries - the portals,
    Susan's figures (.type-admin sets its own heading face) and every email
    are untouched. A script has one weight and needs its natural spacing, so
@@ -70,7 +72,7 @@
    the trial, delete this block and the class on the shell.
 --------------------------------------------------------------------------- */
 .os-type {
-  --font-heading: var(--font-oooh-baby), var(--font-manrope), cursive;
+  --font-heading: var(--font-architects), var(--font-manrope), cursive;
 }
 /* Not inside the NESTED .type-admin scope, the one that pins Susan's figures
    to Manrope - those keep Manrope's weight. Outside it they take the trial. */
@@ -80,8 +82,7 @@
 }
 
 /* The title-font picker (components/TitleFontPicker) - the same trial, one
-   face at a time. No attribute means Oooh Baby, above. */
-:root[data-title-font="delicious"] .os-type { --font-heading: var(--font-delicious), var(--font-manrope), cursive; }
+   face at a time. No attribute means Architects Daughter, above. */
 :root[data-title-font="cherry"] .os-type { --font-heading: var(--font-cherry), var(--font-manrope), cursive; }
 :root[data-title-font="boogaloo"] .os-type { --font-heading: var(--font-boogaloo), var(--font-manrope), cursive; }
 :root[data-title-font="handlee"] .os-type { --font-heading: var(--font-handlee), var(--font-manrope), cursive; }
