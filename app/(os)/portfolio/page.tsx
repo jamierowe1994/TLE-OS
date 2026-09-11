@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import PortfolioMap from "@/components/PortfolioMap";
@@ -18,6 +19,7 @@ import {
 } from "@/lib/compliance";
 import type { ManagedBook, ManagedLandlord, ManagedProperty, Party } from "@/lib/portfolio-types";
 import PickOne from "@/components/PickOne";
+import Segmented from "@/components/Segmented";
 
 /**
  * Portfolio — the managed book. Every property the business looks after,
@@ -125,10 +127,17 @@ const needsLook = (s: CertSummary | null) => !!s && (s.worst === "expired" || s.
 
 /** The dropdown chip — same grammar as Listings and Leads. */
 
-function StatCard({ label, value, hint }: { label: string; value: React.ReactNode; hint?: React.ReactNode }) {
+/* White with a hairline, like the rest of the OS since 11 Sep 2026; the one
+   that asks for a hand (certificates to renew) goes pink. */
+function StatCard({ label, value, hint, icon, tone }: { label: string; value: React.ReactNode; hint?: React.ReactNode; icon: string; tone?: "pink" }) {
   return (
-    <div className="fade-up rounded-2xl border border-line/80 bg-panel p-5">
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</p>
+    <div className={`fade-up rounded-2xl border p-5 ${tone === "pink" ? "border-transparent bg-accent-soft/70" : "border-line/70 bg-card"}`}>
+      <p className="flex items-center gap-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+        <span className={`flex h-7 w-7 items-center justify-center rounded-full ${tone === "pink" ? "bg-white/80" : "bg-accent-soft"} text-accent-dark`}>
+          <DoodleIcon name={icon} size={13} />
+        </span>
+        {label}
+      </p>
       <div className="figures mt-2 text-[30px] font-semibold leading-none tracking-tight">{value}</div>
       {hint && <p className="mt-2 text-[11px] leading-relaxed text-muted">{hint}</p>}
     </div>
@@ -270,7 +279,7 @@ function PropertyPanel({
               <button
                 type="button"
                 onClick={() => setTab("house")}
-                className={`rounded-full border px-4 py-2 text-[12.5px] font-semibold transition-colors ${tab === "house" ? "border-ink bg-ink text-page" : "border-line/80 hover:border-ink"}`}
+                className={`rounded-full border px-4 py-2 text-[12.5px] font-semibold transition-colors ${tab === "house" ? "border-accent-dark bg-accent-dark text-page" : "border-line/80 hover:border-ink"}`}
               >
                 The house
               </button>
@@ -670,12 +679,12 @@ export default function Portfolio() {
     : `${certTally.expired} expired · ${certTally.urgent} due in 30 days · ${certTally.missing} with no record in REX${certs.stale ? " · refreshing" : ""}`;
 
   const pillClass = (on: boolean) =>
-    `rounded-full border px-3.5 py-2 text-[12px] transition-colors ${on ? "border-ink bg-ink text-page" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"}`;
+    `rounded-full border px-3.5 py-2 text-[12px] transition-colors ${on ? "border-accent-dark bg-accent-soft text-accent-dark" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"}`;
 
   return (
     <>
       <PageHeader
-        title="Portfolio"
+        title="Properties"
         blurb={blurb}
         /* A street, so it is short and wide rather than tall - 3.11 against
            the roughly 1.2 of the scene pages. Sized by WIDTH rather than the
@@ -713,21 +722,26 @@ export default function Portfolio() {
         <>
           <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard
+              icon="home"
               label="Properties"
               value={book ? book.counts.properties.toLocaleString("en-GB") : <FindingData label="" />}
               hint={book && Object.entries(book.counts.byService).sort((a, b) => b[1] - a[1]).map(([s, n]) => `${s} ${n}`).join(" · ")}
             />
             <StatCard
+              icon="coin"
               label="Rent roll"
               value={book ? <>{money(book.counts.rentRoll)}<span className="text-[13px] text-muted"> pcm</span></> : <FindingData label="" />}
               hint={book && `REX's agreed rent, not money received. Average ${money(book.counts.avgRent)} pcm.`}
             />
             <StatCard
+              icon="user"
               label="Landlords"
               value={book ? book.counts.landlords.toLocaleString("en-GB") : <FindingData label="" />}
               hint={book && (book.counts.withoutLandlord ? `${book.counts.withoutLandlord} properties have no landlord on the REX record.` : "Every property has a landlord on record.")}
             />
             <StatCard
+              icon="shield"
+              tone={certs.status === "ready" && attention.size > 0 ? "pink" : undefined}
               label="Certificates to renew"
               value={certs.status === "ready" ? attention.size.toLocaleString("en-GB") : <span className="text-[18px] text-muted">…</span>}
               hint={book ? certsHint : undefined}
@@ -735,13 +749,15 @@ export default function Portfolio() {
           </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-2">
-            <div className="flex gap-1.5">
-              {(["properties", "landlords", "map"] as View[]).map((v) => (
-                <button key={v} type="button" onClick={() => setView(v)} className={pillClass(view === v)}>
-                  {v === "properties" ? `Properties${book ? ` · ${filtered.length}` : ""}` : v === "landlords" ? `Landlords${book ? ` · ${landlords.length}` : ""}` : "Map"}
-                </button>
-              ))}
-            </div>
+            <Segmented
+              value={view}
+              onChange={setView}
+              options={[
+                { id: "properties" as const, label: book ? `Properties · ${filtered.length}` : "Properties", icon: <DoodleIcon name="list" size={14} /> },
+                { id: "landlords" as const, label: book ? `Landlords · ${landlords.length}` : "Landlords", icon: <DoodleIcon name="user" size={14} /> },
+                { id: "map" as const, label: "Map", icon: <DoodleIcon name="target" size={14} /> },
+              ]}
+            />
             <span className="hidden h-6 w-px bg-line/80 sm:block" />
             <PickOne label="Service" options={services} value={service} onChange={setService} />
             {everything && <PickOne label="Agent" options={agents} value={agent} onChange={setAgent} />}
@@ -774,11 +790,11 @@ export default function Portfolio() {
           {view === "properties" && (
             <div className="mt-4">
               {state.status === "loading" ? (
-                <div className="rounded-2xl border border-line/70 bg-panel p-8 text-center"><FindingData label="Reading the managed book" /></div>
+                <div className="rounded-2xl border border-line/70 bg-card p-8 text-center"><FindingData label="Reading the managed book" /></div>
               ) : filtered.length === 0 ? (
                 <p className="rounded-2xl border border-dashed border-line/80 p-6 text-center text-[12.5px] text-muted">Nothing matches. Clear a filter.</p>
               ) : (
-                <ul className="overflow-hidden rounded-2xl border border-line/70 bg-panel">
+                <ul className="overflow-hidden rounded-2xl border border-line/70 bg-card">
                   {/* Three widths. A phone gets photo, address and rent; a
                       laptop adds service, landlord and certificates; agent and
                       let date wait for a wide screen (xl), because at 1100px
@@ -796,7 +812,7 @@ export default function Portfolio() {
                         <button
                           type="button"
                           onClick={() => setOpenId(p.listingId)}
-                          className="grid w-full grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-box md:grid-cols-[56px_minmax(0,2fr)_90px_100px_minmax(0,1.3fr)_120px] xl:grid-cols-[56px_minmax(0,2.2fr)_90px_100px_minmax(0,1.4fr)_minmax(0,1fr)_100px_120px]"
+                          className="grid w-full grid-cols-[56px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-panel md:grid-cols-[56px_minmax(0,2fr)_90px_100px_minmax(0,1.3fr)_120px] xl:grid-cols-[56px_minmax(0,2.2fr)_90px_100px_minmax(0,1.4fr)_minmax(0,1fr)_100px_120px]"
                         >
                           <PropertyPhoto src={p.image ?? house?.rooms.find((r) => r.image)?.image ?? null} alt="" className="h-11 w-14 rounded-lg object-cover" />
                           <span className="min-w-0">
@@ -843,7 +859,7 @@ export default function Portfolio() {
           {view === "landlords" && (
             <div className="mt-4">
               {state.status === "loading" ? (
-                <div className="rounded-2xl border border-line/70 bg-panel p-8 text-center"><FindingData label="Reading the managed book" /></div>
+                <div className="rounded-2xl border border-line/70 bg-card p-8 text-center"><FindingData label="Reading the managed book" /></div>
               ) : landlords.length === 0 ? (
                 <p className="rounded-2xl border border-dashed border-line/80 p-6 text-center text-[12.5px] text-muted">No landlord matches.</p>
               ) : (
@@ -853,7 +869,7 @@ export default function Portfolio() {
                     const flagged = mine.filter((p) => attention.has(p.listingId)).length;
                     const isOpen = expanded.has(l.contactId);
                     return (
-                      <li key={l.contactId} className="fade-up rounded-2xl border border-line/70 bg-panel p-4">
+                      <li key={l.contactId} className="fade-up rounded-2xl border border-line/70 bg-card p-4">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className="text-[14px]">{l.name}</p>
@@ -884,7 +900,7 @@ export default function Portfolio() {
                           </button>
                         </div>
                         {isOpen && (
-                          <ul className="mt-3 divide-y divide-line/40 rounded-xl border border-line/60 bg-box">
+                          <ul className="mt-3 divide-y divide-line/40 rounded-xl border border-line/60 bg-card">
                             {mine.map((p) => {
                               const s = summaryOf(p);
                               return (
@@ -915,7 +931,7 @@ export default function Portfolio() {
           {view === "map" && (
             <div className="mt-4 h-[calc(100vh-380px)] min-h-[420px]">
               {state.status === "loading" ? (
-                <div className="flex h-full items-center justify-center rounded-2xl border border-line/70 bg-panel"><FindingData label="Reading the managed book" /></div>
+                <div className="flex h-full items-center justify-center rounded-2xl border border-line/70 bg-card"><FindingData label="Reading the managed book" /></div>
               ) : (
                 <PortfolioMap properties={filtered} attention={attention} onOpen={setOpenId} />
               )}
