@@ -52,6 +52,49 @@ const when = (iso: string | null) =>
     ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" })
     : null;
 
+/**
+ * Mint the pre-appraisal deck for one appraisal. Shared with the "Next up"
+ * box on the appraisal page (components/appraisal/NextUp), so the two
+ * screens that can make this deck make the same one.
+ */
+export async function mintPreAppraisalDeck(a: {
+  refId: string;
+  landlord: string;
+  address: string;
+  postcode: string;
+  appointmentAt: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const r = await fetch("/api/presentations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ref: a.refId,
+        kind: "pre-appraisal",
+        recipientName: a.landlord,
+        address: a.address,
+        postcode: a.postcode,
+        /* The appointment IS the pre-appraisal deck's job, so it is passed
+           rather than left to the deck's own "we'll confirm a time" fallback. */
+        whenPretty: a.appointmentAt
+          ? new Date(a.appointmentAt).toLocaleString("en-GB", {
+              weekday: "long",
+              day: "numeric",
+              month: "long",
+              hour: "numeric",
+              minute: "2-digit",
+            })
+          : "",
+        startsAt: a.appointmentAt,
+      }),
+    });
+    const j = (await r.json()) as { ok?: boolean; error?: string };
+    return j.ok ? { ok: true } : { ok: false, error: j.error ?? "Couldn't create the pre-appraisal deck." };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 export default function DeckRail({
   appraisalId,
   refId,
@@ -141,38 +184,10 @@ export default function DeckRail({
   async function mintPre() {
     setMinting(true);
     setError(null);
-    try {
-      const r = await fetch("/api/presentations", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          ref: refId,
-          kind: "pre-appraisal",
-          recipientName: landlord,
-          address,
-          postcode,
-          /* The appointment IS the pre-appraisal deck's job, so it is passed
-             rather than left to the deck's own "we'll confirm a time" fallback. */
-          whenPretty: appointmentAt
-            ? new Date(appointmentAt).toLocaleString("en-GB", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-                hour: "numeric",
-                minute: "2-digit",
-              })
-            : "",
-          startsAt: appointmentAt,
-        }),
-      });
-      const j = (await r.json()) as { ok?: boolean; error?: string };
-      if (!j.ok) setError(j.error ?? "Couldn't create the pre-appraisal deck.");
-      else await load();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setMinting(false);
-    }
+    const r = await mintPreAppraisalDeck({ refId, landlord, address, postcode, appointmentAt });
+    if (!r.ok) setError(r.error);
+    else await load();
+    setMinting(false);
   }
 
   const pre = latest("pre-appraisal");

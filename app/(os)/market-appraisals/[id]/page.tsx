@@ -1,62 +1,57 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Pill } from "@/components/Wire";
-import ResearchPanel from "@/components/ResearchPanel";
-import DeckRail from "@/components/DeckRail";
-import ValuationForm from "@/components/ValuationForm";
+import DoodleIcon from "@/components/DoodleIcon";
 import RexPropertyPicker from "@/components/RexPropertyPicker";
 import PropertyFile from "@/components/PropertyFile";
 import VideoChaseControl from "@/components/VideoChaseControl";
 import AppraisalOutcome from "@/components/AppraisalOutcome";
+import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
+import NextUp, { SAGE_INK, SAGE_WASH, type SentDeck } from "@/components/appraisal/NextUp";
 import {
   MA_STAGES,
   effectiveStage,
   needsValuation,
   type MarketAppraisal,
 } from "@/lib/market-appraisal";
-import type { MaResearch } from "@/lib/ma-research";
 
 /**
- * The appraisal file — a PAGE, laid out like a listing.
+ * The appraisal file, to James's mock of 11 Sep 2026.
  *
- * It was a pop-out. James asked for the same shape a listing has, and he is
- * right: an appraisal is a file an agent lives in for three weeks, not a thing
- * they glance at. A drawer caps the property details at whatever fits above the
- * fold, and material information alone is thirty fields.
+ * Light and airy, the landlord portal's aesthetic brought into the OS: white
+ * boxes with a hairline of trim, a blush hero, one sage box to break the
+ * run, room around everything. The order is the order of the job:
  *
- * The order is the order of the job, not of the data:
+ *   0. QUICK LINKS     — the decks that exist and the video recorder, as
+ *                        pills beside the back link
+ *   1. THE HERO        — the address, the stage in a line, won or lost, the
+ *                        house standing on the card's edge, and "At a
+ *                        glance": the three facts an agent opens the file for
+ *   2. THREE CARDS     — the landlord, the appointment, and NEXT UP: the one
+ *                        box that changes with the stage (components/appraisal/NextUp)
+ *   3. THE SPINE       — where it's up to, with the small ticks
  *
- *   1. WHO AND WHAT     — the landlord, how to reach them, the property in a line
- *   2. THE APPOINTMENT  — when it is, and whether it has happened
- *   3. WHAT THEY SEE    — pre-appraisal, appraisal, post-appraisal, in that order
- *   4. WHAT WE KNOW     — the evidence: comparables and the best-price guide
- *
- * The full material-information panel is NOT here. It moved to the
- * presentation builder, where it was already rendered: thirty fields of
- * tenure and thermal transmittance is what you take to a landlord, not what
- * you need when you open the file — and it made the top of this page an
- * eight-second "Pulling the property details…" above everything an agent
- * actually came for.
- *
- * Nothing above (3) waits on a fetch. The research at (4) is the slowest thing
- * here and is last, loading without blocking anything above it.
+ * That is the whole page. The three-deck rail, the research and the
+ * always-on property file came off it (James, 11 Sep): the step you are on
+ * says what to do, the quick links open what exists, the property file
+ * appears when the AML step asks for it, and the comparables live in the
+ * presentation builder where they are used.
  */
 
-/** What the appraisal is waiting on at each stage. */
-const NEXT: Record<string, { do: string; who: string }> = {
-  booked: { do: "The pre-appraisal deck goes out the day before. Record a welcome video for it if you can.", who: "Us" },
-  pre_appraisal: { do: "Pull the comparables together and agree your opening figure before you go.", who: "Us" },
-  appraisal: { do: "The visit. Walk it, then record the valuation while it is fresh.", who: "Us" },
-  post_appraisal: { do: "Send the deck back with the figure, set the follow-up, and get the terms out for signature.", who: "Us" },
-  takeon: { do: "Book the take-on visit — this is where the photographs and the description come from.", who: "Us" },
-  aml: { do: "ID and proof of ownership, AML on the landlord, and the property's certificates.", who: "Us" },
-  won: { do: "Everything clear — push it through to a listing.", who: "Us" },
-  lost: { do: "Nothing outstanding. Worth recording why, while anyone remembers.", who: "—" },
-};
-
+const card = "rounded-[22px] border border-line/50 bg-white";
+const eyebrow = "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted";
+const pill =
+  "inline-flex items-center gap-1.5 rounded-full border border-line/70 bg-white px-3.5 py-2 text-[12px] font-semibold transition-colors hover:border-ink/40";
 const gbp = (n: number) => `£${n.toLocaleString("en-GB")}`;
+
+const longDate = (iso: string) =>
+  new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
+
+interface FileRow {
+  state: string;
+  files: { key: string }[];
+}
 
 export default function AppraisalFile({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -66,7 +61,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
   const [booked, setBooked] = useState<MarketAppraisal | null | undefined>(undefined);
   const ma = booked ?? null;
 
-  useEffect(() => {
+  const reload = useCallback(() => {
     let gone = false;
     fetch(`/api/appraisals`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
@@ -82,25 +77,55 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
       gone = true;
     };
   }, [id]);
+  useEffect(() => reload(), [reload]);
 
-  const [research, setResearch] = useState<MaResearch | null>(null);
-  const [failed, setFailed] = useState(false);
+  /* The decks, read once here for the quick links and the Next up box. */
+  const refId = ma ? (ma.leadId ?? ma.id) : null;
+  const [decks, setDecks] = useState<SentDeck[] | null | undefined>(undefined);
+  const loadDecks = useCallback(() => {
+    if (!refId) return;
+    fetch(`/api/presentations?ref=${encodeURIComponent(refId)}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; sent?: SentDeck[] }) => setDecks(j.ok && j.sent ? j.sent : null))
+      .catch(() => setDecks(null));
+  }, [refId]);
+  useEffect(() => loadDecks(), [loadDecks]);
 
-  /* The research is the slow call — Homesearch plus our own book, and it can
-     run to eight seconds. It loads after paint and never blocks the spine,
-     because the spine is what the agent came for. */
+  /* The property file, counted for "At a glance". One light call so the
+     hero can say "3 on file" without the whole panel. */
+  const [file, setFile] = useState<{ held: number; outstanding: number } | null | undefined>(undefined);
   useEffect(() => {
     if (!ma) return;
     let live = true;
-    const q = new URLSearchParams({ address: ma.address, postcode: ma.postcode, beds: "2" });
-    fetch(`/api/ma-research?${q}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((d: MaResearch) => live && setResearch(d))
-      .catch(() => live && setFailed(true));
+    const key = ma.rexPropertyId ? `property=${encodeURIComponent(ma.rexPropertyId)}` : `address=${encodeURIComponent(ma.address)}`;
+    fetch(`/api/property-file?${key}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { ok?: boolean; rows?: FileRow[]; outstanding?: number } | null) => {
+        if (!live) return;
+        if (!j?.ok || !Array.isArray(j.rows)) return setFile(null);
+        setFile({
+          held: j.rows.filter((r) => r.files.length > 0 || r.state === "valid" || r.state === "expiring").length,
+          outstanding: j.outstanding ?? 0,
+        });
+      })
+      .catch(() => live && setFile(null));
     return () => {
       live = false;
     };
   }, [ma]);
+
+  /* A save hands back the bare row; the ticks, the live stage and the
+     "why" line only come with the list read, so re-read after every save. */
+  const saved = useCallback(
+    (next: MarketAppraisal) => {
+      setBooked((prev) => (prev ? { ...prev, ...next } : next));
+      reload();
+    },
+    [reload]
+  );
+
+  /* The property file panel, shown when asked for. */
+  const [showFile, setShowFile] = useState(false);
 
   if (booked === undefined) {
     return (
@@ -114,9 +139,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
         <p className="hand text-[20px]">No such appraisal</p>
-        <p className="mt-2 text-[12.5px] text-muted">
-          It may have been removed, or the link is wrong.
-        </p>
+        <p className="mt-2 text-[12.5px] text-muted">It may have been removed, or the link is wrong.</p>
         <Link href="/market-appraisals" className="mt-4 inline-block text-[12.5px] underline">
           Back to Market Appraisals
         </Link>
@@ -125,318 +148,370 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
   }
 
   const live = effectiveStage(ma);
-  const at = MA_STAGES.findIndex((s) => s.id === live);
-  /* "Lost" is an outcome, not a step, and it is not drawn on the spine. Counting
-     it made the header say "stage 1 of 8" above seven visible stages. */
+  /* "Lost" is an outcome, not a step, and it is not drawn on the spine. */
   const spine = MA_STAGES.filter((s) => s.id !== "lost");
-  const next = NEXT[live];
+  const at = Math.max(0, spine.findIndex((s) => s.id === live));
   const missingFigure = needsValuation(ma);
+  const when = ma.appointmentAt ? new Date(ma.appointmentAt) : null;
+  const past = Boolean(when && when < new Date());
+  const latest = (kind: string) => decks?.find((d) => d.kind === kind) ?? null;
+  const pre = latest("pre-appraisal");
+  const deck = latest("appraisal");
+  const post = latest("post-appraisal");
+  const openFile = () => {
+    setShowFile(true);
+    setTimeout(() => document.getElementById("property-file")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+  };
 
   return (
-    <>
-      <Link href="/market-appraisals" className="text-[12.5px] text-muted underline">
-        ← Market Appraisals
-      </Link>
-
-      {/* ── 1. what it is ───────────────────────────────────────────────── */}
-      <header className="fade-up mt-3 rounded-2xl border border-line/80 bg-panel p-6">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-          Market appraisal — stage {at + 1} of {spine.length}
-        </p>
-        <h1 className="hand mt-1 text-[26px] leading-tight">{ma.address}</h1>
-        {/* THE DATE AND THE AGENT USED TO BE REPEATED HERE. Both now have
-            sections of their own directly below, and the appointment was
-            printed three times on one screen — header, appointment card, and
-            again in "needs doing now". The header keeps only what those two
-            sections do NOT say: where it is, and the figure, which is the one
-            thing worth seeing without scrolling. */}
-        <p className="mt-1 text-[12.5px] text-muted">
-          {ma.postcode}
-          {ma.valuation ? ` · valued ${gbp(ma.valuation)} pcm` : ""}
-        </p>
-        {/* The stage is read from the record; these are the two hand moves. */}
-        <AppraisalOutcome id={ma.id} stage={live} why={ma.stageWhy ?? null} />
-      </header>
-
-      {/* ── 1b. how to reach them ───────────────────────────────────────── */}
-      {/* THE FULL MATERIAL-INFORMATION PANEL USED TO BE HERE and it has moved
-          to the presentation builder, where it was already rendered anyway.
-          James, 31 Aug: thirty fields of tenure and thermal transmittance is
-          what you take to a landlord, not what you need when you open the
-          file. It also meant the top of this page was a "Pulling the property
-          details…" placeholder for eight seconds, above everything an agent
-          actually came for.
-
-          What replaces it is what an agent opens an appraisal to find: the
-          property in one line, and a way to ring the landlord. Both are known
-          instantly — no fetch, nothing to wait for. */}
-      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-6">
-        <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
-          The landlord
-        </p>
-        <div className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-3">
-          <div>
-            <p className="text-[10.5px] uppercase tracking-wide text-muted">Name</p>
-            <p className="mt-0.5 text-[13px]">{ma.landlord}</p>
-          </div>
-          <div className="min-w-0">
-            <p className="text-[10.5px] uppercase tracking-wide text-muted">Email</p>
-            {ma.landlordEmail ? (
-              <a
-                href={`mailto:${ma.landlordEmail}`}
-                className="mt-0.5 block truncate text-[13px] underline"
-              >
-                {ma.landlordEmail}
-              </a>
-            ) : (
-              <p className="mt-0.5 text-[13px] text-muted">Not recorded</p>
-            )}
-          </div>
-          <div>
-            <p className="text-[10.5px] uppercase tracking-wide text-muted">Mobile</p>
-            {ma.landlordMobile ? (
-              <a href={`tel:${ma.landlordMobile}`} className="mt-0.5 block text-[13px] underline">
-                {ma.landlordMobile}
-              </a>
-            ) : (
-              <p className="mt-0.5 text-[13px] text-muted">Not recorded</p>
-            )}
-          </div>
-        </div>
-
-        {/* A few property facts once the research lands — never a placeholder
-            while it is in flight. Absent reads as "not here yet", which is
-            true, rather than as a screen that is broken. */}
-        {research?.material && (
-          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 border-t border-line/70 pt-3 text-[12px] text-muted">
-            {research.material.bedrooms != null && (
-              <span>
-                <span className="text-ink">{research.material.bedrooms}</span> bed
-              </span>
-            )}
-            {research.material.compliance.epcRating && (
-              <span>
-                EPC <span className="text-ink">{research.material.compliance.epcRating}</span>
-              </span>
-            )}
-            <span>{ma.postcode}</span>
-            <span className="ml-auto">
-              Full property details are on the presentation&apos;s first step.
-            </span>
-          </div>
+    <div className="space-y-5">
+      {/* ── 0. back, and the quick links ────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Link href="/market-appraisals" className="mr-auto inline-flex items-center gap-1.5 text-[12.5px] text-muted hover:text-ink">
+          <span aria-hidden>←</span> Market Appraisals
+        </Link>
+        {pre && (
+          <a href={pre.url} target="_blank" rel="noreferrer" className={pill}>
+            <DoodleIcon name="mail" size={13} className="text-accent-dark" /> Pre-appraisal deck
+          </a>
         )}
-        {/* Which REX property this is, captured at the booking stage — long
-            before terms are signed, and by a person rather than by matching an
-            address. See RexPropertyPicker for why that distinction matters. */}
-        <div className="mt-4 border-t border-line/70 pt-3">
-          <RexPropertyPicker appraisal={ma} onSaved={setBooked} />
-        </div>
-
-        {failed && (
-          <p className="mt-4 border-t border-line/70 pt-3 text-[11.5px] leading-relaxed text-muted">
-            Homesearch could not be reached, so there are no property facts here. Nothing stale is
-            shown in their place.
-          </p>
+        {deck ? (
+          <a href={deck.url} target="_blank" rel="noreferrer" className={pill}>
+            <DoodleIcon name="magic-wand" size={13} className="text-accent-dark" /> View presentation
+          </a>
+        ) : (
+          <Link href={`/market-appraisals/${ma.id}/build`} className={pill}>
+            <DoodleIcon name="magic-wand" size={13} className="text-accent-dark" /> Build presentation
+          </Link>
         )}
-      </section>
-
-      {/* ── the property file: certificates the landlord hands over at the
-             appraisal are filed NOW, against the address, and are on the REX
-             property the day it is linked or instructed (James, 6 Sep). ── */}
-      <div className="fade-up mt-4">
-        <PropertyFile propertyId={ma.rexPropertyId} address={ma.address} screen="the market appraisal" />
+        {post && (
+          <a href={post.url} target="_blank" rel="noreferrer" className={pill}>
+            <DoodleIcon name="file-contract" size={13} className="text-accent-dark" /> Post-appraisal deck
+          </a>
+        )}
+        {/* The welcome video, recorded against the pre-appraisal deck. */}
+        {pre && (
+          <span className="[&>button]:!border-line/70 [&>button]:!bg-white [&>button]:!px-3.5 [&>button]:!py-2 [&>button]:!text-[12px] [&>button]:!font-semibold">
+            <WelcomeVideoRecorder compact token={pre.token} address={ma.address} />
+          </span>
+        )}
+        <button type="button" onClick={openFile} className={pill}>
+          <DoodleIcon name="folder" size={13} className="text-accent-dark" /> Property file
+        </button>
       </div>
 
-      {/* ── 2. the booking ──────────────────────────────────────────────── */}
-      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-6">
-        <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
-          The appointment
-        </p>
-        {ma.appointmentAt ? (
-          (() => {
-            const when = new Date(ma.appointmentAt);
-            const past = when < new Date();
-            return (
-              <>
-                <p className="mt-2.5 text-[14.5px]">
-                  {when.toLocaleString("en-GB", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </p>
-                <p className="mt-1.5 flex items-center gap-2 text-[11.5px] text-muted">
-                  {past ? "Been and gone" : "Still to come"}
-                  {ma.agent && <span>· with {ma.agent}</span>}
-                </p>
-                {/* Only when the visit has HAPPENED. Before it, "the
-                    pre-appraisal goes out the day before" is already the whole
-                    of Needs doing now, and saying it twice on one screen
-                    taught an agent to stop reading either. */}
-                {past && (
-                  <p className="mt-3 border-t border-line/70 pt-3 text-[11.5px] leading-relaxed text-muted">
-                    {missingFigure
-                      ? "No figure has been recorded. That is the next thing, and the post-appraisal deck waits on it."
-                      : "The figure is recorded, so the post-appraisal deck can go."}
+      {/* ── 1. the hero ─────────────────────────────────────────────────── */}
+      {/* Blush all the way across (James, 11 Sep), the glance panel white on
+          it. The house stands on the card's bottom edge and whatever the
+          drawing has below its doorstep is clipped by the card. */}
+      <header className="fade-up relative overflow-hidden rounded-[22px] border border-line/50 bg-accent-soft/60">
+        <span aria-hidden className="pointer-events-none absolute -bottom-[340px] right-[330px] hidden h-[420px] w-[520px] rounded-[50%] bg-white/45 xl:block 2xl:right-[380px] 2xl:w-[600px]" />
+        <div className="relative grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:p-7 xl:grid-cols-[minmax(0,1fr)_280px_300px] 2xl:grid-cols-[minmax(0,1fr)_380px_340px]">
+          <div className="min-w-0 pb-1">
+            <p className={eyebrow}>Market appraisal · stage {at + 1} of {spine.length}</p>
+            <h1 className="hand mt-2 text-[30px] leading-[1.1] sm:text-[34px]">{ma.address}</h1>
+            <p className="mt-1.5 text-[13px] text-muted">
+              {ma.postcode}
+              {ma.valuation ? ` · valued ${gbp(ma.valuation)} pcm` : ""}
+            </p>
+            {ma.stageWhy && <p className="mt-4 text-[13px] leading-relaxed">{ma.stageWhy}</p>}
+            {/* The stage is read from the record; these are the two hand moves. */}
+            <AppraisalOutcome id={ma.id} stage={live} why={null} size="large" />
+          </div>
+
+          {/* The house, from xl up. */}
+          <div className="relative hidden self-stretch xl:block">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand/art/appraisal-house.webp"
+              alt=""
+              className="pointer-events-none absolute bottom-[-56px] left-1/2 w-[330px] max-w-none -translate-x-1/2 2xl:w-[420px] 2xl:bottom-[-70px]"
+            />
+          </div>
+
+          {/* At a glance. */}
+          <aside className="rounded-2xl border border-line/40 bg-white p-5">
+            <p className="hand flex items-center gap-2 text-[15px]">
+              <DoodleIcon name="magic-wand" size={15} className="text-accent-dark" />
+              At a glance
+            </p>
+            <ul className="mt-4 space-y-3.5">
+              <Glance
+                icon="calendar"
+                title={!when ? "No date on this appraisal" : past ? "Visit completed" : "Visit still to come"}
+                sub={when ? longDate(ma.appointmentAt!) : "Booked without one - worth chasing"}
+              />
+              <Glance
+                icon="doc"
+                title={ma.valuation != null ? `${gbp(ma.valuation)} pcm recorded` : "No figure recorded yet"}
+                sub={
+                  ma.valuation != null
+                    ? `Valued${ma.valuedAt ? ` ${new Date(ma.valuedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long" })}` : ""}${ma.valuedBy ? ` by ${ma.valuedBy}` : ""}`
+                    : past
+                      ? "Add a figure to move to the next stage"
+                      : "Comes from the visit"
+                }
+              />
+              <Glance
+                icon="folder"
+                title={
+                  file === undefined
+                    ? "Reading the property file…"
+                    : file === null
+                      ? "Property file unavailable"
+                      : file.held === 0
+                        ? "No property file"
+                        : `${file.held} certificate${file.held === 1 ? "" : "s"} on file`
+                }
+                sub={
+                  file === undefined
+                    ? ""
+                    : file === null
+                      ? "The file could not be read"
+                      : file.outstanding > 0
+                        ? `${file.outstanding} still outstanding`
+                        : file.held === 0
+                          ? "Attach any relevant documents"
+                          : "Everything required is in date"
+                }
+              />
+            </ul>
+          </aside>
+        </div>
+      </header>
+
+      {/* ── 2. the three cards ──────────────────────────────────────────── */}
+      <div className="grid gap-5 lg:grid-cols-3">
+        {/* The landlord */}
+        <section className={`fade-up flex flex-col ${card} p-5`}>
+          <CardTitle icon="user">The landlord</CardTitle>
+          <dl className="mt-4 space-y-2.5 text-[13px]">
+            <Row k="Name">{ma.landlord}</Row>
+            <Row k="Email">
+              {ma.landlordEmail ? (
+                <a href={`mailto:${ma.landlordEmail}`} className="block truncate hover:underline">
+                  {ma.landlordEmail}
+                </a>
+              ) : (
+                <span className="text-muted">Not recorded</span>
+              )}
+            </Row>
+            <Row k="Mobile">
+              {ma.landlordMobile ? (
+                <a href={`tel:${ma.landlordMobile}`} className="hover:underline">
+                  {ma.landlordMobile}
+                </a>
+              ) : (
+                <span className="text-muted">Not recorded</span>
+              )}
+            </Row>
+          </dl>
+          {/* Which REX property this is, captured at the booking stage — long
+              before terms are signed, and by a person rather than by matching
+              an address. See RexPropertyPicker for why that distinction matters. */}
+          <div className="mt-auto border-t border-line/50 pt-3.5">
+            <RexPropertyPicker appraisal={ma} onSaved={saved} />
+          </div>
+        </section>
+
+        {/* The appointment */}
+        <section className={`fade-up flex flex-col ${card} p-5`}>
+          <CardTitle icon="calendar">The appointment</CardTitle>
+          {when ? (
+            <>
+              <p className="mt-4 text-[14px]">{longDate(ma.appointmentAt!)}</p>
+              <div className="mt-3 flex items-start gap-3">
+                <span
+                  className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${past ? "text-white" : "border border-line/70 text-muted"}`}
+                  style={past ? { background: SAGE_INK } : undefined}
+                >
+                  {past ? "✓" : "…"}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[13.5px] font-semibold">{past ? "Visit completed" : "Still to come"}</p>
+                  <p className="text-[12px] text-muted">
+                    {past ? "Been and gone" : "In the diary"}
+                    {ma.agent ? ` · with ${ma.agent}` : ""}
                   </p>
-                )}
-              </>
-            );
-          })()
-        ) : (
-          <p className="mt-2.5 text-[13px] leading-relaxed text-muted">
-            No date on this appraisal. It was booked without one — worth chasing, because the
-            pre-appraisal deck is scheduled from the appointment and has nothing to count back
-            from.
-          </p>
-        )}
-      </section>
+                </div>
+              </div>
+              {past && (
+                <p className="mt-3 text-[12px] leading-relaxed text-muted">
+                  {missingFigure ? "No figure recorded yet - the post-appraisal deck waits on it." : "The figure is recorded, so the post-appraisal deck can go."}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="mt-4 text-[13px] leading-relaxed text-muted">
+              No date on this appraisal. It was booked without one - worth chasing, because the
+              pre-appraisal deck is scheduled from the appointment.
+            </p>
+          )}
+          {/* The video nudge, while there is still time for one. */}
+          {(live === "booked" || live === "pre_appraisal") && (
+            <div className="mt-auto border-t border-line/50 pt-3.5">
+              <VideoChaseControl appraisalId={ma.id} />
+            </div>
+          )}
+        </section>
 
-      {/* ── 2. where it is up to ────────────────────────────────────────── */}
-      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-6">
-        <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
-          Where it&apos;s up to
-        </p>
-        {/* ACROSS, not down. James, 28 Aug — and he is right: a spine is a
-            journey, and a journey reads left to right. Vertically it looked
-            like a checklist of unrelated jobs; horizontally you can see at a
-            glance how far along a file is, which is the only question the
-            panel exists to answer.
+        {/* Next up: the one box that changes with the stage. */}
+        <div className="fade-up">
+          <NextUp
+            ma={ma}
+            decks={decks}
+            onSaved={saved}
+            onDecksChanged={() => {
+              loadDecks();
+              reload();
+            }}
+            onAttach={openFile}
+          />
+        </div>
+      </div>
 
-            It scrolls sideways rather than wrapping. Seven stages wrapped onto
-            two rows would put "Won" underneath "Booked" and undo the reading
-            order the change is for. */}
-        <ol className="-mx-1 mt-4 flex gap-1 overflow-x-auto px-1 pb-2">
-          {spine.map((s, i, arr) => {
-            const done = i < at;
-            const here = s.id === live;
-            return (
-              <li key={s.id} className="flex min-w-[132px] flex-1 shrink-0 flex-col">
-                <div className="flex items-center">
-                  <span
-                    className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[10px] ${
-                      done
-                        ? "border-accent-dark bg-accent-soft text-accent-dark"
-                        : here
-                          ? "border-accent-dark bg-accent-dark text-white"
-                          : "border-line bg-panel text-muted"
-                    }`}
-                  >
-                    {done ? "\u2713" : i + 1}
-                  </span>
-                  {i < arr.length - 1 && (
+      {/* ── 3. where it's up to ─────────────────────────────────────────── */}
+      <section className={`fade-up ${card} p-5`}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <CardTitle icon="target">
+            Where it&apos;s up to
+            <span className="mt-0.5 block text-[12px] font-normal text-muted">
+              Track progress through the {spine.length} stages of a market appraisal.
+            </span>
+          </CardTitle>
+          <span className="rounded-full bg-accent-soft px-3 py-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-accent-dark">
+            Stage {at + 1} of {spine.length}
+          </span>
+        </div>
+
+        {/* ACROSS, not down (James, 28 Aug): a spine is a journey, and a
+            journey reads left to right. It scrolls sideways rather than
+            wrapping, so "Won" never sits underneath "Booked". */}
+        <div className="-mx-2 mt-5 overflow-x-auto px-2 pb-1">
+          <ol className="grid min-w-[760px]" style={{ gridTemplateColumns: `repeat(${spine.length}, minmax(0, 1fr))` }}>
+            {spine.map((s, i) => {
+              const done = i < at;
+              const here = s.id === live;
+              return (
+                <li key={s.id} className="relative flex flex-col items-center px-1 text-center">
+                  {i > 0 && (
                     <span
                       aria-hidden
-                      className={`h-[1.5px] flex-1 ${done ? "bg-accent-dark/50" : "bg-line"}`}
+                      className={`absolute left-[-50%] right-[50%] top-[13px] ${i <= at ? "h-0.5" : "h-0 border-t-2 border-dashed border-line/80"}`}
+                      style={i <= at ? { background: SAGE_INK } : undefined}
                     />
                   )}
-                </div>
-                <span className={`mt-2 pr-3 text-[12px] leading-tight ${here ? "font-semibold" : "text-muted"}`}>
-                  {s.label}
-                </span>
-                {here && (
-                  <span className="mt-0.5 pr-3 text-[10.5px] leading-snug text-muted">{s.blurb}</span>
-                )}
-                {/* The small ticks: have I sent this, done this, made this.
-                    Read from the record (lib/appraisal-stage), never typed. */}
-                {(() => {
-                  const ticks = (ma.ticks ?? []).filter((t) => t.stage === s.id);
-                  if (!ticks.length) return null;
-                  return (
-                    <ul className="mt-2 space-y-1 pr-3">
+                  <span
+                    className={`relative z-[1] flex h-[26px] w-[26px] items-center justify-center rounded-full text-[11px] font-semibold ${
+                      done ? "text-white" : here ? "bg-accent-dark text-white" : "border-[1.5px] border-line/80 bg-white text-muted"
+                    }`}
+                    style={done ? { background: SAGE_INK } : undefined}
+                  >
+                    {done ? "✓" : i + 1}
+                  </span>
+                  <p className={`mt-2.5 text-[12px] leading-tight ${here ? "font-semibold" : "text-muted"}`}>{s.label}</p>
+                </li>
+              );
+            })}
+          </ol>
+
+          {/* The small ticks: have I sent this, done this, made this. Read
+              from the record (lib/appraisal-stage), never typed. */}
+          <ol className="mt-4 grid min-w-[760px] gap-2" style={{ gridTemplateColumns: `repeat(${spine.length}, minmax(0, 1fr))` }}>
+            {spine.map((s, i) => {
+              const here = s.id === live;
+              const done = i < at;
+              const ticks = (ma.ticks ?? []).filter((t) => t.stage === s.id);
+              return (
+                <li
+                  key={s.id}
+                  className={`rounded-2xl border p-3 ${here ? "border-accent/60 bg-accent-soft/40" : "border-line/50"}`}
+                  style={done ? { background: SAGE_WASH, borderColor: "transparent" } : undefined}
+                >
+                  <p className={`text-[11.5px] ${here ? "font-semibold" : "text-muted"}`}>{s.label}</p>
+                  {here && <p className="mt-1 text-[10.5px] leading-snug text-muted">{s.blurb}</p>}
+                  {ticks.length > 0 && (
+                    <ul className="mt-2.5 space-y-1.5">
                       {ticks.map((t) => (
                         <li key={t.id} className="flex items-start gap-1.5 text-[10.5px] leading-snug" title={t.at ? new Date(t.at).toLocaleString("en-GB") : undefined}>
-                          <span className={`mt-[1px] flex h-3 w-3 shrink-0 items-center justify-center rounded-full border text-[8px] ${t.done ? "border-accent-dark bg-accent-dark text-white" : "border-line text-transparent"}`}>
+                          <span
+                            className={`mt-[1px] flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[8px] ${t.done ? "text-white" : "border border-line/80 bg-white text-transparent"}`}
+                            style={t.done ? { background: done ? SAGE_INK : "var(--accent-dark)" } : undefined}
+                          >
                             ✓
                           </span>
                           <span className={t.done ? "text-ink" : "text-muted"}>
                             {t.label}
-                            {t.detail ? <span className="text-muted"> · {t.detail}</span> : t.done && t.at ? <span className="text-muted"> · {new Date(t.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span> : null}
+                            {t.detail ? (
+                              <span className="text-muted"> · {t.detail}</span>
+                            ) : t.done && t.at ? (
+                              <span className="text-muted"> · {new Date(t.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
+                            ) : null}
                           </span>
                         </li>
                       ))}
                     </ul>
-                  );
-                })()}
-              </li>
-            );
-          })}
-        </ol>
-        <p className="mt-3 border-t border-line/70 pt-3 text-[11px] leading-relaxed text-muted">
-          Once terms are signed this stops being an appraisal and becomes a{" "}
-          <span className="font-semibold">listing</span>.
-        </p>
-      </section>
-
-      {/* ── 3. what to do next ──────────────────────────────────────────── */}
-      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-6">
-        <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
-          Needs doing now
-        </p>
-        <p className="mt-2.5 text-[13.5px] leading-relaxed">
-          {missingFigure
-            ? "The visit has been and gone with no figure recorded. Do that first — everything after it waits on the valuation."
-            : next?.do}
-        </p>
-        <p className="mt-3 flex items-center gap-2 text-[11px] text-muted">
-          Waiting on <Pill tone="accent">{missingFigure ? "Us" : (next?.who ?? "Us")}</Pill>
-        </p>
-
-        {/* The video nudge, while there is still time for one: who it goes
-            to and when, with "send it to me now" for checking the email
-            lands. This page is where that email's button points, so the
-            recorder (in the pre-appraisal card below) is one scroll away. */}
-        {(live === "booked" || live === "pre_appraisal") && (
-          <div className="mt-4">
-            <VideoChaseControl appraisalId={ma.id} />
-          </div>
-        )}
-
-        {/* "Record the valuation" USED TO LIVE HERE and it was a redirect
-            loop: it pointed at /market-appraisals?open=<id>, whose open
-            handler immediately router.replace'd back to this page. It has been
-            removed rather than left looking available, because there is no
-            valuation form anywhere in this OS to send anyone to. The
-            post-appraisal card below says so in words. */}
-        <div className="mt-4 flex flex-wrap gap-2.5">
-          <Link
-            href="/compliance"
-            className="rounded-lg border border-line/80 px-4 py-2.5 text-[12.5px]"
-          >
-            Certificates
-          </Link>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
         </div>
+        <p className="mt-4 flex items-start gap-2 border-t border-line/50 pt-3 text-[11.5px] leading-relaxed text-muted">
+          <DoodleIcon name="info" size={13} className="mt-[2px]" />
+          <span>
+            Once terms are signed this stops being an appraisal and becomes a{" "}
+            <span className="font-semibold text-ink">listing</span>.
+          </span>
+        </p>
       </section>
 
-      {/* ── 3. the three decks ──────────────────────────────────────────── */}
-      {/* The valuation form is passed INTO the post-appraisal card rather than
-          sitting in a section of its own further up. It is the thing that
-          unlocks that step, and it belongs beside the step it unlocks. */}
-      <section className="fade-up mt-4">
-        <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
-          What they see
-        </p>
-        <p className="mt-2 mb-3 text-[12px] leading-relaxed text-muted">
-          Three decks, in the order a landlord meets them.
-        </p>
-        <DeckRail
-          appraisalId={ma.id}
-          refId={ma.leadId ?? ma.id}
-          address={ma.address}
-          postcode={ma.postcode}
-          landlord={ma.landlord}
-          appointmentAt={ma.appointmentAt ?? null}
-          hasValuation={ma.valuation != null}
-          valuationSlot={<ValuationForm appraisal={ma} onSaved={setBooked} />}
-        />
-      </section>
+      {/* ── the property file, when asked for ───────────────────────────── */}
+      {/* Certificates the landlord hands over at the appraisal are filed NOW,
+          against the address, and are on the REX property the day it is
+          linked or instructed (James, 6 Sep). Opened from the quick link or
+          the AML step rather than always on the page. */}
+      {showFile && (
+        <div id="property-file" className="fade-up scroll-mt-6 [&>section]:rounded-[22px] [&>section]:border-line/50 [&>section]:bg-white [&>section]:p-5">
+          <PropertyFile propertyId={ma.rexPropertyId} address={ma.address} screen="the market appraisal" />
+        </div>
+      )}
+    </div>
+  );
+}
 
-      {/* ── 4. what we know ─────────────────────────────────────────────── */}
-      <section className="fade-up mt-4">
-        <ResearchPanel address={ma.address} postcode={ma.postcode} beds={2} />
-      </section>
-    </>
+/* ── small pieces ─────────────────────────────────────────────────────── */
+
+function CardTitle({ icon, children }: { icon: string; children: React.ReactNode }) {
+  return (
+    <h2 className="hand flex items-start gap-3 text-[17px] leading-tight">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+        <DoodleIcon name={icon} size={16} />
+      </span>
+      <span className="min-w-0 pt-1.5">{children}</span>
+    </h2>
+  );
+}
+
+function Row({ k, children }: { k: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[60px_minmax(0,1fr)] items-baseline gap-3">
+      <dt className="text-[11px] text-muted">{k}</dt>
+      <dd className="min-w-0">{children}</dd>
+    </div>
+  );
+}
+
+function Glance({ icon, title, sub }: { icon: string; title: string; sub: string }) {
+  return (
+    <li className="flex items-start gap-3">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line/50 bg-white text-accent-dark">
+        <DoodleIcon name={icon} size={16} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[13.5px] font-semibold leading-snug">{title}</span>
+        {sub && <span className="block text-[12px] leading-snug text-muted">{sub}</span>}
+      </span>
+    </li>
   );
 }

@@ -8,7 +8,19 @@ import { useState } from "react";
  * reopened, because "instructed elsewhere" is sometimes followed by a call
  * back; reopening returns it to whatever the record says.
  */
-export default function AppraisalOutcome({ id, stage, why }: { id: string; stage: string; why?: string | null }) {
+export default function AppraisalOutcome({
+  id,
+  stage,
+  why,
+  size = "small",
+}: {
+  id: string;
+  stage: string;
+  why?: string | null;
+  /** "large" on the appraisal file's hero, where the two moves are the only buttons. */
+  size?: "small" | "large";
+}) {
+  const big = size === "large";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,14 +44,14 @@ export default function AppraisalOutcome({ id, stage, why }: { id: string; stage
 
   const ended = stage === "won" || stage === "lost";
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2">
+    <div className={`flex flex-wrap items-center ${big ? "mt-6 gap-3" : "mt-3 gap-2"}`}>
       {why && <span className="mr-2 text-[11.5px] text-muted">{why}</span>}
       {ended ? (
         <button
           type="button"
           disabled={busy}
           onClick={() => void set(null)}
-          className="rounded-full border border-line px-3 py-1 text-[11.5px] text-muted transition hover:border-ink hover:text-ink disabled:opacity-50"
+          className={big ? "rounded-full border border-line/70 bg-white px-5 py-2.5 text-[13px] font-semibold transition hover:border-ink/40 disabled:opacity-50" : "rounded-full border border-line px-3 py-1 text-[11.5px] text-muted transition hover:border-ink hover:text-ink disabled:opacity-50"}
         >
           Reopen
         </button>
@@ -49,7 +61,7 @@ export default function AppraisalOutcome({ id, stage, why }: { id: string; stage
             type="button"
             disabled={busy}
             onClick={() => void set("won")}
-            className="rounded-full border border-emerald-300 px-3 py-1 text-[11.5px] font-medium text-emerald-800 transition hover:bg-emerald-50 disabled:opacity-50"
+            className={big ? "rounded-full bg-accent-dark px-6 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50" : "rounded-full border border-emerald-300 px-3 py-1 text-[11.5px] font-medium text-emerald-800 transition hover:bg-emerald-50 disabled:opacity-50"}
           >
             Mark as won
           </button>
@@ -57,7 +69,7 @@ export default function AppraisalOutcome({ id, stage, why }: { id: string; stage
             type="button"
             disabled={busy}
             onClick={() => void set("lost")}
-            className="rounded-full border border-line px-3 py-1 text-[11.5px] text-muted transition hover:border-ink hover:text-ink disabled:opacity-50"
+            className={big ? "rounded-full border border-line/70 bg-white px-6 py-2.5 text-[13px] font-semibold transition hover:border-ink/40 disabled:opacity-50" : "rounded-full border border-line px-3 py-1 text-[11.5px] text-muted transition hover:border-ink hover:text-ink disabled:opacity-50"}
           >
             Mark as lost
           </button>

@@ -59,6 +59,20 @@
         "3286"
       ],
       "port": 3286
+    },
+    {
+      "name": "tle-os-appraisal",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "DATABASE_URL=postgres://postgres:radar@localhost:55432/tleos",
+        "NEXT_DIST_DIR=.next-appraisal",
+        "npx",
+        "next",
+        "dev",
+        "-p",
+        "3290"
+      ],
+      "port": 3290
     }
   ]
 }
