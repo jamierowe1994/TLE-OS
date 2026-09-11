@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
+import { scopeFor } from "@/lib/scope";
 import { feeBasis, forecastFor, saveFeeBasis, saveTarget, type FeeBasis } from "@/lib/finance-forecast";
 
 /**
@@ -21,10 +22,25 @@ export async function GET(req: NextRequest) {
   const { actor, subject } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const me = subject ?? actor;
-  /* An owner sees the whole business; everybody else sees their own book. */
-  const scope = can(actor.role, "see:business") ? null : me.rexUserId;
-  const answer = await forecastFor(scope, me.id);
-  return NextResponse.json({ ok: true, ...answer, whole: scope === null, canSetRates: can(actor.role, "see:business") });
+  /* WHOSE book: the one resolver every data route uses (lib/scope). An owner
+     sees the whole business; a partner their own; an owner viewing as a
+     partner sees that partner's - including one with no OS account yet,
+     whose REX id rides on the view-as cookie. Somebody the OS cannot place
+     in REX gets an honest blank rather than the whole firm's money. */
+  const scope = await scopeFor(req);
+  const canSetRates = can(actor.role, "see:business");
+  if (!scope.everything && !scope.rexUserId) {
+    return NextResponse.json({
+      ok: true, live: false, reason: "Not linked to a REX user yet, so there is no book to read.",
+      whole: false, canSetRates,
+    });
+  }
+  const answer = await forecastFor(scope.rexUserId, {
+    id: me.id,
+    email: subject?.email ?? (scope.everything ? actor.email : null) ?? null,
+    rexUserId: scope.rexUserId ?? me.rexUserId ?? null,
+  });
+  return NextResponse.json({ ok: true, ...answer, whole: scope.everything, canSetRates });
 }
 
 export async function PUT(req: NextRequest) {

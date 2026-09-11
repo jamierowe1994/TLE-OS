@@ -45,6 +45,9 @@ export type WidgetDef = {
   defaultH: number;
   /** The tap-to-size presets. Omitted = the global S 1×1 / M 2×1 / L 2×2. */
   sizes?: { s: [number, number]; m: [number, number]; l: [number, number] };
+  /** A wash for the tile - the odd one in colour. Pink for the box that asks
+   *  for a hand, sage for the day's money. Everything else stays white. */
+  tint?: string;
   render: (w: number, h: number) => React.ReactNode;
 };
 

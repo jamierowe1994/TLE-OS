@@ -411,6 +411,8 @@ export default function BentoDash({
           if (!def) return null;
           const isDragged = dragged?.id === item.id;
           const sizes = def.sizes ?? DEFAULT_SIZES;
+          /* The registry may name its own wash; the dashboard's two live here. */
+          const tint = def.tint ?? TINT[item.type];
           return (
             <Reveal
               key={item.id}
@@ -423,7 +425,7 @@ export default function BentoDash({
                 beginDrag(e, item.id, false, r.width, r.height);
               }}
               index={idx}
-              className={`relative rounded-2xl border p-5 ${TINT[item.type] ?? "bg-card"} ${
+              className={`relative rounded-2xl border p-5 ${tint ?? "bg-card"} ${
                 customise
                   ? `cursor-grab select-none border-dashed border-ink/40 ${
                       /* The wiggle rests while anything is being moved or
@@ -438,7 +440,7 @@ export default function BentoDash({
                   /* The slab is the board's hover language — it went missing
                      on 8 Aug when the request was to drop it from the WIDE
                      chart boxes, and I took it off every tile instead. */
-                  : `block-pop overflow-hidden ${TINT[item.type] ? "border-transparent" : "border-line/80"} hover:border-ink`
+                  : `block-pop overflow-hidden ${tint ? "border-transparent" : "border-line/80"} hover:border-ink`
               }`}
               style={{
                 gridColumn: `span ${item.w} / span ${item.w}`,

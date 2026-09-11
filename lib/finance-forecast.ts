@@ -2,6 +2,7 @@ import "server-only";
 import { managedBookFor } from "@/lib/managed-book-cache";
 import { hasDb, q } from "@/lib/db";
 import type { ManagedProperty } from "@/lib/portfolio-types";
+import { getTegPerson, listTegPeople } from "@/lib/teg-people";
 
 /**
  * What the book earns, what it is on course to earn, and what somebody wants
@@ -34,6 +35,22 @@ import type { ManagedProperty } from "@/lib/portfolio-types";
  * as the book's shape, never as historic income.
  */
 
+/**
+ * What a partner package means in money (James, 11 Sep 2026: "what platform
+ * they're on... if they're on the pro licence"). The Hub says which package
+ * each partner trades under - Basic, Pro or Academy; these say what that
+ * package keeps of a fee and what it pays a month. Blank until an owner
+ * fills them in, like every other rate here.
+ */
+export interface PackageTerms {
+  /** The share of fee income the partner keeps, as a percentage. */
+  sharePct: number | null;
+  /** The monthly licence the partner pays, in pence. */
+  licencePence: number | null;
+}
+
+export const PACKAGES = ["Basic", "Pro", "Academy"] as const;
+
 export interface FeeBasis {
   /** Management fee as a percentage of rent, on fully managed homes. */
   managementPct: number | null;
@@ -43,6 +60,8 @@ export interface FeeBasis {
   setupFeePence: number | null;
   /** Let-only earns the set-up fee and no monthly fee. */
   letOnlySetupPence: number | null;
+  /** Keyed on the Hub's package names. */
+  packages: Record<string, PackageTerms>;
 }
 
 export const EMPTY_BASIS: FeeBasis = {
@@ -50,6 +69,7 @@ export const EMPTY_BASIS: FeeBasis = {
   rentCollectPct: null,
   setupFeePence: null,
   letOnlySetupPence: null,
+  packages: {},
 };
 
 export interface MonthPoint {
@@ -96,6 +116,34 @@ export interface ForecastAnswer {
   /** What the next twelve months come to at the current trajectory. */
   predictedPence: number | null;
   ageMs: number;
+  /**
+   * The person looking, as the Hub knows them: their package and what it
+   * means. Null package = the Hub has no record of them (owners, support).
+   */
+  mine: {
+    package: string | null;
+    sharePct: number | null;
+    licencePence: number | null;
+  };
+  /**
+   * What they take home this month and next: fees × their share, less the
+   * licence. Null until the package's share is set. An owner looking at the
+   * whole business gets null too - a share is a partner's, not the firm's.
+   */
+  paidThisMonthPence: number | null;
+  paidNextMonthPence: number | null;
+  /** Next month's fee income, off the same projection as the year ahead. */
+  nextMonthPence: number | null;
+  /**
+   * Licence income across the active partners, for an owner: the Hub's
+   * headcount per package times the licence on each. Null on an agent's
+   * view - it is not their money.
+   */
+  licenceIncome: {
+    partners: number;
+    byPackage: { name: string; partners: number; licencePence: number | null; totalPence: number | null }[];
+    totalPence: number | null;
+  } | null;
 }
 
 const MONTHS = 12;
@@ -119,11 +167,18 @@ const SETTINGS_KEY = "fees";
 export async function feeBasis(): Promise<FeeBasis> {
   if (!hasDb()) return EMPTY_BASIS;
   const rows = await q<{ value: Partial<FeeBasis> | null }>(`SELECT value FROM os_settings WHERE key = $1`, [SETTINGS_KEY]).catch(() => []);
-  return { ...EMPTY_BASIS, ...(rows[0]?.value ?? {}) };
+  const stored = rows[0]?.value ?? {};
+  return { ...EMPTY_BASIS, ...stored, packages: { ...(stored.packages ?? {}) } };
 }
 
 export async function saveFeeBasis(next: Partial<FeeBasis>): Promise<FeeBasis> {
-  const merged = { ...(await feeBasis()), ...next };
+  const cur = await feeBasis();
+  /* Packages merge by name, so setting Pro does not blank Basic. */
+  const packages = { ...cur.packages };
+  for (const [name, terms] of Object.entries(next.packages ?? {})) {
+    packages[name] = { ...(packages[name] ?? { sharePct: null, licencePence: null }), ...terms };
+  }
+  const merged = { ...cur, ...next, packages };
   if (hasDb()) {
     await q(
       `INSERT INTO os_settings (key, value, updated_at) VALUES ($1, $2, NOW())
@@ -177,10 +232,56 @@ const earnsMonthly = (p: ManagedProperty) => p.service === "Managed" || p.servic
 
 /* ── the answer ─────────────────────────────────────────────────────────── */
 
-export async function forecastFor(rexUserId: string | null, userId: string): Promise<ForecastAnswer> {
+export interface ForecastWho {
+  id: string;
+  email: string | null;
+  rexUserId: string | null;
+}
+
+export async function forecastFor(rexUserId: string | null, who: ForecastWho): Promise<ForecastAnswer> {
   const basis = await feeBasis();
-  const targetPence = await readTarget(userId);
+  const targetPence = await readTarget(who.id);
   const basisSet = basis.managementPct != null || basis.setupFeePence != null;
+  const whole = rexUserId === null;
+
+  /* The person and the partners, as the Hub holds them. Read here rather
+     than in a second route so one fetch fills every tile on the board. */
+  const [person, everyone] = await Promise.all([
+    getTegPerson({ email: who.email, rexId: who.rexUserId }),
+    whole ? listTegPeople() : Promise.resolve([]),
+  ]);
+  const myPackage = person?.partnerPackage ?? null;
+  const myTerms = myPackage ? basis.packages[myPackage] : undefined;
+  const mine = {
+    package: myPackage,
+    sharePct: myTerms?.sharePct ?? null,
+    licencePence: myTerms?.licencePence ?? null,
+  };
+  /* Active partners only. Departed and duplicate rows are in the Hub too,
+     and counting them would invoice people who have left. */
+  const active = everyone.filter((p) => p.status === "Active" && p.personType === "Partner" && p.partnerPackage);
+  const licenceIncome = whole
+    ? (() => {
+        const names = [...new Set([...PACKAGES, ...active.map((p) => p.partnerPackage as string)])];
+        const byPackage = names
+          .map((name) => {
+            const partners = active.filter((p) => p.partnerPackage === name).length;
+            const licencePence = basis.packages[name]?.licencePence ?? null;
+            return { name, partners, licencePence, totalPence: licencePence == null ? null : partners * licencePence };
+          })
+          .filter((row) => row.partners > 0);
+        const priced = byPackage.filter((r) => r.totalPence != null);
+        return {
+          partners: active.length,
+          byPackage,
+          totalPence: priced.length ? priced.reduce((a, r) => a + (r.totalPence ?? 0), 0) : null,
+        };
+      })()
+    : null;
+  const takeHome = (feesPence: number | null): number | null =>
+    whole || feesPence == null || mine.sharePct == null
+      ? null
+      : Math.round((feesPence * mine.sharePct) / 100) - (mine.licencePence ?? 0);
 
   let properties: ManagedProperty[] = [];
   let ageMs = 0;
@@ -195,6 +296,7 @@ export async function forecastFor(rexUserId: string | null, userId: string): Pro
       basisSet, basis, past: [], ahead: [],
       growth: { addedThisYear: 0, addedLast12: 0, perMonth: 0, propertiesNow: 0, managedNow: 0, feeableRentNowPence: 0, propertiesYearAgo: 0, feeableRentYearAgoPence: 0, growthPct: null },
       targetPence, predictedPence: null, ageMs: 0,
+      mine, paidThisMonthPence: null, paidNextMonthPence: null, nextMonthPence: null, licenceIncome,
     };
   }
 
@@ -285,5 +387,15 @@ export async function forecastFor(rexUserId: string | null, userId: string): Pro
     ? null
     : ahead.reduce((a, m) => a + (m.totalPence ?? 0), 0);
 
-  return { live: true, basisSet, basis, past, ahead, growth, targetPence, predictedPence, ageMs };
+  const thisMonthPence = past[past.length - 1]?.totalPence ?? null;
+  const nextMonthPence = ahead[0]?.totalPence ?? null;
+
+  return {
+    live: true, basisSet, basis, past, ahead, growth, targetPence, predictedPence, ageMs,
+    mine,
+    paidThisMonthPence: takeHome(thisMonthPence),
+    paidNextMonthPence: takeHome(nextMonthPence),
+    nextMonthPence,
+    licenceIncome,
+  };
 }
