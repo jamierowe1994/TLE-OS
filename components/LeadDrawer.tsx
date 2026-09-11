@@ -825,7 +825,8 @@ export default function LeadDrawer({
     setTasks(detail.tasks);
     setNotes(detail.notes);
     setDocs(detail.docs);
-    setTags(detail.tags);
+    /* A lead with no area carries "—" as a value; it is not a tag. */
+    setTags(detail.tags.filter((t) => t && t.trim() !== "—"));
     setTab(null);
     setDraft("");
     setAdded([]);
@@ -1101,7 +1102,7 @@ export default function LeadDrawer({
   const receivedIso = enquiry?.receivedAt ?? lead.receivedAt ?? null;
   const enqProperty = lead.address || enquiry?.fields.find(([k]) => /property address|listing address/i.test(k))?.[1] || lead.preferred;
   const quick: { label: string; sub: string; icon: string; go: () => void; off?: boolean; href?: string }[] = [
-    { label: "Find properties", sub: "On a map, by radius", icon: "search", go: () => { setFinderAddr(contact.area || enqProperty || ""); setFinderOpen(true); } },
+    { label: "Find properties", sub: "On a map, by radius", icon: "search", go: () => { const real = (v?: string | null) => (v && v.trim() !== "—" ? v : ""); setFinderAddr(real(contact.area) || real(enqProperty)); setFinderOpen(true); } },
     passport?.done && passport.path
       ? { label: "Passport done", sub: "See their answers", icon: "user", href: passport.path, go: () => {} }
       : { label: passport?.sent ? "Resend passport" : "Send passport", sub: passportEmail ? (passportBusy ? "Sending…" : passportSaid ?? "Ask for their details") : "No email on this lead", icon: "user", off: !passportEmail || passportBusy, go: () => void sendPassport(Boolean(passport?.sent)) },
