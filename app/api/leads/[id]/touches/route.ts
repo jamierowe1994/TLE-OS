@@ -30,7 +30,7 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const KINDS: TouchKind[] = ["call", "text", "email", "visit", "note", "nurture", "rejoin"];
+const KINDS: TouchKind[] = ["call", "text", "whatsapp", "email", "visit", "note", "nurture", "rejoin"];
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { actor } = await whoIs(req);

@@ -408,9 +408,9 @@ export function leadDetail(lead: Lead): LeadDetail {
       // whichever agent the lead happens to be assigned to. Not for a tenant
       // (11 Sep 2026): their lead opens on the enquiry card, read in full from
       // REX, and this note was REX's 100-character preview repeated below it.
-      (lead.enquiryMessage && leadSide(lead) !== "tenant"
-        ? [{ id: "n1", author: `${lead.name} — their enquiry`, when: lead.received, text: lead.enquiryMessage }]
-        : lead.notes
+      /* Nor for a landlord now (11 Sep 2026): both leads open on the
+         enquiry itself, read in full from REX. */
+      (lead.notes
           ? [{ id: "n1", author: lead.agent, when: lead.received, text: lead.notes }]
           : []),
     docs: d.docs ?? [],

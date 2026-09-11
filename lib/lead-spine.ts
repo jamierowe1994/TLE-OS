@@ -13,7 +13,7 @@
  */
 
 /** What an agent can log against a lead. */
-export type TouchKind = "call" | "text" | "email" | "visit" | "note" | "nurture" | "rejoin";
+export type TouchKind = "call" | "text" | "whatsapp" | "email" | "visit" | "note" | "nurture" | "rejoin";
 
 /** How a contact attempt went. Only the contact kinds carry one. */
 export type TouchOutcome = "spoke" | "no_answer" | "voicemail" | "replied" | "sent";
@@ -30,21 +30,24 @@ export interface LeadTouch {
 }
 
 export const TOUCH_KINDS: { id: TouchKind; label: string; icon: string }[] = [
+  /* The four ways to reach a lead who has just enquired (James, 11 Sep
+     2026). Visit stays a kind the log accepts - old rows carry it - but is
+     not offered: nobody drives to a house that has only just enquired. */
   { id: "call", label: "Call", icon: "call" },
-  { id: "text", label: "Text / WhatsApp", icon: "message" },
-  { id: "visit", label: "Visit", icon: "home" },
+  { id: "text", label: "Text", icon: "message" },
+  { id: "whatsapp", label: "WhatsApp", icon: "message-2" },
   { id: "email", label: "Email", icon: "mail" },
 ];
 
 /** The contact kinds - the ones that count as an attempt on the spine. */
-export const ATTEMPT_KINDS: TouchKind[] = ["call", "text", "visit"];
+export const ATTEMPT_KINDS: TouchKind[] = ["call", "text", "whatsapp", "visit"];
 
 export const OUTCOMES: { id: TouchOutcome; label: string; for: TouchKind[] }[] = [
   { id: "spoke", label: "Spoke to them", for: ["call", "visit"] },
   { id: "no_answer", label: "No answer", for: ["call", "visit"] },
   { id: "voicemail", label: "Left a voicemail", for: ["call"] },
-  { id: "sent", label: "Sent", for: ["text", "email"] },
-  { id: "replied", label: "They replied", for: ["text", "email"] },
+  { id: "sent", label: "Sent", for: ["text", "whatsapp", "email"] },
+  { id: "replied", label: "They replied", for: ["text", "whatsapp", "email"] },
 ];
 
 /**
@@ -167,6 +170,8 @@ export function touchSentence(t: LeadTouch): string {
       return outcome ? `Call - ${outcome.toLowerCase()}` : "Call";
     case "text":
       return outcome === "They replied" ? "Text - they replied" : "Text sent";
+    case "whatsapp":
+      return outcome === "They replied" ? "WhatsApp - they replied" : "WhatsApp sent";
     case "visit":
       return outcome ? `Visit - ${outcome.toLowerCase()}` : "Visit";
     case "email":
@@ -184,6 +189,7 @@ export function touchIcon(t: LeadTouch): string {
   switch (t.kind) {
     case "call": return "call";
     case "text": return "message";
+    case "whatsapp": return "message-2";
     case "visit": return "home";
     case "email": return "mail";
     case "note": return "doc";

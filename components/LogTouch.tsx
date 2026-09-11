@@ -35,6 +35,7 @@ export default function LogTouch({
   initialKind = "call",
   onClose,
   onLogged,
+  onBook,
 }: {
   leadId: string;
   leadName: string;
@@ -44,6 +45,8 @@ export default function LogTouch({
   initialKind?: TouchKind;
   onClose: () => void;
   onLogged: (result: unknown) => void;
+  /** They said yes on the call: log it, then straight into booking the appraisal. */
+  onBook?: () => void;
 }) {
   const [kind, setKind] = useState<TouchKind>(initialKind);
   const [outcome, setOutcome] = useState<TouchOutcome | null>(null);
@@ -51,6 +54,12 @@ export default function LogTouch({
   const [reason, setReason] = useState(NURTURE_REASONS[0]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /* The attempt walks through frames (James, 11 Sep 2026): how you reached
+     them, how it went, whether they booked, then anything to remember. */
+  const [frame, setFrame] = useState<1 | 2 | 3 | 4>(1);
+  const [booked, setBooked] = useState<boolean | null>(null);
+  const engaged = outcome === "spoke" || outcome === "replied";
+  const offered = TOUCH_KINDS.filter((k) => k.id !== "visit");
 
   const outcomes = OUTCOMES.filter((o) => o.for.includes(kind));
   useEffect(() => {
@@ -80,7 +89,7 @@ export default function LogTouch({
         body: JSON.stringify(
           mode === "nurture"
             ? { kind: "nurture", reason, body, lead: leadFacts }
-            : { kind, outcome, body }
+            : { kind, outcome, body: booked ? `Booked the valuation.${body ? ` ${body}` : ""}` : body }
         ),
       });
       const j = await r.json().catch(() => null);
@@ -90,6 +99,7 @@ export default function LogTouch({
         return;
       }
       onLogged(j);
+      if (booked && onBook) onBook();
     } catch {
       setError("That didn't save - the connection dropped.");
       setBusy(false);
@@ -104,54 +114,81 @@ export default function LogTouch({
       <div className="fade-up relative w-full max-w-md rounded-3xl border border-line/80 bg-page p-6 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
         {mode === "attempt" ? (
           <>
-            <h2 className="hand text-[20px]">Log the attempt</h2>
-            <p className="mt-1 text-[12.5px] text-muted">
-              What you did to reach {first}, and how it went. Unanswered counts - three of those is information.
-            </p>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {TOUCH_KINDS.map((k) => (
-                <button
-                  key={k.id}
-                  type="button"
-                  onClick={() => setKind(k.id)}
-                  className={`flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12px] transition-colors ${
-                    kind === k.id
-                      ? "border-accent-dark bg-accent-soft/50 font-semibold text-accent-dark"
-                      : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
-                  }`}
-                >
-                  <DoodleIcon name={k.icon} size={13} />
-                  {k.label}
-                </button>
-              ))}
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="hand text-[20px]">
+                {frame === 1 ? `How did you reach ${first}?` : frame === 2 ? "How did it go?" : frame === 3 ? "Did they book the valuation?" : "Anything worth remembering?"}
+              </h2>
+              <span className="flex items-center gap-1" aria-hidden>
+                {[1, 2, 3, 4].map((n) => (
+                  <span key={n} className={`h-1.5 rounded-full transition-all ${n === frame ? "w-4 bg-accent-dark" : n < frame ? "w-1.5 bg-accent-dark/50" : "w-1.5 bg-line"}`} />
+                ))}
+              </span>
             </div>
-
-            <p className="mt-4 text-[10.5px] font-semibold uppercase tracking-wide text-muted">How did it go</p>
-            <div className="mt-1.5 flex flex-wrap gap-2">
-              {outcomes.map((o) => (
-                <button
-                  key={o.id}
-                  type="button"
-                  onClick={() => setOutcome(o.id)}
-                  className={`rounded-full border px-3.5 py-2 text-[12px] transition-colors ${
-                    outcome === o.id
-                      ? "border-ink bg-ink font-semibold text-page"
-                      : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
-                  }`}
-                >
-                  {o.label}
+            {frame === 1 && (
+              <div className="mt-4 grid grid-cols-2 gap-2.5">
+                {offered.map((k) => (
+                  <button
+                    key={k.id}
+                    type="button"
+                    onClick={() => { setKind(k.id); setOutcome(null); setBooked(null); setFrame(2); }}
+                    className="flex items-center gap-3 rounded-2xl border border-line/70 bg-card px-4 py-3.5 text-left transition-colors hover:border-ink/40"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-dark">
+                      <DoodleIcon name={k.icon} size={16} />
+                    </span>
+                    <span className="text-[13.5px] font-semibold">{k.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {frame === 2 && (
+              <div className="mt-4 grid gap-2.5">
+                {outcomes.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => {
+                      setOutcome(o.id);
+                      const engages = o.id === "spoke" || o.id === "replied";
+                      if (!engages) setBooked(null);
+                      setFrame(engages ? 3 : 4);
+                    }}
+                    className={`flex items-center justify-between rounded-2xl border px-4 py-3.5 text-left text-[13.5px] font-semibold transition-colors hover:border-ink/40 ${outcome === o.id ? "border-accent-dark bg-accent-soft/40" : "border-line/70 bg-card"}`}
+                  >
+                    {o.label}
+                    <span aria-hidden className="text-muted">›</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {frame === 3 && (
+              <div className="mt-4 grid grid-cols-2 gap-2.5">
+                <button type="button" onClick={() => { setBooked(true); setFrame(4); }} className={`rounded-2xl border px-4 py-4 text-[13.5px] font-semibold transition-colors hover:border-ink/40 ${booked === true ? "border-accent-dark bg-sage/30" : "border-line/70 bg-card"}`}>
+                  Yes, booked
+                  <span className="mt-1 block text-[11.5px] font-normal text-muted">Log it, then pick the slot</span>
                 </button>
-              ))}
-            </div>
-
-            <textarea
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="Anything worth remembering - what they said, when to try again…"
-              rows={3}
-              className="mt-4 w-full resize-none rounded-xl border border-line/80 bg-transparent px-3 py-2.5 text-[12.5px] leading-relaxed outline-none placeholder:text-muted/70 focus:border-ink"
-            />
+                <button type="button" onClick={() => { setBooked(false); setFrame(4); }} className={`rounded-2xl border px-4 py-4 text-[13.5px] font-semibold transition-colors hover:border-ink/40 ${booked === false ? "border-accent-dark bg-accent-soft/40" : "border-line/70 bg-card"}`}>
+                  Not yet
+                  <span className="mt-1 block text-[11.5px] font-normal text-muted">They are thinking about it</span>
+                </button>
+              </div>
+            )}
+            {frame === 4 && (
+              <>
+                <p className="mt-1 text-[12.5px] text-muted">
+                  {TOUCH_KINDS.find((k) => k.id === kind)?.label} · {outcomes.find((o) => o.id === outcome)?.label}
+                  {booked === true ? " · booked the valuation" : booked === false ? " · not booked yet" : ""}
+                </p>
+                <textarea
+                  autoFocus
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  placeholder="What they said, when to try again…"
+                  rows={3}
+                  className="mt-4 w-full resize-none rounded-xl border border-line/80 bg-transparent px-3 py-2.5 text-[12.5px] leading-relaxed outline-none placeholder:text-muted/70 focus:border-ink"
+                />
+              </>
+            )}
           </>
         ) : (
           <>
@@ -192,11 +229,12 @@ export default function LogTouch({
         <div className="mt-5 flex items-center justify-end gap-3">
           <button
             type="button"
-            onClick={onClose}
+            onClick={mode === "attempt" && frame > 1 ? () => setFrame((f) => (f === 4 && !engaged ? 2 : (f - 1) as 1 | 2 | 3)) : onClose}
             className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40"
           >
-            Cancel
+            {mode === "attempt" && frame > 1 ? "← Back" : "Cancel"}
           </button>
+          {(mode === "nurture" || frame === 4) && (
           <PressButton
             onClick={save}
             disabled={!canSave || busy}
@@ -205,8 +243,9 @@ export default function LogTouch({
             }`}
           >
             <DoodleIcon name={mode === "nurture" ? "clock" : "checklist"} size={14} />
-            {busy ? "Saving…" : mode === "nurture" ? "Add to nurture" : "Log it"}
+            {busy ? "Saving…" : mode === "nurture" ? "Add to nurture" : booked ? "Log it and book" : "Log it"}
           </PressButton>
+          )}
         </div>
       </div>
     </div>

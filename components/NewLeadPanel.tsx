@@ -551,6 +551,9 @@ export default function NewLeadPanel({
                illustration big enough to carry the choice and a word big
                enough to read across the room (James, 8 Aug 2026). */
             <div className="mx-auto flex h-full max-w-3xl flex-col justify-center">
+              {/* James's picture for a new lead (11 Sep 2026). */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/art/new-lead.webp" alt="" aria-hidden className="pointer-events-none mx-auto mb-2 h-[200px] w-auto shrink-0" />
               {(
                 [
                   {

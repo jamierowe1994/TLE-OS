@@ -36,6 +36,7 @@ export default function ProcessTimeline({
   onPick,
   stalled,
   doneAt,
+  hints,
   pickAny,
   branch,
 }: {
@@ -59,6 +60,8 @@ export default function ProcessTimeline({
    * agent should see the fork while they are still on it.
    */
   branch?: Branch;
+  /** Hover text per step - what was actually logged there (11 Sep 2026). */
+  hints?: (string | null | undefined)[];
 }) {
   const isDone = (i: number) => (doneAt ? doneAt(i) : i < current);
   return (
@@ -97,7 +100,7 @@ export default function ProcessTimeline({
                   type="button"
                   disabled={!reachable}
                   onClick={() => onPick(i)}
-                  title={reachable ? s.title : "Finish the step you're on first"}
+                  title={hints?.[i] || (reachable ? s.title : "Finish the step you're on first")}
                   className="group relative z-[1] flex flex-col items-center gap-2 px-1 disabled:cursor-not-allowed"
                 >
                   <span
