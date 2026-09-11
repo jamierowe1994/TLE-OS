@@ -62,7 +62,6 @@ type TabKey = "activity" | "tasks" | "documents" | "properties";
  * stop reading tabs. Booked viewings surface in Activity, where they're news.
  */
 const TABS: { key: TabKey; label: string }[] = [
-  { key: "activity", label: "Activity" },
   { key: "tasks", label: "Tasks" },
   { key: "documents", label: "Documents" },
   { key: "properties", label: "Properties" },
@@ -660,6 +659,23 @@ export default function LeadDrawer({
     return () => { live = false; };
   }, [enquiryLeadId]);
 
+  /* The pop-outs: activity, the property finder, the more menu, removal. */
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeBusy, setRemoveBusy] = useState(false);
+  const [removeMsg, setRemoveMsg] = useState<string | null>(null);
+  const [finderOpen, setFinderOpen] = useState(false);
+  const [finderAddr, setFinderAddr] = useState("");
+  const [finderOrigin, setFinderOrigin] = useState<{ lat: number; lng: number } | null>(null);
+  const [finderLabel, setFinderLabel] = useState("");
+  const [finderBusy, setFinderBusy] = useState(false);
+  const [finderMsg, setFinderMsg] = useState<string | null>(null);
+  useEffect(() => {
+    setActivityOpen(false); setMoreOpen(false); setRemoving(false); setFinderOpen(false);
+    setFinderOrigin(null); setFinderLabel(""); setFinderMsg(null);
+  }, [enquiryLeadId]);
+
   async function sendPassport(again: boolean) {
     if (!lead || passportBusy || !passportEmail) return;
     setPassportBusy(true);
@@ -1084,15 +1100,104 @@ export default function LeadDrawer({
   const enqMessage = enquiry?.message || (enquiry === undefined && previewOk ? lead.enquiryMessage ?? "" : "");
   const receivedIso = enquiry?.receivedAt ?? lead.receivedAt ?? null;
   const enqProperty = lead.address || enquiry?.fields.find(([k]) => /property address|listing address/i.test(k))?.[1] || lead.preferred;
-  const quick: { label: string; sub: string; icon: string; go: () => void; primary?: boolean; off?: boolean; href?: string }[] = [
-    { label: "Book a viewing", sub: "Find a slot and invite", icon: "calendar", primary: true, go: () => { setBookMode("viewing"); setBooking(true); advanceTo("viewing"); } },
-    { label: "Send properties", sub: "Any in the book", icon: "mail", go: () => { setEmailing(true); advanceTo("shortlist"); } },
+  const quick: { label: string; sub: string; icon: string; go: () => void; off?: boolean; href?: string }[] = [
+    { label: "Find properties", sub: "On a map, by radius", icon: "search", go: () => { setFinderAddr(contact.area || enqProperty || ""); setFinderOpen(true); } },
     passport?.done && passport.path
       ? { label: "Passport done", sub: "See their answers", icon: "user", href: passport.path, go: () => {} }
       : { label: passport?.sent ? "Resend passport" : "Send passport", sub: passportEmail ? (passportBusy ? "Sending…" : passportSaid ?? "Ask for their details") : "No email on this lead", icon: "user", off: !passportEmail || passportBusy, go: () => void sendPassport(Boolean(passport?.sent)) },
-    { label: "Find properties", sub: "Search near them", icon: "search", go: () => setTab("properties") },
     { label: "Add a note", sub: "Log a conversation", icon: "note", go: () => { const el = document.getElementById("lead-note"); el?.scrollIntoView({ behavior: "smooth", block: "center" }); (el as HTMLTextAreaElement | null)?.focus(); } },
+    { label: "View activity", sub: "Everything so far", icon: "list", go: () => setActivityOpen(true) },
   ];
+
+  /* Everything that has happened with this person, for the pop-out. */
+  const activityPanel = (
+    <>
+                    <ul className="space-y-4">
+                      {viewings.map((v) => (
+                        <li key={v.id} className="flex items-start gap-3 border-b border-line/40 pb-4 last:border-0 last:pb-0">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft/60">
+                            <DoodleIcon name="calendar" size={15} className="text-accent-dark" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[12.5px]">
+                              Viewing — {v.property}, {v.locality}
+                            </span>
+                            <span className="block text-[10.5px] text-muted">{v.when}</span>
+                          </span>
+                          <Pill tone={v.outcome === "Applying" ? "good" : "neutral"}>{v.outcome}</Pill>
+                        </li>
+                      ))}
+                      {touches.map((t) => (
+                        <li key={t.id} className="flex items-start gap-3 border-b border-line/40 pb-4 last:border-0 last:pb-0">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft/60">
+                            <DoodleIcon name={touchIcon(t)} size={15} className="text-accent-dark" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[12.5px]">
+                              {touchSentence(t)}
+                              {t.kind !== "nurture" && t.body ? <span className="text-muted"> — {t.body}</span> : null}
+                            </span>
+                            <span className="block text-[10.5px] text-muted">
+                              {t.byName} · {whenAgo(t.at)}
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                      {lead.activity.map((a, i) => (
+                        <li key={i} className="flex items-start gap-3 border-b border-line/40 pb-4 last:border-0 last:pb-0">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft/60">
+                            <DoodleIcon name={a.icon} size={15} className="text-accent-dark" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[12.5px]">{a.text}</span>
+                            <span className="block text-[10.5px] text-muted">{a.when}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-4 border-t border-line/70 pt-3 text-[10.5px] text-muted">
+                      Emails in and out will thread here — REX AuditLogs already records
+                      field-level changes with actor and timestamp, so the history is real.
+                    </p>
+                  </>
+  );
+
+  async function removeLead() {
+    if (removeBusy) return;
+    setRemoveBusy(true);
+    setRemoveMsg(null);
+    try {
+      const j = await fetch(`/api/leads/${encodeURIComponent(lead!.id)}/hide`, { method: "POST" }).then((r) => r.json());
+      if (!j?.ok) throw new Error(j?.error ?? "That did not save.");
+      window.dispatchEvent(new CustomEvent("lead-removed", { detail: lead!.id }));
+      setRemoving(false);
+      onClose();
+    } catch (e) {
+      setRemoveMsg(e instanceof Error ? e.message : "That did not save.");
+    } finally {
+      setRemoveBusy(false);
+    }
+  }
+
+  async function centreFinder() {
+    const addr = finderAddr.trim();
+    if (!addr || finderBusy) return;
+    setFinderBusy(true);
+    setFinderMsg(null);
+    try {
+      const j = await fetch(`/api/address?geocode=${encodeURIComponent(addr)}`, { cache: "no-store" }).then((r) => r.json());
+      if (j?.lat != null && j?.lng != null) {
+        setFinderOrigin({ lat: j.lat, lng: j.lng });
+        setFinderLabel(j.address || addr);
+      } else {
+        setFinderMsg(j?.problem?.says ?? "We could not place that address. Try a postcode.");
+      }
+    } catch {
+      setFinderMsg("We could not place that address just now.");
+    } finally {
+      setFinderBusy(false);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[120]">
@@ -1126,6 +1231,15 @@ export default function LeadDrawer({
           {/* The side questions, centre stage. A tab toggles: open its panel
               in the person box, or click again to put the record back. */}
           <div className="hidden items-center gap-1 sm:flex">
+            {/* The way back to the record (James, 11 Sep 2026: "we can't then
+                ever get back to the homepage"). */}
+            <button
+              type="button"
+              onClick={() => setTab(null)}
+              className={`hand rounded-full px-3.5 py-1.5 text-[13px] transition-colors ${tab === null ? "bg-accent-soft text-accent-dark" : "text-muted hover:text-ink"}`}
+            >
+              Overview
+            </button>
             {TABS.map((t) => {
               const count =
                 t.key === "tasks"
@@ -1171,11 +1285,51 @@ export default function LeadDrawer({
             </button>
             <button
               type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink"
-              title="More"
+              onClick={() => setActivityOpen(true)}
+              className="hidden items-center gap-2 rounded-full border border-line/80 px-4 py-2 text-[12px] text-muted transition-colors hover:text-ink md:flex"
             >
-              ⋯
+              <DoodleIcon name="list" size={13} />
+              View activity
             </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setMoreOpen((o) => !o)}
+                aria-expanded={moreOpen}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink"
+                title="More"
+              >
+                ⋯
+              </button>
+              {moreOpen && (
+                <div className="fade-up absolute right-0 top-full z-30 mt-2 w-60 rounded-2xl border border-line/80 bg-card p-1.5 shadow-[0_18px_40px_-16px_rgba(16,16,20,0.35)]">
+                  <button
+                    type="button"
+                    onClick={() => { setMoreOpen(false); setActivityOpen(true); }}
+                    className="block w-full rounded-xl px-3 py-2 text-left text-[12.5px] transition-colors hover:bg-page"
+                  >
+                    View activity
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMoreOpen(false);
+                      void navigator.clipboard?.writeText(`${window.location.origin}/leads?open=${encodeURIComponent(lead.id)}`);
+                    }}
+                    className="block w-full rounded-xl px-3 py-2 text-left text-[12.5px] transition-colors hover:bg-page"
+                  >
+                    Copy a link to this lead
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setMoreOpen(false); setRemoveMsg(null); setRemoving(true); }}
+                    className="block w-full rounded-xl px-3 py-2 text-left text-[12.5px] font-semibold text-accent-dark transition-colors hover:bg-page"
+                  >
+                    Remove this lead…
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -1188,7 +1342,8 @@ export default function LeadDrawer({
               because tags describe the person, not the process. No avatar:
               nobody uploads headshots of applicants, and a circle of initials
               is a photo-shaped apology. ── */}
-          <div className="relative rounded-3xl border border-line/80 bg-card p-5">
+          <div className={isTenant && tab === null ? "relative" : "relative rounded-3xl border border-line/80 bg-card p-5"}>
+            {!(isTenant && tab === null) && (
             <div className="flex flex-wrap items-center gap-3">
               {/* Editable only for people the OS owns. A REX lead's name is
                   REX's to change, and an input that silently discards what you
@@ -1241,41 +1396,90 @@ export default function LeadDrawer({
                 </span>
               )}
             </div>
+            )}
 
             {tab === null && isTenant ? (
-              /* THE TENANT LEAD (James's mock, 11 Sep 2026): their enquiry
-                 first, then who they are and the property they asked about,
-                 then the things you do - denser, and nothing stretched out. */
-              <div className="mt-5 space-y-4">
-                <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)]">
-                  {/* Their enquiry - the first thing anyone should read. */}
-                  <section className="flex flex-col rounded-2xl bg-accent-soft/70 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="flex items-center gap-2.5 text-[13.5px] font-semibold">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-accent-dark">
-                          <DoodleIcon name="message" size={14} />
-                        </span>
-                        Their enquiry
+              /* THE TENANT LEAD, round two (James, 11 Sep 2026, after the new
+                 market appraisal page): a pink banner with who they are and
+                 what they asked, the picture and the two things you do most;
+                 then who they are, the property, and the state of play. */
+              <div className="space-y-4">
+                <section className="relative overflow-hidden rounded-3xl bg-accent-soft/70 p-6">
+                  <div className="relative z-[1] grid items-end gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
+                    <div className="min-w-0">
+                      <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">
+                        Tenant enquiry · step {Math.min(step, track.length - 1) + 1} of {track.length}
                       </p>
-                      {receivedIso && (
-                        <span className="text-[11.5px] text-muted">
-                          {whenFull(receivedIso)} · {whenAgo(receivedIso)}
-                        </span>
-                      )}
+                      <div className="mt-2 flex flex-wrap items-center gap-3">
+                        {ours ? (
+                          <h2 className="min-w-0 text-[34px] leading-tight">
+                            <InlineField
+                              value={personName}
+                              onChange={(v) => {
+                                const next = v.trim();
+                                if (!next || next === personName) return;
+                                setPersonName(next);
+                                void saveField({ name: next });
+                              }}
+                              className="text-[34px] leading-tight"
+                            />
+                          </h2>
+                        ) : (
+                          <h2 className="text-[34px] leading-tight">{lead.name}</h2>
+                        )}
+                        <Pill tone={STAGE_TONE[lead.stage]}>{lead.stage}</Pill>
+                        {passport?.done && passport.path && (
+                          <a href={passport.path} target="_blank" rel="noreferrer" className="rounded-full bg-sage/40 px-2.5 py-1 text-[11px] font-semibold transition-opacity hover:opacity-80" title="Open their passport">
+                            ✓ Passport done
+                          </a>
+                        )}
+                      </div>
+                      {/* Their own words - the first thing anyone should read. */}
+                      <div className="mt-4 max-w-2xl rounded-2xl bg-white/75 p-4">
+                        <p className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-muted">
+                          <span className="flex items-center gap-1.5 font-semibold text-ink">
+                            <DoodleIcon name="message" size={13} className="text-accent-dark" />
+                            Their enquiry
+                          </span>
+                          {receivedIso && <span>{whenFull(receivedIso)} · {whenAgo(receivedIso)}</span>}
+                        </p>
+                        {enquiry === undefined && !enqMessage ? (
+                          <p className="mt-2 text-[12.5px] text-muted">Reading their enquiry from REX…</p>
+                        ) : enqMessage ? (
+                          <p className="mt-2 max-h-[140px] overflow-y-auto whitespace-pre-line pr-1 text-[14.5px] leading-relaxed">{enqMessage}</p>
+                        ) : (
+                          <p className="mt-2 text-[12.5px] text-muted">They sent no message with this enquiry.</p>
+                        )}
+                        <p className="mt-2 text-[11px] text-muted">
+                          Via {enquiry?.source || lead.source}
+                          {enquiry === undefined && enqMessage ? " · loading the full message…" : ""}
+                        </p>
+                      </div>
+                      <div className="mt-5 flex flex-wrap gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => { setBookMode("viewing"); setBooking(true); advanceTo("viewing"); }}
+                          className="inline-flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-page transition-opacity hover:opacity-90"
+                        >
+                          <DoodleIcon name="calendar" size={14} />
+                          Book a viewing
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setEmailing(true); advanceTo("shortlist"); }}
+                          className="inline-flex items-center gap-2 rounded-full border border-line/80 bg-white px-5 py-2.5 text-[13px] font-semibold transition-colors hover:border-ink/40"
+                        >
+                          <DoodleIcon name="mail" size={14} />
+                          Send properties
+                        </button>
+                      </div>
                     </div>
-                    {enquiry === undefined && !enqMessage ? (
-                      <p className="mt-3 text-[12.5px] text-muted">Reading their enquiry from REX…</p>
-                    ) : enqMessage ? (
-                      <p className="mt-3 max-h-[168px] overflow-y-auto whitespace-pre-line pr-1 text-[13.5px] leading-relaxed">{enqMessage}</p>
-                    ) : (
-                      <p className="mt-3 text-[12.5px] text-muted">They sent no message with this enquiry.</p>
-                    )}
-                    <p className="mt-auto pt-3 text-[11.5px] text-muted">
-                      Via {enquiry?.source || lead.source}
-                      {enquiry === undefined && enqMessage ? " · loading the full message…" : ""}
-                    </p>
-                  </section>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/brand/art/new-home.png" alt="" aria-hidden className="pointer-events-none hidden h-[230px] w-auto self-end lg:block" />
+                  </div>
+                </section>
 
+                <div className="grid gap-4 xl:grid-cols-3">
                   {/* Who they are - editable, and filled in by the passport once it is done. */}
                   <section className="rounded-2xl border border-line/70 bg-card p-4">
                     <div className="flex items-center justify-between gap-2">
@@ -1351,26 +1555,48 @@ export default function LeadDrawer({
                       <p className="mt-3 text-[12.5px] text-muted">A general enquiry - not about one property.</p>
                     )}
                   </section>
+
+                  {/* The state of play, on sage - the balance to the pink above. */}
+                  <section className="rounded-2xl bg-sage/25 p-4">
+                    <p className="flex items-center gap-2.5 text-[13.5px] font-semibold">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80">
+                        <DoodleIcon name="checklist" size={14} />
+                      </span>
+                      At a glance
+                    </p>
+                    <dl className="mt-3 space-y-2.5 text-[12.5px]">
+                      {([
+                        ["Came in", receivedIso ? `${whenFull(receivedIso)}` : lead.received],
+                        ["From", enquiry?.source || lead.source],
+                        ["Passport", passport?.done ? "Done" : passport?.sent ? "Sent, not finished" : passportEmail ? "Not sent yet" : "No email yet"],
+                        ["Viewings", viewings.length ? `${viewings.length} booked` : "None yet"],
+                        ["Now", track[Math.min(step, track.length - 1)]?.label ?? "Enquiry"],
+                      ] as Array<[string, string]>).map(([k, v]) => (
+                        <div key={k} className="flex items-baseline justify-between gap-3">
+                          <dt className="text-muted">{k}</dt>
+                          <dd className="text-right font-semibold">{v}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
                 </div>
 
                 {/* The tags row brings its own top rule and margin for the landlord
                     layout; here it sits between two blocks, so both come off. */}
                 <div className="[&>div]:mt-0 [&>div]:border-t-0 [&>div]:pt-0">{tagsRow}</div>
 
-                {/* The things you do to a tenant lead, one click each. */}
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                {/* The rest of what you do to a tenant lead, one click each. */}
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {quick.map((a) => {
-                    const cls = `flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-colors ${
-                      a.primary ? "bg-accent-dark text-page hover:opacity-90" : "border border-line/70 bg-card hover:border-ink/40"
-                    } ${a.off ? "pointer-events-none opacity-50" : ""}`;
+                    const cls = `flex items-center gap-3 rounded-2xl border border-line/70 bg-card px-4 py-3.5 text-left transition-colors hover:border-ink/40 ${a.off ? "pointer-events-none opacity-50" : ""}`;
                     const inner = (
                       <>
-                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${a.primary ? "bg-white/15" : "bg-accent-soft text-accent-dark"}`}>
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-dark">
                           <DoodleIcon name={a.icon} size={16} />
                         </span>
                         <span className="min-w-0">
                           <span className="block text-[13px] font-semibold leading-tight">{a.label}</span>
-                          <span className={`block truncate text-[11.5px] ${a.primary ? "text-page/75" : "text-muted"}`}>{a.sub}</span>
+                          <span className="block truncate text-[11.5px] text-muted">{a.sub}</span>
                         </span>
                       </>
                     );
@@ -1576,59 +1802,7 @@ export default function LeadDrawer({
               /* A tab is open: its panel takes the box over. Same place,
                  different question — not a second page of cards underneath.
                  It scrolls within its own bounds; the page never does. */
-              <div className="fade-up mt-5 max-h-[46vh] overflow-y-auto pr-1">
-                {tab === "activity" && (
-                  <>
-                    <ul className="space-y-4">
-                      {viewings.map((v) => (
-                        <li key={v.id} className="flex items-start gap-3 border-b border-line/40 pb-4 last:border-0 last:pb-0">
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft/60">
-                            <DoodleIcon name="calendar" size={15} className="text-accent-dark" />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-[12.5px]">
-                              Viewing — {v.property}, {v.locality}
-                            </span>
-                            <span className="block text-[10.5px] text-muted">{v.when}</span>
-                          </span>
-                          <Pill tone={v.outcome === "Applying" ? "good" : "neutral"}>{v.outcome}</Pill>
-                        </li>
-                      ))}
-                      {touches.map((t) => (
-                        <li key={t.id} className="flex items-start gap-3 border-b border-line/40 pb-4 last:border-0 last:pb-0">
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft/60">
-                            <DoodleIcon name={touchIcon(t)} size={15} className="text-accent-dark" />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-[12.5px]">
-                              {touchSentence(t)}
-                              {t.kind !== "nurture" && t.body ? <span className="text-muted"> — {t.body}</span> : null}
-                            </span>
-                            <span className="block text-[10.5px] text-muted">
-                              {t.byName} · {whenAgo(t.at)}
-                            </span>
-                          </span>
-                        </li>
-                      ))}
-                      {lead.activity.map((a, i) => (
-                        <li key={i} className="flex items-start gap-3 border-b border-line/40 pb-4 last:border-0 last:pb-0">
-                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft/60">
-                            <DoodleIcon name={a.icon} size={15} className="text-accent-dark" />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-[12.5px]">{a.text}</span>
-                            <span className="block text-[10.5px] text-muted">{a.when}</span>
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="mt-4 border-t border-line/70 pt-3 text-[10.5px] text-muted">
-                      Emails in and out will thread here — REX AuditLogs already records
-                      field-level changes with actor and timestamp, so the history is real.
-                    </p>
-                  </>
-                )}
-
+              <div className="fade-up mt-5">
                 {tab === "tasks" && (
                   <>
                     {/* Real tasks, kept. Anything typed here is still here
@@ -1928,7 +2102,7 @@ export default function LeadDrawer({
               While a landlord is AT the appraisal, this steps aside for the
               appraisal itself (below): booking one turns the record into a
               job of work, and the job deserves the screen. ── */}
-          <div className={`mt-3 rounded-3xl border border-line/80 bg-card p-5 ${appraisalTakesOver ? "hidden" : ""}`}>
+          <div className={`mt-3 rounded-3xl border border-line/80 bg-card p-5 ${appraisalTakesOver || tab !== null ? "hidden" : ""}`}>
             <ProcessTimeline
               steps={track}
               current={step}
@@ -2175,7 +2349,12 @@ export default function LeadDrawer({
               appraisalTakesOver ? "hidden" : ""
             }`}
           >
-            <SectionHead>Notes</SectionHead>
+            <h3 className="mb-4 flex items-center gap-2.5 text-[15px] font-semibold">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+                <DoodleIcon name="note" size={14} />
+              </span>
+              Notes
+            </h3>
             <div className="grid min-h-0 flex-1 gap-5 md:grid-cols-2">
               <div className="flex min-h-0 flex-col rounded-xl border border-line/80 p-3">
                 <textarea
@@ -2198,10 +2377,26 @@ export default function LeadDrawer({
               </div>
 
               <ul className="min-h-0 space-y-3 overflow-y-auto pr-1">
+                {/* Open tasks sit above the notes, so what is still to do is
+                    never a tab away (James, 11 Sep 2026). */}
+                {(realTasks ?? []).filter((t) => !t.done).map((t) => (
+                  <li key={`task-${t.id}`} className="flex items-start gap-2.5 rounded-xl bg-sage/20 p-3">
+                    <button
+                      type="button"
+                      onClick={() => void toggleTask(t)}
+                      aria-label="Mark done"
+                      className="mt-0.5 h-[17px] w-[17px] shrink-0 rounded-full border-[1.5px] border-line bg-white transition-colors hover:border-ink"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[12.5px]">{t.title}</span>
+                      <span className="block text-[10.5px] text-muted">Task{t.detail ? ` · ${t.detail}` : ""}</span>
+                    </span>
+                  </li>
+                ))}
                 {noteRows.map((n) => (
                   <li
                     key={n.id}
-                    className={`rounded-xl p-3.5 ${n.pinned ? "bg-accent-soft/40" : "border border-line/60"}`}
+                    className={`rounded-xl p-3.5 ${n.pinned ? "bg-accent-soft/40" : "bg-panel"}`}
                   >
                     <p className="text-[12.5px] leading-relaxed">{n.text}</p>
                     <div className="mt-2 flex items-center justify-between gap-3">
@@ -2230,6 +2425,84 @@ export default function LeadDrawer({
           </div>
         </div>
       </aside>
+
+      {/* ── Activity: everything that has happened with this person. ── */}
+      {activityOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+          <button type="button" aria-label="Close" onClick={() => setActivityOpen(false)} className="absolute inset-0 cursor-default bg-ink/45" />
+          <div className="fade-up relative flex max-h-[84vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+            <div className="flex items-center justify-between gap-3 border-b border-line/70 px-6 py-4">
+              <h2 className="text-[19px]">Activity with {lead.name.split(" ")[0]}</h2>
+              <button type="button" onClick={() => setActivityOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-[12px] text-muted hover:text-ink">✕</button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{activityPanel}</div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Find properties: the map one side, the book the other. ── */}
+      {finderOpen && (
+        <div className="fixed inset-0 z-[150] flex items-stretch justify-center p-3 sm:p-6">
+          <button type="button" aria-label="Close" onClick={() => setFinderOpen(false)} className="absolute inset-0 cursor-default bg-ink/45" />
+          <div className="fade-up relative flex w-full max-w-[1500px] flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+            <div className="flex flex-wrap items-center gap-3 border-b border-line/70 px-6 py-4">
+              <h2 className="text-[20px]">Find properties for {lead.name.split(" ")[0]}</h2>
+              <form
+                onSubmit={(e) => { e.preventDefault(); void centreFinder(); }}
+                className="flex min-w-[260px] flex-1 items-center gap-2 sm:ml-auto sm:max-w-xl"
+              >
+                <input
+                  value={finderAddr}
+                  onChange={(e) => setFinderAddr(e.target.value)}
+                  placeholder="Their address, a street or a postcode"
+                  className="min-w-0 flex-1 rounded-full border border-line/80 bg-card px-4 py-2 text-[12.5px] outline-none focus:border-ink"
+                />
+                <button type="submit" disabled={finderBusy || !finderAddr.trim()} className="shrink-0 rounded-full bg-accent-dark px-4 py-2 text-[12px] font-semibold text-page disabled:opacity-50">
+                  {finderBusy ? "Finding…" : "Search around here"}
+                </button>
+              </form>
+              <button type="button" onClick={() => setFinderOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-[12px] text-muted hover:text-ink">✕</button>
+            </div>
+            {finderMsg && <p className="px-6 pt-3 text-[12px] text-accent-dark">{finderMsg}</p>}
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              <TenantPropertySearch
+                key={finderOrigin ? `${finderOrigin.lat},${finderOrigin.lng}` : "start"}
+                mapSide
+                origin={finderOrigin ?? (lead.lat != null && lead.lng != null ? { lat: lead.lat, lng: lead.lng } : null)}
+                originLabel={finderLabel || contact.area || lead.area || ""}
+                originListingId={lead.listingId != null ? String(lead.listingId) : null}
+                shortlisted={shortlist.map((p) => p.id)}
+                onShortlist={(l) => {
+                  setAddedListings((cur) => (cur.some((x) => x.id === l.id) ? cur : [...cur, l as unknown as Listing]));
+                  setAdded((cur) => (cur.includes(l.id) ? cur : [...cur, l.id]));
+                }}
+                onBook={() => { setFinderOpen(false); setBookMode("viewing"); setBooking(true); }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Remove: the OS forgets the lead; REX keeps it. ── */}
+      {removing && (
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4">
+          <button type="button" aria-label="Cancel" onClick={() => setRemoving(false)} className="absolute inset-0 cursor-default bg-ink/45" />
+          <div className="fade-up relative w-full max-w-md rounded-3xl border border-line/80 bg-page p-6 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+            <h2 className="text-[20px]">Remove {lead.name}?</h2>
+            <p className="mt-2 text-[13px] leading-relaxed text-muted">
+              They disappear from your leads in the OS.
+              {lead.id.startsWith("rex-") ? " REX keeps the enquiry - nothing is changed there." : ""} It can be brought back if it was a mistake.
+            </p>
+            {removeMsg && <p className="mt-3 text-[12.5px] font-semibold text-accent-dark">{removeMsg}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setRemoving(false)} className="rounded-full border border-line/80 px-4 py-2 text-[12.5px] font-semibold hover:border-ink/40">Keep them</button>
+              <button type="button" onClick={() => void removeLead()} disabled={removeBusy} className="rounded-full bg-accent-dark px-4 py-2 text-[12.5px] font-semibold text-page disabled:opacity-50">
+                {removeBusy ? "Removing…" : "Remove"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* The landlord side of the same job. Merge values come from the record
           in front of the agent, so {{address}} is this property and not a

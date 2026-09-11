@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { fetchLeadBook, type LeadBook } from "@/lib/rex-leads";
 import { scopeFor } from "@/lib/scope";
 import { ledgerBoard, ledgerStats, recordLeads } from "@/lib/lead-ledger";
+import { hiddenLeadIds } from "@/lib/hidden-leads";
 import { ago } from "@/lib/rex-leads";
 import { hasDb, q } from "@/lib/db";
 import { rexConfigured } from "@/lib/rex";
@@ -125,6 +126,10 @@ export async function GET(req: NextRequest) {
     });
   }
   const key = cacheKeyFor(scope.rexUserId);
+  /* Leads removed from the OS by hand never leave the server, cached copy or
+     not; the ids go with the answer so the page can hide its own records too. */
+  const hidden = await hiddenLeadIds().catch(() => new Set<string>());
+  const out = <B extends { leads: { id: string }[] }>(b: B) => ({ ...b, leads: b.leads.filter((l) => !hidden.has(l.id)), hiddenIds: [...hidden] });
 
   const held = memory.get(key) ?? (await readStored(key));
   const age = held ? Date.now() - held.at : Infinity;
@@ -132,20 +137,20 @@ export async function GET(req: NextRequest) {
   const onFile = (await ledgerStats().catch(() => ({ onFile: 0 }))).onFile;
 
   if (held && age < FRESH_MS) {
-    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...held.book, onFile, ageMs: age });
+    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...out(held.book), onFile, ageMs: age });
   }
   if (held && age < STALE_MS) {
     void refresh(key, scope.rexUserId); // behind the scenes; this caller gets the stale copy now
-    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...held.book, onFile, ageMs: age, stale: true });
+    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...out(held.book), onFile, ageMs: age, stale: true });
   }
 
   try {
     const fresh = await refresh(key, scope.rexUserId);
-    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...fresh.book, onFile: (await ledgerStats().catch(() => ({ onFile }))).onFile, ageMs: 0 });
+    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...out(fresh.book), onFile: (await ledgerStats().catch(() => ({ onFile }))).onFile, ageMs: 0 });
   } catch (e) {
     // Something is better than nothing, however old.
     if (held) {
-      return NextResponse.json({ ok: true, live: true, scope: scope.label, ...held.book, ageMs: age, stale: true });
+      return NextResponse.json({ ok: true, live: true, scope: scope.label, ...out(held.book), ageMs: age, stale: true });
     }
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "Couldn't reach REX." },

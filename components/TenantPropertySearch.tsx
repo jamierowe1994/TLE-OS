@@ -59,6 +59,7 @@ export default function TenantPropertySearch({
   shortlisted,
   onShortlist,
   onBook,
+  mapSide = false,
 }: {
   /** The tenant's own coordinates, when the lead has them. */
   origin: { lat: number; lng: number } | null;
@@ -78,6 +79,8 @@ export default function TenantPropertySearch({
   shortlisted: string[];
   onShortlist?: (l: Listing) => void;
   onBook?: (l: Listing) => void;
+  /** The finder pop-out (11 Sep 2026): the map down one side, the list down the other. */
+  mapSide?: boolean;
 }) {
   const [book, setBook] = useState<Listing[] | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
@@ -87,7 +90,7 @@ export default function TenantPropertySearch({
   const [type, setType] = useState("");
   const [maxRent, setMaxRent] = useState<number | null>(null);
   const [within, setWithin] = useState<number | null>(5);
-  const [showMap, setShowMap] = useState(false);
+  const [showMap, setShowMap] = useState(mapSide);
 
   useEffect(() => {
     let live = true;
@@ -173,7 +176,7 @@ export default function TenantPropertySearch({
   const field =
     "rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink";
 
-  return (
+  const list = (
     <div>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <label className="flex flex-1 items-center gap-2 rounded-xl border border-line/80 px-3 py-2 focus-within:border-ink">
@@ -203,6 +206,7 @@ export default function TenantPropertySearch({
             <option key={n} value={n}>Up to {money(n)}</option>
           ))}
         </select>
+        {!mapSide && (
         <button
           type="button"
           onClick={() => setShowMap((m) => !m)}
@@ -210,6 +214,7 @@ export default function TenantPropertySearch({
         >
           {showMap ? "Hide map" : "Map"}
         </button>
+        )}
       </div>
 
       {/* The radius only exists where there is a place to measure from. */}
@@ -237,7 +242,7 @@ export default function TenantPropertySearch({
         </p>
       )}
 
-      {showMap && (
+      {showMap && !mapSide && (
         <SearchMap origin={centre?.at ?? null} within={within} results={results} className="mb-3" />
       )}
 
@@ -261,7 +266,7 @@ export default function TenantPropertySearch({
           Nothing matches. Widen the radius or clear a filter.
         </p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className={`grid gap-3 sm:grid-cols-2 ${mapSide ? "" : "xl:grid-cols-3"}`}>
           {results.slice(0, 60).map(({ l, miles }) => {
             const on = shortlisted.includes(l.id);
             return (
@@ -289,6 +294,15 @@ export default function TenantPropertySearch({
                         {on ? "On the list" : "Add to list"}
                       </button>
                     )}
+                    {/* Open the property itself, like a comparable on a market appraisal. */}
+                    <a
+                      href={`/listings?open=${l.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full border border-line/80 px-2.5 py-1 text-[10.5px] font-semibold transition-colors hover:border-ink/40"
+                    >
+                      Open
+                    </a>
                     {onBook && (
                       <button
                         type="button"
@@ -310,16 +324,27 @@ export default function TenantPropertySearch({
       )}
     </div>
   );
+  if (!mapSide) return list;
+  return (
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
+      <div className="lg:sticky lg:top-0 lg:self-start">
+        <SearchMap origin={centre?.at ?? null} within={within} results={results} tall />
+      </div>
+      <div className="min-w-0">{list}</div>
+    </div>
+  );
 }
 
 /** The same properties, on a map, with the radius drawn round the tenant. */
 function SearchMap({
-  origin, within, results, className = "",
+  origin, within, results, className = "", tall = false,
 }: {
   origin: { lat: number; lng: number } | null;
   within: number | null;
   results: { l: Listing; miles: number | null }[];
   className?: string;
+  /** The finder's map, the height of the window rather than a strip. */
+  tall?: boolean;
 }) {
   const holder = useRef<HTMLDivElement | null>(null);
   const map = useRef<google.maps.Map | null>(null);
@@ -414,5 +439,5 @@ function SearchMap({
       </p>
     );
   }
-  return <div ref={holder} className={`h-[320px] w-full overflow-hidden rounded-2xl border border-line/70 ${className}`} />;
+  return <div ref={holder} className={`${tall ? "h-[64vh] min-h-[380px]" : "h-[320px]"} w-full overflow-hidden rounded-2xl border border-line/70 ${className}`} />;
 }

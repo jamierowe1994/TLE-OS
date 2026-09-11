@@ -1308,6 +1308,15 @@ CREATE INDEX IF NOT EXISTS os_viewings_listing_idx ON os_viewings (listing_id, s
 CREATE INDEX IF NOT EXISTS os_viewings_property_idx ON os_viewings (property_id, starts_at DESC);
 
 -- The lead ledger: every enquiry the OS has seen, kept (lib/lead-ledger.ts).
+-- Leads removed from the OS by hand (11 Sep 2026). REX is never touched: a
+-- REX lead stays in REX, it just stops showing on the board. Deleting the
+-- row brings it back.
+CREATE TABLE IF NOT EXISTS os_hidden_leads (
+  id         TEXT PRIMARY KEY,
+  hidden_by  TEXT,
+  hidden_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS os_leads (
   id             TEXT PRIMARY KEY,            -- rex-<lead id>
   received_at    TIMESTAMPTZ,

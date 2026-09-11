@@ -103,6 +103,18 @@ export default function Leads() {
      record somebody typed in ten seconds ago, and REX being down must not hide
      it. They arrive whenever they arrive and merge into the book below. */
   const [ours, setOurs] = useState<Lead[]>([]);
+  /* Removed from the OS: by the server (hiddenIds) and, the moment the drawer
+     does it, by the "lead-removed" event - no reload needed. */
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
+  const [hiddenIds, setHiddenIds] = useState<string[]>([]);
+  useEffect(() => {
+    const on = (e: Event) => {
+      const id = (e as CustomEvent<string>).detail;
+      if (id) setRemoved((cur) => new Set(cur).add(id));
+    };
+    window.addEventListener("lead-removed", on);
+    return () => window.removeEventListener("lead-removed", on);
+  }, []);
   useEffect(() => {
     let gone = false;
     fetch("/api/contacts", { cache: "no-store" })
@@ -123,6 +135,7 @@ export default function Leads() {
       .then((r) => r.json())
       .then((j) => {
         if (gone) return;
+        if (Array.isArray(j.hiddenIds)) setHiddenIds(j.hiddenIds);
         if (j.ok && j.live && Array.isArray(j.leads)) {
           setSource({
             leads: j.leads,
@@ -165,11 +178,11 @@ export default function Leads() {
 
   const ALL = useMemo(
     () =>
-      [...ours, ...source.leads].map((l) => {
+      [...ours, ...source.leads].filter((l) => !removed.has(l.id) && !hiddenIds.includes(l.id)).map((l) => {
         const label = spines[l.id]?.label;
         return label ? { ...l, spineLabel: label } : l;
       }),
-    [ours, source.leads, spines]
+    [ours, source.leads, spines, removed, hiddenIds]
   );
 
   // The dropdowns offer what the book actually contains — no imagined values.
