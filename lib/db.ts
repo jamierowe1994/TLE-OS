@@ -395,6 +395,18 @@ CREATE TABLE IF NOT EXISTS os_works_orders (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- One row a day: what the maintenance board looked like that morning.
+-- Written by the daily cron so the four tiles can say "3 more than last
+-- month" and mean it. The whole summary rather than four columns, because the
+-- snapshot costs the same either way and the next figure somebody wants to
+-- trend is then already a month old rather than a month away. See
+-- lib/works-trend.ts.
+CREATE TABLE IF NOT EXISTS os_works_snapshots (
+  day       DATE PRIMARY KEY,
+  summary   JSONB NOT NULL,
+  taken_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS tenant_email   TEXT NOT NULL DEFAULT '';
 ALTER TABLE os_works_orders ADD COLUMN IF NOT EXISTS landlord_email TEXT NOT NULL DEFAULT '';
 -- The workflow's facts (James and Michael, 7 Sep 2026): each step is

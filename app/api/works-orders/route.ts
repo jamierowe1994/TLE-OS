@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hasDb } from "@/lib/db";
+import { worksSnapshotAround } from "@/lib/works-trend";
 import { whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
 import { createOrder, listOrders, listContractors, worksSummary, logEvent, KINDS, type Kind, type NewOrder } from "@/lib/works-orders";
@@ -24,8 +25,21 @@ export async function GET(req: NextRequest) {
   const open = req.nextUrl.searchParams.get("open") === "1";
   const propertyId = req.nextUrl.searchParams.get("property");
   const me = subject ?? actor;
-  const [orders, contractors, summary] = await Promise.all([listOrders({ kind, open, propertyId }), listContractors(me.id), worksSummary()]);
-  return NextResponse.json({ ok: true, live: true, orders, contractors, summary, canCorporate: can(actor.role, "see:business") });
+  /* `lastMonth` is the snapshot nearest to thirty days ago, or null when we
+     do not hold one yet - the board draws a delta only when there is a real
+     one to draw. See lib/works-trend.ts. */
+  const [orders, contractors, summary, lastMonth] = await Promise.all([
+    listOrders({ kind, open, propertyId }),
+    listContractors(me.id),
+    worksSummary(),
+    worksSnapshotAround(30).catch(() => null),
+  ]);
+  return NextResponse.json({
+    ok: true, live: true, orders, contractors, summary,
+    lastMonth: lastMonth?.summary ?? null,
+    lastMonthOn: lastMonth?.day ?? null,
+    canCorporate: can(actor.role, "see:business"),
+  });
 }
 
 export async function POST(req: NextRequest) {

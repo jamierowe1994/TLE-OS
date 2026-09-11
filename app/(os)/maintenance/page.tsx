@@ -93,7 +93,7 @@ export default function Maintenance() {
     else if (params.get("section") === "accounts") setSection("accounts");
     else setSection((cur) => (cur === "contractors" ? "repair" : cur));
   }, [rail, params]);
-  const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; live: boolean; reason?: string; canCorporate?: boolean } | null>(null);
+  const [data, setData] = useState<{ orders: WorksOrder[]; contractors: Contractor[]; summary: WorksSummary | null; lastMonth?: WorksSummary | null; lastMonthOn?: string | null; live: boolean; reason?: string; canCorporate?: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showClosed, setShowClosed] = useState(false);
   const [raising, setRaising] = useState<Kind | null>(null);
@@ -130,6 +130,11 @@ export default function Maintenance() {
   }, [orders, section, showClosed, q]);
   const grouped = useMemo(() => STEPS.map((st) => ({ status: st.id, label: st.label, rows: rows.filter((r) => stepOf(r) === st.id) })).filter((g) => g.rows.length), [rows]);
   const s = data?.summary;
+  /* Last month's figures, if we have them. The snapshot started on 11 Sep
+     2026, so until roughly mid-October there is nothing to compare against
+     and the tiles simply do not draw a delta - see lib/works-trend.ts. A
+     tile that invents a trend is worse than a tile with no trend on it. */
+  const was = data?.lastMonth ?? null;
   const open = orders.find((o) => o.id === openId) ?? null;
 
   return (
@@ -168,19 +173,32 @@ export default function Maintenance() {
       <div className="mt-10 grid grid-cols-2 gap-4 xl:grid-cols-4">
         {(
           [
-            ["Open jobs", s ? String(s.open) : "•", s ? `${s.byKind.repair} repair${s.byKind.repair === 1 ? "" : "s"} · ${s.byKind.planned} planned` : "reading", "setting"],
-            ["Overdue", s ? String(s.overdue) : "•", s?.emergencies ? `${s.emergencies} emergenc${s.emergencies === 1 ? "y" : "ies"} open` : "past their date", "bell"],
-            ["Awaiting the landlord", s ? String(s.awaitingLandlord) : "•", "quotes over their authority", "user"],
-            ["Invoiced, unpaid", s ? pounds(s.invoicedUnpaidPence) : "•", "contractor invoices to settle", "coin"],
+            ["Open jobs", s ? String(s.open) : "•", s ? `${s.byKind.repair} repair${s.byKind.repair === 1 ? "" : "s"} · ${s.byKind.planned} planned` : "reading", "setting", s && was ? s.open - was.open : null, false],
+            ["Overdue", s ? String(s.overdue) : "•", s?.emergencies ? `${s.emergencies} emergenc${s.emergencies === 1 ? "y" : "ies"} open` : "past their date", "bell", s && was ? s.overdue - was.overdue : null, false],
+            ["Awaiting the landlord", s ? String(s.awaitingLandlord) : "•", "quotes over their authority", "user", s && was ? s.awaitingLandlord - was.awaitingLandlord : null, false],
+            ["Invoiced, unpaid", s ? pounds(s.invoicedUnpaidPence) : "•", "contractor invoices to settle", "coin", s && was ? s.invoicedUnpaidPence - was.invoicedUnpaidPence : null, true],
           ] as const
-        ).map(([k, v, hint, icon]) => (
+        ).map(([k, v, hint, icon, delta, money]) => (
           <div key={k} className="rounded-2xl border border-line/80 bg-panel p-4">
             <p className="flex items-center gap-2 text-[9.5px] font-bold uppercase tracking-wider text-muted">
               <DoodleIcon name={icon} size={14} className="text-accent-dark" />
               {k}
             </p>
             <p className="figures mt-1.5 text-[26px] leading-none">{v}</p>
-            <p className="mt-1.5 truncate text-[11px] text-accent-dark">{hint}</p>
+            {/* Every one of these four counts something you would rather have
+                less of, so UP is the bad direction on all four and the arrow
+                can say so without a per-tile rule. Zero change is stated
+                rather than drawn as an arrow pointing nowhere. */}
+            {delta == null ? (
+              <p className="mt-1.5 truncate text-[11px] text-accent-dark">{hint}</p>
+            ) : (
+              <p className="mt-1.5 flex items-center gap-1.5 truncate text-[11px]">
+                <span className={delta === 0 ? "text-muted" : delta > 0 ? "text-accent-dark" : "text-[#2e7d5b]"}>
+                  {delta === 0 ? "level with" : `${delta > 0 ? "↑" : "↓"} ${money ? pounds(Math.abs(delta)) : Math.abs(delta)} from`}
+                </span>
+                <span className="text-muted">last month</span>
+              </p>
+            )}
           </div>
         ))}
       </div>
