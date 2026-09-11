@@ -8,6 +8,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PickOne from "@/components/PickOne";
 import Segmented from "@/components/Segmented";
 import StageTabs from "@/components/StageTabs";
+import CornerSwell from "@/components/CornerSwell";
 import {
   MA_STAGES,
   OPEN_STAGES,
@@ -86,11 +87,15 @@ function inPeriod(iso: string | null, period: PeriodId): boolean {
 
 export default function MarketAppraisals() {
   const [filter, setFilter] = useState<MaStage | "open">("open");
+  /* The bar under the header is this list's search - one search per page,
+     the same as Leads (James, 11 Sep: the two bars were different widths). */
+  const [q, setQ] = useState("");
   /* Narrowing by date, and how the rows are drawn. Both are view state and
      neither is persisted: they are how somebody is looking right now, not a
      setting about them. */
   const [period, setPeriod] = useState<PeriodId>("any");
-  const [view, setView] = useState<"list" | "tiles">("list");
+  /* Tiles by default (James, 11 Sep 2026): the board is taken in, then worked down as a list. */
+  const [view, setView] = useState<"list" | "tiles">("tiles");
   /* The appraisals actually booked through the OS. Null while we are still
      asking, so the screen can say "loading" rather than flashing "none yet" at
      somebody who has just booked one. */
@@ -119,14 +124,16 @@ export default function MarketAppraisals() {
   const all = useMemo(() => live ?? [], [live]);
 
   const rows = useMemo(() => {
+    const needle = q.trim().toLowerCase();
     const withStage = all
       .map((m) => ({ ...m, live: effectiveStage(m) }))
-      .filter((m) => inPeriod(m.appointmentAt, period));
+      .filter((m) => inPeriod(m.appointmentAt, period))
+      .filter((m) => !needle || `${m.address} ${m.postcode} ${m.landlord} ${m.agent ?? ""}`.toLowerCase().includes(needle));
     const open = withStage.filter((m) => m.live !== "won" && m.live !== "lost");
     return (filter === "open" ? open : withStage.filter((m) => m.live === filter)).sort(
       (a, b) => urgencyOf(a) - urgencyOf(b)
     );
-  }, [filter, all, period]);
+  }, [filter, all, period, q]);
 
   /* Arriving from Leads: booking an appraisal sends the agent here with
      ?open=<id>, and we forward to that appraisal's file.
@@ -200,17 +207,34 @@ export default function MarketAppraisals() {
          * halves of that: less of him overall, and the line crossing further
          * down the legs rather than at their top. 302px above the rule.
          */
-        illustrationHeight={520}
-        seat={0.58}
+        /* Smaller, and tucked further behind the desk (James, 11 Sep): his
+           head sits a touch above the title and never reaches the search
+           bar. 380 x 0.6 puts 228px of him above the rule. */
+        illustrationHeight={380}
+        seat={0.6}
         illustrationAspect={0.9704}
         illustrationCrop
         lineBreak="none"
+        searchValue={q}
+        onSearch={setQ}
+        searchPlaceholder="Search appraisals…"
         actions={
           /* flex-wrap, like every other actions row. Without it the date
              picker and the view switch are one unbreakable 233px block, which
              on a 390px screen would not fit beside the reserved artwork and
              took the page 32px sideways (10 Sep 2026). */
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* List or tiles, with the words on - the same switch, in the
+                same place, as Leads (James, 11 Sep). The marker SLIDES
+                between them - see components/Segmented. */}
+            <Segmented
+              value={view}
+              onChange={setView}
+              options={[
+                { id: "list" as const, label: "List", icon: <DoodleIcon name="list" size={13} /> },
+                { id: "tiles" as const, label: "Tiles", icon: <DoodleIcon name="grid" size={13} /> },
+              ]}
+            />
             {/* Was a native <select>, which looked exactly like what it was
                 next to hand-drawn pills. See components/PickOne. */}
             <PickOne
@@ -224,24 +248,20 @@ export default function MarketAppraisals() {
               clearable={false}
               neutral="any"
             />
-            {/* List or tiles. Two ways of reading the same rows: a list to
-                work down, tiles to take in. Nothing is hidden in either.
-                The marker SLIDES between them - see components/Segmented. */}
-            <Segmented
-              value={view}
-              onChange={setView}
-              options={[
-                { id: "list" as const, title: "List view", icon: <DoodleIcon name="list" size={14} /> },
-                { id: "tiles" as const, title: "Tile view", icon: <DoodleIcon name="grid" size={14} /> },
-              ]}
-            />
           </div>
         }
       />
 
       {/* ── The spine. Shared with Listings and Applications since 10 Sep;
              the reasoning lives in components/StageTabs. ── */}
+      <div className="fade-up relative mt-4 overflow-hidden rounded-[22px] border border-line/50 bg-white px-5 pb-4 pt-1">
+        <CornerSwell />
+        <div className="relative">
+      {/* Boxed, so no flow chevrons between the tabs: with them the seven
+          did not fit the box on a laptop and the last one wrapped alone. */}
       <StageTabs
+        wrap
+        flow={false}
         label="Appraisal stages"
         allId="open"
         value={filter}
@@ -254,6 +274,8 @@ export default function MarketAppraisals() {
           })),
         ]}
       />
+        </div>
+      </div>
 
       <div className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
         <div className="mb-4 flex items-baseline justify-between gap-3">

@@ -46,6 +46,7 @@ export default function StageTabs<T extends string>({
   allId,
   flow = true,
   label = "Stages",
+  wrap = false,
 }: {
   stages: StageTab<T>[];
   value: T;
@@ -53,10 +54,12 @@ export default function StageTabs<T extends string>({
   allId: T;
   flow?: boolean;
   label?: string;
+  /** Wrap onto a second row inside a box, rather than scrolling sideways. */
+  wrap?: boolean;
 }) {
   return (
     <nav
-      className="fade-up mt-4 -mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1"
+      className={`fade-up mt-4 -mx-1 flex gap-2.5 px-1 pb-1 ${wrap ? "flex-wrap gap-y-2" : "overflow-x-auto"}`}
       aria-label={label}
     >
       {stages.map((st, i, arr) => {
