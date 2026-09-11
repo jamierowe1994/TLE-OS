@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import TermsSigning from "@/components/TermsSigning";
 import ValuationSteps from "@/components/appraisal/ValuationSteps";
+import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
 import { mintPreAppraisalDeck } from "@/components/DeckRail";
+import { PRE_APPRAISAL_LEAD_WORDS, bodyFor, subjectFor } from "@/lib/appraisal-email";
 import { effectiveStage, needsValuation, type MarketAppraisal } from "@/lib/market-appraisal";
 
 /**
@@ -78,6 +80,75 @@ export default function NextUp({
     else onDecksChanged?.();
     setBusy(false);
   }
+
+  /* ── The pre-presentation is pre-made (James, 11 Sep 2026) ──────────────
+     Nobody presses "Make the deck" any more. A file with a date and no
+     pre-presentation makes one the first time it is opened, and once the
+     deck exists the email that carries it is put on the queue for the day
+     before the visit - so the page can say "goes out on Thursday" and mean
+     it. Each happens once per open; a failure is shown, not retried. */
+  const minted = useRef(false);
+  useEffect(() => {
+    if (minted.current || decks === undefined || pre || !ma.appointmentAt || busy) return;
+    if (stage !== "pre_appraisal" || new Date(ma.appointmentAt) <= new Date()) return;
+    minted.current = true;
+    void makePre();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decks, pre, ma.appointmentAt, stage]);
+
+  const queued = useRef(false);
+  useEffect(() => {
+    if (queued.current || !pre || !ma.landlordEmail || !ma.preSend || ma.preSend.state !== "none" || !ma.preSend.at) return;
+    if (stage !== "pre_appraisal") return;
+    queued.current = true;
+    const invite = {
+      landlordName: ma.landlord,
+      address: ma.address,
+      whenPretty: ma.appointmentAt
+        ? new Date(ma.appointmentAt).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit" })
+        : "",
+      startsAt: ma.appointmentAt,
+      minutes: 45,
+      agentName: ma.agent || "The Letting Experts",
+      agentPhone: "0161 883 2525",
+      presentationUrl: pre.url,
+    };
+    fetch("/api/scheduled-sends", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        kind: "pre-appraisal", ref: refId, to: ma.landlordEmail, sendAt: ma.preSend.at,
+        subject: subjectFor(invite), text: bodyFor(invite),
+      }),
+    })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; error?: string }) => { if (j.ok) onDecksChanged?.(); else setError(j.error ?? "Couldn't schedule the pre-presentation."); })
+      .catch(() => setError("Couldn't schedule the pre-presentation."));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pre, ma.landlordEmail, ma.preSend?.state, stage]);
+
+  const [declining, setDeclining] = useState(false);
+  async function decline() {
+    setDeclining(true);
+    setError(null);
+    const r = await fetch("/api/appraisals/video-chase", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: ma.id, mode: "decline" }),
+    }).then((x) => x.json()).catch(() => ({ ok: false, error: "That didn't save." }));
+    if (!r.ok) setError(r.error ?? "That didn't save.");
+    else onDecksChanged?.();
+    setDeclining(false);
+  }
+
+  const sendWords = ma.preSend?.state === "sent"
+    ? `went to ${ma.landlord}${ma.preSend.at ? ` on ${new Date(ma.preSend.at).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}` : ""}`
+    : ma.preSend?.state === "queued" && ma.preSend.at
+      ? `goes to ${ma.landlord} on ${new Date(ma.preSend.at).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}, ${PRE_APPRAISAL_LEAD_WORDS} the visit`
+      : !ma.landlordEmail
+        ? "cannot go out on its own - there is no email for the landlord on this file"
+        : ma.preSend?.at
+          ? `goes to ${ma.landlord} ${PRE_APPRAISAL_LEAD_WORDS} the visit`
+          : "has not gone out";
 
   const primary =
     "inline-flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60";
@@ -164,21 +235,47 @@ export default function NextUp({
       ),
     };
   } else if (!pre) {
+    card = ma.appointmentAt && new Date(ma.appointmentAt) > new Date()
+      ? { icon: "mail", title: "Preparing your pre-presentation…", sub: "It is made from the file. Nothing to press." }
+      : {
+          icon: "mail",
+          title: "Make the pre-presentation",
+          sub: ma.appointmentAt ? "The visit has been, so it will not go out on its own." : "There is no date on this appraisal, so it cannot be scheduled.",
+          body: (
+            <button type="button" onClick={makePre} disabled={busy} className={primary}>
+              {busy ? "Making it…" : "Make it anyway"}
+            </button>
+          ),
+        };
+  } else if (stage === "pre_appraisal" && ma.videoState !== "recorded" && ma.videoState !== "declined") {
+    /* The one choice at this stage: a video from you on the front of the
+       pre-presentation, or send it as it is. Either way it goes. */
     card = {
-      icon: "mail",
-      title: "Make the pre-appraisal deck",
-      sub: "Goes out the day before: who's coming, when, and why us.",
+      icon: "magic-wand",
+      title: "Record a personalised video for your appraisal",
+      sub: `Your pre-presentation is ready and ${sendWords}. A short video from you on the front of it is what makes it yours.`,
       body: (
-        <button type="button" onClick={makePre} disabled={busy} className={primary}>
-          {busy ? "Making it…" : "Make the deck"}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <WelcomeVideoRecorder compact token={pre.token} address={ma.address} label="Record a video" className={primary} onDone={() => onDecksChanged?.()} />
+          <button type="button" onClick={() => void decline()} disabled={declining} className={ghost}>
+            {declining ? "Saving…" : "Send it without a video"}
+          </button>
+        </div>
       ),
     };
   } else if (!deck) {
     card = {
       icon: "magic-wand",
       title: "Build your presentation",
-      sub: "The deck you take with you on the day.",
+      sub: `The deck you take with you on the day.${
+        stage === "pre_appraisal"
+          ? ` Your pre-presentation ${sendWords}${
+              (ma.preSend?.state === "queued" || ma.preSend?.state === "sent")
+                ? ma.videoState === "recorded" ? ", with your video on it" : ma.videoState === "declined" ? ", without a video" : ""
+                : ""
+            }.`
+          : ""
+      }`,
       body: (
         <Link href={`/market-appraisals/${ma.id}/build`} className={primary}>
           Build the presentation <span aria-hidden>→</span>

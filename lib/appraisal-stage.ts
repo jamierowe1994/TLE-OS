@@ -9,6 +9,7 @@ import { persistStage } from "@/lib/appraisal-store";
 import { getComplianceItemsFor } from "@/lib/business/rex-stats";
 import { listVault } from "@/lib/vault";
 import { pendingKeyFor } from "@/lib/property-match";
+import { PRE_APPRAISAL_LEAD_DAYS } from "@/lib/appraisal-email";
 
 /**
  * Where an appraisal is, worked out from what has happened.
@@ -71,20 +72,41 @@ export function deriveAppraisalStage(ma: MarketAppraisal, f: AppraisalFacts): { 
   if (f.termsSigned) return { stage: "takeon", why: "Terms signed. Next is the take-on visit and photographs." };
   if (f.valued) return { stage: "post_appraisal", why: "A figure has been recorded." };
   if (f.visitPassed) return { stage: "appraisal", why: "The visit has happened. No figure recorded yet." };
-  if (f.preDeck) return { stage: "pre_appraisal", why: "The pre-appraisal deck has been made." };
-  return { stage: "booked", why: "Booked. Nothing sent yet." };
+  if (f.preDeck) return { stage: "pre_appraisal", why: "The pre-presentation is made. Record a video, or send it without one." };
+  /* Never "booked": booking is the first stop and it is done the moment the
+     file exists, so a file at rest sits at the pre-appraisal (James, 11 Sep
+     2026: "the first stage is always done... it should always be green"). */
+  return { stage: "pre_appraisal", why: "Booked and in the diary. The pre-presentation is next." };
 }
 
 interface Signals {
   facts: AppraisalFacts;
   ticks: AppraisalTick[];
+  videoState: "recorded" | "declined" | "none";
+  preSend: { state: "queued" | "sent" | "none"; at: string | null; opens?: number };
+  nudgeAt: string | null;
 }
 
 const SEND_LABEL: Record<string, string> = {
-  "pre-appraisal": "Pre-appraisal deck emailed",
-  "video-chase": "Welcome video nudge",
+  "pre-appraisal": "Pre-presentation emailed",
+  /* Not "nudge" - that is what James calls the reminder to himself. On the
+     file it is the job: a personal video, or the choice not to make one. */
+  "video-chase": "Record a personalised video for your appraisal",
   confirmation: "Confirmation sent",
 };
+
+/** The day before the visit at 9am, or within the hour if that has gone
+ *  and the visit is still ahead. Null once the visit has been. */
+function preSendMoment(ma: MarketAppraisal, now: Date): string | null {
+  if (!ma.appointmentAt) return null;
+  const visit = new Date(ma.appointmentAt);
+  if (Number.isNaN(visit.valueOf()) || visit <= now) return null;
+  const when = new Date(visit);
+  when.setDate(when.getDate() - PRE_APPRAISAL_LEAD_DAYS);
+  when.setHours(9, 0, 0, 0);
+  const soon = new Date(now.getTime() + 60 * 60 * 1000);
+  return (when < soon ? soon : when).toISOString();
+}
 
 const iso = (v: string | Date | null | undefined) => (v ? new Date(v).toISOString() : null);
 const dayWords = (v: string | null) => (v ? new Date(v).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" }) : "");
@@ -129,17 +151,34 @@ async function signalsFor(ma: MarketAppraisal, listedIds: Set<string>, now: Date
   const ticks: AppraisalTick[] = [];
   const tick = (stage: MaStage, id: string, label: string, done: boolean, at: string | null = null, detail?: string) => ticks.push({ id, stage, label, done, at, ...(detail ? { detail } : {}) });
 
-  /* booked */
+  /* booked: the video, recorded or declined. The reminder to the agent is
+     only a detail - the job is done when there is a recording on the deck
+     or the agent has said "send it without one". */
   const video = sends.find((s) => s.kind === "video-chase");
-  tick("booked", "video", SEND_LABEL["video-chase"], Boolean(video?.sent_at), iso(video?.sent_at), video && !video.sent_at ? (video.state === "queued" ? `queued for ${dayWords(iso(video.send_at))}` : video.state) : undefined);
+  const recorded = Boolean(pre && (pre as { deck?: { welcomeVideo?: { status?: string } } }).deck?.welcomeVideo?.status === "ready");
+  const declined = !recorded && sends.some((s) => s.kind === "video-chase" && s.state === "declined");
+  const videoState: Signals["videoState"] = recorded ? "recorded" : declined ? "declined" : "none";
+  const nudgeAt = video && video.state === "queued" ? iso(video.send_at) : null;
+  tick(
+    "booked", "video", SEND_LABEL["video-chase"], recorded || declined,
+    recorded ? iso(pre?.createdAt ?? null) : null,
+    recorded ? "recorded" : declined ? "sending without one" : nudgeAt ? `reminder ${dayWords(nudgeAt)}` : undefined
+  );
   for (const s of sends.filter((x) => x.kind !== "video-chase" && x.kind !== "pre-appraisal")) {
     tick("booked", `send-${s.kind}`, SEND_LABEL[s.kind] ?? s.kind.replace(/[-_]/g, " "), Boolean(s.sent_at), iso(s.sent_at), !s.sent_at && s.state === "queued" ? `queued for ${dayWords(iso(s.send_at))}` : undefined);
   }
 
   /* pre-appraisal */
   const preMail = sends.find((s) => s.kind === "pre-appraisal");
-  tick("pre_appraisal", "pre-made", "Pre-appraisal deck made", Boolean(pre), iso(pre?.createdAt ?? null));
-  tick("pre_appraisal", "pre-sent", "Sent to the landlord", Boolean(pre) || Boolean(preMail?.sent_at), iso(preMail?.sent_at ?? pre?.createdAt ?? null), preMail && !preMail.sent_at && preMail.state === "queued" ? `queued for ${dayWords(iso(preMail.send_at))}` : undefined);
+  const preQueued = preMail && !preMail.sent_at && preMail.state === "queued" ? preMail : null;
+  const preSend: Signals["preSend"] = preMail?.sent_at
+    ? { state: "sent", at: iso(preMail.sent_at), opens: pre?.opens ?? 0 }
+    : preQueued
+      ? { state: "queued", at: iso(preQueued.send_at) }
+      : { state: "none", at: preSendMoment(ma, now) };
+  tick("pre_appraisal", "pre-made", "Pre-presentation made", Boolean(pre), iso(pre?.createdAt ?? null));
+  /* Made is not sent. This used to tick the moment the deck existed. */
+  tick("pre_appraisal", "pre-sent", "Sent to the landlord", Boolean(preMail?.sent_at), iso(preMail?.sent_at ?? null), preQueued ? `goes out ${dayWords(iso(preQueued.send_at))}` : undefined);
   tick("pre_appraisal", "pre-opened", "Opened by the landlord", Boolean(pre && pre.opens > 0), iso(pre?.firstOpenedAt ?? null), pre && pre.opens > 1 ? `opened ${pre.opens} times` : undefined);
 
   /* appraisal */
@@ -160,7 +199,7 @@ async function signalsFor(ma: MarketAppraisal, listedIds: Set<string>, now: Date
   /* won */
   tick("won", "listed", "Listed in REX", listed, null);
 
-  return { facts, ticks };
+  return { facts, ticks, videoState, preSend, nudgeAt };
 }
 
 /** Gas, EICR and EPC: in REX on the picked property, or held against the address. */
@@ -187,10 +226,10 @@ async function certificatesFor(ma: MarketAppraisal): Promise<{ key: string; labe
 /** One record, its live stage, why, and the ticks; the stored stage brought up to match. */
 export async function withLiveStage(ma: MarketAppraisal, listedIds: Set<string>, now = new Date()): Promise<MarketAppraisal> {
   try {
-    const { facts, ticks } = await signalsFor(ma, listedIds, now);
+    const { facts, ticks, videoState, preSend, nudgeAt } = await signalsFor(ma, listedIds, now);
     const { stage, why } = deriveAppraisalStage(ma, facts);
     if (stage !== ma.stage && ma.stage !== "won" && ma.stage !== "lost") void persistStage(ma.id, stage);
-    return { ...ma, liveStage: stage, stageWhy: why, ticks };
+    return { ...ma, liveStage: stage, stageWhy: why, ticks, videoState, preSend, nudgeAt };
   } catch {
     return ma;
   }

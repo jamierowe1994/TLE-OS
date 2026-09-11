@@ -80,15 +80,18 @@ export default function VideoChaseControl({ appraisalId }: { appraisalId: string
   if (!info.ok) return null;
 
   const queued = info.queued && info.queued.state === "queued" ? info.queued : null;
+  /* "Nudge" is James's own word for it; on the file it is a reminder. */
   const status = info.recorded
-    ? "A video is on the landlord's page, so no nudge is needed."
-    : queued
-      ? `Video nudge queued for ${day(queued.sendAt)}, to ${queued.toEmail}.`
-      : info.queued?.state === "sent"
-        ? `Video nudge sent ${info.queued.sentAt ? day(info.queued.sentAt) : ""} to ${info.queued.toEmail}.`
-        : info.sendAt
-          ? `Video nudge goes to ${info.to} on ${day(info.sendAt)} if nothing is recorded by then.`
-          : `No video nudge - the visit is too close for one.`;
+    ? "Your video is on the landlord's page, so no reminder is needed."
+    : info.queued?.state === "declined"
+      ? "Sending without a video - no reminder will go."
+      : queued
+        ? `A reminder to record goes to ${queued.toEmail} on ${day(queued.sendAt)}.`
+        : info.queued?.state === "sent"
+          ? `The reminder to record went to ${info.queued.toEmail}${info.queued.sentAt ? ` on ${day(info.queued.sentAt)}` : ""}.`
+          : info.sendAt
+            ? `A reminder to record goes to ${info.to} on ${day(info.sendAt)} if nothing is recorded by then.`
+            : `No reminder - the visit is too close for one.`;
 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-2xl border border-line/70 bg-card px-4 py-3">

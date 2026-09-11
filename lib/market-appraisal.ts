@@ -115,6 +115,17 @@ export interface MarketAppraisal {
    *  and one line saying why. Absent on a bare row. */
   liveStage?: MaStage;
   stageWhy?: string;
+  /**
+   * The pre-appraisal, as the file page reads it (11 Sep 2026). The video
+   * is recorded, declined, or neither; the pre-presentation email is queued
+   * for a date, already sent, or not on the queue - in which case `at` is
+   * the date it WOULD go (the day before the visit, 9am) so the page can
+   * put it there, or null when that moment has passed.
+   */
+  videoState?: "recorded" | "declined" | "none";
+  preSend?: { state: "queued" | "sent" | "none"; at: string | null; opens?: number };
+  /** When the reminder to record goes to the agent, if one is queued. */
+  nudgeAt?: string | null;
   /** The small ticks inside each stage - "have I sent this, done this, made
    *  this" - read from the record by lib/appraisal-stage. */
   ticks?: AppraisalTick[];
@@ -164,6 +175,10 @@ export function effectiveStage(ma: MarketAppraisal, now = new Date()): MaStage {
      REX listing). Every screen that calls this gets that for free. */
   if (ma.liveStage) return ma.liveStage;
   if (ma.stage === "won" || ma.stage === "lost") return ma.stage;
+  /* Booked is the act of booking, done the moment the file exists (James,
+     11 Sep 2026: "the first stage is always done"). A file at rest is at
+     the pre-appraisal, never at Booked. */
+  if (ma.stage === "booked" && ma.valuation == null) return "pre_appraisal";
   // A recorded figure means the visit produced something, so the record has
   // moved past the appraisal whatever anyone remembered to click.
   if (ma.valuation != null && (ma.stage === "appraisal" || ma.stage === "booked")) {

@@ -39,6 +39,8 @@ export default function WelcomeVideoRecorder({
   address,
   compact = false,
   onDone,
+  label = "Record a welcome",
+  className,
 }: {
   /** The presentation this belongs to. Never leaves our own origin. */
   token: string;
@@ -47,6 +49,11 @@ export default function WelcomeVideoRecorder({
    *  modal it opens is identical — only the trigger changes. */
   compact?: boolean;
   onDone?: (v: WelcomeVideo) => void;
+  /** What the compact button says at rest. */
+  label?: string;
+  /** Replaces the compact button's own classes, for a row of buttons that
+   *  should all look the same. */
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [recorderUrl, setRecorderUrl] = useState<string | null>(null);
@@ -246,16 +253,16 @@ export default function WelcomeVideoRecorder({
           type="button"
           onClick={start}
           disabled={busy || Boolean(working) || ready}
-          className="rounded-full border border-line/80 px-4 py-2.5 text-[12px] transition-opacity disabled:opacity-45"
+          className={className ?? "rounded-full border border-line/80 px-4 py-2.5 text-[12px] transition-opacity disabled:opacity-45"}
           title={ready ? "Already recorded — it's on their page" : undefined}
         >
           {ready
-            ? "Welcome recorded ✓"
+            ? "Video recorded ✓"
             : busy
               ? "Setting up…"
               : working
                 ? WORDS[video!.status]
-                : "Record a welcome"}
+                : label}
         </button>
         {error && <span className="text-[11px] text-accent-dark">{error}</span>}
         {modal}

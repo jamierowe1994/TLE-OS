@@ -7,6 +7,7 @@ import { ExternalRecipientRefused } from "@/lib/email-policy";
 import {
   buildVideoChase,
   chaseSendAt,
+  declineVideoChase,
   queueVideoChase,
   queuedVideoChase,
   sendVideoChaseNow,
@@ -20,6 +21,7 @@ import { publicOrigin } from "@/lib/origin";
  * GET  ?id=…                 → who it would go to, when, and whether one is queued
  * POST { id, mode: "now" }   → send it to the signed-in person this minute
  * POST { id, mode: "queue" } → put it on the queue for two days before the visit
+ * POST { id, mode: "decline" } → send the pre-presentation without a video
  *
  * Reaches a colleague on our own domain, as the direct result of that
  * colleague pressing a button - the same footing as the agent briefing, and
@@ -71,8 +73,12 @@ export async function POST(req: NextRequest) {
   const ma = await getAppraisal(id);
   if (!ma) return NextResponse.json({ ok: false, error: "No such appraisal." }, { status: 404 });
 
-  const mode = body.mode === "queue" ? "queue" : "now";
+  const mode = body.mode === "queue" ? "queue" : body.mode === "decline" ? "decline" : "now";
   try {
+    if (mode === "decline") {
+      const r = await declineVideoChase({ ma, me, origin: origin(req) });
+      return NextResponse.json({ ok: true, ...r });
+    }
     if (mode === "queue") {
       const r = await queueVideoChase({ ma, me, origin: origin(req) });
       return NextResponse.json({ ok: true, ...r });

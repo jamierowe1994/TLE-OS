@@ -9,6 +9,7 @@ import VideoChaseControl from "@/components/VideoChaseControl";
 import AppraisalOutcome from "@/components/AppraisalOutcome";
 import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
 import NextUp, { SAGE_INK, SAGE_WASH, type SentDeck } from "@/components/appraisal/NextUp";
+import { glanceFor } from "@/components/appraisal/glance";
 import {
   MA_STAGES,
   effectiveStage,
@@ -235,46 +236,11 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
               <DoodleIcon name="magic-wand" size={15} className="text-accent-dark" />
               At a glance
             </p>
+            {/* Three facts chosen by the stage - see components/appraisal/glance. */}
             <ul className="mt-4 space-y-3.5">
-              <Glance
-                icon="calendar"
-                title={!when ? "No date on this appraisal" : past ? "Visit completed" : "Visit still to come"}
-                sub={when ? longDate(ma.appointmentAt!) : "Booked without one - worth chasing"}
-              />
-              <Glance
-                icon="doc"
-                title={ma.valuation != null ? `${gbp(ma.valuation)} pcm recorded` : "No figure recorded yet"}
-                sub={
-                  ma.valuation != null
-                    ? `Valued${ma.valuedAt ? ` ${new Date(ma.valuedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long" })}` : ""}${ma.valuedBy ? ` by ${ma.valuedBy}` : ""}`
-                    : past
-                      ? "Add a figure to move to the next stage"
-                      : "Comes from the visit"
-                }
-              />
-              <Glance
-                icon="folder"
-                title={
-                  file === undefined
-                    ? "Reading the property file…"
-                    : file === null
-                      ? "Property file unavailable"
-                      : file.held === 0
-                        ? "No property file"
-                        : `${file.held} certificate${file.held === 1 ? "" : "s"} on file`
-                }
-                sub={
-                  file === undefined
-                    ? ""
-                    : file === null
-                      ? "The file could not be read"
-                      : file.outstanding > 0
-                        ? `${file.outstanding} still outstanding`
-                        : file.held === 0
-                          ? "Attach any relevant documents"
-                          : "Everything required is in date"
-                }
-              />
+              {glanceFor(ma, live, decks === undefined ? undefined : { deck: Boolean(deck), post: post ? { opens: post.opens } : null }, file).map((g, i) => (
+                <Glance key={i} icon={g.icon} title={g.title} sub={g.sub} />
+              ))}
             </ul>
           </aside>
         </div>

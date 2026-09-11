@@ -100,6 +100,35 @@ export async function buildVideoChase(opts: {
   return { to, subject: m.subject, text: m.text, html: m.html, link };
 }
 
+/**
+ * "Send it without a video." The choice is a fact about the appraisal, so
+ * it lives where the reminder does: the queued reminder is marked declined
+ * rather than sent, and if none was ever queued (the visit was too close) a
+ * declined row is written so the file still knows. Recording a video later
+ * outranks it - the deck is read first.
+ */
+export async function declineVideoChase(opts: { ma: MarketAppraisal; me: Me; origin: string }): Promise<{ declined: true }> {
+  if (!hasDb()) return { declined: true };
+  const existing = await queuedVideoChase(opts.ma.id);
+  if (existing && existing.state === "queued") {
+    await q(`UPDATE os_scheduled_sends SET state = 'declined', error = $2 WHERE id = $1`, [
+      existing.id,
+      `Sending without a video - ${opts.me.name || opts.me.email} chose to on the file.`,
+    ]);
+    return { declined: true };
+  }
+  if (existing && existing.state === "declined") return { declined: true };
+  const built = await buildVideoChase(opts);
+  const id = randomBytes(9).toString("base64url");
+  await q(
+    `INSERT INTO os_scheduled_sends
+       (id, kind, ref, to_email, contact_id, subject, body, html, send_at, state, error, queued_by, queued_by_id)
+     VALUES ($1,$2,$3,$4,NULL,$5,$6,$7,NOW(),'declined',$8,$9,$10)`,
+    [id, VIDEO_CHASE_KIND, opts.ma.id, built.to.email, built.subject, built.text, built.html, "Sending without a video - chosen on the file.", opts.me.name || opts.me.email, opts.me.id]
+  );
+  return { declined: true };
+}
+
 export interface QueuedChase {
   id: string;
   sendAt: string;
