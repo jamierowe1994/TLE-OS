@@ -36,6 +36,7 @@ export default function LogTouch({
   onClose,
   onLogged,
   onBook,
+  inline = false,
 }: {
   leadId: string;
   leadName: string;
@@ -47,6 +48,10 @@ export default function LogTouch({
   onLogged: (result: unknown) => void;
   /** They said yes on the call: log it, then straight into booking the appraisal. */
   onBook?: () => void;
+  /** Drawn inside the Next up card rather than as a pop-out (James, 11 Sep
+   *  2026: "in the box rather than a pop-out"): no overlay, the four ways of
+   *  reaching them are the first thing shown, and the buttons are brown. */
+  inline?: boolean;
 }) {
   const [kind, setKind] = useState<TouchKind>(initialKind);
   const [outcome, setOutcome] = useState<TouchOutcome | null>(null);
@@ -69,12 +74,18 @@ export default function LogTouch({
   }, [kind]);
 
   useEffect(() => {
+    if (inline) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, inline]);
+
+  /* Inline, the card's own colour is the chocolate brown; the pop-out keeps the OS red. */
+  const primary = inline ? "bg-brown text-white" : "bg-accent-dark text-page";
+  const chosen = inline ? "border-brown bg-brown/10" : "border-accent-dark bg-accent-soft/40";
+  const kindIcon = inline ? "bg-brown text-white" : "bg-accent-soft text-accent-dark";
 
   const canSave = mode === "nurture" ? Boolean(reason) : Boolean(outcome);
 
@@ -108,19 +119,17 @@ export default function LogTouch({
 
   const first = leadName.split(" ")[0] || "them";
 
-  return (
-    <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
-      <button aria-label="Close" onClick={onClose} className="absolute inset-0 cursor-default bg-ink/45" />
-      <div className="fade-up relative w-full max-w-md rounded-3xl border border-line/80 bg-page p-6 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+  const body_ = (
+      <div key={frame} className={inline ? "slide-across" : undefined}>
         {mode === "attempt" ? (
           <>
             <div className="flex items-center justify-between gap-3">
-              <h2 className="hand text-[20px]">
-                {frame === 1 ? `How did you reach ${first}?` : frame === 2 ? "How did it go?" : frame === 3 ? "Did they book the valuation?" : "Anything worth remembering?"}
+              <h2 className={inline ? "text-[14px] font-semibold" : "hand text-[20px]"}>
+                {frame === 1 ? (inline ? `Did you call, text, WhatsApp or email ${first}?` : `How did you reach ${first}?`) : frame === 2 ? "How did it go?" : frame === 3 ? "Did they book the valuation?" : "Anything worth remembering?"}
               </h2>
               <span className="flex items-center gap-1" aria-hidden>
                 {[1, 2, 3, 4].map((n) => (
-                  <span key={n} className={`h-1.5 rounded-full transition-all ${n === frame ? "w-4 bg-accent-dark" : n < frame ? "w-1.5 bg-accent-dark/50" : "w-1.5 bg-line"}`} />
+                  <span key={n} className={`h-1.5 rounded-full transition-all ${n === frame ? `w-4 ${inline ? "bg-brown" : "bg-accent-dark"}` : n < frame ? `w-1.5 ${inline ? "bg-brown/50" : "bg-accent-dark/50"}` : "w-1.5 bg-line"}`} />
                 ))}
               </span>
             </div>
@@ -131,9 +140,9 @@ export default function LogTouch({
                     key={k.id}
                     type="button"
                     onClick={() => { setKind(k.id); setOutcome(null); setBooked(null); setFrame(2); }}
-                    className="flex items-center gap-3 rounded-2xl border border-line/70 bg-card px-4 py-3.5 text-left transition-colors hover:border-ink/40"
+                    className={`flex items-center gap-3 rounded-2xl border border-line/70 bg-card text-left transition-colors hover:border-ink/40 ${inline ? "px-3 py-2.5" : "px-4 py-3.5"}`}
                   >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-dark">
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${kindIcon}`}>
                       <DoodleIcon name={k.icon} size={16} />
                     </span>
                     <span className="text-[13.5px] font-semibold">{k.label}</span>
@@ -153,7 +162,7 @@ export default function LogTouch({
                       if (!engages) setBooked(null);
                       setFrame(engages ? 3 : 4);
                     }}
-                    className={`flex items-center justify-between rounded-2xl border px-4 py-3.5 text-left text-[13.5px] font-semibold transition-colors hover:border-ink/40 ${outcome === o.id ? "border-accent-dark bg-accent-soft/40" : "border-line/70 bg-card"}`}
+                    className={`flex items-center justify-between rounded-2xl border px-4 py-3.5 text-left text-[13.5px] font-semibold transition-colors hover:border-ink/40 ${outcome === o.id ? chosen : "border-line/70 bg-card"}`}
                   >
                     {o.label}
                     <span aria-hidden className="text-muted">›</span>
@@ -163,11 +172,11 @@ export default function LogTouch({
             )}
             {frame === 3 && (
               <div className="mt-4 grid grid-cols-2 gap-2.5">
-                <button type="button" onClick={() => { setBooked(true); setFrame(4); }} className={`rounded-2xl border px-4 py-4 text-[13.5px] font-semibold transition-colors hover:border-ink/40 ${booked === true ? "border-accent-dark bg-sage/30" : "border-line/70 bg-card"}`}>
+                <button type="button" onClick={() => { setBooked(true); setFrame(4); }} className={`rounded-2xl border px-4 py-4 text-[13.5px] font-semibold transition-colors hover:border-ink/40 ${booked === true ? chosen : "border-line/70 bg-card"}`}>
                   Yes, booked
                   <span className="mt-1 block text-[11.5px] font-normal text-muted">Log it, then pick the slot</span>
                 </button>
-                <button type="button" onClick={() => { setBooked(false); setFrame(4); }} className={`rounded-2xl border px-4 py-4 text-[13.5px] font-semibold transition-colors hover:border-ink/40 ${booked === false ? "border-accent-dark bg-accent-soft/40" : "border-line/70 bg-card"}`}>
+                <button type="button" onClick={() => { setBooked(false); setFrame(4); }} className={`rounded-2xl border px-4 py-4 text-[13.5px] font-semibold transition-colors hover:border-ink/40 ${booked === false ? chosen : "border-line/70 bg-card"}`}>
                   Not yet
                   <span className="mt-1 block text-[11.5px] font-normal text-muted">They are thinking about it</span>
                 </button>
@@ -226,7 +235,7 @@ export default function LogTouch({
 
         {error && <p className="mt-3 text-[12px] text-red-700">{error}</p>}
 
-        <div className="mt-5 flex items-center justify-end gap-3">
+        <div className={`flex items-center justify-end gap-3 ${inline && frame === 1 ? "hidden" : "mt-5"}`}>
           <button
             type="button"
             onClick={mode === "attempt" && frame > 1 ? () => setFrame((f) => (f === 4 && !engaged ? 2 : (f - 1) as 1 | 2 | 3)) : onClose}
@@ -239,7 +248,7 @@ export default function LogTouch({
             onClick={save}
             disabled={!canSave || busy}
             className={`flex items-center gap-2 rounded-full px-6 py-2.5 text-[13px] font-semibold ${
-              canSave && !busy ? "bg-accent-dark text-page" : "cursor-not-allowed bg-line/40 text-muted"
+              canSave && !busy ? primary : "cursor-not-allowed bg-line/40 text-muted"
             }`}
           >
             <DoodleIcon name={mode === "nurture" ? "clock" : "checklist"} size={14} />
@@ -248,6 +257,13 @@ export default function LogTouch({
           )}
         </div>
       </div>
+  );
+
+  if (inline) return <div className="overflow-hidden">{body_}</div>;
+  return (
+    <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
+      <button aria-label="Close" onClick={onClose} className="absolute inset-0 cursor-default bg-ink/45" />
+      <div className="fade-up relative w-full max-w-md rounded-3xl border border-line/80 bg-page p-6 shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">{body_}</div>
     </div>
   );
 }

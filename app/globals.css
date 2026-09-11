@@ -1055,3 +1055,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .bond-float, .bond-draw { animation: none; stroke-dashoffset: 0; }
 }
+
+/* A frame arriving from the right, inside the Next up card. */
+@keyframes slide-across { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+.slide-across { animation: slide-across 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }

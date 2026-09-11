@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { registerOpen } from "@/lib/open-record";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -780,6 +780,7 @@ export default function LeadDrawer({
   const [touches, setTouches] = useState<LeadTouch[]>([]);
   const [spine, setSpine] = useState<Spine | null>(null);
   const [logging, setLogging] = useState<LogMode | null>(null);
+  const nextUpRef = useRef<HTMLElement | null>(null);
   /** The campaign the lead is on, named - what nurture actually did. */
   const [campaign, setCampaign] = useState<{ id: string; name: string; since: string; step: number } | null>(null);
   const leadId = lead?.id ?? null;
@@ -1269,6 +1270,8 @@ export default function LeadDrawer({
               }
             />
   );
+  /* On a landlord's contact step the log lives in the Next up card itself. */
+  const logInline = !isTenant && here.action === "log" && !stalled && !nurturing && !sp?.booked;
   const nextActionEl = (
     <>
 
@@ -1306,8 +1309,10 @@ export default function LeadDrawer({
                 ) : (
                   <>
                     <p className="hand mt-1.5 text-[17px] leading-snug">{here.title}</p>
-                    <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{here.detail}</p>
-                    {detail.nextAction && (
+                    {/* The landlord card says the step and nothing under it (James, 11 Sep
+                        2026: no subtext, no "due tomorrow" - nobody set a reminder). */}
+                    {isTenant && <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{here.detail}</p>}
+                    {isTenant && detail.nextAction && (
                       <p className="mt-2 flex items-center gap-2 text-[11.5px] font-medium text-accent-dark">
                         <DoodleIcon name="clock" size={13} />
                         {detail.nextAction.due}
@@ -2149,6 +2154,16 @@ export default function LeadDrawer({
                  property and Next up in a row; then where it's up to. */
               <div className="space-y-5">
                 <header className="relative overflow-hidden rounded-[22px] border border-line/50 bg-sage/30">
+                  {/* The block of flats, sunk into the background behind the words and
+                      cut off by the card's bottom edge (James, 11 Sep 2026: "just there
+                      in the background, filling some of the space"). */}
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/brand/art/lead-building.webp"
+                    alt=""
+                    aria-hidden
+                    className="pointer-events-none absolute bottom-[-64px] right-[300px] hidden w-[520px] max-w-none opacity-[0.55] xl:block"
+                  />
                   <div className="relative grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_240px_300px]">
                     <div className="min-w-0 pb-1">
                       <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">
@@ -2201,7 +2216,7 @@ export default function LeadDrawer({
                         </button>
                         <button
                           type="button"
-                          onClick={() => setLogging("attempt")}
+                          onClick={() => (logInline ? nextUpRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }) : setLogging("attempt"))}
                           className="inline-flex items-center gap-2 rounded-full border border-line/80 bg-white px-5 py-2.5 text-[13px] font-semibold transition-colors hover:border-ink/40"
                         >
                           <DoodleIcon name="call" size={14} />
@@ -2211,11 +2226,8 @@ export default function LeadDrawer({
                       <div className="mt-4 [&>div]:mt-0 [&>div]:border-t-0 [&>div]:pt-0 [&_button]:px-2.5 [&_button]:py-1 [&_button]:text-[11px]">{tagsRow}</div>
                     </div>
 
-                    {/* The agent on the phone, standing on the card's bottom edge, from xl up. */}
-                    <div className="relative hidden self-stretch xl:block">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src="/brand/art/new-lead.webp" alt="" aria-hidden className="pointer-events-none absolute bottom-[-30px] left-1/2 w-[340px] max-w-none -translate-x-1/2" />
-                    </div>
+                    {/* Breathing room over the building, from xl up. */}
+                    <div className="hidden xl:block" />
 
                     <aside className="rounded-2xl border border-line/40 bg-white p-5">
                       <p className="hand flex items-center gap-2 text-[15px]">
@@ -2306,10 +2318,31 @@ export default function LeadDrawer({
                   </section>
 
                   {/* Next up: the process's own next action, on sage. */}
-                  <section className="rounded-2xl bg-sage/25 p-5">
+                  <section ref={nextUpRef} className="rounded-2xl bg-sage/25 p-5">
                     <CardTitle icon={here.icon}>Next up</CardTitle>
-                    {/* The block carries its own "Next action" eyebrow for the tenant's box; here the title says it. */}
-                    <div className="mt-3 flex flex-col gap-4 [&>div:first-child>p:first-child]:hidden [&>div:first-child>p.hand]:mt-0 [&>div:last-child]:items-start">{nextActionEl}</div>
+                    {logInline ? (
+                      /* A contact step: the step's name, then the four ways of reaching
+                         them straight away, and the frames slide across inside the card. */
+                      <div className="mt-3">
+                        <p className="hand text-[17px] leading-snug">{here.title}</p>
+                        <div className="mt-4">
+                          <LogTouch
+                            key={`${lead.id}-${touches.length}`}
+                            inline
+                            leadId={lead.id}
+                            leadName={lead.name}
+                            leadFacts={{ name: lead.name, email: contact.email || lead.email, contactId: lead.contactId ?? null }}
+                            mode="attempt"
+                            onClose={() => undefined}
+                            onLogged={(j) => takeLog(j as { touches?: LeadTouch[]; spine?: Spine | null; campaign?: typeof campaign })}
+                            onBook={() => { setBookMode("appraisal"); setBooking(true); }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      /* The block carries its own "Next action" eyebrow for the tenant's box; here the title says it. */
+                      <div className="mt-3 flex flex-col gap-4 [&>div:first-child>p:first-child]:hidden [&>div:first-child>p.hand]:mt-0 [&>div:last-child]:items-start">{nextActionEl}</div>
+                    )}
                   </section>
                 </div>
 
