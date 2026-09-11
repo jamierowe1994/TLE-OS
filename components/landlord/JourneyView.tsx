@@ -21,8 +21,8 @@ import type { LandlordView } from "@/lib/landlord-view";
 
 const card = "rounded-[22px] border border-line/60 bg-white";
 const eyebrow = "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted";
-const SAGE_INK = "#63614a";
-const SAGE_WASH = "#f4f3ec";
+const SAGE_INK = "#56634a";
+const SAGE_WASH = "#f1f4ec";
 
 /** The current-stage card's title, in words that read as a sentence. */
 const TITLE: Record<string, string> = {

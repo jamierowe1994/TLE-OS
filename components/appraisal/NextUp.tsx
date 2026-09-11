@@ -33,9 +33,9 @@ export interface SentDeck {
   opens: number;
 }
 
-export const SAGE_INK = "#63614a";
-export const SAGE_WASH = "#f4f3ec";
-export const SAGE = "#b7b5a0";
+export const SAGE_INK = "#56634a";
+export const SAGE_WASH = "#f1f4ec";
+export const SAGE = "#b3bea5";
 
 export default function NextUp({
   ma,

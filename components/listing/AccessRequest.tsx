@@ -150,7 +150,7 @@ export default function AccessRequest({
         onClick={press}
         title={access.kind ? "Change how we get in from the Documents tab" : "Record how we get into the property"}
         className={`press-ring flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 ${className}`}
-        style={{ background: access.kind === "vacant" && access.keysCollected ? "#63614a" : "var(--brown)" }}
+        style={{ background: access.kind === "vacant" && access.keysCollected ? "#56634a" : "var(--brown)" }}
       >
         <DoodleIcon name={icon} size={14} />
         {label}

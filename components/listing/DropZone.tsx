@@ -253,7 +253,7 @@ export default function DropZone({
                       </div>
                     ) : (
                       <>
-                        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] ${q.done && !q.error ? "bg-[#f4f3ec] text-[#63614a]" : q.error ? "bg-accent-soft text-accent-dark" : "bg-page"}`}>
+                        <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] ${q.done && !q.error ? "bg-[#f1f4ec] text-[#56634a]" : q.error ? "bg-accent-soft text-accent-dark" : "bg-page"}`}>
                           {q.done && !q.error ? "✓" : q.error ? "!" : <span className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />}
                         </span>
                         <span className="min-w-0 flex-1 truncate">{q.name}</span>

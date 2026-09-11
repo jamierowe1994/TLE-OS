@@ -59,7 +59,7 @@ export const COLOURS: { key: ColourKey; name: string; hex: string }[] = [
   { key: "brown", name: "Dark brown", hex: "#56423e" },
   { key: "pink", name: "Light pink", hex: "#fdefec" },
   { key: "softclay", name: "Palette clay", hex: "#cfa096" },
-  { key: "softsage", name: "Palette sage", hex: "#b7b5a0" },
+  { key: "softsage", name: "Palette sage", hex: "#b3bea5" },
 ];
 
 export type IllustrationKey = "landlord-garden" | "landlord-street" | "landlord-feet-up" | "settled-tenant";

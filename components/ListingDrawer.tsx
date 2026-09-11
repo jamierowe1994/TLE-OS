@@ -97,8 +97,8 @@ const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: "documents", label: "Documents", icon: "file-contract" },
 ];
 
-const SAGE_INK = "#63614a";
-const SAGE_WASH = "#f4f3ec";
+const SAGE_INK = "#56634a";
+const SAGE_WASH = "#f1f4ec";
 
 /** One tenant on an offer — who they are and how they live. */
 type TenantIn = {
@@ -915,7 +915,7 @@ export default function ListingDrawer({
                       onClick={() => setTab("documents")}
                       title="Open Documents"
                       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                        terms.signed ? "bg-white text-[#63614a]" : "border border-accent-dark/50 bg-white text-accent-dark hover:border-accent-dark"
+                        terms.signed ? "bg-white text-[#56634a]" : "border border-accent-dark/50 bg-white text-accent-dark hover:border-accent-dark"
                       }`}
                     >
                       <DoodleIcon name="file-contract" size={11} />
@@ -2185,8 +2185,8 @@ function Doodles({ tone = "sage" }: { tone?: "sage" | "blush" }) {
       host.removeEventListener("mouseleave", leave);
     };
   }, []);
-  const ink = tone === "sage" ? "#63614a" : "var(--accent-dark)";
-  const soft = tone === "sage" ? "#b7b5a0" : "var(--accent)";
+  const ink = tone === "sage" ? "#56634a" : "var(--accent-dark)";
+  const soft = tone === "sage" ? "#b3bea5" : "var(--accent)";
   const wrap = "pointer-events-none absolute transition-transform duration-700 ease-out will-change-transform";
   return (
     <div ref={layer} aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -2261,7 +2261,7 @@ function PushCeremony({ at, address, onDone }: { at: number; address: string; on
       delay: Math.random() * 1.6,
       dur: 2.8 + Math.random() * 2,
       size: 6 + Math.random() * 8,
-      color: ["#de968f", "#a85a51", "#b7b5a0", "#63614a", "#fdefec", "#56423e"][i % 6],
+      color: ["#de968f", "#a85a51", "#b3bea5", "#56634a", "#fdefec", "#56423e"][i % 6],
       round: i % 3 === 0,
       sway: (Math.random() - 0.5) * 120,
     }))
@@ -2313,7 +2313,7 @@ function PushCeremony({ at, address, onDone }: { at: number; address: string; on
                   <li key={name} className="flex items-center gap-3">
                     <span
                       className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-bold ${state === "done" ? "text-white" : state === "now" ? "" : "border border-line/60 text-transparent"}`}
-                      style={state === "done" ? { background: "#63614a" } : undefined}
+                      style={state === "done" ? { background: "#56634a" } : undefined}
                     >
                       {state === "done" ? "✓" : state === "now" ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-accent-dark" /> : "·"}
                     </span>
@@ -2325,13 +2325,13 @@ function PushCeremony({ at, address, onDone }: { at: number; address: string; on
               })}
             </ul>
             <div className="mt-6 h-1.5 overflow-hidden rounded-full bg-line/40">
-              <div className="h-full rounded-full transition-[width] duration-1000 ease-out" style={{ width: `${((at + 0.6) / 3) * 100}%`, background: "#63614a" }} />
+              <div className="h-full rounded-full transition-[width] duration-1000 ease-out" style={{ width: `${((at + 0.6) / 3) * 100}%`, background: "#56634a" }} />
             </div>
           </>
         ) : (
           <>
-            <span className="mx-auto flex h-24 w-24 items-center justify-center rounded-full" style={{ background: "#f4f3ec", animation: "tle-pop 700ms cubic-bezier(0.18, 1.35, 0.32, 1) both" }}>
-              <svg viewBox="0 0 48 48" width="52" height="52" fill="none" stroke="#63614a" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <span className="mx-auto flex h-24 w-24 items-center justify-center rounded-full" style={{ background: "#f1f4ec", animation: "tle-pop 700ms cubic-bezier(0.18, 1.35, 0.32, 1) both" }}>
+              <svg viewBox="0 0 48 48" width="52" height="52" fill="none" stroke="#56634a" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                 <path d="M10 25 L20 35 L38 14" strokeDasharray="50" strokeDashoffset="50" style={{ animation: "tle-draw 600ms 350ms ease-out forwards" }} />
               </svg>
             </span>

@@ -27,8 +27,8 @@ import type { LandlordView } from "@/lib/landlord-view";
 const card = "rounded-[22px] border border-line/60 bg-white";
 const eyebrow = "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted";
 /* Sage, for things that are done and for what comes after the let. */
-const SAGE_INK = "#63614a";
-const SAGE_WASH = "#f4f3ec";
+const SAGE_INK = "#56634a";
+const SAGE_WASH = "#f1f4ec";
 
 export default function LandlordDashboard({
   view: v,

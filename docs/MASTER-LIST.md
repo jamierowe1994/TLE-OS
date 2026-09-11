@@ -101,7 +101,7 @@ it and the dark brown gives contrast**, used where they are needed rather than e
 |---|---|---|
 | Light pink | `#FDEFEC` | Backgrounds, washes |
 | Clay | `#CFA096` | Secondary - rules, soft fills |
-| Sage | `#B7B5A0` | Supporting - the new colour |
+| Sage | `#B3BEA5` | Supporting - the new colour |
 | Dark brown | `#56423E` | **Accent** - buttons, calls to action, headings |
 | ~~Pale green~~ | ~~`#EAF6DC`~~ | **Dropped** |
 
