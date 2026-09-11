@@ -2216,11 +2216,12 @@ export default function LeadDrawer({
                         </button>
                         <button
                           type="button"
-                          onClick={() => (logInline ? nextUpRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }) : setLogging("attempt"))}
-                          className="inline-flex items-center gap-2 rounded-full border border-line/80 bg-white px-5 py-2.5 text-[13px] font-semibold transition-colors hover:border-ink/40"
+                          onClick={() => setLogging("nurture")}
+                          disabled={Boolean(nurturing) || Boolean(sp?.booked)}
+                          className="inline-flex items-center gap-2 rounded-full border border-line/80 bg-white px-5 py-2.5 text-[13px] font-semibold transition-colors hover:border-ink/40 disabled:opacity-50"
                         >
-                          <DoodleIcon name="call" size={14} />
-                          Log a call
+                          <DoodleIcon name="clock" size={14} />
+                          {nurturing ? "In nurture" : "Send to nurture"}
                         </button>
                       </div>
                       <div className="mt-4 [&>div]:mt-0 [&>div]:border-t-0 [&>div]:pt-0 [&_button]:px-2.5 [&_button]:py-1 [&_button]:text-[11px]">{tagsRow}</div>
@@ -2367,7 +2368,8 @@ export default function LeadDrawer({
                             {done && <span className="text-[10px]">✓</span>}
                             {t.label}
                           </p>
-                          {now && <p className="mt-1 text-[10.5px] leading-snug text-muted">{t.detail}</p>}
+                          {/* Every stage says what it is, not only the one they are on (James, 11 Sep 2026). */}
+                          <p className={`mt-1 text-[10.5px] leading-snug ${now ? "text-muted" : "text-muted/70"}`}>{t.detail}</p>
                         </li>
                       );
                     })}
@@ -2934,6 +2936,15 @@ export default function LeadDrawer({
           leadName={lead.name}
           leadFacts={{ name: lead.name, email: contact.email || lead.email, contactId: lead.contactId ?? null }}
           mode={logging}
+          tried={
+            logging === "nurture" && !isTenant
+              ? [
+                  { label: "Called them", done: touches.some((t) => t.kind === "call") },
+                  { label: "Texted or WhatsApped", done: touches.some((t) => t.kind === "text" || t.kind === "whatsapp") },
+                  { label: "Emailed them", done: touches.some((t) => t.kind === "email") },
+                ]
+              : undefined
+          }
           onClose={() => setLogging(null)}
           onLogged={(j) => {
             takeLog(j as { touches?: LeadTouch[]; spine?: Spine | null; campaign?: typeof campaign });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { PressButton } from "@/components/Bits";
 import {
@@ -37,6 +37,7 @@ export default function LogTouch({
   onLogged,
   onBook,
   inline = false,
+  tried,
 }: {
   leadId: string;
   leadName: string;
@@ -52,6 +53,10 @@ export default function LogTouch({
    *  2026: "in the box rather than a pop-out"): no overlay, the four ways of
    *  reaching them are the first thing shown, and the buttons are brown. */
   inline?: boolean;
+  /** For "Send to nurture": what has already been tried, so the sheet can
+   *  ask before it lets go (James, 11 Sep 2026: "Are you sure? Have you
+   *  tried X, Y and Z?"). */
+  tried?: { label: string; done: boolean }[];
 }) {
   const [kind, setKind] = useState<TouchKind>(initialKind);
   const [outcome, setOutcome] = useState<TouchOutcome | null>(null);
@@ -119,8 +124,22 @@ export default function LogTouch({
 
   const first = leadName.split(" ")[0] || "them";
 
+  /* Inline, the card grows and shrinks with the frame rather than jumping:
+     the wrapper is given the new height to ease to (James, 11 Sep 2026:
+     "growing outwards... butter smooth"). */
+  const inner = useRef<HTMLDivElement | null>(null);
+  const [h, setH] = useState<number | undefined>(undefined);
+  useLayoutEffect(() => {
+    if (!inline || !inner.current) return;
+    const el = inner.current;
+    const ro = new ResizeObserver(() => setH(el.getBoundingClientRect().height));
+    ro.observe(el);
+    setH(el.getBoundingClientRect().height);
+    return () => ro.disconnect();
+  }, [inline]);
+
   const body_ = (
-      <div key={frame} className={inline ? "slide-across" : undefined}>
+      <div key={frame} className={inline ? "frame-grow" : undefined}>
         {mode === "attempt" ? (
           <>
             <div className="flex items-center justify-between gap-3">
@@ -143,7 +162,7 @@ export default function LogTouch({
                     className={`flex items-center gap-3 rounded-2xl border border-line/70 bg-card text-left transition-colors hover:border-ink/40 ${inline ? "px-3 py-2.5" : "px-4 py-3.5"}`}
                   >
                     <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${kindIcon}`}>
-                      <DoodleIcon name={k.icon} size={16} />
+                      <DoodleIcon name={k.icon} size={14} />
                     </span>
                     <span className="text-[13.5px] font-semibold">{k.label}</span>
                   </button>
@@ -201,11 +220,28 @@ export default function LogTouch({
           </>
         ) : (
           <>
-            <h2 className="hand text-[20px]">Add to nurture</h2>
+            <h2 className="hand text-[20px]">{tried ? `Send ${first} to nurture?` : "Add to nurture"}</h2>
             <p className="mt-1 text-[12.5px] text-muted">
               {first} is not saying no and not answering. The reason picks the campaign that keeps them warm,
               and they come straight back on the spine the moment they reply.
             </p>
+            {tried && (
+              <div className="mt-4 rounded-2xl border border-line/70 bg-card p-3.5">
+                <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">Have you tried</p>
+                <ul className="mt-2 space-y-1.5">
+                  {tried.map((t) => (
+                    <li key={t.label} className="flex items-center gap-2.5 text-[12.5px]">
+                      <span className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full text-[9px] ${t.done ? "bg-sage text-white" : "border border-line text-muted"}`}>{t.done ? "✓" : "–"}</span>
+                      <span className={t.done ? "" : "text-muted"}>{t.label}</span>
+                      <span className="ml-auto text-[11px] text-muted">{t.done ? "yes" : "not yet"}</span>
+                    </li>
+                  ))}
+                </ul>
+                {tried.some((t) => !t.done) && (
+                  <p className="mt-2.5 text-[11.5px] text-muted">Nurture keeps them warm by email. A call or a message you have not tried yet is still worth one go first.</p>
+                )}
+              </div>
+            )}
             <p className="mt-4 text-[10.5px] font-semibold uppercase tracking-wide text-muted">Why</p>
             <div className="mt-1.5 flex flex-wrap gap-2">
               {NURTURE_REASONS.map((r) => (
@@ -252,14 +288,19 @@ export default function LogTouch({
             }`}
           >
             <DoodleIcon name={mode === "nurture" ? "clock" : "checklist"} size={14} />
-            {busy ? "Saving…" : mode === "nurture" ? "Add to nurture" : booked ? "Log it and book" : "Log it"}
+            {busy ? "Saving…" : mode === "nurture" ? (tried ? "Yes, send to nurture" : "Add to nurture") : booked ? "Log it and book" : "Log it"}
           </PressButton>
           )}
         </div>
       </div>
   );
 
-  if (inline) return <div className="overflow-hidden">{body_}</div>;
+  if (inline)
+    return (
+      <div className="overflow-hidden transition-[height] duration-[520ms] ease-[cubic-bezier(0.22,1,0.36,1)]" style={h != null ? { height: h } : undefined}>
+        <div ref={inner}>{body_}</div>
+      </div>
+    );
   return (
     <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
       <button aria-label="Close" onClick={onClose} className="absolute inset-0 cursor-default bg-ink/45" />

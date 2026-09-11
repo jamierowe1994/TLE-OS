@@ -1086,5 +1086,5 @@ body {
 }
 
 /* A frame arriving from the right, inside the Next up card. */
-@keyframes slide-across { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
-.slide-across { animation: slide-across 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes frame-grow { from { opacity: 0; transform: translateX(36px) scale(0.94); } 40% { opacity: 1; } to { opacity: 1; transform: none; } }
+.frame-grow { animation: frame-grow 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; transform-origin: left center; }
