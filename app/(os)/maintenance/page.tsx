@@ -141,14 +141,20 @@ export default function Maintenance() {
             ? "The people who do the work. Your own book of trades beside the company's, each with a profile, their jobs and what they are owed."
             : "Every job on the managed book, reported through paid. Repairs run on an urgency; planned jobs like a gas safety run on a date. Nothing here is a note-to-self: a job carries its contractor, its quote, its invoice and who said yes."
         }
-        illustration="/illustrations/notioly/home-caring.svg"
-        lineBreak="dip"
+        /* James's own artwork, trimmed to its ink so the drawing's ground
+           line IS the bottom edge of the file - which is what lands it ON the
+           rule rather than near it. Wide, so the aspect is passed and the
+           blurb reserves the real width. */
+        illustration="/illustrations/maintenance-selfie.webp"
+        illustrationHeight={250}
+        illustrationAspect={1.7963}
+        lineBreak="none"
         searchValue={q}
         onSearch={setQ}
         searchPlaceholder="Search jobs, addresses, contractors…"
         actions={
           <div className="flex gap-2">
-            <PressButton onClick={() => { setSection("repair"); setRaising("repair"); }} className="flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 text-[13px] font-semibold text-page">
+            <PressButton onClick={() => { setSection("repair"); setRaising("repair"); }} className="flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-page">
               <span className="text-[15px] leading-none">+</span> Report a repair
             </PressButton>
             <PressButton onClick={() => { setSection("planned"); setRaising("planned"); }} className="flex items-center gap-2 rounded-full border border-line/80 px-5 py-2.5 text-[13px] font-semibold">
@@ -218,11 +224,35 @@ export default function Maintenance() {
       ) : !data ? (
         <p className="mt-6 text-[12.5px] text-muted">Reading the jobs…</p>
       ) : grouped.length === 0 ? (
-        <div className="mt-6 rounded-2xl border border-dashed border-line/80 bg-panel p-8 text-center">
-          <p className="hand text-[20px]">{section === "repair" ? "Nothing broken that we know of." : "Nothing planned."}</p>
-          <p className="mt-1 text-[12.5px] text-muted">
-            {section === "repair" ? "Report a repair when a tenant or landlord rings." : "Plan a job from a certificate that is due, or straight from here."}
-          </p>
+        /* An empty maintenance board is the good outcome, so it is drawn as
+           one rather than as a dashed box apologising for having nothing in
+           it. James's house, the line that goes with it, and the one button
+           that would fill the screen if it needed filling. */
+        <div className="fade-up mt-6 flex flex-col items-center gap-6 rounded-2xl border border-line/70 bg-accent-soft/25 p-8 text-center sm:flex-row sm:p-10 sm:text-left">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/illustrations/maintenance-house.webp"
+            alt=""
+            aria-hidden
+            className="art-figure w-56 shrink-0 select-none sm:w-72"
+          />
+          <div className="min-w-0">
+            <p className="hand text-[24px] leading-tight">
+              {section === "repair" ? "Nothing broken that we know of." : "Nothing planned."}
+            </p>
+            <p className="mt-2 max-w-[46ch] text-[13px] leading-relaxed text-muted">
+              {section === "repair"
+                ? "Report a repair when a tenant or landlord lets you know, and we'll help you keep everything on track."
+                : "Plan a job from a certificate that is due, or straight from here."}
+            </p>
+            <PressButton
+              onClick={() => { setRaising(section === "repair" ? "repair" : "planned"); }}
+              className="mt-5 inline-flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-page"
+            >
+              <span className="text-[15px] leading-none">+</span>
+              {section === "repair" ? "Report a repair" : "Plan a job"}
+            </PressButton>
+          </div>
         </div>
       ) : (
         <div className="mt-4 space-y-4">
