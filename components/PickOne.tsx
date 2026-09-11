@@ -88,12 +88,12 @@ export default function PickOne<T extends string>({
         aria-expanded={open}
         className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-4 py-2.5 text-[12.5px] transition-colors ${
           open
-            ? "border-ink bg-panel text-ink"
+            ? "border-ink bg-white text-ink"
             : on
               ? /* A filter that is ON has to look on, or somebody reads a
                    narrowed list as the whole book. */
                 "border-accent-dark bg-accent-soft/50 font-semibold text-accent-dark"
-              : "border-line/80 bg-panel text-muted hover:border-ink/40 hover:text-ink"
+              : "border-line/60 bg-white text-muted hover:border-ink/40 hover:text-ink"
         }`}
       >
         {icon && <DoodleIcon name={icon} size={13} />}

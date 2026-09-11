@@ -9,7 +9,6 @@ import Segmented from "@/components/Segmented";
 import StageTabs from "@/components/StageTabs";
 import ListingDrawer from "@/components/ListingDrawer";
 import PropertyPhoto from "@/components/PropertyPhoto";
-import { Pill } from "@/components/Wire";
 import { DIARY } from "@/lib/diary";
 import rexSample from "@/lib/rex-sample.json";
 
@@ -72,17 +71,109 @@ function statusOf(l: SampleListing): { label: string; tone: "good" | "accent" | 
   return { label: "Draft", tone: "accent" };
 }
 
+/* Sage, for what is in a good state - the same two values the appraisal
+   screens use. */
+const SAGE_INK = "#56634a";
+const SAGE_WASH = "#f1f4ec";
+
+/**
+ * WHERE THE LISTING IS, in one line - the thing an agent scans the board for.
+ *
+ * Derived from the record, never typed: a draft missing photographs or an
+ * EPC needs attention before it can go live; a draft with both is ready to
+ * publish; a published listing is live, and says so if it went live short
+ * of something; let agreed is its own state. The words name what is missing
+ * so the next move is on the row.
+ */
+function readiness(l: SampleListing): {
+  tone: "good" | "accent" | "neutral";
+  icon: string;
+  title: string;
+  sub: string;
+  action: string;
+  missing: string[];
+} {
+  const missing: string[] = [];
+  if (l.imageCount === 0) missing.push("photos");
+  if (l.epcExpiry == null) missing.push("EPC");
+  const list = missing.join(" and ");
+  if (l.letAgreed) {
+    return { tone: "neutral", icon: "key", title: "Let agreed", sub: "Under offer to a tenant.", action: "View listing", missing };
+  }
+  if (l.publicationStatus === "published") {
+    return missing.length
+      ? { tone: "accent", icon: "info", title: "Live, needs attention", sub: `Live without ${list}.`, action: "Open listing", missing }
+      : { tone: "good", icon: "checklist", title: "Live", sub: "On the portals, all in order.", action: "Open listing", missing };
+  }
+  return missing.length
+    ? { tone: "accent", icon: "info", title: "Needs attention", sub: `Add ${list} to publish.`, action: "Continue setup", missing }
+    : { tone: "good", icon: "checklist", title: "Ready to publish", sub: "All required info looks good.", action: "Open listing", missing };
+}
+
+/** The readiness box on a row: the state, why, and the one move. */
+function Readiness({ r, compact }: { r: ReturnType<typeof readiness>; /** In a tile: no room for the button. */ compact?: boolean }) {
+  const wash = r.tone === "good" ? { background: SAGE_WASH } : r.tone === "accent" ? { background: "var(--accent-soft)" } : { background: "#f6f6f4" };
+  const ink = r.tone === "good" ? SAGE_INK : r.tone === "accent" ? "var(--accent-dark)" : "var(--muted)";
+  return (
+    <span className={`flex items-center gap-3 rounded-2xl px-3.5 py-3 ${compact ? "" : "min-w-0"}`} style={wash}>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/85" style={{ color: ink }}>
+        <DoodleIcon name={r.icon} size={14} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[12.5px] font-semibold">{r.title}</span>
+        <span className="line-clamp-2 text-[11px] leading-snug text-muted">{r.sub}</span>
+      </span>
+      {!compact && (
+        <span
+          className={`hidden shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3.5 py-2 text-[11.5px] font-semibold 2xl:inline-flex ${
+            r.tone === "accent" ? "bg-accent-dark text-white" : "border border-line/60 bg-white"
+          }`}
+        >
+          {r.action} <span aria-hidden>›</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** A state pill in the file's style: sage for good, blush for a job to do, outlined for the rest. */
+function Tag({ tone, children }: { tone: "good" | "accent" | "neutral"; children: React.ReactNode }) {
+  if (tone === "good") {
+    return (
+      <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: SAGE_WASH, color: SAGE_INK }}>
+        {children}
+      </span>
+    );
+  }
+  return (
+    <span
+      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+        tone === "accent" ? "bg-accent-soft text-accent-dark" : "border border-line/60 text-muted"
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
+
 /** One labelled fact in a listing row: the icon, the caption, the value. */
 function Fact({ icon, label, value, title }: { icon: string; label: string; value: string; title?: string }) {
   return (
     <span className="flex items-center gap-2">
       <DoodleIcon name={icon} size={13} className="shrink-0 text-accent-dark" />
       <span className="min-w-0">
-        <span className="block whitespace-nowrap text-[9px] font-semibold uppercase tracking-wide text-muted">{label}</span>
-        <span className="figures block truncate text-[12px]" title={title}>{value}</span>
+        <span className="block whitespace-nowrap text-[9.5px] font-semibold uppercase leading-tight tracking-[0.06em] text-muted">{label}</span>
+        <span className="figures block truncate text-[12.5px]" title={title}>{value}</span>
       </span>
     </span>
   );
+}
+
+/** "2026-09-07" as "7 Sep 2026"; anything else as it came. */
+function shortDate(iso: string | null): string {
+  if (!iso) return "Now";
+  const d = new Date(`${iso}T00:00:00`);
+  return Number.isFinite(d.getTime()) ? d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : iso;
 }
 
 /** How many viewings the diary knows about for this address. */
@@ -208,7 +299,7 @@ function FilterPanel({
         className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-4 py-2.5 text-[13px] transition-colors ${
           active
             ? "border-accent-dark bg-accent-soft/50 font-semibold text-accent-dark"
-            : "border-line/80 bg-panel text-muted hover:border-ink/40 hover:text-ink"
+            : "border-line/60 bg-white text-muted hover:border-ink/40 hover:text-ink"
         }`}
       >
         <DoodleIcon name="setting" size={14} />
@@ -288,7 +379,7 @@ export default function Listings() {
      the tabs now, which answers the same question and three others beside it,
      and two controls for one filter is how a screen starts to disagree with
      itself. */
-  const [stage, setStage] = useState<"all" | "Available" | "Let agreed" | "Draft">("all");
+  const [stage, setStage] = useState<"all" | "Available" | "Let agreed" | "Draft" | "photos" | "compliance">("all");
   const [period, setPeriod] = useState<PeriodId>("any");
   const [view, setView] = useState<"list" | "tiles">("list");
 
@@ -361,7 +452,11 @@ export default function Listings() {
       // "Available" is what the status chip already means — published and not
       // let agreed. Defined once, in statusOf, so the switch and the chip can
       // never drift apart and show a house the other disagrees with.
-      if (stage !== "all" && statusOf(l).label !== stage) return false;
+      if (stage === "photos") {
+        if (l.imageCount > 0) return false;
+      } else if (stage === "compliance") {
+        if (l.epcExpiry != null) return false;
+      } else if (stage !== "all" && statusOf(l).label !== stage) return false;
       if (!listedIn(l.publishedAt, period)) return false;
       return true;
     });
@@ -460,15 +555,18 @@ export default function Listings() {
           { id: "Available" as const, label: "Available", icon: "home", count: byStage.Available, blurb: "Published, and not let agreed - what you can put somebody in now" },
           { id: "Let agreed" as const, label: "Let agreed", icon: "key", count: byStage["Let agreed"], blurb: "Taken, and working through to a tenancy" },
           { id: "Draft" as const, label: "Draft", icon: "doc", count: byStage.Draft, blurb: "Not on the portals yet" },
+          /* Two jobs rather than two states: what is holding a listing back. */
+          { id: "photos" as const, label: "Missing photos", icon: "folder", count: LISTINGS.filter((l) => l.imageCount === 0).length, blurb: "No photographs on the listing" },
+          { id: "compliance" as const, label: "Needs compliance", icon: "shield", count: LISTINGS.filter((l) => l.epcExpiry == null).length, blurb: "No EPC filed" },
         ]}
       />
 
       {/* ── The board, in the same panel the other two boards use. ── */}
-      <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
-        <div className="mb-3 flex items-baseline justify-between gap-3">
-          <h2 className="text-[15px]">
-            {stage === "all" ? "All listings" : stage}
-            <span className="figures ml-1.5 text-muted">({board.length})</span>
+      <div className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
+        <div className="mb-4 flex items-baseline justify-between gap-3">
+          <h2 className="hand text-[17px]">
+            {stage === "all" ? "All listings" : stage === "photos" ? "Missing photos" : stage === "compliance" ? "Needs compliance" : stage}
+            <span className="figures ml-2 text-[14px] text-muted">{board.length}</span>
           </h2>
           {stage !== "all" && (
             <button type="button" onClick={() => setStage("all")} className="text-[11.5px] text-muted underline transition-colors hover:text-ink">
@@ -481,7 +579,7 @@ export default function Listings() {
             Nothing matches{period === "any" ? "" : " in that window"} — widen the rent band or clear the filters.
           </p>
         )}
-        <div className={`cascade ${view === "tiles" ? "grid gap-3 sm:grid-cols-2 xl:grid-cols-3" : "space-y-4"}`}>
+        <div className={`cascade ${view === "tiles" ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-3" : "space-y-3"}`}>
         {board.map((l) => {
           const st = statusOf(l);
           const views = viewingsFor(l.name);
@@ -495,7 +593,7 @@ export default function Listings() {
               // inner radius of 14 against the card's 16 keeps the two curves
               // concentric — the giveaway that a nested corner is wrong is
               // when the gap between the arcs is uneven.
-              className="fade-up block-pop block w-full rounded-2xl border border-line/60 bg-box p-2 text-left hover:border-ink"
+              className="fade-up block w-full rounded-[22px] border border-line/50 bg-white p-2.5 text-left transition-colors hover:border-ink/40"
             >
               {/* The list card STACKS on a phone.
 
@@ -510,15 +608,16 @@ export default function Listings() {
                   src={l.image}
                   className={
                     view === "tiles"
-                      ? "h-40 w-full shrink-0 rounded-[14px]"
-                      : "h-40 w-full shrink-0 rounded-[14px] sm:h-24 sm:w-32"
+                      ? "h-44 w-full shrink-0 rounded-[16px]"
+                      : "h-40 w-full shrink-0 rounded-[16px] sm:h-24 sm:w-32"
                   }
                 />
 
                 <div
                   className={
                     view === "tiles"
-                      ? "min-w-0 flex-1 px-1 pb-1"
+                      ? /* Tiles: the three facts side by side under the name, the rent on its own line. */
+                        "grid min-w-0 flex-1 grid-cols-[1.5fr_1fr_1fr] gap-x-3 gap-y-3 px-2 pb-2 [&>span:first-child]:col-span-3"
                       : /* ── One row, read across ──────────────────────────
                            The name truncated on its own line, the four facts
                            stacked underneath it, and the rent pinned right -
@@ -536,19 +635,22 @@ export default function Listings() {
                            table rather than as five cards that happen to be
                            stacked. Below md they wrap, because six columns in
                            a phone's width is not a table either. */
-                        "grid min-w-0 flex-1 items-center gap-x-4 gap-y-3 py-1 md:grid-cols-[minmax(0,1.35fr)_112px_74px_66px_104px]"
+                        /* Fixed fact columns from md, wide enough for "Available from"
+                           on one line, and the readiness box as the last column from
+                           xl. The name column takes what is left. */
+                        "grid min-w-0 flex-1 grid-cols-[1.5fr_1fr_1fr] items-center gap-x-4 gap-y-3 py-1 pr-2 [&>span:first-child]:col-span-3 [&>span:last-child]:col-span-3 md:grid-cols-[minmax(0,1fr)_84px_110px_70px_64px] md:[&>span:first-child]:col-span-1 md:[&>span:last-child]:col-span-5 xl:grid-cols-[minmax(0,1fr)_84px_110px_70px_64px_230px] xl:[&>span:last-child]:col-span-1 2xl:grid-cols-[minmax(0,1fr)_84px_110px_70px_64px_310px]"
                   }
                 >
                   <span className="min-w-0">
                     {/* The chips — only what changes decisions. No 'For sale',
                         no 'Sponsored': everything here is a rental, ours. */}
                     <span className="flex flex-wrap items-center gap-1.5">
-                      <Pill tone={st.tone}>{st.label}</Pill>
-                      {l.tenant && <Pill tone="neutral">Tenanted</Pill>}
-                      {l.imageCount === 0 && <Pill tone="accent">No photos</Pill>}
-                      {l.epcExpiry == null && <Pill tone="neutral">EPC not filed</Pill>}
+                      <Tag tone={st.tone}>{st.label}</Tag>
+                      {l.tenant && <Tag tone="neutral">Tenanted</Tag>}
+                      {l.imageCount === 0 && <Tag tone="accent">No photos</Tag>}
+                      {l.epcExpiry == null && <Tag tone="neutral">EPC not filed</Tag>}
                     </span>
-                    <span className="hand mt-1.5 block truncate text-[17px] leading-tight">{l.name}</span>
+                    <span className="hand mt-1.5 line-clamp-2 text-[17px] leading-tight">{l.name}</span>
                     <span className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-muted">
                       <DoodleIcon name="home-1" size={12} className="shrink-0" />
                       <span className="truncate">{l.locality}</span>
@@ -558,7 +660,18 @@ export default function Listings() {
                   {/* The facts, each its own column. Same four as before and
                       in the same order; they are beside the address now
                       instead of under it. */}
-                  <Fact icon="calendar" label="Available from" value={l.availableFrom ?? "Now"} />
+                  {/* A third of the book — mostly drafts — carries no rent at
+                      all. A bare "£" reads as broken; "rent not set" reads as
+                      a job to do, which is what it is. */}
+                  <span className={view === "tiles" ? "order-2 col-span-3 flex items-baseline gap-1.5 border-t border-line/50 pt-3" : "col-span-3 md:col-span-1"}>
+                    <span className="figures block text-[20px] leading-none">
+                      {l.rent == null ? "—" : `£${l.rent.toLocaleString("en-GB")}`}
+                    </span>
+                    <span className={view === "tiles" ? "text-[11px] text-muted" : "mt-0.5 block text-[10px] text-muted"}>
+                      {l.rent == null ? "rent not set" : rentPeriodLabel(l)}
+                    </span>
+                  </span>
+                  <Fact icon="calendar" label="Available from" value={shortDate(l.availableFrom)} title={l.availableFrom ?? undefined} />
                   {/* No Bedrooms column. REX's listing model has no bedroom
                       field at all, so it could only ever print a dash on every
                       row - a column of nothing. It comes back when the take-on
@@ -566,16 +679,9 @@ export default function Listings() {
                   <Fact icon="key" label="Viewings" value={String(views)} />
                   <Fact icon="folder" label="Photos" value={String(l.imageCount)} />
 
-                  {/* A third of the book — mostly drafts — carries no rent at
-                      all. A bare "£" reads as broken; "rent not set" reads as
-                      a job to do, which is what it is. */}
-                  <span className="md:text-right">
-                    <span className="figures block text-[20px] leading-none">
-                      {l.rent == null ? "—" : `£${l.rent.toLocaleString("en-GB")}`}
-                    </span>
-                    <span className="mt-0.5 block text-[10px] text-muted">
-                      {l.rent == null ? "rent not set" : rentPeriodLabel(l)}
-                    </span>
+                  {/* Where it is, and the one move - see readiness(). */}
+                  <span className={view === "tiles" ? "order-3 col-span-3 block" : "block"}>
+                    <Readiness r={readiness(l)} compact={view === "tiles"} />
                   </span>
                 </div>
               </div>

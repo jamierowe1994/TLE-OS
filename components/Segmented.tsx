@@ -48,7 +48,7 @@ export default function Segmented<T extends string>({
 
   return (
     <div
-      className={`relative flex items-center rounded-full border border-line/80 bg-panel p-1 ${className}`}
+      className={`relative flex items-center rounded-full border border-line/60 bg-white p-1 ${className}`}
       role="tablist"
     >
       {/* The marker. inset-1 matches the track's padding, so it sits inside
