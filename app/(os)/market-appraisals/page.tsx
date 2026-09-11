@@ -8,7 +8,6 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PickOne from "@/components/PickOne";
 import Segmented from "@/components/Segmented";
 import StageTabs from "@/components/StageTabs";
-import { Pill } from "@/components/Wire";
 import {
   MA_STAGES,
   OPEN_STAGES,
@@ -256,11 +255,11 @@ export default function MarketAppraisals() {
         ]}
       />
 
-      <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
-        <div className="mb-3 flex items-baseline justify-between gap-3">
-          <h2 className="text-[15px]">
+      <div className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
+        <div className="mb-4 flex items-baseline justify-between gap-3">
+          <h2 className="hand text-[17px]">
             {filter === "open" ? "Open appraisals" : MA_STAGES.find((s) => s.id === filter)?.label}
-            <span className="figures ml-1.5 text-muted">({rows.length})</span>
+            <span className="figures ml-2 text-[14px] text-muted">{rows.length}</span>
           </h2>
           {filter !== "open" && (
             <button type="button" onClick={() => setFilter("open")} className="text-[11.5px] text-muted underline">
@@ -269,7 +268,9 @@ export default function MarketAppraisals() {
           )}
         </div>
 
-        {rows.length === 0 ? (
+        {live === null ? (
+          <p className="py-6 text-[12.5px] text-muted">Fetching the appraisals…</p>
+        ) : rows.length === 0 ? (
           <p className="py-6 text-[12.5px] text-muted">
             Nothing at this stage{period === "any" ? "" : " in that date range"}.
           </p>
@@ -278,104 +279,156 @@ export default function MarketAppraisals() {
              three weeks and carries thirty fields of material information -
              that wants an address you can bookmark, send, and come back to.
              True of a tile as much as a line. */
-          <ul className={view === "tiles" ? "grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3" : "space-y-2"}>
-            {rows.map((m) => {
-              const when = m.appointmentAt
-                ? new Date(m.appointmentAt).toLocaleString("en-GB", {
-                    weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
-                  })
-                : null;
-              const stage = MA_STAGES.find((s) => s.id === m.live)?.label;
-              const badges = (
-                <>
-                  {/* The forgotten-valuation flag. It used to be a stage of its
-                      own; as a flag it can shout from whichever stage the file
-                      is actually sitting on. */}
-                  {needsValuation(m) && <Pill tone="accent">No figure yet</Pill>}
-                  {m.valuation ? <Pill tone="good">{gbp(m.valuation)} pcm</Pill> : null}
-                  <Pill tone="neutral">{stage}</Pill>
-                </>
-              );
-
-              /* The landlord's number and address, each behind its own drawn
-                 icon. Both are DERIVED from the contact record, so either can
-                 be null - it says "not recorded" rather than leaving a blank
-                 that reads as still loading. */
-              const contact = (
-                <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted">
-                  {!m.landlordMobile && !m.landlordEmail ? (
-                    /* Holding neither, one sentence. Two "not recorded"s side
-                       by side under their own icons read as the screen having
-                       failed rather than as a contact we simply do not have. */
-                    <span className="inline-flex items-center gap-1.5">
-                      <DoodleIcon name="user" size={11} />
-                      No contact recorded for this landlord
-                    </span>
-                  ) : (
-                    <>
-                      {m.landlordMobile && (
-                        <span className="inline-flex items-center gap-1.5">
-                          <DoodleIcon name="call" size={11} />
-                          {m.landlordMobile}
-                        </span>
-                      )}
-                      {m.landlordEmail && (
-                        <span className="inline-flex items-center gap-1.5 truncate">
-                          <DoodleIcon name="mail" size={11} />
-                          <span className="truncate">{m.landlordEmail}</span>
-                        </span>
-                      )}
-                    </>
-                  )}
-                </span>
-              );
-
-              return (
-                <li key={m.id} className={view === "tiles" ? "" : ""}>
-                  <Link
-                    href={`/market-appraisals/${m.id}`}
-                    className={`block h-full rounded-xl border border-line/70 p-3.5 transition-colors hover:border-ink ${
-                      view === "tiles" ? "bg-box" : ""
-                    }`}
-                  >
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <span className="hand text-[14px]">{m.address}</span>
-                      {view === "list" && <span className="flex shrink-0 items-center gap-1.5">{badges}</span>}
-                    </div>
-
-                    <p className="mt-1 text-[11.5px]">
-                      {/* A lead has no postcode, so an appraisal booked from
-                          one starts without it - and the separator has to go
-                          with it, or the line reads "Beatrice Okonkwo · · no
-                          agent". */}
-                      <span className="font-semibold">{m.landlord}</span>
-                      <span className="text-muted">
-                        {m.postcode ? ` · ${m.postcode}` : ""}
-                        {m.agent ? ` · with ${m.agent}` : " · no agent recorded"}
-                      </span>
-                    </p>
-
-                    <p className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] text-muted">
-                      <DoodleIcon name="calendar" size={11} />
-                      {when ?? "no date booked"}
-                    </p>
-
-                    <div className="mt-1.5">{contact}</div>
-
-                    {/* Tiles carry the badges at the foot instead of the head:
-                        a card is read top to bottom, and the state is the
-                        answer, not the question. */}
-                    {view === "tiles" && (
-                      <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-line/60 pt-3">{badges}</div>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
+          <ul className={view === "tiles" ? "grid gap-4 sm:grid-cols-2 xl:grid-cols-3" : "space-y-3"}>
+            {rows.map((m) => (
+              <li key={m.id}>
+                <AppraisalCard m={m} tile={view === "tiles"} />
+              </li>
+            ))}
           </ul>
         )}
       </div>
 
     </>
+  );
+}
+
+/* Sage, for what is done - the same two values the appraisal file uses. */
+const SAGE_INK = "#56634a";
+const SAGE_WASH = "#f1f4ec";
+const SPINE = MA_STAGES.filter((s) => s.id !== "lost");
+
+/**
+ * One appraisal, as a card (tiles) or a row (list). Same content either
+ * way, in the file's own style: white with a hairline, the address in the
+ * title face, a seven-segment strip for where it is up to, and the state as
+ * pills at the foot - blush for a missing figure, sage for a recorded one.
+ */
+function AppraisalCard({ m, tile }: { m: MarketAppraisal & { live: MaStage }; tile: boolean }) {
+  const when = m.appointmentAt
+    ? new Date(m.appointmentAt).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+    : null;
+  const at = SPINE.findIndex((s) => s.id === m.live);
+  const stage = MA_STAGES.find((s) => s.id === m.live)?.label;
+  const missing = needsValuation(m);
+
+  const strip = (
+    <span className="flex gap-1" aria-label={`Stage ${at + 1} of ${SPINE.length}`} title={`Stage ${at + 1} of ${SPINE.length}: ${stage}`}>
+      {SPINE.map((s, i) => (
+        <span
+          key={s.id}
+          className={`h-1.5 flex-1 rounded-full ${i === at ? "bg-accent-dark" : i > at ? "bg-line/40" : ""}`}
+          style={i < at ? { background: SAGE_INK } : undefined}
+        />
+      ))}
+    </span>
+  );
+
+  const badges = (
+    <>
+      {missing && <span className="rounded-full bg-accent-soft px-2.5 py-1 text-[11px] font-semibold text-accent-dark">No figure yet</span>}
+      {m.valuation ? (
+        <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: SAGE_WASH, color: SAGE_INK }}>
+          {gbp(m.valuation)} pcm
+        </span>
+      ) : null}
+      <span className="rounded-full border border-line/60 px-2.5 py-1 text-[11px] font-semibold text-muted">{stage}</span>
+    </>
+  );
+
+  /* The landlord's number and address. Both are DERIVED from the contact
+     record, so either can be null - one sentence when we hold neither. */
+  const contact = (
+    <span className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-muted">
+      {!m.landlordMobile && !m.landlordEmail ? (
+        <span className="inline-flex items-center gap-1.5">
+          <DoodleIcon name="user" size={11} />
+          No contact recorded
+        </span>
+      ) : (
+        <>
+          {m.landlordMobile && (
+            <span className="inline-flex items-center gap-1.5">
+              <DoodleIcon name="call" size={11} />
+              {m.landlordMobile}
+            </span>
+          )}
+          {m.landlordEmail && (
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <DoodleIcon name="mail" size={11} />
+              <span className="truncate">{m.landlordEmail}</span>
+            </span>
+          )}
+        </>
+      )}
+    </span>
+  );
+
+  const house = (
+    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+      <DoodleIcon name="home" size={18} />
+    </span>
+  );
+
+  if (tile) {
+    return (
+      <Link
+        href={`/market-appraisals/${m.id}`}
+        className="flex h-full flex-col rounded-[22px] border border-line/50 bg-white p-5 transition-colors hover:border-ink/40"
+      >
+        <div className="flex items-start gap-3.5">
+          {house}
+          <div className="min-w-0">
+            <span className="hand block text-[16px] leading-tight">{m.address}</span>
+            <p className="mt-1 text-[12px]">
+              <span className="font-semibold">{m.landlord}</span>
+              <span className="text-muted">{m.postcode ? ` · ${m.postcode}` : ""}</span>
+            </p>
+          </div>
+        </div>
+        <p className="mt-4 inline-flex items-center gap-1.5 text-[12px] text-muted">
+          <DoodleIcon name="calendar" size={12} />
+          {when ?? "No date booked"}
+          {m.agent ? <span> · with {m.agent}</span> : <span> · no agent recorded</span>}
+        </p>
+        <div className="mt-1.5">{contact}</div>
+        <div className="mt-auto pt-5">
+          {strip}
+          <div className="mt-3.5 flex flex-wrap items-center gap-1.5">{badges}</div>
+        </div>
+      </Link>
+    );
+  }
+
+  return (
+    <Link
+      href={`/market-appraisals/${m.id}`}
+      /* Fixed columns for the strip and the pills, so the strip starts at the
+         same place on every row and sits in the middle of the space rather
+         than up against the pills (James, 11 Sep). */
+      className="grid items-center gap-x-5 gap-y-3 rounded-[22px] border border-line/50 bg-white p-4 transition-colors hover:border-ink/40 lg:grid-cols-[auto_minmax(0,1fr)_280px_230px] lg:pr-5"
+    >
+      <span className="hidden lg:block">{house}</span>
+      <div className="min-w-0">
+        <span className="hand block text-[15px] leading-tight">{m.address}</span>
+        <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
+          <span>
+            <span className="font-semibold">{m.landlord}</span>
+            <span className="text-muted">{m.postcode ? ` · ${m.postcode}` : ""}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-muted">
+            <DoodleIcon name="calendar" size={11} />
+            {when ?? "No date booked"}
+            {m.agent ? ` · with ${m.agent}` : ""}
+          </span>
+        </p>
+        <div className="mt-1">{contact}</div>
+      </div>
+      <div className="w-[200px] max-w-full">
+        {strip}
+        <p className="mt-1.5 text-[10.5px] text-muted">Stage {at + 1} of {SPINE.length}</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">{badges}</div>
+    </Link>
   );
 }

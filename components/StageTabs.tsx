@@ -70,8 +70,8 @@ export default function StageTabs<T extends string>({
               title={st.blurb}
               className={`min-w-[124px] rounded-2xl border px-3.5 py-3 text-left transition-colors ${
                 on
-                  ? "border-accent-dark bg-accent-soft/60"
-                  : "border-line/80 bg-panel hover:border-ink/40"
+                  ? "border-accent/70 bg-accent-soft/60"
+                  : "border-line/50 bg-white hover:border-ink/40"
               }`}
             >
               <span className={`flex items-center gap-1.5 ${on ? "text-accent-dark" : "text-muted"}`}>
