@@ -1035,7 +1035,10 @@ export default function LeadDrawer({
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pb-4 pt-4">
+        {/* Scrolls itself, and the scroll stops here (11 Sep 2026): it was
+            overflow-hidden, so a tenant enquiry taller than the window could
+            not be read to the bottom and the wheel scrolled the page behind. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-6 pb-4 pt-4">
           {/* ── The person. One box: who they are, how to reach them, the
               property they rang about, and its photo — with tags at the foot,
               because tags describe the person, not the process. No avatar:
