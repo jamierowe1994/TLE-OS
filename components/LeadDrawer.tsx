@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { handoverTarget } from "@/lib/market-appraisal";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
-import { DetailRow, DoneTick, PressButton, SectionHead } from "@/components/Bits";
+import { ConfettiBurst, DetailRow, DoneTick, PressButton, SectionHead } from "@/components/Bits";
 import Compose from "@/components/Compose";
 import { agentName, firstNameOf, properName } from "@/lib/names";
 import EmailProperties from "@/components/EmailProperties";
@@ -688,6 +688,10 @@ export default function LeadDrawer({
 
   /* The pop-outs: activity, the property finder, the more menu, removal. */
   const [activityOpen, setActivityOpen] = useState(false);
+  const [enquiryOpen, setEnquiryOpen] = useState(false);
+  /* Sending the passport walks through frames (James, 11 Sep 2026): is this
+     the right address, sending, sent. */
+  const [passportFlow, setPassportFlow] = useState<"ask" | "sending" | "sent" | "failed" | null>(null);
   const [removing, setRemoving] = useState(false);
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeMsg, setRemoveMsg] = useState<string | null>(null);
@@ -698,7 +702,7 @@ export default function LeadDrawer({
   const [finderBusy, setFinderBusy] = useState(false);
   const [finderMsg, setFinderMsg] = useState<string | null>(null);
   useEffect(() => {
-    setActivityOpen(false); setRemoving(false); setFinderOpen(false);
+    setActivityOpen(false); setRemoving(false); setFinderOpen(false); setEnquiryOpen(false); setPassportFlow(null);
     setFinderOrigin(null); setFinderLabel(""); setFinderMsg(null);
   }, [enquiryLeadId]);
 
@@ -732,8 +736,8 @@ export default function LeadDrawer({
   const [nearMisses, setNearMisses] = useState<{ id: string; address: string; image: string | null }[]>([]);
   useEffect(() => { setFillNote(null); setNearMisses([]); }, [enquiryLeadId]);
 
-  async function sendPassport(again: boolean) {
-    if (!lead || passportBusy || !passportEmail) return;
+  async function sendPassport(again: boolean): Promise<boolean> {
+    if (!lead || passportBusy || !passportEmail) return false;
     setPassportBusy(true);
     setPassportSaid(null);
     try {
@@ -745,8 +749,10 @@ export default function LeadDrawer({
       if (!j.ok) throw new Error(j.error ?? "That did not send.");
       setPassport((p) => ({ done: false, summary: null, ...(p ?? {}), sent: true, invitedAt: j.invitedAt ?? new Date().toISOString(), path: j.path ?? null }));
       setPassportSaid(j.alreadySent ? "Already sent - use Resend to send it again." : "Sent.");
+      return true;
     } catch (e) {
       setPassportSaid(e instanceof Error ? e.message : "That did not send.");
+      return false;
     } finally {
       setPassportBusy(false);
     }
@@ -1825,7 +1831,7 @@ export default function LeadDrawer({
           </button>
           {/* The side questions, centre stage. A tab toggles: open its panel
               in the person box, or click again to put the record back. */}
-          <div className="hidden items-center gap-1 sm:flex">
+          <div className="hidden items-center gap-2 sm:flex">
             {TABS.map((t) => {
               const count =
                 t.key === "tasks"
@@ -1839,10 +1845,10 @@ export default function LeadDrawer({
                   key={t.key}
                   type="button"
                   onClick={() => setTab(active ? null : t.key)}
-                  className={`hand rounded-full px-3.5 py-1.5 text-[13px] transition-colors ${
+                  className={`flex items-center gap-2 rounded-full border px-4 py-2 text-[12px] transition-colors ${
                     active
-                      ? "bg-accent-soft text-accent-dark"
-                      : "text-muted hover:text-ink"
+                      ? "border-transparent bg-accent-soft text-accent-dark"
+                      : "border-line/80 text-muted hover:text-ink"
                   }`}
                 >
                   {t.label}
@@ -1866,13 +1872,13 @@ export default function LeadDrawer({
             {isTenant && (
               <button
                 type="button"
-                onClick={() => (passport?.done && passport.path ? window.open(passport.path, "_blank") : void sendPassport(Boolean(passport?.sent)))}
+                onClick={() => (passport?.done && passport.path ? window.open(passport.path, "_blank") : setPassportFlow("ask"))}
                 disabled={!passport?.done && (!passportEmail || passportBusy)}
                 title={passport?.done ? "Open their answers" : passportEmail ? "Ask for their details" : "No email on this lead"}
                 className="hidden items-center gap-2 rounded-full border border-line/80 px-4 py-2 text-[12px] text-muted transition-colors hover:text-ink disabled:opacity-50 md:flex"
               >
                 <DoodleIcon name="user" size={13} />
-                {passport?.done ? "Passport done" : passportBusy ? "Sending…" : passport?.sent ? "Resend passport" : "Send passport"}
+                {passport?.done ? "Passport done" : passportBusy ? "Sending…" : passport?.sent ? "Passport sent" : "Send passport"}
               </button>
             )}
           </div>
@@ -1903,7 +1909,7 @@ export default function LeadDrawer({
                     src="/brand/art/lead-house.webp"
                     alt=""
                     aria-hidden
-                    className="pointer-events-none absolute bottom-[-64px] right-[190px] hidden w-[620px] max-w-none opacity-[0.6] xl:block"
+                    className="pointer-events-none absolute bottom-[-64px] right-[300px] hidden w-[620px] max-w-none opacity-[0.6] xl:block"
                   />
                   <div className="relative grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_200px_300px]">
                     <div className="min-w-0 pb-1">
@@ -1939,7 +1945,7 @@ export default function LeadDrawer({
                         {receivedIso ? ` · ${whenAgo(receivedIso)}` : ""}
                       </p>
                       {/* Their own words - the first thing anyone should read. */}
-                      <div className="mt-4 flex h-[176px] max-w-xl flex-col rounded-2xl border border-line/70 p-4">
+                      <div className="mt-4 max-w-xl rounded-2xl border border-line/70 p-4">
                         <p className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-muted">
                           <span className="flex items-center gap-1.5 font-semibold text-ink">
                             <DoodleIcon name="message" size={13} className="text-accent-dark" />
@@ -1950,7 +1956,14 @@ export default function LeadDrawer({
                         {enquiry === undefined && !enqMessage ? (
                           <p className="mt-2 text-[12.5px] text-muted">Reading their enquiry from REX…</p>
                         ) : enqMessage ? (
-                          <p className="mt-2 min-h-0 flex-1 overflow-y-auto whitespace-pre-line pr-1 text-[14px] leading-relaxed">{enqMessage}</p>
+                          <>
+                            <p className="mt-2 line-clamp-5 whitespace-pre-line text-[14px] leading-relaxed">{enqMessage}</p>
+                            {(enqMessage.length > 320 || enqMessage.split("\n").length > 5) && (
+                              <button type="button" onClick={() => setEnquiryOpen(true)} className="mt-1.5 text-[12px] font-semibold text-accent-dark hover:underline">
+                                Read more
+                              </button>
+                            )}
+                          </>
                         ) : enqFacts.length ? (
                           <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12.5px]">
                             {enqFacts.map(([k, v]) => (
@@ -1963,7 +1976,7 @@ export default function LeadDrawer({
                         ) : (
                           <p className="mt-2 text-[12.5px] text-muted">They sent no message with this enquiry.</p>
                         )}
-                        <p className="mt-auto pt-2 text-[11px] text-muted">
+                        <p className="mt-2 text-[11px] text-muted">
                           Via {enquiry?.source || lead.source}
                           {enquiry === undefined && enqMessage ? " · loading the full message…" : ""}
                         </p>
@@ -2005,7 +2018,7 @@ export default function LeadDrawer({
                         <Glance
                           icon="doc"
                           title={passport?.done ? "Passport done" : passport?.sent ? "Passport sent, not finished" : "Passport not sent"}
-                          sub={passport?.done ? "Their details are filled in below" : passportEmail ? "One click on the tiles below" : "No email to send it to yet"}
+                          sub={passport?.done ? "Their details are filled in below" : passportEmail ? "Send passport, top right" : "No email to send it to yet"}
                         />
                         <Glance
                           icon="calendar"
@@ -2535,6 +2548,81 @@ export default function LeadDrawer({
                 Remove this lead…
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Their enquiry in full. ── */}
+      {enquiryOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+          <button type="button" aria-label="Close" onClick={() => setEnquiryOpen(false)} className="absolute inset-0 cursor-default bg-ink/45" />
+          <div className="frame-grow relative flex max-h-[84vh] w-full max-w-xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+            <div className="flex items-center justify-between gap-3 border-b border-line/70 px-6 py-4">
+              <div>
+                <h2 className="text-[19px]">What {lead.name.split(" ")[0]} wrote</h2>
+                <p className="text-[12px] text-muted">{receivedIso ? `${whenFull(receivedIso)} · ` : ""}via {enquiry?.source || lead.source}</p>
+              </div>
+              <button type="button" onClick={() => setEnquiryOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-[12px] text-muted hover:text-ink">✕</button>
+            </div>
+            <p className="min-h-0 flex-1 overflow-y-auto whitespace-pre-line px-6 py-5 text-[14.5px] leading-relaxed">{enqMessage}</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Send the passport: ask, send, tick. ── */}
+      {passportFlow && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+          <button type="button" aria-label="Close" onClick={() => passportFlow !== "sending" && setPassportFlow(null)} className="absolute inset-0 cursor-default bg-ink/45" />
+          <div key={passportFlow} className="frame-grow relative w-full max-w-md rounded-3xl border border-line/80 bg-page p-6 text-center shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+            {passportFlow === "ask" && (
+              <>
+                <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+                  <DoodleIcon name="user" size={24} />
+                </span>
+                <h2 className="hand mt-4 text-[22px]">{passport?.sent ? "Send the passport again?" : "Send the tenant passport?"}</h2>
+                <p className="mt-2 text-[13px] text-muted">It goes to</p>
+                <p className="mt-1 break-all text-[15px] font-semibold">{passportEmail}</p>
+                <p className="mt-2 text-[12px] text-muted">Wrong address? Close this and change it on The tenant card first.</p>
+                <div className="mt-6 flex items-center justify-center gap-3">
+                  <button type="button" onClick={() => setPassportFlow(null)} className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40">Not now</button>
+                  <PressButton
+                    onClick={() => {
+                      setPassportFlow("sending");
+                      void sendPassport(Boolean(passport?.sent)).then((ok) => {
+                        setPassportFlow(ok ? "sent" : "failed");
+                        if (ok) setTimeout(() => setPassportFlow((f) => (f === "sent" ? null : f)), 1800);
+                      });
+                    }}
+                    className="press-ring flex items-center gap-2 rounded-full bg-brown px-6 py-2.5 text-[13px] font-semibold text-white"
+                  >
+                    <DoodleIcon name="mail" size={14} />
+                    Send it here
+                  </PressButton>
+                </div>
+              </>
+            )}
+            {passportFlow === "sending" && (
+              <div className="py-6">
+                <span className="mx-auto block h-12 w-12 animate-spin rounded-full border-[3px] border-line border-t-brown" />
+                <h2 className="hand mt-5 text-[20px]">Sending the tenant passport now…</h2>
+                <p className="mt-1 text-[12.5px] text-muted">to {passportEmail}</p>
+              </div>
+            )}
+            {passportFlow === "sent" && (
+              <div className="relative py-6">
+                <ConfettiBurst />
+                <div className="mx-auto w-fit"><DoneTick size={72} /></div>
+                <h2 className="hand mt-5 text-[22px]">Passport sent</h2>
+                <p className="mt-1 text-[12.5px] text-muted">{passportSaid === "Sent." || !passportSaid ? `On its way to ${passportEmail}` : passportSaid}</p>
+              </div>
+            )}
+            {passportFlow === "failed" && (
+              <div className="py-4">
+                <h2 className="hand text-[20px]">That did not send</h2>
+                <p className="mt-2 text-[12.5px] text-muted">{passportSaid}</p>
+                <button type="button" onClick={() => setPassportFlow("ask")} className="mt-5 rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40">Try again</button>
+              </div>
+            )}
           </div>
         </div>
       )}
