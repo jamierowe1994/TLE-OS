@@ -8,7 +8,7 @@ import DoodleIcon from "@/components/DoodleIcon";
  * point of having a filter"). Pick any number; a lead has to carry all of
  * them. Drawn like PickOne, so the row of filters reads as one set.
  */
-export default function TagsPick({ tags, value, onChange }: { tags: [string, number][]; value: string[]; onChange: (next: string[]) => void }) {
+export default function TagsPick({ tags, value, onChange, tone = "neutral" }: { tags: [string, number][]; value: string[]; onChange: (next: string[]) => void; tone?: "neutral" | "pink" }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const box = useRef<HTMLDivElement | null>(null);
@@ -30,7 +30,13 @@ export default function TagsPick({ tags, value, onChange }: { tags: [string, num
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-4 py-2.5 text-[12.5px] transition-colors ${
-          on ? "border-accent-dark bg-accent-soft text-accent-dark" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
+          tone === "pink"
+            ? on
+              ? "border-transparent bg-accent-dark font-semibold text-white"
+              : "border-transparent bg-accent-soft font-medium text-accent-dark hover:bg-accent-soft/70"
+            : on
+              ? "border-accent-dark bg-accent-soft text-accent-dark"
+              : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
         }`}
       >
         <DoodleIcon name="target" size={13} />

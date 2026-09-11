@@ -102,8 +102,11 @@ export function useColumns<T>(tableKey: string, defs: ColumnDef<T>[]) {
 
 export function ColumnCustomiser<T>({
   cols,
+  tone = "neutral",
 }: {
   cols: ReturnType<typeof useColumns<T>>;
+  /** "pink" matches the leads board's filter row - see PickOne. */
+  tone?: "neutral" | "pink";
 }) {
   const [open, setOpen] = useState(false);
   const [dragging, setDragging] = useState<number | null>(null);
@@ -151,10 +154,10 @@ export function ColumnCustomiser<T>({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-3.5 py-2 text-[12px] transition-colors ${
-          open
-            ? "border-ink/40 text-ink"
-            : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
+        className={`flex items-center gap-2 whitespace-nowrap rounded-full border transition-colors ${
+          tone === "pink"
+            ? `px-4 py-2.5 text-[12.5px] ${open ? "border-accent-dark bg-accent-soft text-accent-dark" : "border-transparent bg-accent-soft font-medium text-accent-dark hover:bg-accent-soft/70"}`
+            : `px-3.5 py-2 text-[12px] ${open ? "border-ink/40 text-ink" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"}`
         }`}
         title="Choose which columns show, and drag to reorder"
       >

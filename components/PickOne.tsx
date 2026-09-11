@@ -30,6 +30,7 @@ export default function PickOne<T extends string>({
   icon,
   clearable = true,
   neutral,
+  tone = "neutral",
 }: {
   /** Shown on the button when nothing is chosen, and as the "any" row. */
   label: string;
@@ -52,6 +53,12 @@ export default function PickOne<T extends string>({
    * the opposite of what the highlight is for.
    */
   neutral?: T;
+  /**
+   * How the closed button is drawn. "pink" is the leads board's filter row
+   * (James, 11 Sep 2026: "make all sources and stuff pink"): a blush wash
+   * at rest, the deep accent once it is narrowing something.
+   */
+  tone?: "neutral" | "pink";
 }) {
   const [open, setOpen] = useState(false);
   const [at, setAt] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -87,13 +94,19 @@ export default function PickOne<T extends string>({
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-4 py-2.5 text-[12.5px] transition-colors ${
-          open
-            ? "border-ink bg-white text-ink"
-            : on
-              ? /* A filter that is ON has to look on, or somebody reads a
-                   narrowed list as the whole book. */
-                "border-accent-dark bg-accent-soft/50 font-semibold text-accent-dark"
-              : "border-line/60 bg-white text-muted hover:border-ink/40 hover:text-ink"
+          tone === "pink"
+            ? open
+              ? "border-accent-dark bg-accent-soft text-accent-dark"
+              : on
+                ? "border-transparent bg-accent-dark font-semibold text-white"
+                : "border-transparent bg-accent-soft font-medium text-accent-dark hover:bg-accent-soft/70"
+            : open
+              ? "border-ink bg-panel text-ink"
+              : on
+                ? /* A filter that is ON has to look on, or somebody reads a
+                     narrowed list as the whole book. */
+                  "border-accent-dark bg-accent-soft/50 font-semibold text-accent-dark"
+                : "border-line/80 bg-panel text-muted hover:border-ink/40 hover:text-ink"
         }`}
       >
         {icon && <DoodleIcon name={icon} size={13} />}

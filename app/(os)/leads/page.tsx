@@ -17,7 +17,10 @@ import TagsPick from "@/components/TagsPick";
 import { defaultTags } from "@/lib/lead-facts-shape";
 import Segmented from "@/components/Segmented";
 import DoodleIcon from "@/components/DoodleIcon";
-import LeadGroups from "@/components/LeadGroups";
+import LeadGroups, { DEFAULT_GROUPS, type GroupsConfig } from "@/components/LeadGroups";
+import GroupsCustomiser from "@/components/GroupsCustomiser";
+import CornerSwell from "@/components/CornerSwell";
+import { usePref } from "@/lib/prefs-store";
 
 /**
  * Leads: one inbox for every channel, with the record open beside it.
@@ -77,6 +80,16 @@ export default function Leads() {
      scrolling. Held per side below, so a switch to List is remembered while
      you are on that side and a fresh sign-in starts at Groups. */
   const [view, setView] = useState<"list" | "groups">("list");
+  /* The shape they settled on, kept per side and per person (James, 11 Sep
+     2026: "once I've set it up, it will then stay"). All leads has no
+     Groups, so nothing is remembered for it. */
+  const [savedView, saveView, viewReady] = usePref<Record<string, "list" | "groups">>("leads-view-v1", {});
+  /* How the boxes are laid out - which, in what order, how deep. */
+  const [groupsConfig, saveGroupsConfig] = usePref<GroupsConfig>("leads-groups-v1", DEFAULT_GROUPS);
+  const pickView = (v: "list" | "groups") => {
+    setView(v);
+    if (side) saveView({ ...savedView, [side]: v });
+  };
   const [fSource, setFSource] = useState<string | null>(null);
   const [fAgent, setFAgent] = useState<string | null>(null);
   const [fStage, setFStage] = useState<string | null>(null);
@@ -102,12 +115,16 @@ export default function Leads() {
     if (wantsNew) setCreating(true);
   }, [wantsNew]);
 
-  /* All leads has no Groups, so it is always the list. A side rests on Groups
-     until somebody says otherwise, and changing side forgets that they did -
-     the choice belongs to the question, not to the session. */
+  /* All leads has no Groups, so it is always the list. A side opens on
+     whatever this person last chose for it, and on Groups until they have. */
   useEffect(() => {
-    setView(side ? "groups" : "list");
-  }, [side]);
+    if (!side) return setView("list");
+    if (!viewReady) return;
+    setView(savedView[side] ?? "groups");
+    // Only when the side changes or the saved choice first arrives; a save
+    // made here must not re-run this and put the view back.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [side, viewReady]);
 
   /* ── The real book, out of REX. Until it answers we show the demo one, so
         the page never renders empty; `live` says which you're looking at. ── */
@@ -379,16 +396,19 @@ export default function Leads() {
             {side && (
               <Segmented
                 value={view}
-                onChange={setView}
+                onChange={pickView}
                 options={[
                   { id: "list" as const, label: "List", icon: <DoodleIcon name="list" size={13} /> },
                   { id: "groups" as const, label: "Groups", icon: <DoodleIcon name="grid" size={13} /> },
                 ]}
               />
             )}
+            {/* The brand colour they picked, as picked - not its deepened
+                cousin. The switch beside it is brown, so the one button that
+                MAKES something is the one thing on the row in the accent. */}
             <PressButton
               onClick={() => setCreating(true)}
-              className="flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-page"
+              className="flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-[13px] font-semibold text-white ring-1 ring-inset ring-black/10"
             >
               <span className="text-[15px] leading-none">+</span> New lead
             </PressButton>
@@ -401,14 +421,18 @@ export default function Leads() {
       <div className="mt-4">
         {view === "groups" ? (
           <>
-            <div className="fade-up relative z-20 rounded-2xl border border-line/80 bg-panel px-5 py-4">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <PickOne label="All sources" options={sources.map((o) => ({ id: o, label: o }))} value={fSource} onChange={setFSource} />
-                <PickOne label="All agents" options={agents.map((o) => ({ id: o, label: o }))} value={fAgent} onChange={setFAgent} />
-                <PickOne label="All stages" options={stages.map((o) => ({ id: o, label: o }))} value={fStage} onChange={setFStage} />
-                <TagsPick tags={tagCounts} value={fTags} onChange={setFTags} />
+            <div className="fade-up relative z-20 rounded-[22px] border border-line/50 bg-white px-5 py-4">
+              <CornerSwell />
+              <div className="relative flex flex-wrap items-center gap-2.5">
+                <PickOne tone="pink" label="All sources" options={sources.map((o) => ({ id: o, label: o }))} value={fSource} onChange={setFSource} />
+                <PickOne tone="pink" label="All agents" options={agents.map((o) => ({ id: o, label: o }))} value={fAgent} onChange={setFAgent} />
+                <PickOne tone="pink" label="All stages" options={stages.map((o) => ({ id: o, label: o }))} value={fStage} onChange={setFStage} />
+                <TagsPick tone="pink" tags={tagCounts} value={fTags} onChange={setFTags} />
+                <div className="ml-auto">
+                  <GroupsCustomiser value={groupsConfig} onChange={saveGroupsConfig} />
+                </div>
               </div>
-              {scanNote && <p className="mt-3 text-[11px] leading-relaxed text-muted">{scanNote}</p>}
+              {scanNote && <p className="relative mt-3 text-[11px] leading-relaxed text-muted">{scanNote}</p>}
             </div>
 
             {/* The whole filtered book, not a page of it - each box does its
@@ -419,26 +443,30 @@ export default function Leads() {
                 leads={book}
                 activeId={openId}
                 onOpen={(l) => setOpenId(l.id === openId ? null : l.id)}
+                config={groupsConfig}
               />
             </div>
           </>
         ) : (
-        <div className="fade-up min-w-0 rounded-2xl border border-line/80 bg-panel p-5">
+        <div className="fade-up relative min-w-0 rounded-[22px] border border-line/50 bg-white p-5">
+          <CornerSwell />
           {/* Filters, with the column customiser at the end of the row. */}
           {/* The search itself is the bar under the header - one search per
               page (James, 6 Sep 2026). This row is only the filters. */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            <PickOne label="All sources" options={sources.map((o) => ({ id: o, label: o }))} value={fSource} onChange={setFSource} />
-            <PickOne label="All agents" options={agents.map((o) => ({ id: o, label: o }))} value={fAgent} onChange={setFAgent} />
-            <PickOne label="All stages" options={stages.map((o) => ({ id: o, label: o }))} value={fStage} onChange={setFStage} />
-            <TagsPick tags={tagCounts} value={fTags} onChange={setFTags} />
-            <ColumnCustomiser cols={cols} />
+          <div className="relative flex flex-wrap items-center gap-2.5">
+            <PickOne tone="pink" label="All sources" options={sources.map((o) => ({ id: o, label: o }))} value={fSource} onChange={setFSource} />
+            <PickOne tone="pink" label="All agents" options={agents.map((o) => ({ id: o, label: o }))} value={fAgent} onChange={setFAgent} />
+            <PickOne tone="pink" label="All stages" options={stages.map((o) => ({ id: o, label: o }))} value={fStage} onChange={setFStage} />
+            <TagsPick tone="pink" tags={tagCounts} value={fTags} onChange={setFTags} />
+            <div className="ml-auto">
+              <ColumnCustomiser cols={cols} tone="pink" />
+            </div>
           </div>
 
           {/* The scan report, next to the list it is about. */}
-          {scanNote && <p className="mt-3 text-[11px] leading-relaxed text-muted">{scanNote}</p>}
+          {scanNote && <p className="relative mt-3 text-[11px] leading-relaxed text-muted">{scanNote}</p>}
 
-          <div className="mt-4">
+          <div className="relative mt-4">
             <DataTable
               cols={cols}
               rows={rows}
@@ -447,7 +475,7 @@ export default function Leads() {
             />
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line/70 pt-4">
+          <div className="relative mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line/50 pt-4">
             <p className="flex items-center gap-2.5 text-[11px] text-muted">
               Showing {book.length ? page * perPage + 1 : 0}–
               {Math.min((page + 1) * perPage, book.length)} of {book.length} leads
@@ -507,6 +535,10 @@ export default function Leads() {
           nothing, so nothing depends on it any more. */}
       <NewLeadPanel
         open={creating}
+        /* Landing on the Tenant or Landlord board and adding somebody means
+           adding one of those - the home screen's quick links arrive with
+           ?new=1&side=... for exactly this. */
+        initialKind={side === "tenant" || side === "landlord" ? side : undefined}
         onClose={() => setCreating(false)}
         onCreated={() => setAddedTick((n) => n + 1)}
       />

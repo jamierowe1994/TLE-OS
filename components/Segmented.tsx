@@ -55,7 +55,10 @@ export default function Segmented<T extends string>({
           the border rather than on it. */}
       <span
         aria-hidden
-        className="absolute bottom-1 left-1 top-1 rounded-full bg-accent-dark transition-transform duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+        /* The brown, not the accent (James, 11 Sep 2026): the chosen half of
+           a two-way switch is the palette's contrast colour everywhere, and
+           the brand accent is kept for the one button that makes something. */
+        className="absolute bottom-1 left-1 top-1 rounded-full bg-brown transition-transform duration-[280ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
         style={{ width: `calc((100% - 0.5rem) / ${n})`, transform: `translateX(${i * 100}%)` }}
       />
       {options.map((o) => (

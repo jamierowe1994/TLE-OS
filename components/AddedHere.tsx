@@ -97,7 +97,7 @@ export default function AddedHere({ refreshKey }: { refreshKey?: number }) {
   const shown = all ? rows : rows.slice(0, SHOWN);
 
   return (
-    <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
+    <div className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="flex items-center gap-2.5 text-[14px]">
           <DoodleIcon name="user" size={16} className="text-accent-dark" />

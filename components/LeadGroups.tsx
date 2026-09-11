@@ -66,7 +66,7 @@ function receivedAt(l: Lead): Date | null {
  * in changes at midnight on its own, with nothing to run and nothing to go
  * stale (the live-figures rule in CLAUDE.md).
  */
-type GroupId = "new" | "review" | "contacted";
+export type GroupId = "new" | "review" | "contacted";
 
 function groupOf(l: Lead, now: Date): GroupId {
   /* Anything past New has been picked up, whatever the label says next. */
@@ -87,7 +87,7 @@ function groupOf(l: Lead, now: Date): GroupId {
   return today ? "new" : "review";
 }
 
-const GROUPS: { id: GroupId; title: string; icon: string; blurb: string }[] = [
+export const GROUPS: { id: GroupId; title: string; icon: string; blurb: string }[] = [
   { id: "new", title: "New today", icon: "star", blurb: "Fresh enquiries to review" },
   { id: "review", title: "Needs review", icon: "clock", blurb: "Nobody has been in touch yet" },
   { id: "contacted", title: "Contacted", icon: "call", blurb: "You have already spoken to these" },
@@ -95,17 +95,33 @@ const GROUPS: { id: GroupId; title: string; icon: string; blurb: string }[] = [
 
 /** How many rows a box shows before View all. Six fills the box without the
  *  page becoming one long scroll of three thousand rows. */
-const PREVIEW = 6;
+export const PREVIEW = 6;
+
+/**
+ * How somebody wants their boxes (James, 11 Sep 2026: "they should be able
+ * to customise their view... once I've set it up, it will then stay"). Which
+ * boxes show, in what order, and how many rows each opens with. Saved per
+ * person by the page; this only draws what it is handed.
+ */
+export interface GroupsConfig {
+  show: GroupId[];
+  preview: number;
+}
+export const DEFAULT_GROUPS: GroupsConfig = { show: ["new", "review", "contacted"], preview: PREVIEW };
 
 export default function LeadGroups({
   leads,
   activeId,
   onOpen,
+  config = DEFAULT_GROUPS,
 }: {
   leads: Lead[];
   activeId: string | null;
   onOpen: (l: Lead) => void;
+  config?: GroupsConfig;
 }) {
+  const PREVIEW = Math.max(1, config.preview);
+  const groups = config.show.map((id) => GROUPS.find((g) => g.id === id)).filter((g): g is (typeof GROUPS)[number] => Boolean(g));
   /* Read once per render of the filtered book rather than per lead, so every
      row in one pass is measured against the same instant. */
   const grouped = useMemo(() => {
@@ -124,22 +140,24 @@ export default function LeadGroups({
 
   return (
     <div className="space-y-4">
-      {GROUPS.map((g, i) => {
+      {groups.map((g, i) => {
         const rows = grouped[g.id];
         const all = openAll[g.id];
         const shown = all ? rows : rows.slice(0, PREVIEW);
         return (
           <section
             key={g.id}
-            className="fade-up rounded-2xl border border-line/80 bg-panel"
+            /* White with a hairline, like every card since the appraisal
+               file; the grey panel is gone (James, 11 Sep 2026). */
+            className="fade-up rounded-[22px] border border-line/50 bg-white"
             style={{ animationDelay: `${i * 60}ms` }}
           >
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line/70 px-5 py-3.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line/50 px-5 py-3.5">
               <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent-soft text-accent-dark">
                 <DoodleIcon name={g.icon} size={14} />
               </span>
               <h2 className="hand text-[17px] leading-none">{g.title}</h2>
-              <span className="rounded-full bg-box px-2 py-0.5 text-[11px] font-semibold text-muted figures">
+              <span className="figures rounded-full bg-accent-soft px-2.5 py-0.5 text-[11px] font-semibold text-accent-dark">
                 {rows.length.toLocaleString("en-GB")}
               </span>
               <p className="text-[11.5px] text-muted">{g.blurb}</p>
@@ -163,14 +181,14 @@ export default function LeadGroups({
                     : "Nobody has been contacted yet."}
               </p>
             ) : (
-              <ul className="divide-y divide-line/60">
+              <ul className="divide-y divide-line/40">
                 {shown.map((l) => (
                   <li key={l.id}>
                     <button
                       type="button"
                       onClick={() => onOpen(l)}
                       className={`flex w-full flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-3 text-left transition-colors md:grid md:grid-cols-[10px_minmax(0,2fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_auto] ${
-                        l.id === activeId ? "bg-accent-soft/40" : "hover:bg-box/70"
+                        l.id === activeId ? "bg-accent-soft/50" : "hover:bg-accent-soft/20"
                       }`}
                     >
                       {/* Filled means nobody has spoken to them. */}
