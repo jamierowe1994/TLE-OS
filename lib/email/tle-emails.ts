@@ -25,7 +25,7 @@
  */
 
 import { renderTemplate } from "@/lib/email/render.js";
-import { tleBrand } from "@/lib/campaign-mail";
+import { tleBrand, type EmailAudience } from "@/lib/campaign-mail";
 import { verifyEmailFor, resetEmailFor } from "@/lib/verify-email";
 import { pilotInviteEmail } from "@/lib/email/pilot-email";
 import { videoChaseEmail } from "@/lib/email/video-chase-email";
@@ -187,7 +187,7 @@ export function renderTleEmail(id: string, vars: Record<string, string>): { subj
       return next as unknown as EmailDoc["blocks"][number];
     }),
   };
-  return blocks(filled)();
+  return blocks(filled, entry.audience)();
 }
 
 /**
@@ -226,14 +226,18 @@ export async function renderTleEmailLive(id: string, vars: Record<string, string
       return next as unknown as EmailDoc["blocks"][number];
     }),
   };
-  return blocks(filled)();
+  return blocks(filled, entry.audience)();
 }
 
-const blocks = (doc: EmailDoc) => (override?: EmailDoc) =>
+/* Rendered on the letterhead for the entry's audience (11 Sep 2026): the
+   customer palette for landlords and tenants, the red for the team and the
+   trades. See tleBrand in lib/campaign-mail. */
+const blocks = (doc: EmailDoc, audience?: EmailAudience) => (override?: EmailDoc) =>
   renderTemplate(
     { ...doc, ...(override ?? {}), branding: doc.branding },
-    { brand: { ...tleBrand(), ...(doc.branding ?? {}) } }
+    { brand: { ...tleBrand(audience), ...(doc.branding ?? {}) } }
   ) as { subject: string; html: string };
+const blocksAs = (audience: EmailAudience) => (doc: EmailDoc) => blocks(doc, audience);
 
 export const TLE_EMAILS: CatalogEntry[] = [
   {
@@ -264,7 +268,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
     summary:
       "Announces TLE OS is open to everyone. Leads on what changes for the reader rather than on features, and names the pilot so it doesn't read as a first draft.",
     doc: LAUNCH_ANNOUNCEMENT,
-    render: blocks(LAUNCH_ANNOUNCEMENT),
+    render: blocksAs("partner")(LAUNCH_ANNOUNCEMENT),
   },
 
   {
@@ -380,7 +384,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
     summary:
       "One property, one certificate, one date. States the obligation plainly and offers the two real paths — they arrange it and send it in, or we book a contractor. No urgency dressing: a certificate is a legal obligation, and making every reminder shout leaves nothing to distinguish the genuinely urgent ones.",
     doc: COMPLIANCE_CHASE_LANDLORD,
-    render: (o) => blocks(withSample(o ?? COMPLIANCE_CHASE_LANDLORD))(),
+    render: (o) => blocksAs("landlord")(withSample(o ?? COMPLIANCE_CHASE_LANDLORD))(),
   },
   {
     id: "account-verify",
@@ -534,7 +538,7 @@ The Letting Experts`
       "Turns a booked viewing into a started passport. Leads on the payoff to THEM - fill it in once and it answers every application - rather than on us needing documents. Says plainly, in the body rather than a footnote, that nothing is shared with a landlord until they apply: referencing and right-to-rent are intrusive to hand over, and somebody who thinks a landlord can already see it will not fill it in.",
     doc: TENANT_PASSPORT_INVITE,
     render: (o) =>
-      blocks(
+      blocksAs("tenant")(
         withSample(o ?? TENANT_PASSPORT_INVITE, {
           firstName: "Sophie",
           address: "Flat 2, Mercer Street, Manchester M4 1SL",
@@ -557,7 +561,7 @@ The Letting Experts`
       "No password. The link is the sign-in, single use and a day long, the same way the deck and the passport already work. It only ever goes to an address that is the owner contact on a managed listing, so a stranger typing an email gets the same on-screen answer and no email.",
     doc: LANDLORD_SIGN_IN,
     render: (o) =>
-      blocks(
+      blocksAs("landlord")(
         withSample(o ?? LANDLORD_SIGN_IN, {
           firstName: "Helen",
           link: `${SITE}/landlord/enter?token=sample`,
@@ -577,7 +581,7 @@ The Letting Experts`
       "The landlord link, for tenants. Only ever goes to an address that is a tenant on a Propoly deal, so a stranger typing an email gets the same on-screen answer and no email.",
     doc: TENANT_SIGN_IN,
     render: (o) =>
-      blocks(
+      blocksAs("tenant")(
         withSample(o ?? TENANT_SIGN_IN, {
           firstName: "Sophie",
           link: `${SITE}/tenant/enter?token=sample`,
@@ -597,7 +601,7 @@ The Letting Experts`
       "Turns a booked appraisal into an account. The pitch is not 'make an account' but 'we have already gathered what is on record for your property, correct it before we arrive' - which is worth more to them than to us, and is true. Also sets up the file as the place the valuation, terms and certificates will live afterwards.",
     doc: LANDLORD_DECK_INVITE,
     render: (o) =>
-      blocks(
+      blocksAs("landlord")(
         withSample(o ?? LANDLORD_DECK_INVITE, {
           firstName: "Helen",
           address: "12 Chorlton Road, Manchester M15 4AZ",
@@ -622,7 +626,7 @@ const WORKS_SAMPLE: Record<string, string> = {
 };
 const worksEntry = (id: string, name: string, audience: CatalogEntry["audience"], trigger: string, to: string, summary: string, doc: EmailDoc, group = "Maintenance"): CatalogEntry => ({
   id, group, name, audience, trigger, fires: "lib/works-emails, from the job's own moves", to, summary, doc,
-  render: (o) => blocks(withSample(o ?? doc, WORKS_SAMPLE))(),
+  render: (o) => blocks(withSample(o ?? doc, WORKS_SAMPLE), audience)(),
 });
 TLE_EMAILS.push(
   worksEntry("works-contractor-order", "Works Order to the Contractor", "contractor", "When a contractor is put on a job", "The contractor", "The job sheet by email: what, where, how urgent, access, the tenant to arrange with, and the rule that anything over the landlord's authority needs a quote first.", WORKS_CONTRACTOR_ORDER as unknown as EmailDoc),
@@ -653,7 +657,7 @@ const INSPECTION_SAMPLE: Record<string, string> = {
 };
 const inspectionEntry = (id: string, name: string, audience: CatalogEntry["audience"], trigger: string, to: string, summary: string, doc: EmailDoc): CatalogEntry => ({
   id, group: "Inspections", name, audience, trigger, fires: "lib/inspection-emails, from the inspection's own moves", to, summary, doc,
-  render: (o) => blocks(withSample(o ?? doc, INSPECTION_SAMPLE))(),
+  render: (o) => blocks(withSample(o ?? doc, INSPECTION_SAMPLE), audience)(),
 });
 TLE_EMAILS.push(
   inspectionEntry("inspection-tenant-access", "Can We Visit? to the Tenant", "tenant", "When an agent asks the tenant for access on an inspection", "The tenant", "The ask, not the telling: why we come, how long it takes, the dates on offer and a link to choose one or say none of them work. Their answer is what the OS keeps as the permission.", INSPECTION_TENANT_ACCESS as unknown as EmailDoc),
@@ -715,7 +719,7 @@ export function renderLandlordSignIn(input: { firstName: string; link: string })
       return next as unknown as (typeof LANDLORD_SIGN_IN.blocks)[number];
     }),
   };
-  const out = blocks(doc as unknown as EmailDoc)();
+  const out = blocks(doc as unknown as EmailDoc, "landlord")();
   const text = [
     `Hi ${input.firstName},`,
     "",

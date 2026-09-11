@@ -167,23 +167,25 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Headings, the wordmark and the figures on Manrope with weight - James asked
-   for "a fair amount of weight", so bold rather than Manrope's light default.
-   In the base layer on purpose: a font-weight utility on the element (a
-   font-semibold here and there) still wins, which the old unlayered rule
-   silently overrode. Letter-spacing stays 0, per the house rule. */
+/* Headings, the wordmark and the figures on Manrope with weight. James asked
+   for "a fair amount of weight", then on the first look for heavier still and
+   the letters drawn in "so they're not quite touching" (11 Sep 2026) - so
+   extrabold, tracked in a touch. That replaces the house "letter-spacing 0"
+   for TLE OS, on his word. In the base layer on purpose: a font-weight or
+   tracking utility on the element still wins, which the old unlayered rule
+   silently overrode. */
 @layer base {
   h1, h2, h3, h4, h5 {
     font-family: var(--font-heading);
-    font-weight: 700;
-    letter-spacing: 0;
+    font-weight: 800;
+    letter-spacing: -0.02em;
   }
-  h3, h4, h5 { font-weight: 600; }
+  h3, h4, h5 { font-weight: 700; letter-spacing: -0.012em; }
 
   /* The heading face on demand - the wordmark, section titles. The class name
      is from the drawn-type days; it now means "heading face". */
-  .hand { font-family: var(--font-heading); font-weight: 700; }
-  .figures { font-family: var(--font-figures); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .hand { font-family: var(--font-heading); font-weight: 800; letter-spacing: -0.02em; }
+  .figures { font-family: var(--font-figures); font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 }
 
 /* ---------------------------------------------------------------------------
@@ -810,7 +812,8 @@ body {
 .type-admin .accent-soft-bg { background-color: var(--accent-soft); }
 .type-admin .written {
   font-family: var(--font-heading);
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 .type-admin .tnum { font-variant-numeric: tabular-nums; }
 .type-admin .card {
@@ -840,7 +843,7 @@ body {
 .type-admin .stat-value {
   font-family: var(--font-figures);
   font-size: clamp(28px, 2.6vw, 36px);
-  font-weight: 700; /* Manrope with weight, 11 Sep */
+  font-weight: 800; /* Manrope, extrabold, 11 Sep */
   letter-spacing: -0.02em;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;

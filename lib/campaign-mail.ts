@@ -33,21 +33,49 @@ import type { CampaignStep } from "./campaigns";
  * broken company.
  */
 function assetOrigin(): string {
-  return (process.env.NEXT_PUBLIC_OS_ORIGIN ?? "").replace(/\/+$/, "");
+  /* Falls back to the custom domain rather than "" (11 Sep 2026): production
+     never had NEXT_PUBLIC_OS_ORIGIN set, so every landlord and tenant email
+     went out with no logo and the serif fallback wordmark instead. A constant
+     resolves the same on the server and in the browser, so the builder's
+     hydration is still safe - the reason this cannot read OS_ORIGIN, which
+     the browser never sees. Same default as lib/email/shell's ORIGIN. */
+  return (process.env.NEXT_PUBLIC_OS_ORIGIN || "https://tle-os.co.uk").replace(/\/+$/, "");
 }
 
-export function tleBrand() {
+/**
+ * Who an email is for. The catalogue in lib/email/tle-emails.ts tags every
+ * email with one; the send paths here are all landlord-facing.
+ */
+export type EmailAudience = "partner" | "landlord" | "tenant" | "contractor" | "internal";
+
+/**
+ * The TLE letterhead, for one audience (James, 11 Sep 2026).
+ *
+ * Landlords and tenants get the extended palette, the same mix their own
+ * portal pages run: a dark brown button and headings for contrast on a pale
+ * pink ground. The team and the trades keep the red off the logo. Everyone
+ * gets the type: Manrope headings, Inter body, for the clients that load web
+ * fonts (Apple Mail, iOS); Gmail and Outlook read the fallback stack.
+ *
+ * Defaults to landlord because every send path in this file writes to one.
+ */
+export function tleBrand(audience: EmailAudience = "landlord") {
   const origin = assetOrigin();
+  const customer = audience === "landlord" || audience === "tenant";
   return {
     ...defaultBrand(),
     companyName: "The Letting Experts",
     signatureName: "The Letting Experts",
     website: "https://thelettingexperts.co.uk",
     logo: origin ? `${origin}/brand/tle-logo.png` : "",
-    // The red off the logo itself, not the OS's clay accent: the OS is where
-    // the team works and can be repainted at will, an email is the company.
-    accentColor: "#e31f36",
-    bgColor: "#f6f4f2",
+    headingFont: "manrope",
+    bodyFont: "inter",
+    buttonFont: "inter",
+    ...(customer
+      ? { accentColor: "#56423e", headingColor: "#56423e", bgColor: "#fdefec" }
+      : // The red off the logo itself: an email to the team or a trade is
+        // still the company, just not the customer-facing palette.
+        { accentColor: "#e31f36", bgColor: "#f6f4f2" }),
   };
 }
 
