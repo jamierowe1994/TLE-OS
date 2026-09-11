@@ -472,6 +472,9 @@ export default function Listings() {
       />
 
       {/* ── The board, in the same panel the other two boards use. ── */}
+      {/* White with a hairline. A blush wash with doodles was tried here on
+          11 Sep and taken straight back out: "the pink background doesn't
+          work". */}
       <div className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
         <div className="mb-4 flex items-baseline justify-between gap-3">
           <h2 className="hand text-[17px]">
@@ -590,8 +593,8 @@ export default function Listings() {
                   <Fact icon="folder" label="Photos" value={String(l.imageCount)} />
 
                   {/* Where it is, and the one move - see readiness(). */}
-                  <span className={view === "tiles" ? "order-3 col-span-3 block" : "block"}>
-                    <Readiness r={readiness(l)} compact={view === "tiles"} />
+                  <span className={view === "tiles" ? "order-3 col-span-3 block" : "flex justify-end"}>
+                    <Readiness r={readiness(l)} compact={view === "tiles"} buttonOnly={view !== "tiles"} />
                   </span>
                 </div>
               </div>

@@ -84,11 +84,14 @@ export function readiness(l: { letAgreed: boolean; publicationStatus: string | n
 export function Readiness({
   r,
   compact,
+  buttonOnly,
   onAction,
 }: {
   r: ReadinessState;
   /** No button - a tile, or anywhere the box is already the whole width. */
   compact?: boolean;
+  /** Just the move, no box and no words: a row on the board (James, 11 Sep). */
+  buttonOnly?: boolean;
   /** Makes the move a real button. Without it the words are plain (the row around them is the link). */
   onAction?: () => void;
 }) {
@@ -97,6 +100,13 @@ export function Readiness({
   const button = `shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3.5 py-2 text-[11.5px] font-semibold ${
     r.tone === "accent" ? "bg-accent-dark text-white" : "border border-line/60 bg-white"
   }`;
+  if (buttonOnly) {
+    return (
+      <span className={`inline-flex ${button}`} title={`${r.title}. ${r.sub}`}>
+        {r.action} <span aria-hidden>›</span>
+      </span>
+    );
+  }
   return (
     <span className="flex min-w-0 items-center gap-3 rounded-2xl px-3.5 py-3" style={wash}>
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/85" style={{ color: ink }}>
