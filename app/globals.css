@@ -214,10 +214,28 @@ body {
 
 /* Motion — a single gentle entrance, matching the portal's fade-up. */
 @keyframes fade-up {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(var(--flow-rise, 10px)); }
   to { opacity: 1; transform: translateY(0); }
 }
 .fade-up { animation: fade-up 0.58s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ── Landing one piece at a time ──────────────────────────────────────────
+   James, 11 Sep 2026: "the bits on the page should flow up individually...
+   the button should flow up, and then the calendar, and then the right-hand
+   side, each one with a separate timing."
+
+   Shell walks the new screen once it mounts and gives each top-level block
+   that carries fade-up its own delay, duration and travel through these
+   three variables, in the order they sit on the page: after the masthead
+   is most of the way home, then one after another, each slightly quicker or
+   slower than its neighbour. Blocks inside a .cascade keep the cascade's
+   own timing; everything outside .page-flow (landlord and tenant surfaces)
+   is untouched. Leaving overrides all three, so the fall is still one
+   movement. */
+.page-flow .fade-up {
+  animation-delay: var(--flow-delay, 0s);
+  animation-duration: var(--flow-dur, 0.58s);
+}
 
 /* ── One at a time ────────────────────────────────────────────────────────
    James, 10 Sep 2026: "the box will fly in, and then the individual listings
@@ -288,13 +306,18 @@ body {
   0%, 92% { clip-path: inset(-100vh 0 0 0); }
   100%    { clip-path: inset(-100vh 0 -100vh 0); }
 }
+/* How far the block goes: its own height, or further when the artwork stands
+   taller than the masthead. The appraisals man is 302px above the rule, and
+   112% of a 268px masthead left the top of his head showing at the end of
+   the fall (James, 11 Sep 2026). PageHeader sets --mast-drop from the art's
+   own height, so every figure goes all the way down behind the line. */
 @keyframes mast-rise {
-  from { transform: translateY(112%); }
+  from { transform: translateY(max(112%, var(--mast-drop, 0px))); }
   to   { transform: translateY(0); }
 }
 @keyframes mast-fall {
   from { transform: translateY(0); }
-  to   { transform: translateY(112%); }
+  to   { transform: translateY(max(112%, var(--mast-drop, 0px))); }
 }
 /* The body's exit, and the one place in the app allowed to be abrupt. It fell
    34px and faded, which is a polite dissolve; James asked for "a little bit
@@ -309,13 +332,19 @@ body {
    perfectly... we almost want to slow it down a little bit, just a touch."
    0.62 → 0.78, and the clip's hold moves with it so the block still arrives
    before anything of it shows below the line. */
-.os-mast-frame { animation: mast-window 0.78s linear both; }
-.os-mast { animation: mast-rise 0.78s cubic-bezier(0.16, 1, 0.3, 1) both; }
+/* 0.78 → 0.92 on 11 Sep: the masthead is the heavy thing, and the body
+   below lands in lighter, quicker pieces after it (see .page-flow .fade-up),
+   which is what makes the screen feel like it arrives at different speeds. */
+.os-mast-frame { animation: mast-window 0.92s linear both; }
+.os-mast { animation: mast-rise 0.92s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
 /* Leaving. The frame's clip is held shut for the whole fall, so the block
    goes behind the line rather than over whatever is under it. */
 .page-leaving .os-mast-frame { animation: none; clip-path: inset(-100vh 0 0 0); }
-.page-leaving .os-mast { animation: mast-fall 0.42s cubic-bezier(0.5, 0, 0.9, 0.3) both; }
+/* 0.4s, and Shell waits the same 400ms before it navigates. It used to leave
+   at 260ms with the fall still going, so the old screen was cut off mid-drop
+   - the "catches, freezes, comes back" James saw on Market Appraisals. */
+.page-leaving .os-mast { animation: mast-fall 0.4s cubic-bezier(0.5, 0, 0.9, 0.3) both; }
 .page-leaving .page-flow > *:not(.os-mast-frame),
 .page-leaving > *:not(.os-mast-frame) { animation: body-fall 0.3s cubic-bezier(0.6, 0, 0.95, 0.35) both; }
 

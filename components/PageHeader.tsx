@@ -466,7 +466,16 @@ export default function PageHeader({
       >
       <div
         className="os-mast flex h-full items-end justify-between gap-6 pt-8"
-        style={{ minHeight }}
+        /* --mast-drop: how far the block has to travel for the artwork to go
+           fully behind the rule - the art's height above the line plus a
+           margin. The keyframes take the larger of this and 112% of the
+           masthead, so a tall figure is never left with his head showing. */
+        style={
+          {
+            minHeight,
+            "--mast-drop": hasArt ? `${Math.ceil(illustrationHeight * cross) + 56}px` : undefined,
+          } as React.CSSProperties
+        }
       >
         {/* The scenery, first in the DOM so everything else paints over it.
             No .art class: it is already pale, and inverting a pale drawing on

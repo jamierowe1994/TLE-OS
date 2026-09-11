@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import NotificationBell from "@/components/NotificationBell";
@@ -168,7 +168,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
    */
   const [leaving, setLeaving] = useState<string | null>(null);
   useEffect(() => { setLeaving(null); }, [currentHref]);
-  const EXIT_MS = 260;
+  /* Matches .page-leaving .os-mast in globals.css: the fall is 400ms, and
+     navigating before it lands cut the old screen off mid-drop. */
+  const EXIT_MS = 400;
   const goTo = useCallback(
     (href: string) => {
       if (href === currentHref) return;
@@ -177,6 +179,34 @@ export default function Shell({ children }: { children: React.ReactNode }) {
     },
     [currentHref, router]
   );
+  /* ── Landing one piece at a time ─────────────────────────────────────────
+     James, 11 Sep 2026: "the bits on the page should flow up individually
+     ... the button should flow up, and then the calendar, and then the
+     right-hand side, each with a separate timing."
+
+     When a screen mounts, every top-level block that carries fade-up gets its
+     own delay, duration and travel, in page order: the first starts once the
+     masthead is most of the way home, and each one after it a beat later,
+     alternately a little quicker or slower than its neighbour so the screen
+     reads as pieces landing rather than one sheet arriving. Blocks nested in
+     another fade-up, or in a .cascade, keep their own timing. Before paint,
+     so nothing starts and then jumps. */
+  const flowRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const root = flowRef.current;
+    if (!root) return;
+    const DUR = [0.74, 0.88, 0.66];
+    const RISE = [28, 36, 22];
+    let i = 0;
+    root.querySelectorAll<HTMLElement>(".fade-up").forEach((el) => {
+      if (el.parentElement?.closest(".fade-up, .cascade, .os-mast-frame")) return;
+      const n = Math.min(i, 9);
+      el.style.setProperty("--flow-delay", `${300 + n * 130}ms`);
+      el.style.setProperty("--flow-dur", `${DUR[i % 3]}s`);
+      el.style.setProperty("--flow-rise", `${RISE[i % 3]}px`);
+      i += 1;
+    });
+  }, [pathname]);
   const [collapsed, setCollapsed] = useState(false);
   const [accent, setAccent] = useState("");
   const [theme, setTheme] = useState<ThemeChoice>("auto");
@@ -507,7 +537,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <main data-os-content className="w-full flex-1 px-5 pb-28 pt-8 lg:px-10 xl:pr-[84px] 2xl:pl-14">
           {/* Keyed on the path so the screen replays when you actually change
               screen, and not when a filter changes the query string. */}
-          <div key={pathname} className={`page-flow ${leaving ? "page-leaving" : ""}`}>
+          <div key={pathname} ref={flowRef} className={`page-flow ${leaving ? "page-leaving" : ""}`}>
             {children}
           </div>
         </main>

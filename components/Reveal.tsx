@@ -48,7 +48,9 @@ export default function Reveal({
   );
 
   const ready = held === 0;
-  const delay = useCallback(() => (waited ? 0 : Math.min(index, 8) * 70), [waited, index]);
+  /* 240ms first: the masthead is most of the way home by then, so the tiles
+     land after it rather than with it (11 Sep 2026). */
+  const delay = useCallback(() => (waited ? 0 : 280 + Math.min(index, 8) * 100), [waited, index]);
 
   return (
     <div
