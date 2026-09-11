@@ -45,19 +45,19 @@ export default function RepairPage() {
         {err && <p style={{ color: "#a85a51", marginTop: 12 }}>{err}</p>}
         {job && done === "yes" && (
           <>
-            <h1 style={{ fontSize: 24, fontWeight: 500, margin: "10px 0 0" }}>Thanks, that's good to hear</h1>
+            <h1 style={{ fontSize: 24, fontWeight: 800, margin: "10px 0 0", letterSpacing: "-0.02em" }}>Thanks, that's good to hear</h1>
             <p style={{ color: "#6b6b70", fontSize: 14, lineHeight: 1.6 }}>{job.title} at {job.address} is closed off as sorted. If it comes back, reply to any of our emails and we'll get somebody out.</p>
           </>
         )}
         {job && done === "no" && (
           <>
-            <h1 style={{ fontSize: 24, fontWeight: 500, margin: "10px 0 0" }}>Not a problem</h1>
+            <h1 style={{ fontSize: 24, fontWeight: 800, margin: "10px 0 0", letterSpacing: "-0.02em" }}>Not a problem</h1>
             <p style={{ color: "#6b6b70", fontSize: 14, lineHeight: 1.6 }}>Somebody from the team will be in touch about {job.title} at {job.address}.</p>
           </>
         )}
         {job && !done && (
           <>
-            <h1 style={{ fontSize: 24, fontWeight: 500, margin: "10px 0 0" }}>Was it sorted?</h1>
+            <h1 style={{ fontSize: 24, fontWeight: 800, margin: "10px 0 0", letterSpacing: "-0.02em" }}>Was it sorted?</h1>
             <p style={{ color: "#6b6b70", fontSize: 14, lineHeight: 1.6 }}>{job.contractorName || "The contractor"} has been out to {job.address} for <strong>{job.title}</strong>. Are you happy with what's been done?</p>
             {answer !== "no" ? (
               <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>

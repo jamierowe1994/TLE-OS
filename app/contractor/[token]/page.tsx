@@ -67,7 +67,7 @@ export default function ContractorPage() {
         {!job && !err && <p style={{ color: "#6b6b70", marginTop: 12 }}>Loading the job…</p>}
         {job && (
           <>
-            <h1 style={{ fontSize: 26, fontWeight: 500, margin: "8px 0 0", letterSpacing: 0 }}>#{job.ref} · {job.title}</h1>
+            <h1 style={{ fontSize: 26, fontWeight: 800, margin: "8px 0 0", letterSpacing: "-0.02em" }}>#{job.ref} · {job.title}</h1>
             <p style={{ margin: "6px 0 0", color: "#6b6b70", fontSize: 14 }}>{job.address}</p>
             <div style={box}>
               <span style={label}>The job</span>

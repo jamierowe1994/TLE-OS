@@ -31,7 +31,7 @@ export default async function Proof({ params }: { params: Promise<{ token: strin
         <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#6b6b70", margin: 0 }}>
           The Letting Experts · a proof
         </p>
-        <h1 style={{ fontSize: 27, fontWeight: 500, margin: "8px 0 0", letterSpacing: 0 }}>{design.name}</h1>
+        <h1 style={{ fontSize: 27, fontWeight: 800, margin: "8px 0 0", letterSpacing: "-0.02em" }}>{design.name}</h1>
         <p style={{ margin: "6px 0 28px", fontSize: 13, color: "#6b6b70", maxWidth: "60ch", lineHeight: 1.6 }}>
           Both sides, at the size it prints: A6, 148 by 105mm. The name and address are an example - each card is filled in for the
           landlord it goes to. Nothing has been posted.

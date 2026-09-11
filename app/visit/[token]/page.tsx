@@ -77,7 +77,7 @@ export default function VisitPage() {
 
         {visit && done?.reply === "yes" && (
           <>
-            <h1 style={{ fontSize: 24, fontWeight: 500, margin: "10px 0 0" }}>Thanks, that's booked</h1>
+            <h1 style={{ fontSize: 24, fontWeight: 800, margin: "10px 0 0", letterSpacing: "-0.02em" }}>Thanks, that's booked</h1>
             <p style={{ color: "#6b6b70", fontSize: 14, lineHeight: 1.6 }}>
               We'll call at {visit.address}{done.at ? ` on ${pretty(done.at)}` : ""}. You'll get it in writing by email as well. If it stops working, reply to that email and we'll move it.
             </p>
@@ -85,20 +85,20 @@ export default function VisitPage() {
         )}
         {visit && done?.reply === "other_time" && (
           <>
-            <h1 style={{ fontSize: 24, fontWeight: 500, margin: "10px 0 0" }}>No problem</h1>
+            <h1 style={{ fontSize: 24, fontWeight: 800, margin: "10px 0 0", letterSpacing: "-0.02em" }}>No problem</h1>
             <p style={{ color: "#6b6b70", fontSize: 14, lineHeight: 1.6 }}>We'll come back to you with some other times for {visit.address}.</p>
           </>
         )}
         {visit && done?.reply === "no" && (
           <>
-            <h1 style={{ fontSize: 24, fontWeight: 500, margin: "10px 0 0" }}>That's understood</h1>
+            <h1 style={{ fontSize: 24, fontWeight: 800, margin: "10px 0 0", letterSpacing: "-0.02em" }}>That's understood</h1>
             <p style={{ color: "#6b6b70", fontSize: 14, lineHeight: 1.6 }}>Nobody will come to {visit.address}. Somebody from the team will be in touch to talk it through.</p>
           </>
         )}
 
         {visit && !done && (
           <>
-            <h1 style={{ fontSize: 24, fontWeight: 500, margin: "10px 0 6px" }}>Can we pop round?</h1>
+            <h1 style={{ fontSize: 24, fontWeight: 800, margin: "10px 0 6px", letterSpacing: "-0.02em" }}>Can we pop round?</h1>
             <p style={{ color: "#6b6b70", fontSize: 14, lineHeight: 1.6 }}>
               We look after <strong>{visit.address}</strong> and we'd like to call in for a quick look round the property. Pick whichever of these suits you best.
             </p>
