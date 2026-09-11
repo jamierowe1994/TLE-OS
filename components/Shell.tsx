@@ -7,7 +7,6 @@ import NotificationBell from "@/components/NotificationBell";
 import DoodleIcon from "@/components/DoodleIcon";
 import { readTheme, type ThemeChoice } from "@/lib/theme";
 import { FRONT, BACK, railFor, type NavItem } from "@/lib/nav";
-import TitleFontPicker from "@/components/TitleFontPicker";
 
 /**
  * The OS chrome. The rail is its own encapsulated card — a thin outline the
@@ -287,10 +286,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    /* os-type: the agents' own heading face (the Oooh Baby trial, 11 Sep) - see globals.css. */
+    /* os-type: the agents' own title face, Bricolage Grotesque (11 Sep) - see globals.css. */
     <div className="os-type flex min-h-screen">
-      {/* Title-font trial, 11 Sep - remove with the picker once James picks. */}
-      <TitleFontPicker />
       {/* Tagged so /admin can hide it — an owner in the admin centre is not
           doing an agent's job, and the rail invites them to wander into the
           business-wide book by accident. See app/(os)/admin/layout.tsx. */}

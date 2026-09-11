@@ -61,51 +61,15 @@
 }
 
 /* ---------------------------------------------------------------------------
-   TRIAL, 11 Sep 2026 (James): a hand-drawn face on the OS's own headings -
-   Architects Daughter by default (Oooh Baby and Delicious Handrawn tried
-   and dropped the same day).
-   Scoped to .os-type, which only the agents' shell carries - the portals,
-   Susan's figures (.type-admin sets its own heading face) and every email
-   are untouched. A script has one weight and needs its natural spacing, so
-   the extrabold and the drawn-in tracking are undone inside the scope. The
-   big numbers stay Manrope so a tile can still be read at a glance. To end
-   the trial, delete this block and the class on the shell.
+   THE OS'S OWN TITLE FACE: Bricolage Grotesque (James, 11 Sep 2026, after
+   trialling fifteen faces on a picker). Scoped to .os-type, which only the
+   agents' shell carries - the portals, every email, and Susan's figures (the
+   nested .type-admin scope sets its own heading face) stay on Manrope. It
+   takes the same extrabold and drawn-in tracking as Manrope from the base
+   rules; the figures stay Manrope for tabular reading.
 --------------------------------------------------------------------------- */
 .os-type {
-  --font-heading: var(--font-architects), var(--font-manrope), cursive;
-}
-/* Not inside the NESTED .type-admin scope, the one that pins Susan's figures
-   to Manrope - those keep Manrope's weight. Outside it they take the trial. */
-.os-type :is(h1, h2, h3, h4, h5, .hand):not(.type-admin .type-admin *) {
-  font-weight: 400;
-  letter-spacing: 0;
-}
-
-/* The title-font picker (components/TitleFontPicker) - the same trial, one
-   face at a time. No attribute means Architects Daughter, above. */
-:root[data-title-font="cherry"] .os-type { --font-heading: var(--font-cherry), var(--font-manrope), cursive; }
-:root[data-title-font="boogaloo"] .os-type { --font-heading: var(--font-boogaloo), var(--font-manrope), cursive; }
-:root[data-title-font="handlee"] .os-type { --font-heading: var(--font-handlee), var(--font-manrope), cursive; }
-/* The second batch loads from Google Fonts by name (TitleFontPicker). */
-:root[data-title-font="hurricane"] .os-type { --font-heading: "Hurricane", var(--font-manrope), cursive; }
-:root[data-title-font="fascinate"] .os-type { --font-heading: "Fascinate", var(--font-manrope), cursive; }
-:root[data-title-font="fascinateinline"] .os-type { --font-heading: "Fascinate Inline", var(--font-manrope), cursive; }
-:root[data-title-font="protest"] .os-type { --font-heading: "Protest Riot", var(--font-manrope), cursive; }
-:root[data-title-font="gravitas"] .os-type { --font-heading: "Gravitas One", var(--font-manrope), serif; }
-:root[data-title-font="story"] .os-type { --font-heading: "Story Script", var(--font-manrope), cursive; }
-:root[data-title-font="praise"] .os-type { --font-heading: "Praise", var(--font-manrope), cursive; }
-:root[data-title-font="luckiest"] .os-type { --font-heading: "Luckiest Guy", var(--font-manrope), cursive; }
-:root[data-title-font="rampart"] .os-type { --font-heading: "Rampart One", var(--font-manrope), cursive; }
-:root[data-title-font="bricolage"] .os-type { --font-heading: "Bricolage Grotesque", var(--font-manrope), sans-serif; }
-:root[data-title-font="manrope"] .os-type { --font-heading: var(--font-manrope), var(--font-inter), system-ui, sans-serif; }
-/* Manrope and Bricolage have the weights the scripts lack, so they get the extrabold back. */
-:root:is([data-title-font="manrope"], [data-title-font="bricolage"]) .os-type :is(h1, h2, .hand):not(.type-admin .type-admin *) {
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-:root:is([data-title-font="manrope"], [data-title-font="bricolage"]) .os-type :is(h3, h4, h5):not(.type-admin .type-admin *) {
-  font-weight: 700;
-  letter-spacing: -0.012em;
+  --font-heading: var(--font-bricolage), var(--font-manrope), system-ui, sans-serif;
 }
 
 /* ---------------------------------------------------------------------------

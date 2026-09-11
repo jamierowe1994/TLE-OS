@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Architects_Daughter, Boogaloo, Cherry_Bomb_One, Handlee, Inter, Lora, Manrope, Montserrat, Ms_Madi, Shantell_Sans } from "next/font/google";
+import { Bricolage_Grotesque, Inter, Lora, Manrope, Montserrat, Ms_Madi, Shantell_Sans } from "next/font/google";
 import "./globals.css";
 
 /**
@@ -20,19 +20,16 @@ const manrope = Manrope({
 });
 
 /**
- * A TRIAL (James, 11 Sep 2026): a hand-drawn face on the OS's own headings
- * only - the agents' screens, not the portals, not any email. Applied
- * through the .os-type scope in globals.css. Architects Daughter is the
- * default; the picker (components/TitleFontPicker) swaps in the others.
- * Oooh Baby and Delicious Handrawn were tried and dropped the same day.
+ * The OS's own title face (James, 11 Sep 2026, chosen from fifteen on a
+ * trial picker): Bricolage Grotesque, on the agents' screens only, through
+ * the .os-type scope in globals.css. Portals and emails keep Manrope.
  */
-const architects = Architects_Daughter({ subsets: ["latin"], weight: "400", variable: "--font-architects", display: "swap" });
-
-/* The rest of the title-font trial (components/TitleFontPicker). Loaded only
-   while James picks; one weight each. */
-const cherry = Cherry_Bomb_One({ subsets: ["latin"], weight: "400", variable: "--font-cherry", display: "swap" });
-const boogaloo = Boogaloo({ subsets: ["latin"], weight: "400", variable: "--font-boogaloo", display: "swap" });
-const handlee = Handlee({ subsets: ["latin"], weight: "400", variable: "--font-handlee", display: "swap" });
+const bricolage = Bricolage_Grotesque({
+  subsets: ["latin"],
+  weight: ["600", "700", "800"],
+  variable: "--font-bricolage",
+  display: "swap",
+});
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -126,7 +123,7 @@ export default function RootLayout({
     // heading silently falls back to system fonts.
     <html
       lang="en"
-      className={`${manrope.variable} ${inter.variable} ${architects.variable} ${cherry.variable} ${boogaloo.variable} ${handlee.variable} ${montserrat.variable} ${shantell.variable} ${msMadi.variable} ${lora.variable}`}
+      className={`${manrope.variable} ${inter.variable} ${bricolage.variable} ${montserrat.variable} ${shantell.variable} ${msMadi.variable} ${lora.variable}`}
     >
       <body className="antialiased">{children}</body>
     </html>
