@@ -1311,6 +1311,16 @@ CREATE INDEX IF NOT EXISTS os_viewings_property_idx ON os_viewings (property_id,
 -- Leads removed from the OS by hand (11 Sep 2026). REX is never touched: a
 -- REX lead stays in REX, it just stops showing on the board. Deleting the
 -- row brings it back.
+-- What the OS knows about a lead beyond what REX sent (11 Sep 2026): the
+-- agent's tags, and the property's facts on a landlord lead. Keyed on the
+-- lead id, so a REX lead and one of our own are held the same way.
+CREATE TABLE IF NOT EXISTS os_lead_facts (
+  lead_id    TEXT PRIMARY KEY,
+  tags       JSONB,
+  property   JSONB,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS os_hidden_leads (
   id         TEXT PRIMARY KEY,
   hidden_by  TEXT,

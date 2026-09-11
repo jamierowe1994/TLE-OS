@@ -14,6 +14,8 @@ import EmailProperties from "@/components/EmailProperties";
 import PhotoBox from "@/components/PhotoBox";
 import ProcessTimeline from "@/components/ProcessTimeline";
 import PropertyFacts from "@/components/PropertyFacts";
+import PinMap from "@/components/PinMap";
+import { EMPTY_PROPERTY, type PropertyFactsData } from "@/lib/lead-facts-shape";
 import ReferToAgent, { isSalesIntent, SALES_TAGS } from "@/components/ReferToAgent";
 import SignaturePanel, { type Signer } from "@/components/SignaturePanel";
 import ViewingBooker from "@/components/ViewingBooker";
@@ -676,6 +678,36 @@ export default function LeadDrawer({
     setFinderOrigin(null); setFinderLabel(""); setFinderMsg(null);
   }, [enquiryLeadId]);
 
+  /* What the OS holds on the lead beyond REX: the tags (saved, so the board
+     can filter on them) and, on a landlord lead, the property. */
+  const [prop, setProp] = useState<PropertyFactsData>(EMPTY_PROPERTY);
+  useEffect(() => {
+    if (!enquiryLeadId) return;
+    let live = true;
+    setProp(EMPTY_PROPERTY);
+    fetch(`/api/leads/${encodeURIComponent(enquiryLeadId)}/facts`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!live || !j?.ok) return;
+        if (Array.isArray(j.tags)) setTags(j.tags);
+        if (j.property) setProp({ ...EMPTY_PROPERTY, ...j.property });
+      })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [enquiryLeadId]);
+  const saveFacts = (patch: { tags?: string[]; property?: PropertyFactsData }) => {
+    if (!enquiryLeadId) return;
+    void fetch(`/api/leads/${encodeURIComponent(enquiryLeadId)}/facts`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(patch) }).catch(() => {});
+  };
+  const changeTags = (next: string[]) => { setTags(next); saveFacts({ tags: next }); };
+  const changeProp = (next: PropertyFactsData) => { setProp(next); saveFacts({ property: next }); };
+
+  /* "Fill this page for me": the lookups, then what was certain. */
+  const [filling, setFilling] = useState(false);
+  const [fillNote, setFillNote] = useState<string | null>(null);
+  const [nearMisses, setNearMisses] = useState<{ id: string; address: string; image: string | null }[]>([]);
+  useEffect(() => { setFillNote(null); setNearMisses([]); }, [enquiryLeadId]);
+
   async function sendPassport(again: boolean) {
     if (!lead || passportBusy || !passportEmail) return;
     setPassportBusy(true);
@@ -1039,7 +1071,7 @@ export default function LeadDrawer({
                     <button
                       key={t}
                       type="button"
-                      onClick={() => setTags((cur) => cur.filter((x) => x !== t))}
+                      onClick={() => changeTags(tags.filter((x) => x !== t))}
                       className="group flex items-center gap-1.5 rounded-full border border-line/80 px-3 py-1.5 text-[11.5px] transition-colors hover:border-ink/40"
                       title="Remove tag"
                     >
@@ -1069,7 +1101,7 @@ export default function LeadDrawer({
                           <button
                             key={t}
                             type="button"
-                            onClick={() => { setTags((cur) => [...cur, t]); setTagging(false); }}
+                            onClick={() => { changeTags([...tags, t]); setTagging(false); }}
                             className="block w-full rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-page"
                           >
                             {t}
@@ -1080,7 +1112,7 @@ export default function LeadDrawer({
                           onClick={() => {
                             setTagging(false);
                             const t = window.prompt("New tag");
-                            if (t?.trim()) setTags((cur) => [...cur, t.trim()]);
+                            if (t?.trim() && !tags.includes(t.trim())) changeTags([...tags, t.trim()]);
                           }}
                           className="mt-1 block w-full rounded-lg border-t border-line/50 px-2 py-1.5 text-left text-[12px] text-muted transition-colors hover:text-ink"
                         >
@@ -1101,11 +1133,58 @@ export default function LeadDrawer({
   const enqMessage = enquiry?.message || (enquiry === undefined && previewOk ? lead.enquiryMessage ?? "" : "");
   const receivedIso = enquiry?.receivedAt ?? lead.receivedAt ?? null;
   const enqProperty = lead.address || enquiry?.fields.find(([k]) => /property address|listing address/i.test(k))?.[1] || lead.preferred;
+  const real = (v?: string | null) => (v && v.trim() !== "—" ? v.trim() : "");
   const quick: { label: string; sub: string; icon: string; go: () => void; off?: boolean; href?: string }[] = [
-    { label: "Find properties", sub: "On a map, by radius", icon: "search", go: () => { const real = (v?: string | null) => (v && v.trim() !== "—" ? v : ""); setFinderAddr(real(contact.area) || real(enqProperty)); setFinderOpen(true); } },
+    { label: "Find properties", sub: "On a map, by radius", icon: "search", go: () => { setFinderAddr(real(contact.area) || real(enqProperty)); setFinderOpen(true); } },
     passport?.done && passport.path
       ? { label: "Passport done", sub: "See their answers", icon: "user", href: passport.path, go: () => {} }
       : { label: passport?.sent ? "Resend passport" : "Send passport", sub: passportEmail ? (passportBusy ? "Sending…" : passportSaid ?? "Ask for their details") : "No email on this lead", icon: "user", off: !passportEmail || passportBusy, go: () => void sendPassport(Boolean(passport?.sent)) },
+    { label: "Add a note", sub: "Log a conversation", icon: "note", go: () => { const el = document.getElementById("lead-note"); el?.scrollIntoView({ behavior: "smooth", block: "center" }); (el as HTMLTextAreaElement | null)?.focus(); } },
+    { label: "View activity", sub: "Everything so far", icon: "list", go: () => setActivityOpen(true) },
+  ];
+
+  /* The address to look the property up by, on a landlord lead. */
+  const propAddress = real(prop.address) || real(contact.area) || real(lead.preferred) || real(lead.address);
+  async function fillPage() {
+    if (filling) return;
+    if (!propAddress) { setFillNote("Put the property's address on the lead first, then try again."); return; }
+    setFilling(true);
+    setFillNote(null);
+    try {
+      const j = await fetch(`/api/leads/${encodeURIComponent(lead!.id)}/prefill`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address: propAddress }),
+      }).then((r) => r.json());
+      if (!j?.ok) throw new Error(j?.error ?? "The lookups did not answer.");
+      const found = j.property as PropertyFactsData;
+      /* What the lookups are sure of wins; what only the agent knows stays. */
+      const next: PropertyFactsData = {
+        ...prop, ...found,
+        type: found.type || prop.type, beds: found.beds ?? prop.beds, baths: prop.baths, receptions: prop.receptions,
+        image: found.image ?? prop.image, rexPropertyId: found.rexPropertyId ?? prop.rexPropertyId,
+        matched: found.matched === "rex" ? "rex" : prop.matched === "rex" ? "rex" : found.matched,
+      };
+      changeProp(next);
+      setNearMisses(j.nearMisses ?? []);
+      const filled: string[] = j.filled ?? [], missing: string[] = j.missing ?? [];
+      setFillNote(`${filled.length ? `Filled in ${filled.join(", ")}.` : "Nothing new found."}${missing.length ? ` Could not find ${missing.join("; ")}.` : ""}`);
+      if (next.address && next.address !== contact.area) {
+        setContact((c) => ({ ...c, area: next.address! }));
+        void saveField({ address: next.address, ...(next.postcode ? { postcode: next.postcode } : {}) });
+      }
+    } catch (e) {
+      setFillNote(e instanceof Error ? e.message : "The lookups did not answer just now.");
+    } finally {
+      setFilling(false);
+    }
+  }
+  const pickRex = (h: { id: string; address: string; image: string | null }) => {
+    changeProp({ ...prop, rexPropertyId: h.id, address: h.address, image: h.image ?? prop.image, matched: "rex" });
+    setNearMisses([]);
+    setFillNote(`Matched to ${h.address} in REX.`);
+  };
+  const landlordQuick: typeof quick = [
+    { label: "Fill this page for me", sub: filling ? "Looking it up…" : propAddress ? "Address, map, beds, photo" : "Add the address first", icon: "magic-wand", off: filling || !propAddress, go: () => void fillPage() },
+    { label: "Book an appraisal", sub: "Pick a slot, invite them", icon: "calendar", go: () => { setBookMode("appraisal"); setBooking(true); } },
     { label: "Add a note", sub: "Log a conversation", icon: "note", go: () => { const el = document.getElementById("lead-note"); el?.scrollIntoView({ behavior: "smooth", block: "center" }); (el as HTMLTextAreaElement | null)?.focus(); } },
     { label: "View activity", sub: "Everything so far", icon: "list", go: () => setActivityOpen(true) },
   ];
@@ -1343,8 +1422,8 @@ export default function LeadDrawer({
               because tags describe the person, not the process. No avatar:
               nobody uploads headshots of applicants, and a circle of initials
               is a photo-shaped apology. ── */}
-          <div className={isTenant && tab === null ? "relative" : "relative rounded-3xl border border-line/80 bg-card p-5"}>
-            {!(isTenant && tab === null) && (
+          <div className={tab === null ? "relative" : "relative rounded-3xl border border-line/80 bg-card p-5"}>
+            {tab !== null && (
             <div className="flex flex-wrap items-center gap-3">
               {/* Editable only for people the OS owns. A REX lead's name is
                   REX's to change, and an input that silently discards what you
@@ -1610,195 +1689,218 @@ export default function LeadDrawer({
                 </div>
               </div>
             ) : tab === null ? (
-              <>
-                {/* The row DISTRIBUTES rather than hugging the left: each column takes
-                    an equal share up to a cap, so an ultra-wide screen widens the
-                    breathing room instead of piling empty space after the photo. All
-                    three stretch to one height — the photo ends where the last
-                    contact row ends, because items-stretch makes that a rule rather
-                    than a coincidence. */}
-                <div className="mt-5 flex flex-wrap items-stretch justify-between gap-x-12 gap-y-6">
-                  {/* Fixed-width columns: the rules under the rows stop where
-                      the content stops instead of running the box's width. */}
-                  <section className="w-full min-w-[240px] flex-1 lg:max-w-[350px]">
-                    <SectionHead>Contact details</SectionHead>
-                    {/* Click a value to change it — a rule appears underneath
-                        and it commits on blur or Enter. No Save button per
-                        field, and no edit mode for the whole record: changing
-                        a mobile number shouldn't feel like filling in a form.
-                        Copy sits on hover. */}
-                    <div className="divide-y divide-line/50">
-                      <DetailRow
-                        icon="call"
-                        label="mobile"
-                        value={contact.phone}
-                        copyable
-                        onChange={(v) => {
-                          setContact((c) => ({ ...c, phone: v }));
-                          void saveField({ mobile: v });
-                        }}
-                      />
-                      <DetailRow
-                        icon="mail"
-                        label="email"
-                        value={contact.email}
-                        copyable
-                        onChange={(v) => {
-                          setContact((c) => ({ ...c, email: v }));
-                          void saveField({ email: v });
-                        }}
-                      />
-                      {/* Landlords give a property address; tenants give an
-                          area. Both look up as they type — the pick commits
-                          the formatted address with its geotag resolved, and
-                          that geotag is what the take-on weather and the
-                          street photo will hang off. */}
+              /* THE LANDLORD LEAD (James, 11 Sep 2026): the tenant's page's
+                 sibling - on sage where theirs is pink. Who they are and
+                 their enquiry, the property (found for them, or pinned),
+                 and the state of play; then tags and the quick actions. */
+              <div className="space-y-4">
+                <section className="relative overflow-hidden rounded-3xl bg-sage/30 p-6">
+                  <div className="relative z-[1] grid items-end gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
+                    <div className="min-w-0">
+                      <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">
+                        Landlord enquiry · step {Math.min(step, track.length - 1) + 1} of {track.length}
+                      </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-3">
+                        {ours ? (
+                          <h2 className="min-w-0 text-[34px] leading-tight">
+                            <InlineField
+                              value={personName}
+                              onChange={(v) => {
+                                const next = v.trim();
+                                if (!next || next === personName) return;
+                                setPersonName(next);
+                                void saveField({ name: next });
+                              }}
+                              className="text-[34px] leading-tight"
+                            />
+                          </h2>
+                        ) : (
+                          <h2 className="text-[34px] leading-tight">{lead.name}</h2>
+                        )}
+                        {sp?.label ? (
+                          <Pill tone={sp.booked ? "good" : sp.nurture ? "neutral" : "accent"}>{sp.label}</Pill>
+                        ) : (
+                          <Pill tone={STAGE_TONE[lead.stage]}>{lead.stage}</Pill>
+                        )}
+                      </div>
+                      {propAddress && (
+                        <p className="mt-2 flex items-center gap-2 text-[14px] text-muted">
+                          <DoodleIcon name="home" size={14} />
+                          {propAddress}
+                        </p>
+                      )}
+                      <div className="mt-4 max-w-2xl rounded-2xl bg-white/75 p-4">
+                        <p className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-muted">
+                          <span className="flex items-center gap-1.5 font-semibold text-ink">
+                            <DoodleIcon name="message" size={13} className="text-accent-dark" />
+                            Their enquiry
+                          </span>
+                          {receivedIso && <span>{whenFull(receivedIso)} · {whenAgo(receivedIso)}</span>}
+                        </p>
+                        {enquiry === undefined && !enqMessage ? (
+                          <p className="mt-2 text-[12.5px] text-muted">Reading their enquiry from REX…</p>
+                        ) : enqMessage ? (
+                          <p className="mt-2 max-h-[140px] overflow-y-auto whitespace-pre-line pr-1 text-[14.5px] leading-relaxed">{enqMessage}</p>
+                        ) : (
+                          <p className="mt-2 text-[12.5px] text-muted">They sent no message with this enquiry.</p>
+                        )}
+                        <p className="mt-2 text-[11px] text-muted">Via {enquiry?.source || lead.source}</p>
+                      </div>
+                      <div className="mt-5 flex flex-wrap gap-2.5">
+                        <button
+                          type="button"
+                          onClick={() => { setBookMode("appraisal"); setBooking(true); }}
+                          className="inline-flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-page transition-opacity hover:opacity-90"
+                        >
+                          <DoodleIcon name="calendar" size={14} />
+                          Book an appraisal
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setLogging("attempt")}
+                          className="inline-flex items-center gap-2 rounded-full border border-line/80 bg-white px-5 py-2.5 text-[13px] font-semibold transition-colors hover:border-ink/40"
+                        >
+                          <DoodleIcon name="call" size={14} />
+                          Log a call
+                        </button>
+                      </div>
+                    </div>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src="/brand/art/landlord-sofa.png" alt="" aria-hidden className="pointer-events-none hidden h-[230px] w-auto self-end lg:block" />
+                  </div>
+                </section>
+
+                <div className="grid gap-4 xl:grid-cols-3">
+                  <section className="rounded-2xl border border-line/70 bg-card p-4">
+                    <p className="flex items-center gap-2.5 text-[13.5px] font-semibold">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+                        <DoodleIcon name="user" size={14} />
+                      </span>
+                      Contact details
+                    </p>
+                    <div className="mt-2 divide-y divide-line/50">
+                      <DetailRow icon="call" label="mobile" value={contact.phone} copyable onChange={(v) => { setContact((c) => ({ ...c, phone: v })); void saveField({ mobile: v }); }} />
+                      <DetailRow icon="mail" label="email" value={contact.email} copyable onChange={(v) => { setContact((c) => ({ ...c, email: v })); void saveField({ email: v }); }} />
                       <DetailRow
                         icon="home"
-                        label={isTenant ? "area" : "address"}
+                        label="address"
                         value={contact.area}
-                        /* Copyable like the mobile and the email. It is the
-                           field most likely to be pasted into a portal or a
-                           certificate request, and it was the one you could
-                           not copy — the button was being pushed off the row
-                           by the untruncated value. */
                         copyable
+                        address
                         onChange={(v) => {
                           setContact((c) => ({ ...c, area: v }));
-                          /* The postcode rides along when the lookup resolved
-                             one, so the dossier and the take-on weather have
-                             something to hang off after an address change. */
                           const pc = v.match(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i)?.[0];
                           void saveField({ address: v, ...(pc ? { postcode: pc.toUpperCase() } : {}) });
                         }}
-                        address
                       />
-                      <DetailRow
-                        icon="target"
-                        label="source"
-                        value={`${lead.source} · ${lead.received}`}
-                      />
+                      <DetailRow icon="target" label="source" value={`${lead.source} · ${lead.received}`} />
                     </div>
                   </section>
 
-                  {!isTenant && (
-                    <section className="w-full min-w-[240px] flex-1 lg:max-w-[350px]">
-                      <SectionHead>The property</SectionHead>
-                      <PropertyFacts />
-                    </section>
-                  )}
-
-                  {/* The photo, sized like a photo rather than a mural — the
-                      full-height version dominated the box and pushed the
-                      record off one page. No heading: it's visibly a photo,
-                      and a label saying so was a label saying nothing.
-                      Tenants have no property to photograph, so they keep
-                      the drawing. */}
-                  {isTenant ? (
-                    /* A tenant has no property to photograph, so the drawing
-                       IS the picture — it takes the same footprint the photo
-                       takes on a property lead, rather than sitting in the
-                       corner like a stamp. */
-                    <div className="hidden min-w-[300px] flex-1 flex-col items-center justify-center gap-4 self-stretch py-2 lg:flex xl:max-w-[420px]">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src="/illustrations/notioly/home-caring.svg"
-                        alt=""
-                        aria-hidden
-                        className="art max-h-[240px] min-h-[160px] w-auto flex-1 object-contain"
+                  {/* The property: found for them, or pinned, or waiting. */}
+                  <section className="rounded-2xl border border-line/70 bg-card p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="flex items-center gap-2.5 text-[13.5px] font-semibold">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+                          <DoodleIcon name="home" size={14} />
+                        </span>
+                        The property
+                      </p>
+                      {prop.matched === "rex" ? (
+                        <span className="rounded-full bg-sage/30 px-2 py-0.5 text-[10.5px] font-semibold">✓ Matched in REX</span>
+                      ) : prop.matched === "pin" ? (
+                        <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10.5px] font-semibold text-accent-dark">Pinned from the address</span>
+                      ) : null}
+                    </div>
+                    <div className="mt-3 h-[150px] overflow-hidden rounded-xl">
+                      {prop.image ? (
+                        <PropertyPhoto src={prop.image} className="h-full w-full" />
+                      ) : prop.lat != null && prop.lng != null ? (
+                        <PinMap lat={prop.lat} lng={prop.lng} className="h-full w-full" />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void fillPage()}
+                          disabled={filling || !propAddress}
+                          className="flex h-full w-full flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-line/80 text-[12px] text-muted transition-colors hover:border-ink/40 disabled:opacity-60"
+                        >
+                          <DoodleIcon name="search" size={16} />
+                          {propAddress ? (filling ? "Looking it up…" : "Find the property") : "Add the address to find it"}
+                        </button>
+                      )}
+                    </div>
+                    <div className="mt-2">
+                      <PropertyFacts
+                        value={{ type: prop.type, beds: prop.beds, baths: prop.baths, receptions: prop.receptions }}
+                        onChange={(v) => changeProp({ ...prop, ...v })}
                       />
-                      {/* The two things anyone actually does to a tenant, sat
-                          where they can be reached without opening a step.
-                          Each one IS the stage change — sending the shortlist
-                          moves them to Shortlists, booking moves them to
-                          Viewings, so nobody has to remember to tick it. */}
-                      <div className="flex w-full shrink-0 gap-2.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEmailing(true);
-                            advanceTo("shortlist");
-                          }}
-                          className="flex-1 rounded-xl border border-line bg-panel px-3 py-2.5 text-[12.5px] font-semibold transition-colors hover:border-ink/40"
-                        >
-                          Send properties
-                        </button>
-                        <button
-                          type="button"
-                          /* It used to call advanceTo alone, which moved the
-                             rail and opened nothing - the button looked dead
-                             (James, 9 Sep 2026). Open the booker, and let the
-                             stage follow the booking like the other one. */
-                          onClick={() => {
-                            setBookMode("viewing");
-                            setBooking(true);
-                            advanceTo("viewing");
-                          }}
-                          className="flex-1 rounded-xl bg-accent-dark px-3 py-2.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90"
-                        >
-                          Book viewing
-                        </button>
+                    </div>
+                    {prop.epc && <p className="mt-1 text-[11.5px] text-muted">EPC rating {prop.epc}</p>}
+                    {fillNote && <p className="mt-2 text-[11.5px] leading-relaxed text-muted">{fillNote}</p>}
+                    {nearMisses.length > 0 && (
+                      <div className="mt-2 rounded-xl bg-panel p-2.5">
+                        <p className="text-[11px] font-semibold text-muted">Is it one of these in REX?</p>
+                        <ul className="mt-1.5 space-y-1">
+                          {nearMisses.map((h) => (
+                            <li key={h.id}>
+                              <button type="button" onClick={() => pickRex(h)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-white">
+                                <PropertyPhoto src={h.image} className="h-8 w-10 shrink-0 rounded-md" />
+                                <span className="min-w-0 flex-1 truncate">{h.address}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
+                    )}
+                  </section>
 
-                      {/* The passport, by hand. It goes automatically off a
-                          booked viewing; this is for the tenant who has not
-                          booked one yet, or who lost the email. The link is
-                          theirs alone and can be handed over any way. */}
-                      <div className="w-full shrink-0 rounded-xl border border-line/70 p-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <DoodleIcon name="user" size={14} className="shrink-0 text-accent-dark" />
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-[12px] font-semibold">Tenant passport</span>
-                            <span className="block text-[10.5px] text-muted">
-                              {!passportEmail
-                                ? "No email on this lead yet"
-                                : passport === null
-                                  ? "Checking…"
-                                  : passport.sent
-                                    ? `Sent ${passport.invitedAt ? new Date(passport.invitedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : ""}`
-                                    : "Not sent yet"}
-                            </span>
-                          </span>
-                          {passportEmail && passport?.path && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard?.writeText(`${window.location.origin}${passport.path}`);
-                                setPassportSaid("Link copied.");
-                              }}
-                              className="rounded-full border border-line/80 px-3 py-1.5 text-[11px] font-semibold transition-colors hover:border-ink/40"
-                            >
-                              Copy link
-                            </button>
-                          )}
-                          {passportEmail && (
-                            <button
-                              type="button"
-                              disabled={passportBusy}
-                              onClick={() => void sendPassport(Boolean(passport?.sent))}
-                              className="rounded-full bg-ink px-3.5 py-1.5 text-[11px] font-semibold text-page disabled:opacity-50"
-                            >
-                              {passportBusy ? "Sending…" : passport?.sent ? "Resend" : "Send passport"}
-                            </button>
-                          )}
+                  {/* The state of play, on pink - the balance to the sage above. */}
+                  <section className="rounded-2xl bg-accent-soft/70 p-4">
+                    <p className="flex items-center gap-2.5 text-[13.5px] font-semibold">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-accent-dark">
+                        <DoodleIcon name="checklist" size={14} />
+                      </span>
+                      At a glance
+                    </p>
+                    <dl className="mt-3 space-y-2.5 text-[12.5px]">
+                      {([
+                        ["Came in", receivedIso ? whenFull(receivedIso) : lead.received],
+                        ["From", enquiry?.source || lead.source],
+                        ["Property", prop.matched === "rex" ? "Matched in REX" : prop.matched === "pin" ? "Pinned on the map" : propAddress ? "Not looked up yet" : "No address yet"],
+                        ["Home", [prop.type, prop.beds != null ? `${prop.beds} bed` : null, prop.baths != null ? `${prop.baths} bath` : null].filter(Boolean).join(" · ") || "Not known yet"],
+                        ["Now", nurturing ? "In nurture" : track[Math.min(step, track.length - 1)]?.label ?? "Enquiry"],
+                      ] as Array<[string, string]>).map(([k, v]) => (
+                        <div key={k} className="flex items-baseline justify-between gap-3">
+                          <dt className="text-muted">{k}</dt>
+                          <dd className="text-right font-semibold">{v}</dd>
                         </div>
-                        {passportSaid && <p className="mt-2 text-[11px] text-muted">{passportSaid}</p>}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="hidden min-w-[300px] flex-1 self-stretch xl:block xl:max-w-[420px]">
-                      <PhotoBox
-                        fill
-                        className="h-full"
-                        label="Add a photo of the property"
-                        refId={`lead-${lead.id}`}
-                      />
-                    </div>
-                  )}
+                      ))}
+                    </dl>
+                  </section>
                 </div>
 
-                {tagsRow}
-              </>
+                <div className="[&>div]:mt-0 [&>div]:border-t-0 [&>div]:pt-0">{tagsRow}</div>
+
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {landlordQuick.map((a) => (
+                    <button
+                      key={a.label}
+                      type="button"
+                      onClick={a.go}
+                      disabled={a.off}
+                      className="flex items-center gap-3 rounded-2xl border border-line/70 bg-card px-4 py-3.5 text-left transition-colors hover:border-ink/40 disabled:opacity-50"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-dark">
+                        <DoodleIcon name={a.icon} size={16} />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-semibold leading-tight">{a.label}</span>
+                        <span className="block truncate text-[11.5px] text-muted">{a.sub}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             ) : (
               /* A tab is open: its panel takes the box over. Same place,
                  different question — not a second page of cards underneath.

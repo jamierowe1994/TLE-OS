@@ -98,25 +98,23 @@ function TypePicker({ value, onChange }: { value: string; onChange: (t: string) 
   );
 }
 
-export default function PropertyFacts() {
-  const [type, setType] = useState("");
-  const [beds, setBeds] = useState(0);
-  const [baths, setBaths] = useState(0);
-  const [receptions, setReceptions] = useState(0);
+export type PropertyFactsValue = { type: string; beds: number | null; baths: number | null; receptions: number | null };
 
+/** Controlled since 11 Sep 2026: the values live on the lead (lib/lead-facts), not in this box. */
+export default function PropertyFacts({ value, onChange }: { value: PropertyFactsValue; onChange: (next: PropertyFactsValue) => void }) {
   return (
     <div className="divide-y divide-line/50">
       <Row icon="home" label="Property type">
-        <TypePicker value={type} onChange={setType} />
+        <TypePicker value={value.type} onChange={(type) => onChange({ ...value, type })} />
       </Row>
       <Row icon="bed.png" label="Bedrooms">
-        <Stepper value={beds} onChange={setBeds} />
+        <Stepper value={value.beds ?? 0} onChange={(beds) => onChange({ ...value, beds })} />
       </Row>
       <Row icon="doc" label="Bathrooms">
-        <Stepper value={baths} onChange={setBaths} />
+        <Stepper value={value.baths ?? 0} onChange={(baths) => onChange({ ...value, baths })} />
       </Row>
       <Row icon="sofa.png" label="Receptions">
-        <Stepper value={receptions} onChange={setReceptions} />
+        <Stepper value={value.receptions ?? 0} onChange={(receptions) => onChange({ ...value, receptions })} />
       </Row>
     </div>
   );

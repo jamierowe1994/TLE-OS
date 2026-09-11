@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PressButton } from "@/components/Bits";
 import AddedHere from "@/components/AddedHere";
@@ -13,6 +13,8 @@ import { ColumnCustomiser, DataTable, useColumns, type ColumnDef } from "@/compo
 import { Pill } from "@/components/Wire";
 import { LEADS, STAGE_TONE, leadSide, type Lead } from "@/lib/leads-sample";
 import PickOne from "@/components/PickOne";
+import TagsPick from "@/components/TagsPick";
+import { defaultTags } from "@/lib/lead-facts-shape";
 import Segmented from "@/components/Segmented";
 import DoodleIcon from "@/components/DoodleIcon";
 import LeadGroups from "@/components/LeadGroups";
@@ -78,6 +80,20 @@ export default function Leads() {
   const [fSource, setFSource] = useState<string | null>(null);
   const [fAgent, setFAgent] = useState<string | null>(null);
   const [fStage, setFStage] = useState<string | null>(null);
+  /* Tags, as a filter (James, 11 Sep 2026). Saved tags come from the OS;
+     a lead nobody has tagged carries its defaults. Re-read when the drawer
+     closes, so a tag just added is filterable at once. */
+  const [fTags, setFTags] = useState<string[]>([]);
+  const [savedTags, setSavedTags] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    let gone = false;
+    fetch("/api/leads/facts", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { ok?: boolean; tags?: Record<string, string[]> } | null) => { if (!gone && j?.ok && j.tags) setSavedTags(j.tags); })
+      .catch(() => {});
+    return () => { gone = true; };
+  }, [openId]);
+  const tagsOf = useCallback((l: Lead) => savedTags[l.id] ?? defaultTags(l), [savedTags]);
   const params = useSearchParams();
   const side = params.get("side"); // "tenant" | "landlord" | null (both)
   /* "Add new lead" in the sidebar lands here with ?new=1 and opens the panel. */
@@ -199,6 +215,7 @@ export default function Leads() {
       if (fSource && l.source !== fSource) return false;
       if (fAgent && l.agent !== fAgent) return false;
       if (fStage && (l.spineLabel ?? l.stage) !== fStage) return false;
+      if (fTags.length) { const mine = tagsOf(l); if (!fTags.every((t) => mine.includes(t))) return false; }
       /* Phone and address are in the needle too. Somebody looking a landlord up
          mid-call has the number in front of them far more often than the town,
          and a search that silently ignores what you typed reads as "not in the
@@ -212,12 +229,18 @@ export default function Leads() {
       }
       return true;
     });
-  }, [ALL, side, fSource, fAgent, fStage, q]);
+  }, [ALL, side, fSource, fAgent, fStage, fTags, tagsOf, q]);
+  /* Every tag on the board this side, with how many carry it. */
+  const tagCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of ALL) { if (side && leadSide(l) !== side) continue; for (const t of tagsOf(l)) m.set(t, (m.get(t) ?? 0) + 1); }
+    return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "en-GB"));
+  }, [ALL, side, tagsOf]);
 
   // A filter change can strand the page number past the end of the list.
   useEffect(() => {
     setPage(0);
-  }, [side, fSource, fAgent, fStage, q, perPage]);
+  }, [side, fSource, fAgent, fStage, fTags, q, perPage]);
   const open = book.find((l) => l.id === openId) ?? null;
 
   /** Previous/Next walk the whole filtered book, not just the visible page. */
@@ -383,6 +406,7 @@ export default function Leads() {
                 <PickOne label="All sources" options={sources.map((o) => ({ id: o, label: o }))} value={fSource} onChange={setFSource} />
                 <PickOne label="All agents" options={agents.map((o) => ({ id: o, label: o }))} value={fAgent} onChange={setFAgent} />
                 <PickOne label="All stages" options={stages.map((o) => ({ id: o, label: o }))} value={fStage} onChange={setFStage} />
+                <TagsPick tags={tagCounts} value={fTags} onChange={setFTags} />
               </div>
               {scanNote && <p className="mt-3 text-[11px] leading-relaxed text-muted">{scanNote}</p>}
             </div>
@@ -407,6 +431,7 @@ export default function Leads() {
             <PickOne label="All sources" options={sources.map((o) => ({ id: o, label: o }))} value={fSource} onChange={setFSource} />
             <PickOne label="All agents" options={agents.map((o) => ({ id: o, label: o }))} value={fAgent} onChange={setFAgent} />
             <PickOne label="All stages" options={stages.map((o) => ({ id: o, label: o }))} value={fStage} onChange={setFStage} />
+            <TagsPick tags={tagCounts} value={fTags} onChange={setFTags} />
             <ColumnCustomiser cols={cols} />
           </div>
 

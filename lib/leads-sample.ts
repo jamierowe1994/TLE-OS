@@ -1,3 +1,4 @@
+import { defaultTags } from "@/lib/lead-facts-shape";
 /**
  * Demo lead book for the wireframe — deliberately 24 rows so the list
  * behaves like a real working day rather than a tidy screenshot.
@@ -385,11 +386,7 @@ const DEFAULT_TASKS: Task[] = [
 export function leadDetail(lead: Lead): LeadDetail {
   const d = DETAIL[lead.id] ?? {};
   return {
-    tags: d.tags ?? [
-      lead.enquiry === "Landlord" ? "Landlord" : "Looking to rent",
-      lead.area,
-      lead.source,
-    ],
+    tags: d.tags ?? defaultTags(lead),
     priority: d.priority ?? (lead.stage === "New" ? "High" : "Medium"),
     summary:
       d.summary ??
