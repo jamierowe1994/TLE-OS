@@ -506,6 +506,11 @@ type PassportState = {
   } | null;
 };
 type EnquiryState = { message: string; fields: Array<[string, string]>; receivedAt: string | null; source: string | null };
+/* Enquiries already read, by lead id, for the life of the page. Kept whatever
+   happens to the request that fetched them: the drawer can re-run its read
+   mid-flight (the list refreshes under it), and a reply thrown away as
+   stale left the card on "loading" until the next click. */
+const ENQUIRY_CACHE = new Map<string, EnquiryState | null>();
 
 /** "Thu 11 Sep, 2:32pm" - the day and the time, which is what an agent reads first. */
 const whenFull = (iso: string | null | undefined) => {
@@ -638,11 +643,19 @@ export default function LeadDrawer({
   const enquiryLeadId = lead?.id ?? null;
   useEffect(() => {
     if (!enquiryLeadId) return;
+    if (ENQUIRY_CACHE.has(enquiryLeadId)) {
+      setEnquiry(ENQUIRY_CACHE.get(enquiryLeadId) ?? null);
+      return;
+    }
     let live = true;
     setEnquiry(undefined);
     fetch(`/api/leads/${encodeURIComponent(enquiryLeadId)}/enquiry`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => { if (live) setEnquiry(j?.ok ? (j.enquiry ?? null) : null); })
+      .then((j) => {
+        const got: EnquiryState | null = j?.ok ? (j.enquiry ?? null) : null;
+        if (j?.ok) ENQUIRY_CACHE.set(enquiryLeadId, got);
+        if (live) setEnquiry(got);
+      })
       .catch(() => { if (live) setEnquiry(null); });
     return () => { live = false; };
   }, [enquiryLeadId]);
@@ -1064,7 +1077,11 @@ export default function LeadDrawer({
   );
 
   /* The quick actions a tenant lead needs, each one the real thing. */
-  const enqMessage = enquiry?.message || lead.enquiryMessage || "";
+  /* REX's own 100-character preview stands in only until the full read
+     lands, and only when it is words - some portals' previews are just
+     their labelled lines ("Email Address: ... Phone Default: ..."). */
+  const previewOk = Boolean(lead.enquiryMessage && !/^[A-Z][A-Za-z ]{1,30}:/.test(lead.enquiryMessage));
+  const enqMessage = enquiry?.message || (enquiry === undefined && previewOk ? lead.enquiryMessage ?? "" : "");
   const receivedIso = enquiry?.receivedAt ?? lead.receivedAt ?? null;
   const enqProperty = lead.address || enquiry?.fields.find(([k]) => /property address|listing address/i.test(k))?.[1] || lead.preferred;
   const quick: { label: string; sub: string; icon: string; go: () => void; primary?: boolean; off?: boolean; href?: string }[] = [
