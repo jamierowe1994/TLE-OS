@@ -10,3 +10,14 @@
  * once every one of them really sends.
  */
 export const VIEWING_SENDS_LIVE = false;
+
+/**
+ * Booking a viewing FROM A LISTING is off for the pilot (11 Sep 2026).
+ *
+ * Its "Who's viewing?" list was the sample applicants in lib/leads-sample
+ * (Sarah Johnson, Tom Williams...), the agent was always "Kirstie", and the
+ * booking lived only on that screen. Booking from a lead is the real path.
+ * Flip to true once the listing feeds the booker its real REX enquiries
+ * (MASTER-LIST D17).
+ */
+export const LISTING_BOOKER_LIVE = false;

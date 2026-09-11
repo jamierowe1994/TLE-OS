@@ -28,7 +28,7 @@
 
 > **FOUND 11 SEP - "BOOK A VIEWING" FROM A LISTING PICKS FROM MADE-UP PEOPLE (D17)**
 > - **Open a listing, press Book a viewing: "Who's viewing?" lists sample applicants (Sarah Johnson, Tom Williams...) from `lib/leads-sample.ts`, not REX, and the agent is always "Kirstie".** Nothing is saved - the booking lives on that screen until it closes. (Booking from a lead is the real path.)
-> - **Your call:** hide the button on listings for the pilot (my recommendation, minutes), or feed it the listing's real enquiries from REX (half a day).
+> - **DONE 11 Sep: HIDDEN FOR THE PILOT.** All three ways in on a listing (the step's Book a viewing, Arrange viewing, Book viewing) are gone; the step says to book from the lead or in REX. Switch: `LISTING_BOOKER_LIVE` in `lib/viewing-sends.ts`.
 
 > **DECISION NEEDED FROM YOU, OR IT BLOCKS**
 > - **A1 - WHO IS IN THE PILOT.** Eleven items cannot start until agents can sign in. **This is the single biggest blocker.**
@@ -244,7 +244,7 @@ still A1 (agent accounts), the palette (now received) and J15 (the full run).
 | D14 | **Bond at launch: ship what is finished, or pull it** (= J8) | Time |
 | D15 | **Which view J24 means** | Unclear |
 | D16 | **DONE 11 Sep - hidden.** **Three viewing buttons say "sent" and send nothing** (Cancel & tell them, Send the offer, the booker's Send). Hide them for the pilot, or wire them to the agent's mailbox. | Applicants turning up to cancelled viewings |
-| D17 | **Book a viewing on a listing uses made-up applicants and always says Kirstie.** Hide it for the pilot, or feed it REX's enquiries. | An agent books a fake person |
+| D17 | **DONE 11 Sep - hidden.** **Book a viewing on a listing uses made-up applicants and always says Kirstie.** Hide it for the pilot, or feed it REX's enquiries. | An agent books a fake person |
 
 ## E. Supervised live tests - built behind the lock, never run for real
 

@@ -16,6 +16,7 @@ import PropertyFile from "@/components/PropertyFile";
 import ViewingBooker, { type Person } from "@/components/ViewingBooker";
 import { CopyButton, DoneTick, PressButton } from "@/components/Bits";
 import { Pill } from "@/components/Wire";
+import { LISTING_BOOKER_LIVE } from "@/lib/viewing-sends";
 import { LISTING_TRACK, listingStartingStep } from "@/lib/journey";
 import type { Landlord } from "@/lib/rex-landlord";
 import { LEADS, leadSide } from "@/lib/leads-sample";
@@ -596,7 +597,7 @@ export default function ListingDrawer({
 
   /** The step decides what the button does, same as on a lead. */
   function fire() {
-    if (here.action === "viewing") setBooking(true);
+    if (here.action === "viewing") { if (LISTING_BOOKER_LIVE) setBooking(true); }
     else if (here.action === "review") offers.length && setReviewing(true);
     else if (here.action === "handoff") setHandingOver(true);
     else advance();
@@ -715,13 +716,15 @@ export default function ListingDrawer({
                     <DoodleIcon name="mail" size={14} />
                     Email to tenants
                   </PressButton>
-                  <PressButton
-                    onClick={() => setBooking(true)}
-                    className="press-ring flex items-center gap-2 rounded-full border border-ink/25 px-5 py-2.5 text-[12.5px] font-semibold"
-                  >
-                    <DoodleIcon name="calendar" size={14} />
-                    Arrange viewing
-                  </PressButton>
+                  {LISTING_BOOKER_LIVE && (
+                    <PressButton
+                      onClick={() => setBooking(true)}
+                      className="press-ring flex items-center gap-2 rounded-full border border-ink/25 px-5 py-2.5 text-[12.5px] font-semibold"
+                    >
+                      <DoodleIcon name="calendar" size={14} />
+                      Arrange viewing
+                    </PressButton>
+                  )}
 
                 </div>
 
@@ -916,6 +919,11 @@ export default function ListingDrawer({
                       Make an offer
                     </PressButton>
                   )}
+                  {here.action === "viewing" && !LISTING_BOOKER_LIVE ? (
+                    <p className="max-w-[240px] text-right text-[11.5px] leading-snug text-muted">
+                      Book viewings from the applicant&apos;s lead, or in REX, for now
+                    </p>
+                  ) : (
                   <PressButton
                     onClick={fire}
                     className={`press-ring flex items-center gap-2 rounded-full px-6 py-3 text-[13px] font-semibold ${
@@ -927,6 +935,7 @@ export default function ListingDrawer({
                     <DoodleIcon name={here.icon} size={15} />
                     {here.cta}
                   </PressButton>
+                  )}
                 </div>
                 {here.id === "viewings" && (
                   <button
@@ -1108,13 +1117,15 @@ export default function ListingDrawer({
                     title="Upcoming viewings"
                     icon="calendar"
                     action={
-                      <PressButton
-                        onClick={() => setBooking(true)}
-                        className="press-ring flex items-center gap-2 rounded-full border border-ink/25 px-3.5 py-2 text-[11.5px] font-semibold"
-                      >
-                        <DoodleIcon name="calendar" size={13} />
-                        Book viewing
-                      </PressButton>
+                      LISTING_BOOKER_LIVE ? (
+                        <PressButton
+                          onClick={() => setBooking(true)}
+                          className="press-ring flex items-center gap-2 rounded-full border border-ink/25 px-3.5 py-2 text-[11.5px] font-semibold"
+                        >
+                          <DoodleIcon name="calendar" size={13} />
+                          Book viewing
+                        </PressButton>
+                      ) : undefined
                     }
                   >
                     {(viewings?.upcoming.length ?? 0) + booked.length > 0 ? (
