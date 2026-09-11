@@ -129,7 +129,9 @@ interface RexAddress {
   property_subcategory?: { text?: string | null } | null;
 }
 
-interface RexListing extends Record<string, unknown> {
+export interface RexListing extends Record<string, unknown> {
+  /** current / leased / withdrawn / archived — REX's own state. */
+  system_listing_state?: string | null;
   id?: number | string;
   system_publication_status?: string | null;
   system_publication_time?: number | string | null;
@@ -228,7 +230,7 @@ function internetAdvert(l: RexListing): { heading: string | null; body: string |
   return { heading: trim(net?.advert_heading), body: trim(net?.advert_body) };
 }
 
-function toListing(l: RexListing): OsListing {
+export function toListing(l: RexListing): OsListing {
   const { name, locality } = addressOf(l.property);
   const advert = internetAdvert(l);
   const published = num(l.system_publication_time);

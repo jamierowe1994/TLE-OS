@@ -73,6 +73,20 @@
         "3290"
       ],
       "port": 3290
+    },
+    {
+      "name": "tle-os-walk",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "DATABASE_URL=postgres://postgres:radar@localhost:55432/tleos",
+        "NEXT_DIST_DIR=.next-walk",
+        "npx",
+        "next",
+        "dev",
+        "-p",
+        "3230"
+      ],
+      "port": 3230
     }
   ]
 }

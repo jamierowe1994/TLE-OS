@@ -250,10 +250,10 @@ export default function MarketMap({
       map: map.current,
       center: { lat: centre.lat, lng: centre.lon },
       radius: radiusMiles * 1609.34,
-      strokeColor: "#7f1d1d",
+      strokeColor: "#56423e",
       strokeOpacity: 0.55,
       strokeWeight: 1.5,
-      fillColor: "#7f1d1d",
+      fillColor: "#56423e",
       fillOpacity: 0.06,
       clickable: false,
     });
@@ -337,7 +337,7 @@ export default function MarketMap({
             nobody needs telling about. */}
         {ready && subject && (
           <span
-            className="pointer-events-none absolute z-[2] h-3.5 w-3.5 rounded-full border-[2.5px] border-white bg-[#2563eb] shadow"
+            className="pointer-events-none absolute z-[2] h-3.5 w-3.5 rounded-full border-[2.5px] border-white bg-brown shadow"
             style={{ left: subject.x, top: subject.y, transform: "translate(-50%,-50%)" }}
           />
         )}

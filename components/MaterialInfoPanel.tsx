@@ -42,15 +42,32 @@ export default function MaterialInfoPanel({
   warning,
   loading,
   hideVerbose = false,
+  compact = false,
 }: {
   material: MaterialInfo | null;
   /** Drop Construction and Risks — see VERBOSE_GROUPS. */
   hideVerbose?: boolean;
+  /**
+   * "What we know" - the builder's version. James, 11 Sep 2026: "it is
+   * literally the hardest thing to read because there's just so much going
+   * on... push the most important information to the places where it is
+   * most important, and then show the harder information afterwards."
+   *
+   * So: no box, a title that says what it is, the seven facts a landlord
+   * asks about first as one row of tiles with the value large - estimated
+   * value, tenure, beds, type, floor area, council tax, EPC - and everything
+   * else (broadband, planning, the rest) behind one button, as tabs, one
+   * group at a time. The appraisal file keeps the boxed panel below.
+   */
+  compact?: boolean;
   /** The address-match warning, when Homesearch matched a different property. */
   warning?: string | null;
   loading?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  /* Which group of the detail is showing, in the compact view. Null means the
+     first one, so a fresh panel never opens onto nothing. */
+  const [tab, setTab] = useState<string | null>(null);
 
   if (loading) {
     return (
@@ -89,6 +106,109 @@ export default function MaterialInfoPanel({
     (f): f is NonNullable<typeof f> => Boolean(f)
   );
   const val = material.valuation ? valuationLines(material.valuation) : [];
+
+  if (compact) {
+    const groups = material.groups.filter((g) => !hideVerbose || !VERBOSE_GROUPS.includes(g.id));
+    const active = groups.find((g) => g.id === tab) ?? groups[0] ?? null;
+    /* The order a landlord asks, with the money first. Tenure is second on
+       purpose - freehold or leasehold changes the conversation - and the
+       measurements come after the words. Only what Homesearch actually
+       holds is drawn; a blank tile would be a question we cannot answer. */
+    const estimate = val.find((f) => f.label === "Estimated value");
+    const lastSold = val.find((f) => f.label === "Last sold");
+    const by = (label: string) => all.find((f) => f.label === label);
+    const facts = [
+      estimate ? { label: "Est. sale value", value: estimate.value, money: true } : null,
+      by("Tenure"),
+      by("Bedrooms"),
+      by("Property type"),
+      by("Floor area"),
+      by("Council tax band"),
+      by("EPC rating"),
+    ].filter((f): f is NonNullable<typeof f> => Boolean(f));
+
+    return (
+      <div>
+        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+          <h2 className="hand text-[20px] leading-tight">What we know</h2>
+          <span className="flex items-center gap-2 text-[10.5px] text-muted">
+            <Pill tone="accent">Matched</Pill>
+            {material.known} of {material.possible} known
+          </span>
+        </div>
+
+        {facts.length > 0 && (
+          <dl className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4">
+            {facts.map((f) => (
+              <div
+                key={f.label}
+                className={`rounded-xl border px-3.5 py-3 ${"money" in f && f.money ? "border-[#56634a]/30 bg-[#f1f4ec]" : "border-line/60 bg-box"}`}
+              >
+                <dt className="text-[9.5px] uppercase tracking-wide text-muted">{f.label}</dt>
+                {/* Wraps rather than truncates: "Semi-detached house" and
+                    "69 sqm · 743 sq ft" are the answer, and an ellipsis on the
+                    answer is worse than a second line. */}
+                <dd className="figures mt-1.5 text-[19px] font-semibold leading-tight">{f.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        {lastSold && (
+          <p className="mt-2 text-[11px] text-muted">
+            {lastSold.label}: <span className="figures text-ink">{lastSold.value}</span>. The value is a sale
+            estimate, not rent.
+          </p>
+        )}
+
+        {groups.length > 0 && (
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              aria-expanded={open}
+              className="flex items-center gap-2 text-[12px] text-muted transition-colors hover:text-ink"
+            >
+              <span>{open ? "Less" : "More about it"}</span>
+              <span className={`text-[10px] transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+            </button>
+            {open && active && (
+              <div className="fade-up mt-2.5">
+                {/* One group at a time. Thirty fields in a single list was
+                    the wall of text; as tabs it is one screen's worth, and
+                    the tab names say what is there before you open it. */}
+                <div className="flex flex-wrap gap-1.5">
+                  {groups.map((g) => (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => setTab(g.id)}
+                      className={`rounded-full border px-3 py-1 text-[11.5px] transition-colors ${
+                        g.id === active.id ? "border-ink bg-ink text-page" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
+                      }`}
+                    >
+                      {g.title}
+                    </button>
+                  ))}
+                </div>
+                <dl className="mt-2.5 grid gap-x-6 gap-y-0.5 sm:grid-cols-2 xl:grid-cols-3">
+                  {active.fields.map((f) => (
+                    <div key={f.label} className="flex items-baseline justify-between gap-3 border-b border-line/40 py-1.5">
+                      <dt className="shrink-0 text-[11.5px] text-muted">{f.label}</dt>
+                      <dd className="min-w-0 text-right text-[12px]">{f.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
+                  From Homesearch, live. Blanks are fields Homesearch does not hold for this
+                  property, not fields we chose to leave out.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-2xl border border-line/80 bg-panel p-5">

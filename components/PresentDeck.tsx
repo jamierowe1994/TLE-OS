@@ -1668,10 +1668,14 @@ export default function PresentDeck({
   token,
   deck,
   slides,
+  embedded = false,
 }: {
   token: string;
   deck: Deck;
   slides: { id: SlideId; title: string; section: SectionId }[];
+  /** Inside the builder's preview box (11 Sep 2026): fills its parent
+   *  rather than the viewport, and never counts itself as an open. */
+  embedded?: boolean;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState(0);
@@ -1699,6 +1703,7 @@ export default function PresentDeck({
   /* Count the open, once. See app/api/present/opened for why it isn't done
      in the page render. */
   useEffect(() => {
+    if (embedded) return;
     const t = setTimeout(() => {
       fetch("/api/present/opened", {
         method: "POST",
@@ -1708,7 +1713,7 @@ export default function PresentDeck({
       }).catch(() => {});
     }, 1500);
     return () => clearTimeout(t);
-  }, [token]);
+  }, [token, embedded]);
 
   /**
    * Two observers, because two different questions are being asked and one
@@ -1961,7 +1966,7 @@ export default function PresentDeck({
        to keep in step. See themeVars in present-kit. */
     <DeckStyleCtx.Provider value={asStyle(deck.style)}>
     <div
-      className="relative h-[100dvh] w-full overflow-hidden"
+      className={`relative w-full overflow-hidden ${embedded ? "h-full" : "h-[100dvh]"}`}
       style={themeVars(asStyle(deck.style))}
       data-present-style={asStyle(deck.style)}
     >

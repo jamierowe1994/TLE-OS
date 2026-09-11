@@ -88,7 +88,7 @@ function Bar({
             /* A real zero must still be visibly zero, so it gets no bar at all
                rather than a minimum stub that reads as "a few". */
             width: max > 0 && n > 0 ? `${Math.max((n / max) * 100, 4)}%` : "0%",
-            backgroundColor: strong ? "var(--accent)" : "var(--accent-soft)",
+            backgroundColor: strong ? "var(--brown)" : "var(--accent)",
           }}
         />
       </div>
@@ -99,14 +99,75 @@ function Bar({
 }
 
 /** A headline figure with its unit and a line of context beneath. */
-function Big({ value, unit, note }: { value: string; unit?: string; note: string }) {
+/* A label ABOVE the figure. James, 11 Sep 2026: "you can't really tell what
+   you're looking at" - the number was first and the explanation was a line
+   of small grey under it, so three figures read as three numbers. Now each
+   says what it is before it says how much. */
+function Big({ label, value, unit, note }: { label: string; value: string; unit?: string; note: string }) {
   return (
-    <div className="rounded-xl border border-line/70 p-3.5">
-      <p className="flex items-baseline gap-1.5">
-        <span className="figures text-[24px] leading-none">{value}</span>
+    <div className="rounded-xl border border-line/70 bg-box/40 p-4">
+      <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">{label}</p>
+      <p className="mt-1.5 flex items-baseline gap-1.5">
+        <span className="figures text-[28px] leading-none">{value}</span>
         {unit && <span className="text-[12px] text-muted">{unit}</span>}
       </p>
-      <p className="mt-1.5 text-[11.5px] leading-snug text-muted">{note}</p>
+      <p className="mt-2 text-[11.5px] leading-snug text-muted">{note}</p>
+    </div>
+  );
+}
+
+/* A ring, for the two questions that are shares of a whole - what is
+   competing and who is letting it. Bars said "how many"; a ring says "how
+   much of it", which is the question a landlord is actually asking. Drawn
+   by hand in SVG so it takes the palette and needs no library. */
+const RING = ["var(--brown)", "var(--accent)", "var(--sage)", "#e7c9c4", "#d6d9cd", "#c9bdb8"];
+function Donut({
+  parts,
+  centre,
+  sub,
+}: {
+  parts: { label: string; n: number; strong?: boolean }[];
+  centre: string;
+  sub: string;
+}) {
+  const total = parts.reduce((a, b) => a + b.n, 0);
+  const r = 40, c = 2 * Math.PI * r;
+  let acc = 0;
+  return (
+    <div className="flex flex-wrap items-center gap-5">
+      <svg viewBox="0 0 100 100" className="h-[124px] w-[124px] shrink-0" aria-hidden>
+        <circle cx="50" cy="50" r={r} fill="none" stroke="var(--line)" strokeWidth="14" />
+        {total > 0 &&
+          parts.map((p, i) => {
+            const len = (p.n / total) * c;
+            const el = (
+              <circle
+                key={p.label}
+                cx="50" cy="50" r={r} fill="none"
+                stroke={RING[i % RING.length]}
+                strokeWidth="14"
+                strokeDasharray={`${len} ${c - len}`}
+                strokeDashoffset={-acc}
+                transform="rotate(-90 50 50)"
+                className="transition-[stroke-dasharray] duration-500"
+              />
+            );
+            acc += len;
+            return el;
+          })}
+        <text x="50" y="47" textAnchor="middle" className="figures" fontSize="15" fontWeight="700" fill="var(--ink)">{centre}</text>
+        <text x="50" y="60" textAnchor="middle" fontSize="7" fill="var(--muted)">{sub}</text>
+      </svg>
+      <ul className="min-w-0 flex-1 space-y-1">
+        {parts.map((p, i) => (
+          <li key={p.label} className="flex items-center gap-2.5 text-[12px]">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: RING[i % RING.length] }} />
+            <span className={`min-w-0 flex-1 truncate ${p.strong ? "font-semibold" : ""}`} title={p.label}>{p.label}</span>
+            <span className="figures w-8 shrink-0 text-right">{p.n}</span>
+            <span className="w-10 shrink-0 text-right text-[10.5px] text-muted">{total ? Math.round((p.n / total) * 100) : 0}%</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -133,23 +194,30 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className={`rounded-xl border p-4 ${picked ? "border-accent-dark/40 bg-accent-soft/20" : "border-line/70"}`}>
+    /* The title is a title now (James, 11 Sep 2026: "the titles aren't big,
+       so you get eye fatigue... you can't really tell what you're looking
+       at"), and "On slide" is a pill that fills when it is on rather than a
+       checkbox in the corner. */
+    <div className={`flex h-full flex-col rounded-2xl border p-4 sm:p-5 ${picked ? "border-[#56634a]/40 bg-[#f1f4ec]/60" : "border-line/70"}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">{title}</p>
-          {hint && <p className="mt-1 text-[11.5px] leading-snug text-muted">{hint}</p>}
+          <h3 className="hand text-[17px] leading-tight">{title}</h3>
+          {hint && <p className="mt-1 text-[12px] leading-snug text-muted">{hint}</p>}
         </div>
-        <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-muted">
-          <input
-            type="checkbox"
-            checked={picked}
-            onChange={() => onPick(id)}
-            className="h-3.5 w-3.5 accent-[var(--accent-dark)]"
-          />
-          On slide
-        </label>
+        <button
+          type="button"
+          onClick={() => onPick(id)}
+          aria-pressed={picked}
+          className={`shrink-0 rounded-full border px-3 py-1 text-[11.5px] font-semibold transition-colors ${
+            /* Green when it is on. James, 11 Sep 2026: "put on the slide,
+               love this, and then the button turns to green." */
+            picked ? "border-[#56634a] bg-[#56634a] text-white" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
+          }`}
+        >
+          {picked ? "On the slide ✓" : "Put on slide"}
+        </button>
       </div>
-      <div className="mt-3">{children}</div>
+      <div className="mt-4">{children}</div>
     </div>
   );
 }
@@ -278,8 +346,6 @@ export default function MarketPicturePanel({
   ];
   const bandMax = Math.max(1, ...bands.map((b) => b.n));
   const bedMax = Math.max(1, ...sc.beds.map((b) => b.n));
-  const agentMax = Math.max(1, ...sc.agents.map((a) => a.n));
-  const mixMax = Math.max(1, sc.houses, sc.flats);
   const pct = (n: number) => Math.round((n / sc.advertised) * 100);
 
   return (
@@ -315,6 +381,7 @@ export default function MarketPicturePanel({
 
       <div className="grid gap-3 sm:grid-cols-3">
         <Big
+          label="Median asking rent"
           value={sc.rent ? money(sc.rent.median) : "—"}
           unit={sc.rent ? "pcm" : undefined}
           note={
@@ -324,6 +391,7 @@ export default function MarketPicturePanel({
           }
         />
         <Big
+          label="Time on the market"
           value={sc.daysAdvertised ? String(sc.daysAdvertised.median) : "—"}
           unit={sc.daysAdvertised ? "days" : undefined}
           note={
@@ -333,11 +401,18 @@ export default function MarketPicturePanel({
           }
         />
         <Big
+          label="Already reduced"
           value={`${pct(sc.reduced)}%`}
           note={`${sc.reduced} of ${sc.advertised} landlords here have already cut their asking rent.`}
         />
       </div>
 
+      {/* Side by side. James, 11 Sep 2026: "stack these side by side, one pie
+          chart and one bar chart per line... not spread it so much of a sweep
+          downwards." Pace keeps the full width because it is two figures
+          against each other; the other four pair up. */}
+      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="lg:col-span-2">
       <Section
         id="pace"
         title="How fast it moves"
@@ -383,6 +458,7 @@ export default function MarketPicturePanel({
           began on 30 August.
         </p>
       </Section>
+      </div>
 
       <Section
         id="bands"
@@ -423,6 +499,22 @@ export default function MarketPicturePanel({
             />
           ))}
         </div>
+        {/* The spread, not just the middle. A landlord with a 2-bed wants to
+            know the cheapest and dearest 2-bed on the market as much as the
+            median - it is the range they will be placed within. */}
+        {sc.rent && (
+          <p className="mt-2.5 text-[11.5px] text-muted">
+            Across every size the asking rents run from <span className="figures text-ink">{money(sc.rent.low)}</span> to{" "}
+            <span className="figures text-ink">{money(sc.rent.high)}</span>
+            {subjectBeds != null && (() => {
+              const mine = sc.beds.find((b) => b.beds === Math.min(subjectBeds, 5));
+              return mine?.rent ? (
+                <> ; {mine.beds >= 5 ? "5+" : mine.beds}-beds like this one from <span className="figures text-ink">{money(mine.rent.low)}</span> to <span className="figures text-ink">{money(mine.rent.high)}</span></>
+              ) : null;
+            })()}
+            .
+          </p>
+        )}
         {/* A median of two is still shown — an agent would rather have it than
             a blank — but it must not look like a median of forty. */}
         {sc.beds.some((b) => b.rent && b.rent.n < 4) && (
@@ -444,10 +536,14 @@ export default function MarketPicturePanel({
         picked={picked.includes("mix")}
         onPick={togglePick}
       >
-        <div className="space-y-1.5">
-          <Bar label="Houses" n={sc.houses} max={mixMax} note={`${pct(sc.houses)}%`} />
-          <Bar label="Flats" n={sc.flats} max={mixMax} note={`${pct(sc.flats)}%`} />
-        </div>
+        <Donut
+          parts={[
+            { label: "Houses", n: sc.houses },
+            { label: "Flats", n: sc.flats },
+          ]}
+          centre={`${pct(sc.houses)}%`}
+          sub="houses"
+        />
       </Section>
 
       <Section
@@ -457,19 +553,19 @@ export default function MarketPicturePanel({
         picked={picked.includes("agents")}
         onPick={togglePick}
       >
-        <div className="space-y-1.5">
-          {sc.agents.map((a) => (
-            <Bar
-              key={a.agent}
-              label={a.agent}
-              n={a.n}
-              max={agentMax}
-              strong={a.ours}
-              note={`${pct(a.n)}%`}
-              wide
-            />
-          ))}
-        </div>
+        {/* The top six by share, the rest as "everyone else": a ring with
+            fourteen slivers says nothing. Ours is always named when we are
+            there at all. */}
+        {(() => {
+          const sorted = [...sc.agents].sort((a, b) => (b.ours ? 1 : 0) - (a.ours ? 1 : 0) || b.n - a.n);
+          const top = sorted.slice(0, 5);
+          const rest = sorted.slice(5).reduce((a, b) => a + b.n, 0);
+          const parts = [
+            ...top.map((a) => ({ label: a.ours ? `${a.agent} (us)` : a.agent, n: a.n, strong: a.ours })),
+            ...(rest > 0 ? [{ label: `${sorted.length - 5} other agents`, n: rest }] : []),
+          ];
+          return <Donut parts={parts} centre={String(sc.agents.length)} sub="agents" />;
+        })()}
         {/* When TLE has no stock here the panel says nothing about TLE. An "us:
             0" row beside a competitor on fourteen hands the landlord an
             argument against instructing. */}
@@ -479,6 +575,7 @@ export default function MarketPicturePanel({
           </p>
         )}
       </Section>
+      </div>
 
       <p className="text-[10.5px] leading-relaxed text-muted">
         Every figure above is the live Homesearch lettings book for {sc.area}, read{" "}

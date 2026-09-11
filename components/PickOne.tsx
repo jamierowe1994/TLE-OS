@@ -58,7 +58,7 @@ export default function PickOne<T extends string>({
    * (James, 11 Sep 2026: "make all sources and stuff pink"): a blush wash
    * at rest, the deep accent once it is narrowing something.
    */
-  tone?: "neutral" | "pink";
+  tone?: "neutral" | "pink" | "sage";
 }) {
   const [open, setOpen] = useState(false);
   const [at, setAt] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -100,6 +100,15 @@ export default function PickOne<T extends string>({
               : on
                 ? "border-transparent bg-accent-dark font-semibold text-white"
                 : "border-transparent bg-accent-soft font-medium text-accent-dark hover:bg-accent-soft/70"
+            : tone === "sage"
+              ? /* The sage pill: the page's one touch of the green (James, 11
+                   Sep: Market Appraisals "needs a little bit more colour").
+                   Filled sage at rest, the sage ink when a window is chosen. */
+                open
+                ? "border-[#56634a] bg-[#f1f4ec] text-[#56634a]"
+                : on
+                  ? "border-transparent bg-[#56634a] font-semibold text-white"
+                  : "border-transparent bg-sage font-medium text-[#56634a] hover:bg-sage/80"
             : open
               ? "border-ink bg-panel text-ink"
               : on

@@ -4,13 +4,24 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import MaterialInfoPanel from "@/components/MaterialInfoPanel";
+import SubjectStory from "@/components/appraisal/SubjectStory";
+import StreetView from "@/components/appraisal/StreetView";
 import MarketMap from "@/components/MarketMap";
 import MarketPicturePanel, {
   type MarketBlockId,
   type MarketSelection,
 } from "@/components/MarketPicture";
 import type { MarketPicture } from "@/lib/market-picture";
-import type { DeckKind } from "@/lib/present";
+import PresentDeck from "@/components/PresentDeck";
+import {
+  STANDARD_FEES,
+  defaultBio,
+  firstNameOf,
+  slidesFor,
+  type DeckKind,
+  type PresentAgent,
+  type PresentDeck as Deck,
+} from "@/lib/present";
 import { SERVICE_LEVELS, type MarketAppraisal } from "@/lib/market-appraisal";
 import { Pill } from "@/components/Wire";
 import {
@@ -240,93 +251,105 @@ export default function PresentationBuilder({
    * the agent approved on Friday. Sending the whole research packet would let
    * the numbers move underneath them.
    */
+  /* THE DECK, AS THE SERVER WILL RECEIVE IT.
+
+     One function for both the real send and the preview on the Review step
+     (James, 11 Sep 2026: "we've got no preview, so they can't see what it
+     would look like"), so the two cannot differ: what the preview shows is
+     the payload create() posts, field for field. The offer (valuation and
+     the signing link) is added at send time only - see offerPayload, which
+     opens a DocuSeal session and must not run for a preview. */
+  function deckBody() {
+    if (!d) return null;
+    const picked = d.comparables.filter((c) => chosen.includes(c.id));
+    const rents = picked.map((c) => c.rentMonthly).sort((a, b) => a - b);
+    const at = (q: number) => rents[Math.min(rents.length - 1, Math.floor(rents.length * q))];
+    return {
+      ref: refId ?? "",
+      /* THIS BUILDER MAKES THE APPRAISAL DECK, not the pre-appraisal one.
+         The pre-appraisal is short, automatic and needs no building — it
+         is minted from the lead drawer the day before. What is assembled
+         here is the full research the agent takes with them and sends
+         afterwards, which is why it is the only one with a five-step
+         wizard in front of it. */
+      kind,
+      recipientName: landlord ?? "",
+      address,
+      postcode,
+      comparables: rents.length
+        ? {
+            // Recomputed from what the agent CHOSE, not copied from the
+            // research. Ticking three of eight must move the range, or the
+            // deck quotes a number the chosen properties do not support.
+            guideLow: at(0.25),
+            guideMid: at(0.5),
+            guideHigh: at(0.75),
+            basedOn: rents.length,
+            rows: picked.map((c) => ({
+              name: c.name,
+              locality: c.locality,
+              rent: c.rentDisplay,
+              days: c.daysOnMarket,
+              letAgreed: c.letAgreed,
+            })),
+            caveat: d.guide?.caveat ?? null,
+          }
+        : null,
+      market: marketPayload(),
+      /* WHAT THE AGENT PICKED ON THE AVAILABLE STEP, snapshotted with its
+         photographs. Until now the wizard let somebody choose these and
+         then threw the choice away at send: the slide existed, the type
+         existed, and nothing ever reached a real deck.
+
+         `picks` is already the resolved MarketListing, so the photographs
+         and the advert that /api/ma-photos folded back onto it travel with
+         it. If that fetch has not returned yet the row still goes, with
+         just its lead image - which is the difference between a row that
+         opens a gallery and one that does not, never the difference
+         between a row and no row. */
+      listings: picks.map((l) => ({
+        address: l.address,
+        locality: l.postcode,
+        rent: l.rent != null ? `£${Math.round(l.rent).toLocaleString("en-GB")} pcm` : "",
+        beds: l.beds,
+        type: l.type,
+        image: l.image,
+        photos: l.photos ?? [],
+        /* Homesearch DOES carry the agency, and it is worth having: a
+           landlord recognises the names on their own street, and a list of
+           competitors with nobody's name on it reads as invented. Null
+           where the feed has none, which the row handles. */
+        agent: l.agent ?? null,
+        advert: l.advert ?? null,
+        status: l.status,
+        days: l.daysListed ?? null,
+        /* These come from the whole local market, not our book. Anything
+           of ours in the list is there because a tenant would see it too,
+           so it is not flagged as ours - see the Listings slide. */
+        ours: false,
+      })),
+      /* The headline fields only. The material panel an AGENT reads runs to
+         thirty rows across five groups; a landlord is being asked to
+         correct what goes on the listing, and a thirty-row form is one
+         nobody corrects. */
+      material: (d.material?.groups ?? [])
+        .flatMap((g) => g.fields)
+        .filter((f) => f.headline)
+        .slice(0, 8)
+        .map((f) => ({ label: f.label, value: f.value })),
+    };
+  }
+
   async function create() {
-    if (!d) return;
+    const body = deckBody();
+    if (!body) return;
     setMaking(true);
     setError(null);
     try {
-      const picked = d.comparables.filter((c) => chosen.includes(c.id));
-      const rents = picked.map((c) => c.rentMonthly).sort((a, b) => a - b);
-      const at = (q: number) => rents[Math.min(rents.length - 1, Math.floor(rents.length * q))];
-
       const res = await fetch("/api/presentations", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          ref: refId ?? "",
-          /* THIS BUILDER MAKES THE APPRAISAL DECK, not the pre-appraisal one.
-             The pre-appraisal is short, automatic and needs no building — it
-             is minted from the lead drawer the day before. What is assembled
-             here is the full research the agent takes with them and sends
-             afterwards, which is why it is the only one with a five-step
-             wizard in front of it. */
-          kind,
-          recipientName: landlord ?? "",
-          address,
-          postcode,
-          comparables: rents.length
-            ? {
-                // Recomputed from what the agent CHOSE, not copied from the
-                // research. Ticking three of eight must move the range, or the
-                // deck quotes a number the chosen properties do not support.
-                guideLow: at(0.25),
-                guideMid: at(0.5),
-                guideHigh: at(0.75),
-                basedOn: rents.length,
-                rows: picked.map((c) => ({
-                  name: c.name,
-                  locality: c.locality,
-                  rent: c.rentDisplay,
-                  days: c.daysOnMarket,
-                  letAgreed: c.letAgreed,
-                })),
-                caveat: d.guide?.caveat ?? null,
-              }
-            : null,
-          market: marketPayload(),
-          /* WHAT THE AGENT PICKED ON THE AVAILABLE STEP, snapshotted with its
-             photographs. Until now the wizard let somebody choose these and
-             then threw the choice away at send: the slide existed, the type
-             existed, and nothing ever reached a real deck.
-
-             `picks` is already the resolved MarketListing, so the photographs
-             and the advert that /api/ma-photos folded back onto it travel with
-             it. If that fetch has not returned yet the row still goes, with
-             just its lead image - which is the difference between a row that
-             opens a gallery and one that does not, never the difference
-             between a row and no row. */
-          listings: picks.map((l) => ({
-            address: l.address,
-            locality: l.postcode,
-            rent: l.rent != null ? `£${Math.round(l.rent).toLocaleString("en-GB")} pcm` : "",
-            beds: l.beds,
-            type: l.type,
-            image: l.image,
-            photos: l.photos ?? [],
-            /* Homesearch DOES carry the agency, and it is worth having: a
-               landlord recognises the names on their own street, and a list of
-               competitors with nobody's name on it reads as invented. Null
-               where the feed has none, which the row handles. */
-            agent: l.agent ?? null,
-            advert: l.advert ?? null,
-            status: l.status,
-            days: l.daysListed ?? null,
-            /* These come from the whole local market, not our book. Anything
-               of ours in the list is there because a tenant would see it too,
-               so it is not flagged as ours - see the Listings slide. */
-            ours: false,
-          })),
-          /* The headline fields only. The material panel an AGENT reads runs to
-             thirty rows across five groups; a landlord is being asked to
-             correct what goes on the listing, and a thirty-row form is one
-             nobody corrects. */
-          material: (d.material?.groups ?? [])
-            .flatMap((g) => g.fields)
-            .filter((f) => f.headline)
-            .slice(0, 8)
-            .map((f) => ({ label: f.label, value: f.value })),
-          ...(await offerPayload()),
-        }),
+        body: JSON.stringify({ ...body, ...(await offerPayload()) }),
       });
       const j = (await res.json()) as { ok?: boolean; url?: string; error?: string };
       if (j.ok && j.url) setMade(j.url);
@@ -389,7 +412,37 @@ export default function PresentationBuilder({
   /* The split view. Off by default: most of the time an agent is skimming
      cards, and a map that is always there costs half the width for a question
      they have not asked yet. */
-  const [mapOpen, setMapOpen] = useState(false);
+  /* Open from the start. James, 11 Sep 2026: "always start the view on maps
+     and give them the option of clicking off" - the map is the easier way to
+     search, so it is the default and the circle button closes it. */
+  /* The signed-in agent, for the preview only. The real deck asks REX for
+     the title, phone and photo at send time; the preview uses what the OS
+     already knows, which is enough to see the slide. */
+  const [me, setMe] = useState<PresentAgent | null>(null);
+  useEffect(() => {
+    let gone = false;
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { user?: { name?: string; email?: string; photo?: string | null } | null } | null) => {
+        const u = j?.user;
+        if (gone || !u) return;
+        const name = u.name ?? "";
+        setMe({
+          name,
+          firstName: firstNameOf(name),
+          title: "",
+          email: u.email ?? "",
+          phone: "",
+          photo: u.photo ?? null,
+          bio: defaultBio(firstNameOf(name)),
+        });
+      })
+      .catch(() => {});
+    return () => { gone = true; };
+  }, []);
+  const [mapOpen, setMapOpen] = useState(true);
+  const [oursOpen, setOursOpen] = useState(false);
+  const [oursWide, setOursWide] = useState(false);
   /* The map is kept MOUNTED for the length of its own exit, so it can slide
      back into the corner it came from instead of vanishing. `mapIn` drives the
      classes; `mapMounted` decides whether it exists at all. Two flags rather
@@ -618,7 +671,7 @@ export default function PresentationBuilder({
             step={0.5}
             value={filters.radius}
             onChange={(e) => applyFilters({ ...filters, radius: Number(e.target.value) })}
-            className="w-24 accent-[#e31f36]"
+            className="w-24 accent-[#56423e]"
             aria-label="Search radius in miles"
           />
           <span className="figures w-[52px] shrink-0 text-[11.5px]">
@@ -937,11 +990,107 @@ export default function PresentationBuilder({
    * nothing on the step line ever moves. Circles that shove their neighbours
    * aside on hover make a row of them unusable.
    */
+  /* From either list: the let-agreed step picks the same way the market
+     step does now (James, 11 Sep 2026), so a tick on either lands here. */
   const picks = pickedNearby
-    .map((k) => nearby.find((l) => keyOf(l) === k))
+    .map((k) => nearby.find((l) => keyOf(l) === k) ?? letAgreed.find((l) => keyOf(l) === k))
     .filter((l): l is MarketListing => Boolean(l));
+  /* The list the split view is showing on this step. */
+  const listHere: MarketListing[] = here === "let" ? letAgreed : nearby;
+  const splitStep = here === "available" || here === "let";
 
-  const deckRail = here === "available" && picks.length > 0 ? (
+  /* OUR OWN LETS, folded up. What we let (with time on the market, which
+     only our book can say) and what we are letting now, as one line above
+     the market's let-agreed stock. Open when there is something to read;
+     the checkboxes decide which of ours reach the deck's comparables. It
+     replaces the long lists that used to be this step, with their doubled
+     rules under every address. */
+  const oursStrip = d ? (
+    <div className="mb-3 shrink-0">
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setOursOpen((o) => !o)}
+          aria-expanded={oursOpen}
+          className={`rounded-full border px-3.5 py-1.5 text-[12px] font-semibold transition-colors ${
+            oursOpen ? "border-brown bg-brown text-page" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
+          }`}
+        >
+          What we&apos;ve let {oursOpen ? "▴" : "▾"}
+        </button>
+        <span className="text-[11.5px] text-muted">
+          {d.recentlyLet.length} let by us in {d.postcode.split(" ")[0]} &middot; {available.length} of ours letting now
+        </span>
+        {oursOpen && (
+          /* Wider: every let of ours the research carries, not just this
+             district. James, 11 Sep 2026: "the ability to pull out the search
+             a bit wider if we want to show other things that we've let". */
+          <button
+            type="button"
+            onClick={() => setOursWide((w) => !w)}
+            aria-pressed={oursWide}
+            className={`ml-auto rounded-full border px-3 py-1 text-[11.5px] transition-colors ${
+              oursWide ? "border-brown bg-brown text-page" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
+            }`}
+          >
+            {oursWide ? "Showing everything of ours" : "Show ours further out"}
+          </button>
+        )}
+      </div>
+      {oursOpen && (
+        <div className="fade-up mt-2.5 grid gap-x-6 gap-y-3 rounded-2xl border border-line/70 p-4 sm:grid-cols-2">
+          <div>
+            <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Let by us, most recent first</p>
+            {(() => {
+              const district = d.postcode.split(" ")[0];
+              const rows = oursWide ? d.recentlyLet : d.recentlyLet.filter((l) => !l.postcode || l.postcode.split(" ")[0] === district);
+              return rows.length === 0 ? (
+                <p className="mt-1.5 text-[11.5px] text-muted">Nothing let in this district yet{oursWide ? "" : " - try further out"}.</p>
+              ) : (
+                <ul className="mt-1.5 max-h-52 overflow-y-auto">
+                  {rows.map((l, i) => (
+                    <li key={`${l.address}-${i}`} className="flex items-baseline justify-between gap-2 py-1.5 text-[12.5px]">
+                      <span className="min-w-0 truncate">
+                        {l.address}
+                        <span className="ml-1.5 text-[10.5px] text-muted">{[l.beds ? `${l.beds} bed` : null, l.postcode].filter(Boolean).join(" \u00b7 ")}</span>
+                      </span>
+                      <span className="shrink-0 text-muted">
+                        {l.rent ? <span className="figures text-ink">{money(l.rent)}</span> : "\u2014"}
+                        {l.daysToLet != null ? ` \u00b7 let in ${l.daysToLet}d` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              );
+            })()}
+          </div>
+          <div>
+            <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Ours, letting now &mdash; tick what goes in the deck</p>
+            {available.length === 0 ? (
+              <p className="mt-1.5 text-[11.5px] text-muted">Nothing of ours near this postcode.</p>
+            ) : (
+              <ul className="mt-1.5 max-h-52 overflow-y-auto">
+                {available.map((c) => (
+                  <li key={c.id}>
+                    <label className="flex cursor-pointer items-center gap-2.5 py-1.5 text-[12.5px]">
+                      <input type="checkbox" checked={chosen.includes(c.id)} onChange={() => toggle(c.id)} className="h-3.5 w-3.5 accent-[#56423e]" />
+                      <span className="min-w-0 flex-1 truncate">
+                        {c.name}
+                        <span className="ml-1.5 text-[10.5px] text-muted">{c.locality}</span>
+                      </span>
+                      <span className="figures shrink-0">{c.rentDisplay}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  ) : null;
+
+  const deckRail = splitStep && picks.length > 0 ? (
     <div className="flex items-center gap-1.5">
       {picks.map((l) => {
         const k = keyOf(l);
@@ -1042,7 +1191,7 @@ export default function PresentationBuilder({
     </div>
   ) : null;
 
-  const mapToggle = here === "available" && nearby.length > 0 ? (
+  const mapToggle = splitStep && listHere.length > 0 ? (
     <button
       type="button"
       onClick={() => setMapOpen((m) => !m)}
@@ -1106,13 +1255,71 @@ export default function PresentationBuilder({
     </>
   );
 
+  /* The preview deck: the same payload the server would receive, given a
+     stand-in agent and the standing fees, so it is the landlord's deck as it
+     would be minted right now. Recomputed as picks and ticks change. */
+  const previewDeck = useMemo<Deck | null>(() => {
+    const b = deckBody();
+    if (!b || !me) return null;
+    const level = SERVICE_LEVELS.find((sl) => sl.id === appraisal?.serviceLevel);
+    return {
+      kind,
+      recipientName: landlord ?? "",
+      property: {
+        address,
+        postcode,
+        image: null,
+        beds: d?.material?.bedrooms ?? null,
+        baths: null,
+        sqft: null,
+        propertyType: null,
+        epc: null,
+      },
+      whenPretty: "",
+      startsAt: appraisal?.appointmentAt ?? null,
+      minutes: 45,
+      agent: me,
+      comparables: b.comparables && b.comparables.rows.length >= 3 ? b.comparables : null,
+      market: b.market && b.market.area ? b.market : null,
+      listings: b.listings.length ? (b.listings as Deck["listings"]) : null,
+      material: b.material.length ? b.material : null,
+      fees: STANDARD_FEES,
+      valuation:
+        kind === "post-appraisal" && appraisal?.valuation
+          ? {
+              rent: appraisal.valuation,
+              serviceLevel: level?.label ?? null,
+              feePct: appraisal.feePct ?? null,
+              setupFee: appraisal.setupFee ?? null,
+              note: appraisal.valuationNote ?? null,
+            }
+          : null,
+      terms: null,
+      createdAt: new Date().toISOString(),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d, me, chosen, picks, marketSel, marketPic, kind, landlord, address, postcode, appraisal]);
+
   const body = (
     <>
-        <div className="flex shrink-0 items-center justify-between gap-3 px-0 py-3">
+        {/* THE TITLE AT THE OS'S OWN SIZE. James, 11 Sep 2026: "the title is
+            really small, and the name of the property is really small". It
+            was a 17px line with the address in 11.5px under it - a modal's
+            title, kept when this became a page. Every other screen opens
+            with a 30-42px title in the house face, and the appraisal file
+            this came from sets the address at 30/34. So: the same title
+            scale, and the address as a real second line rather than a
+            caption. Tight underneath, because space here is at a premium. */}
+        <div className="flex shrink-0 flex-wrap items-end justify-between gap-x-6 gap-y-2 px-0 pb-3 pt-5">
           <div className="min-w-0">
-            <p className="hand text-[17px] leading-tight">Build the presentation</p>
-            <p className="truncate text-[11.5px] text-muted">
-              {address} · {postcode}
+            <h1 className="hand text-[30px] leading-[1.05] sm:text-[38px]">Build the presentation</h1>
+            <p className="mt-1.5 truncate text-[16px] leading-snug sm:text-[18px]">
+              {address}
+              {/* Some records carry the postcode inside the address already;
+                  saying it twice on the title line looked like a typo. */}
+              {!address.toUpperCase().includes(postcode.toUpperCase()) && (
+                <span className="ml-2 text-[13px] text-muted">{postcode}</span>
+              )}
             </p>
           </div>
           {/* BACK AND NEXT LIVE UP HERE NOW. James, 29 Aug: "move the next
@@ -1141,8 +1348,8 @@ export default function PresentationBuilder({
               type="button"
               onClick={() => setStep(i)}
               title={s.blurb}
-              className={`rounded-full border px-3 py-1 text-[11.5px] transition-colors ${
-                i === step ? "border-accent-dark bg-accent-dark text-white" : "border-line/80"
+              className={`rounded-full border px-3.5 py-1.5 text-[12px] transition-colors ${
+                i === step ? "border-brown bg-brown font-semibold text-page" : "border-line/80 text-muted hover:border-ink/40 hover:text-ink"
               }`}
             >
               <span className="mr-1 opacity-50">{i + 1}</span>
@@ -1167,7 +1374,7 @@ export default function PresentationBuilder({
             screen except the one it was measured on. */}
         <div
           className={
-            mapMounted && here === "available"
+            mapMounted && splitStep
               ? "flex min-h-0 flex-1 flex-col overflow-hidden px-0 py-3"
               : "min-h-0 flex-1 overflow-y-auto px-0 py-3"
           }
@@ -1175,9 +1382,14 @@ export default function PresentationBuilder({
           {error && <p className="text-[12.5px] text-accent-dark">{error}</p>}
           {!d && !error && <p className="text-[12.5px] text-muted">Pulling the research…</p>}
 
+          {/* TIDY. James, 11 Sep 2026: "space is at a premium, so anything
+              that doesn't need to be shown, we don't have to show. Key
+              property details." The step's blurb is gone (the tab already
+              says Property), the panel runs compact - six facts in a row,
+              the long list behind one button - and compliance below is one
+              line per item rather than a card each. */}
           {d && here === "property" && (
             <div className="space-y-3">
-              <p className="text-[12.5px] leading-relaxed text-muted">{BUILD_STEPS[0].blurb}</p>
               {d.addressWarning && (
                 <p className="rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[12px] leading-relaxed">
                   {d.addressWarning}
@@ -1191,7 +1403,38 @@ export default function PresentationBuilder({
               {/* The address is already in the header two lines up, and the
                   panel repeats property type. James spotted the duplication:
                   "you've got them in the boxes above". One or the other. */}
-              <MaterialInfoPanel material={d.material} warning={d.addressWarning} hideVerbose />
+              {/* BULKED UP. James, 11 Sep 2026: the slimmed step was "too
+                  thin... make it bigger and more visual". Facts on the left
+                  at a size you can read across a table; on the right the
+                  property on its map and its story - advertised now, through
+                  our hands before, and any photographs either turns up. */}
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+                <MaterialInfoPanel material={d.material} warning={d.addressWarning} hideVerbose compact />
+                <div className="space-y-5">
+                  {d.subjectPoint && (
+                    /* The front door from the street, with the flat map as
+                       the fallback when there is no panorama or no key. */
+                    <StreetView
+                      point={d.subjectPoint}
+                      caption={`${address.split(",")[0]} · from the street`}
+                      fallback={
+                        <div className="relative overflow-hidden rounded-2xl border border-line/70 bg-box">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={tileUrl(d.subjectPoint.lat, d.subjectPoint.lon, 16)}
+                            alt=""
+                            className="aspect-[16/9] w-full object-cover"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                          />
+                          <span className="pointer-events-none absolute left-1/2 top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brown ring-[3px] ring-white shadow" />
+                          <span className="absolute bottom-2 left-2 rounded-full bg-page/95 px-2.5 py-1 text-[11px] shadow-sm">{postcode}</span>
+                        </div>
+                      }
+                    />
+                  )}
+                  <SubjectStory address={address} postcode={postcode} live={[...nearby, ...letAgreed]} />
+                </div>
+              </div>
             </div>
           )}
 
@@ -1213,16 +1456,10 @@ export default function PresentationBuilder({
               landlord they are non-compliant on the strength of us not having
               looked. */}
           {d && here === "property" && (
-            <div className="mt-5 border-t border-line/70 pt-5">
-              <p className="hand text-[15px] leading-tight">Compliance</p>
+            <div className="mt-4 border-t border-line/70 pt-4">
+              <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">Compliance</p>
               {(() => {
                 const items = knownCompliance(d.material ?? null);
-                const tone = (st: string) =>
-                  st === "fail"
-                    ? "border-accent-dark/50 bg-accent-soft/40"
-                    : st === "warn"
-                      ? "border-line bg-box/70"
-                      : "border-line/70";
                 const dot = (st: string) =>
                   st === "fail"
                     ? "bg-accent-dark"
@@ -1234,42 +1471,46 @@ export default function PresentationBuilder({
                 return (
                   <>
                     {items.length === 0 ? (
-                      <p className="mt-2 rounded-xl border border-dashed border-line p-4 text-[12px] leading-relaxed text-muted">
-                        Nothing on the EPC register for this address yet. That may be a genuine
-                        gap or it may be the address not matching &mdash; check before telling a
-                        landlord they have no certificate.
+                      <p className="mt-2 text-[12px] leading-relaxed text-muted">
+                        Nothing on the EPC register for this address yet &mdash; a genuine gap, or
+                        the address not matching. Check before telling a landlord they have no
+                        certificate.
                       </p>
                     ) : (
-                      <ul className="mt-3 space-y-2">
+                      /* One line each: the dot says the state, the label says
+                         what, the detail says why, and the source rides at the
+                         end in small type. It was a card per item with three
+                         lines in it, which cost the screen half its height. */
+                      <ul className="mt-2 divide-y divide-line/50">
                         {items.map((it) => (
                           <li
                             key={it.label}
-                            className={`flex gap-3 rounded-xl border p-3 ${tone(it.state)}`}
+                            className={`flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2 text-[12.5px] ${it.state === "fail" ? "text-accent-dark" : ""}`}
+                            title={it.source}
                           >
-                            <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot(it.state)}`} />
-                            <span className="min-w-0">
-                              <span className="text-[12.5px] font-semibold">{it.label}</span>
-                              <p className="mt-0.5 text-[12px] leading-relaxed text-muted">
-                                {it.detail}
-                              </p>
-                              <p className="mt-1 text-[10px] uppercase tracking-wide text-muted/80">
-                                {it.source}
-                              </p>
-                            </span>
+                            <span className={`relative top-[-1px] inline-block h-2 w-2 shrink-0 rounded-full ${dot(it.state)}`} />
+                            <span className="font-semibold">{it.label}</span>
+                            <span className="min-w-0 flex-1 text-muted">{it.detail}</span>
                           </li>
                         ))}
                       </ul>
                     )}
 
-                    <p className="mt-5 text-[12.5px] leading-relaxed text-muted">
-                      And what we will need from the landlord. None of these is on any public
-                      register, so this is a list to ask for &mdash; not a list of failures.
+                    {/* What to ask the landlord for: chips, not a grid of cards.
+                        The reason for each one is on hover; the list itself is
+                        what an agent needs to see, and it fits on one line. */}
+                    <p className="mt-3 text-[11.5px] leading-relaxed text-muted">
+                      To ask the landlord for &mdash; nothing here is on a public register, so
+                      this is a list to ask, not a list of failures.
                     </p>
-                    <ul className="mt-2 grid gap-x-4 gap-y-2 sm:grid-cols-2">
+                    <ul className="mt-1.5 flex flex-wrap gap-1.5">
                       {OUTSTANDING_AT_APPRAISAL.map((o) => (
-                        <li key={o.label} className="rounded-xl border border-dashed border-line/80 p-3">
-                          <span className="text-[12px] font-semibold">{o.label}</span>
-                          <p className="mt-0.5 text-[11px] leading-relaxed text-muted">{o.why}</p>
+                        <li
+                          key={o.label}
+                          title={o.why}
+                          className="rounded-full border border-dashed border-line px-2.5 py-1 text-[11.5px] text-muted"
+                        >
+                          {o.label}
                         </li>
                       ))}
                     </ul>
@@ -1279,8 +1520,14 @@ export default function PresentationBuilder({
             </div>
           )}
 
-          {d && here === "available" && nearby.length > 0 && (
+          {/* ONE VIEW FOR BOTH. James, 11 Sep 2026: Recently let "should be exactly
+              the same page as On the market... have a map on there so they can
+              pick their things." So the split view below serves both steps,
+              fed by whichever list the step is about; only the strip of our
+              own lets at the top is particular to Recently let. */}
+          {d && splitStep && listHere.length > 0 && (
             <div className={mapMounted ? "flex min-h-0 flex-1 flex-col" : "mb-5"}>
+              {here === "let" && oursStrip}
               {/* NO BOX. The filter row is the row — a bordered, tinted panel
                   around four controls was a container drawn for its own sake,
                   and it cost the screen the vertical space that made the map
@@ -1303,8 +1550,8 @@ export default function PresentationBuilder({
                   {refiltering
                     ? "Searching\u2026"
                     : filters.radius
-                      ? `${nearby.length} on the market within ${filters.radius} ${filters.radius === 1 ? "mile" : "miles"} of ${postcode} \u2014 every agent's stock, not just ours.`
-                      : `${nearby.length} on the market in ${d.sector} only \u2014 every agent's stock, not just ours. Drag the slider to reach further out.`}
+                      ? `${listHere.length} ${here === "let" ? "let agreed" : "on the market"} within ${filters.radius} ${filters.radius === 1 ? "mile" : "miles"} of ${postcode} \u2014 every agent's stock, not just ours.`
+                      : `${listHere.length} ${here === "let" ? "let agreed" : "on the market"} in ${d.sector} only \u2014 every agent's stock, not just ours. Drag the slider to reach further out.`}
                 </p>
               </div>
 
@@ -1339,7 +1586,7 @@ export default function PresentationBuilder({
                       : "grid gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
                   }
                 >
-                {[...nearby]
+                {[...listHere]
                   /* Picked properties leave the list — they are in the rail at
                      the top now, and a thing in two places at once is a thing
                      you have to reconcile. One exception: the card still
@@ -1373,7 +1620,7 @@ export default function PresentationBuilder({
                   >
                     <div className="h-full min-w-[440px]">
                       <MarketMap
-                        listings={nearby}
+                        listings={listHere}
                         centre={d.subjectPoint}
                         selected={pickedNearby}
                         radiusMiles={filters.radius}
@@ -1397,141 +1644,17 @@ export default function PresentationBuilder({
             </div>
           )}
 
-          {d && here === "let" && (
+          {/* Nothing let agreed on these filters: the strip of our own lets
+              still shows, and the filters stay reachable to widen the search. */}
+          {d && here === "let" && listHere.length === 0 && (
             <div className="mb-5">
-              {/* "Advertised Nd", not "let in Nd". The span is publication to
-                  leased, so it is time on the market — which is the honest
-                  reading and still the persuasive one. A row whose stamps do
-                  not give a trustworthy span shows no number at all rather
-                  than a rounded guess. */}
-              <p className="text-[12.5px] leading-relaxed text-muted">
-                What <span className="font-semibold">we</span> have let in {d.postcode.split(" ")[0]},
-                most recent first, and how long each was advertised. This is ours rather than
-                the whole market&apos;s, which is what makes it worth showing.
+              {oursStrip}
+              <div className="flex flex-wrap items-center gap-2">{controlsFor(false)}</div>
+              <p className="mt-3 text-[12.5px] leading-relaxed text-muted">
+                Nothing let agreed nearby on these filters. Widen the radius or clear the bed
+                and rent filters &mdash; there is far less let-agreed stock than there is on the
+                market, so a narrow search empties this quickly.
               </p>
-              {d.recentlyLet.length === 0 ? (
-                <p className="mt-3 rounded-xl border border-dashed border-line p-4 text-[12.5px] leading-relaxed text-muted">
-                  Nothing let in this district yet. That is our book being thin here rather than
-                  a fault, and better said plainly than papered over with something from further away.
-                </p>
-              ) : (
-                <ul className="mt-3 space-y-1">
-                  {d.recentlyLet.map((l, i) => (
-                    <li key={`${l.address}-${i}`} className="flex flex-wrap items-baseline justify-between gap-2 border-b border-line/40 py-2 text-[12.5px]">
-                      <span className="min-w-0">
-                        {l.address}
-                        <span className="ml-2 text-[11px] text-muted">
-                          {[l.beds ? `${l.beds} bed` : null, l.postcode].filter(Boolean).join(" \u00b7 ")}
-                        </span>
-                      </span>
-                      <span className="shrink-0 text-muted">
-                        {l.rent ? <span className="figures text-ink">{money(l.rent)}</span> : "\u2014"}
-                        {l.daysToLet != null ? ` \u00b7 advertised ${l.daysToLet}d` : ""}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {/* WHAT THE WHOLE MARKET HAS LET, not just us.
-
-                  Our own book is thin almost everywhere — measured 30 Aug, the
-                  entire NN5 district returned ONE let from REX and thirty-six
-                  let agreed from Homesearch. A step called "Recently let" that
-                  shows a landlord one property is not evidence, it is an
-                  apology.
-
-                  SAME CARDS, SAME FILTERS, NO MAP. James, 30 Aug. The filter
-                  row is the one from the market step and it is not a copy —
-                  `applyFilters` refetches the whole feed, and let-agreed rows
-                  come back through the same call, so radius, beds, type and
-                  rent narrow both lists from one control. The map is dropped
-                  because there is far less here and it does not need dividing
-                  in two.
-
-                  THESE CARRY NO LET DATE, and that is stated rather than
-                  papered over. See the note at the top of lib/ma-research on
-                  why no completed-let source exists at all. */}
-              <div className="mt-6 border-t border-line/70 pt-5">
-                <div className="mb-3 flex flex-wrap items-center gap-2">{controlsFor(false)}</div>
-                <p className="text-[12.5px] leading-relaxed text-muted">
-                  {letAgreed.length > 0 ? (
-                    <>
-                      <span className="figures text-ink">{letAgreed.length}</span> let agreed
-                      nearby across every agent &mdash; somebody has accepted these figures, which
-                      makes them evidence of what the market pays rather than what it asks.
-                      Homesearch does not record WHEN each one let, so there is no time-to-let
-                      here; the figures above are ours and do.
-                    </>
-                  ) : (
-                    <>
-                      Nothing let agreed nearby on these filters. Widen the radius or clear the
-                      bed and rent filters &mdash; there is far less let-agreed stock than there
-                      is on the market, so a narrow search empties this quickly.
-                    </>
-                  )}
-                </p>
-                {letAgreed.length > 0 && (
-                  <ul className="mt-3 grid gap-x-4 gap-y-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {letAgreed
-                      .filter((l) => !pickedNearby.includes(keyOf(l)) || leaving.includes(keyOf(l)))
-                      .map((l) => propertyCard(l))}
-                  </ul>
-                )}
-              </div>
-
-              {/* MOVED HERE FROM "On the market". James, 29 Aug.
-
-                  That step is the whole market — every agent's stock, with a
-                  map. Our own book sitting underneath it was a second list
-                  answering a different question on a screen already full of
-                  the first one. Here it belongs: this step is the only one
-                  that is about US, so "what we let" and "what we are letting"
-                  now sit together and the market step is just the market. */}
-              <p className="mt-6 border-t border-line/70 pt-5 text-[12.5px] leading-relaxed text-muted">
-                And from our own book right now &mdash; the ones we are letting and can
-                speak to.
-              </p>
-              <div className="space-y-3">
-              {available.length === 0 ? (
-                <p className="rounded-xl border border-line/70 p-4 text-[12.5px] text-muted">
-                  Nothing here for this postcode. That is a real answer, not a failure — carry
-                  on, and this section simply won&apos;t appear in the deck.
-                </p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {available.map((c) => (
-                    <li key={c.id}>
-                      <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-line/70 p-3 text-[12.5px]">
-                        <input
-                          type="checkbox"
-                          checked={chosen.includes(c.id)}
-                          onChange={() => toggle(c.id)}
-                          className="h-4 w-4 accent-[#e31f36]"
-                        />
-                        <span className="min-w-0 flex-1 truncate">
-                          {c.name}
-                          <span className="ml-1.5 text-[10.5px] text-muted">{c.locality}</span>
-                        </span>
-                        {c.daysOnMarket != null && (
-                          <span className="shrink-0 text-[10.5px] text-muted">
-                            {c.letAgreed ? `let in ${c.daysOnMarket}d` : `${c.daysOnMarket}d`}
-                          </span>
-                        )}
-                        <Pill tone={c.nearness === "sector" ? "accent" : "neutral"}>
-                          {c.nearness === "sector" ? "same sector" : c.nearness === "district" ? "same district" : "wider area"}
-                        </Pill>
-                        <span className="figures shrink-0">{c.rentDisplay}</span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <p className="text-[11px] leading-relaxed text-muted">
-                Only same-sector properties start ticked. A pre-ticked box is a
-                recommendation, and recommending one from the other side of the city is how
-                you end up defending a property you have never seen.
-              </p>
-              </div>
             </div>
           )}
 
@@ -1721,90 +1844,106 @@ export default function PresentationBuilder({
           )}
 
           {here === "review" && (
-            <div className="space-y-3">
-              <p className="text-[12.5px] leading-relaxed text-muted">
-                {pages.length} pages, {chosen.length} comparable{chosen.length === 1 ? "" : "s"}.
-                Untick to leave a section out; everything stays saved either way.
-              </p>
-              <ul className="space-y-1.5">
-                {plan.order.map((id) => {
-                  const s = DECK_SECTIONS.find((x) => x.id === id);
-                  if (!s) return null;
-                  /* THE MARKET ROW IS NOT PART OF `plan`, and must not be.
-
-                     It was, and the two disagreed on screen: an agent who
-                     ticked all five blocks on the Market step arrived here and
-                     read "The local market — off". Two controls for one thing,
-                     contradicting each other, on the page whose entire job is
-                     to say what the landlord will receive.
-
-                     The Market step's selection is the single source, because
-                     it is the one that carries the FIGURES. Unticking here
-                     clears it; there is nothing to tick here without having
-                     been to that step, so the box is disabled until there is. */
-                  const isMarket = s.id === "market";
-                  const marketOn = Boolean(marketSel?.blocks.length);
-                  const on = isMarket ? marketOn : s.always || plan.enabled[s.id];
-                  return (
-                    <li
-                      key={s.id}
-                      className="flex items-center gap-3 rounded-xl border border-line/70 p-3 text-[12.5px]"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={on}
-                        disabled={s.always || (isMarket && !marketOn)}
-                        onChange={() => {
-                          if (isMarket) setMarketSel(null);
-                          else
-                            setPlan((p) => ({
-                              ...p,
-                              enabled: { ...p.enabled, [s.id]: !p.enabled[s.id] },
-                            }));
-                        }}
-                        className="h-4 w-4 accent-[#e31f36] disabled:opacity-40"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block">{s.label}</span>
-                        <span className="block text-[10.5px] text-muted">
-                          {isMarket
-                            ? marketOn
-                              ? `${marketSel!.blocks.length} block${marketSel!.blocks.length === 1 ? "" : "s"} from ${marketSel!.area}. Untick to leave it out.`
-                              : "Nothing ticked on the Market step, so this is not in the deck."
-                            : s.blurb}
+            /* A QUARTER FOR THE LIST, THE REST FOR THE PREVIEW. James, 11 Sep
+               2026: "we've got no preview, so they can't see what it would
+               look like... quarter the size of these tabs and then have a
+               massive preview on the right-hand side, so as they change it,
+               it will change in real time." The preview is the real deck
+               renderer, scaled to the box, fed the same payload the send
+               uses - so what they see is what the landlord gets. */
+            <div className="grid gap-5 lg:grid-cols-[minmax(220px,1fr)_minmax(0,3fr)]">
+              <div className="min-w-0">
+                <p className="text-[12px] leading-relaxed text-muted">
+                  {pages.length} pages, {chosen.length} comparable{chosen.length === 1 ? "" : "s"}.
+                  Untick to leave a section out.
+                </p>
+                <ol className="mt-2.5 space-y-1.5">
+                  {plan.order.map((id, i) => {
+                    const s = DECK_SECTIONS.find((x) => x.id === id);
+                    if (!s) return null;
+                    const isMarket = s.id === "market";
+                    const marketOn = Boolean(marketSel?.blocks.length);
+                    const on = isMarket ? marketOn : s.always || plan.enabled[s.id];
+                    const locked = s.always || (isMarket && !marketOn);
+                    const flip = () => {
+                      if (locked) return;
+                      if (isMarket) setMarketSel(null);
+                      else setPlan((p) => ({ ...p, enabled: { ...p.enabled, [s.id]: !p.enabled[s.id] } }));
+                    };
+                    return (
+                      /* A card per section (James, 11 Sep 2026: "make the
+                         sections a little bit nicer"): its place in the deck,
+                         its name, one line on what it is, and a switch rather
+                         than a checkbox. Off is faded, not hidden - the
+                         landlord will not see it, but the agent should. */
+                      <li
+                        key={s.id}
+                        className={`flex items-center gap-2.5 rounded-xl border px-3 py-2.5 transition-colors ${
+                          on ? "border-line/70 bg-card" : "border-dashed border-line/60 opacity-60"
+                        }`}
+                      >
+                        <span className={`figures flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10.5px] font-bold ${on ? "bg-brown text-page" : "bg-line/60 text-muted"}`}>
+                          {i + 1}
                         </span>
-                      </span>
-                      {s.always ? (
-                        <Pill tone="neutral">always in</Pill>
-                      ) : (
-                        <span className="flex shrink-0 gap-1">
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-[12.5px] font-semibold leading-tight">{s.label}</span>
+                          <span className="block truncate text-[10.5px] leading-snug text-muted">
+                            {isMarket
+                              ? marketOn
+                                ? `${marketSel!.blocks.length} block${marketSel!.blocks.length === 1 ? "" : "s"} from ${marketSel!.area}`
+                                : "Nothing ticked on the Market step"
+                              : s.blurb}
+                          </span>
+                        </span>
+                        {s.always ? (
+                          <span className="shrink-0 text-[9.5px] font-bold uppercase tracking-wider text-muted">Fixed</span>
+                        ) : (
                           <button
                             type="button"
-                            onClick={() => setPlan((p) => reorder(p, s.id, -1))}
-                            className="rounded border border-line/80 px-2 text-[12px]"
-                            title="Move up"
+                            role="switch"
+                            aria-checked={on}
+                            aria-label={`${s.label} ${on ? "on" : "off"}`}
+                            disabled={locked}
+                            onClick={flip}
+                            className={`relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-40 ${on ? "bg-[#56634a]" : "bg-line"}`}
                           >
-                            ↑
+                            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-[left] ${on ? "left-[18px]" : "left-0.5"}`} />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setPlan((p) => reorder(p, s.id, 1))}
-                            className="rounded border border-line/80 px-2 text-[12px]"
-                            title="Move down"
-                          >
-                            ↓
-                          </button>
-                        </span>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-              <p className="text-[11px] leading-relaxed text-muted">
-                Welcome stays first and the close stays last. Not tidiness — a deck that
-                opens on a rent table shows a landlord a number before it has said who is
-                speaking.
-              </p>
+                        )}
+                        {!s.always && (
+                          <span className="flex shrink-0 flex-col">
+                            <button type="button" onClick={() => setPlan((p) => reorder(p, s.id, -1))} className="px-1 text-[10px] leading-none text-muted hover:text-ink" title="Move up">▲</button>
+                            <button type="button" onClick={() => setPlan((p) => reorder(p, s.id, 1))} className="px-1 text-[10px] leading-none text-muted hover:text-ink" title="Move down">▼</button>
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ol>
+                <p className="mt-2 text-[10.5px] leading-relaxed text-muted">
+                  Welcome stays first and the close stays last.
+                </p>
+              </div>
+
+              <div className="min-w-0">
+                <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
+                    Preview &mdash; what the landlord opens
+                  </p>
+                  {previewDeck && (
+                    <span className="text-[11px] text-muted">
+                      {slidesFor(previewDeck).length} slides &middot; scroll sideways, or use the arrows
+                    </span>
+                  )}
+                </div>
+                {previewDeck ? (
+                  <DeckPreview deck={previewDeck} />
+                ) : (
+                  <div className="flex aspect-[16/10] items-center justify-center rounded-2xl border border-dashed border-line text-[12.5px] text-muted">
+                    Building the preview&hellip;
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -1828,7 +1967,7 @@ export default function PresentationBuilder({
          card column inside it does. */
       <div className="-mx-5 -my-8 flex h-[100dvh] flex-col overflow-hidden px-5 lg:-mx-10 lg:px-8 2xl:-mx-14 2xl:px-8">
         {backHref && (
-          <Link href={backHref} className="mt-4 inline-block shrink-0 text-[12px] text-muted underline">
+          <Link href={backHref} className="mt-10 inline-block shrink-0 text-[12px] text-muted underline">
             ← Back to the appraisal
           </Link>
         )}
@@ -1855,5 +1994,36 @@ export default function PresentationBuilder({
       </div>
     </div>,
     document.body
+  );
+}
+
+/**
+ * The deck at a laptop's proportions, scaled to whatever width the Review
+ * step can give it. The renderer lays out at 1280 x 800 and is scaled with a
+ * transform, so type, spacing and the slide count are exactly the landlord's;
+ * only the size differs. Its own sideways scroller and arrows still work.
+ */
+function DeckPreview({ deck }: { deck: Deck }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.5);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const fit = () => setScale(el.clientWidth / 1280);
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div
+      ref={box}
+      className="relative w-full overflow-hidden rounded-2xl border border-line/70 bg-box shadow-sm"
+      style={{ height: Math.round(800 * scale) }}
+    >
+      <div className="absolute left-0 top-0 h-[800px] w-[1280px] origin-top-left" style={{ transform: `scale(${scale})` }}>
+        <PresentDeck token="preview" deck={deck} slides={slidesFor(deck)} embedded />
+      </div>
+    </div>
   );
 }
