@@ -7,6 +7,7 @@ import PageHeader from "@/components/PageHeader";
 import PickOne from "@/components/PickOne";
 import Segmented from "@/components/Segmented";
 import StageTabs from "@/components/StageTabs";
+import CornerSwell from "@/components/CornerSwell";
 import ListingDrawer from "@/components/ListingDrawer";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DIARY } from "@/lib/diary";
@@ -170,17 +171,24 @@ function FilterPanel({
     options: { id: string; label: string }[];
     value: string | null;
     onChange: (v: string | null) => void;
+    /** Show a search box above the options - for a long list like localities. */
+    searchable?: boolean;
   }[];
   active: number;
   onClear: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [at, setAt] = useState<{ top: number; left: number } | null>(null);
+  /* Which group's options are popped out, and where the pop-out sits:
+     level with that group's row, to the right of the panel. Hover opens
+     it; click keeps it, so a trackpad can travel across the gap. */
+  const [over, setOver] = useState<{ i: number; top: number; left: number } | null>(null);
+  const [needle, setNeedle] = useState("");
   const btn = useRef<HTMLButtonElement | null>(null);
 
   const place = useCallback(() => {
     const r = btn.current?.getBoundingClientRect();
-    if (r) setAt({ top: r.bottom + 8, left: r.left });
+    if (r) setAt({ top: r.bottom + 8, left: Math.min(r.left, window.innerWidth - 560) });
   }, []);
 
   useEffect(() => {
@@ -188,8 +196,6 @@ function FilterPanel({
     place();
     const close = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", close);
-    /* Follows the button rather than freezing where it was opened - the page
-       under it still scrolls. */
     window.addEventListener("scroll", place, true);
     window.addEventListener("resize", place);
     return () => {
@@ -198,6 +204,19 @@ function FilterPanel({
       window.removeEventListener("resize", place);
     };
   }, [open, place]);
+
+  useEffect(() => {
+    if (!open) setOver(null);
+  }, [open]);
+
+  const pop = (i: number, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    setNeedle("");
+    setOver({ i, top: r.top, left: r.right + 6 });
+  };
+
+  const g = over ? groups[over.i] : null;
+  const shown = g ? g.options.filter((o) => !needle.trim() || o.label.toLowerCase().includes(needle.trim().toLowerCase())) : [];
 
   return (
     <>
@@ -213,7 +232,7 @@ function FilterPanel({
         }`}
       >
         <DoodleIcon name="setting" size={14} />
-        Filter
+        Filters
         {active > 0 && (
           <span className="figures rounded-full bg-accent-dark px-1.5 text-[10px] font-bold text-page">{active}</span>
         )}
@@ -227,46 +246,77 @@ function FilterPanel({
             onClick={() => setOpen(false)}
             className="fixed inset-0 z-[200] cursor-default"
           />
+          {/* The groups. Each row says what it is and what it is set to;
+              the options themselves pop out beside it. */}
           <div
             data-filter-panel
-            className="fade-up fixed z-[201] max-h-[70vh] w-[268px] overflow-auto rounded-2xl border border-line/80 bg-card p-3 shadow-[0_18px_44px_-14px_rgba(0,0,0,0.34)]"
+            className="fade-up fixed z-[201] w-[240px] rounded-2xl border border-line/50 bg-white p-2 shadow-[0_18px_44px_-14px_rgba(0,0,0,0.34)]"
             style={{ top: at.top, left: at.left }}
           >
-            <div className="mb-2 flex items-center justify-between gap-3 px-1">
-              <p className="text-[11px] font-bold uppercase tracking-wide text-muted">Filter</p>
+            <div className="mb-1 flex items-center justify-between gap-3 px-2 pt-1">
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">Filters</p>
               {active > 0 && (
-                <button type="button" onClick={onClear} className="text-[11.5px] text-accent-dark underline">
+                <button type="button" onClick={() => { onClear(); setOver(null); }} className="text-[11.5px] text-accent-dark underline">
                   Clear all
                 </button>
               )}
             </div>
-            {groups.map((g) => (
-              <div key={g.label} className="mb-2 last:mb-0">
-                <p className="px-1 pb-1 text-[11px] font-semibold text-muted">{g.label}</p>
+            {groups.map((grp, i) => {
+              const current = grp.options.find((o) => o.id === grp.value)?.label;
+              const on = over?.i === i;
+              return (
                 <button
+                  key={grp.label}
                   type="button"
-                  onClick={() => g.onChange(null)}
-                  className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-[12.5px] transition-colors hover:bg-accent-soft/40 ${
-                    g.value === null ? "font-semibold text-accent-dark" : ""
-                  }`}
+                  onMouseEnter={(e) => pop(i, e.currentTarget)}
+                  onClick={(e) => pop(i, e.currentTarget)}
+                  className={`flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors ${on ? "bg-accent-soft/50" : "hover:bg-page"}`}
                 >
-                  Any
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[12.5px] font-semibold">{grp.label}</span>
+                    <span className={`block truncate text-[11px] ${current ? "text-accent-dark" : "text-muted"}`}>{current ?? "Any"}</span>
+                  </span>
+                  <span aria-hidden className="text-muted">›</span>
                 </button>
-                {g.options.map((o) => (
-                  <button
-                    key={o.id}
-                    type="button"
-                    onClick={() => g.onChange(o.id)}
-                    className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-[12.5px] transition-colors hover:bg-accent-soft/40 ${
-                      g.value === o.id ? "font-semibold text-accent-dark" : ""
-                    }`}
-                  >
-                    {o.label}
-                  </button>
-                ))}
-              </div>
-            ))}
+              );
+            })}
           </div>
+
+          {/* The options for the group under the mouse, beside it. */}
+          {over && g && (
+            <div
+              className="fade-up fixed z-[202] max-h-[60vh] w-[220px] overflow-auto rounded-2xl border border-line/50 bg-white p-1.5 shadow-[0_18px_44px_-14px_rgba(0,0,0,0.34)]"
+              style={{ top: Math.min(over.top, window.innerHeight - 320), left: over.left }}
+            >
+              {g.searchable && (
+                <input
+                  autoFocus
+                  value={needle}
+                  onChange={(e) => setNeedle(e.target.value)}
+                  placeholder={`Search ${g.label.toLowerCase()}…`}
+                  className="mb-1 h-9 w-full rounded-xl border border-line/60 px-3 text-[12.5px] outline-none focus:border-ink"
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => g.onChange(null)}
+                className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-[12.5px] transition-colors hover:bg-accent-soft/40 ${g.value === null ? "font-semibold text-accent-dark" : ""}`}
+              >
+                Any
+              </button>
+              {shown.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => g.onChange(o.id)}
+                  className={`block w-full rounded-lg px-2.5 py-1.5 text-left text-[12.5px] transition-colors hover:bg-accent-soft/40 ${g.value === o.id ? "font-semibold text-accent-dark" : ""}`}
+                >
+                  {o.label}
+                </button>
+              ))}
+              {g.searchable && shown.length === 0 && <p className="px-2.5 py-2 text-[11.5px] text-muted">Nothing matches.</p>}
+            </div>
+          )}
         </>,
         document.body
       )}
@@ -291,7 +341,8 @@ export default function Listings() {
      itself. */
   const [stage, setStage] = useState<"all" | "Available" | "Let agreed" | "Draft" | "photos" | "compliance">("all");
   const [period, setPeriod] = useState<PeriodId>("any");
-  const [view, setView] = useState<"list" | "tiles">("list");
+  /* Tiles by default, like Market Appraisals (James, 11 Sep 2026). */
+  const [view, setView] = useState<"list" | "tiles">("tiles");
 
   /* ── The real book, out of REX. The static export stands in until it
         answers, so the page never renders empty. ── */
@@ -405,47 +456,30 @@ export default function Listings() {
         /* One row of chrome: the filters, then the button that makes more
            houses. Nothing else stands between the agent and the board. */
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Date listed, then list or tiles - the same two controls, in the
-                same order, as Market Appraisals and Applications. */}
-            <PickOne
-              label="Date listed"
-              icon="calendar"
-              options={PERIODS.map((x) => ({ id: x.id, label: x.label }))}
-              value={period}
-              onChange={(v) => setPeriod((v ?? "any") as PeriodId)}
-              clearable={false}
-              neutral="any"
-            />
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Just the switch and the button that makes a listing (James, 11
+                Sep). No icons on the switch - the drawn grid read as cut off.
+                The filters, the date among them, live in the box below. */}
             <Segmented
               value={view}
               onChange={setView}
               options={[
-                { id: "list" as const, title: "List view", icon: <DoodleIcon name="list" size={14} /> },
-                { id: "tiles" as const, title: "Tile view", icon: <DoodleIcon name="grid" size={14} /> },
+                { id: "list" as const, label: "List" },
+                { id: "tiles" as const, label: "Tiles" },
               ]}
             />
-            <FilterPanel
-              active={[sort, rentBand, loc].filter(Boolean).length}
-              onClear={() => { setSort(null); setRentBand(null); setLoc(null); }}
-              groups={[
-                { label: "Sort by", options: SORTS, value: sort, onChange: setSort },
-                { label: "Rent", options: RENT_BANDS, value: rentBand, onChange: setRentBand },
-                { label: "Location", options: localities, value: loc, onChange: setLoc },
-              ]}
-            />
-            {/* It did nothing when pressed - a dead button in the most visible
-                spot on the page. Properties are still created in REX, so it
-                opens REX's listings in a new tab rather than pretending the OS
-                can do it. The new property appears here on the next read. */}
+            {/* Properties are still created in REX, so it opens REX's
+                listings in a new tab rather than pretending the OS can do it.
+                The new property appears here on the next read. In the brand
+                accent, like New lead. */}
             <a
               href="https://app.rexsoftware.com/listings/"
               target="_blank"
               rel="noreferrer"
               title="Opens REX - properties are created there, and appear here once they are"
-              className="hand flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] text-page transition-opacity hover:opacity-90"
+              className="flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-[13px] font-semibold text-white ring-1 ring-inset ring-black/10 transition-opacity hover:opacity-90"
             >
-              <span className="text-base leading-none">+</span> Add new listing
+              <span className="text-[15px] leading-none">+</span> Add new listing
               <DoodleIcon name="link" size={12} className="opacity-70" />
             </a>
           </div>
@@ -454,7 +488,13 @@ export default function Listings() {
 
       {/* ── The stages, and the filter for them. Same component and the same
              row as Market Appraisals and Applications. ── */}
+      {/* Boxed with the corner circles, like Market Appraisals and the leads
+          filter row. */}
+      <div className="fade-up relative mt-4 overflow-hidden rounded-[22px] border border-line/50 bg-white px-5 pb-4 pt-1">
+        <CornerSwell />
+        <div className="relative flex flex-wrap items-start gap-x-4">
       <StageTabs
+        wrap
         label="Listing statuses"
         allId="all"
         value={stage}
@@ -470,6 +510,20 @@ export default function Listings() {
           { id: "compliance" as const, label: "Needs compliance", icon: "shield", count: LISTINGS.filter((l) => l.epcExpiry == null).length, blurb: "No EPC filed" },
         ]}
       />
+          <div className="ml-auto mt-4">
+            <FilterPanel
+              active={[sort, rentBand, loc].filter(Boolean).length + (period === "any" ? 0 : 1)}
+              onClear={() => { setSort(null); setRentBand(null); setLoc(null); setPeriod("any"); }}
+              groups={[
+                { label: "Sort by", options: SORTS, value: sort, onChange: setSort },
+                { label: "Rent", options: RENT_BANDS, value: rentBand, onChange: setRentBand },
+                { label: "Location", options: localities, value: loc, onChange: setLoc, searchable: true },
+                { label: "Date listed", options: PERIODS.filter((x) => x.id !== "any").map((x) => ({ id: x.id, label: x.label })), value: period === "any" ? null : period, onChange: (v) => setPeriod((v ?? "any") as PeriodId) },
+              ]}
+            />
+          </div>
+        </div>
+      </div>
 
       {/* ── The board, in the same panel the other two boards use. ── */}
       {/* White with a hairline. A blush wash with doodles was tried here on
