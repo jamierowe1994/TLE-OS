@@ -21,7 +21,8 @@ import PropertyPhoto from "@/components/PropertyPhoto";
  * they actually saw — never a blank form asking which one they mean.
  */
 
-const RED = "#e31f36";
+/* The tenant surface's call-to-action colour (globals.css, data-surface="tenant"). */
+const CTA = "var(--accent-dark)";
 
 /** The viewing this feedback belongs to. Live, this comes from the link's
  *  token; the sample stands in so the page can be seen and judged. */
@@ -73,7 +74,7 @@ export default function TenantFeedback() {
         <div className="rounded-2xl border border-black/10 bg-white p-8 text-center">
           <div
             className="mx-auto flex h-12 w-12 items-center justify-center rounded-full text-[22px] text-white"
-            style={{ background: RED }}
+            style={{ background: CTA }}
           >
             ✓
           </div>
@@ -143,7 +144,7 @@ export default function TenantFeedback() {
               className="flex-1 rounded-xl border px-4 py-3 text-[13.5px] font-semibold transition-colors"
               style={
                 interested === v
-                  ? { background: RED, borderColor: RED, color: "#fff" }
+                  ? { background: CTA, borderColor: CTA, color: "#fff" }
                   : { borderColor: "rgba(0,0,0,.12)" }
               }
             >
@@ -164,10 +165,10 @@ export default function TenantFeedback() {
                 value={offer}
                 onChange={(e) => setOffer(e.target.value)}
                 className="mt-2 w-40 rounded-xl border bg-white p-3 text-[15px] font-semibold outline-none"
-                style={{ borderColor: offerError ? RED : "rgba(0,0,0,.12)" }}
+                style={{ borderColor: offerError ? CTA : "rgba(0,0,0,.12)" }}
               />
               {offerError ? (
-                <span className="mt-1.5 block text-[12.5px]" style={{ color: RED }}>
+                <span className="mt-1.5 block text-[12.5px]" style={{ color: CTA }}>
                   {offerError}
                 </span>
               ) : null}
@@ -205,7 +206,7 @@ export default function TenantFeedback() {
         disabled={!canSend}
         onClick={() => setSent(true)}
         className="mt-6 w-full rounded-xl px-5 py-3.5 text-[14px] font-bold text-white transition-opacity disabled:opacity-35"
-        style={{ background: RED }}
+        style={{ background: CTA }}
       >
         {interested === "yes" ? "Send feedback and offer" : "Send feedback"}
       </button>

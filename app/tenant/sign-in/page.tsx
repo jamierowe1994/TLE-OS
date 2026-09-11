@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 
-const RED = "#e31f36";
+/* The tenant surface's call-to-action colour (globals.css, data-surface="tenant"). */
+const CTA = "var(--accent-dark)";
 
 /**
  * The tenant's sign-in: the email on their deal, a link, no password.
@@ -58,7 +59,7 @@ export default function TenantSignIn() {
             <div className="mt-4 rounded-xl border border-dashed border-black/20 p-3 text-[12px]">
               <p className="font-semibold">Not sent, because this isn&rsquo;t production.</p>
               <p className="mt-1 text-black/60">{dev.note}</p>
-              <a href={dev.link} className="mt-2 block break-all font-semibold underline" style={{ color: RED }}>
+              <a href={dev.link} className="mt-2 block break-all font-semibold underline" style={{ color: CTA }}>
                 Open the link here instead
               </a>
             </div>
@@ -82,7 +83,7 @@ export default function TenantSignIn() {
             type="submit"
             disabled={busy}
             className="w-full rounded-xl py-3 text-[13.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-            style={{ background: RED }}
+            style={{ background: CTA }}
           >
             {busy ? "Sending…" : "Send me my link"}
           </button>

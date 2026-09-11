@@ -9,7 +9,8 @@ import { useEffect, useState } from "react";
  * it is.
  */
 
-const RED = "#e31f36";
+/* The tenant surface's call-to-action colour (globals.css, data-surface="tenant"). */
+const CTA = "var(--accent-dark)";
 const STORE = "tle-tenant-profile";
 
 type TenantProfile = {
@@ -72,10 +73,10 @@ export default function TenantProfilePage() {
       <div className="mt-5">
         <div className="flex items-center justify-between text-[11.5px] font-bold">
           <span className="text-black/50">{pct}% complete</span>
-          {saved && <span style={{ color: RED }}>Saved ✓</span>}
+          {saved && <span style={{ color: CTA }}>Saved ✓</span>}
         </div>
         <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-black/10">
-          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: RED }} />
+          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: CTA }} />
         </div>
       </div>
 
@@ -136,7 +137,7 @@ export default function TenantProfilePage() {
                     className={`rounded-lg border px-3.5 py-2 text-[12.5px] font-semibold transition-colors ${
                       on ? "text-white" : "border-black/15 hover:border-black/50"
                     }`}
-                    style={on ? { backgroundColor: RED, borderColor: RED } : undefined}
+                    style={on ? { backgroundColor: CTA, borderColor: CTA } : undefined}
                   >
                     {o}
                   </button>

@@ -11,7 +11,8 @@ import { useRouter } from "next/navigation";
  * password, and the portal opens.
  */
 
-const RED = "#e31f36";
+/* The tenant surface's call-to-action colour (globals.css, data-surface="tenant"). */
+const CTA = "var(--accent-dark)";
 
 export default function TenantWelcome() {
   const router = useRouter();
@@ -31,7 +32,7 @@ export default function TenantWelcome() {
 
   return (
     <div className="mx-auto max-w-md py-14">
-      <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: RED }}>
+      <p className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: CTA }}>
         Welcome
       </p>
       <h1 className="mt-2 text-[26px] font-bold leading-tight">
@@ -79,13 +80,13 @@ export default function TenantWelcome() {
           />
         </label>
 
-        {err && <p className="text-[12px] font-semibold" style={{ color: RED }}>{err}</p>}
+        {err && <p className="text-[12px] font-semibold" style={{ color: CTA }}>{err}</p>}
 
         <button
           type="button"
           onClick={create}
           className="w-full rounded-lg py-3.5 text-[14px] font-bold text-white transition-opacity hover:opacity-90"
-          style={{ backgroundColor: RED }}
+          style={{ backgroundColor: CTA }}
         >
           Create my account
         </button>

@@ -17,7 +17,8 @@ import { currentTenant, tenantDealViews, tenantPassportPath, type TenantDealView
 
 export const dynamic = "force-dynamic";
 
-const RED = "#e31f36";
+/* The tenant surface's call-to-action colour (globals.css, data-surface="tenant"). */
+const CTA = "var(--accent-dark)";
 
 const money = (n: number | null) => (n == null ? null : `£${Math.round(n).toLocaleString("en-GB")}`);
 const longDate = (iso: string | null) =>
@@ -52,9 +53,9 @@ function DealCard({ d, passport }: { d: TenantDealView; passport: string | null 
                 className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[10px] font-semibold"
                 style={
                   s.state === "done"
-                    ? { borderColor: RED, color: RED, background: "#fdecee" }
+                    ? { borderColor: CTA, color: CTA, background: "var(--accent-soft)" }
                     : s.state === "current"
-                      ? { borderColor: RED, background: RED, color: "#fff" }
+                      ? { borderColor: CTA, background: CTA, color: "#fff" }
                       : { borderColor: "rgba(0,0,0,0.15)", color: "rgba(0,0,0,0.4)" }
                 }
               >
@@ -76,8 +77,8 @@ function DealCard({ d, passport }: { d: TenantDealView; passport: string | null 
           </p>
           <p className="mt-1.5 text-[13.5px] leading-relaxed">{d.now}</p>
         </div>
-        <div className="rounded-xl p-4" style={{ background: "#fdecee" }}>
-          <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: RED }}>
+        <div className="rounded-xl p-4" style={{ background: "var(--accent-soft)" }}>
+          <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: CTA }}>
             What you can do
           </p>
           <p className="mt-1.5 text-[13.5px] leading-relaxed">{d.next}</p>
@@ -100,7 +101,7 @@ function DealCard({ d, passport }: { d: TenantDealView; passport: string | null 
         )}
         {d.flatfair && <span className="rounded-full border border-black/10 px-2.5 py-1 text-[11.5px] text-black/60">Deposit alternative: Flatfair</span>}
         {passport && (
-          <Link href={passport} className="ml-auto rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold text-white" style={{ background: RED }}>
+          <Link href={passport} className="ml-auto rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold text-white" style={{ background: CTA }}>
             Your passport
           </Link>
         )}

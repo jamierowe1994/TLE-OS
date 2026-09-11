@@ -46,6 +46,39 @@
   --art-wash: #f0efeb;
 
   --radius-card: 16px;
+
+  /* THE EXTENDED PALETTE (James, 11 Sep 2026). What TLE already had plus sage
+     and a dark brown: the pink and white alone read "very girly", so sage
+     balances it and the brown gives contrast. #EAF6DC was dropped. Every
+     surface draws from these; each surface sets its own mix below. */
+  --pal-pink: #fdefec;
+  --pal-clay: #cfa096;
+  --pal-sage: #b3bea5;
+  --pal-brown: #56423e;
+  /* Supporting and contrast colours, available to the OS as well. */
+  --sage: var(--pal-sage);
+  --brown: var(--pal-brown);
+}
+
+/* ---------------------------------------------------------------------------
+   EACH CUSTOMER SURFACE RUNS ITS OWN COLOURS (James, 11 Sep 2026).
+   The OS keeps each agent's accent choice (data-accent on <html>). The
+   landlord and tenant surfaces stamp data-surface on their shell, which
+   redefines the same three tokens for everything inside, so an agent's red
+   never leaks into a landlord's page. Change a surface's look here, and only
+   here. Buttons and calls to action are the brown on both - the contrast the
+   palette brought it in for; washes are the pink. The landlord's accent is
+   clay, the tenant's sage, so the two read as siblings rather than one page.
+--------------------------------------------------------------------------- */
+[data-surface="landlord"] {
+  --accent: var(--pal-clay);
+  --accent-dark: var(--pal-brown);
+  --accent-soft: var(--pal-pink);
+}
+[data-surface="tenant"] {
+  --accent: var(--pal-sage);
+  --accent-dark: var(--pal-brown);
+  --accent-soft: var(--pal-pink);
 }
 
 /* ---------------------------------------------------------------------------
@@ -121,6 +154,8 @@
   --color-card: var(--card);
   --color-panel: var(--panel);
   --color-box: var(--box);
+  --color-sage: var(--sage);
+  --color-brown: var(--brown);
   --font-sans: var(--font-body);
   --radius-card: 1rem;
 }

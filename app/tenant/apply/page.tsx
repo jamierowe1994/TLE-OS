@@ -29,7 +29,8 @@ import PropertyPhoto from "@/components/PropertyPhoto";
  * job and let them see it shrinking.
  */
 
-const RED = "#e31f36";
+/* The tenant surface's call-to-action colour (globals.css, data-surface="tenant"). */
+const CTA = "var(--accent-dark)";
 
 /** Live, this arrives with the link's token. The sample stands in so the page
  *  can be seen and judged before the join is wired. */
@@ -104,7 +105,7 @@ function YesNo({
     <div>
       <p className="text-[13px] font-semibold">
         {label}
-        {required && value === null ? <span style={{ color: RED }}> *</span> : null}
+        {required && value === null ? <span style={{ color: CTA }}> *</span> : null}
       </p>
       {hint ? <p className="mt-0.5 text-[12px] leading-snug text-black/50">{hint}</p> : null}
       <div className="mt-2 flex gap-2">
@@ -116,7 +117,7 @@ function YesNo({
             className="rounded-lg border px-4 py-1.5 text-[12.5px] font-semibold transition-colors"
             style={
               value === v
-                ? { background: RED, borderColor: RED, color: "#fff" }
+                ? { background: CTA, borderColor: CTA, color: "#fff" }
                 : { borderColor: "rgba(0,0,0,.12)" }
             }
           >
@@ -232,7 +233,7 @@ export default function Apply() {
         <div className="mx-auto max-w-xl rounded-2xl border border-black/10 bg-white p-8 text-center">
           <div
             className="mx-auto flex h-12 w-12 items-center justify-center rounded-full text-[22px] text-white"
-            style={{ background: RED }}
+            style={{ background: CTA }}
           >
             ✓
           </div>
@@ -359,7 +360,7 @@ export default function Apply() {
                           type="checkbox"
                           checked={p[k]}
                           onChange={(e) => set(i, { [k]: e.target.checked } as Partial<Person>)}
-                          className="h-4 w-4 accent-[#e31f36]"
+                          className="h-4 w-4 accent-[var(--accent-dark)]"
                         />
                         {label}
                       </label>
@@ -436,10 +437,10 @@ export default function Apply() {
               value={offer}
               onChange={(e) => setOffer(e.target.value)}
               className="w-40 rounded-xl border bg-white p-2.5 text-[15px] font-semibold outline-none"
-              style={{ borderColor: offerError ? RED : "rgba(0,0,0,.12)" }}
+              style={{ borderColor: offerError ? CTA : "rgba(0,0,0,.12)" }}
             />
             {offerError ? (
-              <span className="mt-1.5 block text-[12.5px]" style={{ color: RED }}>{offerError}</span>
+              <span className="mt-1.5 block text-[12.5px]" style={{ color: CTA }}>{offerError}</span>
             ) : null}
           </Field>
           <Field label="When would you move in?">
@@ -515,8 +516,8 @@ export default function Apply() {
       )}
 
       {problems.length > 0 && (
-        <div className="mt-6 rounded-2xl border p-4" style={{ borderColor: RED }}>
-          <p className="text-[12.5px] font-semibold" style={{ color: RED }}>
+        <div className="mt-6 rounded-2xl border p-4" style={{ borderColor: CTA }}>
+          <p className="text-[12.5px] font-semibold" style={{ color: CTA }}>
             We couldn&apos;t file that
           </p>
           <ul className="mt-2 space-y-1 text-[12.5px] text-black/70">
@@ -532,7 +533,7 @@ export default function Apply() {
         disabled={missing.length > 0 || sending}
         onClick={submit}
         className="mt-6 w-full rounded-xl px-5 py-3.5 text-[14px] font-bold text-white transition-opacity disabled:opacity-35"
-        style={{ background: RED }}
+        style={{ background: CTA }}
       >
         {sending ? "Sending…" : "Send my application"}
       </button>

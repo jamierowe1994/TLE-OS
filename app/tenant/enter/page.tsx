@@ -4,7 +4,8 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-const RED = "#e31f36";
+/* The tenant surface's call-to-action colour (globals.css, data-surface="tenant"). */
+const CTA = "var(--accent-dark)";
 
 function Enter() {
   const router = useRouter();
@@ -43,7 +44,7 @@ function Enter() {
         <>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-black/50">That link didn&rsquo;t work</p>
           <h1 className="mt-2 text-[24px] font-semibold leading-tight">{failed}</h1>
-          <Link href="/tenant/sign-in" className="mt-6 inline-block rounded-xl px-6 py-3 text-[13.5px] font-semibold text-white" style={{ background: RED }}>
+          <Link href="/tenant/sign-in" className="mt-6 inline-block rounded-xl px-6 py-3 text-[13.5px] font-semibold text-white" style={{ background: CTA }}>
             Get a new link
           </Link>
         </>

@@ -14,8 +14,9 @@ import { currentLandlord } from "@/lib/landlord-account";
  * beside "The Letting Experts" in the OS's handwriting, cropped from the one
  * logo file the way the marketing shell already does.
  *
- * If Susan wants the website's red instead of the clay, it is one attribute
- * (data-accent="red", which the OS already ships).
+ * Its colours are its own since 11 Sep 2026: data-surface="landlord" on the
+ * shell picks the landlord mix of the extended palette in globals.css, so an
+ * agent's OS accent never reaches a landlord's page.
  */
 
 export const metadata = { title: "The Letting Experts — Your property file" };
@@ -28,7 +29,8 @@ export default async function LandlordLayout({ children }: { children: React.Rea
     /* The reference: a grey page, a thin margin, and white panels that pop
        against it. #e8e8e6 rather than the OS's eggshell wash - James asked
        for it a shade darker so the white reads as white. */
-    <div className="min-h-screen bg-white text-ink">
+    /* data-surface: the landlord's own colours, set in globals.css (11 Sep). */
+    <div data-surface="landlord" className="min-h-screen bg-white text-ink">
       <header>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-5 pt-5 sm:px-10">
           {/* The pin and the name in spaced small caps, as the reference. */}

@@ -20,7 +20,8 @@ import rexSample from "@/lib/rex-sample.json";
  * Still brand red, corporate type, no illustrations — the customer surface.
  */
 
-const RED = "#e31f36";
+/* The tenant surface's call-to-action colour (globals.css, data-surface="tenant"). */
+const CTA = "var(--accent-dark)";
 const ME = "Sophie Turner";
 
 /** Her agent — the attached owner of her record. Headshot is a cutout
@@ -150,7 +151,7 @@ export default function TenantHome() {
           {big && (
             <div className="mt-3 flex gap-2">
               {offered[l.id] ? (
-                <p className="text-[12px] font-semibold" style={{ color: RED }}>
+                <p className="text-[12px] font-semibold" style={{ color: CTA }}>
                   ✓ Offer of £{Number(offered[l.id]).toLocaleString("en-GB")} sent
                 </p>
               ) : (
@@ -159,7 +160,7 @@ export default function TenantHome() {
                     type="button"
                     onClick={() => { setOffering(l); setOfferAmount(String(l.rent ?? "")); setOfferNote(""); }}
                     className="rounded-lg px-4 py-2 text-[12px] font-bold text-white transition-opacity hover:opacity-90"
-                    style={{ backgroundColor: RED }}
+                    style={{ backgroundColor: CTA }}
                   >
                     Make an offer
                   </button>
@@ -190,7 +191,7 @@ export default function TenantHome() {
               {dayLabel(v.day)} at {v.start} · {v.agent} from our team will meet you there
             </p>
             {req && (
-              <p className="mt-1 text-[12px] font-semibold" style={{ color: RED }}>
+              <p className="mt-1 text-[12px] font-semibold" style={{ color: CTA }}>
                 Move requested — {req}. We&apos;ll confirm shortly.
               </p>
             )}
@@ -217,7 +218,7 @@ export default function TenantHome() {
                   className={`rounded-lg border px-3 py-2 text-[12px] font-semibold transition-colors ${
                     reDay === d ? "text-white" : "border-black/15 hover:border-black/50"
                   }`}
-                  style={reDay === d ? { backgroundColor: RED, borderColor: RED } : undefined}
+                  style={reDay === d ? { backgroundColor: CTA, borderColor: CTA } : undefined}
                 >
                   {dayLabel(d)}
                 </button>
@@ -235,7 +236,7 @@ export default function TenantHome() {
                       className={`rounded-lg border px-3 py-2 text-[12px] font-semibold transition-colors ${
                         reSlot === t ? "text-white" : "border-black/15 hover:border-black/50"
                       }`}
-                      style={reSlot === t ? { backgroundColor: RED, borderColor: RED } : undefined}
+                      style={reSlot === t ? { backgroundColor: CTA, borderColor: CTA } : undefined}
                     >
                       {t}
                     </button>
@@ -251,7 +252,7 @@ export default function TenantHome() {
                 setRescheduling(null);
               }}
               className="mt-4 rounded-lg px-5 py-2.5 text-[12.5px] font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-30"
-              style={{ backgroundColor: RED }}
+              style={{ backgroundColor: CTA }}
             >
               Request this time
             </button>
@@ -270,7 +271,7 @@ export default function TenantHome() {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={AGENT.photo} alt={AGENT.name} className="h-28 w-24 shrink-0 object-contain object-bottom" />
           <div className="pb-4">
-            <p className="text-[10.5px] font-bold uppercase tracking-[0.12em]" style={{ color: RED }}>
+            <p className="text-[10.5px] font-bold uppercase tracking-[0.12em]" style={{ color: CTA }}>
               My agent
             </p>
             <p className="mt-0.5 text-[16px] font-bold leading-tight">{AGENT.name}</p>
@@ -281,7 +282,7 @@ export default function TenantHome() {
           <a
             href={`tel:${AGENT.mobile.replace(/\s/g, "")}`}
             className="rounded-lg py-2 text-center text-[12px] font-bold text-white transition-opacity hover:opacity-90"
-            style={{ backgroundColor: RED }}
+            style={{ backgroundColor: CTA }}
           >
             📞 Call
           </a>
@@ -340,7 +341,7 @@ export default function TenantHome() {
               <li key={st} className="flex items-center gap-2 text-[11.5px]">
                 <span
                   className={`inline-block h-2 w-2 rounded-full ${i > MY_STAGE ? "border border-black/20" : ""}`}
-                  style={i <= MY_STAGE ? { backgroundColor: RED } : undefined}
+                  style={i <= MY_STAGE ? { backgroundColor: CTA } : undefined}
                 />
                 <span className={i === MY_STAGE ? "font-bold" : i < MY_STAGE ? "text-black/60" : "text-black/35"}>
                   {st}
@@ -405,7 +406,7 @@ export default function TenantHome() {
                   <div className="mt-6">
                     <div className="mb-2 flex items-center justify-between">
                       <p className="text-[11px] font-bold uppercase tracking-wide text-black/45">Picked for you</p>
-                      <button type="button" onClick={() => setSection("properties")} className="text-[11.5px] font-bold" style={{ color: RED }}>
+                      <button type="button" onClick={() => setSection("properties")} className="text-[11.5px] font-bold" style={{ color: CTA }}>
                         See all →
                       </button>
                     </div>
@@ -498,7 +499,7 @@ export default function TenantHome() {
                         <p className="mt-1 text-[12.5px] leading-relaxed text-black/60">
                           {openGuide === g.title ? g.body : g.blurb}
                         </p>
-                        <p className="mt-2 text-[11px] font-bold" style={{ color: RED }}>
+                        <p className="mt-2 text-[11px] font-bold" style={{ color: CTA }}>
                           {openGuide === g.title ? "Close" : "Read →"}
                         </p>
                       </button>
@@ -519,7 +520,7 @@ export default function TenantHome() {
                 <Link
                   href="/tenant/profile"
                   className="mt-3 inline-block rounded-lg px-4 py-2 text-[12px] font-bold text-white transition-opacity hover:opacity-90"
-                  style={{ backgroundColor: RED }}
+                  style={{ backgroundColor: CTA }}
                 >
                   Finish my profile
                 </Link>
@@ -577,7 +578,7 @@ export default function TenantHome() {
                   setOffering(null);
                 }}
                 className="rounded-lg px-5 py-2.5 text-[12.5px] font-bold text-white"
-                style={{ backgroundColor: RED }}
+                style={{ backgroundColor: CTA }}
               >
                 Send my offer
               </button>

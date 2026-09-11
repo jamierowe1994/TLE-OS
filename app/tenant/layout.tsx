@@ -18,7 +18,8 @@ import { currentTenant } from "@/lib/tenant-account";
 
 export const metadata = { title: "The Letting Experts — My Account" };
 
-const RED = "#e31f36";
+/* The tenant surface's call-to-action colour (globals.css, data-surface="tenant"). */
+const CTA = "var(--accent-dark)";
 
 export default async function TenantLayout({ children }: { children: React.ReactNode }) {
   const me = await currentTenant();
@@ -26,7 +27,7 @@ export default async function TenantLayout({ children }: { children: React.React
     // Same type as every other surface since 11 Sep: Manrope headings (the
     // global h1-h5 rule) and Inter body. The old override that flattened the
     // headings existed to keep the OS's handwriting out; there is none now.
-    <div className="min-h-screen bg-white font-sans text-[#16181d]">
+    <div data-surface="tenant" className="min-h-screen bg-white font-sans text-[#16181d]">
       {/* ── The masthead: wordmark left, quiet account links right. ── */}
       <header className="border-b border-black/10">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-5">
