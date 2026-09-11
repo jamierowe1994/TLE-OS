@@ -18,8 +18,29 @@ const OPTIONS = [
   { key: "cherry", label: "Cherry Bomb One", note: "Round and bubbly", sample: "var(--font-cherry)" },
   { key: "boogaloo", label: "Boogaloo", note: "Chunky, condensed", sample: "var(--font-boogaloo)" },
   { key: "handlee", label: "Handlee", note: "Neat handwriting", sample: "var(--font-handlee)" },
+  { key: "hurricane", label: "Hurricane", note: "Brush script", sample: "'Hurricane'" },
+  { key: "fascinate", label: "Fascinate", note: "Art deco display", sample: "'Fascinate'" },
+  { key: "protest", label: "Protest Riot", note: "Stencil, loud", sample: "'Protest Riot'" },
+  /* "Gervitz Levin" as dictated - no Google font by that name; Gravitas One
+     is the nearest by sound. Swap it if he meant another. */
+  { key: "gravitas", label: "Gravitas One", note: "Heavy display (for \"Gervitz Levin\")", sample: "'Gravitas One'" },
+  { key: "story", label: "Story Script", note: "Storybook script", sample: "'Story Script'" },
+  /* "Praise Serena" as dictated - Praise is the Google font. */
+  { key: "praise", label: "Praise", note: "Calligraphy script", sample: "'Praise'" },
+  { key: "luckiest", label: "Luckiest Guy", note: "Cartoon block", sample: "'Luckiest Guy'" },
   { key: "manrope", label: "Manrope", note: "The brand face, extrabold", sample: "var(--font-manrope)" },
 ] as const;
+
+/*
+ * The second batch (11 Sep) loads straight from Google Fonts rather than
+ * through next/font: Story Script is newer than Next's own font list, and a
+ * trial should not grow app/layout.tsx by seven faces. Story Script gets its
+ * own link so that if Google ever refuses it, the other six still load.
+ */
+const GOOGLE_LINKS = [
+  "https://fonts.googleapis.com/css2?family=Hurricane&family=Fascinate&family=Protest+Riot&family=Gravitas+One&family=Praise&family=Luckiest+Guy&display=swap",
+  "https://fonts.googleapis.com/css2?family=Story+Script&display=swap",
+];
 
 type Face = (typeof OPTIONS)[number]["key"];
 
@@ -34,6 +55,16 @@ export default function TitleFontPicker() {
   const [face, setFace] = useState<Face>("architects");
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    for (const href of GOOGLE_LINKS) {
+      if (document.querySelector(`link[href="${href}"]`)) continue;
+      const l = document.createElement("link");
+      l.rel = "stylesheet";
+      l.href = href;
+      document.head.appendChild(l);
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -77,7 +108,7 @@ export default function TitleFontPicker() {
     /* Left of Steve's bubble, which owns the bottom-right corner. */
     <div ref={wrap} className="fixed bottom-5 right-24 z-40 print:hidden">
       {open && (
-        <div className="swing-down absolute bottom-[calc(100%+0.6rem)] right-0 w-[264px] origin-bottom-right overflow-hidden rounded-2xl border border-line bg-card p-1.5 shadow-xl">
+        <div className="swing-down absolute bottom-[calc(100%+0.6rem)] right-0 max-h-[70vh] w-[264px] origin-bottom-right overflow-y-auto rounded-2xl border border-line bg-card p-1.5 shadow-xl">
           <p className="px-2.5 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
             Title font - trial
           </p>

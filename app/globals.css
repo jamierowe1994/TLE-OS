@@ -86,6 +86,14 @@
 :root[data-title-font="cherry"] .os-type { --font-heading: var(--font-cherry), var(--font-manrope), cursive; }
 :root[data-title-font="boogaloo"] .os-type { --font-heading: var(--font-boogaloo), var(--font-manrope), cursive; }
 :root[data-title-font="handlee"] .os-type { --font-heading: var(--font-handlee), var(--font-manrope), cursive; }
+/* The second batch loads from Google Fonts by name (TitleFontPicker). */
+:root[data-title-font="hurricane"] .os-type { --font-heading: "Hurricane", var(--font-manrope), cursive; }
+:root[data-title-font="fascinate"] .os-type { --font-heading: "Fascinate", var(--font-manrope), cursive; }
+:root[data-title-font="protest"] .os-type { --font-heading: "Protest Riot", var(--font-manrope), cursive; }
+:root[data-title-font="gravitas"] .os-type { --font-heading: "Gravitas One", var(--font-manrope), serif; }
+:root[data-title-font="story"] .os-type { --font-heading: "Story Script", var(--font-manrope), cursive; }
+:root[data-title-font="praise"] .os-type { --font-heading: "Praise", var(--font-manrope), cursive; }
+:root[data-title-font="luckiest"] .os-type { --font-heading: "Luckiest Guy", var(--font-manrope), cursive; }
 :root[data-title-font="manrope"] .os-type { --font-heading: var(--font-manrope), var(--font-inter), system-ui, sans-serif; }
 /* Manrope has the weights the scripts lack, so it gets its extrabold back. */
 :root[data-title-font="manrope"] .os-type :is(h1, h2, .hand):not(.type-admin .type-admin *) {
