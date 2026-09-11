@@ -12,6 +12,11 @@ import PropertyPhoto from "@/components/PropertyPhoto";
  * Deliberately NOT a compose window. The default path is pick, send. Reviewing
  * the wording is offered, never imposed: an agent sending a shortlist twenty
  * times a day does not want to read the same covering note twenty times.
+ *
+ * ANY property, not only the shortlist (James, 11 Sep 2026: "we can't send
+ * properties unless they're shortlisted... that doesn't make any sense").
+ * The shortlist comes first and ticked; under it, the whole live book,
+ * searchable, and anything ticked there goes too.
  */
 
 type Listing = {
@@ -30,6 +35,30 @@ export default function EmailProperties({
   properties: Listing[];
 }) {
   const [chosen, setChosen] = useState<string[]>([]);
+  /* The live book, loaded when the picker opens, and whatever was ticked from it. */
+  const [book, setBook] = useState<Listing[] | null>(null);
+  const [bookFailed, setBookFailed] = useState(false);
+  const [find, setFind] = useState("");
+  const [extra, setExtra] = useState<Listing[]>([]);
+  useEffect(() => {
+    if (!open || book) return;
+    let live = true;
+    fetch("/api/listings", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!live) return;
+        if (j?.ok && Array.isArray(j.listings)) {
+          const rows = (j.listings as Array<Listing & { letAgreed?: boolean; publicationStatus?: string | null }>)
+            .filter((l) => !l.letAgreed)
+            .map((l) => ({ id: String(l.id), name: l.name, locality: l.locality, rent: l.rent, image: l.image }));
+          setBook(rows);
+        } else setBookFailed(true);
+      })
+      .catch(() => live && setBookFailed(true));
+    return () => {
+      live = false;
+    };
+  }, [open, book]);
   const [stage, setStage] = useState<"pick" | "review" | "sent">("pick");
 
   // Seeded on OPEN only — `properties` is built inline by the caller, so
@@ -41,6 +70,8 @@ export default function EmailProperties({
     // Everything shortlisted is pre-selected — the common case is "send them
     // all", so that should need no clicks at all.
     setChosen(seed.current.map((p) => p.id));
+    setExtra([]);
+    setFind("");
     setStage("pick");
   }, [open]);
 
@@ -53,7 +84,13 @@ export default function EmailProperties({
 
   if (!open) return null;
 
-  const picked = properties.filter((p) => chosen.includes(p.id));
+  const all = [...properties, ...extra.filter((e) => !properties.some((p) => p.id === e.id))];
+  const picked = all.filter((p) => chosen.includes(p.id));
+  const needle = find.trim().toLowerCase();
+  const results = (book ?? [])
+    .filter((l) => !all.some((p) => p.id === l.id))
+    .filter((l) => !needle || `${l.name} ${l.locality}`.toLowerCase().includes(needle))
+    .slice(0, needle ? 30 : 8);
   const first = lead.name.split(" ")[0];
   const subject =
     picked.length === 1
@@ -104,9 +141,9 @@ export default function EmailProperties({
 
           {stage === "pick" && (
             <>
-              {properties.length ? (
+              {all.length ? (
                 <ul className="space-y-2.5">
-                  {properties.map((p) => {
+                  {all.map((p) => {
                     const on = chosen.includes(p.id);
                     return (
                       <li key={p.id}>
@@ -145,10 +182,48 @@ export default function EmailProperties({
                   })}
                 </ul>
               ) : (
-                <p className="py-8 text-center text-[12.5px] text-muted">
-                  Nothing shortlisted yet — add a property first.
-                </p>
+                <p className="pb-2 text-[12.5px] text-muted">Nothing shortlisted - pick any property below.</p>
               )}
+
+              {/* Any property in the live book. */}
+              <div className="mt-5 border-t border-line/60 pt-4">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Add any property</p>
+                <input
+                  value={find}
+                  onChange={(e) => setFind(e.target.value)}
+                  placeholder="Search by street, town or postcode"
+                  className="mt-2 w-full rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink"
+                />
+                {book === null && !bookFailed && <p className="mt-3 text-[12px] text-muted">Loading the live book…</p>}
+                {bookFailed && <p className="mt-3 text-[12px] text-muted">REX did not answer, so only the shortlist can be sent just now.</p>}
+                {book && (
+                  <ul className="mt-3 space-y-2">
+                    {results.map((p) => (
+                      <li key={p.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExtra((cur) => [...cur, p]);
+                            setChosen((c) => [...c, p.id]);
+                          }}
+                          className="flex w-full items-center gap-3 rounded-xl border border-dashed border-line/80 p-2.5 text-left transition-colors hover:border-ink/40"
+                        >
+                          <span className="flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full border-[1.5px] border-line text-[10px] text-muted">+</span>
+                          <PropertyPhoto src={p.image} className="h-10 w-12 shrink-0 rounded-lg" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[13px] font-semibold">{p.name}</span>
+                            <span className="block truncate text-[10.5px] text-muted">{p.locality}</span>
+                          </span>
+                          <span className="figures shrink-0 text-[13px]">
+                            {p.rent != null ? `£${p.rent.toLocaleString("en-GB")}` : "—"}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                    {!results.length && <li className="text-[12px] text-muted">Nothing matches that.</li>}
+                  </ul>
+                )}
+              </div>
             </>
           )}
 

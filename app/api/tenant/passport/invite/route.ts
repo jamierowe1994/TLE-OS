@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { publicOrigin } from "@/lib/origin";
-import { createPassport, findPassportByEmail, markInvited } from "@/lib/passport";
+import { createPassport, findPassportByEmail, getPassport, markInvited } from "@/lib/passport";
+import { householdIncome } from "@/lib/passport-shape";
 import { renderTleEmail } from "@/lib/email/tle-emails";
 import { sendEmail } from "@/lib/resend";
 import { switchOn } from "@/lib/switches";
@@ -50,12 +51,33 @@ export async function GET(req: NextRequest) {
   if (!email) return NextResponse.json({ ok: true, sent: false, path: null, invitedAt: null });
 
   const existing = await findPassportByEmail(email, me.id).catch(() => null);
+  /* Done or not, and what it says (11 Sep 2026): a finished passport shows
+     on the lead as a tick, and its answers fill in the tenant's details, so
+     the agent never re-asks what the tenant has already told us. */
+  const full = existing ? await getPassport(existing.token).catch(() => null) : null;
+  const d = full?.data;
+  const yes = (b: boolean | null | undefined) => (b == null ? null : b ? "Yes" : "No");
+  const income = d ? householdIncome(d).total : null;
   return NextResponse.json({
     ok: true,
     sent: Boolean(existing?.invitedAt),
     exists: Boolean(existing),
     invitedAt: existing?.invitedAt ?? null,
     path: existing ? `/tenant/passport/${existing.token}` : null,
+    done: Boolean(full?.submittedAt),
+    submittedAt: full?.submittedAt ?? null,
+    summary: d
+      ? {
+          applicantType: d.applicantType || null,
+          householdIncome: income,
+          adults: d.numAdults || null,
+          children: d.numChildren || null,
+          pets: d.pets == null ? null : d.pets ? d.petsNote || "Yes" : "No",
+          guarantor: yes(d.guarantor),
+          rightToRent: d.hasBritishPassport ? "British passport" : d.shareCode ? "Share code given" : null,
+          currentAddress: d.currentAddress || null,
+        }
+      : null,
   });
 }
 

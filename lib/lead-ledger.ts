@@ -48,7 +48,16 @@ export async function recordLeads(leads: Lead[]): Promise<number> {
      ON CONFLICT (id) DO UPDATE SET
        stage = EXCLUDED.stage, name = EXCLUDED.name, email = EXCLUDED.email, phone = EXCLUDED.phone,
        listing_id = EXCLUDED.listing_id, contact_id = EXCLUDED.contact_id, assignee_id = EXCLUDED.assignee_id,
-       agent = EXCLUDED.agent, address = EXCLUDED.address, payload = EXCLUDED.payload, last_seen = NOW()`,
+       agent = EXCLUDED.agent, address = EXCLUDED.address,
+       /* The scan's payload wins, except for the enquiry read in full from
+          REX (/api/leads/[id]/enquiry): the scan only ever sees REX's
+          100-character snippet, and must not write it back over the whole
+          message. jsonb_strip_nulls drops the keys a lead never had. */
+       payload = EXCLUDED.payload || jsonb_strip_nulls(jsonb_build_object(
+         'enquiryFull', os_leads.payload->'enquiryFull',
+         'enquiryFields', os_leads.payload->'enquiryFields',
+         'enquirySource', os_leads.payload->'enquirySource')),
+       last_seen = NOW()`,
     cols.flat()
   );
   return leads.length;

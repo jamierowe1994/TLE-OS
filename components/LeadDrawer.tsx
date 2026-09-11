@@ -489,6 +489,34 @@ function DocsPanel({
   );
 }
 
+type PassportState = {
+  sent: boolean;
+  invitedAt: string | null;
+  path: string | null;
+  done: boolean;
+  summary: {
+    applicantType: string | null;
+    householdIncome: number | null;
+    adults: string | null;
+    children: string | null;
+    pets: string | null;
+    guarantor: string | null;
+    rightToRent: string | null;
+    currentAddress: string | null;
+  } | null;
+};
+type EnquiryState = { message: string; fields: Array<[string, string]>; receivedAt: string | null; source: string | null };
+
+/** "Thu 11 Sep, 2:32pm" - the day and the time, which is what an agent reads first. */
+const whenFull = (iso: string | null | undefined) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return null;
+  const day = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/London" });
+  const time = d.toLocaleTimeString("en-GB", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Europe/London" }).replace(" ", "");
+  return `${day}, ${time}`;
+};
+
 export default function LeadDrawer({
   lead,
   onClose,
@@ -592,10 +620,28 @@ export default function LeadDrawer({
     setPassportSaid(null);
     fetch(`/api/tenant/passport/invite?email=${encodeURIComponent(passportEmail)}`, { cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => { if (live && j?.ok) setPassport({ sent: Boolean(j.sent), invitedAt: j.invitedAt ?? null, path: j.path ?? null }); })
+      .then((j) => {
+        if (live && j?.ok)
+          setPassport({ sent: Boolean(j.sent), invitedAt: j.invitedAt ?? null, path: j.path ?? null, done: Boolean(j.done), summary: j.summary ?? null });
+      })
       .catch(() => { /* the card just offers Send */ });
     return () => { live = false; };
   }, [lead, passportEmail]);
+
+  /* Their enquiry in full, from REX once and then from the ledger
+     (/api/leads/[id]/enquiry). undefined while it loads, null when there is
+     no REX email behind the lead. */
+  const [enquiry, setEnquiry] = useState<EnquiryState | null | undefined>(undefined);
+  useEffect(() => {
+    if (!lead) return;
+    let live = true;
+    setEnquiry(undefined);
+    fetch(`/api/leads/${encodeURIComponent(lead.id)}/enquiry`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => { if (live) setEnquiry(j?.ok ? (j.enquiry ?? null) : null); })
+      .catch(() => { if (live) setEnquiry(null); });
+    return () => { live = false; };
+  }, [lead]);
 
   async function sendPassport(again: boolean) {
     if (!lead || passportBusy || !passportEmail) return;
@@ -608,7 +654,7 @@ export default function LeadDrawer({
         body: JSON.stringify({ name: lead.name, email: passportEmail, again }),
       }).then((r) => r.json());
       if (!j.ok) throw new Error(j.error ?? "That did not send.");
-      setPassport({ sent: true, invitedAt: j.invitedAt ?? new Date().toISOString(), path: j.path ?? null });
+      setPassport((p) => ({ done: false, summary: null, ...(p ?? {}), sent: true, invitedAt: j.invitedAt ?? new Date().toISOString(), path: j.path ?? null }));
       setPassportSaid(j.alreadySent ? "Already sent - use Resend to send it again." : "Sent.");
     } catch (e) {
       setPassportSaid(e instanceof Error ? e.message : "That did not send.");
@@ -696,7 +742,7 @@ export default function LeadDrawer({
   /* The tenant passport, sent by hand. There is an automatic send off a booked
      viewing; James, 9 Sep: an agent must also be able to send it whenever they
      like, see whether it already went, and copy the link to paste anywhere. */
-  const [passport, setPassport] = useState<{ sent: boolean; invitedAt: string | null; path: string | null } | null>(null);
+  const [passport, setPassport] = useState<PassportState | null>(null);
   const [passportBusy, setPassportBusy] = useState(false);
   const [passportSaid, setPassportSaid] = useState<string | null>(null);
   const [signing, setSigning] = useState(false);
@@ -950,6 +996,83 @@ export default function LeadDrawer({
     ...notes,
   ];
 
+  /* The tags, shared by the tenant and landlord layouts. */
+  const tagsRow = (
+    <>
+                {/* Tags — the quick facts, addable, at the foot of the box. */}
+                <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-line/60 pt-4">
+                  {tags.map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setTags((cur) => cur.filter((x) => x !== t))}
+                      className="group flex items-center gap-1.5 rounded-full border border-line/80 px-3 py-1.5 text-[11.5px] transition-colors hover:border-ink/40"
+                      title="Remove tag"
+                    >
+                      {t}
+                      <span className="text-muted opacity-0 transition-opacity group-hover:opacity-100">
+                        ✕
+                      </span>
+                    </button>
+                  ))}
+                  {/* A menu rather than a prompt box. The sales tags have to
+                      be offered, not guessed at — a reveal nobody can find is
+                      a feature nobody has. */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setTagging((t) => !t)}
+                      className="rounded-full border border-dashed border-line px-3 py-1.5 text-[11.5px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
+                    >
+                      + Add tag
+                    </button>
+                    {tagging && (
+                      <div className="fade-up absolute bottom-full left-0 z-20 mb-1.5 w-56 rounded-xl border border-line/80 bg-card p-1.5 shadow-[0_12px_32px_-12px_rgba(16,16,20,0.3)]">
+                        <p className="px-2 pb-1 pt-1.5 text-[9.5px] font-bold uppercase tracking-wide text-muted">
+                          Sales intent
+                        </p>
+                        {SALES_TAGS.filter((t) => !tags.includes(t)).map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => { setTags((cur) => [...cur, t]); setTagging(false); }}
+                            className="block w-full rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-page"
+                          >
+                            {t}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTagging(false);
+                            const t = window.prompt("New tag");
+                            if (t?.trim()) setTags((cur) => [...cur, t.trim()]);
+                          }}
+                          className="mt-1 block w-full rounded-lg border-t border-line/50 px-2 py-1.5 text-left text-[12px] text-muted transition-colors hover:text-ink"
+                        >
+                          Something else…
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+    </>
+  );
+
+  /* The quick actions a tenant lead needs, each one the real thing. */
+  const enqMessage = enquiry?.message || lead.enquiryMessage || "";
+  const receivedIso = enquiry?.receivedAt ?? lead.receivedAt ?? null;
+  const enqProperty = lead.address || enquiry?.fields.find(([k]) => /property address|listing address/i.test(k))?.[1] || lead.preferred;
+  const quick: { label: string; sub: string; icon: string; go: () => void; primary?: boolean; off?: boolean; href?: string }[] = [
+    { label: "Book a viewing", sub: "Find a slot and invite", icon: "calendar", primary: true, go: () => { setBookMode("viewing"); setBooking(true); advanceTo("viewing"); } },
+    { label: "Send properties", sub: "Any in the book", icon: "mail", go: () => { setEmailing(true); advanceTo("shortlist"); } },
+    passport?.done && passport.path
+      ? { label: "Passport done", sub: "See their answers", icon: "user", href: passport.path, go: () => {} }
+      : { label: passport?.sent ? "Resend passport" : "Send passport", sub: passportEmail ? (passportBusy ? "Sending…" : passportSaid ?? "Ask for their details") : "No email on this lead", icon: "user", off: !passportEmail || passportBusy, go: () => void sendPassport(Boolean(passport?.sent)) },
+    { label: "Find properties", sub: "Search near them", icon: "search", go: () => setTab("properties") },
+    { label: "Add a note", sub: "Log a conversation", icon: "note", go: () => { const el = document.getElementById("lead-note"); el?.scrollIntoView({ behavior: "smooth", block: "center" }); (el as HTMLTextAreaElement | null)?.focus(); } },
+  ];
+
   return (
     <div className="fixed inset-0 z-[120]">
       {/* The scrim — clicking anywhere on it closes, as asked. */}
@@ -1044,7 +1167,7 @@ export default function LeadDrawer({
               because tags describe the person, not the process. No avatar:
               nobody uploads headshots of applicants, and a circle of initials
               is a photo-shaped apology. ── */}
-          <div className="relative rounded-3xl border border-line/80 bg-panel p-5">
+          <div className="relative rounded-3xl border border-line/80 bg-card p-5">
             <div className="flex flex-wrap items-center gap-3">
               {/* Editable only for people the OS owns. A REX lead's name is
                   REX's to change, and an input that silently discards what you
@@ -1072,6 +1195,22 @@ export default function LeadDrawer({
               ) : (
                 <Pill tone={STAGE_TONE[lead.stage]}>{lead.stage}</Pill>
               )}
+              {/* The passport as a tick, not a tab (James, 11 Sep 2026): done
+                  is a click through to their answers; anything else is quiet. */}
+              {isTenant && passport?.done && passport.path && (
+                <a
+                  href={passport.path}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-sage/30 px-2.5 py-1 text-[11px] font-semibold text-ink transition-opacity hover:opacity-80"
+                  title="Open their passport"
+                >
+                  ✓ Passport done
+                </a>
+              )}
+              {isTenant && passport && !passport.done && passport.sent && (
+                <span className="text-[11px] text-muted">Passport sent</span>
+              )}
               {sync && (
                 <span
                   className={`text-[11px] ${sync.bad ? "text-accent-dark" : "text-muted"}`}
@@ -1082,7 +1221,145 @@ export default function LeadDrawer({
               )}
             </div>
 
-            {tab === null ? (
+            {tab === null && isTenant ? (
+              /* THE TENANT LEAD (James's mock, 11 Sep 2026): their enquiry
+                 first, then who they are and the property they asked about,
+                 then the things you do - denser, and nothing stretched out. */
+              <div className="mt-5 space-y-4">
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                  {/* Their enquiry - the first thing anyone should read. */}
+                  <section className="flex flex-col rounded-2xl bg-accent-soft/70 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="flex items-center gap-2.5 text-[13.5px] font-semibold">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80 text-accent-dark">
+                          <DoodleIcon name="message" size={14} />
+                        </span>
+                        Their enquiry
+                      </p>
+                      {receivedIso && (
+                        <span className="text-[11.5px] text-muted">
+                          {whenFull(receivedIso)} · {whenAgo(receivedIso)}
+                        </span>
+                      )}
+                    </div>
+                    {enquiry === undefined && !enqMessage ? (
+                      <p className="mt-3 text-[12.5px] text-muted">Reading their enquiry from REX…</p>
+                    ) : enqMessage ? (
+                      <p className="mt-3 max-h-[168px] overflow-y-auto whitespace-pre-line pr-1 text-[13.5px] leading-relaxed">{enqMessage}</p>
+                    ) : (
+                      <p className="mt-3 text-[12.5px] text-muted">They sent no message with this enquiry.</p>
+                    )}
+                    <p className="mt-auto pt-3 text-[11.5px] text-muted">
+                      Via {enquiry?.source || lead.source}
+                      {enquiry === undefined && enqMessage ? " · loading the full message…" : ""}
+                    </p>
+                  </section>
+
+                  {/* Who they are - editable, and filled in by the passport once it is done. */}
+                  <section className="rounded-2xl border border-line/70 bg-card p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="flex items-center gap-2.5 text-[13.5px] font-semibold">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+                          <DoodleIcon name="user" size={14} />
+                        </span>
+                        Tenant details
+                      </p>
+                      {passport?.done && <span className="rounded-full bg-sage/30 px-2 py-0.5 text-[10.5px] font-semibold">From their passport</span>}
+                    </div>
+                    <div className="mt-2 divide-y divide-line/50">
+                      <DetailRow icon="call" label="mobile" value={contact.phone} copyable onChange={(v) => { setContact((c) => ({ ...c, phone: v })); void saveField({ mobile: v }); }} />
+                      <DetailRow icon="mail" label="email" value={contact.email} copyable onChange={(v) => { setContact((c) => ({ ...c, email: v })); void saveField({ email: v }); }} />
+                      <DetailRow
+                        icon="home"
+                        label="area"
+                        value={contact.area}
+                        copyable
+                        address
+                        onChange={(v) => {
+                          setContact((c) => ({ ...c, area: v }));
+                          const pc = v.match(/\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i)?.[0];
+                          void saveField({ address: v, ...(pc ? { postcode: pc.toUpperCase() } : {}) });
+                        }}
+                      />
+                    </div>
+                    {passport?.done && passport.summary && (
+                      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-line/50 pt-3 text-[12px]">
+                        {([
+                          ["Household income", passport.summary.householdIncome != null ? `£${passport.summary.householdIncome.toLocaleString("en-GB")} a year` : null],
+                          ["Works", passport.summary.applicantType],
+                          ["Moving in", [passport.summary.adults && `${passport.summary.adults} adult${passport.summary.adults === "1" ? "" : "s"}`, passport.summary.children && passport.summary.children !== "0" && `${passport.summary.children} children`].filter(Boolean).join(", ") || null],
+                          ["Pets", passport.summary.pets],
+                          ["Guarantor", passport.summary.guarantor],
+                          ["Right to rent", passport.summary.rightToRent],
+                        ] as Array<[string, string | null]>)
+                          .filter(([, v]) => v)
+                          .map(([k, v]) => (
+                            <div key={k} className="min-w-0">
+                              <dt className="text-[10.5px] text-muted">{k}</dt>
+                              <dd className="truncate font-semibold">{v}</dd>
+                            </div>
+                          ))}
+                      </dl>
+                    )}
+                  </section>
+
+                  {/* The property they asked about. */}
+                  <section className="rounded-2xl border border-line/70 bg-card p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="flex items-center gap-2.5 text-[13.5px] font-semibold">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+                          <DoodleIcon name="home" size={14} />
+                        </span>
+                        Property enquiry
+                      </p>
+                      {lead.listingId != null && (
+                        <Link href={`/listings?open=${lead.listingId}`} className="rounded-full border border-line/80 px-3 py-1 text-[11.5px] font-semibold transition-colors hover:border-ink/40">
+                          View
+                        </Link>
+                      )}
+                    </div>
+                    {enqProperty && enqProperty !== "—" ? (
+                      <div className="mt-3 flex gap-3">
+                        <PropertyPhoto src={lead.photo ?? null} className="h-[84px] w-[112px] shrink-0 rounded-xl" />
+                        <div className="min-w-0">
+                          <p className="text-[13.5px] font-semibold leading-snug">{enqProperty}</p>
+                          {lead.office && <p className="mt-1 text-[11.5px] text-muted">{lead.office}</p>}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-[12.5px] text-muted">A general enquiry - not about one property.</p>
+                    )}
+                  </section>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">{tagsRow}</div>
+
+                {/* The things you do to a tenant lead, one click each. */}
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                  {quick.map((a) => {
+                    const cls = `flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-colors ${
+                      a.primary ? "bg-accent-dark text-page hover:opacity-90" : "border border-line/70 bg-card hover:border-ink/40"
+                    } ${a.off ? "pointer-events-none opacity-50" : ""}`;
+                    const inner = (
+                      <>
+                        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${a.primary ? "bg-white/15" : "bg-accent-soft text-accent-dark"}`}>
+                          <DoodleIcon name={a.icon} size={16} />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-[13px] font-semibold leading-tight">{a.label}</span>
+                          <span className={`block truncate text-[11.5px] ${a.primary ? "text-page/75" : "text-muted"}`}>{a.sub}</span>
+                        </span>
+                      </>
+                    );
+                    return a.href ? (
+                      <a key={a.label} href={a.href} target="_blank" rel="noreferrer" className={cls}>{inner}</a>
+                    ) : (
+                      <button key={a.label} type="button" onClick={a.go} className={cls}>{inner}</button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : tab === null ? (
               <>
                 {/* The row DISTRIBUTES rather than hugging the left: each column takes
                     an equal share up to a cap, so an ultra-wide screen widens the
@@ -1270,63 +1547,7 @@ export default function LeadDrawer({
                   )}
                 </div>
 
-                {/* Tags — the quick facts, addable, at the foot of the box. */}
-                <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-line/60 pt-4">
-                  {tags.map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setTags((cur) => cur.filter((x) => x !== t))}
-                      className="group flex items-center gap-1.5 rounded-full border border-line/80 px-3 py-1.5 text-[11.5px] transition-colors hover:border-ink/40"
-                      title="Remove tag"
-                    >
-                      {t}
-                      <span className="text-muted opacity-0 transition-opacity group-hover:opacity-100">
-                        ✕
-                      </span>
-                    </button>
-                  ))}
-                  {/* A menu rather than a prompt box. The sales tags have to
-                      be offered, not guessed at — a reveal nobody can find is
-                      a feature nobody has. */}
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setTagging((t) => !t)}
-                      className="rounded-full border border-dashed border-line px-3 py-1.5 text-[11.5px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
-                    >
-                      + Add tag
-                    </button>
-                    {tagging && (
-                      <div className="fade-up absolute bottom-full left-0 z-20 mb-1.5 w-56 rounded-xl border border-line/80 bg-card p-1.5 shadow-[0_12px_32px_-12px_rgba(16,16,20,0.3)]">
-                        <p className="px-2 pb-1 pt-1.5 text-[9.5px] font-bold uppercase tracking-wide text-muted">
-                          Sales intent
-                        </p>
-                        {SALES_TAGS.filter((t) => !tags.includes(t)).map((t) => (
-                          <button
-                            key={t}
-                            type="button"
-                            onClick={() => { setTags((cur) => [...cur, t]); setTagging(false); }}
-                            className="block w-full rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-page"
-                          >
-                            {t}
-                          </button>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTagging(false);
-                            const t = window.prompt("New tag");
-                            if (t?.trim()) setTags((cur) => [...cur, t.trim()]);
-                          }}
-                          className="mt-1 block w-full rounded-lg border-t border-line/50 px-2 py-1.5 text-left text-[12px] text-muted transition-colors hover:text-ink"
-                        >
-                          Something else…
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                {tagsRow}
               </>
             ) : (
               /* A tab is open: its panel takes the box over. Same place,
@@ -1684,7 +1905,7 @@ export default function LeadDrawer({
               While a landlord is AT the appraisal, this steps aside for the
               appraisal itself (below): booking one turns the record into a
               job of work, and the job deserves the screen. ── */}
-          <div className={`mt-3 rounded-3xl border border-line/80 bg-panel p-5 ${appraisalTakesOver ? "hidden" : ""}`}>
+          <div className={`mt-3 rounded-3xl border border-line/80 bg-card p-5 ${appraisalTakesOver ? "hidden" : ""}`}>
             <ProcessTimeline
               steps={track}
               current={step}
@@ -1927,7 +2148,7 @@ export default function LeadDrawer({
               its own column, only when it has to. No "lead summary" card —
               the agent's own notes ARE the summary. ── */}
           <div
-            className={`mt-3 flex min-h-[200px] flex-1 flex-col rounded-3xl border border-line/80 bg-panel p-5 ${
+            className={`mt-3 flex min-h-[200px] flex-1 flex-col rounded-3xl border border-line/80 bg-card p-5 ${
               appraisalTakesOver ? "hidden" : ""
             }`}
           >
@@ -1935,6 +2156,7 @@ export default function LeadDrawer({
             <div className="grid min-h-0 flex-1 gap-5 md:grid-cols-2">
               <div className="flex min-h-0 flex-col rounded-xl border border-line/80 p-3">
                 <textarea
+                  id="lead-note"
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   placeholder="Add a note — what was said, what to remember…"
