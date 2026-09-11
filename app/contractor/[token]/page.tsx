@@ -60,7 +60,7 @@ export default function ContractorPage() {
   const label: React.CSSProperties = { display: "block", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#6b6b70", marginBottom: 4 };
 
   return (
-    <main style={{ minHeight: "100vh", background: "#f2f0eb", padding: "24px 12px 48px", fontFamily: "Montserrat, system-ui, sans-serif", color: "#101014" }}>
+    <main style={{ minHeight: "100vh", background: "#f2f0eb", padding: "24px 12px 48px", fontFamily: "var(--font-body)", color: "#101014" }}>
       <div style={{ maxWidth: 640, margin: "0 auto" }}>
         <p style={{ fontSize: 12, letterSpacing: "0.12em", textTransform: "uppercase", color: "#6b6b70", margin: 0 }}>The Letting Experts · works order</p>
         {err && !job && <p style={{ color: "#a85a51", marginTop: 12 }}>{err}</p>}

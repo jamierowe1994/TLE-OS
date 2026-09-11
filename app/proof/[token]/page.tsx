@@ -26,7 +26,7 @@ export default async function Proof({ params }: { params: Promise<{ token: strin
   if (!design) notFound();
 
   return (
-    <main style={{ minHeight: "100vh", background: "#f2f0eb", padding: "40px 20px 64px", fontFamily: "Montserrat, system-ui, sans-serif", color: "#101014" }}>
+    <main style={{ minHeight: "100vh", background: "#f2f0eb", padding: "40px 20px 64px", fontFamily: "var(--font-body)", color: "#101014" }}>
       <div style={{ maxWidth: 1040, margin: "0 auto" }}>
         <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "#6b6b70", margin: 0 }}>
           The Letting Experts · a proof

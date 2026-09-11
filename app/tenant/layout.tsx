@@ -23,13 +23,10 @@ const RED = "#e31f36";
 export default async function TenantLayout({ children }: { children: React.ReactNode }) {
   const me = await currentTenant();
   return (
-    // The heading override matters: the OS gives every h1–h3 the hand face
-    // globally, and one handwritten headline would out the portal as the
-    // other product. Here, everything is corporate type.
-    <div
-      className="min-h-screen bg-white font-sans text-[#16181d] [&_h1]:!font-[inherit] [&_h2]:!font-[inherit] [&_h3]:!font-[inherit]"
-      style={{ fontFamily: "var(--font-montserrat), system-ui, sans-serif" }}
-    >
+    // Same type as every other surface since 11 Sep: Manrope headings (the
+    // global h1-h5 rule) and Inter body. The old override that flattened the
+    // headings existed to keep the OS's handwriting out; there is none now.
+    <div className="min-h-screen bg-white font-sans text-[#16181d]">
       {/* ── The masthead: wordmark left, quiet account links right. ── */}
       <header className="border-b border-black/10">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-5">

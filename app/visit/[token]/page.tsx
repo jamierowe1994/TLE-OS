@@ -70,7 +70,7 @@ export default function VisitPage() {
   });
 
   return (
-    <main style={{ minHeight: "100vh", background: "#f2f0eb", padding: "24px 12px 48px", fontFamily: "Montserrat, system-ui, sans-serif", color: "#101014" }}>
+    <main style={{ minHeight: "100vh", background: "#f2f0eb", padding: "24px 12px 48px", fontFamily: "var(--font-body)", color: "#101014" }}>
       <div style={{ maxWidth: 520, margin: "48px auto 0", background: "#fff", border: "1px solid #cdc9c0", borderRadius: 16, padding: 28 }}>
         <p style={{ fontSize: 12, letterSpacing: "0.12em", textTransform: "uppercase", color: "#6b6b70", margin: 0 }}>The Letting Experts</p>
         {err && <p style={{ color: "#a85a51", marginTop: 12 }}>{err}</p>}

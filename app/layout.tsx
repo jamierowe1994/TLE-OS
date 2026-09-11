@@ -1,6 +1,23 @@
 import type { Metadata } from "next";
-import { Inter, Lora, Montserrat, Ms_Madi, Shantell_Sans } from "next/font/google";
+import { Inter, Lora, Manrope, Montserrat, Ms_Madi, Shantell_Sans } from "next/font/google";
 import "./globals.css";
+
+/**
+ * THE TYPE, from 11 Sep 2026 (James): Manrope for headings and figures, set
+ * with real weight, and Inter for everything else. It replaces Shantell Sans
+ * (the drawn headings and numbers) and Montserrat (body) across the OS, the
+ * sign-in screens and the portals. globals.css composes --font-heading,
+ * --font-figures and --font-body out of these two.
+ *
+ * Montserrat, Shantell, Ms Madi and Lora are still loaded below because the
+ * decks, postcards and email editor name them directly. They go when those
+ * move over (MASTER-LIST Round 3, items 14 and 15).
+ */
+const manrope = Manrope({
+  subsets: ["latin"],
+  variable: "--font-manrope",
+  display: "swap",
+});
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -66,7 +83,7 @@ const lora = Lora({
   display: "swap",
 });
 
-// Columns of figures want a plain grotesque.
+// The body face everywhere, and the deck's body since 4 Sep.
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
@@ -94,7 +111,7 @@ export default function RootLayout({
     // heading silently falls back to system fonts.
     <html
       lang="en"
-      className={`${montserrat.variable} ${shantell.variable} ${inter.variable} ${msMadi.variable} ${lora.variable}`}
+      className={`${manrope.variable} ${inter.variable} ${montserrat.variable} ${shantell.variable} ${msMadi.variable} ${lora.variable}`}
     >
       <body className="antialiased">{children}</body>
     </html>

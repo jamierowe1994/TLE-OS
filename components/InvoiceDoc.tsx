@@ -93,7 +93,7 @@ export default function InvoiceDoc({ inv, onChange }: { inv: DocData; onChange?:
   return (
     <div className={`inv ${inv.status === "draft" ? "inv-draft" : ""}`}>
       <style>{`
-        .inv { background:#fff; color:#101014; font-family: Unitext, Montserrat, system-ui, sans-serif; font-size: 13px; line-height: 1.5; padding: 48px 52px; max-width: 800px; margin: 0 auto; min-height: 1000px; position: relative; }
+        .inv { background:#fff; color:#101014; font-family: var(--font-body, Inter, system-ui, sans-serif); font-size: 13px; line-height: 1.5; padding: 48px 52px; max-width: 800px; margin: 0 auto; min-height: 1000px; position: relative; }
         .inv h1 { font-size: 30px; font-weight: 500; letter-spacing: 0; margin: 0; }
         .inv-muted { color: #6b6b70; }
         .inv-small { font-size: 11px; }

@@ -8,11 +8,13 @@
 --------------------------------------------------------------------------- */
 
 :root {
-  --font-body: var(--font-montserrat), system-ui, -apple-system, sans-serif;
-  --font-heading: var(--font-shantell), var(--font-montserrat), system-ui, sans-serif;
-  /* Figures on the hand face too — the reference mock's numbers are written,
-     and that is half of what makes it feel drawn rather than templated. */
-  --font-figures: var(--font-shantell), var(--font-montserrat), system-ui, sans-serif;
+  /* The type, from 11 Sep 2026 (James): Manrope for headings and figures,
+     with weight; Inter for body. Replaces Shantell Sans (the drawn headings
+     and numbers) and Montserrat. Every heading, .hand and .figures reads
+     these three, so the whole OS follows from here. */
+  --font-body: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --font-heading: var(--font-manrope), var(--font-inter), system-ui, sans-serif;
+  --font-figures: var(--font-manrope), var(--font-inter), system-ui, sans-serif;
 
   /* Brand — Warm Clay by default, the recruitment page's monochrome-plus-clay
      premise carried into the OS. The deepened value exists because small text
@@ -130,18 +132,24 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* The reference look: handwriting carries the voice — headings, figures and
-   nav all run on the hand face; only small helper text stays on Montserrat
-   so dense labels remain effortless to read. */
-h1, h2, h3, h4, h5 {
-  font-family: var(--font-heading);
-  font-weight: 500;
-}
+/* Headings, the wordmark and the figures on Manrope with weight - James asked
+   for "a fair amount of weight", so bold rather than Manrope's light default.
+   In the base layer on purpose: a font-weight utility on the element (a
+   font-semibold here and there) still wins, which the old unlayered rule
+   silently overrode. Letter-spacing stays 0, per the house rule. */
+@layer base {
+  h1, h2, h3, h4, h5 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+  h3, h4, h5 { font-weight: 600; }
 
-/* The handwritten face on demand — the wordmark, section titles. */
-.hand { font-family: var(--font-heading); }
-/* Figures in a plain grotesque; a column of numbers wants Inter. */
-.figures { font-family: var(--font-figures); }
+  /* The heading face on demand - the wordmark, section titles. The class name
+     is from the drawn-type days; it now means "heading face". */
+  .hand { font-family: var(--font-heading); font-weight: 700; }
+  .figures { font-family: var(--font-figures); font-weight: 700; font-variant-numeric: tabular-nums; }
+}
 
 /* ---------------------------------------------------------------------------
    Wireframe furniture. The dashed outline is the visual grammar for "this is
@@ -758,15 +766,16 @@ h1, h2, h3, h4, h5 {
    Deleted with the rest of the port when the portal is finally retired.
    ══════════════════════════════════════════════════════════════════════════ */
 .type-admin .type-admin {
-  --font-body: var(--font-montserrat), system-ui, -apple-system, sans-serif;
-  --font-heading: var(--font-montserrat), system-ui, -apple-system, sans-serif;
-  --font-figures: var(--font-montserrat), system-ui, -apple-system, sans-serif;
+  --font-body: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --font-heading: var(--font-manrope), var(--font-inter), system-ui, sans-serif;
+  --font-figures: var(--font-manrope), var(--font-inter), system-ui, sans-serif;
   font-family: var(--font-body);
 }
 .type-admin .accent-text { color: var(--accent); }
 .type-admin .accent-soft-bg { background-color: var(--accent-soft); }
 .type-admin .written {
-  font-family: var(--font-shantell), var(--font-montserrat), system-ui, sans-serif;
+  font-family: var(--font-heading);
+  font-weight: 700;
 }
 .type-admin .tnum { font-variant-numeric: tabular-nums; }
 .type-admin .card {
@@ -796,7 +805,7 @@ h1, h2, h3, h4, h5 {
 .type-admin .stat-value {
   font-family: var(--font-figures);
   font-size: clamp(28px, 2.6vw, 36px);
-  font-weight: 500; /* was 600 — the whole surface leans lighter now */
+  font-weight: 700; /* Manrope with weight, 11 Sep */
   letter-spacing: -0.02em;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;

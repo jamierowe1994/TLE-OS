@@ -325,6 +325,10 @@ These come from each screen's own caveats in `lib/screens.ts` - the screen tells
 | G5 | REX PM's 522 letting agreements are 477 distinct properties - anything quoted "of 522" counts 45 twice | 45 |
 | G6 | Propoly holds 643 deals, read ten to a page | 65 requests a full read |
 
+## G2. Found during Round 3, 11 Sep
+
+- **The dashboard on a phone squeezes its four tiles into one row** - the numbers are cut off ("140", "699") and the illustration sits over the subtitle. **Not caused by the new fonts:** the live site on the old fonts does exactly the same. The OS is desktop-first; agents on phones will see this. Half a day to give the bento a phone layout.
+
 ## H. Ideas captured, not scheduled
 
 From the certificate work, 6 Sep. Each is a build of its own.
