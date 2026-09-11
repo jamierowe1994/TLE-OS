@@ -632,16 +632,20 @@ export default function LeadDrawer({
      (/api/leads/[id]/enquiry). undefined while it loads, null when there is
      no REX email behind the lead. */
   const [enquiry, setEnquiry] = useState<EnquiryState | null | undefined>(undefined);
+  /* Keyed on the id, not the lead object: the list rebuilds that object on
+     every refresh, and keying on it cancelled the read each time, so the
+     card sat on "loading" for good. */
+  const enquiryLeadId = lead?.id ?? null;
   useEffect(() => {
-    if (!lead) return;
+    if (!enquiryLeadId) return;
     let live = true;
     setEnquiry(undefined);
-    fetch(`/api/leads/${encodeURIComponent(lead.id)}/enquiry`, { cache: "no-store" })
+    fetch(`/api/leads/${encodeURIComponent(enquiryLeadId)}/enquiry`, { cache: "no-store" })
       .then((r) => r.json())
       .then((j) => { if (live) setEnquiry(j?.ok ? (j.enquiry ?? null) : null); })
       .catch(() => { if (live) setEnquiry(null); });
     return () => { live = false; };
-  }, [lead]);
+  }, [enquiryLeadId]);
 
   async function sendPassport(again: boolean) {
     if (!lead || passportBusy || !passportEmail) return;
