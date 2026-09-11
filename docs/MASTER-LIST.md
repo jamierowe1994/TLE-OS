@@ -24,7 +24,7 @@
 > **FOUND IN THE ROUND 1 SWEEP, 11 SEP - THREE BUTTONS SAY "SENT" AND SEND NOTHING**
 > - **On a viewing: "Cancel & tell them", "Send the offer" (to the landlord), and the booker's "Send" confirmation to the applicant.** All three go through one piece of the screen (SendFlow) that has no send in it. The screen logs "messages sent", but no email or WhatsApp leaves. The landlord on the cancel and offer messages is a placeholder (landlord@record.tle, 07000 000000), and the offer's link goes to a /review page that does not exist.
 > - **Risk for the pilot:** an agent cancels a viewing, and the applicant turns up anyway. (The appraisal confirmation to a landlord is a separate path and does send.)
-> - **Your call (D16):** hide the three buttons for the pilot (half an hour, my recommendation), or wire them to the agent's own mailbox (Round 4, after the supervised send test E-list).
+> - **DONE 11 Sep (D16): HIDDEN FOR THE PILOT**, with two more of the same kind found on the way (the no-show email and Reschedule). The screen now says to do it in REX and Outlook. One switch brings them back once they really send: `lib/viewing-sends.ts`.
 
 > **DECISION NEEDED FROM YOU, OR IT BLOCKS**
 > - **A1 - WHO IS IN THE PILOT.** Eleven items cannot start until agents can sign in. **This is the single biggest blocker.**
@@ -239,7 +239,7 @@ still A1 (agent accounts), the palette (now received) and J15 (the full run).
 | D13 | **Susan's REX service field** - matched homes' service type left untouched as her call | REX data quality |
 | D14 | **Bond at launch: ship what is finished, or pull it** (= J8) | Time |
 | D15 | **Which view J24 means** | Unclear |
-| D16 | **Three viewing buttons say "sent" and send nothing** (Cancel & tell them, Send the offer, the booker's Send). Hide them for the pilot, or wire them to the agent's mailbox. | Applicants turning up to cancelled viewings |
+| D16 | **DONE 11 Sep - hidden.** **Three viewing buttons say "sent" and send nothing** (Cancel & tell them, Send the offer, the booker's Send). Hide them for the pilot, or wire them to the agent's mailbox. | Applicants turning up to cancelled viewings |
 
 ## E. Supervised live tests - built behind the lock, never run for real
 
