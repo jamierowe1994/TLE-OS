@@ -80,6 +80,11 @@ export default function Leads() {
   const [fStage, setFStage] = useState<string | null>(null);
   const params = useSearchParams();
   const side = params.get("side"); // "tenant" | "landlord" | null (both)
+  /* "Add new lead" in the sidebar lands here with ?new=1 and opens the panel. */
+  const wantsNew = params.get("new") === "1";
+  useEffect(() => {
+    if (wantsNew) setCreating(true);
+  }, [wantsNew]);
 
   /* All leads has no Groups, so it is always the list. A side rests on Groups
      until somebody says otherwise, and changing side forgets that they did -

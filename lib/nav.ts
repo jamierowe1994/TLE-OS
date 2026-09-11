@@ -36,10 +36,10 @@ export const FRONT: NavItem[] = [
     label: "Leads",
     icon: "target",
     children: [
-      /* All leads first, because the parent no longer navigates. Clicking
-         Leads opens the drawer and goes nowhere, so without this there would
-         be no way back to the unfiltered inbox. */
-      { href: "/leads", label: "All leads" },
+      /* Always split, never "All leads" (James, 11 Sep 2026): add one, or
+         go straight to a side. The parent opens this drawer rather than
+         navigating, so the first child is the action. */
+      { href: "/leads?new=1", label: "Add new lead" },
       { href: "/leads?side=tenant", label: "Tenant" },
       { href: "/leads?side=landlord", label: "Landlord" },
     ],

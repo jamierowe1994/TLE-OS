@@ -334,6 +334,32 @@ These come from each screen's own caveats in `lib/screens.ts` - the screen tells
 
 - **The dashboard on a phone squeezes its four tiles into one row** - the numbers are cut off ("140", "699") and the illustration sits over the subtitle. **Not caused by the new fonts:** the live site on the old fonts does exactly the same. The OS is desktop-first; agents on phones will see this. Half a day to give the bento a phone layout.
 
+## G3. Added by James, 11 Sep (evening)
+
+| # | What | Who |
+|---|---|---|
+| G3.1 | **Find the GetAgent logo** - it is a lead source and needs its logo beside the others | James to find it, Claude to drop it in |
+| G3.2 | **Market appraisal page (TLE OS), once you click into one** - "a lot of boxes and a bit of a mess". Restyle it and make the order make sense, in the white-with-outline language of the landlord portal | Claude, James to review |
+| G3.3 | **Tenant enquiries: show the tenant's own message and when it came in, first.** REX keeps the full message (plain_body, up to ~1,000 characters) - we were reading the 100-character preview, and the drawer did not show it at all. Waiting on James's "go" | Claude |
+
+## G4. From James and Danielle's walkthrough, 11 Sep (Wispr Flow: "Builder Presentation Deck Workflow")
+
+Decisions: **DocuSeal is the contract tool.** **The valuation deck emails to the agent, not the client** - it is used live in the valuation.
+
+| # | What | Who |
+|---|---|---|
+| G4.1 | Check how the pre-appraisal email to the agent behaves | Claude |
+| G4.2 | Build the generic pre-appraisal client deck - about 5 or 6 slides, with the booking confirmation | Claude (the decks are James's - confirm before touching /present) |
+| G4.3 | Move the valuation slides to the front of the deck, so the client sees them first. Susan wants 28 slides | Claude, with James |
+| G4.4 | **Slim the contract with Susan**, and split compliance into its own document | James and Susan, then Claude |
+| G4.5 | TMKE banner offering professional photos with Jack - book into Jack's diary and the videography CRM | Claude, James for Jack's diary |
+| G4.6 | A description step with an AI draft, before a listing goes live | Claude |
+| G4.7 | Move "push live" to the end of the market appraisal; the listing then lands with confetti | Claude |
+| G4.8 | Split viewings and offers into two separate stages | Claude |
+| G4.9 | Listings view feels squashed: make the spine or next action collapsible, or move the tabs to the top; the process bar is too long across - try it vertical, keep the photo large | Claude |
+| G4.10 | Applications view: photo on the left, collapse the completed items | Claude |
+| G4.11 | Settings: a section for custom email templates | Claude |
+
 ## H. Ideas captured, not scheduled
 
 From the certificate work, 6 Sep. Each is a build of its own.

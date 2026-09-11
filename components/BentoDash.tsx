@@ -56,6 +56,17 @@ type ResizeState = { id: string; x0: number; y0: number; w0: number; h0: number;
 
 /** One board, any registry — the dashboard and Finances are the same
  *  machine pointed at different widget sets. */
+/**
+ * White boxes with a hairline, and the odd one in colour (James, 11 Sep 2026,
+ * after the landlord portal): the boxes that ask for a hand get the pink, the
+ * day's diary the sage. Everything else stays white. Both colours come from
+ * the theme tokens, so dark mode keeps working.
+ */
+const TINT: Record<string, string> = {
+  attention: "bg-accent-soft/70",
+  today: "bg-sage/25",
+};
+
 export default function BentoDash({
   registry,
   defaultLayout,
@@ -412,7 +423,7 @@ export default function BentoDash({
                 beginDrag(e, item.id, false, r.width, r.height);
               }}
               index={idx}
-              className={`relative rounded-2xl border bg-box p-5 ${
+              className={`relative rounded-2xl border p-5 ${TINT[item.type] ?? "bg-card"} ${
                 customise
                   ? `cursor-grab select-none border-dashed border-ink/40 ${
                       /* The wiggle rests while anything is being moved or
@@ -427,7 +438,7 @@ export default function BentoDash({
                   /* The slab is the board's hover language — it went missing
                      on 8 Aug when the request was to drop it from the WIDE
                      chart boxes, and I took it off every tile instead. */
-                  : "block-pop overflow-hidden border-line/80 hover:border-ink"
+                  : `block-pop overflow-hidden ${TINT[item.type] ? "border-transparent" : "border-line/80"} hover:border-ink`
               }`}
               style={{
                 gridColumn: `span ${item.w} / span ${item.w}`,
