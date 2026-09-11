@@ -639,11 +639,20 @@ export const JOURNEYS: Journey[] = [
       {
         id: "agent-checker",
         title: "Agent compliance checker",
-        what: "Whether the agent themselves is compliant, on their profile, with reminders.",
-        how: [],
-        state: "notbuilt",
-        todo: "Michael's remit. Not started.",
-        since: "2026-08-21",
+        /* Said "not built" long after it was: /agent-compliance, its three
+           APIs and the Personal compliance panel on Profile all shipped on
+           5 Sep. Corrected 11 Sep so the testing starts from the truth. What
+           it still lacks is Michael's real list - the eight are a starter set. */
+        what: "Whether the agent themselves is compliant, on their profile, with reminders - and Michael's view of every person against every requirement.",
+        how: [
+          "Open your Profile, Personal compliance. Mark one requirement done with a date. Its expiry should be worked out from the renewal period.",
+          "Upload the evidence against it. The file should stay on the requirement.",
+          "As an owner, open /agent-compliance. Every person should show against every requirement, with the one you marked as done.",
+          "Tick it as seen. Only Michael's seen tick reads as checked.",
+        ],
+        where: "/agent-compliance",
+        state: "built",
+        since: "2026-09-05",
       },
     ],
   },

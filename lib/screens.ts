@@ -158,7 +158,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     ],
     wiring: "partial",
     caveats: [
-      "+ Add new listing does nothing when pressed. Create the property in REX.",
+      "+ Add new listing opens REX in a new tab. Properties are still created in REX, and appear here once they are.",
       "Pills like No photos and EPC not filed are telling you what REX is missing, not what this screen failed to load.",
       "Every other field on the file is read-only — the Marketing write-up is the only thing here that saves back to REX. Rent, availability, beds and the rest have to be changed in REX itself.",
       "Live advert links only appear for a property that is actually feeding a portal. No links means the feed is not running, not that the screen failed.",
@@ -257,7 +257,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     ],
     wiring: "partial",
     caveats: [
-      "Live from REX's leased rental book. The rent roll is REX's agreed rent, not money received — PayProp's UK agency has no API key on this environment yet.",
+      "Live from REX's leased rental book. The rent roll is REX's agreed rent, not money received. PayProp is connected, but the rent roll does not read from it yet.",
       "Certificates take a few minutes to read the first time each day and fill in behind the list. Until then the certificate column says it is checking.",
       "About a quarter of the book has no landlord on the REX record. Those properties say so rather than guessing.",
       "Nothing on this screen writes to REX.",

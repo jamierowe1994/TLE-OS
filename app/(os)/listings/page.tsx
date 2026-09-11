@@ -429,12 +429,20 @@ export default function Listings() {
                 { label: "Location", options: localities, value: loc, onChange: setLoc },
               ]}
             />
-            <button
-              type="button"
+            {/* It did nothing when pressed - a dead button in the most visible
+                spot on the page. Properties are still created in REX, so it
+                opens REX's listings in a new tab rather than pretending the OS
+                can do it. The new property appears here on the next read. */}
+            <a
+              href="https://app.rexsoftware.com/listings/"
+              target="_blank"
+              rel="noreferrer"
+              title="Opens REX - properties are created there, and appear here once they are"
               className="hand flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] text-page transition-opacity hover:opacity-90"
             >
               <span className="text-base leading-none">+</span> Add new listing
-            </button>
+              <DoodleIcon name="link" size={12} className="opacity-70" />
+            </a>
           </div>
         }
       />
@@ -528,7 +536,7 @@ export default function Listings() {
                            table rather than as five cards that happen to be
                            stacked. Below md they wrap, because six columns in
                            a phone's width is not a table either. */
-                        "grid min-w-0 flex-1 items-center gap-x-4 gap-y-3 py-1 md:grid-cols-[minmax(0,1.35fr)_112px_78px_74px_66px_104px]"
+                        "grid min-w-0 flex-1 items-center gap-x-4 gap-y-3 py-1 md:grid-cols-[minmax(0,1.35fr)_112px_74px_66px_104px]"
                   }
                 >
                   <span className="min-w-0">
@@ -551,12 +559,10 @@ export default function Listings() {
                       in the same order; they are beside the address now
                       instead of under it. */}
                   <Fact icon="calendar" label="Available from" value={l.availableFrom ?? "Now"} />
-                  <Fact
-                    icon="bed.png"
-                    label="Bedrooms"
-                    value="—"
-                    title="Not in REX's listing projection — captured at the take-on"
-                  />
+                  {/* No Bedrooms column. REX's listing model has no bedroom
+                      field at all, so it could only ever print a dash on every
+                      row - a column of nothing. It comes back when the take-on
+                      captures a count (11 Sep 2026). */}
                   <Fact icon="key" label="Viewings" value={String(views)} />
                   <Fact icon="folder" label="Photos" value={String(l.imageCount)} />
 
@@ -582,9 +588,7 @@ export default function Listings() {
 
       <p className="mt-4 text-[11px] leading-relaxed text-muted">
         Showing {board.length} of {C.currentRentals} current rentals ·{" "}
-        <span className="font-semibold">Bedrooms</span> shows a dash on purpose — counts
-        aren&apos;t in REX&apos;s listing projection; they arrive with the take-on and are
-        never invented. <span className="font-semibold">Days on market</span> is only
+        <span className="font-semibold">Days on market</span> is only
         known for the published half: a draft has never been on a portal, so it has no
         clock to read.
       </p>

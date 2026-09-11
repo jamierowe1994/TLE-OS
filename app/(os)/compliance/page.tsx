@@ -189,7 +189,9 @@ export default function Compliance() {
       />
 
       {/* ── The four counts. Each is also the filter for the book below. ── */}
-      <div className="mt-10 grid grid-cols-2 gap-4 xl:grid-cols-5">
+      {/* Four tiles, four columns. It was five wide from when Let only had a
+          tile of its own; that tile went on 10 Sep and left a gap at xl. */}
+      <div className="mt-10 grid grid-cols-2 gap-4 xl:grid-cols-4">
         {TILES.map((t) => (
           <button
             key={t.key}

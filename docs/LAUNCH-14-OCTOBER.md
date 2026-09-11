@@ -16,6 +16,10 @@ pick off. **Status column is honest: `todo` until it is actually working.**
 
 ## The board
 
+> **Superseded for "what is left" by `docs/MASTER-LIST.md` (11 Sep 2026).** This board
+> was last re-read on 5 September and 160 commits have landed since. It stays as the
+> history of each item; the master list is the current reading of what is open.
+
 Status re-read on **5 September 2026** against the commits and the Testing page
 (`lib/testing-journeys.ts`, Admin → Testing), not against memory. Five and a half
 weeks left. The Testing page is now the finer-grained truth: this board is the
