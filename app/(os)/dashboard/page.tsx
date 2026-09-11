@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import BentoDash from "@/components/BentoDash";
 import PageHeader from "@/components/PageHeader";
+import QuickLinks from "@/components/QuickLinks";
 import { DASH_TRAY_GROUPS, DEFAULT_LAYOUT, WIDGETS } from "@/components/widgets";
 
 /**
@@ -88,8 +89,11 @@ export default function Dashboard() {
            off". It keeps the standard inset now and comes in a further 34px,
            so the whole vignette is inside the frame. */
         illustrationNudge={-34}
-        /* Customise rides the search row — one line of chrome, not two. */
-        actions={
+        /* Customise rides the search row — one line of chrome, not two.
+           The agent's quick links sit to its right (components/QuickLinks):
+           pills they picked themselves, and in customise mode the circle that
+           adds them. */
+        actions={<>
           <button
             type="button"
             onClick={() => setCustomising((c) => !c)}
@@ -104,7 +108,8 @@ export default function Dashboard() {
           >
             {customising ? "Done" : "✨ Customise"}
           </button>
-        }
+          <QuickLinks customising={customising} />
+        </>}
       />
 
       <BentoDash

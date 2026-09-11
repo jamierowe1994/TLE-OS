@@ -896,10 +896,10 @@ function LeadSourcesWidget({ w, h }: { w: number; h: number }) {
   const top = [...bySource.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
   return (
     <>
-      <div className="flex items-center justify-between gap-2">
-        <Head icon="pie" label="Lead sources" />
-        {w >= 2 && <FlowTag from="REX" />}
-      </div>
+      {/* No REX tag on this one (James, 11 Sep): the home screen is the
+          agent's, and the source of the counts is a detail for the tile's
+          deeper sizes, not a badge in its head. */}
+      <Head icon="pie" label="Lead sources" />
       {h === 1 ? (
         <BigCount
           value={loading ? "•" : error ? "—" : top ? `${Math.round((top[1] / Math.max(1, month.length)) * 100)}%` : "0"}
