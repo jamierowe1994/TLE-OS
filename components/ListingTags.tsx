@@ -12,8 +12,8 @@ import DoodleIcon from "@/components/DoodleIcon";
  */
 
 /* Sage, the same two values the appraisal screens use. */
-export const SAGE_INK = "#56634a";
-export const SAGE_WASH = "#f1f4ec";
+export const SAGE_INK = "#63614a";
+export const SAGE_WASH = "#f4f3ec";
 
 export type Tone = "good" | "accent" | "neutral";
 

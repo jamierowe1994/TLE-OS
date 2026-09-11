@@ -53,7 +53,10 @@
      surface draws from these; each surface sets its own mix below. */
   --pal-pink: #fdefec;
   --pal-clay: #cfa096;
-  --pal-sage: #b3bea5;
+  /* Sage was #b3bea5 until 11 Sep 2026; James retoned it to #b7b5a0 (greyer,
+     warmer). Its ink (#63614a) and wash (#f4f3ec), typed in across the OS as
+     SAGE_INK / SAGE_WASH, were re-derived on the same hue. */
+  --pal-sage: #b7b5a0;
   --pal-brown: #56423e;
   /* Supporting and contrast colours, available to the OS as well. */
   --sage: var(--pal-sage);

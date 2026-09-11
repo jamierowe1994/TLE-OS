@@ -654,7 +654,7 @@ export function FeeForecast({ h }: { w: number; h: number }) {
                     <div key={m.month} className="flex flex-1 flex-col items-center justify-end" title={`${m.label}: ${gbp(m.totalPence)}${m.projected ? " projected" : ""}`}>
                       <div
                         className={`w-full rounded-t-[3px] ${m.projected ? "" : "bg-accent-dark"}`}
-                        style={{ height: `${Math.max(3, Math.round(((m.totalPence ?? 0) / peak) * 88))}px`, ...(m.projected ? { background: "#b3bea5" } : {}) }}
+                        style={{ height: `${Math.max(3, Math.round(((m.totalPence ?? 0) / peak) * 88))}px`, ...(m.projected ? { background: "#b7b5a0" } : {}) }}
                       />
                     </div>
                   ))}

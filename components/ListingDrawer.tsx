@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import PhotoLightbox from "@/components/PhotoLightbox";
@@ -97,8 +97,8 @@ const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: "documents", label: "Documents", icon: "file-contract" },
 ];
 
-const SAGE_INK = "#56634a";
-const SAGE_WASH = "#f1f4ec";
+const SAGE_INK = "#63614a";
+const SAGE_WASH = "#f4f3ec";
 
 /** One tenant on an offer — who they are and how they live. */
 type TenantIn = {
@@ -215,6 +215,14 @@ export default function ListingDrawer({
   const [uploaded, setUploaded] = useState<{ key: string; url: string }[]>([]);
   const [drop, setDrop] = useState<DropKind | null>(null);
   const [writing, setWriting] = useState(false);
+  /* The push to the portals, as a moment: null when not running, then the
+     portal it is on (0..2), then 3 for the tick and the confetti. */
+  const [pushing, setPushing] = useState<number | null>(null);
+  useEffect(() => {
+    if (pushing == null || pushing >= 3) return;
+    const t = setTimeout(() => setPushing((p) => (p == null ? null : p + 1)), 1400);
+    return () => clearTimeout(t);
+  }, [pushing]);
   /* The certificates on the property, for the legal minimum before the
      listing can go to the portals: EPC, gas safety and EICR. */
   const [certs, setCerts] = useState<Record<string, string> | null>(null);
@@ -778,7 +786,7 @@ export default function ListingDrawer({
             of buttons is only there at the top, not pinned over the page. The
             street at the foot is pinned instead, and the content keeps room
             above it so nothing is ever hidden behind the houses. */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-[210px] pt-5">
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 pt-5">
         {/* Close, and the tabs. Previous / Next went (James, 11 Sep): nobody
             steps through the book from inside a record, they close and pick
             the next one. */}
@@ -846,8 +854,7 @@ export default function ListingDrawer({
               top left, the quick actions under it; the address in the
               middle; the property's details in a white box on the right. ── */}
           <div className="relative overflow-hidden rounded-[22px] border border-line/50" style={{ background: SAGE_WASH }}>
-            {/* One soft white ellipse low on the right - a shape, not a set of circles. */}
-            <span aria-hidden className="pointer-events-none absolute -bottom-[220px] right-[120px] h-[360px] w-[620px] rounded-[50%] bg-white/50" />
+            <Doodles tone="sage" />
             <div className="relative p-5">
             <div className="grid grid-cols-[minmax(0,1fr)] gap-5 md:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)_320px]">
               {/* The photograph: from the address line down to the foot of the
@@ -908,7 +915,7 @@ export default function ListingDrawer({
                       onClick={() => setTab("documents")}
                       title="Open Documents"
                       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                        terms.signed ? "bg-white text-[#56634a]" : "border border-accent-dark/50 bg-white text-accent-dark hover:border-accent-dark"
+                        terms.signed ? "bg-white text-[#63614a]" : "border border-accent-dark/50 bg-white text-accent-dark hover:border-accent-dark"
                       }`}
                     >
                       <DoodleIcon name="file-contract" size={11} />
@@ -943,7 +950,7 @@ export default function ListingDrawer({
                     11 Sep): getting INTO the property, and getting it OUT to
                     the database. They used to be one ambiguous "Email to
                     tenants". */}
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-4 flex flex-col items-start gap-2">
                   <AccessRequest
                     value={access}
                     onChange={setAccess}
@@ -1130,7 +1137,7 @@ export default function ListingDrawer({
                           is still missing (James, 11 Sep). */}
                       <span className="group relative">
                         <PressButton
-                          onClick={() => readyToGoLive && advance()}
+                          onClick={() => readyToGoLive && setPushing(0)}
                           className={`press-ring flex items-center gap-2 rounded-full bg-[var(--brown)] px-5 py-2.5 text-[12.5px] font-semibold text-white ${readyToGoLive ? "" : "cursor-not-allowed"}`}
                         >
                           <DoodleIcon name="megaphone" size={14} />
@@ -1312,6 +1319,21 @@ export default function ListingDrawer({
           )}
 
           <div key={`view-${tab}`} className={tab === "home" ? "" : "fade-up"}>
+            {tab === "applications" && (
+              <ViewTitle title="Applications" sub="Who has enquired and who has offered. Start an application from anybody here, and put the offers to the landlord when the viewings stop." wash="blush" art="/brand/art/keys-handover.png" />
+            )}
+            {tab === "viewings" && (
+              <ViewTitle title="Viewings" sub="Everything in the diary for this property, out of REX. Ask for access against a viewing, and mark it granted when they say yes." wash="sage" art="/brand/art/viewing.png" />
+            )}
+            {tab === "marketing" && (
+              <ViewTitle title="Marketing" sub="The property's facts, the advert the portals show, and the photographs. What a tenant sees, all in one place." wash="blush" art="/brand/art/marketing-desk.png" />
+            )}
+            {tab === "compliance" && (
+              <ViewTitle title="Compliance" sub="Every certificate the property needs, where it stands in REX, and the files on hand. Drop a certificate and it is read and filed." />
+            )}
+            {tab === "documents" && (
+              <ViewTitle title="Documents" sub="How we get into the property, the terms of business, and everything signed or filed against this listing." />
+            )}
             {tab === "applications" && enquiries !== null && (
               /* ── The enquiries REX holds against this listing, as REX's own
                     Leads tab shows them. Each opens on the Leads board. ── */
@@ -1747,11 +1769,6 @@ export default function ListingDrawer({
         {/* The street, pinned to the foot of the drawer whatever is scrolled.
             The scroll area above keeps 210px clear for it, so it never sits
             over anything. */}
-        {/* A white fade under the houses, so whatever scrolls beneath them
-            fades out rather than colliding with the drawing. */}
-        <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[150px] bg-gradient-to-t from-white via-white/90 to-transparent" />
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/illustrations/street.webp" alt="" aria-hidden className="art art-figure pointer-events-none absolute bottom-0 left-1/2 w-[520px] max-w-[92%] -translate-x-1/2 opacity-90" />
       </aside>
 
       {/* The handover. A confirmation that SHOWS what's being compiled —
@@ -2070,6 +2087,16 @@ export default function ListingDrawer({
         onBooked={(v) => setBooked((cur) => [{ when: v.when, who: v.who }, ...cur])}
       />
       {lightbox != null && <PhotoLightbox photos={photos} start={lightbox} name={listing.name} onClose={() => setLightbox(null)} />}
+      {pushing != null && (
+        <PushCeremony
+          at={pushing}
+          address={listing.name}
+          onDone={() => {
+            setPushing(null);
+            advance();
+          }}
+        />
+      )}
       {drop && (
         <DropZone
           kind={drop}
@@ -2082,6 +2109,247 @@ export default function ListingDrawer({
           }}
         />
       )}
+    </div>
+  );
+}
+
+
+/* ── a view's title ───────────────────────────────────────────────────── */
+
+/**
+ * Plain for Compliance and Documents; a washed band with one of the brand
+ * drawings for the working tabs (James, 11 Sep: "very bland and a little
+ * bit depressing"). The drawing stands on the band's bottom edge, clipped.
+ */
+function ViewTitle({ title, sub, wash, art }: { title: string; sub: string; wash?: "blush" | "sage"; art?: string }) {
+  if (!wash) {
+    return (
+      <div className="mb-5">
+        <h2 className="hand text-[26px] leading-tight">{title}</h2>
+        <p className="mt-1.5 max-w-2xl text-[13px] leading-relaxed text-muted">{sub}</p>
+      </div>
+    );
+  }
+  return (
+    <div
+      className="relative mb-5 min-h-[150px] overflow-hidden rounded-[22px] border border-line/50"
+      style={{ background: wash === "sage" ? SAGE_WASH : "color-mix(in srgb, var(--accent-soft) 70%, white)" }}
+    >
+      <Doodles tone={wash} />
+      <div className="relative max-w-[60%] p-6 sm:max-w-[62%]">
+        <h2 className="hand text-[26px] leading-tight">{title}</h2>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-muted">{sub}</p>
+      </div>
+      {art && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={art} alt="" aria-hidden className="pointer-events-none absolute -bottom-6 right-4 hidden h-[190px] w-auto sm:block" />
+      )}
+    </div>
+  );
+}
+
+/* ── the hero's doodles ───────────────────────────────────────────────── */
+
+/**
+ * A ring, two thin lines and a couple of hand-drawn squiggles behind the
+ * hero, each on a slow ease-in-out drift - and each easing AWAY from the
+ * mouse as it moves over the card, by a different amount, so the layer
+ * has a little depth without ever being busy (James, 11 Sep 2026).
+ *
+ * The repel is written straight onto the wrapper's transform, outside
+ * React; the drift is a CSS animation on the inner element, so the two
+ * never fight. Nothing moves for anyone who has asked for less motion.
+ */
+function Doodles({ tone = "sage" }: { tone?: "sage" | "blush" }) {
+  const layer = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = layer.current;
+    const host = el?.parentElement;
+    if (!el || !host) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const items = Array.from(el.querySelectorAll<HTMLElement>("[data-depth]"));
+    const move = (e: MouseEvent) => {
+      const r = host.getBoundingClientRect();
+      const dx = (e.clientX - (r.left + r.width / 2)) / r.width;
+      const dy = (e.clientY - (r.top + r.height / 2)) / r.height;
+      for (const it of items) {
+        const d = Number(it.dataset.depth ?? "0");
+        it.style.transform = `translate(${(-dx * d).toFixed(1)}px, ${(-dy * d).toFixed(1)}px)`;
+      }
+    };
+    const leave = () => items.forEach((it) => (it.style.transform = "translate(0px, 0px)"));
+    host.addEventListener("mousemove", move);
+    host.addEventListener("mouseleave", leave);
+    return () => {
+      host.removeEventListener("mousemove", move);
+      host.removeEventListener("mouseleave", leave);
+    };
+  }, []);
+  const ink = tone === "sage" ? "#63614a" : "var(--accent-dark)";
+  const soft = tone === "sage" ? "#b7b5a0" : "var(--accent)";
+  const wrap = "pointer-events-none absolute transition-transform duration-700 ease-out will-change-transform";
+  return (
+    <div ref={layer} aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      <style>{`
+        @keyframes tle-drift-a { 0%,100% { transform: translate(0,0) } 50% { transform: translate(14px,-10px) } }
+        @keyframes tle-drift-b { 0%,100% { transform: translate(0,0) rotate(0deg) } 50% { transform: translate(-16px,8px) rotate(4deg) } }
+        @keyframes tle-drift-d { 0%,100% { transform: translateX(0) } 50% { transform: translateX(-24px) } }
+        .tle-drift-a { animation: tle-drift-a 12s ease-in-out infinite }
+        .tle-drift-b { animation: tle-drift-b 15s ease-in-out infinite }
+        .tle-drift-d { animation: tle-drift-d 18s ease-in-out infinite }
+        @media (prefers-reduced-motion: reduce) { .tle-drift-a, .tle-drift-b, .tle-drift-d { animation: none } }
+      `}</style>
+      {/* the ring */}
+      <span data-depth="26" className={`${wrap} -right-8 top-4`}>
+        <span className="tle-drift-b block h-36 w-36 rounded-full border-[12px]" style={{ borderColor: `color-mix(in srgb, ${soft} 40%, transparent)` }} />
+      </span>
+      {/* a squiggle, top middle */}
+      <span data-depth="14" className={`${wrap} left-[44%] top-5`}>
+        <svg className="tle-drift-a block" width="170" height="34" viewBox="0 0 170 34" fill="none" stroke={ink} strokeWidth="1.6" strokeLinecap="round" opacity="0.45">
+          <path d="M3 20 C 20 -6, 38 46, 56 20 S 92 -6, 110 20 S 146 46, 167 14" />
+        </svg>
+      </span>
+      {/* a looping doodle, low right */}
+      <span data-depth="20" className={`${wrap} bottom-3 right-[28%]`}>
+        <svg className="tle-drift-b block" width="150" height="46" viewBox="0 0 150 46" fill="none" stroke={ink} strokeWidth="1.5" strokeLinecap="round" opacity="0.38">
+          <path d="M4 28 C 24 -4, 44 -4, 58 22 C 70 44, 44 50, 46 30 C 48 8, 80 6, 96 20 C 112 34, 128 34, 146 12" />
+        </svg>
+      </span>
+      {/* two thin lines across the foot */}
+      <span data-depth="8" className={`${wrap} bottom-9 left-[36%]`}>
+        <span className="tle-drift-d block h-px w-[260px] rotate-[-10deg]" style={{ background: `linear-gradient(90deg, transparent, color-mix(in srgb, ${ink} 45%, transparent), transparent)` }} />
+      </span>
+      <span data-depth="10" className={`${wrap} bottom-5 left-[42%]`}>
+        <span className="tle-drift-d block h-px w-[200px] rotate-[-10deg]" style={{ background: `linear-gradient(90deg, transparent, color-mix(in srgb, ${ink} 30%, transparent), transparent)`, animationDelay: "-8s" }} />
+      </span>
+      {/* three short marks, the drawings' own sparkle */}
+      <span data-depth="32" className={`${wrap} right-[34%] top-9`}>
+        <svg className="tle-drift-a block" width="34" height="30" viewBox="0 0 34 30" fill="none" stroke={ink} strokeWidth="1.8" strokeLinecap="round" opacity="0.5" style={{ animationDelay: "-5s" }}>
+          <path d="M4 26 L 11 15" /><path d="M14 22 L 17 6" /><path d="M24 24 L 31 17" />
+        </svg>
+      </span>
+    </div>
+  );
+}
+
+/* ── pushing it to the portals: the moment ────────────────────────────── */
+
+const PORTALS = ["Rightmove", "Zoopla", "OnTheMarket"];
+
+/**
+ * A listing going live is a big deal for the person doing it (James, 11
+ * Sep 2026), so it gets a moment: each portal in turn, then a big sage
+ * tick, "Your property listing is now live", and confetti.
+ *
+ * Honest about what it is: the record in the OS moves to On market. The
+ * push into REX itself waits on the REX write allowlist, and the line at
+ * the foot says so until it is wired.
+ */
+function PushCeremony({ at, address, onDone }: { at: number; address: string; onDone: () => void }) {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(t);
+  }, []);
+  const done = at >= 3;
+  /* The confetti, made once: sixty pieces in the palette's colours, each
+     with its own start, delay, drift and spin. */
+  const [pieces] = useState(() =>
+    Array.from({ length: 70 }, (_, i) => ({
+      id: i,
+      left: Math.random() * 100,
+      delay: Math.random() * 1.6,
+      dur: 2.8 + Math.random() * 2,
+      size: 6 + Math.random() * 8,
+      color: ["#de968f", "#a85a51", "#b7b5a0", "#63614a", "#fdefec", "#56423e"][i % 6],
+      round: i % 3 === 0,
+      sway: (Math.random() - 0.5) * 120,
+    }))
+  );
+  return (
+    <div className="fixed inset-0 z-[170] flex items-center justify-center p-4">
+      <style>{`
+        @keyframes tle-confetti { 0% { transform: translate3d(0,-10vh,0) rotate(0deg); opacity: 1 } 100% { transform: translate3d(var(--sway),110vh,0) rotate(720deg); opacity: 0.9 } }
+        @keyframes tle-pop { 0% { transform: scale(0.4); opacity: 0 } 60% { transform: scale(1.12); opacity: 1 } 100% { transform: scale(1) } }
+        @keyframes tle-draw { to { stroke-dashoffset: 0 } }
+      `}</style>
+      <span aria-hidden className={`absolute inset-0 bg-ink/50 transition-opacity duration-500 ${shown ? "opacity-100" : "opacity-0"}`} />
+      {done && (
+        <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+          {pieces.map((p) => (
+            <span
+              key={p.id}
+              className="absolute top-0"
+              style={{
+                left: `${p.left}%`,
+                width: p.size,
+                height: p.round ? p.size : p.size * 0.5,
+                background: p.color,
+                borderRadius: p.round ? "50%" : 2,
+                animation: `tle-confetti ${p.dur}s cubic-bezier(0.2, 0.6, 0.4, 1) ${p.delay}s forwards`,
+                ["--sway" as string]: `${p.sway}px`,
+              }}
+            />
+          ))}
+        </div>
+      )}
+      <div
+        className="relative w-full max-w-md overflow-hidden rounded-[26px] border border-line/50 bg-white p-8 text-center shadow-[0_40px_90px_-30px_rgba(0,0,0,0.5)]"
+        style={{
+          transform: shown ? "scaleY(1)" : "scaleY(0.02)",
+          opacity: shown ? 1 : 0.4,
+          transformOrigin: "50% 50%",
+          transition: "transform 620ms cubic-bezier(0.18, 1.35, 0.32, 1), opacity 260ms ease-out",
+        }}
+      >
+        {!done ? (
+          <>
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-accent-dark">Going live</p>
+            <h2 className="hand mt-2 text-[24px] leading-tight">{address}</h2>
+            <ul className="mt-6 space-y-3 text-left">
+              {PORTALS.map((name, i) => {
+                const state = i < at ? "done" : i === at ? "now" : "next";
+                return (
+                  <li key={name} className="flex items-center gap-3">
+                    <span
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-bold ${state === "done" ? "text-white" : state === "now" ? "" : "border border-line/60 text-transparent"}`}
+                      style={state === "done" ? { background: "#63614a" } : undefined}
+                    >
+                      {state === "done" ? "✓" : state === "now" ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-accent-dark" /> : "·"}
+                    </span>
+                    <span className={`text-[14px] ${state === "next" ? "text-muted" : "font-semibold"}`}>
+                      {state === "done" ? `Pushed to ${name}` : state === "now" ? `Pushing it to ${name}…` : name}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+            <div className="mt-6 h-1.5 overflow-hidden rounded-full bg-line/40">
+              <div className="h-full rounded-full transition-[width] duration-1000 ease-out" style={{ width: `${((at + 0.6) / 3) * 100}%`, background: "#63614a" }} />
+            </div>
+          </>
+        ) : (
+          <>
+            <span className="mx-auto flex h-24 w-24 items-center justify-center rounded-full" style={{ background: "#f4f3ec", animation: "tle-pop 700ms cubic-bezier(0.18, 1.35, 0.32, 1) both" }}>
+              <svg viewBox="0 0 48 48" width="52" height="52" fill="none" stroke="#63614a" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M10 25 L20 35 L38 14" strokeDasharray="50" strokeDashoffset="50" style={{ animation: "tle-draw 600ms 350ms ease-out forwards" }} />
+              </svg>
+            </span>
+            <h2 className="hand mt-6 text-[26px] leading-tight">Your property listing is now live</h2>
+            <p className="mt-2 text-[13.5px] leading-relaxed text-muted">{address} is on Rightmove, Zoopla and OnTheMarket. Nice one.</p>
+            <button
+              type="button"
+              onClick={onDone}
+              className="mt-7 rounded-full bg-[var(--brown)] px-6 py-3 text-[13.5px] font-semibold text-white transition-opacity hover:opacity-90"
+            >
+              Brilliant
+            </button>
+            <p className="mt-5 text-[10.5px] leading-relaxed text-muted">
+              The record has moved to On market. The push into REX itself waits on the REX write allowlist.
+            </p>
+          </>
+        )}
+      </div>
     </div>
   );
 }

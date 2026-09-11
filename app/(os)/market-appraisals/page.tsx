@@ -294,8 +294,8 @@ export default function MarketAppraisals() {
 }
 
 /* Sage, for what is done - the same two values the appraisal file uses. */
-const SAGE_INK = "#56634a";
-const SAGE_WASH = "#f1f4ec";
+const SAGE_INK = "#63614a";
+const SAGE_WASH = "#f4f3ec";
 const SPINE = MA_STAGES.filter((s) => s.id !== "lost");
 
 /**
