@@ -28,7 +28,7 @@ export default function MessageTile({
   sub: string;
   icon: string;
   /** "button": the dark pill on the agent card and the next-step card (11 Sep 2026). Same sheet. */
-  variant?: "tile" | "button";
+  variant?: "tile" | "button" | "row";
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -76,7 +76,18 @@ export default function MessageTile({
 
   return (
     <>
-      {variant === "button" ? (
+      {variant === "row" ? (
+        <button type="button" onClick={() => setOpen(true)} className="flex w-full items-center gap-4 py-3.5 text-left transition-opacity hover:opacity-80">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line/60 text-muted">
+            <DoodleIcon name={icon} size={16} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13.5px] font-semibold">{label}</span>
+            <span className="block text-[12px] text-muted">{thread.length ? `${thread.length} in your thread` : sub}</span>
+          </span>
+          <span aria-hidden className="text-[15px] text-muted">›</span>
+        </button>
+      ) : variant === "button" ? (
         <button
           type="button"
           onClick={() => setOpen(true)}

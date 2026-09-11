@@ -1,9 +1,11 @@
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
-import SignTile from "@/components/landlord/SignTile";
-import MessageTile from "@/components/landlord/MessageTile";
-import type { LandlordView, ViewStep } from "@/lib/landlord-view";
+import AgentCard from "@/components/landlord/AgentCard";
+import Spine from "@/components/landlord/Spine";
+import { HeroAction, pickHero } from "@/components/landlord/StepAction";
+import { fullJourney } from "@/lib/landlord-journey";
+import type { LandlordView } from "@/lib/landlord-view";
 
 /**
  * The landlord dashboard, to James's mock of 11 Sep 2026: light, airy,
@@ -24,8 +26,6 @@ import type { LandlordView, ViewStep } from "@/lib/landlord-view";
 
 const card = "rounded-[22px] border border-line/60 bg-white";
 const eyebrow = "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted";
-const cta =
-  "inline-flex items-center gap-3 rounded-full bg-accent-dark px-7 py-3.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90";
 /* Sage, for things that are done and for what comes after the let. */
 const SAGE_INK = "#56634a";
 const SAGE_WASH = "#f1f4ec";
@@ -41,12 +41,10 @@ export default function LandlordDashboard({
   /** Properties we already look after, from the page. */
   managed?: React.ReactNode;
 }) {
-  const agentFirst = v.agent?.name.split(/\s+/)[0] ?? "your agent";
   /* The one next step: signing, when there is a contract to sign, because
      nothing else moves until it is done; otherwise the first in the stage's
      order. The rest are quiet links under it. */
-  const hero =
-    v.steps.find((s) => s.id === "sign" && ((s.action === "sign" && v.appraisalId) || s.href)) ?? v.steps[0] ?? null;
+  const hero = pickHero(v);
   const others = v.steps.filter((s) => s !== hero && s.href && !s.action);
 
   return (
@@ -58,47 +56,7 @@ export default function LandlordDashboard({
           <h1 className="text-[44px] leading-[1.05]">{v.greeting}</h1>
           <p className="mt-3 max-w-xl text-[14.5px] text-muted">{v.intro}</p>
         </div>
-        {v.agent && (
-          <div id="messages" className={`${card} flex flex-wrap items-center gap-4 px-5 py-4`} data-search>
-            {v.agent.photo ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={v.agent.photo} alt="" className="h-16 w-16 shrink-0 rounded-full object-cover" />
-            ) : (
-              <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[24px] font-semibold text-accent-dark">
-                {v.agent.name[0]}
-              </span>
-            )}
-            <div className="min-w-0">
-              <p className="text-[11.5px] text-muted">Your letting agent</p>
-              <p className="text-[19px] font-bold leading-tight">{v.agent.name}</p>
-              <p className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-muted">
-                {v.agent.phone && (
-                  <a href={`tel:${v.agent.phone.replace(/\s+/g, "")}`} className="flex items-center gap-1.5 hover:text-ink">
-                    <DoodleIcon name="call" size={13} />
-                    {v.agent.phone}
-                  </a>
-                )}
-                {v.agent.email && (
-                  <a href={`mailto:${v.agent.email}`} className="flex items-center gap-1.5 hover:text-ink">
-                    <DoodleIcon name="mail" size={13} />
-                    {v.agent.email}
-                  </a>
-                )}
-              </p>
-            </div>
-            <div className="lg:ml-4">
-              <MessageTile
-                variant="button"
-                appraisalId={v.appraisalId ?? null}
-                agentName={v.agent.name}
-                messages={v.messages ?? []}
-                label={`Message ${agentFirst}`}
-                sub=""
-                icon="message"
-              />
-            </div>
-          </div>
-        )}
+        <AgentCard v={v} />
       </div>
 
       {/* ── the property, and the next step ── */}
@@ -203,39 +161,9 @@ export default function LandlordDashboard({
       {/* ── the spine ── */}
       <section id="journey" className={`${card} p-6`} data-search>
         <h2 className="text-[18px]">Your letting journey</h2>
-        <ol className="mt-7 grid grid-cols-3 gap-y-6 sm:grid-cols-6">
-          {v.journey.map((s, i) => {
-            const prevDone = i > 0 && v.journey[i - 1].state === "done";
-            return (
-              <li key={s.id} className="relative flex flex-col items-center text-center">
-                {/* The line into this stop. None into the first, and none
-                    into the first of the second row on a phone, where three
-                    stops sit per row and a line would run in from nowhere. */}
-                {i > 0 && (
-                  <span
-                    className={`absolute left-[-50%] right-[50%] top-[14px] ${i === 3 ? "hidden sm:block" : ""} ${
-                      prevDone && s.state !== "upcoming" ? "h-0.5 bg-accent-dark" : "h-0 border-t-2 border-dashed border-line"
-                    }`}
-                  />
-                )}
-                <span
-                  className={`relative z-[1] flex h-[30px] w-[30px] items-center justify-center rounded-full ${
-                    s.state === "done"
-                      ? "bg-accent-dark text-white"
-                      : s.state === "current"
-                        ? "border-[3px] border-accent-dark bg-white"
-                        : "border-2 border-line bg-white"
-                  }`}
-                >
-                  {s.state === "done" && <span className="text-[13px] leading-none">✓</span>}
-                  {s.state === "current" && <span className="h-2.5 w-2.5 rounded-full bg-accent-dark" />}
-                </span>
-                <p className={`mt-3 text-[12.5px] ${s.state === "upcoming" ? "text-muted" : "font-semibold"}`}>{s.label}</p>
-                <p className="mt-0.5 text-[11.5px] text-muted">{s.sub}</p>
-              </li>
-            );
-          })}
-        </ol>
+        <div className="mt-7">
+          <Spine stops={fullJourney(v)} />
+        </div>
       </section>
 
       {/* ── the let, step by step ──
@@ -423,36 +351,6 @@ export default function LandlordDashboard({
 
       {managed}
     </div>
-  );
-}
-
-/** The call to action on the next-step card: the real action behind the step, or nothing. */
-function HeroAction({ s, v }: { s: ViewStep; v: LandlordView }) {
-  if (s.action === "sign" && v.appraisalId) {
-    return <SignTile variant="button" appraisalId={v.appraisalId} label={s.label} sub={s.sub} icon={s.icon} />;
-  }
-  if (s.action === "message") {
-    return (
-      <MessageTile
-        variant="button"
-        appraisalId={v.appraisalId ?? null}
-        agentName={v.agent?.name ?? null}
-        messages={v.messages ?? []}
-        label={s.label}
-        sub={s.sub}
-        icon={s.icon}
-      />
-    );
-  }
-  if (!s.href) return null;
-  return s.external ? (
-    <a href={s.href} target="_blank" rel="noreferrer" className={cta}>
-      {s.label} <span aria-hidden>→</span>
-    </a>
-  ) : (
-    <Link href={s.href} className={cta}>
-      {s.label} <span aria-hidden>→</span>
-    </Link>
   );
 }
 

@@ -83,6 +83,8 @@
    clay, the tenant's sage, so the two read as siblings rather than one page.
 --------------------------------------------------------------------------- */
 [data-surface="landlord"] {
+  /* The OS's own title face on the landlord's headings too (James, 11 Sep). */
+  --font-heading: var(--font-bricolage), var(--font-manrope), system-ui, sans-serif;
   --accent: var(--pal-clay);
   --accent-dark: var(--pal-brown);
   --accent-soft: var(--pal-pink);

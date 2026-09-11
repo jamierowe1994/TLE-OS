@@ -22,7 +22,7 @@ export default function SignTile({
   sub: string;
   icon: string;
   /** "button": the big call to action on the "Your next step" card (11 Sep 2026). */
-  variant?: "tile" | "button";
+  variant?: "tile" | "button" | "row";
 }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -49,6 +49,21 @@ export default function SignTile({
     } finally {
       setBusy(false);
     }
+  }
+
+  if (variant === "row") {
+    return (
+      <button type="button" onClick={open} disabled={busy} className="flex w-full items-center gap-4 py-3.5 text-left transition-opacity hover:opacity-80 disabled:opacity-60">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line/60 text-muted">
+          <DoodleIcon name={icon} size={16} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13.5px] font-semibold">{busy ? "Opening…" : label}</span>
+          <span className="block text-[12px] text-muted">{note ?? sub}</span>
+        </span>
+        <span aria-hidden className="text-[15px] text-muted">›</span>
+      </button>
+    );
   }
 
   if (variant === "button") {
