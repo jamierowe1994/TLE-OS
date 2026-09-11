@@ -408,8 +408,10 @@ export function leadDetail(lead: Lead): LeadDetail {
     notes:
       d.notes ??
       // The applicant's own message is THEIRS — attributed to them, not to
-      // whichever agent the lead happens to be assigned to.
-      (lead.enquiryMessage
+      // whichever agent the lead happens to be assigned to. Not for a tenant
+      // (11 Sep 2026): their lead opens on the enquiry card, read in full from
+      // REX, and this note was REX's 100-character preview repeated below it.
+      (lead.enquiryMessage && leadSide(lead) !== "tenant"
         ? [{ id: "n1", author: `${lead.name} — their enquiry`, when: lead.received, text: lead.enquiryMessage }]
         : lead.notes
           ? [{ id: "n1", author: lead.agent, when: lead.received, text: lead.notes }]
