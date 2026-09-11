@@ -8,6 +8,7 @@ import DiaryGrid from "@/components/DiaryGrid";
 import { ConfettiBurst, DoneTick, PressButton } from "@/components/Bits";
 import PeopleFilterBar, { NO_FILTERS, passesFilters, milesBetween, type Filters } from "@/components/PeopleFilter";
 import SendFlow, { type Outgoing } from "@/components/SendFlow";
+import { VIEWING_SENDS_LIVE } from "@/lib/viewing-sends";
 import { dayKey, useForecast } from "@/lib/weather";
 import type { Landlord } from "@/lib/rex-landlord";
 import { minutesOf, type Appt } from "@/lib/diary";
@@ -536,6 +537,34 @@ export default function ViewingBooker({
       /* A buffer that didn't save must not lose the booking behind it. */
     } finally {
       setSavingBuffers(false);
+    }
+  }
+
+  /**
+   * Book it and show the done screen. Reached from the "who do we tell?"
+   * step, or straight from the time picker while the sends are off
+   * (lib/viewing-sends) - that step's Send sent nothing.
+   */
+  function finishBooking(sentN: number) {
+    setSentCount(sentN);
+    setStage("done");
+    /* Take-ons come through here rather than through bookAndClose,
+       so the buffer has to be written on this path too or it is
+       silently dropped for every mode but the appraisal. */
+    void saveBuffers();
+    // Appraisals have no listing — the guard must not eat them.
+    if (toLandlord || property) {
+      onBooked({
+        when: whenLabel,
+        property: toLandlord ? (address || "Visit") : property!.name,
+        propertyId: toLandlord ? null : (property?.propertyId ?? null),
+        listingId: toLandlord ? null : (property?.id ?? null),
+        locality: mode === "appraisal" ? "Market appraisal" : mode === "takeon" ? "Take-on visit" : property!.locality,
+        who: chosen?.name ?? "",
+        whenPretty,
+        startsAt,
+        minutes: mins,
+      });
     }
   }
 
@@ -1102,28 +1131,7 @@ export default function ViewingBooker({
             <SendFlow
               messages={compose()}
               sendLabel="Send"
-              onSend={(sent) => {
-                setSentCount(sent.length);
-                setStage("done");
-                /* Take-ons come through here rather than through bookAndClose,
-                   so the buffer has to be written on this path too or it is
-                   silently dropped for every mode but the appraisal. */
-                void saveBuffers();
-                // Appraisals have no listing — the guard must not eat them.
-                if (toLandlord || property) {
-                  onBooked({
-                    when: whenLabel,
-                    property: toLandlord ? (address || "Visit") : property!.name,
-                    propertyId: toLandlord ? null : (property?.propertyId ?? null),
-                    listingId: toLandlord ? null : (property?.id ?? null),
-                    locality: mode === "appraisal" ? "Market appraisal" : mode === "takeon" ? "Take-on visit" : property!.locality,
-                    who: chosen?.name ?? "",
-                    whenPretty,
-                    startsAt,
-                    minutes: mins,
-                  });
-                }
-              }}
+              onSend={(sent) => finishBooking(sent.length)}
             />
           )}
 
@@ -1140,7 +1148,9 @@ export default function ViewingBooker({
               <p className="mt-3 text-[12px] text-muted">
                 {sentCount
                   ? `${sentCount} message${sentCount === 1 ? "" : "s"} sent. In the diary and on the record.`
-                  : "In the diary and on the record. Nobody was told."}
+                  : VIEWING_SENDS_LIVE
+                    ? "In the diary and on the record. Nobody was told."
+                    : "Noted here. Nobody has been told and it is not in REX yet - book it in REX and confirm from Outlook as usual."}
               </p>
             </div>
           )}
@@ -1177,7 +1187,7 @@ export default function ViewingBooker({
                     : "Pick a day and a time"}
                 </p>
                 <PressButton
-                  onClick={() => ready && !savingBuffers && (bookedOnly ? void bookAndClose() : setStage("who"))}
+                  onClick={() => ready && !savingBuffers && (bookedOnly ? void bookAndClose() : VIEWING_SENDS_LIVE ? setStage("who") : finishBooking(0))}
                   className={`shrink-0 rounded-full px-6 py-2.5 text-[13px] font-semibold ${
                     ready && !savingBuffers ? "bg-ink text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
                   }`}
@@ -1188,7 +1198,7 @@ export default function ViewingBooker({
                     ) : (
                       <DoodleIcon name="calendar" size={15} />
                     )}
-                    {savingBuffers ? "Booking…" : bookedOnly ? "Book it" : "Next — who do we tell?"}
+                    {savingBuffers ? "Booking…" : bookedOnly || !VIEWING_SENDS_LIVE ? "Book it" : "Next — who do we tell?"}
                   </span>
                 </PressButton>
               </>

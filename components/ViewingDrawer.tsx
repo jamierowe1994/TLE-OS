@@ -6,6 +6,7 @@ import Link from "next/link";
 import DiaryGrid from "@/components/DiaryGrid";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
+import { VIEWING_SENDS_LIVE } from "@/lib/viewing-sends";
 import type { KeySet } from "@/lib/rex-keys";
 import ProcessTimeline from "@/components/ProcessTimeline";
 import SendFlow, { type Outgoing } from "@/components/SendFlow";
@@ -348,7 +349,12 @@ export default function ViewingDrawer({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {!past && !cancelled && (
+            {!VIEWING_SENDS_LIVE && !past && !cancelled && (
+              <p className="max-w-[190px] text-right text-[11px] leading-snug text-muted">
+                To move or cancel it, do it in REX and tell them from Outlook for now
+              </p>
+            )}
+            {VIEWING_SENDS_LIVE && !past && !cancelled && (
               <>
                 <PressButton
                   onClick={() => setRescheduling(true)}
@@ -717,6 +723,10 @@ export default function ViewingDrawer({
                     <p className="mt-3 flex items-center gap-2 text-[12px] font-semibold text-accent-dark">
                       <DoneTick size={20} /> Landlord told — logged on the record
                     </p>
+                  ) : !VIEWING_SENDS_LIVE ? (
+                    <p className="mt-3 text-[12px] leading-relaxed text-muted">
+                      Tell the landlord from Outlook for now - the OS does not send this one yet.
+                    </p>
                   ) : (
                     <PressButton
                       onClick={() => {
@@ -737,13 +747,20 @@ export default function ViewingDrawer({
                 <Card
                   title="The offer"
                   icon="coin"
-                  action={offerPushed ? <Pill tone="good">With the landlord</Pill> : <Pill tone="accent">Ready to push</Pill>}
+                  action={offerPushed ? <Pill tone="good">With the landlord</Pill> : <Pill tone="accent">{VIEWING_SENDS_LIVE ? "Ready to push" : "Offer in"}</Pill>}
                 >
-                  <p className="text-[12px] leading-relaxed text-muted">
-                    {appt.who} is offering. The landlord gets a link with everything —
-                    the money, the situation, the references — by email or WhatsApp.
-                  </p>
-                  {!offerPushed && (
+                  {VIEWING_SENDS_LIVE ? (
+                    <p className="text-[12px] leading-relaxed text-muted">
+                      {appt.who} is offering. The landlord gets a link with everything —
+                      the money, the situation, the references — by email or WhatsApp.
+                    </p>
+                  ) : (
+                    <p className="text-[12px] leading-relaxed text-muted">
+                      {appt.who} is offering. Put it to the landlord from Outlook for now - the OS
+                      does not send the offer yet.
+                    </p>
+                  )}
+                  {VIEWING_SENDS_LIVE && !offerPushed && (
                     <PressButton
                       onClick={() => setPushingOffer(true)}
                       className="press-ring mt-3 flex items-center gap-2 rounded-full bg-accent-dark px-4 py-2.5 text-[12px] font-semibold text-page"
