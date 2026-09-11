@@ -30,6 +30,7 @@ const OPTIONS = [
   { key: "praise", label: "Praise", note: "Calligraphy script", sample: "'Praise'" },
   { key: "luckiest", label: "Luckiest Guy", note: "Cartoon block", sample: "'Luckiest Guy'" },
   { key: "rampart", label: "Rampart One", note: "Outlined 3D block", sample: "'Rampart One'" },
+  { key: "bricolage", label: "Bricolage Grotesque", note: "Quirky grotesque, extrabold", sample: "'Bricolage Grotesque'" },
   { key: "manrope", label: "Manrope", note: "The brand face, extrabold", sample: "var(--font-manrope)" },
 ] as const;
 
@@ -40,7 +41,7 @@ const OPTIONS = [
  * own link so that if Google ever refuses it, the other six still load.
  */
 const GOOGLE_LINKS = [
-  "https://fonts.googleapis.com/css2?family=Hurricane&family=Fascinate&family=Fascinate+Inline&family=Protest+Riot&family=Gravitas+One&family=Praise&family=Luckiest+Guy&family=Rampart+One&display=swap",
+  "https://fonts.googleapis.com/css2?family=Hurricane&family=Fascinate&family=Fascinate+Inline&family=Protest+Riot&family=Gravitas+One&family=Praise&family=Luckiest+Guy&family=Rampart+One&family=Bricolage+Grotesque:wght@600..800&display=swap",
   "https://fonts.googleapis.com/css2?family=Story+Script&display=swap",
 ];
 
