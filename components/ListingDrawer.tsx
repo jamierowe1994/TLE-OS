@@ -2,9 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
-import PhotoBox from "@/components/PhotoBox";
 import PropertyPhoto from "@/components/PropertyPhoto";
-import ListingGallery from "@/components/ListingGallery";
 import PhotoLightbox from "@/components/PhotoLightbox";
 import Link from "next/link";
 import EmailToTenants from "@/components/EmailToTenants";
@@ -15,7 +13,10 @@ import ListingDocuments from "@/components/ListingDocuments";
 import PropertyFile from "@/components/PropertyFile";
 import ViewingBooker, { type Person } from "@/components/ViewingBooker";
 import { CopyButton, DoneTick, PressButton } from "@/components/Bits";
-import { Pill } from "@/components/Wire";
+import { Tag } from "@/components/ListingTags";
+import AccessRequest, { AccessSettings, NO_ACCESS, type Access } from "@/components/listing/AccessRequest";
+import DropZone, { type DropKind } from "@/components/listing/DropZone";
+import PickOne from "@/components/PickOne";
 import { LISTING_BOOKER_LIVE } from "@/lib/viewing-sends";
 import { LISTING_TRACK, listingStartingStep } from "@/lib/journey";
 import type { Landlord } from "@/lib/rex-landlord";
@@ -80,27 +81,24 @@ type LandlordState =
   | { status: "none" }
   | { status: "problem"; says: string };
 
-type TabKey = "home" | "viewings" | "property" | "marketing" | "photos" | "compliance" | "documents";
+type TabKey = "home" | "applications" | "viewings" | "marketing" | "compliance" | "documents";
 
-/* Property and Marketing are EDIT tabs — the facts they hold moved up into
-   the header, so the tab is where you go to change them, not to read them.
-   Home is the working view: applications on the left, viewings on the right. */
-const TABS: { key: TabKey; label: string }[] = [
-  /* Two lists, not one board. James, 10 Sep 2026: viewings and applications
-     are separate jobs and reading them side by side made both cramped. */
-  { key: "home", label: "Applications" },
-  { key: "viewings", label: "Viewings" },
-  { key: "property", label: "Property" },
-  { key: "marketing", label: "Marketing" },
-  { key: "photos", label: "Photos" },
-  /* The property file: every duty the home carries, where it stands in
-     REX, and the certificates on hand. The same panel Portfolio and
-     Compliance show, so the file travels with the property. */
-  { key: "compliance", label: "Compliance" },
-  /* Where the signed terms live now that the panel has gone. Filed rather
-     than displayed: nobody needs it until the one day they very much do. */
-  { key: "documents", label: "Documents" },
+/* SIX VIEWS, ONE RECORD (James, 11 Sep 2026). Home is the record itself -
+   the hero, the landlord, at a glance, next up and the spine. The rest each
+   take the whole drawer, in the order they get clicked: applications,
+   viewings, marketing (the property's facts, the write-up and the photos in
+   one place), compliance, documents. Home brings you back. */
+const TABS: { key: TabKey; label: string; icon: string }[] = [
+  { key: "home", label: "Home", icon: "home" },
+  { key: "applications", label: "Applications", icon: "coin" },
+  { key: "viewings", label: "Viewings", icon: "calendar" },
+  { key: "marketing", label: "Marketing", icon: "megaphone" },
+  { key: "compliance", label: "Compliance", icon: "shield" },
+  { key: "documents", label: "Documents", icon: "file-contract" },
 ];
+
+const SAGE_INK = "#56634a";
+const SAGE_WASH = "#f1f4ec";
 
 /** One tenant on an offer — who they are and how they live. */
 type TenantIn = {
@@ -130,10 +128,10 @@ function Card({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-line/80 bg-panel p-5">
+    <section className="rounded-[22px] border border-line/50 bg-white p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h3 className="flex items-center gap-2.5 text-[14px]">
-          <DoodleIcon name={icon} size={17} className="text-accent-dark" />
+        <h3 className="hand flex items-center gap-2.5 text-[15px]">
+          <DoodleIcon name={icon} size={15} className="text-accent-dark" />
           {title}
         </h3>
         {action}
@@ -210,6 +208,58 @@ export default function ListingDrawer({
   const [landlord, setLandlord] = useState<LandlordState>({ status: "idle" });
   /* The photo set popped out full size; null when closed. */
   const [lightbox, setLightbox] = useState<number | null>(null);
+  /* How we get into the property - vacant, tenant or landlord - kept on
+     the record so the hero button and the Documents tab agree. */
+  const [access, setAccess, accessStatus] = useCaseState<Access>("access", listing?.id ?? null, NO_ACCESS);
+  /* Photographs added here, out of R2, shown beside REX's. */
+  const [uploaded, setUploaded] = useState<{ key: string; url: string }[]>([]);
+  const [drop, setDrop] = useState<DropKind | null>(null);
+  const [writing, setWriting] = useState(false);
+  /* The certificates on the property, for the legal minimum before the
+     listing can go to the portals: EPC, gas safety and EICR. */
+  const [certs, setCerts] = useState<Record<string, string> | null>(null);
+  useEffect(() => {
+    setCerts(null);
+    if (!listing) return;
+    let off = false;
+    const key = listing.propertyId ? `property=${encodeURIComponent(String(listing.propertyId))}` : `address=${encodeURIComponent(listing.name)}`;
+    fetch(`/api/property-file?${key}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; rows?: { type: string; state: string }[] }) => {
+        if (off) return;
+        if (!j.ok || !Array.isArray(j.rows)) return setCerts({});
+        setCerts(Object.fromEntries(j.rows.map((r) => [r.type, r.state])));
+      })
+      .catch(() => !off && setCerts({}));
+    return () => {
+      off = true;
+    };
+  }, [listing, drop]);
+  const [me, setMe] = useState<string>("The Letting Experts");
+  useEffect(() => {
+    fetch("/api/auth/me", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { user?: { name?: string }; name?: string }) => {
+        const n = j.user?.name ?? j.name;
+        if (n) setMe(n);
+      })
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    setUploaded([]);
+    const id = listing?.id;
+    if (!id) return;
+    let off = false;
+    fetch(`/api/r2/list?scope=photo&ref=${encodeURIComponent(`listing-${id}`)}`)
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; files?: { key: string; url: string }[] }) => {
+        if (!off && j.ok && Array.isArray(j.files)) setUploaded(j.files);
+      })
+      .catch(() => {});
+    return () => {
+      off = true;
+    };
+  }, [listing?.id]);
   useEffect(() => {
     if (!listing) { setEnquiries(null); setLiveApps(null); return; }
     let gone = false;
@@ -516,11 +566,63 @@ export default function ListingDrawer({
   /* Every photo when REX gave us them, the single primary when it didn't, and
      an empty set for the drafts — more than half the book has no photo at all,
      so an empty gallery is the normal case, not the broken one. */
-  const photos: string[] = listing.images?.length
-    ? listing.images
-    : listing.image
-      ? [listing.image]
-      : [];
+  const photos: string[] = [
+    ...(listing.images?.length ? listing.images : listing.image ? [listing.image] : []),
+    ...uploaded.map((u) => u.url),
+  ];
+
+  /**
+   * THE LEGAL MINIMUM before "Push to the portals" lights up (James, 11 Sep
+   * 2026): photographs, a description, the EPC, the gas safety and the
+   * electrical certificate. A standard re-let; an HMO's extra duties come
+   * later. "No gas at the property" satisfies gas.
+   */
+  const certOk = (t: string) => certs != null && ["valid", "expiring", "not-required"].includes(certs[t] ?? "");
+  const requirements: { id: string; label: string; done: boolean; fix: () => void }[] = [
+    { id: "photos", label: "Photographs on", done: photos.length > 0, fix: () => setDrop("photos") },
+    { id: "description", label: "Description written", done: Boolean(shownBody), fix: () => setTab("marketing") },
+    { id: "epc", label: "EPC filed", done: certOk("epc"), fix: () => setDrop("epc") },
+    { id: "gas", label: "Gas safety on file", done: certOk("gas_safety"), fix: () => setTab("compliance") },
+    { id: "eicr", label: "Electrical certificate (EICR) on file", done: certOk("eicr"), fix: () => setTab("compliance") },
+  ];
+  const readyToGoLive = certs != null && requirements.every((r) => r.done);
+  const isLive = listing.publicationStatus === "published";
+
+  /* The upcoming viewings, for an access request to hang off. */
+  const upcomingOptions = (viewings?.upcoming ?? [])
+    .filter((v) => !v.cancelled)
+    .map((v) => ({ id: v.id, startsAt: v.startsAt, who: v.contacts.map((c) => c.name).join(", ") || v.title }));
+
+  /** The advert, drafted by Claude from the record and the photographs. */
+  async function writeForMe() {
+    if (!listing) return;
+    setWriting(true);
+    setCopyError(null);
+    try {
+      const r = await fetch("/api/listings/describe", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: listing.name,
+          locality: listing.locality,
+          rent: listing.rent,
+          availableFrom: listing.availableFrom,
+          type, beds, baths, receptions, furnished,
+          photos: photos.slice(0, 4),
+          current: shownBody,
+        }),
+      });
+      const j = (await r.json()) as { ok?: boolean; heading?: string; body?: string; error?: string };
+      if (!j.ok) throw new Error(j.error ?? "The writer did not answer.");
+      setCopyHeading(j.heading ?? "");
+      setCopyBody(j.body ?? "");
+      setEditingCopy(true);
+    } catch (e) {
+      setCopyError(e instanceof Error ? e.message : "The writer did not answer.");
+    } finally {
+      setWriting(false);
+    }
+  }
   const here = LISTING_TRACK[Math.min(step, LISTING_TRACK.length - 1)];
   const advance = () => setStep((s) => Math.min(s + 1, LISTING_TRACK.length - 1));
 
@@ -537,17 +639,17 @@ export default function ListingDrawer({
     const past = start.getTime() < Date.now();
     return (
       <li key={v.id} className="border-b border-line/40 last:border-0">
-        <button type="button" onClick={() => setOpenViewing(open ? null : v.id)} className="flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-box">
+        <button type="button" onClick={() => setOpenViewing(open ? null : v.id)} className="flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-page">
           <span className="w-28 shrink-0 text-[11px] text-muted">
             {start.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: past ? undefined : undefined })} · {hhmm(start)}
           </span>
           <span className="min-w-0 flex-1 truncate text-[12.5px]">{who || v.title || "Viewing"}</span>
-          <Pill tone={v.cancelled ? "neutral" : past ? (v.feedbackId ? "good" : "accent") : "good"}>
+          <Tag tone={v.cancelled ? "neutral" : past ? (v.feedbackId ? "good" : "accent") : "good"}>
             {v.cancelled ? "Cancelled" : past ? (v.feedbackId ? "Feedback in" : "Viewed") : v.status ?? "Booked"}
-          </Pill>
+          </Tag>
         </button>
         {open && (
-          <div className="mb-3 rounded-xl border border-line/70 bg-panel px-4 py-3 text-[12px]">
+          <div className="mb-3 rounded-xl border border-line/50 bg-page px-4 py-3 text-[12px]">
             <p className="text-[13px]">
               {v.mins} minute {v.kind === "viewing" ? "viewing" : v.kind}, {start.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}, {hhmm(start)}{end ? ` to ${hhmm(end)}` : ""}
             </p>
@@ -574,6 +676,42 @@ export default function ListingDrawer({
               </ul>
             )}
             {v.description && <p className="mt-2 whitespace-pre-line text-muted">{v.description}</p>}
+            {/* Access to the property for THIS viewing, where it goes through
+                a person. Asked by email from the record; granted by hand when
+                they ring, text or reply. */}
+            {access.kind && access.kind !== "vacant" && !past && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line/50 pt-2.5">
+                {(() => {
+                  const r = (access.requests ?? {})[v.id];
+                  const who = access.kind === "tenant" ? "tenant" : "landlord";
+                  return (
+                    <>
+                      <Tag tone={r?.grantedAt ? "good" : r ? "accent" : "neutral"}>
+                        {r?.grantedAt ? `Access granted ${new Date(r.grantedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : r ? `Access requested ${new Date(r.requestedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : "Access not asked for yet"}
+                      </Tag>
+                      {!r?.grantedAt && (
+                        <button
+                          type="button"
+                          onClick={() => setAccess({ ...access, requests: { ...(access.requests ?? {}), [v.id]: { viewingId: v.id, when: v.startsAt, to: r?.to ?? access.email, requestedAt: r?.requestedAt ?? new Date().toISOString(), grantedAt: new Date().toISOString() } } })}
+                          className="rounded-full border border-line/60 bg-white px-2.5 py-1 text-[11px] font-semibold transition-colors hover:border-ink/40"
+                        >
+                          The {who} has granted access
+                        </button>
+                      )}
+                      {!r && (
+                        <button
+                          type="button"
+                          onClick={() => setAccess({ ...access, requests: { ...(access.requests ?? {}), [v.id]: { viewingId: v.id, when: v.startsAt, to: access.email, requestedAt: new Date().toISOString(), grantedAt: null } } })}
+                          className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-muted hover:text-ink"
+                        >
+                          Mark as requested
+                        </button>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
           </div>
         )}
       </li>
@@ -636,135 +774,101 @@ export default function ListingDrawer({
         }`}
         style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
       >
-        <div className="flex shrink-0 items-center justify-between gap-3 px-6 pt-5">
+        {/* The whole record scrolls, tabs included (James, 11 Sep): the row
+            of buttons is only there at the top, not pinned over the page. The
+            street at the foot is pinned instead, and the content keeps room
+            above it so nothing is ever hidden behind the houses. */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-[210px] pt-5">
+        {/* Close, and the tabs. Previous / Next went (James, 11 Sep): nobody
+            steps through the book from inside a record, they close and pick
+            the next one. */}
+        <div className="flex shrink-0 flex-wrap items-center gap-2 mb-4">
           <button
             type="button"
             onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink"
+            className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/60 bg-white text-[13px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
             title="Close (Esc)"
           >
             ✕
           </button>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onStep(-1)}
-              className="rounded-full border border-line/80 px-4 py-2 text-[12px] text-muted transition-colors hover:text-ink"
-            >
-              ← Previous
-            </button>
-            <button
-              type="button"
-              onClick={() => onStep(1)}
-              className="rounded-full border border-line/80 px-4 py-2 text-[12px] text-muted transition-colors hover:text-ink"
-            >
-              Next →
-            </button>
+          <div className="ml-auto flex min-w-0 max-w-full gap-2 overflow-x-auto pb-0.5">
+            {TABS.map((t) => {
+              const count =
+                t.key === "applications"
+                  ? offers.length + (liveApps?.length ?? 0) + (enquiries?.length ?? 0)
+                  : t.key === "viewings"
+                    ? booked.length + (viewings?.upcoming.length ?? 0)
+                    : 0;
+              const on = tab === t.key;
+              /* A pink dot where something needs doing on that tab, so nobody
+                 has to guess which one to open (James, 11 Sep). */
+              const needs =
+                t.key === "applications"
+                  ? (enquiries?.length ?? 0) > 0 || (liveApps ?? []).some((a) => !/accept|unsuccess|withdraw|declin/i.test(a.statusLabel))
+                  : t.key === "viewings"
+                    ? (viewings?.upcoming ?? []).some((v) => !v.cancelled && access.kind && access.kind !== "vacant" && !(access.requests ?? {})[v.id]?.grantedAt) ||
+                      (viewings?.past ?? []).some((v) => !v.cancelled && !v.feedbackId)
+                    : t.key === "marketing"
+                      ? photos.length === 0 || !shownBody
+                      : t.key === "compliance"
+                        ? certs != null && !(certOk("epc") && certOk("gas_safety") && certOk("eicr"))
+                        : t.key === "documents"
+                          ? (terms.status === "ready" && !terms.signed) || !access.kind
+                          : false;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setTab(t.key)}
+                  className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-[12.5px] font-semibold transition-colors ${
+                    on ? "bg-[var(--brown)] text-white" : "border border-line/60 bg-white text-muted hover:border-ink/40 hover:text-ink"
+                  }`}
+                >
+                  <DoodleIcon name={t.icon} size={13} className={on ? "text-white" : "text-accent-dark"} />
+                  {t.label}
+                  {count > 0 && (
+                    <span className={`figures rounded-full px-1.5 text-[10.5px] ${on ? "bg-white/20 text-white" : "bg-page text-muted"}`}>{count}</span>
+                  )}
+                  {needs && !on && (
+                    <span aria-label="Needs attention" className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-accent" />
+                  )}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-8 pt-4">
-          {/* ── Identity: the photo IS the identity of a property. ── */}
-          <div className="rounded-3xl border border-line/80 bg-panel p-4">
-            {/* items-STRETCH, not items-start. The photograph was pinned to
-                its own height and finished less than half way down a block
-                that runs past the landlord card — a property card where the
-                property is the smallest thing on it. Stretched, it takes the
-                full height of whatever is beside it and the padding stays
-                even on all four sides, because the outer p-4 is the only
-                inset in play. */}
-            {/* One line from a laptop up (James, 7 Sep): the photograph, the
-                facts, the landlord box. The box keeps its width; the
-                photograph is what gives way when the drawer is narrow. */}
-            <div className="flex flex-col items-stretch gap-5 lg:flex-row">
-              <ListingGallery
-                photos={photos}
-                className="w-full sm:w-[380px] lg:w-auto lg:min-w-[220px] lg:max-w-[460px] lg:basis-[36%] lg:shrink"
-                minFrame={300}
-                onOpen={(at) => setLightbox(at)}
-              />
 
-              <div className="min-w-0 flex-1 py-2 pr-2 lg:min-w-[180px]">
-                <h2 className="text-[24px] leading-tight">{listing.name}</h2>
-                <p className="mt-1 text-[12.5px] text-muted">
-                  {listing.locality}
-                  {/* The property's facts live up HERE now — the tabs below
-                      are where you go to change them, not to find them. */}
-                  {(type || beds || baths || furnished) && (
-                    <span className="text-ink">
-                      {" · "}
-                      {[type, beds ? `${beds} bed` : "", baths ? `${baths} bath` : "", furnished]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
+          {tab === "home" && (
+          <div key="record" className="fade-up">
+          {/* ── THE HERO (James, 11 Sep 2026): the appraisal file's hero,
+              in sage this time so the two alternate. The photograph small,
+              top left, the quick actions under it; the address in the
+              middle; the property's details in a white box on the right. ── */}
+          <div className="relative overflow-hidden rounded-[22px] border border-line/50" style={{ background: SAGE_WASH }}>
+            {/* One soft white ellipse low on the right - a shape, not a set of circles. */}
+            <span aria-hidden className="pointer-events-none absolute -bottom-[220px] right-[120px] h-[360px] w-[620px] rounded-[50%] bg-white/50" />
+            <div className="relative p-5">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-5 md:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)_320px]">
+              {/* The photograph: from the address line down to the foot of the
+                  card, the exact height of what is beside it, cropped to fit. */}
+              <div className="flex min-w-0 flex-col">
+                <button
+                  type="button"
+                  onClick={() => photos.length && setLightbox(0)}
+                  className={`group relative block h-[220px] w-full flex-1 overflow-hidden rounded-2xl border border-white/70 bg-white md:h-auto md:min-h-[240px] ${photos.length ? "cursor-zoom-in" : "cursor-default"}`}
+                  aria-label={photos.length ? "Open the photos" : "No photographs yet"}
+                >
+                  <PropertyPhoto src={photos[0] ?? null} className="absolute inset-0 h-full w-full transition-transform duration-300 group-hover:scale-[1.03]" />
+                  {photos.length > 1 && (
+                    <span className="absolute bottom-2 right-2 rounded-full bg-black/45 px-2 py-0.5 text-[10.5px] font-semibold text-white">{photos.length} photos</span>
                   )}
-                </p>
-                <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                  <Pill tone={status.tone}>{status.label}</Pill>
-                  <span className="figures text-[18px]">
-                    £{listing.rent?.toLocaleString("en-GB")}
-                    <span className="text-[11px] text-muted"> pcm</span>
-                  </span>
-                </div>
-
-                {/* The two buttons that matter, before anything else. */}
-                <div className="mt-5 flex flex-wrap gap-2.5">
-                  <PressButton
-                    onClick={() => setEmailing(true)}
-                    className="press-ring flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-page"
-                  >
-                    <DoodleIcon name="mail" size={14} />
-                    Email to tenants
-                  </PressButton>
-                  {LISTING_BOOKER_LIVE && (
-                    <PressButton
-                      onClick={() => setBooking(true)}
-                      className="press-ring flex items-center gap-2 rounded-full border border-ink/25 px-5 py-2.5 text-[12.5px] font-semibold"
-                    >
-                      <DoodleIcon name="calendar" size={14} />
-                      Arrange viewing
-                    </PressButton>
-                  )}
-
-                </div>
-
-                {/* Straight out to the live advert, one link per portal this
-                    property is actually feeding. The URLs are the ones the
-                    portals issued back to REX, so a link here opens exactly
-                    what a tenant sees — and its absence means the feed isn't
-                    running, which is worth knowing too.
-
-                    Deliberately lighter than the two buttons above. The column
-                    they share is a fixed ~187px on desktop, so everything in it
-                    stacks; at full button weight three portals would bury the
-                    two actions that actually do something under a wall of
-                    identical pills. These are somewhere to GO, not something to
-                    DO, and they read that way. */}
-                {(portalsLoading || portals.length > 0) && (
-                  <div className="mt-3.5">
-                    {/* One icon on the label, none on the chips. The column is
-                        187px wide: an icon per chip costs ~17px each and is
-                        the difference between "Rightmove Zoopla" sharing a line
-                        and all three going single file. */}
-                    <p className="flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.08em] text-muted">
-                      <DoodleIcon name="link" size={11} />
-                      Live advert
-                    </p>
-                    {/* When, as well as where. The go-live day is REX's
-                        publication time. The portals themselves are the chips
-                        below: a chip is a feed that is running. REX keeps no
-                        date per portal (probed 4 Sep). Item 20 on the list. */}
-                    {listing.publishedAt && (
-                      <p className="mt-1 text-[11px] text-muted">
-                        Live since{" "}
-                        {new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                      </p>
-                    )}
-                    <div className="mt-1.5 flex flex-wrap gap-1.5">
+                </button>
+                <div className="hidden">
+                  {(portalsLoading || portals.length > 0) && (
+                    <div className="mt-1 flex flex-wrap gap-1.5">
                       {portalsLoading && portals.length === 0 ? (
-                        <span className="rounded-full border border-line px-2.5 py-1 text-[11.5px] text-muted">
-                          Checking…
-                        </span>
+                        <span className="rounded-full border border-line/60 bg-white px-2.5 py-1 text-[11px] text-muted">Checking the portals…</span>
                       ) : (
                         portals.map((p) => (
                           <a
@@ -773,188 +877,425 @@ export default function ListingDrawer({
                             target="_blank"
                             rel="noopener noreferrer"
                             title={`Open this property on ${p.portal}`}
-                            className="press-ring rounded-full border border-line px-2.5 py-1 text-[11.5px] text-muted transition-colors hover:border-ink/30 hover:text-ink"
+                            className="press-ring rounded-full border border-line/60 bg-white px-2.5 py-1 text-[11px] font-semibold transition-colors hover:border-ink/40"
                           >
                             {p.portal}
                           </a>
                         ))
                       )}
                     </div>
-                  </div>
-                )}
-              </div>
-
-              {/* The landlord, because the first question on any property is
-                  "whose is it and can I ring them". */}
-              {/* Twice the width it had (James, 7 Sep): a name, a number and an
-                  email should not be truncating in a 210px column. */}
-              <div className="hidden w-[250px] shrink-0 rounded-2xl border border-line/70 p-5 lg:block xl:w-[380px] 2xl:w-[420px]">
-                {/* ── Terms, as one word rather than a panel.
-                    By the time a property is in Listings the terms are signed,
-                    so a box asking whether to send them is a permanent
-                    question nobody has. What is worth knowing at a glance is
-                    that they ARE signed — and, on the rare record where they
-                    aren't, that they are not. The copy itself lives in
-                    Documents; sending is a pop-out you open on purpose. ── */}
-                {terms.status === "ready" && (
-                  <button
-                    type="button"
-                    onClick={() => setTab("documents")}
-                    title="Open Documents"
-                    className={`mb-2.5 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors ${
-                      terms.signed
-                        ? "border-emerald-600/40 text-emerald-700 hover:border-emerald-600/70"
-                        : "border-accent-dark/50 text-accent-dark hover:border-accent-dark"
-                    }`}
-                  >
-                    <DoodleIcon name="file-contract" size={11} />
-                    {terms.signed ? "Terms signed" : "No terms on file"}
-                  </button>
-                )}
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                  Landlord
-                </p>
-                {/* The REAL landlord, off the listing's owner relationship in
-                    REX. Was three lines of invented contact details rendered
-                    exactly like real ones. Loading, present, absent and
-                    unreachable are four different things and say so. */}
-                {landlord.status === "loading" && (
-                  <p className="mt-1.5 flex items-center gap-2 text-[11.5px] text-muted">
-                    <span className="block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
-                    Looking them up…
-                  </p>
-                )}
-                {landlord.status === "known" && (
-                  <>
-                    <p className="hand mt-1.5 text-[14px]">{landlord.landlord.name}</p>
-                    <p className="mt-2 flex items-center gap-2 text-[11.5px] text-muted">
-                      <DoodleIcon name="call" size={13} />
-                      {landlord.landlord.phone ?? "No number on file"}
-                    </p>
-                    <p className="mt-1 flex items-center gap-2 truncate text-[11.5px] text-muted">
-                      <DoodleIcon name="mail" size={13} />
-                      {landlord.landlord.email ?? "No email on file"}
-                    </p>
-                  </>
-                )}
-                {landlord.status === "none" && (
-                  <>
-                    <p className="hand mt-1.5 text-[14px] text-muted/70">Not recorded in REX</p>
-                    <p className="mt-2 text-[11px] leading-relaxed text-muted">
-                      No landlord is held against this property, so there is nobody to ring or
-                      email from here. Adding them to the listing in REX brings them through.
-                    </p>
-                  </>
-                )}
-                {landlord.status === "problem" && (
-                  <p className="mt-1.5 text-[11px] leading-relaxed text-accent-dark">
-                    {landlord.says}
-                  </p>
-                )}
-                {/* The people the property comes with. A tenanted viewing
-                    without a heads-up is how goodwill dies — so the tenant
-                    lives on the record, and the booker offers to tell them. */}
-                {listing.tenant && (
-                  <div className="mt-3 border-t border-line/60 pt-2.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">
-                      Current tenant
-                    </p>
-                    <p className="hand mt-1 text-[13px]">{listing.tenant.name}</p>
-                    <p className="mt-1 flex items-center gap-2 text-[11px] text-muted">
-                      <DoodleIcon name="call" size={12} /> {listing.tenant.phone}
-                    </p>
-                    <p className="mt-0.5 flex items-center gap-2 truncate text-[11px] text-muted">
-                      <DoodleIcon name="mail" size={12} /> {listing.tenant.email}
-                    </p>
-                  </div>
-                )}
-                {/* Said "Stand-in until the REX property record is joined in."
-                    That was honest when the landlord above it was one of five
-                    invented people. It is now read from REX, so the old line
-                    would be a lie in the opposite direction — telling an agent
-                    a real landlord is a placeholder, which is how a real
-                    person's details get ignored. It only appears now when
-                    there IS something provisional to say. */}
-                {landlord.status === "known" && (
-                  <p className="mt-3 border-t border-line/60 pt-2.5 text-[10px] leading-relaxed text-muted">
-                    From the property record in REX.
-                  </p>
-                )}
-              </div>
-            </div>
-
-          </div>
-
-          {/* ── The process, same grammar as the lead record: the rail says
-              where the property is, the sentence under it says what to do
-              about it, and the button does that thing. ── */}
-          <div className="mt-5 rounded-3xl border border-line/80 bg-panel p-6">
-            <ProcessTimeline
-              steps={LISTING_TRACK}
-              current={step}
-              onPick={setStep}
-            />
-
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-x-8 gap-y-4 border-t border-line/60 pt-5">
-              <div className="min-w-[240px] max-w-xl flex-1">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Next action
-                </p>
-                <p className="hand mt-1.5 text-[17px] leading-snug">{here.title}</p>
-                <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{here.detail}</p>
-              </div>
-
-              <div className="flex shrink-0 flex-col items-end gap-2">
-                <div className="flex flex-wrap items-center justify-end gap-2.5">
-                  {/* Offers land WHILE viewings run — the two live together
-                      and the record doesn't move until the agent says the
-                      viewings have stopped. No "already done" shortcut: this
-                      process moves when the work moves, not before. */}
-                  {here.id === "viewings" && (
-                    <PressButton
-                      onClick={() => setOffering(true)}
-                      className="press-ring flex items-center gap-2 rounded-full border border-ink/25 px-5 py-3 text-[13px] font-semibold"
-                    >
-                      <DoodleIcon name="coin" size={15} />
-                      Make an offer
-                    </PressButton>
-                  )}
-                  {here.action === "viewing" && !LISTING_BOOKER_LIVE ? (
-                    <p className="max-w-[240px] text-right text-[11.5px] leading-snug text-muted">
-                      Book viewings from the applicant&apos;s lead, or in REX, for now
-                    </p>
-                  ) : (
-                  <PressButton
-                    onClick={fire}
-                    className={`press-ring flex items-center gap-2 rounded-full px-6 py-3 text-[13px] font-semibold ${
-                      here.action === "review" && !offers.length
-                        ? "cursor-not-allowed bg-ink/30 text-page/60"
-                        : "bg-accent-dark text-page"
-                    }`}
-                  >
-                    <DoodleIcon name={here.icon} size={15} />
-                    {here.cta}
-                  </PressButton>
                   )}
                 </div>
-                {here.id === "viewings" && (
-                  <button
-                    type="button"
-                    onClick={() => offers.length && advance()}
-                    className={`text-[11px] font-semibold transition-colors ${
-                      offers.length ? "text-muted hover:text-ink" : "cursor-not-allowed text-muted/40"
-                    }`}
-                    title={offers.length ? undefined : "No offers yet — nothing for the landlord to review"}
-                  >
-                    Viewings have stopped → landlord review
-                  </button>
-                )}
-                {here.action === "review" && !offers.length && (
-                  <p className="text-[10.5px] text-muted">No applications logged yet.</p>
-                )}
               </div>
+
+              {/* The listing itself. */}
+              <div className="min-w-0 md:pr-2">
+                <h2 className="hand text-[28px] leading-[1.1]">{listing.name}</h2>
+                <p className="mt-1.5 text-[13px] text-muted">{listing.locality}</p>
+                <p className="mt-3 flex items-baseline gap-1.5">
+                  <span className="figures text-[28px] leading-none">
+                    {listing.rent == null ? "—" : `£${listing.rent.toLocaleString("en-GB")}`}
+                  </span>
+                  <span className="text-[12px] text-muted">{listing.rent == null ? "rent not set" : "pcm"}</span>
+                </p>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <Tag tone={status.tone}>{status.label}</Tag>
+                  {listing.tenant && <Tag tone="neutral">Tenanted</Tag>}
+                  {/* Terms, as one word rather than a panel. The copy lives in Documents. */}
+                  {terms.status === "ready" && (
+                    <button
+                      type="button"
+                      onClick={() => setTab("documents")}
+                      title="Open Documents"
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                        terms.signed ? "bg-white text-[#56634a]" : "border border-accent-dark/50 bg-white text-accent-dark hover:border-accent-dark"
+                      }`}
+                    >
+                      <DoodleIcon name="file-contract" size={11} />
+                      {terms.signed ? "Terms signed" : "No terms on file"}
+                    </button>
+                  )}
+                  {listing.publishedAt && (
+                    <span className="text-[11.5px] text-muted">
+                      Live since {new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    </span>
+                  )}
+                  {/* The portals this property is actually feeding, from REX. */}
+                  {portalsLoading && portals.length === 0 ? (
+                    <span className="rounded-full border border-line/60 bg-white px-2.5 py-1 text-[11px] text-muted">Checking the portals…</span>
+                  ) : (
+                    portals.map((p) => (
+                      <a
+                        key={p.portal}
+                        href={p.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`Open this property on ${p.portal}`}
+                        className="press-ring rounded-full border border-line/60 bg-white px-2.5 py-1 text-[11px] font-semibold transition-colors hover:border-ink/40"
+                      >
+                        {p.portal}
+                      </a>
+                    ))
+                  )}
+                </div>
+
+                {/* Two buttons, side by side, both in the dark chocolate (James,
+                    11 Sep): getting INTO the property, and getting it OUT to
+                    the database. They used to be one ambiguous "Email to
+                    tenants". */}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <AccessRequest
+                    value={access}
+                    onChange={setAccess}
+                    loading={accessStatus === "loading"}
+                    address={listing.name}
+                    agent={me}
+                    tenant={listing.tenant ?? null}
+                    landlord={landlord.status === "known" ? landlord.landlord : null}
+                    viewings={upcomingOptions}
+                    onBook={LISTING_BOOKER_LIVE ? () => setBooking(true) : undefined}
+                  />
+                  <PressButton
+                    onClick={() => setEmailing(true)}
+                    className="press-ring flex items-center gap-2 rounded-full bg-[var(--brown)] px-4 py-2.5 text-[12.5px] font-semibold text-white"
+                  >
+                    <DoodleIcon name="megaphone" size={14} />
+                    Mail the database
+                  </PressButton>
+                  {LISTING_BOOKER_LIVE && (
+                    <PressButton
+                      onClick={() => setBooking(true)}
+                      className="press-ring flex items-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold"
+                    >
+                      <DoodleIcon name="calendar" size={14} />
+                      Arrange viewing
+                    </PressButton>
+                  )}
+                </div>
+              </div>
+
+              {/* Property details: the facts, small, in a white box. The
+                  ones an agent sets (type, beds, baths, furnishing) come
+                  from the Marketing tab and show here the moment they do. */}
+              <aside className="rounded-2xl border border-line/40 bg-white p-4 md:col-span-2 xl:col-span-1">
+                <p className="hand flex items-center gap-2 text-[14px]">
+                  <DoodleIcon name="home" size={14} className="text-accent-dark" />
+                  Property details
+                </p>
+                <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[12px] md:grid-cols-4 xl:grid-cols-2">
+                  {[
+                    ["Type", type || "Not set"],
+                    ["Bedrooms", beds ? String(beds) : "Not set"],
+                    ["Bathrooms", baths ? String(baths) : "Not set"],
+                    ["Furnishing", furnished || "Not set"],
+                    ["Available from", listing.availableFrom ? new Date(`${listing.availableFrom}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Now"],
+                    ["EPC expires", listing.epcExpiry ? new Date(`${listing.epcExpiry}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Not recorded"],
+                  ].map(([k, v]) => (
+                    <div key={k} className="min-w-0">
+                      <dt className="text-[10.5px] text-muted">{k}</dt>
+                      <dd className={`truncate font-semibold ${v === "Not set" || v === "Not recorded" ? "font-normal text-muted" : ""}`}>{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <button type="button" onClick={() => setTab("marketing")} className="mt-3 text-[11.5px] font-semibold text-accent-dark hover:underline">
+                  Edit in Marketing →
+                </button>
+              </aside>
+            </div>
             </div>
           </div>
+
+          {/* ── THREE CARDS: the landlord, at a glance, and next up. ── */}
+          <div className="mt-5 grid gap-5 lg:grid-cols-3">
+            {/* The landlord, because the first question on any property is
+                "whose is it and can I ring them". The REAL landlord, off the
+                listing's owner relationship in REX. */}
+            <section className="flex flex-col rounded-[22px] border border-line/50 bg-white p-5">
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">The landlord</p>
+              {landlord.status === "loading" && (
+                <p className="mt-4 flex items-center gap-2 text-[12px] text-muted">
+                  <span className="block h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+                  Looking them up…
+                </p>
+              )}
+              {landlord.status === "known" && (
+                <>
+                  <p className="hand mt-2 text-[22px] leading-tight">{landlord.landlord.name}</p>
+                  <div className="mt-3 space-y-1.5 border-t border-line/50 pt-3 text-[13px]">
+                    {landlord.landlord.phone ? (
+                      <a href={`tel:${landlord.landlord.phone.replace(/\s+/g, "")}`} className="flex items-center gap-2.5 hover:underline"><DoodleIcon name="call" size={13} className="text-accent-dark" />{landlord.landlord.phone}</a>
+                    ) : (
+                      <p className="flex items-center gap-2.5 text-muted"><DoodleIcon name="call" size={13} />No number on file</p>
+                    )}
+                    {landlord.landlord.email ? (
+                      <a href={`mailto:${landlord.landlord.email}`} className="flex min-w-0 items-center gap-2.5 hover:underline"><DoodleIcon name="mail" size={13} className="shrink-0 text-accent-dark" /><span className="truncate">{landlord.landlord.email}</span></a>
+                    ) : (
+                      <p className="flex items-center gap-2.5 text-muted"><DoodleIcon name="mail" size={13} />No email on file</p>
+                    )}
+                  </div>
+                </>
+              )}
+              {landlord.status === "none" && (
+                <p className="mt-4 text-[12.5px] leading-relaxed text-muted">
+                  No landlord is held against this property in REX, so there is nobody to ring or email from here. Adding them to the listing in REX brings them through.
+                </p>
+              )}
+              {landlord.status === "problem" && (
+                <p className="mt-4 text-[12px] leading-relaxed text-accent-dark">{landlord.says}</p>
+              )}
+              {listing.tenant && (
+                <div className="mt-auto border-t border-line/50 pt-3.5">
+                  <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">Current tenant</p>
+                  <p className="mt-1.5 text-[13px] font-semibold">{listing.tenant.name}</p>
+                  <p className="mt-0.5 flex flex-wrap gap-x-3 text-[12px] text-muted">
+                    <span>{listing.tenant.phone}</span>
+                    <span className="truncate">{listing.tenant.email}</span>
+                  </p>
+                </div>
+              )}
+            </section>
+
+            {/* At a glance: what is happening on the listing - the numbers
+                the tabs hold, so the record answers before anyone clicks. */}
+            <section className="rounded-[22px] border border-line/50 bg-white p-5">
+              <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">At a glance</p>
+              <ul className="mt-3 space-y-3">
+                {[
+                  { icon: "target", title: enquiries === null ? "Reading the enquiries…" : `${enquiries.length} enquir${enquiries.length === 1 ? "y" : "ies"}`, sub: "From the portals, on this listing", to: "applications" as TabKey },
+                  { icon: "calendar", title: viewings === null ? "Reading the diary…" : `${viewings.upcoming.length + booked.length} booked · ${viewings.past.length} done`, sub: "Viewings", to: "viewings" as TabKey },
+                  { icon: "coin", title: liveApps === null ? "Reading the applications…" : `${(liveApps?.length ?? 0) + offers.length} application${(liveApps?.length ?? 0) + offers.length === 1 ? "" : "s"}`, sub: liveApps?.some((a) => /accept/i.test(a.statusLabel)) ? "One accepted" : "None accepted yet", to: "applications" as TabKey },
+                  { icon: "folder", title: `${listing.imageCount} photo${listing.imageCount === 1 ? "" : "s"} on file`, sub: listing.daysOnMarket != null ? `${listing.daysOnMarket} days on the market` : "Not published yet", to: "marketing" as TabKey },
+                ].map((g) => (
+                  <li key={g.sub + g.title}>
+                    <button type="button" onClick={() => setTab(g.to)} className="flex w-full items-start gap-3 text-left">
+                      <DoodleIcon name={g.icon} size={15} className="mt-0.5 shrink-0 text-accent-dark" />
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-semibold leading-snug">{g.title}</span>
+                        <span className="block text-[11.5px] text-muted">{g.sub}</span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            {/* Next up: what the process says to do, and what the record says
+                is missing. Blush here, because the hero is sage. */}
+            <section className="relative flex flex-col overflow-hidden rounded-[22px] bg-accent-soft/70 p-5">
+              <span
+                aria-hidden
+                className="pointer-events-none absolute -bottom-6 -right-8 h-[200px] w-[260px] rotate-[-8deg] rounded-[30px]"
+                style={{
+                  backgroundImage: "repeating-linear-gradient(135deg, color-mix(in srgb, var(--accent-dark) 22%, transparent) 0 1px, transparent 1px 10px)",
+                  maskImage: "radial-gradient(closest-side at 80% 90%, black 10%, transparent 100%)",
+                  WebkitMaskImage: "radial-gradient(closest-side at 80% 90%, black 10%, transparent 100%)",
+                }}
+              />
+              <div className="relative">
+                <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-accent-dark">Next up</p>
+                <h3 className="hand mt-1.5 text-[18px] leading-tight">{here.title}</h3>
+                <p className="mt-1 text-[12px] leading-relaxed text-muted">{here.detail}</p>
+              </div>
+              {/* Before it goes live: the legal minimum, each one a click to
+                  fix. Nothing else on the card until they are all in. */}
+              {here.id === "live" && !isLive && (
+                <ul className="relative mt-3.5 space-y-1.5">
+                  {requirements.map((r) => (
+                    <li key={r.id} className="flex items-center gap-2 text-[12px]">
+                      <span
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${r.done ? "text-white" : "border border-accent/60 bg-white text-transparent"}`}
+                        style={r.done ? { background: SAGE_INK } : undefined}
+                      >
+                        ✓
+                      </span>
+                      {r.done ? (
+                        <span>{r.label}</span>
+                      ) : (
+                        <button type="button" onClick={r.fix} className="text-left font-semibold hover:underline">{r.label.replace(/ on file$| on$| filed$| written$/, "")} · add it</button>
+                      )}
+                    </li>
+                  ))}
+                  {certs === null && <li className="text-[11px] text-muted">Reading the certificates…</li>}
+                </ul>
+              )}
+              <div className="relative mt-auto flex flex-wrap items-center gap-2.5 pt-4">
+                {here.id === "live" ? (
+                  isLive ? (
+                    <p className="text-[12px] leading-relaxed" style={{ color: SAGE_INK }}>
+                      On the portals{listing.publishedAt ? ` since ${new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}.
+                    </p>
+                  ) : (
+                    <>
+                      {/* Full colour, never greyed. Hover it and it says what
+                          is still missing (James, 11 Sep). */}
+                      <span className="group relative">
+                        <PressButton
+                          onClick={() => readyToGoLive && advance()}
+                          className={`press-ring flex items-center gap-2 rounded-full bg-[var(--brown)] px-5 py-2.5 text-[12.5px] font-semibold text-white ${readyToGoLive ? "" : "cursor-not-allowed"}`}
+                        >
+                          <DoodleIcon name="megaphone" size={14} />
+                          Push to the portals
+                        </PressButton>
+                        {!readyToGoLive && (
+                          <span
+                            role="tooltip"
+                            className="pointer-events-none absolute bottom-full left-0 z-10 mb-2 w-64 rounded-xl bg-ink px-3.5 py-2.5 text-[11.5px] leading-snug text-white opacity-0 shadow-lg transition-opacity duration-200 group-hover:opacity-100"
+                          >
+                            Can&apos;t push it live until{" "}
+                            {(() => {
+                              const words: Record<string, string> = { photos: "the photographs are on", description: "the description is written", epc: "the EPC is filed", gas: "the gas safety is on file", eicr: "the EICR is on file" };
+                              const m = requirements.filter((r) => !r.done).map((r) => words[r.id] ?? r.label);
+                              return m.length > 1 ? `${m.slice(0, -1).join(", ")} and ${m[m.length - 1]}` : m[0] ?? "the certificates are read";
+                            })()}.
+                            <span aria-hidden className="absolute left-5 top-full h-0 w-0 border-x-[6px] border-t-[6px] border-x-transparent border-t-ink" />
+                          </span>
+                        )}
+                      </span>
+                      {readyToGoLive && (
+                        <span className="text-[11px] leading-snug text-muted">Moves the record on. The push into REX waits on the REX write allowlist.</span>
+                      )}
+                    </>
+                  )
+                ) : here.action === "viewing" && !LISTING_BOOKER_LIVE ? (
+                  <p className="text-[11.5px] leading-snug text-muted">Book viewings from the applicant&apos;s lead, or in REX, for now.</p>
+                ) : (
+                  <PressButton
+                    onClick={fire}
+                    className={`press-ring flex items-center gap-2 rounded-full px-5 py-2.5 text-[12.5px] font-semibold ${
+                      here.action === "review" && !offers.length ? "cursor-not-allowed bg-ink/30 text-white/60" : "bg-accent-dark text-white"
+                    }`}
+                  >
+                    <DoodleIcon name={here.icon} size={14} />
+                    {here.cta}
+                  </PressButton>
+                )}
+                {here.id === "viewings" && (
+                  <PressButton
+                    onClick={() => setOffering(true)}
+                    className="press-ring flex items-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold"
+                  >
+                    <DoodleIcon name="coin" size={14} />
+                    Make an offer
+                  </PressButton>
+                )}
+              </div>
+              {here.id === "viewings" && (
+                <button
+                  type="button"
+                  onClick={() => offers.length && advance()}
+                  className={`relative mt-2.5 text-left text-[11px] font-semibold transition-colors ${offers.length ? "text-muted hover:text-ink" : "cursor-not-allowed text-muted/50"}`}
+                  title={offers.length ? undefined : "No offers yet — nothing for the landlord to review"}
+                >
+                  Viewings have stopped → landlord review
+                </button>
+              )}
+              {here.action === "review" && !offers.length && (
+                <p className="relative mt-2 text-[10.5px] text-muted">No applications logged yet.</p>
+              )}
+            </section>
+          </div>
+
+          {/* ── WHERE IT'S UP TO: the appraisal file's spine, with the small
+              ticks under each step - what the record can say has happened. ── */}
+          <section className="mt-5 rounded-[22px] border border-line/50 bg-white p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="hand text-[17px]">Where it&apos;s up to</h3>
+                <p className="mt-0.5 text-[12px] text-muted">Track progress through the {LISTING_TRACK.length} steps of a listing. Click a step to move the record.</p>
+              </div>
+              <span className="rounded-full px-3 py-1 text-[10.5px] font-semibold uppercase tracking-[0.12em]" style={{ background: SAGE_WASH, color: SAGE_INK }}>
+                Step {Math.min(step, LISTING_TRACK.length - 1) + 1} of {LISTING_TRACK.length}
+              </span>
+            </div>
+            {(() => {
+              const at = Math.min(step, LISTING_TRACK.length - 1);
+              const n = (viewings?.upcoming.length ?? 0) + (viewings?.past.length ?? 0) + booked.length;
+              const apps = (liveApps?.length ?? 0) + offers.length;
+              const accepted = liveApps?.some((a) => /accept/i.test(a.statusLabel)) || (here.id === "accepted" || here.id === "handover");
+              const ticks: Record<string, { label: string; done: boolean; detail?: string }[]> = {
+                live: [
+                  ...requirements.map((r) => ({ label: r.label, done: r.done, detail: r.id === "photos" && photos.length ? String(photos.length) : undefined })),
+                  { label: "Published to the portals", done: isLive, detail: listing.publishedAt ? new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : undefined },
+                ],
+                viewings: [
+                  { label: "Enquiries in", done: (enquiries?.length ?? 0) > 0, detail: enquiries?.length ? String(enquiries.length) : undefined },
+                  { label: "Viewings booked", done: n > 0, detail: n ? String(n) : undefined },
+                  { label: "Offers logged", done: apps > 0, detail: apps ? String(apps) : undefined },
+                ],
+                offers: [{ label: "Sent to the landlord", done: at > 2 }],
+                accepted: [{ label: "Offer accepted", done: Boolean(accepted) }],
+                handover: [{ label: "Handed over to Kirstie", done: at > 4 }],
+              };
+              return (
+                <div className="-mx-2 mt-5 overflow-x-auto px-2 pb-1">
+                  <ol className="grid min-w-[640px]" style={{ gridTemplateColumns: `repeat(${LISTING_TRACK.length}, minmax(0, 1fr))` }}>
+                    {LISTING_TRACK.map((st, i) => {
+                      const done = i < at;
+                      const cur = i === at;
+                      return (
+                        <li key={st.id} className="relative flex flex-col items-center px-1 text-center">
+                          {i > 0 && (
+                            <span
+                              aria-hidden
+                              className={`absolute left-[-50%] right-[50%] top-[13px] ${i <= at ? "h-0.5" : "h-0 border-t-2 border-dashed border-line/80"}`}
+                              style={i <= at ? { background: SAGE_INK } : undefined}
+                            />
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setStep(i)}
+                            title={`Move the record to ${st.label}`}
+                            className={`relative z-[1] flex h-[26px] w-[26px] items-center justify-center rounded-full text-[11px] font-semibold transition-transform hover:scale-110 ${
+                              done ? "text-white" : cur ? "bg-accent-dark text-white" : "border-[1.5px] border-line/80 bg-white text-muted"
+                            }`}
+                            style={done ? { background: SAGE_INK } : undefined}
+                          >
+                            {done ? "✓" : i + 1}
+                          </button>
+                          <p className={`mt-2.5 text-[12px] leading-tight ${cur ? "font-semibold" : "text-muted"}`}>{st.label}</p>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                  <ol className="mt-4 grid min-w-[640px] gap-2" style={{ gridTemplateColumns: `repeat(${LISTING_TRACK.length}, minmax(0, 1fr))` }}>
+                    {LISTING_TRACK.map((st, i) => {
+                      const done = i < at;
+                      const cur = i === at;
+                      const list = ticks[st.id] ?? [];
+                      return (
+                        <li
+                          key={st.id}
+                          className={`rounded-2xl border p-3 ${cur ? "border-accent/60 bg-accent-soft/40" : "border-line/50"}`}
+                          style={done ? { background: SAGE_WASH, borderColor: "transparent" } : undefined}
+                        >
+                          <p className={`text-[11.5px] ${cur ? "font-semibold" : "text-muted"}`}>{st.label}</p>
+                          {cur && <p className="mt-1 text-[10.5px] leading-snug text-muted">{st.title}</p>}
+                          {list.length > 0 && (
+                            <ul className="mt-2.5 space-y-1.5">
+                              {list.map((t) => (
+                                <li key={t.label} className="flex items-start gap-1.5 text-[10.5px] leading-snug">
+                                  <span
+                                    className={`mt-[1px] flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[8px] ${t.done ? "text-white" : "border border-line/80 bg-white text-transparent"}`}
+                                    style={t.done ? { background: done ? SAGE_INK : "var(--accent-dark)" } : undefined}
+                                  >
+                                    ✓
+                                  </span>
+                                  <span className={t.done ? "text-ink" : "text-muted"}>
+                                    {t.label}
+                                    {t.detail && <span className="text-muted"> · {t.detail}</span>}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
+              );
+            })()}
+          </section>
 
           {/* ── From "offer accepted" onward, the landlord, the property and
               the tenant are one thing. The panel is the record of that, and
@@ -967,43 +1308,11 @@ export default function ListingDrawer({
               )}
             </div>
           )}
-
-          {/* The terms-of-business panel used to sit here, open on every
-              property at every step. It is now a pill in the header and a
-              Documents tab — see the note beside the pill. */}
-
-          {/* ── Tabs ── */}
-          <div className="mt-5 flex gap-1 overflow-x-auto border-b border-line/80">
-            {TABS.map((t) => (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => setTab(t.key)}
-                className={`hand relative whitespace-nowrap px-4 py-2.5 text-[13.5px] transition-colors ${
-                  tab === t.key ? "text-ink" : "text-muted hover:text-ink"
-                }`}
-              >
-                {t.label}
-                {/* Each tab counts its own now that they are two lists. */}
-                {t.key === "home" && (offers.length + (liveApps?.length ?? 0)) > 0 && (
-                  <span className="figures ml-1.5 text-[10.5px] text-muted">
-                    {offers.length + (liveApps?.length ?? 0)}
-                  </span>
-                )}
-                {t.key === "viewings" && (booked.length + (viewings?.upcoming.length ?? 0)) > 0 && (
-                  <span className="figures ml-1.5 text-[10.5px] text-muted">
-                    {booked.length + (viewings?.upcoming.length ?? 0)}
-                  </span>
-                )}
-                {tab === t.key && (
-                  <span className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-accent-dark" />
-                )}
-              </button>
-            ))}
           </div>
+          )}
 
-          <div className="mt-5">
-            {tab === "home" && enquiries !== null && (
+          <div key={`view-${tab}`} className={tab === "home" ? "" : "fade-up"}>
+            {tab === "applications" && enquiries !== null && (
               /* ── The enquiries REX holds against this listing, as REX's own
                     Leads tab shows them. Each opens on the Leads board. ── */
               <div className="mb-4">
@@ -1012,12 +1321,12 @@ export default function ListingDrawer({
                   <ul className="divide-y divide-line/40">
                     {enquiries.slice(0, 12).map((e) => (
                       <li key={e.id} className="flex items-center gap-2">
-                        <a href={`/leads?open=${encodeURIComponent(e.id)}`} className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 py-2.5 transition-colors hover:bg-box sm:grid-cols-[minmax(0,1.2fr)_110px_minmax(0,1fr)_90px]">
+                        <a href={`/leads?open=${encodeURIComponent(e.id)}`} className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 py-2.5 transition-colors hover:bg-page sm:grid-cols-[minmax(0,1.2fr)_110px_minmax(0,1fr)_90px]">
                           <span className="min-w-0">
                             <span className="hand block truncate text-[13px]">{e.name}</span>
                             <span className="block truncate text-[10.5px] text-muted">{[e.phone, e.email].filter(Boolean).join(" · ") || "No contact details"}</span>
                           </span>
-                          <span className="hidden sm:block"><Pill tone="neutral">{e.source}</Pill></span>
+                          <span className="hidden sm:block"><Tag tone="neutral">{e.source}</Tag></span>
                           <span className="hidden min-w-0 truncate text-[11px] text-muted sm:block">{e.message || "—"}</span>
                           <span className="text-right text-[11px] text-muted">{e.received}</span>
                         </a>
@@ -1042,7 +1351,7 @@ export default function ListingDrawer({
               </Card>
               </div>
             )}
-            {tab === "home" && (
+            {tab === "applications" && (
               <div className="grid gap-4">
                 {/* The applications on this listing, on their own tab. */}
                 <Card
@@ -1064,7 +1373,7 @@ export default function ListingDrawer({
                       {liveApps.map((a) => (
                         <li key={a.id} className="flex items-center gap-3 py-2">
                           <span className="hand min-w-0 flex-1 truncate text-[13px]">{a.applicants || "Applicant not named"}</span>
-                          <Pill tone={/accept/i.test(a.statusLabel) ? "good" : /unsuccess|withdraw|declin/i.test(a.statusLabel) ? "neutral" : "accent"}>{a.statusLabel}</Pill>
+                          <Tag tone={/accept/i.test(a.statusLabel) ? "good" : /unsuccess|withdraw|declin/i.test(a.statusLabel) ? "neutral" : "accent"}>{a.statusLabel}</Tag>
                           {a.offerAmount != null && <span className="figures text-[13px]">£{a.offerAmount.toLocaleString("en-GB")}</span>}
                         </li>
                       ))}
@@ -1073,7 +1382,7 @@ export default function ListingDrawer({
                   {offers.length ? (
                     <ul className="space-y-3">
                       {offers.map((o, i) => (
-                        <li key={i} className="rounded-xl border border-line/60 p-3">
+                        <li key={i} className="rounded-2xl border border-line/50 p-3.5">
                           <div className="flex items-center justify-between gap-3">
                             <span className="hand text-[13.5px]">
                               {o.tenants.map((t) => t.name).join(" & ")}
@@ -1135,7 +1444,7 @@ export default function ListingDrawer({
                           <li key={`b${i}`} className="flex items-center gap-3 border-b border-line/40 py-2.5 last:border-0">
                             <span className="figures w-28 shrink-0 text-[12px] text-accent-dark">{v.when}</span>
                             <span className="min-w-0 flex-1 truncate text-[12.5px]">{v.who}</span>
-                            <Pill tone="neutral">Booked here</Pill>
+                            <Tag tone="neutral">Booked here</Tag>
                           </li>
                         ))}
                       </ul>
@@ -1161,59 +1470,92 @@ export default function ListingDrawer({
               </div>
             )}
 
-            {tab === "property" && (
-              <Card title="The property — edit what's wrong" icon="home">
-                <div className="max-w-md">
-                  <label className="mb-2 block">
-                    <select
-                      value={type}
-                      onChange={(e) => setType(e.target.value)}
-                      className="w-full rounded-lg border border-line/80 bg-transparent px-2.5 py-2 text-[12.5px] outline-none focus:border-ink"
-                    >
-                      <option value="">Property type…</option>
-                      {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </label>
-                  <div className="divide-y divide-line/40">
-                    <Stepper label="Bedrooms" value={beds} onChange={setBeds} />
-                    <Stepper label="Bathrooms" value={baths} onChange={setBaths} />
-                    <Stepper label="Receptions" value={receptions} onChange={setReceptions} />
-                  </div>
-                  <label className="mt-2 block">
-                    <select
-                      value={furnished}
-                      onChange={(e) => setFurnished(e.target.value)}
-                      className="w-full rounded-lg border border-line/80 bg-transparent px-2.5 py-2 text-[12.5px] outline-none focus:border-ink"
-                    >
-                      <option value="">Furnishing…</option>
-                      <option>Furnished</option>
-                      <option>Part furnished</option>
-                      <option>Unfurnished</option>
-                    </select>
-                  </label>
-                  <p className="mt-3.5 border-t border-line/60 pt-2.5 text-[10px] leading-relaxed text-muted">
-                    Everything here shows in the header the moment it&apos;s set. Bedroom
-                    counts aren&apos;t in REX&apos;s listing projection; captured here, they
-                    can be written back.
-                  </p>
-                </div>
-              </Card>
-            )}
-
             {tab === "marketing" && (
-              <Card title="Marketing — edit what's wrong" icon="megaphone">
-                {/* The write-up: REX's "internet" advert, which IS the copy
-                    Rightmove shows. Read live; editing lands once the write
-                    path is proven on a nominated listing. */}
-                <div className="mb-5 rounded-xl border border-line/60 p-4">
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <h4 className="text-[12.5px] font-semibold">Portal write-up</h4>
-                    <div className="flex items-center gap-3">
-                      <span className="text-[10px] text-muted">
-                        {shownBody
-                          ? `${shownBody.length.toLocaleString("en-GB")} characters`
-                          : "Nothing written"}
-                      </span>
+              <div className="space-y-5">
+                <div className="grid gap-5 lg:grid-cols-2">
+                  {/* The property's facts, in the OS's own pickers rather than
+                      the browser's. Everything here shows in the property
+                      details the moment it is set. */}
+                  <section className="rounded-[22px] border border-line/50 bg-white p-5">
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">The property</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <PickOne
+                        label="Property type"
+                        icon="home"
+                        options={TYPES.map((t) => ({ id: t, label: t }))}
+                        value={type || null}
+                        onChange={(v) => setType(v ?? "")}
+                      />
+                      <PickOne
+                        label="Furnishing"
+                        icon="sofa.png"
+                        options={["Furnished", "Part furnished", "Unfurnished"].map((t) => ({ id: t, label: t }))}
+                        value={furnished || null}
+                        onChange={(v) => setFurnished(v ?? "")}
+                      />
+                    </div>
+                    <div className="mt-3 divide-y divide-line/40">
+                      <Stepper label="Bedrooms" value={beds} onChange={setBeds} />
+                      <Stepper label="Bathrooms" value={baths} onChange={setBaths} />
+                      <Stepper label="Receptions" value={receptions} onChange={setReceptions} />
+                    </div>
+                    <p className="mt-3 border-t border-line/50 pt-2.5 text-[10.5px] leading-relaxed text-muted">
+                      Bedroom counts aren&apos;t in REX&apos;s listing projection; captured here, they can be written back.
+                    </p>
+                  </section>
+
+                  {/* The listing itself, read from REX. */}
+                  <section className="rounded-[22px] border border-line/50 bg-white p-5">
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">The listing</p>
+                    <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-[12.5px]">
+                      {[
+                        ["Status", status.label],
+                        ["Rent", listing.rent == null ? "Not set" : `£${listing.rent.toLocaleString("en-GB")} pcm`],
+                        ["Available from", listing.availableFrom ? new Date(`${listing.availableFrom}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Now"],
+                        ["Photos on file", String(photos.length)],
+                        ["EPC expires", listing.epcExpiry ? new Date(`${listing.epcExpiry}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Not recorded"],
+                        ["Days on market", listing.daysOnMarket != null ? String(listing.daysOnMarket) : "Not published"],
+                        ["Live since", listing.publishedAt ? new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Not yet"],
+                        ["Updated in REX", listing.lastUpdated ? (Number.isFinite(new Date(listing.lastUpdated).getTime()) ? new Date(listing.lastUpdated).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : listing.lastUpdated) : "—"],
+                      ].map(([k, v]) => (
+                        <div key={k}>
+                          <dt className="text-[10.5px] text-muted">{k}</dt>
+                          <dd className={`font-semibold ${v === "Not set" || v === "Not recorded" ? "font-normal text-accent-dark" : ""}`}>{v}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                    {photos.length === 0 && (
+                      <p className="mt-4 rounded-xl bg-accent-soft/60 px-3 py-2 text-[11.5px] leading-relaxed text-accent-dark">
+                        No photos. A listing without photos gets almost no portal traffic - the single highest-value thing to fix on this record.
+                      </p>
+                    )}
+                    <p className="mt-3 border-t border-line/50 pt-2.5 text-[10.5px] leading-relaxed text-muted">
+                      Read-only facts until the write path to REX is wired.
+                    </p>
+                  </section>
+                </div>
+
+                {/* The advert: REX's "internet" write-up, which IS the copy
+                    Rightmove shows. Claude drafts it from the record and the
+                    photographs; the agent edits; saving writes it to REX. */}
+                <section className="rounded-[22px] border border-line/50 bg-white p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">The advert</p>
+                      <p className="mt-1 text-[11.5px] text-muted">
+                        {shownBody ? `${shownBody.length.toLocaleString("en-GB")} characters · goes to Rightmove and Zoopla` : "Nothing written yet - it cannot go to the portals without one"}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void writeForMe()}
+                        disabled={writing}
+                        className="flex items-center gap-2 rounded-full bg-[var(--brown)] px-4 py-2.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                      >
+                        <DoodleIcon name="magic-wand" size={14} />
+                        {writing ? "Writing it…" : shownBody ? "Rewrite it for me" : "Write it for me"}
+                      </button>
                       {!editingCopy && (
                         <button
                           type="button"
@@ -1222,152 +1564,165 @@ export default function ListingDrawer({
                             setCopyBody(shownBody ?? "");
                             setEditingCopy(true);
                           }}
-                          className="rounded-full border border-line/80 px-3 py-1 text-[11px] transition-colors hover:border-ink/40"
+                          className="rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold transition-colors hover:border-ink/40"
                         >
-                          {shownBody ? "Edit" : "Write one"}
+                          {shownBody ? "Edit" : "Write one by hand"}
                         </button>
                       )}
                     </div>
                   </div>
 
-                  {editingCopy ? (
-                    <div className="space-y-2.5">
-                      <input
-                        type="text"
-                        value={copyHeading}
-                        onChange={(e) => setCopyHeading(e.target.value)}
-                        placeholder="Headline — the line the portals show first"
-                        className="w-full rounded-lg border border-line/80 px-3 py-2 text-[12.5px] outline-none focus:border-ink"
-                      />
-                      <textarea
-                        value={copyBody}
-                        onChange={(e) => setCopyBody(e.target.value)}
-                        rows={14}
-                        placeholder="Where it is, what it's like, what's nearby…"
-                        className="w-full resize-y rounded-lg border border-line/80 px-3 py-2 text-[12.5px] leading-relaxed outline-none focus:border-ink"
-                      />
-                      <div className="flex flex-wrap items-center gap-2.5">
-                        <button
-                          type="button"
-                          onClick={saveCopy}
-                          disabled={savingCopy}
-                          className="rounded-full bg-ink px-4 py-2 text-[12px] text-page transition-opacity disabled:opacity-50"
-                        >
-                          {savingCopy ? "Saving to REX…" : "Save to REX"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setEditingCopy(false); setCopyError(null); }}
-                          className="rounded-full border border-line/80 px-4 py-2 text-[12px]"
-                        >
-                          Cancel
-                        </button>
-                        <span className="text-[10px] text-muted">
-                          {copyBody.length.toLocaleString("en-GB")} characters · goes to Rightmove
-                        </span>
+                  <div className="mt-4">
+                    {editingCopy ? (
+                      <div className="space-y-2.5">
+                        <input
+                          type="text"
+                          value={copyHeading}
+                          onChange={(e) => setCopyHeading(e.target.value)}
+                          placeholder="Headline - the line the portals show first"
+                          className="w-full rounded-xl border border-line/70 px-3.5 py-2.5 text-[13.5px] font-semibold outline-none focus:border-ink"
+                        />
+                        <textarea
+                          value={copyBody}
+                          onChange={(e) => setCopyBody(e.target.value)}
+                          rows={12}
+                          placeholder="Where it is, what it's like, what's nearby…"
+                          className="w-full resize-y rounded-xl border border-line/70 px-3.5 py-2.5 text-[13px] leading-relaxed outline-none focus:border-ink"
+                        />
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <button
+                            type="button"
+                            onClick={saveCopy}
+                            disabled={savingCopy}
+                            className="rounded-full bg-[var(--brown)] px-5 py-2.5 text-[12.5px] font-semibold text-white transition-opacity disabled:opacity-50"
+                          >
+                            {savingCopy ? "Saving to REX…" : "Save to REX"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setEditingCopy(false); setCopyError(null); }}
+                            className="rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold"
+                          >
+                            Cancel
+                          </button>
+                          <span className="text-[11px] text-muted">{copyBody.length.toLocaleString("en-GB")} characters</span>
+                        </div>
                       </div>
-                      {copyError && (
-                        <p className="rounded-lg bg-accent-soft/60 px-3 py-2 text-[11px] leading-relaxed text-accent-dark">
-                          {copyError}
+                    ) : shownBody ? (
+                      <div className="rounded-2xl bg-page p-5">
+                        {shownHeading && <p className="hand mb-2 text-[17px] leading-snug">{shownHeading}</p>}
+                        <p className="max-h-72 overflow-y-auto whitespace-pre-wrap text-[13px] leading-relaxed text-muted">{shownBody}</p>
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-line/70 bg-page px-6 py-10 text-center">
+                        <p className="hand text-[18px]">No description on this listing</p>
+                        <p className="mx-auto mt-1.5 max-w-md text-[12.5px] leading-relaxed text-muted">
+                          Every published rental in the book has one, and this is what stands between a draft and going live. Let Claude draft it from the record and the photographs, then make it yours.
                         </p>
-                      )}
+                      </div>
+                    )}
+                    {copyError && (
+                      <p className="mt-3 rounded-xl bg-accent-soft/60 px-3.5 py-2.5 text-[12px] leading-relaxed text-accent-dark">{copyError}</p>
+                    )}
+                    {saved && !editingCopy && (
+                      <p className="mt-2.5 text-[11px] text-muted">Saved to REX - read back from the record, not from the box.</p>
+                    )}
+                  </div>
+
+                  {/* Only where there IS an advert: a draft has no campaign. */}
+                  {listing.publicationStatus === "published" && (
+                    <div className="mt-5 border-t border-line/50 pt-5">
+                      <PortalStatsPanel listingId={listing.id} embedded />
                     </div>
-                  ) : shownBody ? (
-                    <>
-                      {shownHeading && (
-                        <p className="mb-2 text-[13px] font-semibold leading-snug">{shownHeading}</p>
+                  )}
+                </section>
+
+                {/* The photographs, all of them, across the bottom. Add more
+                    through the drop zone; they land in R2 under this listing. */}
+                <section className="rounded-[22px] border border-line/50 bg-white p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">
+                      Photos{photos.length ? ` · ${photos.length}` : ""}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {photos.length > 0 && (
+                        <button type="button" onClick={() => setLightbox(0)} className="rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold transition-colors hover:border-ink/40">
+                          Open the showcase
+                        </button>
                       )}
-                      <p className="max-h-64 overflow-y-auto whitespace-pre-wrap text-[12.5px] leading-relaxed text-muted">
-                        {shownBody}
-                      </p>
-                    </>
+                      <button
+                        type="button"
+                        onClick={() => setDrop("photos")}
+                        className="flex items-center gap-2 rounded-full bg-[var(--brown)] px-4 py-2.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90"
+                      >
+                        <DoodleIcon name="upload" size={14} />
+                        Add photos
+                      </button>
+                    </div>
+                  </div>
+                  {photos.length ? (
+                    <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4 xl:grid-cols-6">
+                      {photos.map((p, i) => (
+                        <button
+                          key={p + i}
+                          type="button"
+                          onClick={() => setLightbox(i)}
+                          aria-label={`Photo ${i + 1}`}
+                          className="group overflow-hidden rounded-xl border border-line/50 transition-colors hover:border-ink/40"
+                        >
+                          <PropertyPhoto src={p} className="aspect-[4/3] w-full transition-transform duration-300 group-hover:scale-[1.03]" />
+                        </button>
+                      ))}
+                    </div>
                   ) : (
-                    <p className="rounded-lg bg-accent-soft/50 px-3 py-2 text-[11px] leading-relaxed text-accent-dark">
-                      No description on this listing. It can&apos;t go to the portals
-                      reading like this — every published rental in the book has one,
-                      and this is what stands between a draft and going live.
-                    </p>
-                  )}
-                  {saved && !editingCopy && (
-                    <p className="mt-2.5 text-[10px] text-muted">
-                      Saved to REX — read back from the record, not from the box.
-                    </p>
-                  )}
-                </div>
-
-                {/* The facts and the performance, side by side. The facts
-                    column was capped at max-w-md and left half the tab empty;
-                    what the advert is DOING is the natural neighbour of what
-                    the advert SAYS. ── */}
-                <div className="grid gap-x-8 gap-y-6 lg:grid-cols-2">
-                <div className="min-w-0">
-                <dl className="max-w-md space-y-2 text-[12.5px]">
-                  {[
-                    ["Status", status.label],
-                    ["Rent", `£${listing.rent?.toLocaleString("en-GB")} pcm`],
-                    ["Available from", listing.availableFrom ?? "Not set"],
-                    ["Photos on file", String(listing.imageCount)],
-                    ["EPC expires", listing.epcExpiry ?? "Not recorded"],
-                    ["Age in REX", listing.daysOnMarket != null ? `${listing.daysOnMarket} days` : "—"],
-                  ].map(([k, v]) => (
-                    <div key={k} className="flex justify-between gap-4 border-b border-line/40 pb-2 last:border-0 last:pb-0">
-                      <dt className="text-muted">{k}</dt>
-                      <dd className="text-right">{v}</dd>
-                    </div>
-                  ))}
-                </dl>
-                {listing.imageCount === 0 && (
-                  <p className="mt-3 max-w-md rounded-lg bg-accent-soft/50 px-3 py-2 text-[11px] leading-relaxed text-accent-dark">
-                    No photos. A listing without photos gets almost no portal traffic —
-                    this is the single highest-value thing to fix on this record.
-                  </p>
-                )}
-                <p className="mt-3.5 max-w-md border-t border-line/60 pt-2.5 text-[10px] leading-relaxed text-muted">
-                  Editing these writes back to REX once the write path is wired —
-                  read-only facts until then.
-                </p>
-                </div>
-
-                {/* Only where there IS an advert: a draft has no campaign, and
-                    an empty panel on the 162 unpublished listings would teach
-                    everyone to ignore it. */}
-                {listing.publicationStatus === "published" && (
-                  <PortalStatsPanel listingId={listing.id} embedded />
-                )}
-                </div>
-              </Card>
-            )}
-
-            {tab === "photos" && (
-              <Card title={photos.length ? `Photos · ${photos.length}` : "Photos"} icon="folder">
-                {/* Every photo REX holds, small, and any of them pops the set
-                    out full size (James, 7 Sep). One box after them to add. */}
-                <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 xl:grid-cols-5">
-                  {photos.map((p, i) => (
                     <button
-                      key={p + i}
                       type="button"
-                      onClick={() => setLightbox(i)}
-                      aria-label={`Photo ${i + 1}`}
-                      className="group overflow-hidden rounded-xl border border-line/60 transition-colors hover:border-ink"
+                      onClick={() => setDrop("photos")}
+                      className="mt-4 flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-line/70 bg-page px-6 py-10 text-center transition-colors hover:border-accent-dark/60 hover:bg-accent-soft/30"
                     >
-                      <PropertyPhoto src={p} className="aspect-[4/3] w-full transition-transform duration-300 group-hover:scale-[1.03]" />
+                      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-accent-dark"><DoodleIcon name="folder" size={20} /></span>
+                      <span className="hand mt-3 text-[17px]">No photographs yet</span>
+                      <span className="mt-1 text-[12.5px] text-muted">Drop them here, or click to choose them.</span>
                     </button>
-                  ))}
-                  <PhotoBox refId={`listing-${listing.id}`} label={photos.length ? "Add a photo" : "Add the main photo"} />
-                </div>
-                <p className="mt-4 border-t border-line/60 pt-3 text-[10.5px] leading-relaxed text-muted">
-                  Drop a file on any box, or click it. Nothing is stored yet — photos need
-                  the R2 bucket first, because they can&apos;t be pushed straight to REX;
-                  they have to live somewhere with a URL before REX can be handed one.
-                </p>
-              </Card>
+                  )}
+                </section>
+              </div>
             )}
 
             {tab === "compliance" && (
-              <PropertyFile propertyId={listing.propertyId ?? null} address={listing.propertyId ? null : listing.name} screen="the listing" />
+              <div className="space-y-5">
+                {listing.epcExpiry == null && (
+                  <button
+                    type="button"
+                    onClick={() => setDrop("epc")}
+                    className="flex w-full items-center gap-4 rounded-[22px] border border-accent/60 bg-accent-soft/50 p-5 text-left transition-colors hover:bg-accent-soft/80"
+                  >
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-accent-dark"><DoodleIcon name="shield" size={18} /></span>
+                    <span className="min-w-0 flex-1">
+                      <span className="hand block text-[17px]">File the EPC</span>
+                      <span className="block text-[12.5px] text-muted">No EPC is recorded on this listing. Drop the certificate and we read the rating and the dates off it.</span>
+                    </span>
+                    <span className="shrink-0 rounded-full bg-[var(--brown)] px-4 py-2.5 text-[12.5px] font-semibold text-white">Drop it here</span>
+                  </button>
+                )}
+                <div className="[&>section]:rounded-[22px] [&>section]:border-line/50 [&>section]:bg-white">
+                  <PropertyFile key={`file-${drop ?? "x"}`} propertyId={listing.propertyId ?? null} address={listing.propertyId ? null : listing.name} screen="the listing" />
+                </div>
+              </div>
             )}
 
+            {tab === "documents" && (
+              <div className="mb-5 rounded-[22px] border border-line/50 bg-white p-5">
+                <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">How we get in</p>
+                <p className="mt-1 mb-4 text-[12.5px] text-muted">Vacant, through the tenant, or through the landlord. The access button on the record follows this.</p>
+                <AccessSettings
+                  value={access}
+                  onChange={setAccess}
+                  tenant={listing.tenant ?? null}
+                  landlord={landlord.status === "known" ? landlord.landlord : null}
+                />
+              </div>
+            )}
             {tab === "documents" && (
               <ListingDocuments
                 terms={terms}
@@ -1386,7 +1741,17 @@ export default function ListingDrawer({
             )}
 
           </div>
+
         </div>
+
+        {/* The street, pinned to the foot of the drawer whatever is scrolled.
+            The scroll area above keeps 210px clear for it, so it never sits
+            over anything. */}
+        {/* A white fade under the houses, so whatever scrolls beneath them
+            fades out rather than colliding with the drawing. */}
+        <span aria-hidden className="pointer-events-none absolute inset-x-0 bottom-0 h-[150px] bg-gradient-to-t from-white via-white/90 to-transparent" />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/illustrations/street.webp" alt="" aria-hidden className="art art-figure pointer-events-none absolute bottom-0 left-1/2 w-[520px] max-w-[92%] -translate-x-1/2 opacity-90" />
       </aside>
 
       {/* The handover. A confirmation that SHOWS what's being compiled —
@@ -1705,6 +2070,18 @@ export default function ListingDrawer({
         onBooked={(v) => setBooked((cur) => [{ when: v.when, who: v.who }, ...cur])}
       />
       {lightbox != null && <PhotoLightbox photos={photos} start={lightbox} name={listing.name} onClose={() => setLightbox(null)} />}
+      {drop && (
+        <DropZone
+          kind={drop}
+          refId={`listing-${listing.id}`}
+          propertyId={listing.propertyId ?? null}
+          address={listing.name}
+          onClose={() => setDrop(null)}
+          onLanded={(f) => {
+            if (drop === "photos" && f.url) setUploaded((u) => [...u, { key: f.name, url: f.url! }]);
+          }}
+        />
+      )}
     </div>
   );
 }

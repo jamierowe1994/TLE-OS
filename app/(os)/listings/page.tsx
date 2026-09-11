@@ -10,6 +10,7 @@ import StageTabs from "@/components/StageTabs";
 import ListingDrawer from "@/components/ListingDrawer";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DIARY } from "@/lib/diary";
+import { Readiness, Tag, readiness, statusOf } from "@/components/ListingTags";
 import rexSample from "@/lib/rex-sample.json";
 
 /**
@@ -63,97 +64,6 @@ const FALLBACK_COUNTS = rexSample.counts as Counts;
 /** What to print under the price. Weekly rents say so. */
 function rentPeriodLabel(l: SampleListing): string {
   return l.rentPeriod === "week" ? "per week" : "pcm";
-}
-
-function statusOf(l: SampleListing): { label: string; tone: "good" | "accent" | "neutral" } {
-  if (l.letAgreed) return { label: "Let agreed", tone: "neutral" };
-  if (l.publicationStatus === "published") return { label: "Available", tone: "good" };
-  return { label: "Draft", tone: "accent" };
-}
-
-/* Sage, for what is in a good state - the same two values the appraisal
-   screens use. */
-const SAGE_INK = "#56634a";
-const SAGE_WASH = "#f1f4ec";
-
-/**
- * WHERE THE LISTING IS, in one line - the thing an agent scans the board for.
- *
- * Derived from the record, never typed: a draft missing photographs or an
- * EPC needs attention before it can go live; a draft with both is ready to
- * publish; a published listing is live, and says so if it went live short
- * of something; let agreed is its own state. The words name what is missing
- * so the next move is on the row.
- */
-function readiness(l: SampleListing): {
-  tone: "good" | "accent" | "neutral";
-  icon: string;
-  title: string;
-  sub: string;
-  action: string;
-  missing: string[];
-} {
-  const missing: string[] = [];
-  if (l.imageCount === 0) missing.push("photos");
-  if (l.epcExpiry == null) missing.push("EPC");
-  const list = missing.join(" and ");
-  if (l.letAgreed) {
-    return { tone: "neutral", icon: "key", title: "Let agreed", sub: "Under offer to a tenant.", action: "View listing", missing };
-  }
-  if (l.publicationStatus === "published") {
-    return missing.length
-      ? { tone: "accent", icon: "info", title: "Live, needs attention", sub: `Live without ${list}.`, action: "Open listing", missing }
-      : { tone: "good", icon: "checklist", title: "Live", sub: "On the portals, all in order.", action: "Open listing", missing };
-  }
-  return missing.length
-    ? { tone: "accent", icon: "info", title: "Needs attention", sub: `Add ${list} to publish.`, action: "Continue setup", missing }
-    : { tone: "good", icon: "checklist", title: "Ready to publish", sub: "All required info looks good.", action: "Open listing", missing };
-}
-
-/** The readiness box on a row: the state, why, and the one move. */
-function Readiness({ r, compact }: { r: ReturnType<typeof readiness>; /** In a tile: no room for the button. */ compact?: boolean }) {
-  const wash = r.tone === "good" ? { background: SAGE_WASH } : r.tone === "accent" ? { background: "var(--accent-soft)" } : { background: "#f6f6f4" };
-  const ink = r.tone === "good" ? SAGE_INK : r.tone === "accent" ? "var(--accent-dark)" : "var(--muted)";
-  return (
-    <span className={`flex items-center gap-3 rounded-2xl px-3.5 py-3 ${compact ? "" : "min-w-0"}`} style={wash}>
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/85" style={{ color: ink }}>
-        <DoodleIcon name={r.icon} size={14} />
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-[12.5px] font-semibold">{r.title}</span>
-        <span className="line-clamp-2 text-[11px] leading-snug text-muted">{r.sub}</span>
-      </span>
-      {!compact && (
-        <span
-          className={`hidden shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3.5 py-2 text-[11.5px] font-semibold 2xl:inline-flex ${
-            r.tone === "accent" ? "bg-accent-dark text-white" : "border border-line/60 bg-white"
-          }`}
-        >
-          {r.action} <span aria-hidden>›</span>
-        </span>
-      )}
-    </span>
-  );
-}
-
-/** A state pill in the file's style: sage for good, blush for a job to do, outlined for the rest. */
-function Tag({ tone, children }: { tone: "good" | "accent" | "neutral"; children: React.ReactNode }) {
-  if (tone === "good") {
-    return (
-      <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: SAGE_WASH, color: SAGE_INK }}>
-        {children}
-      </span>
-    );
-  }
-  return (
-    <span
-      className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-        tone === "accent" ? "bg-accent-soft text-accent-dark" : "border border-line/60 text-muted"
-      }`}
-    >
-      {children}
-    </span>
-  );
 }
 
 /** One labelled fact in a listing row: the icon, the caption, the value. */

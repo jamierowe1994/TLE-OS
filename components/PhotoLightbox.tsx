@@ -47,6 +47,28 @@ export default function PhotoLightbox({
       <div className="relative z-10 flex shrink-0 items-center justify-between px-5 py-4 text-white">
         <span className="text-[12.5px] font-medium">{at + 1} of {count}</span>
         <div className="flex items-center gap-2">
+          {/* All of them, one after another (James, 11 Sep). The browser
+              asks once whether to allow multiple downloads. */}
+          {count > 1 && (
+            <button
+              type="button"
+              onClick={() => {
+                photos.forEach((p, i) => {
+                  setTimeout(() => {
+                    const a = document.createElement("a");
+                    a.href = `/api/photo/download?u=${encodeURIComponent(p)}&name=${encodeURIComponent(`${name} ${i + 1}`)}`;
+                    a.download = "";
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                  }, i * 350);
+                });
+              }}
+              className="rounded-full bg-white/15 px-3.5 py-2 text-[12px] font-semibold transition-colors hover:bg-white/30"
+            >
+              Download all {count}
+            </button>
+          )}
           {/* Download this photograph (James, 7 Sep): the OS fetches it from
               REX's CDN and hands it down under the property's name. */}
           <a
