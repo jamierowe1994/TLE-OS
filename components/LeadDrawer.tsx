@@ -1332,7 +1332,9 @@ export default function LeadDrawer({
                   </section>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">{tagsRow}</div>
+                {/* The tags row brings its own top rule and margin for the landlord
+                    layout; here it sits between two blocks, so both come off. */}
+                <div className="[&>div]:mt-0 [&>div]:border-t-0 [&>div]:pt-0">{tagsRow}</div>
 
                 {/* The things you do to a tenant lead, one click each. */}
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">

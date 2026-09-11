@@ -56,7 +56,8 @@ export async function recordLeads(leads: Lead[]): Promise<number> {
        payload = EXCLUDED.payload || jsonb_strip_nulls(jsonb_build_object(
          'enquiryFull', os_leads.payload->'enquiryFull',
          'enquiryFields', os_leads.payload->'enquiryFields',
-         'enquirySource', os_leads.payload->'enquirySource')),
+         'enquirySource', os_leads.payload->'enquirySource',
+         'enquiryV', os_leads.payload->'enquiryV')),
        last_seen = NOW()`,
     cols.flat()
   );

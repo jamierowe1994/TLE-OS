@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { hasDb, q } from "@/lib/db";
-import { readEnquiry } from "@/lib/rex-enquiry";
+import { ENQUIRY_VERSION, readEnquiry } from "@/lib/rex-enquiry";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  * else. A lead the OS made itself has no REX email behind it and answers
  * with nothing.
  */
-type Stored = { enquiryFull?: string; enquiryFields?: Array<[string, string]>; enquirySource?: string | null; receivedAt?: string };
+type Stored = { enquiryV?: number; enquiryFull?: string; enquiryFields?: Array<[string, string]>; enquirySource?: string | null; receivedAt?: string };
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const { actor } = await whoIs(req);
@@ -25,7 +25,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   if (hasDb()) {
     const rows = await q<{ payload: Stored }>(`SELECT payload FROM os_leads WHERE id = $1`, [id]).catch(() => []);
     stored = rows[0]?.payload ?? null;
-    if (stored?.enquiryFull !== undefined) {
+    /* Kept only if read by the current parser; anything older is read again. */
+    if (stored?.enquiryFull !== undefined && stored.enquiryV === ENQUIRY_VERSION) {
       return NextResponse.json({
         ok: true,
         enquiry: { message: stored.enquiryFull, fields: stored.enquiryFields ?? [], receivedAt: stored.receivedAt ?? null, source: stored.enquirySource ?? null },
@@ -38,8 +39,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 
   if (hasDb()) {
     await q(
-      `UPDATE os_leads SET payload = payload || jsonb_build_object('enquiryFull', $2::text, 'enquiryFields', $3::jsonb, 'enquirySource', $4::text) WHERE id = $1`,
-      [id, e.message, JSON.stringify(e.fields), e.source]
+      `UPDATE os_leads SET payload = payload || jsonb_build_object('enquiryFull', $2::text, 'enquiryFields', $3::jsonb, 'enquirySource', $4::text, 'enquiryV', $5::int) WHERE id = $1`,
+      [id, e.message, JSON.stringify(e.fields), e.source, ENQUIRY_VERSION]
     ).catch(() => {});
   }
   return NextResponse.json({ ok: true, enquiry: { ...e, receivedAt: e.receivedAt ?? stored?.receivedAt ?? null } });
