@@ -1,430 +1,407 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import DiaryCalendar from "@/components/DiaryCalendar";
-import DiaryMonth from "@/components/DiaryMonth";
+import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import PickOne from "@/components/PickOne";
 import Segmented from "@/components/Segmented";
-import StageTabs from "@/components/StageTabs";
 import ViewingDrawer, { type Outcome } from "@/components/ViewingDrawer";
-import { FlowTag, Ghost, Pill } from "@/components/Wire";
+import Agenda, { ApptRow, type AgendaMode } from "@/components/viewings/Agenda";
+import AppointmentDrawer from "@/components/viewings/AppointmentDrawer";
+import Month from "@/components/viewings/Month";
+import PrintSheet, { type PrintGroup } from "@/components/viewings/PrintSheet";
+import Tiles from "@/components/viewings/Tiles";
+import WeekGrid from "@/components/viewings/WeekGrid";
+import { card, dateOfOffset, fmtFull, fmtShort, groupByDay, nearLabel } from "@/components/viewings/shared";
 import { KIND_META, minutesOf, VIEWING_OUTCOMES, type Appt, type ApptKind } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 
 /**
- * Viewings: the week's diary, and every row opens into the whole story —
- * when, which property, who's coming, whether the home is tenanted, and
- * whether every confirmation actually went. The rows read from the same
- * diary as the calendar and the dashboard, so there is one truth.
+ * Viewings: one screen, one person's diary.
+ *
+ * ── The shape (James, 11 Sep 2026) ────────────────────────────────────────
+ *
+ * A bento, not a scroll. The five tiles sit in the calendar's column, so the
+ * calendar comes up under them and the day beside it rises to the top - the
+ * two columns line up and the page ends where the calendar ends. The week
+ * strip and the "landlord feedback report" that used to hang underneath are
+ * gone: the tiles answer the week, and the report was a promise, not a
+ * feature.
+ *
+ * Every tile changes what the panel beside the calendar answers and never
+ * changes screen. "Next 7 days" opens the calendar out into a seven-day grid
+ * rather than dropping you in a list. The Diary toggle is still here for the
+ * long read - that one is allowed to run past the fold.
+ *
+ * ── Whose diary ───────────────────────────────────────────────────────────
+ *
+ * An agent's book is served already scoped to their mailbox. An owner gets
+ * the whole business, so this screen narrows it to THEIR OWN entries first
+ * and offers colleagues by name; an owner with no calendar of their own
+ * (James's test account, Susan) sees everybody, because an empty page would
+ * be the wrong answer to "what's going on".
  */
 
 const OUTCOMES: Record<string, Outcome> = VIEWING_OUTCOMES;
 
-/** What the panel calls itself, per stage. */
-const STAGE_TITLE: Record<string, string> = {
-  upcoming: "All upcoming",
-  today: "Today",
-  week: "Next 7 days",
-  due: "Feedback due",
-  in: "Feedback in",
-};
-
-function dayName(offset: number): string {
-  if (offset === 0) return "Today";
-  if (offset === 1) return "Tomorrow";
-  const d = new Date();
-  d.setDate(d.getDate() + offset);
-  return d.toLocaleDateString("en-GB", { weekday: "long" });
-}
-
-function dayDate(offset: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + offset);
-  return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
-}
-
-function Legend({ past }: { past?: boolean }) {
-  return (
-    <div className="mb-3 hidden items-center gap-3 border-b border-line/70 pb-2 text-[9px] font-bold uppercase tracking-[0.12em] text-muted/70 sm:flex">
-      <span className="w-16 shrink-0">{past ? "When" : "Time"}</span>
-      <span className="min-w-0 flex-1">Applicant · property</span>
-      <span className="w-24 shrink-0">Occupancy</span>
-      <span className="w-16 shrink-0">Agent</span>
-      <span className="w-[110px] shrink-0 text-right">{past ? "Outcome" : "Messages"}</span>
-      <span className="w-3" />
-    </div>
-  );
-}
+type TileId = "upcoming" | "today" | "week" | "due" | "in";
+/** What the space beside the month is showing. `day` is a month click. */
+type Panel = AgendaMode | "week";
 
 export default function Viewings() {
-  /**
-   * The calendar is the DEFAULT shape of this page (James, 10 Sep 2026).
-   *
-   * The list only ever answered "what is left today"; the question agents
-   * actually arrive with is "what have I got on the 23rd", and no amount of
-   * scrolling a today-first list answers that. The list is still here — it is
-   * the better read once you know which day you care about — but you now
-   * choose it rather than being given it.
-   */
   const [view, setView] = useState<"calendar" | "diary">("calendar");
-  /**
-   * Which question the list is answering.
-   *
-   * Two hand-drawn pills, "Diary · 41" and "Feedback · 12", asked this before
-   * - the same question the other three boards ask with StageTabs, drawn a
-   * fourth way. Today and the next seven days are on it now because they are
-   * what an agent actually arrives asking, and a today-first list never
-   * answered them.
-   *
-   * NOT a date dropdown as well. The other boards carry one because their
-   * records are not sorted by date on the screen; these are, and two controls
-   * for one filter is how a screen starts to disagree with itself.
-   */
-  const [stage, setStage] = useState<"upcoming" | "today" | "week" | "due" | "in">("upcoming");
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [calOpen, setCalOpen] = useState(false);
-  /** Narrowing, shared by both shapes so switching view keeps your place. */
-  const [fAgent, setFAgent] = useState<string | null>(null);
+  const [panel, setPanel] = useState<Panel>("day");
+  const [selected, setSelected] = useState(0);
+  const [monthShift, setMonthShift] = useState(0);
+  const [quickId, setQuickId] = useState<string | null>(null);
+  const [fullId, setFullId] = useState<string | null>(null);
+  /** undefined = not decided yet; null = everyone; a name = that person. */
+  const [fAgent, setFAgent] = useState<string | null | undefined>(undefined);
   const [fKind, setFKind] = useState<ApptKind | null>(null);
-  /** "apptId:label" for anything sent from the drawer this session. */
+  /** "apptId:label" for anything sent from a drawer this session. */
   const [sentExtra, setSentExtra] = useState<Set<string>>(new Set());
 
-  const { appts: DIARY, live, loading, everything } = useDiary();
+  const { appts: DIARY, loading, everything, error } = useDiary();
 
-  /** Whoever actually appears in this book, in name order. */
+  /* Who is looking. The owner's own entries are the default, matched on the
+     mailbox rather than the name - see Appt.agentEmail. */
+  const [me, setMe] = useState<{ name: string; email: string } | null>(null);
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { user?: { name?: string; email?: string } } | null) =>
+        setMe({ name: j?.user?.name ?? "", email: (j?.user?.email ?? "").toLowerCase() })
+      )
+      .catch(() => setMe({ name: "", email: "" }));
+  }, []);
+
   const agents = useMemo(
     () => [...new Set(DIARY.map((a) => a.agent).filter(Boolean))].sort(),
     [DIARY]
   );
-  /** Only the kinds that are really in the diary — an empty filter row is a
-   *  promise the data cannot keep. */
+
+  useEffect(() => {
+    if (fAgent !== undefined || loading || !me) return;
+    if (!everything) return setFAgent(null);
+    const mine = DIARY.find(
+      (a) => (me.email && (a.agentEmail ?? "").toLowerCase() === me.email) || (me.name && a.agent === me.name)
+    );
+    setFAgent(mine ? mine.agent : null);
+  }, [fAgent, loading, me, everything, DIARY]);
+
   const kinds = useMemo(
-    () =>
-      (Object.keys(KIND_META) as ApptKind[]).filter((k) => DIARY.some((a) => a.kind === k)),
+    () => (Object.keys(KIND_META) as ApptKind[]).filter((k) => DIARY.some((a) => a.kind === k)),
     [DIARY]
   );
 
-  /**
-   * The calendar shows the WHOLE day — viewings, appraisals, travel and the
-   * private blocks in between. A calendar that draws only viewings tells an
-   * agent an afternoon is free when it is nothing of the sort.
-   */
-  const monthAppts = useMemo(
+  /** The book being looked at: one person, and the kinds asked for. */
+  const scoped = useMemo(
     () => DIARY.filter((a) => (!fAgent || a.agent === fAgent) && (!fKind || a.kind === fKind)),
     [DIARY, fAgent, fKind]
   );
+  const byDay = useMemo(() => groupByDay(scoped), [scoped]);
 
-  const viewings = DIARY.filter((a) => a.kind === "viewing" && (!fAgent || a.agent === fAgent));
-  const upcoming = viewings.filter((a) => a.day >= 0).sort(
-    (a, b) => a.day - b.day || minutesOf(a.start) - minutesOf(b.start)
+  const upcoming = useMemo(
+    () =>
+      scoped
+        .filter((a) => a.day >= 0)
+        .sort((a, b) => a.day - b.day || Number(!!b.allDay) - Number(!!a.allDay) || minutesOf(a.start) - minutesOf(b.start)),
+    [scoped]
   );
-  const recent = viewings.filter((a) => a.day < 0).sort((a, b) => b.day - a.day);
-  /* One place decides what each stage holds, so the count on a tab and the
-     rows under it can never disagree. "Due" is a viewing that has happened
-     and nobody has written down what was said - the only one of these that is
-     a job rather than a view. */
-  const buckets = useMemo(() => {
-    const been = recent;
-    return {
-      upcoming,
-      today: upcoming.filter((a) => a.day === 0),
-      week: upcoming.filter((a) => a.day >= 0 && a.day <= 7),
-      due: been.filter((a) => !OUTCOMES[a.id]),
-      in: been.filter((a) => Boolean(OUTCOMES[a.id])),
-    };
-  }, [upcoming, recent]);
-  const rows = buckets[stage];
-  const past = stage === "due" || stage === "in";
-  const days = [...new Set(rows.map((a) => a.day))];
-  const open = DIARY.find((a) => a.id === openId) ?? null;
+  /* Feedback is a viewing's business only. */
+  const been = useMemo(
+    () => scoped.filter((a) => a.kind === "viewing" && a.day < 0).sort((a, b) => b.day - a.day || minutesOf(b.start) - minutesOf(a.start)),
+    [scoped]
+  );
+  const due = useMemo(() => been.filter((a) => !OUTCOMES[a.id]), [been]);
+  const fedBack = useMemo(() => been.filter((a) => Boolean(OUTCOMES[a.id])), [been]);
+  const today = byDay.get(0) ?? [];
+  const week = upcoming.filter((a) => a.day <= 6);
 
-  /** The row's state at a glance: every message gone, or something missing. */
-  function commState(a: Appt) {
-    // A REX calendar entry carries no record of what was sent. Saying
-    // "all confirmed" because the list is empty would be inventing comfort.
-    if (a.fromRex && !a.comms.length) {
-      return { label: "Not known", tone: "neutral" as const };
-    }
-    const missing = a.comms.filter((c) => !c.done && !sentExtra.has(`${a.id}:${c.label}`)).length;
-    return missing === 0
-      ? { label: "All confirmed", tone: "good" as const }
-      : { label: `${missing} to send`, tone: "accent" as const };
+  const quick = DIARY.find((a) => a.id === quickId) ?? null;
+  const full = DIARY.find((a) => a.id === fullId) ?? null;
+
+  function pickDay(offset: number) {
+    setSelected(offset);
+    setPanel("day");
+    const d = dateOfOffset(offset);
+    const t = new Date();
+    setMonthShift((d.getFullYear() - t.getFullYear()) * 12 + (d.getMonth() - t.getMonth()));
   }
 
-  function Row({ a, showDay }: { a: Appt; showDay?: boolean }) {
-    const property = a.what.replace(/^[^—]+—\s*/, "");
-    const state = commState(a);
-    const outcome = OUTCOMES[a.id];
-    return (
-      /* fade-up so the cascade on the <ul> has something to stagger. */
-      <li className="fade-up">
-        <button
-          type="button"
-          onClick={() => setOpenId(a.id)}
-          className="flex w-full items-center gap-3 border-b border-line/40 py-3 text-left transition-colors last:border-0 hover:bg-accent-soft/20"
-        >
-          <span className={`figures w-16 shrink-0 text-[12.5px] ${showDay ? "text-muted" : "text-accent-dark"}`}>
-            {showDay ? dayDate(a.day).split(" ").slice(0, 2).join(" ") : a.start}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="hand block truncate text-[13px]">{a.who}</span>
-            <span className="block truncate text-[10.5px] text-muted">
-              {property} · {a.where}
-            </span>
-          </span>
-          {/* Tenanted is a fact the agent needs BEFORE opening the row —
-              stated either way, never blank, and given the room to be seen. */}
-          <span className="hidden w-24 shrink-0 sm:block">
-            {a.tenant ? (
-              <Pill tone="accent">Tenanted</Pill>
-            ) : a.tenant === null ? (
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted/70">Vacant</span>
-            ) : (
-              // undefined means nobody has told us — which is not the same
-              // as empty, and an agent knocking on a tenanted door deserves
-              // the difference.
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted/50">Not known</span>
-            )}
-          </span>
-          <span className="hidden w-16 shrink-0 truncate text-[11px] text-muted sm:block">{a.agent}</span>
-          <span className="flex w-[110px] shrink-0 justify-end">
-            {a.day < 0 && outcome ? (
-              <Pill tone={outcome === "Applying" ? "good" : "neutral"}>{outcome}</Pill>
-            ) : (
-              <Pill tone={state.tone}>{state.label}</Pill>
-            )}
-          </span>
-          <span className="text-[12px] text-muted">›</span>
-        </button>
-      </li>
-    );
+  function pickTile(id: TileId) {
+    if (id === "today") return pickDay(0);
+    setPanel(id);
   }
+
+  const tiles = [
+    { id: "upcoming" as const, label: "Upcoming", icon: "analytics", count: upcoming.length, blurb: "Everything still to happen", on: panel === "upcoming" },
+    { id: "today" as const, label: "Today", icon: "clock", count: today.length, blurb: "What is on today", on: panel === "day" && selected === 0 },
+    { id: "week" as const, label: "Next 7 days", icon: "calendar", count: week.length, blurb: "Today and the six days after it, hour by hour", on: panel === "week" },
+    { id: "due" as const, label: "Feedback due", icon: "message", count: due.length, blurb: "Been, and nobody has written down what was said", on: panel === "due" },
+    { id: "in" as const, label: "Feedback in", icon: "checklist", count: fedBack.length, blurb: "Ready for the landlord", on: panel === "in" },
+  ];
+
+  /* What the Print button prints: the day, or the seven days. */
+  const printGroups: PrintGroup[] =
+    panel === "day"
+      ? [{ heading: fmtFull(dateOfOffset(selected)), sub: nearLabel(selected) ?? undefined, list: byDay.get(selected) ?? [] }]
+      : Array.from({ length: 7 }, (_, i) => ({
+          heading: fmtFull(dateOfOffset(i)),
+          sub: nearLabel(i) ?? undefined,
+          list: byDay.get(i) ?? [],
+        }));
+  const owner = fAgent ?? (everything ? "The team" : me?.name ?? "");
+
+  /* The Diary list: the same rows, allowed to run long. */
+  const listMode: AgendaMode | "week" = panel;
+  const listRows =
+    listMode === "day"
+      ? (byDay.get(selected) ?? [])
+      : listMode === "upcoming"
+        ? upcoming
+        : listMode === "week"
+          ? week
+          : listMode === "due"
+            ? due
+            : fedBack;
+  const listTitle =
+    listMode === "day"
+      ? fmtFull(dateOfOffset(selected))
+      : listMode === "upcoming"
+        ? "Everything upcoming"
+        : listMode === "week"
+          ? "The next 7 days"
+          : listMode === "due"
+            ? "Feedback due"
+            : "Feedback in";
+  const listDays = [...new Set(listRows.map((a) => a.day))];
 
   return (
     <>
       <PageHeader
         title="Viewings"
-        blurb="Every viewing opens into its whole story: the property, who's coming, whether someone lives there — and whether every confirmation actually went."
-        /* The still, not the clip. The loop keyed cleanly but the source was
-           soft, and 496K of soft is worse than 34K of sharp. scooter.webp is
-           still in the repo if a better capture turns up. */
+        blurb="Your day, and the week around it. Every appointment opens into what it is, where it is, who's coming and what you need before you knock."
         illustration="/illustrations/scooter-still.webp"
         illustrationAspect={0.6486}
-        /* A street for him to be riding down, standing on the same rule he
-           does. James's own artwork, trimmed to its ink — the file already
-           carried alpha, so the paper it was drawn on came off cleanly and
-           the ground line in the drawing IS the bottom edge of the file,
-           which is what lands it on the rule rather than near it. */
         backdrop="/illustrations/houses-row.webp"
-        /* The street reads as a street rather than a strip of scenery behind
-           her (James, 10 Sep 2026: "make the houses behind her a bit
-           bigger"). Still the same drawing standing on the same rule. */
         backdropWidth={620}
-        /**
-         * He rides ON the rule, and stays put while he does it.
-         *
-         * James's own clip, keyed off its black plate. The MP4 carries no
-         * alpha - h264 cannot - and the background was pure (0,0,0), so the
-         * transparency is cut per frame: flood the background in from the
-         * border, and ALSO take any sealed pocket of the same pure black,
-         * because the gap between her leg, the stem and the deck is enclosed
-         * by the drawing and a flood from the edge can never reach it. Her
-         * hair, the backpack and the scooter body are all darker than most of
-         * her and every one of them survives, because they are nowhere near
-         * 0 - the darkest thing kept is around 25 against a background of 0.
-         *
-         * Cropped to the union of every frame's ink, so she does not jitter
-         * inside her own box. Measured on the finished loop: the bottom of
-         * the ink moves 8px across 31 frames, which is her back foot kicking
-         * - the wheels stay on the ground, so it reads as riding on the spot
-         * rather than drifting off the side of the page.
-         *
-         * `lineBreak="none"` on purpose: DROP is 0 for it, so the rule stays
-         * dead flat and reads as the road he is on. A dip would have the line
-         * sagging under a scooter, which is the wrong physics for the joke.
-         */
         lineBreak="none"
-        /* One row of chrome, under the blurb, in the same order as Listings,
-           Market Appraisals and Applications: the shape switch first because
-           it changes the whole screen, then the things that only narrow what
-           is already on it. It used to sit in a row of its own below the
-           header, which is a fourth arrangement of the same three controls. */
         actions={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
-        <Segmented
-          options={[
-            {
-              id: "calendar",
-              label: "Calendar",
-              icon: <DoodleIcon name="calendar" size={14} />,
-            },
-            { id: "diary", label: "Diary", icon: <DoodleIcon name="list" size={14} /> },
-          ]}
-          value={view}
-          onChange={setView}
-        />
-
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Only an owner has a book to filter. Everybody else is looking at
-              their own diary, so a picker offering colleagues by name would be
-              offering something the server will not answer for anyway. */}
-          {everything && agents.length > 1 && (
-            <PickOne
-              label="All agents"
-              icon="user"
-              options={agents.map((a) => ({ id: a, label: a }))}
-              value={fAgent}
-              onChange={setFAgent}
+            <Segmented
+              options={[
+                { id: "calendar", label: "Calendar", icon: <DoodleIcon name="calendar" size={14} /> },
+                { id: "diary", label: "Diary", icon: <DoodleIcon name="list" size={14} /> },
+              ]}
+              value={view}
+              onChange={setView}
             />
-          )}
-          {/* Kind only narrows the calendar — the list is viewings by
-              definition, and a filter that greys out its own screen is a
-              trap. */}
-          {view === "calendar" && kinds.length > 1 && (
-            <PickOne
-              label="Everything"
-              icon="grid"
-              options={kinds.map((k) => ({ id: k, label: KIND_META[k].label }))}
-              value={fKind}
-              onChange={setFKind}
-            />
-          )}
-        </div>
+            <div className="flex flex-wrap items-center gap-2.5">
+              {/* Only an owner has a book to choose from. An agent's diary is
+                  their own and arrives already scoped. */}
+              {everything && agents.length > 1 && (
+                <PickOne
+                  label="Everyone"
+                  icon="user"
+                  options={agents.map((a) => ({ id: a, label: a === me?.name ? `${a} (you)` : a }))}
+                  value={fAgent ?? null}
+                  onChange={setFAgent}
+                />
+              )}
+              {kinds.length > 1 && (
+                <PickOne
+                  label="Everything"
+                  icon="grid"
+                  options={kinds.map((k) => ({ id: k, label: KIND_META[k].label }))}
+                  value={fKind}
+                  onChange={setFKind}
+                />
+              )}
+            </div>
           </div>
         }
-      />
-
-      {/* ── The stages, and the filter for them. Same component and the same
-             row as Listings, Market Appraisals and Applications. Picking one
-             is a question about a LIST, so it puts you in the list - the
-             calendar has only the order a calendar has, and cannot show you
-             "feedback still owed" at all. ── */}
-      <StageTabs
-        label="Viewing stages"
-        allId="upcoming"
-        value={stage}
-        onChange={(id) => { setStage(id); setView("diary"); }}
-        flow={false}
-        stages={[
-          { id: "upcoming" as const, label: "All upcoming", icon: "analytics", count: buckets.upcoming.length, blurb: "Everything still to happen" },
-          { id: "today" as const, label: "Today", icon: "clock", count: buckets.today.length, blurb: "What is left today" },
-          { id: "week" as const, label: "Next 7 days", icon: "calendar", count: buckets.week.length, blurb: "The week ahead" },
-          { id: "due" as const, label: "Feedback due", icon: "message", count: buckets.due.length, blurb: "Been, and nobody has written down what was said" },
-          { id: "in" as const, label: "Feedback in", icon: "checklist", count: buckets.in.length, blurb: "Ready for the landlord" },
-        ]}
       />
 
       {view === "calendar" ? (
-        <DiaryMonth
-          appts={monthAppts}
-          loading={loading}
-          onOpen={(a) => setOpenId(a.id)}
-          onOpenWeek={() => setCalOpen(true)}
-        />
-      ) : (
-        <div className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
-          <div className="mb-3 flex items-baseline justify-between gap-3">
-            <h2 className="text-[15px]">
-              {STAGE_TITLE[stage]}
-              <span className="figures ml-1.5 text-muted">({rows.length})</span>
-            </h2>
-            {stage === "in" && (
-              <span className="text-[11px] text-muted">
-                What the applicant said, ready for the landlord
-              </span>
-            )}
-            {stage !== "upcoming" && stage !== "in" && (
-              <button
-                type="button"
-                onClick={() => setStage("upcoming")}
-                className="text-[11.5px] text-muted underline transition-colors hover:text-ink"
-              >
-                Show all upcoming
-              </button>
-            )}
+        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
+          {/* ── Left: the questions, then the month. ── */}
+          {/* min-w-0 on both columns: the tile row's five shrink-0 tiles would
+              otherwise set the column's minimum width to their sum on a phone
+              and push the month card off the right-hand edge. */}
+          <div className="flex min-w-0 flex-col gap-4">
+            <Tiles tiles={tiles} onPick={pickTile} />
+            <Month byDay={byDay} selected={selected} onSelect={pickDay} monthShift={monthShift} onMonthShift={setMonthShift} />
           </div>
-          <Legend past={past} />
-          {past ? (
-            <ul className="cascade">
-              {rows.map((a) => (
-                <Row key={a.id} a={a} showDay />
-              ))}
-            </ul>
-          ) : (
-            days.map((d) => {
-              const list = rows.filter((a) => a.day === d);
-              return (
-                <div key={d} className="mb-5 last:mb-0">
-                  <div className="flex items-baseline gap-3 border-b border-line/70 pb-2">
-                    <h2 className={`text-[15px] ${d === 0 ? "text-accent-dark" : ""}`}>
-                      {dayName(d)}
-                    </h2>
-                    <span className="text-[10.5px] text-muted">{dayDate(d)}</span>
-                    <span className="ml-auto text-[10.5px] text-muted">
-                      {list.length} viewing{list.length === 1 ? "" : "s"}
-                    </span>
+
+          {/* ── Right: the answer. Pinned to the left column's height from
+                 lg up, so a long day scrolls inside its card rather than
+                 pushing the page down. ── */}
+          <div className="min-h-[360px] min-w-0 lg:relative">
+            <div className="lg:absolute lg:inset-0">
+              {panel === "week" ? (
+                <WeekSummary byDay={byDay} onPickDay={pickDay} onPrint={() => window.print()} />
+              ) : (
+                <Agenda
+                  mode={panel}
+                  selected={selected}
+                  byDay={byDay}
+                  upcoming={upcoming}
+                  due={due}
+                  fedBack={fedBack}
+                  outcomes={OUTCOMES}
+                  loading={loading}
+                  error={error}
+                  sentExtra={sentExtra}
+                  onOpen={(a) => setQuickId(a.id)}
+                  onPrint={() => window.print()}
+                  onPickDay={pickDay}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* ── The calendar, opened out. ── */}
+          {panel === "week" && (
+            <div className="lg:col-span-2">
+              <WeekGrid appts={scoped} onOpen={(a) => setQuickId(a.id)} onPrint={() => window.print()} onPickDay={pickDay} />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="mt-4 min-w-0 space-y-4">
+          <Tiles tiles={tiles} onPick={pickTile} />
+          <section className={`fade-up ${card} p-5`}>
+            <div className="mb-3 flex flex-wrap items-baseline gap-3 border-b border-line/60 pb-3">
+              <h2 className="hand text-[17px]">
+                {listTitle}
+                <span className="figures ml-2 text-[14px] text-muted">{listRows.length}</span>
+              </h2>
+              <button type="button" onClick={() => window.print()} className="ml-auto text-[11.5px] font-semibold text-muted underline hover:text-ink">
+                Print
+              </button>
+            </div>
+            {listRows.length === 0 ? (
+              <p className="py-8 text-center text-[12.5px] text-muted">
+                {loading ? "Reading the diary…" : listMode === "due" ? "Nothing waiting on feedback. Rare, and good." : listMode === "in" ? "No feedback recorded yet." : "Nothing booked."}
+              </p>
+            ) : listMode === "due" || listMode === "in" ? (
+              <ul className="cascade">
+                {listRows.map((a) => (
+                  <ApptRow key={a.id} a={a} outcome={OUTCOMES[a.id]} showDay sentExtra={sentExtra} onOpen={(x) => setQuickId(x.id)} />
+                ))}
+              </ul>
+            ) : (
+              listDays.map((d) => {
+                const list = listRows.filter((a) => a.day === d);
+                const dn = nearLabel(d);
+                return (
+                  <div key={d} className="mb-5 last:mb-0">
+                    <div className="flex items-baseline gap-3 border-b border-line/60 px-2 pb-2">
+                      <h3 className={`text-[14px] ${d === 0 ? "text-accent-dark" : ""}`}>{dn ?? fmtFull(dateOfOffset(d))}</h3>
+                      <span className="text-[10.5px] text-muted">{fmtShort(dateOfOffset(d))}</span>
+                      <span className="ml-auto text-[10.5px] text-muted">
+                        {list.length} {list.length === 1 ? "appointment" : "appointments"}
+                      </span>
+                    </div>
+                    <ul className="cascade">
+                      {list.map((a) => (
+                        <ApptRow key={a.id} a={a} outcome={OUTCOMES[a.id]} sentExtra={sentExtra} onOpen={(x) => setQuickId(x.id)} />
+                      ))}
+                    </ul>
                   </div>
-                  <ul className="cascade">
-                    {list.map((a) => (
-                      <Row key={a.id} a={a} />
-                    ))}
-                  </ul>
-                </div>
-              );
-            })
-          )}
-          {!rows.length && (
-            <p className="py-8 text-center text-[12.5px] text-muted">
-              {stage === "due"
-                ? "Nothing waiting on feedback. Rare, and good."
-                : stage === "in"
-                  ? "No feedback recorded yet."
-                  : "Nothing booked — the listings page is where viewings start."}
-            </p>
-          )}
+                );
+              })
+            )}
+          </section>
         </div>
       )}
 
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        {/* In the calendar the week grid is already offered under the week
-            strip, where it belongs. Two doors to the same room reads as two
-            rooms. */}
-        {view === "diary" && (
-          <button
-            type="button"
-            onClick={() => setCalOpen(true)}
-            className="flex items-center gap-3 rounded-2xl border border-line/80 bg-box p-5 text-left transition-colors hover:border-ink"
-          >
-            <DoodleIcon name="calendar" size={22} className="shrink-0 text-accent-dark" />
-            <span className="min-w-0">
-              <span className="hand block text-[14px]">Week calendar</span>
-              <span className="block text-[11px] text-muted">
-                The full grid — every appointment, clickable through to its file.
-              </span>
-            </span>
-            <span className="ml-auto text-[13px] text-muted">→</span>
-          </button>
-        )}
-        <Ghost
-          label="Landlord feedback report"
-          detail="Every viewing and its outcome, per property — the thing landlords chase for."
-          tag={<FlowTag to="REX" />}
-        />
-      </div>
+      <PrintSheet owner={owner} groups={printGroups} outcomes={OUTCOMES} />
 
-      <ViewingDrawer
-        appt={open}
-        outcome={open ? OUTCOMES[open.id] : undefined}
-        onClose={() => setOpenId(null)}
+      <AppointmentDrawer
+        appt={quick}
+        outcome={quick ? OUTCOMES[quick.id] : undefined}
+        onClose={() => setQuickId(null)}
+        onOpenViewing={(a) => {
+          setQuickId(null);
+          setFullId(a.id);
+        }}
         sentExtra={sentExtra}
-        onSend={(id, label) =>
-          setSentExtra((cur) => new Set(cur).add(`${id}:${label}`))
-        }
+        onSend={(id, label) => setSentExtra((cur) => new Set(cur).add(`${id}:${label}`))}
       />
 
-      <DiaryCalendar open={calOpen} onClose={() => setCalOpen(false)} />
+      <ViewingDrawer
+        appt={full}
+        outcome={full ? OUTCOMES[full.id] : undefined}
+        onClose={() => setFullId(null)}
+        sentExtra={sentExtra}
+        onSend={(id, label) => setSentExtra((cur) => new Set(cur).add(`${id}:${label}`))}
+      />
     </>
+  );
+}
+
+/**
+ * Beside the month while the week grid is open: the seven days as a list,
+ * each a door to that day, so the grid below and this panel agree.
+ */
+function WeekSummary({
+  byDay,
+  onPickDay,
+  onPrint,
+}: {
+  byDay: Map<number, Appt[]>;
+  onPickDay: (offset: number) => void;
+  onPrint: () => void;
+}) {
+  const days = Array.from({ length: 7 }, (_, i) => i);
+  const total = days.reduce((n, d) => n + (byDay.get(d)?.length ?? 0), 0);
+  return (
+    <section className={`fade-up flex h-full flex-col ${card} p-5`}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-line/60 pb-3">
+        <h2 className="hand text-[17px] leading-tight">The week at a glance</h2>
+        <span className="ml-auto flex items-center gap-2">
+          <span className="text-[11px] text-muted">{total} {total === 1 ? "appointment" : "appointments"}</span>
+          <button
+            type="button"
+            onClick={onPrint}
+            className="inline-flex items-center gap-2 rounded-full bg-brown px-4 py-2 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            <DoodleIcon name="doc" size={13} />
+            Print
+          </button>
+        </span>
+      </div>
+      <ul className="mt-1 min-h-0 flex-1 overflow-y-auto">
+        {days.map((d) => {
+          const list = byDay.get(d) ?? [];
+          const timed = list.filter((a) => !a.allDay);
+          const first = timed[0]?.start;
+          const last = timed.length ? timed[timed.length - 1].start : undefined;
+          const viewings = list.filter((a) => a.kind === "viewing").length;
+          const dn = nearLabel(d);
+          return (
+            <li key={d} className="border-b border-line/40 last:border-0">
+              <button type="button" onClick={() => onPickDay(d)} className="flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-panel">
+                <span className="min-w-0 flex-1">
+                  <span className={`block text-[13px] font-semibold ${d === 0 ? "text-accent-dark" : ""}`}>
+                    {dn ?? dateOfOffset(d).toLocaleDateString("en-GB", { weekday: "long" })}
+                    <span className="ml-2 text-[11px] font-normal text-muted">{fmtShort(dateOfOffset(d))}</span>
+                  </span>
+                  <span className="block text-[11px] text-muted">
+                    {list.length === 0
+                      ? "Free"
+                      : `${first && last ? `${first} to ${last}` : "All day"}${viewings ? ` · ${viewings} ${viewings === 1 ? "viewing" : "viewings"}` : ""}`}
+                  </span>
+                </span>
+                <span className={`figures text-[17px] font-semibold ${list.length ? "text-ink" : "text-muted/40"}`}>{list.length}</span>
+                <span className="w-3 text-right text-[13px] text-muted/70">›</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

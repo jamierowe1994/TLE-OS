@@ -74,7 +74,7 @@ export function weekOffsets(week: number): { date: Date; offset: number }[] {
  */
 const MAX_LANES = 4;
 
-function laneMap(appts: { id: string; start: string; mins: number }[]) {
+export function laneMap(appts: { id: string; start: string; mins: number }[]) {
   const sorted = [...appts].sort(
     (a, b) => minutesOf(a.start) - minutesOf(b.start) || b.mins - a.mins
   );
