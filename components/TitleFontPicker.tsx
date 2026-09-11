@@ -20,6 +20,7 @@ const OPTIONS = [
   { key: "handlee", label: "Handlee", note: "Neat handwriting", sample: "var(--font-handlee)" },
   { key: "hurricane", label: "Hurricane", note: "Brush script", sample: "'Hurricane'" },
   { key: "fascinate", label: "Fascinate", note: "Art deco display", sample: "'Fascinate'" },
+  { key: "fascinateinline", label: "Fascinate Inline", note: "Art deco, cut through", sample: "'Fascinate Inline'" },
   { key: "protest", label: "Protest Riot", note: "Stencil, loud", sample: "'Protest Riot'" },
   /* "Gervitz Levin" as dictated - no Google font by that name; Gravitas One
      is the nearest by sound. Swap it if he meant another. */
@@ -28,6 +29,7 @@ const OPTIONS = [
   /* "Praise Serena" as dictated - Praise is the Google font. */
   { key: "praise", label: "Praise", note: "Calligraphy script", sample: "'Praise'" },
   { key: "luckiest", label: "Luckiest Guy", note: "Cartoon block", sample: "'Luckiest Guy'" },
+  { key: "rampart", label: "Rampart One", note: "Outlined 3D block", sample: "'Rampart One'" },
   { key: "manrope", label: "Manrope", note: "The brand face, extrabold", sample: "var(--font-manrope)" },
 ] as const;
 
@@ -38,7 +40,7 @@ const OPTIONS = [
  * own link so that if Google ever refuses it, the other six still load.
  */
 const GOOGLE_LINKS = [
-  "https://fonts.googleapis.com/css2?family=Hurricane&family=Fascinate&family=Protest+Riot&family=Gravitas+One&family=Praise&family=Luckiest+Guy&display=swap",
+  "https://fonts.googleapis.com/css2?family=Hurricane&family=Fascinate&family=Fascinate+Inline&family=Protest+Riot&family=Gravitas+One&family=Praise&family=Luckiest+Guy&family=Rampart+One&display=swap",
   "https://fonts.googleapis.com/css2?family=Story+Script&display=swap",
 ];
 
