@@ -688,7 +688,6 @@ export default function LeadDrawer({
 
   /* The pop-outs: activity, the property finder, the more menu, removal. */
   const [activityOpen, setActivityOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeMsg, setRemoveMsg] = useState<string | null>(null);
@@ -699,7 +698,7 @@ export default function LeadDrawer({
   const [finderBusy, setFinderBusy] = useState(false);
   const [finderMsg, setFinderMsg] = useState<string | null>(null);
   useEffect(() => {
-    setActivityOpen(false); setMoreOpen(false); setRemoving(false); setFinderOpen(false);
+    setActivityOpen(false); setRemoving(false); setFinderOpen(false);
     setFinderOrigin(null); setFinderLabel(""); setFinderMsg(null);
   }, [enquiryLeadId]);
 
@@ -1163,14 +1162,6 @@ export default function LeadDrawer({
   const receivedIso = enquiry?.receivedAt ?? lead.receivedAt ?? null;
   const enqProperty = lead.address || enquiry?.fields.find(([k]) => /property address|listing address/i.test(k))?.[1] || lead.preferred;
   const real = (v?: string | null) => (v && v.trim() !== "—" ? v.trim() : "");
-  const quick: { label: string; sub: string; icon: string; go: () => void; off?: boolean; href?: string }[] = [
-    { label: "Find properties", sub: "On a map, by radius", icon: "search", go: () => { setFinderAddr(real(contact.area) || real(enqProperty)); setFinderOpen(true); } },
-    passport?.done && passport.path
-      ? { label: "Passport done", sub: "See their answers", icon: "user", href: passport.path, go: () => {} }
-      : { label: passport?.sent ? "Resend passport" : "Send passport", sub: passportEmail ? (passportBusy ? "Sending…" : passportSaid ?? "Ask for their details") : "No email on this lead", icon: "user", off: !passportEmail || passportBusy, go: () => void sendPassport(Boolean(passport?.sent)) },
-    { label: "Add a note", sub: "Log a conversation", icon: "note", go: () => { const el = document.getElementById("lead-note"); el?.scrollIntoView({ behavior: "smooth", block: "center" }); (el as HTMLTextAreaElement | null)?.focus(); } },
-    { label: "View activity", sub: "Everything so far", icon: "list", go: () => setActivityOpen(true) },
-  ];
 
   /* The address to look the property up by, on a landlord lead. */
   const enqField = (re: RegExp) => enquiry?.fields.find(([k]) => re.test(k))?.[1] ?? "";
@@ -1274,7 +1265,7 @@ export default function LeadDrawer({
             />
   );
   /* On a landlord's contact step the log lives in the Next up card itself. */
-  const logInline = !isTenant && here.action === "log" && !stalled && !nurturing && !sp?.booked;
+  const logInline = (here.action === "log" || (isTenant && (here.id === "enquiry" || here.id === "qualify"))) && !stalled && !nurturing && !sp?.booked;
   const nextActionEl = (
     <>
 
@@ -1312,15 +1303,8 @@ export default function LeadDrawer({
                 ) : (
                   <>
                     <p className="hand mt-1.5 text-[17px] leading-snug">{here.title}</p>
-                    {/* The landlord card says the step and nothing under it (James, 11 Sep
-                        2026: no subtext, no "due tomorrow" - nobody set a reminder). */}
-                    {isTenant && <p className="mt-1 text-[12.5px] leading-relaxed text-muted">{here.detail}</p>}
-                    {isTenant && detail.nextAction && (
-                      <p className="mt-2 flex items-center gap-2 text-[11.5px] font-medium text-accent-dark">
-                        <DoodleIcon name="clock" size={13} />
-                        {detail.nextAction.due}
-                      </p>
-                    )}
+                    {/* The step and nothing under it (James, 11 Sep 2026): no subtext,
+                        no "due tomorrow" - nobody set a reminder. */}
                   </>
                 )}
               </div>
@@ -1879,45 +1863,18 @@ export default function LeadDrawer({
               <DoodleIcon name="list" size={13} />
               View activity
             </button>
-            <div className="relative">
+            {isTenant && (
               <button
                 type="button"
-                onClick={() => setMoreOpen((o) => !o)}
-                aria-expanded={moreOpen}
-                className="flex h-9 w-9 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink"
-                title="More"
+                onClick={() => (passport?.done && passport.path ? window.open(passport.path, "_blank") : void sendPassport(Boolean(passport?.sent)))}
+                disabled={!passport?.done && (!passportEmail || passportBusy)}
+                title={passport?.done ? "Open their answers" : passportEmail ? "Ask for their details" : "No email on this lead"}
+                className="hidden items-center gap-2 rounded-full border border-line/80 px-4 py-2 text-[12px] text-muted transition-colors hover:text-ink disabled:opacity-50 md:flex"
               >
-                ⋯
+                <DoodleIcon name="user" size={13} />
+                {passport?.done ? "Passport done" : passportBusy ? "Sending…" : passport?.sent ? "Resend passport" : "Send passport"}
               </button>
-              {moreOpen && (
-                <div className="fade-up absolute right-0 top-full z-30 mt-2 w-60 rounded-2xl border border-line/80 bg-card p-1.5 shadow-[0_18px_40px_-16px_rgba(16,16,20,0.35)]">
-                  <button
-                    type="button"
-                    onClick={() => { setMoreOpen(false); setActivityOpen(true); }}
-                    className="block w-full rounded-xl px-3 py-2 text-left text-[12.5px] transition-colors hover:bg-page"
-                  >
-                    View activity
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMoreOpen(false);
-                      void navigator.clipboard?.writeText(`${window.location.origin}/leads?open=${encodeURIComponent(lead.id)}`);
-                    }}
-                    className="block w-full rounded-xl px-3 py-2 text-left text-[12.5px] transition-colors hover:bg-page"
-                  >
-                    Copy a link to this lead
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setMoreOpen(false); setRemoveMsg(null); setRemoving(true); }}
-                    className="block w-full rounded-xl px-3 py-2 text-left text-[12.5px] font-semibold text-accent-dark transition-colors hover:bg-page"
-                  >
-                    Remove this lead…
-                  </button>
-                </div>
-              )}
-            </div>
+            )}
           </div>
         </div>
 
@@ -1946,7 +1903,7 @@ export default function LeadDrawer({
                     src="/brand/art/lead-house.webp"
                     alt=""
                     aria-hidden
-                    className="pointer-events-none absolute bottom-[-56px] right-[250px] hidden w-[560px] max-w-none opacity-[0.6] xl:block"
+                    className="pointer-events-none absolute bottom-[-64px] right-[190px] hidden w-[620px] max-w-none opacity-[0.6] xl:block"
                   />
                   <div className="relative grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_200px_300px]">
                     <div className="min-w-0 pb-1">
@@ -1982,7 +1939,7 @@ export default function LeadDrawer({
                         {receivedIso ? ` · ${whenAgo(receivedIso)}` : ""}
                       </p>
                       {/* Their own words - the first thing anyone should read. */}
-                      <div className="mt-4 max-w-xl rounded-2xl border border-line/40 bg-white p-4">
+                      <div className="mt-4 flex h-[176px] max-w-xl flex-col rounded-2xl border border-line/70 p-4">
                         <p className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-muted">
                           <span className="flex items-center gap-1.5 font-semibold text-ink">
                             <DoodleIcon name="message" size={13} className="text-accent-dark" />
@@ -1993,7 +1950,7 @@ export default function LeadDrawer({
                         {enquiry === undefined && !enqMessage ? (
                           <p className="mt-2 text-[12.5px] text-muted">Reading their enquiry from REX…</p>
                         ) : enqMessage ? (
-                          <p className="mt-2 max-h-[110px] overflow-y-auto whitespace-pre-line pr-1 text-[14.5px] leading-relaxed">{enqMessage}</p>
+                          <p className="mt-2 min-h-0 flex-1 overflow-y-auto whitespace-pre-line pr-1 text-[14px] leading-relaxed">{enqMessage}</p>
                         ) : enqFacts.length ? (
                           <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12.5px]">
                             {enqFacts.map(([k, v]) => (
@@ -2006,28 +1963,26 @@ export default function LeadDrawer({
                         ) : (
                           <p className="mt-2 text-[12.5px] text-muted">They sent no message with this enquiry.</p>
                         )}
-                        <p className="mt-2 text-[11px] text-muted">
+                        <p className="mt-auto pt-2 text-[11px] text-muted">
                           Via {enquiry?.source || lead.source}
                           {enquiry === undefined && enqMessage ? " · loading the full message…" : ""}
                         </p>
                       </div>
                                             <div className="mt-5 flex flex-wrap gap-2.5">
-                        <button
-                          type="button"
-                          onClick={() => { setBookMode("viewing"); setBooking(true); advanceTo("viewing"); }}
-                          className="inline-flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-page transition-opacity hover:opacity-90"
+                        <PressButton
+                          onClick={() => { setBookMode("viewing"); setBooking(true); }}
+                          className="press-ring inline-flex items-center gap-2 rounded-full bg-brown px-5 py-2.5 text-[13px] font-semibold text-white"
                         >
                           <DoodleIcon name="calendar" size={14} />
                           Book a viewing
-                        </button>
-                        <button
-                          type="button"
+                        </PressButton>
+                        <PressButton
                           onClick={() => { setEmailing(true); advanceTo("shortlist"); }}
-                          className="inline-flex items-center gap-2 rounded-full border border-line/80 bg-white px-5 py-2.5 text-[13px] font-semibold transition-colors hover:border-ink/40"
+                          className="press-ring inline-flex items-center gap-2 rounded-full border border-brown/60 px-5 py-2.5 text-[13px] font-semibold text-brown transition-colors hover:bg-brown hover:text-white"
                         >
                           <DoodleIcon name="mail" size={14} />
                           Send properties
-                        </button>
+                        </PressButton>
                       </div>
                       <div className="mt-4 [&>div]:mt-0 [&>div]:border-t-0 [&>div]:pt-0 [&_button]:px-2.5 [&_button]:py-1 [&_button]:text-[11px]">{tagsRow}</div>
                     </div>
@@ -2132,32 +2087,29 @@ export default function LeadDrawer({
                   {/* Next up: the process's own next action, on sage, like the landlord's. */}
                   <section className="rounded-2xl bg-sage/25 p-5">
                     <CardTitle icon={here.icon}>Next up</CardTitle>
-                    <div className="mt-3 flex flex-col gap-4 [&>div:first-child>p:first-child]:hidden [&>div:first-child>p.hand]:mt-0 [&>div:last-child]:items-start">{nextActionEl}</div>
+                    {logInline ? (
+                      <div className="mt-3">
+                        <p className="hand text-[17px] leading-snug">{here.title}</p>
+                        <div className="mt-4">
+                          <LogTouch
+                            key={`${lead.id}-${touches.length}`}
+                            inline
+                            askBooked={false}
+                            leadId={lead.id}
+                            leadName={lead.name}
+                            leadFacts={{ name: lead.name, email: contact.email || lead.email, contactId: lead.contactId ?? null }}
+                            mode="attempt"
+                            onClose={() => undefined}
+                            onLogged={(j) => { takeLog(j as { touches?: LeadTouch[]; spine?: Spine | null; campaign?: typeof campaign }); advance(); }}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-3 flex flex-col gap-4 [&>div:first-child>p:first-child]:hidden [&>div:first-child>p.hand]:mt-0 [&>div:last-child]:items-start [&_.press-ring]:bg-brown [&_.press-ring]:text-white">{nextActionEl}</div>
+                    )}
                   </section>
                 </div>
 
-                {/* The rest of what you do to a tenant lead, one click each. */}
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {quick.map((a) => {
-                    const cls = `flex items-center gap-3 rounded-2xl border border-line/70 bg-card px-4 py-3.5 text-left transition-colors hover:border-ink/40 ${a.off ? "pointer-events-none opacity-50" : ""}`;
-                    const inner = (
-                      <>
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-accent-soft text-accent-dark">
-                          <DoodleIcon name={a.icon} size={16} />
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block text-[13px] font-semibold leading-tight">{a.label}</span>
-                          <span className="block truncate text-[11.5px] text-muted">{a.sub}</span>
-                        </span>
-                      </>
-                    );
-                    return a.href ? (
-                      <a key={a.label} href={a.href} target="_blank" rel="noreferrer" className={cls}>{inner}</a>
-                    ) : (
-                      <button key={a.label} type="button" onClick={a.go} className={cls}>{inner}</button>
-                    );
-                  })}
-                </div>
               </div>
             ) : (
               /* THE LANDLORD LEAD, laid out like the market appraisal file
@@ -2566,6 +2518,23 @@ export default function LeadDrawer({
               <button type="button" onClick={() => setActivityOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-full border border-line/80 text-[12px] text-muted hover:text-ink">✕</button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{activityPanel}</div>
+            {/* What the ⋯ menu used to hold (gone, 11 Sep 2026). */}
+            <div className="flex items-center justify-between gap-3 border-t border-line/70 px-6 py-3 text-[11.5px]">
+              <button
+                type="button"
+                onClick={() => void navigator.clipboard?.writeText(`${window.location.origin}/leads?open=${encodeURIComponent(lead.id)}`)}
+                className="text-muted transition-colors hover:text-ink"
+              >
+                Copy a link to this lead
+              </button>
+              <button
+                type="button"
+                onClick={() => { setActivityOpen(false); setRemoveMsg(null); setRemoving(true); }}
+                className="font-semibold text-accent-dark transition-colors hover:underline"
+              >
+                Remove this lead…
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -2746,7 +2715,10 @@ export default function LeadDrawer({
           email: contact.email || lead.email,
           phone: contact.phone || lead.phone,
         }}
-        properties={shortlist.length ? shortlist : LISTINGS.slice(0, 4)}
+        /* Their shortlist, and the home they asked about first; the booker
+           reads the rest of the live book itself. No sample rows. */
+        properties={bookMode === "viewing" ? shortlist : (shortlist.length ? shortlist : LISTINGS.slice(0, 4))}
+        firstId={lead.listingId != null ? String(lead.listingId) : null}
         /* Whose diary the grid shows. An unassigned lead is being booked by
            whoever is looking at it, not by a name typed into the source in
            August. */
@@ -2791,7 +2763,8 @@ export default function LeadDrawer({
           // Booking IS the step's work — the record moves itself on, and the
           // next step's panel is one button away rather than a hunt. The
           // take-on stays put: its second half (photos & details) is still due.
-          if (here.action === "viewing") advance();
+          if (bookMode === "viewing") advanceTo("viewing");
+          else if (here.action === "viewing") advance();
           if (here.action === "takeon") setTakeOnBooked(true);
 
           /* BOOKING AN APPRAISAL HANDS THE RECORD OVER.

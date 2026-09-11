@@ -90,6 +90,7 @@ export default function ViewingBooker({
   occupant = null,
   origin = null,
   onBooked,
+  firstId = null,
 }: {
   open: boolean;
   onClose: () => void;
@@ -114,6 +115,8 @@ export default function ViewingBooker({
    *  each existing appointment is from it, which is how a real day is
    *  planned: not "am I free", but "can I get there". */
   origin?: { lat: number; lng: number } | null;
+  /** The listing they enquired about: first in the list and picked by default. */
+  firstId?: string | null;
   /**
    * `startsAt` and `minutes` are the booking as a MACHINE reads it, and they
    * are not decoration. Everything downstream — the landlord's calendar file,
@@ -138,7 +141,11 @@ export default function ViewingBooker({
   }) => void;
 }) {
   const today = useMemo(() => startOfDay(new Date()), []);
-  const [stage, setStage] = useState<"applicant" | "when" | "who" | "done">("when");
+  /* A viewing is booked property first (James, 11 Sep 2026): find it, confirm
+     it is the one, then the diary, then the confirmation. */
+  const [stage, setStage] = useState<"applicant" | "property" | "confirm" | "when" | "who" | "done">("when");
+  const [find, setFind] = useState("");
+  const [book, setBook] = useState<Listing[] | null>(null);
   const [chosen, setChosen] = useState<Person | null>(lead);
   const [day, setDay] = useState<Date | null>(null);
   const [slot, setSlot] = useState<string | null>(null);
@@ -157,15 +164,34 @@ export default function ViewingBooker({
   // it here would throw the chosen day and time away on any parent re-render.
   const seed = useRef(properties);
   seed.current = properties;
+  /* The whole live book, so the property can be any home on the market and
+     not only what was shortlisted. Read once per open. */
+  useEffect(() => {
+    if (!open || mode !== "viewing") return;
+    let live = true;
+    fetch("/api/listings", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!live || !j?.ok || !Array.isArray(j.listings)) return;
+        const rows = (j.listings as Array<Listing & { letAgreed?: boolean }>)
+          .filter((l) => !l.letAgreed)
+          .map((l) => ({ id: String(l.id), name: l.name, locality: l.locality, rent: l.rent, image: l.image, propertyId: l.propertyId ?? null }));
+        setBook(rows);
+      })
+      .catch(() => undefined);
+    return () => { live = false; };
+  }, [open, mode]);
+
   useEffect(() => {
     if (!open) return;
     // Starting from a property, the applicant is the first unknown; starting
     // from a lead, it's already answered.
     setChosen(lead);
-    setStage(lead ? "when" : "applicant");
+    setStage(lead ? (mode === "viewing" ? "property" : "when") : "applicant");
+    setFind("");
     setDay(null);
     setSlot(null);
-    setPropertyId(seed.current[0]?.id ?? "");
+    setPropertyId(firstId ?? seed.current[0]?.id ?? "");
     setFilters(NO_FILTERS);
     setWeek(0);
     /* Re-seeded on OPEN, not just at mount. The booker mounts once and is
@@ -174,7 +200,7 @@ export default function ViewingBooker({
        kept the viewing default and every appraisal was booked for half an
        hour, no matter what this line said. */
     setMins(mode === "appraisal" || mode === "takeon" ? 60 : 30);
-  }, [open, today, mode]);
+  }, [open, today, mode, firstId]);
 
   useEffect(() => {
     if (!open) return;
@@ -400,9 +426,19 @@ export default function ViewingBooker({
     setBufferAfter(false);
   }, [pickDay, slot, mins]);
 
+  const everyHome = useMemo(() => {
+    const seen = new Set<string>();
+    const all = [...properties, ...(book ?? [])].filter((p) => (seen.has(p.id) ? false : (seen.add(p.id), true)));
+    if (!firstId) return all;
+    const asked = all.find((p) => p.id === firstId);
+    return asked ? [asked, ...all.filter((p) => p.id !== firstId)] : all;
+  }, [properties, book, firstId]);
+
   if (!open) return null;
 
-  const property = properties.find((p) => p.id === propertyId) ?? properties[0] ?? null;
+  const property = everyHome.find((p) => p.id === propertyId) ?? properties[0] ?? null;
+  const needle = find.trim().toLowerCase();
+  const found = everyHome.filter((p) => !needle || `${p.name} ${p.locality}`.toLowerCase().includes(needle));
   /* The booking's real length, in words, so the confirmation cannot promise
      half an hour for a visit the agent has just set aside ninety minutes for.
      That mismatch is exactly how a landlord ends up with somewhere else to be
@@ -803,11 +839,17 @@ export default function ViewingBooker({
                   ? "Who do we tell?"
                   : stage === "applicant"
                     ? "Who's viewing?"
-                    : mode === "appraisal" ? "Book the appraisal" : mode === "takeon" ? "Book the take-on" : "Book a viewing"}
+                    : stage === "property"
+                      ? "Find the property"
+                      : stage === "confirm"
+                        ? "This one?"
+                        : mode === "appraisal" ? "Book the appraisal" : mode === "takeon" ? "Book the take-on" : "Pick a time"}
             </h2>
             <p className="mt-0.5 truncate text-[12px] text-muted">
               {stage === "applicant"
                 ? properties[0]?.name ?? "Pick who's viewing"
+                : stage === "property" || stage === "confirm"
+                  ? `For ${chosen?.name ?? "—"} · ${stage === "property" ? "any home on the market" : property?.name ?? ""}`
                 : stage === "when"
                   ? `For ${chosen?.name ?? "—"}`
                   : `${chosen?.name ?? "—"} · ${whenLabel}${
@@ -873,6 +915,52 @@ export default function ViewingBooker({
             </>
           )}
 
+          {/* ══ FIND THE PROPERTY ══ */}
+          {stage === "property" && (
+            <div className="frame-grow">
+              <input
+                autoFocus
+                value={find}
+                onChange={(e) => setFind(e.target.value)}
+                placeholder="Street, area or postcode…"
+                className="w-full rounded-xl border border-line/80 bg-transparent px-3.5 py-2.5 text-[13px] outline-none focus:border-ink"
+              />
+              {properties.length > 0 && !needle && (
+                <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-muted">{firstId ? "The one they asked about first, then the rest of the book" : "On their shortlist first, then the rest of the book"}</p>
+              )}
+              <ul className="mt-3 grid gap-2.5 sm:grid-cols-2">
+                {found.map((p) => (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      onClick={() => { setPropertyId(p.id); setStage("confirm"); }}
+                      className={`flex w-full items-center gap-3 rounded-2xl border p-2.5 text-left transition-colors hover:border-ink/40 ${p.id === propertyId ? "border-brown bg-brown/5" : "border-line/60"}`}
+                    >
+                      <PropertyPhoto src={p.image} className="h-14 w-[72px] shrink-0 rounded-xl" />
+                      <span className="min-w-0 flex-1">
+                        <span className="hand block truncate text-[13.5px]">{p.name}</span>
+                        <span className="block truncate text-[11px] text-muted">{p.locality}{p.rent ? ` · £${p.rent.toLocaleString("en-GB")} pcm` : ""}</span>
+                      </span>
+                      <span aria-hidden className="text-muted">›</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {book === null && !properties.length && <p className="py-8 text-center text-[12.5px] text-muted">Reading the book…</p>}
+              {book !== null && !found.length && <p className="py-8 text-center text-[12.5px] text-muted">Nothing on the market like that.</p>}
+            </div>
+          )}
+
+          {/* ══ CONFIRM IT ══ */}
+          {stage === "confirm" && property && (
+            <div className="frame-grow mx-auto max-w-md py-4 text-center">
+              <PropertyPhoto src={property.image} className="mx-auto h-44 w-full rounded-2xl" />
+              <p className="hand mt-5 text-[22px]">{property.name}</p>
+              <p className="mt-1 text-[13px] text-muted">{property.locality}{property.rent ? ` · £${property.rent.toLocaleString("en-GB")} pcm` : ""}</p>
+              <p className="mt-4 text-[12.5px] text-muted">{chosen?.name ?? "They"} will be viewing this one. Next, the diary.</p>
+            </div>
+          )}
+
           {/* ══ WHEN ══ */}
           {stage === "when" && (
             <>
@@ -882,7 +970,14 @@ export default function ViewingBooker({
                   At {address} — their place, not ours.
                 </p>
               )}
-              {!toLandlord && properties.length > 1 && (
+              {!toLandlord && property && (
+                <p className="mb-4 flex items-center gap-2 text-[12.5px] text-muted">
+                  <DoodleIcon name="home" size={14} />
+                  {property.name} · {property.locality}
+                  <button type="button" onClick={() => setStage("property")} className="ml-1 text-[11.5px] font-semibold text-accent-dark hover:underline">change</button>
+                </p>
+              )}
+              {false && (
                 <div className="mb-5">
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
                     Which property
@@ -1150,8 +1245,17 @@ export default function ViewingBooker({
                   ? `${sentCount} message${sentCount === 1 ? "" : "s"} sent. In the diary and on the record.`
                   : VIEWING_SENDS_LIVE
                     ? "In the diary and on the record. Nobody was told."
-                    : "Noted here. Nobody has been told and it is not in REX yet - book it in REX and confirm from Outlook as usual."}
+                    : "In the diary here. Not in REX yet."}
               </p>
+              {!toLandlord && !VIEWING_SENDS_LIVE && chosen && (
+                <div className="mt-6 w-full max-w-md rounded-2xl border border-line/60 bg-card p-4 text-left">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Confirm it with {chosen.name.split(" ")[0]}</p>
+                  <p className="mt-1.5 text-[12.5px]">
+                    To <span className="font-semibold">{chosen.email || "no email on this lead"}</span>: {property?.name}, {whenPretty}.
+                  </p>
+                  <p className="mt-2 text-[11.5px] text-muted">Sending from the OS switches on once it goes through your own mailbox. Until then, confirm from Outlook as usual and it stays on this record.</p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1172,6 +1276,21 @@ export default function ViewingBooker({
                   <span className="flex items-center gap-2">
                     <DoodleIcon name="calendar" size={15} />
                     Next — pick a time
+                  </span>
+                </PressButton>
+              </>
+            ) : stage === "property" ? (
+              <>
+                <p className="min-w-0 truncate text-[12px] text-muted">Pick the home they are going to see</p>
+                <span />
+              </>
+            ) : stage === "confirm" ? (
+              <>
+                <button type="button" onClick={() => setStage("property")} className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40">← Not this one</button>
+                <PressButton onClick={() => setStage("when")} className="press-ring shrink-0 rounded-full bg-brown px-6 py-2.5 text-[13px] font-semibold text-white">
+                  <span className="flex items-center gap-2">
+                    <DoodleIcon name="calendar" size={15} />
+                    Yes — pick a time
                   </span>
                 </PressButton>
               </>

@@ -38,6 +38,7 @@ export default function LogTouch({
   onBook,
   inline = false,
   tried,
+  askBooked = true,
 }: {
   leadId: string;
   leadName: string;
@@ -57,6 +58,8 @@ export default function LogTouch({
    *  ask before it lets go (James, 11 Sep 2026: "Are you sure? Have you
    *  tried X, Y and Z?"). */
   tried?: { label: string; done: boolean }[];
+  /** A tenant is not booking a valuation: skip that frame. */
+  askBooked?: boolean;
 }) {
   const [kind, setKind] = useState<TouchKind>(initialKind);
   const [outcome, setOutcome] = useState<TouchOutcome | null>(null);
@@ -147,7 +150,7 @@ export default function LogTouch({
                 {frame === 1 ? (inline ? `Did you call, text, WhatsApp or email ${first}?` : `How did you reach ${first}?`) : frame === 2 ? "How did it go?" : frame === 3 ? "Did they book the valuation?" : "Anything worth remembering?"}
               </h2>
               <span className="flex items-center gap-1" aria-hidden>
-                {[1, 2, 3, 4].map((n) => (
+                {(askBooked ? [1, 2, 3, 4] : [1, 2, 4]).map((n) => (
                   <span key={n} className={`h-1.5 rounded-full transition-all ${n === frame ? `w-4 ${inline ? "bg-brown" : "bg-accent-dark"}` : n < frame ? `w-1.5 ${inline ? "bg-brown/50" : "bg-accent-dark/50"}` : "w-1.5 bg-line"}`} />
                 ))}
               </span>
@@ -179,7 +182,7 @@ export default function LogTouch({
                       setOutcome(o.id);
                       const engages = o.id === "spoke" || o.id === "replied";
                       if (!engages) setBooked(null);
-                      setFrame(engages ? 3 : 4);
+                      setFrame(engages && askBooked ? 3 : 4);
                     }}
                     className={`flex items-center justify-between rounded-2xl border px-4 py-3.5 text-left text-[13.5px] font-semibold transition-colors hover:border-ink/40 ${outcome === o.id ? chosen : "border-line/70 bg-card"}`}
                   >
@@ -274,7 +277,7 @@ export default function LogTouch({
         <div className={`flex items-center justify-end gap-3 ${inline && frame === 1 ? "hidden" : "mt-5"}`}>
           <button
             type="button"
-            onClick={mode === "attempt" && frame > 1 ? () => setFrame((f) => (f === 4 && !engaged ? 2 : (f - 1) as 1 | 2 | 3)) : onClose}
+            onClick={mode === "attempt" && frame > 1 ? () => setFrame((f) => (f === 4 && (!engaged || !askBooked) ? 2 : (f - 1) as 1 | 2 | 3)) : onClose}
             className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40"
           >
             {mode === "attempt" && frame > 1 ? "← Back" : "Cancel"}
