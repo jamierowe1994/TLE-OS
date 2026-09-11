@@ -953,8 +953,11 @@ export default function LeadDrawer({
       setShown(false);
       return;
     }
-    const id = requestAnimationFrame(() => setShown(true));
-    return () => cancelAnimationFrame(id);
+    /* Two frames, not one: the first commit and the flip can land in the
+       same paint, and then the sheet pops instead of sliding. */
+    let id2 = 0;
+    const id = requestAnimationFrame(() => { id2 = requestAnimationFrame(() => setShown(true)); });
+    return () => { cancelAnimationFrame(id); cancelAnimationFrame(id2); };
   }, [lead]);
 
   // Escape closes; arrows step. A record you can only leave with the mouse is
@@ -1934,15 +1937,25 @@ export default function LeadDrawer({
                  what they asked, the picture and the two things you do most;
                  then who they are, the property, and the state of play. */
               <div className="space-y-4">
-                <section className="relative overflow-hidden rounded-3xl bg-accent-soft/70 p-6">
-                  <div className="relative z-[1] grid items-end gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
-                    <div className="min-w-0">
+                {/* The hero, laid out like the landlord's: who they are and what they
+                    asked on the left, At a glance on the right, James's house sunk into
+                    the background and cut off by the bottom edge (11 Sep 2026). */}
+                <header className="relative overflow-hidden rounded-[22px] border border-line/50 bg-sage/30">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/brand/art/lead-house.webp"
+                    alt=""
+                    aria-hidden
+                    className="pointer-events-none absolute bottom-[-56px] right-[250px] hidden w-[560px] max-w-none opacity-[0.6] xl:block"
+                  />
+                  <div className="relative grid gap-6 p-6 lg:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[minmax(0,1fr)_200px_300px]">
+                    <div className="min-w-0 pb-1">
                       <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">
                         Tenant enquiry · step {Math.min(step, track.length - 1) + 1} of {track.length}
                       </p>
                       <div className="mt-2 flex flex-wrap items-center gap-3">
                         {ours ? (
-                          <h2 className="min-w-0 text-[34px] leading-tight">
+                          <h2 className="min-w-0 hand text-[32px] leading-[1.1]">
                             <InlineField
                               value={personName}
                               onChange={(v) => {
@@ -1951,11 +1964,11 @@ export default function LeadDrawer({
                                 setPersonName(next);
                                 void saveField({ name: next });
                               }}
-                              className="text-[34px] leading-tight"
+                              className="hand text-[32px] leading-[1.1]"
                             />
                           </h2>
                         ) : (
-                          <h2 className="text-[34px] leading-tight">{lead.name}</h2>
+                          <h2 className="hand text-[32px] leading-[1.1]">{lead.name}</h2>
                         )}
                         <Pill tone={STAGE_TONE[lead.stage]}>{lead.stage}</Pill>
                         {passport?.done && passport.path && (
@@ -1964,8 +1977,12 @@ export default function LeadDrawer({
                           </a>
                         )}
                       </div>
+                      <p className="mt-1.5 text-[13.5px] text-muted">
+                        {enqProperty && enqProperty !== "—" ? enqProperty : "General enquiry"} · via {enquiry?.source || lead.source}
+                        {receivedIso ? ` · ${whenAgo(receivedIso)}` : ""}
+                      </p>
                       {/* Their own words - the first thing anyone should read. */}
-                      <div className="mt-4 max-w-2xl rounded-2xl bg-white/75 p-4">
+                      <div className="mt-4 max-w-xl rounded-2xl border border-line/40 bg-white p-4">
                         <p className="flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-muted">
                           <span className="flex items-center gap-1.5 font-semibold text-ink">
                             <DoodleIcon name="message" size={13} className="text-accent-dark" />
@@ -1976,7 +1993,7 @@ export default function LeadDrawer({
                         {enquiry === undefined && !enqMessage ? (
                           <p className="mt-2 text-[12.5px] text-muted">Reading their enquiry from REX…</p>
                         ) : enqMessage ? (
-                          <p className="mt-2 max-h-[140px] overflow-y-auto whitespace-pre-line pr-1 text-[14.5px] leading-relaxed">{enqMessage}</p>
+                          <p className="mt-2 max-h-[110px] overflow-y-auto whitespace-pre-line pr-1 text-[14.5px] leading-relaxed">{enqMessage}</p>
                         ) : enqFacts.length ? (
                           <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12.5px]">
                             {enqFacts.map(([k, v]) => (
@@ -1994,7 +2011,7 @@ export default function LeadDrawer({
                           {enquiry === undefined && enqMessage ? " · loading the full message…" : ""}
                         </p>
                       </div>
-                      <div className="mt-5 flex flex-wrap gap-2.5">
+                                            <div className="mt-5 flex flex-wrap gap-2.5">
                         <button
                           type="button"
                           onClick={() => { setBookMode("viewing"); setBooking(true); advanceTo("viewing"); }}
@@ -2012,22 +2029,44 @@ export default function LeadDrawer({
                           Send properties
                         </button>
                       </div>
+                      <div className="mt-4 [&>div]:mt-0 [&>div]:border-t-0 [&>div]:pt-0 [&_button]:px-2.5 [&_button]:py-1 [&_button]:text-[11px]">{tagsRow}</div>
                     </div>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src="/brand/art/new-home.png" alt="" aria-hidden className="pointer-events-none hidden h-[230px] w-auto self-end lg:block" />
+
+                    {/* Breathing room over the house, from xl up. */}
+                    <div className="hidden xl:block" />
+
+                    <aside className="rounded-2xl border border-line/40 bg-white p-5">
+                      <p className="hand flex items-center gap-2 text-[15px]">
+                        <DoodleIcon name="magic-wand" size={15} className="text-accent-dark" />
+                        At a glance
+                      </p>
+                      <ul className="mt-4 space-y-3.5">
+                        <Glance icon="target" title={receivedIso ? `Came in ${whenAgo(receivedIso)}` : `Came in ${lead.received}`} sub={`${receivedIso ? `${whenFull(receivedIso)} · ` : ""}via ${enquiry?.source || lead.source}`} />
+                        <Glance
+                          icon="home"
+                          title={enqProperty && enqProperty !== "—" ? "Asked about one property" : "A general enquiry"}
+                          sub={enqProperty && enqProperty !== "—" ? enqProperty : "Not about one property - match them to the book"}
+                        />
+                        <Glance
+                          icon="doc"
+                          title={passport?.done ? "Passport done" : passport?.sent ? "Passport sent, not finished" : "Passport not sent"}
+                          sub={passport?.done ? "Their details are filled in below" : passportEmail ? "One click on the tiles below" : "No email to send it to yet"}
+                        />
+                        <Glance
+                          icon="calendar"
+                          title={viewings.length ? `${viewings.length} viewing${viewings.length === 1 ? "" : "s"} booked` : "No viewing yet"}
+                          sub={track[Math.min(step, track.length - 1)]?.label ?? "Enquiry"}
+                        />
+                      </ul>
+                    </aside>
                   </div>
-                </section>
+                </header>
 
                 <div className="grid gap-4 xl:grid-cols-3">
                   {/* Who they are - editable, and filled in by the passport once it is done. */}
-                  <section className="rounded-2xl border border-line/70 bg-card p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="flex items-center gap-2.5 text-[13.5px] font-semibold">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
-                          <DoodleIcon name="user" size={14} />
-                        </span>
-                        Tenant details
-                      </p>
+                  <section className="rounded-2xl border border-line/60 bg-card p-5">
+                    <div className="flex items-start justify-between gap-2">
+                      <CardTitle icon="user">The tenant</CardTitle>
                       {passport?.done && <span className="rounded-full bg-sage/30 px-2 py-0.5 text-[10.5px] font-semibold">From their passport</span>}
                     </div>
                     <div className="mt-2 divide-y divide-line/50">
@@ -2068,14 +2107,9 @@ export default function LeadDrawer({
                   </section>
 
                   {/* The property they asked about. */}
-                  <section className="rounded-2xl border border-line/70 bg-card p-4">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="flex items-center gap-2.5 text-[13.5px] font-semibold">
-                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
-                          <DoodleIcon name="home" size={14} />
-                        </span>
-                        Property enquiry
-                      </p>
+                  <section className="rounded-2xl border border-line/60 bg-card p-5">
+                    <div className="flex items-start justify-between gap-2">
+                      <CardTitle icon="home">The property</CardTitle>
                       {lead.listingId != null && (
                         <Link href={`/listings?open=${lead.listingId}`} className="rounded-full border border-line/80 px-3 py-1 text-[11.5px] font-semibold transition-colors hover:border-ink/40">
                           View
@@ -2095,34 +2129,12 @@ export default function LeadDrawer({
                     )}
                   </section>
 
-                  {/* The state of play, on sage - the balance to the pink above. */}
-                  <section className="rounded-2xl bg-sage/25 p-4">
-                    <p className="flex items-center gap-2.5 text-[13.5px] font-semibold">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/80">
-                        <DoodleIcon name="checklist" size={14} />
-                      </span>
-                      At a glance
-                    </p>
-                    <dl className="mt-3 space-y-2.5 text-[12.5px]">
-                      {([
-                        ["Came in", receivedIso ? `${whenFull(receivedIso)}` : lead.received],
-                        ["From", enquiry?.source || lead.source],
-                        ["Passport", passport?.done ? "Done" : passport?.sent ? "Sent, not finished" : passportEmail ? "Not sent yet" : "No email yet"],
-                        ["Viewings", viewings.length ? `${viewings.length} booked` : "None yet"],
-                        ["Now", track[Math.min(step, track.length - 1)]?.label ?? "Enquiry"],
-                      ] as Array<[string, string]>).map(([k, v]) => (
-                        <div key={k} className="flex items-baseline justify-between gap-3">
-                          <dt className="text-muted">{k}</dt>
-                          <dd className="text-right font-semibold">{v}</dd>
-                        </div>
-                      ))}
-                    </dl>
+                  {/* Next up: the process's own next action, on sage, like the landlord's. */}
+                  <section className="rounded-2xl bg-sage/25 p-5">
+                    <CardTitle icon={here.icon}>Next up</CardTitle>
+                    <div className="mt-3 flex flex-col gap-4 [&>div:first-child>p:first-child]:hidden [&>div:first-child>p.hand]:mt-0 [&>div:last-child]:items-start">{nextActionEl}</div>
                   </section>
                 </div>
-
-                {/* The tags row brings its own top rule and margin for the landlord
-                    layout; here it sits between two blocks, so both come off. */}
-                <div className="[&>div]:mt-0 [&>div]:border-t-0 [&>div]:pt-0">{tagsRow}</div>
 
                 {/* The rest of what you do to a tenant lead, one click each. */}
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -2401,9 +2413,17 @@ export default function LeadDrawer({
               While a landlord is AT the appraisal, this steps aside for the
               appraisal itself (below): booking one turns the record into a
               job of work, and the job deserves the screen. ── */}
-          <div className={`mt-3 rounded-3xl border border-line/80 bg-card p-5 ${appraisalTakesOver || !isTenant ? "hidden" : ""}`}>
-            {timelineEl}
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-x-8 gap-y-3 border-t border-line/60 pt-4">{nextActionEl}</div>
+          <div className={`mt-4 rounded-2xl border border-line/60 bg-card p-5 ${appraisalTakesOver || !isTenant ? "hidden" : ""}`}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <CardTitle icon="target">
+                Where it&apos;s up to
+                <span className="mt-0.5 block text-[12px] font-normal text-muted">The tenant track, read from what has been logged.</span>
+              </CardTitle>
+              <span className="rounded-full bg-accent-soft px-3 py-1 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-accent-dark">
+                Step {Math.min(step, track.length - 1) + 1} of {track.length}
+              </span>
+            </div>
+            <div className="mt-4">{timelineEl}</div>
           </div>
 
           {/* ── The appraisal TAKES OVER while the record is at that step.
