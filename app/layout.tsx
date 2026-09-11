@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Lora, Manrope, Montserrat, Ms_Madi, Shantell_Sans } from "next/font/google";
+import { Inter, Lora, Manrope, Montserrat, Ms_Madi, Oooh_Baby, Shantell_Sans } from "next/font/google";
 import "./globals.css";
 
 /**
@@ -16,6 +16,18 @@ import "./globals.css";
 const manrope = Manrope({
   subsets: ["latin"],
   variable: "--font-manrope",
+  display: "swap",
+});
+
+/**
+ * A TRIAL (James, 11 Sep 2026): Oooh Baby, a handwriting script, on the OS's
+ * own headings only - the agents' screens, not the portals, not any email.
+ * Applied through the .os-type scope in globals.css; one weight only.
+ */
+const ooohBaby = Oooh_Baby({
+  subsets: ["latin"],
+  weight: "400",
+  variable: "--font-oooh-baby",
   display: "swap",
 });
 
@@ -111,7 +123,7 @@ export default function RootLayout({
     // heading silently falls back to system fonts.
     <html
       lang="en"
-      className={`${manrope.variable} ${inter.variable} ${montserrat.variable} ${shantell.variable} ${msMadi.variable} ${lora.variable}`}
+      className={`${manrope.variable} ${inter.variable} ${ooohBaby.variable} ${montserrat.variable} ${shantell.variable} ${msMadi.variable} ${lora.variable}`}
     >
       <body className="antialiased">{children}</body>
     </html>

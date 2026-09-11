@@ -61,6 +61,25 @@
 }
 
 /* ---------------------------------------------------------------------------
+   TRIAL, 11 Sep 2026 (James): Oooh Baby on the OS's own headings.
+   Scoped to .os-type, which only the agents' shell carries - the portals,
+   Susan's figures (.type-admin sets its own heading face) and every email
+   are untouched. A script has one weight and needs its natural spacing, so
+   the extrabold and the drawn-in tracking are undone inside the scope. The
+   big numbers stay Manrope so a tile can still be read at a glance. To end
+   the trial, delete this block and the class on the shell.
+--------------------------------------------------------------------------- */
+.os-type {
+  --font-heading: var(--font-oooh-baby), var(--font-manrope), cursive;
+}
+/* Not inside the NESTED .type-admin scope, the one that pins Susan's figures
+   to Manrope - those keep Manrope's weight. Outside it they take the trial. */
+.os-type :is(h1, h2, h3, h4, h5, .hand):not(.type-admin .type-admin *) {
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+/* ---------------------------------------------------------------------------
    EACH CUSTOMER SURFACE RUNS ITS OWN COLOURS (James, 11 Sep 2026).
    The OS keeps each agent's accent choice (data-accent on <html>). The
    landlord and tenant surfaces stamp data-surface on their shell, which

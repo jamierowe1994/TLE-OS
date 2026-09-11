@@ -286,7 +286,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen">
+    /* os-type: the agents' own heading face (the Oooh Baby trial, 11 Sep) - see globals.css. */
+    <div className="os-type flex min-h-screen">
       {/* Tagged so /admin can hide it — an owner in the admin centre is not
           doing an agent's job, and the rail invites them to wander into the
           business-wide book by accident. See app/(os)/admin/layout.tsx. */}
