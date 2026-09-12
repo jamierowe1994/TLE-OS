@@ -119,9 +119,6 @@ export const TINTS = ["var(--p-tint)", "var(--p-tint-2)", "var(--p-tint-3)"] as 
  */
 export const ACCENT_HEX: Record<PresentStyle, string> = {
   house: "#56423e",
-  hand: "#e08a73",
-  brand: "#e31f36",
-  photo: "#e31f36",
 };
 
 /**
@@ -189,65 +186,11 @@ export const THEMES: Record<PresentStyle, DeckTheme> = {
   },
   /* Untouched, deliberately. This is the one somebody already likes, and the
      whole point of adding the other two was to avoid changing it. */
-  hand: {
-    ground: "#faf7f3",
-    accent: "#e08a73",
-    tint: "#fbe7e2",
-    tint2: "#e9eee4",
-    tint3: "#fdf2da",
-    display: "var(--font-shantell), 'Trebuchet MS', sans-serif",
-    /* NO CURSIVE IN THE DRAWN LOOK. James, 7 Sep: "get rid of all of the
-       cursive... 'Let's get you' all looks good, but then the 'more' is in a
-       different font. They should all be exactly the same font."
-       `inherit` rather than naming the marker face on purpose: the emphasised
-       word then takes whatever headline it is sitting inside, so it matches on
-       the cream slides (marker) AND on the appointment slide (serif) without
-       either being listed here. One word, one rule, nothing to keep in step. */
-    script: "inherit",
-    /* And at the SAME SIZE. The 1.22 below exists because a script's x-height
-       is far smaller than the type around it; at the same face it just makes
-       one word bigger than its own sentence. */
-    scriptEm: "1em",
-    scriptLh: "inherit",
-    art: "drawn",
-    brand: "#e31f36",
-    panel: "#e31f3680",
-  },
-  /* Anti Flash White and Expert Red - a colourway the guidelines name, so the
-     halfway house is not a compromise anybody has to defend. */
-  brand: {
-    ground: "#f4f4f3",
-    accent: "#e31f36",
-    tint: "#ffe4df",
-    tint2: "#eceeea",
-    tint3: "#f7f1e4",
-    display: INTER,
-    script: LORA_IT,
-    scriptEm: "1.22em",
-    scriptLh: "1",
-    art: "drawn",
-    brand: "#e31f36",
-    panel: "#e31f3680",
-  },
-  photo: {
-    ground: "#ffffff",
-    accent: "#e31f36",
-    tint: "#ffe4df",
-    tint2: "#f1f1f1",
-    tint3: "#f7f1e4",
-    display: INTER,
-    script: LORA_IT,
-    scriptEm: "1.22em",
-    scriptLh: "1",
-    art: "photo",
-    brand: "#e31f36",
-    panel: "#e31f3680",
-  },
 };
 
 /** The variables a theme stamps. Spread onto the deck root's `style`. */
 export function themeVars(style: PresentStyle): React.CSSProperties {
-  const t = THEMES[style] ?? THEMES.hand;
+  const t = THEMES[style] ?? THEMES.house;
   return {
     ["--p-ground" as string]: t.ground,
     ["--p-accent" as string]: t.accent,
@@ -901,7 +844,6 @@ export const DeckStyleCtx = React.createContext<PresentStyle>("house");
  * hole - which is also what makes adding photographs incremental: five exist
  * today, and a sixth slot works the moment a file lands next to them.
  */
-const PHOTO_SLOTS = new Set(["welcome", "property", "marketing", "protection", "close"]);
 /* The house look photographs the opening, the property and the marketing,
    and keeps the drawings for the rest - "some illustrations, kept to a
    minimum". */
@@ -927,7 +869,7 @@ export function Art({
 }) {
   const style = React.useContext(DeckStyleCtx);
   const art = THEMES[style]?.art;
-  const asPhoto = (art === "photo" && PHOTO_SLOTS.has(slot)) || (art === "mixed" && MIXED_SLOTS.has(slot));
+  const asPhoto = art !== "drawn" && MIXED_SLOTS.has(slot);
 
   if (asPhoto) {
     return (
@@ -950,6 +892,6 @@ export function Art({
 /** Whether the deck is wearing photographs — for the handful of places that
  *  need to drop a hand-drawn flourish rather than swap a picture. */
 export function useIsPhoto(): boolean {
-  /* "Not drawn": the mixed look drops the blobs and flourishes too. */
+  /* House is the only look (12 Sep 2026), and it is not drawn. */
   return THEMES[React.useContext(DeckStyleCtx)]?.art !== "drawn";
 }

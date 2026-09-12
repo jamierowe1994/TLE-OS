@@ -296,8 +296,8 @@ export type PresentHistory = {
 export type PresentDeck = {
   /** Which of the three decks this is — see DeckKind. */
   kind: DeckKind;
-  /** Which look it wears. Absent means "hand", so every deck minted before
-   *  4 Sep keeps exactly the appearance it was approved with. */
+  /** Which look it wears. Only House exists now; absent or anything older
+   *  resolves to it - see asStyle. */
   style?: PresentStyle;
   /** Post-appraisal only. See PresentValuation. */
   valuation?: PresentValuation | null;
@@ -692,16 +692,16 @@ export const SLIDES: { id: SlideId; title: string; removable: boolean; section: 
  * for the display face gets whichever one the deck is wearing without
  * knowing there is a choice. See components/present-kit.
  */
-export type PresentStyle = "house" | "hand" | "brand" | "photo";
+/* ONE STYLE. Drawn, Brand and Photographic were removed on 12 Sep 2026 -
+   James: "the style that we've just made is the style now". The type and
+   the picker plumbing stay so a stored deck's `style` still resolves. */
+export type PresentStyle = "house";
 
 export const PRESENT_STYLES: { id: PresentStyle; label: string; blurb: string }[] = [
   /* The house look (James, 12 Sep 2026): the OS's own type and palette, a
      few real photographs, the drawings kept to a minimum - "very clean, very
      neutral, and balanced", like the landlord portal. The default. */
   { id: "house", label: "House", blurb: "The OS's own type and palette. Photographs, a few drawings." },
-  { id: "hand", label: "Drawn", blurb: "The marker hand and the illustrations." },
-  { id: "brand", label: "Brand", blurb: "Brand typography, same illustrations." },
-  { id: "photo", label: "Photographic", blurb: "Brand typography, photographs." },
 ];
 
 export const asStyle = (v: string | null | undefined): PresentStyle =>
