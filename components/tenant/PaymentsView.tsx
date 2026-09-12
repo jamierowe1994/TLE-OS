@@ -1,12 +1,16 @@
 import Spine from "@/components/landlord/Spine";
 import type { TenantHome } from "@/lib/tenant-home-view";
+import LockedView from "@/components/tenant/LockedView";
+import { locksFor } from "@/lib/tenant-journey";
 
 /** Payments: one section of the tenant portal, drawn from the home view. Shared with the sample. */
 
 const card = "rounded-[22px] border border-line/60 bg-white";
 const eyebrow = "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted";
 
-export default function PaymentsView({ v }: { v: TenantHome }) {
+export default function PaymentsView({ v, base = "/tenant" }: { v: TenantHome; base?: string }) {
+  const locked = locksFor(v.stage).payments;
+  if (locked) return <LockedView title="Payments" opens={locked} what="Your holding fee, your deposit, your rent and what is due when. Nothing is owed until your offer is accepted." base={base} />;
   return (
     <div className="space-y-5">
       <div className="pt-2">

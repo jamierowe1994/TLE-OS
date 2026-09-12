@@ -1,6 +1,9 @@
 import TenancyView from "@/components/tenant/TenancyView";
-import { SOPHIE } from "@/lib/tenant-sample";
+import { demoStage } from "@/lib/tenant-demo";
+import { sampleFor } from "@/lib/tenant-sample";
 
-export default function Page() {
-  return <TenancyView v={SOPHIE} />;
+export const dynamic = "force-dynamic";
+
+export default async function Page() {
+  return <TenancyView v={sampleFor(await demoStage())} base="/tenant/demo" />;
 }

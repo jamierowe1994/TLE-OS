@@ -1,6 +1,9 @@
 import DocumentsView from "@/components/tenant/DocumentsView";
-import { SOPHIE } from "@/lib/tenant-sample";
+import { demoStage } from "@/lib/tenant-demo";
+import { sampleFor } from "@/lib/tenant-sample";
 
-export default function Page() {
-  return <DocumentsView v={SOPHIE} />;
+export const dynamic = "force-dynamic";
+
+export default async function Page() {
+  return <DocumentsView v={sampleFor(await demoStage())} />;
 }

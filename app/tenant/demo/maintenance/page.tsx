@@ -1,6 +1,9 @@
 import MaintenanceView from "@/components/tenant/MaintenanceView";
-import { SOPHIE } from "@/lib/tenant-sample";
+import { demoStage } from "@/lib/tenant-demo";
+import { sampleFor } from "@/lib/tenant-sample";
 
-export default function Page() {
-  return <MaintenanceView v={SOPHIE} />;
+export const dynamic = "force-dynamic";
+
+export default async function Page() {
+  return <MaintenanceView v={sampleFor(await demoStage())} base="/tenant/demo" />;
 }

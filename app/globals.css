@@ -1007,10 +1007,17 @@ body {
    2026: "I like colours to flow throughout. If we're going to pick a colour,
    pick a colour." Keyed on the page, not the shell, so every other tenant
    page keeps its white. */
-[data-surface="tenant"]:has([data-passport-page]) {
+[data-surface="tenant"]:has([data-passport-page]),
+[data-surface="tenant"]:has([data-tenant-door]) {
   background: linear-gradient(180deg, #fdf4f1 0%, #fdefec 100%);
 }
-[data-surface="tenant"]:has([data-passport-page]) > header {
+[data-surface="tenant"]:has([data-passport-page]) > header,
+[data-surface="tenant"]:has([data-tenant-door]) > header {
+  background: transparent;
+  border-color: rgba(86, 66, 62, 0.12);
+}
+/* The sign-in page is the same colour to its foot: no grey footer strip. */
+[data-surface="tenant"]:has([data-tenant-door]) footer {
   background: transparent;
   border-color: rgba(86, 66, 62, 0.12);
 }

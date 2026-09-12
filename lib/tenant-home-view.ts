@@ -4,6 +4,7 @@ import { findUserById } from "@/lib/users";
 import { completeness, type PassportData } from "@/lib/passport-shape";
 import type { PassportRecord } from "@/lib/passport";
 import { tenantDealViews, tenantPassport, type TenantAccount, type TenantDealView } from "@/lib/tenant-account";
+import { isStage, type TenantStageKey } from "@/lib/tenant-journey";
 
 /**
  * Everything the tenant's home needs, in one shape, from what we actually
@@ -13,9 +14,32 @@ import { tenantDealViews, tenantPassport, type TenantAccount, type TenantDealVie
  * one, and the tiles say what they will show once there is.
  */
 
+/** A home they have asked about, or are viewing, or have offered on: the
+ *  property before it is a deal. */
+export type TenantProperty = {
+  property: string;
+  locality: string;
+  rentPcm: number | null;
+  beds: number | null;
+  photo: string | null;
+  /** The listing on the website, if there is one. */
+  href: string | null;
+};
+
 export type TenantHome = {
   first: string;
   daypart: string;
+  /** Where they are (lib/tenant-journey). Decides the shape of the home and
+   *  which pages are open. */
+  stage: TenantStageKey;
+  /** Before a deal: the home they enquired about, if any, and when. */
+  enquiry: (TenantProperty & { enquiredOn: string | null }) | null;
+  /** Their viewing on it: booked, or done and waiting for their thoughts. */
+  viewing: { when: string; withName: string; status: "booked" | "done" } | null;
+  /** Their offer on it. */
+  offer: { amount: number; madeOn: string; status: "with_landlord" | "accepted" } | null;
+  /** What else the agent has on the market, for the finding phase. */
+  market: TenantProperty[];
   agent: { name: string; email: string | null; phone: string | null; photo: string | null } | null;
   deal: TenantDealView | null;
   passport: { record: PassportRecord | null; path: string | null; done: number; total: number; data: PassportData | null };
@@ -33,6 +57,7 @@ export async function loadTenantHome(me: TenantAccount): Promise<TenantHome> {
   const data = record?.data ?? null;
   const { done, total } = data ? completeness(data) : { done: 0, total: 6 };
   const first = me.name.split(/\s+/)[0] || me.name;
+  const stage = stageOf(deal);
 
   /* Their agent: the deal's, or the one who issued the passport. */
   let agent: TenantHome["agent"] = null;
@@ -79,6 +104,14 @@ export async function loadTenantHome(me: TenantAccount): Promise<TenantHome> {
   return {
     first,
     daypart,
+    stage,
+    /* Enquiries, viewings and offers are not read from REX for a signed-in
+       tenant yet, so before a deal the live home is the "find a home" shape
+       with nothing on it. The sample (lib/tenant-sample) shows every stage. */
+    enquiry: null,
+    viewing: null,
+    offer: null,
+    market: [],
     agent,
     deal,
     passport: { record, path: passportPath, done, total, data },
@@ -86,4 +119,18 @@ export async function loadTenantHome(me: TenantAccount): Promise<TenantHome> {
     stops,
     activity: activity.slice(0, 4),
   };
+}
+
+/** The stage from the deal: its key, or living once move-in day has passed;
+ *  no deal is the passport stage. */
+function stageOf(deal: TenantDealView | null): TenantStageKey {
+  if (!deal) return "passport";
+  if (deal.stageKey === "move_day" && deal.moveIn && new Date(deal.moveIn).getTime() < Date.now() - 24 * 3600 * 1000) return "living";
+  return isStage(deal.stageKey) ? deal.stageKey : "deal_started";
+}
+
+/** Just the stage, for the shell, which decides the nav from it. */
+export async function tenantStage(me: TenantAccount): Promise<TenantStageKey> {
+  const deals = await tenantDealViews(me).catch(() => []);
+  return stageOf(deals[0] ?? null);
 }

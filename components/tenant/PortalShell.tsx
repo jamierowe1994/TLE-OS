@@ -4,6 +4,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import FileSearch from "@/components/landlord/FileSearch";
 import SideNav from "@/components/tenant/SideNav";
 import TenantSignOut from "@/components/TenantSignOut";
+import { locksFor, type TenantStageKey } from "@/lib/tenant-journey";
 
 /**
  * The tenant portal's shell, following the landlord's (James, 12 Sep 2026:
@@ -15,6 +16,10 @@ import TenantSignOut from "@/components/TenantSignOut";
  *
  * Shared by the real portal and the sample at /tenant/demo: the sample
  * passes its tenant's name and shows "Sample" where the real one signs out.
+ *
+ * The sidebar follows the journey: before an offer is accepted only Home,
+ * Documents and Messages are open; the tenancy and payments open with the
+ * deal, maintenance with the keys (James, 12 Sep 2026).
  */
 function Logo({ className = "" }: { className?: string }) {
   return (
@@ -23,8 +28,10 @@ function Logo({ className = "" }: { className?: string }) {
   );
 }
 
-export default function PortalShell({ name, base, sample = false, children }: { name: string; base: string; sample?: boolean; children: React.ReactNode }) {
+export default function PortalShell({ name, base, stage, sample = false, children }: { name: string; base: string; stage: TenantStageKey; sample?: boolean; children: React.ReactNode }) {
   const initial = name.trim()[0]?.toUpperCase() ?? "";
+  /* Which sections are open follows where they are (lib/tenant-journey). */
+  const locks = locksFor(stage);
 
   return (
     <div id="top" className="min-h-screen lg:flex">
@@ -33,7 +40,7 @@ export default function PortalShell({ name, base, sample = false, children }: { 
           <Logo className="h-11" />
         </Link>
         <Suspense fallback={<div className="mt-10" />}>
-          <SideNav variant="side" />
+          <SideNav variant="side" locks={locks} />
         </Suspense>
         <div className="mt-auto border-t border-line/50 pt-4 text-[13.5px] text-muted">
           {sample ? <span className="px-3">A sample tenant</span> : <span className="px-3"><TenantSignOut /></span>}
@@ -61,7 +68,7 @@ export default function PortalShell({ name, base, sample = false, children }: { 
 
         <nav className="flex gap-2 overflow-x-auto px-5 pt-4 sm:px-10 lg:hidden">
           <Suspense fallback={null}>
-            <SideNav variant="pills" />
+            <SideNav variant="pills" locks={locks} />
           </Suspense>
         </nav>
 

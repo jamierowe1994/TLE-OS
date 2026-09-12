@@ -1,12 +1,16 @@
 import Spine from "@/components/landlord/Spine";
 import type { TenantHome } from "@/lib/tenant-home-view";
+import LockedView from "@/components/tenant/LockedView";
+import { locksFor } from "@/lib/tenant-journey";
 
 /** My tenancy: one section of the tenant portal, drawn from the home view. Shared with the sample. */
 
 const card = "rounded-[22px] border border-line/60 bg-white";
 const eyebrow = "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted";
 
-export default function TenancyView({ v }: { v: TenantHome }) {
+export default function TenancyView({ v, base = "/tenant" }: { v: TenantHome; base?: string }) {
+  const locked = locksFor(v.stage).tenancy;
+  if (locked) return <LockedView title="My tenancy" opens={locked} what="The property, your dates, your rent, and every stage from offer to move-in day. It fills in the moment a landlord says yes to your offer." base={base} />;
   return (
     <div className="space-y-5">
       <div className="pt-2">

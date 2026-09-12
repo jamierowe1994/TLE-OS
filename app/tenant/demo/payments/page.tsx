@@ -1,6 +1,9 @@
 import PaymentsView from "@/components/tenant/PaymentsView";
-import { SOPHIE } from "@/lib/tenant-sample";
+import { demoStage } from "@/lib/tenant-demo";
+import { sampleFor } from "@/lib/tenant-sample";
 
-export default function Page() {
-  return <PaymentsView v={SOPHIE} />;
+export const dynamic = "force-dynamic";
+
+export default async function Page() {
+  return <PaymentsView v={sampleFor(await demoStage())} base="/tenant/demo" />;
 }

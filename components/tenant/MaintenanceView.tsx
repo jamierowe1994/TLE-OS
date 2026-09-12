@@ -1,12 +1,16 @@
 import Spine from "@/components/landlord/Spine";
 import type { TenantHome } from "@/lib/tenant-home-view";
+import LockedView from "@/components/tenant/LockedView";
+import { locksFor } from "@/lib/tenant-journey";
 
 /** Maintenance: one section of the tenant portal, drawn from the home view. Shared with the sample. */
 
 const card = "rounded-[22px] border border-line/60 bg-white";
 const eyebrow = "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted";
 
-export default function MaintenanceView({ v }: { v: TenantHome }) {
+export default function MaintenanceView({ v, base = "/tenant" }: { v: TenantHome; base?: string }) {
+  const locked = locksFor(v.stage).maintenance;
+  if (locked) return <LockedView title="Maintenance" opens={locked} what="A boiler, a leak, a lock: report it here and we take care of it. There is nothing to report until you have the keys." base={base} />;
   return (
     <div className="space-y-5">
       <div className="pt-2">

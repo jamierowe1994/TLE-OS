@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import PortalShell from "@/components/tenant/PortalShell";
 import { currentTenant } from "@/lib/tenant-account";
+import { tenantStage } from "@/lib/tenant-home-view";
 
 /**
  * The door. Everything in this group is a signed-in tenant's own, so the
@@ -9,5 +10,6 @@ import { currentTenant } from "@/lib/tenant-account";
 export default async function TenantPortalLayout({ children }: { children: React.ReactNode }) {
   const me = await currentTenant();
   if (!me) redirect("/tenant/sign-in");
-  return <PortalShell name={me.name} base="/tenant">{children}</PortalShell>;
+  const stage = await tenantStage(me);
+  return <PortalShell name={me.name} base="/tenant" stage={stage}>{children}</PortalShell>;
 }

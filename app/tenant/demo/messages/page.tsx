@@ -1,6 +1,9 @@
 import MessagesView from "@/components/tenant/MessagesView";
-import { SOPHIE } from "@/lib/tenant-sample";
+import { demoStage } from "@/lib/tenant-demo";
+import { sampleFor } from "@/lib/tenant-sample";
 
-export default function Page() {
-  return <MessagesView v={SOPHIE} />;
+export const dynamic = "force-dynamic";
+
+export default async function Page() {
+  return <MessagesView v={sampleFor(await demoStage())} />;
 }
