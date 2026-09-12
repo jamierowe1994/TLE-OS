@@ -335,7 +335,9 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             <div
               /* Nearly the height of the house beside it (James, 12 Sep
                  2026: "make it as big as the small building icon"). */
-              className={`hand overflow-hidden whitespace-nowrap text-[29px] leading-none tracking-[-0.03em] transition-[max-width,opacity,margin] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+              /* Lighter than the headings (James, 12 Sep): at 800 the mark
+                 sat heavy against the dainty items under it. */
+              className={`hand overflow-hidden whitespace-nowrap text-[29px] font-semibold leading-none tracking-[-0.02em] transition-[max-width,opacity,margin] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
                 collapsed ? "ml-0 max-w-0 opacity-0" : "ml-2 max-w-[130px] opacity-100"
               }`}
             >
