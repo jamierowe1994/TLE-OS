@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import DoodleIcon from "@/components/DoodleIcon";
+import Doodles from "@/components/Doodles";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import PropertyFile from "@/components/PropertyFile";
 import { Pill } from "@/components/Wire";
@@ -21,22 +23,21 @@ type Journey = {
 };
 
 /**
- * An application, opened out.
+ * An application, opened out - in the same frame as the listing record and
+ * the lead (James, 12 Sep 2026: "the same formatting that we've already got
+ * consistent across the other tabs").
  *
- * It replaces the narrow column that used to sit beside the table. A pre-tenancy
- * deal is the most crowded record in the business — eight stages, nine ticks,
- * a chain of chasing, and the reason it has stalled is usually in the comments
- * rather than the fields. A third of the screen could not hold that, so this
- * takes the same full pop-out the viewings and leads already use.
+ * So: the round close and the row of pill tabs at the top; a washed hero
+ * with the doodles behind it - the photograph left, who and what in the
+ * middle, At a glance in a white box on the right; then white cards with
+ * hand-drawn titles. Blush here, because the listing's is sage and the two
+ * alternate.
  *
- * Laid out around the question Kirstie actually asks, which is never "what are
- * this deal's attributes" but "what is holding it up and who touched it last":
- *   left   — where it is, and the one thing to do next
- *   right  — activity and comments, the running account of the deal
- *
- * Comments are the staple. This is the surface that has to join up to the
- * back office, so the composer is real and the thread is ordered newest-last,
- * the way a conversation reads rather than the way a log prints.
+ * Laid out around the question Kirstie actually asks, which is never "what
+ * are this deal's attributes" but "what is holding it up and who touched it
+ * last": the one thing to do next, where it is, the checks, and the running
+ * account of the deal down the right. The people on it and the property's
+ * file each get a tab of their own.
  */
 
 /** "Today 14:02", "Tue 2 Sep" - how a comment's time reads in the thread. */
@@ -48,6 +49,15 @@ function whenWords(iso: string): string {
   const time = d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   return sameDay ? `Today ${time}` : `${d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} ${time}`;
 }
+
+/** "1 Oct 2026" from an ISO date; anything else comes back as it was. */
+function niceDate(s: string | null | undefined): string {
+  if (!s) return "—";
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(s) ? `${s}T00:00:00` : s);
+  return Number.isNaN(d.valueOf()) ? s : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
+
+const gbp = (n: number) => `£${n.toLocaleString("en-GB")}`;
 
 export interface AppActivity {
   when: string;
@@ -64,6 +74,16 @@ export interface AppPerson {
   email: string | null;
   phone: string | null;
   isPrimary: boolean;
+  /* From the application form, where REX holds it. Only the lead applicant
+     is ever asked the four questions - the form stops after them. */
+  income?: number | null;
+  employment?: string | null;
+  job?: string | null;
+  company?: string | null;
+  rightToRent?: boolean | null;
+  landlordRef?: boolean | null;
+  guarantor?: boolean | null;
+  adverseCredit?: boolean | null;
 }
 
 export interface AppRecord {
@@ -96,8 +116,8 @@ export interface Stage {
  * A checklist item carries its own state.
  *
  * It used to be a bare string plus a count, which only works when the items
- * are done in order. The four checks on an application — right to rent,
- * landlord reference, guarantor, credit — are answered independently, and a
+ * are done in order. The four checks on an application - right to rent,
+ * landlord reference, guarantor, credit - are answered independently, and a
  * count of three would have silently ticked the wrong three.
  */
 export interface Check {
@@ -108,86 +128,102 @@ export interface Check {
 }
 
 /**
- * What the application is waiting on — the answer to "do I need to act?"
+ * What the application is waiting on - the answer to "do I need to act?"
  *
  * Keyed on REX's OWN application statuses, because that is the record this
  * drawer opens. The eight pre-tenancy stages (holding fee, referencing, PLC,
  * deposit, move day) belong to the Propoly deal that gets created once an
- * application is accepted — a different record, not joined in yet.
+ * application is accepted - a different record, joined in by the journey.
  */
-const NEXT_ACTION: Record<string, { do: string; who: string }> = {
-  received: { do: "Put it to the landlord — offer, income, and anything they've disclosed.", who: "Us" },
-  communicated: { do: "The landlord has it. Chase for a decision if it's been more than a day.", who: "Landlord" },
-  accepted: { do: "Take the holding deposit and open the deal. Let the other applicants know.", who: "Us" },
-  unsuccessful: { do: "Nothing outstanding. Tell them why if they haven't been told.", who: "—" },
+const NEXT_ACTION: Record<string, { label: string; do: string; who: string }> = {
+  received: { label: "Received", do: "Put it to the landlord - offer, income, and anything they've disclosed.", who: "Us" },
+  communicated: { label: "With the landlord", do: "The landlord has it. Chase for a decision if it's been more than a day.", who: "Landlord" },
+  accepted: { label: "Accepted", do: "Take the holding deposit and open the deal. Let the other applicants know.", who: "Us" },
+  unsuccessful: { label: "Unsuccessful", do: "Nothing outstanding. Tell them why if they haven't been told.", who: "—" },
 };
 
-/** The people on an application, and the ways through to each of them. */
-function Applicants({ people, leadIds }: { people: AppPerson[]; leadIds: Record<string, string> }) {
+const BLUSH_WASH = "color-mix(in srgb, var(--accent-soft) 70%, white)";
+
+type TabKey = "home" | "people" | "file";
+const TABS: { key: TabKey; label: string; icon: string }[] = [
+  { key: "home", label: "Application", icon: "doc" },
+  { key: "people", label: "Applicants", icon: "user" },
+  { key: "file", label: "Property file", icon: "shield" },
+];
+
+/* ── The pieces the other records use ─────────────────────────────────── */
+
+/** A white card with a hand-drawn title, as on the listing record. */
+function Card({ title, icon, action, children }: { title: string; icon: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <ul className="mt-2 space-y-2">
-      {people.map((p, i) => {
-        const lead = p.contactId ? leadIds[p.contactId] : null;
-        return (
-          <li key={(p.contactId ?? "") + i} className="rounded-xl border border-line/70 bg-panel px-3.5 py-2.5">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-              <span className="text-[12.5px] font-semibold">{p.name}</span>
-              {p.isPrimary && <Pill tone="neutral">Lead applicant</Pill>}
-              {p.phone && (
-                <a href={`tel:${p.phone.replace(/\s+/g, "")}`} className="text-[11.5px] text-muted hover:text-ink">{p.phone}</a>
-              )}
-              {p.email && (
-                <a href={`mailto:${p.email}`} className="truncate text-[11.5px] text-muted hover:text-ink">{p.email}</a>
-              )}
-            </div>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {lead && (
-                <a
-                  href={`/leads?open=${encodeURIComponent(lead)}`}
-                  className="rounded-full bg-ink px-3 py-1 text-[11px] font-semibold text-page"
-                >
-                  Open their file
-                </a>
-              )}
-              {p.contactId && (
-                <a
-                  href={rexContactUrl(p.contactId)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="rounded-full border border-line/80 px-3 py-1 text-[11px] font-semibold transition-colors hover:border-ink/40"
-                >
-                  Open in REX
-                </a>
-              )}
-              {!lead && !p.contactId && (
-                <span className="text-[11px] text-muted">No contact record on this application.</span>
-              )}
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+    <section className="rounded-[22px] border border-line/50 bg-white p-5">
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <h3 className="hand flex items-center gap-2.5 text-[15px]">
+          <DoodleIcon name={icon} size={15} className="text-accent-dark" />
+          {title}
+        </h3>
+        {action}
+      </div>
+      {children}
+    </section>
   );
+}
+
+/** One line of At a glance: an icon in a box, a fact, and a word under it. */
+function Glance({ icon, title, sub }: { icon: string; title: string; sub?: string }) {
+  return (
+    <li className="flex items-start gap-3">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line/50 bg-white text-accent-dark">
+        <DoodleIcon name={icon} size={16} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[13.5px] font-semibold leading-snug">{title}</span>
+        {sub && <span className="block text-[12px] leading-snug text-muted">{sub}</span>}
+      </span>
+    </li>
+  );
+}
+
+/** A tab's heading: the wash, the doodles, and a picture in the corner. */
+function ViewTitle({ title, sub, art }: { title: string; sub: string; art?: string }) {
+  return (
+    <div className="relative mb-5 min-h-[150px] overflow-hidden rounded-[22px] border border-line/50" style={{ background: BLUSH_WASH }}>
+      <Doodles tone="blush" />
+      <div className="relative max-w-[60%] p-6 sm:max-w-[62%]">
+        <h2 className="hand text-[26px] leading-tight">{title}</h2>
+        <p className="mt-1.5 text-[13px] leading-relaxed text-muted">{sub}</p>
+      </div>
+      {art && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={art} alt="" aria-hidden className="pointer-events-none absolute -bottom-6 right-4 hidden h-[190px] w-auto sm:block" />
+      )}
+    </div>
+  );
+}
+
+/** Yes / No / Not asked, as a word with a colour. */
+function Answer({ v, yes = "Yes", no = "No" }: { v: boolean | null | undefined; yes?: string; no?: string }) {
+  if (v == null) return <span className="text-muted">Not asked</span>;
+  return <span className={v ? "text-[#1e7a3c]" : "text-accent-dark"}>{v ? yes : no}</span>;
 }
 
 export default function ApplicationDrawer({
   app,
-  stages,
   checklist,
   aside,
   onClose,
 }: {
   app: AppRecord;
-  stages: Stage[];
+  stages?: Stage[];
   checklist: Check[];
-  /** Anything the stage itself calls for — the handover packet, once accepted. */
+  /** Anything the stage itself calls for - the handover packet, once accepted. */
   aside?: React.ReactNode;
   onClose: () => void;
 }) {
   const [shown, setShown] = useState(false);
+  const [tab, setTab] = useState<TabKey>("home");
   /* The people on this application, and which of them the OS already has a
      lead for. Asked once when the drawer opens. */
-  const [whoOpen, setWhoOpen] = useState(false);
   const [leadIds, setLeadIds] = useState<Record<string, string>>({});
   /* Everyone on the application; falls back to the single name the record
      carries, so an application with no applicant rows still shows somebody. */
@@ -215,8 +251,7 @@ export default function ApplicationDrawer({
   const [comments, setComments] = useState<AppActivity[] | null>(null);
   /* The journey: REX's three stops then Kirstie's eight, read from where her
      board reads them, with what the agent should do about it. Loads after
-     the drawer opens - it touches Propoly and PayProp - so the REX rail
-     stands in until it lands. */
+     the drawer opens - it touches Propoly and PayProp. */
   const [journey, setJourney] = useState<Journey | null>(null);
 
   useEffect(() => {
@@ -262,6 +297,22 @@ export default function ApplicationDrawer({
   const thread = [...(app.activity ?? []), ...(comments ?? [])];
   const ticked = checklist.filter((c) => c.done).length;
   const outstanding = checklist.length - ticked;
+  const others = Math.max(0, people.length - 1);
+
+  /* Where it is, in words, for the eyebrow and At a glance: the journey's
+     current stop once it has landed, REX's status until then. */
+  const stops = journey?.ok ? journey.stops ?? null : null;
+  const hereIdx = stops ? stops.findIndex((s) => s.state === "current") : -1;
+  const here = stops ? (hereIdx >= 0 ? stops[hereIdx] : stops[stops.length - 1]) : null;
+  const stageLabel = here?.label ?? action?.label ?? "In progress";
+  const stepWords = stops && here ? `step ${(hereIdx >= 0 ? hereIdx : stops.length - 1) + 1} of ${stops.length} · ${here.label}` : journey === null ? "reading the journey…" : stageLabel;
+  const forYou = journey?.ok ? (journey.actions ?? []).filter((a) => a.who === "you") : [];
+  const waitingOn = forYou.length ? "You" : journey?.ok && journey.actions?.[0] ? { kirstie: "Kirstie", landlord: "The landlord", tenant: "The tenant", you: "You" }[journey.actions[0].who] : action?.who === "Us" ? "You" : action?.who === "Landlord" ? "The landlord" : "Nobody";
+  const received = app.activity?.find((a) => /received/i.test(a.what));
+  const rent = /^£/.test(app.rent) ? app.rent.replace(/\s*pcm$/, "") : null;
+  const answered = people.filter((p) => p.rightToRent === true).length;
+  const plc = app.stageKey === "accepted" || app.stageKey === "communicated";
+  const lead = people.find((p) => p.isPrimary) ?? people[0];
 
   async function post() {
     const text = draft.trim();
@@ -289,6 +340,9 @@ export default function ApplicationDrawer({
     }
   }
 
+  const brownButton = "press-ring inline-flex items-center gap-2 rounded-full bg-[var(--brown)] px-4 py-2.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90";
+  const whiteButton = "press-ring inline-flex items-center gap-2 rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold transition-colors hover:border-ink/40";
+
   return (
     <div className="fixed inset-0 z-[130]">
       <button
@@ -301,348 +355,403 @@ export default function ApplicationDrawer({
       <aside
         role="dialog"
         aria-label={`Application — ${app.tenant}`}
-        className={`absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-2xl bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] lg:w-[calc(100%-17rem)] ${
+        className={`absolute inset-y-0 right-0 flex w-full flex-col overflow-hidden rounded-l-lg bg-page shadow-[-24px_0_60px_-24px_rgba(0,0,0,0.35)] transition-transform duration-[420ms] lg:w-[calc(100%-17rem)] ${
           shown ? "translate-x-0" : "translate-x-full"
         }`}
         style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
       >
-        {/* ── who and what ── */}
-        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-line/70 px-6 py-5">
-          <div className="flex min-w-0 items-start gap-3.5">
-            <PropertyPhoto src={app.image} className="h-14 w-16 shrink-0 rounded-lg" />
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                {journey?.ok && journey.stops
-                  ? `Application — ${(journey.stops.find((x) => x.state === "current") ?? journey.stops[journey.stops.length - 1])?.label ?? "in progress"}`
-                  : "Application"}
-              </p>
-              {/* The tenant's name is the way through to them. It used to be
-                  plain text, so an accepted application named somebody an
-                  agent then had to go and find by hand (James, 10 Sep 2026). */}
-              {people.length ? (
-                <button
-                  type="button"
-                  onClick={() => setWhoOpen((o) => !o)}
-                  className="hand mt-1 flex max-w-full items-center gap-1.5 truncate text-left text-[20px] leading-tight underline decoration-line decoration-2 underline-offset-4 transition-colors hover:decoration-ink"
-                  title="Their details"
-                >
-                  <span className="truncate">{app.tenant}</span>
-                  {people.length > 1 && (
-                    <span className="shrink-0 text-[12px] text-muted">+{people.length - 1}</span>
-                  )}
-                  <span className="shrink-0 text-[11px] text-muted">{whoOpen ? "▴" : "▾"}</span>
-                </button>
-              ) : (
-                <p className="hand mt-1 truncate text-[20px] leading-tight">{app.tenant}</p>
-              )}
-              <p className="mt-1 truncate text-[12px] text-muted">
-                {app.property} · {app.locality}
-              </p>
-              <p className="truncate text-[12px] text-muted">
-                {app.rent} · moves {app.moveIn}
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2.5">
-            {/* The handover starts HERE, on the record, rather than on a screen
-                the agent has to go and find. Everything the wizard needs is on
-                this application, so the only honest place to begin is the page
-                that already has it open.
-
-                Offered once the landlord has said yes. Before that there is no
-                tenancy to be compliant about, and a pack assembled against an
-                offer that then falls through is work thrown away. */}
-            {(app.stageKey === "accepted" || app.stageKey === "communicated") && (
-              <a
-                href={`/plc/start?application=${encodeURIComponent(app.id)}`}
-                className="rounded-lg bg-accent-dark px-3.5 py-2 text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
-              >
-                Start the PLC check
-              </a>
-            )}
-            {app.flag && <Pill tone="accent">{app.flag}</Pill>}
+        {/* The whole record scrolls, tabs included, as the listing does. */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 pt-5">
+          {/* Close, and the tabs. */}
+          <div className="mb-4 flex shrink-0 flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="text-[18px] leading-none text-muted transition-colors hover:text-ink"
-              title="Close"
+              className="mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/60 bg-white text-[13px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
+              title="Close (Esc)"
             >
               ✕
             </button>
+            <div className="ml-auto flex min-w-0 max-w-full gap-2 overflow-x-auto pb-0.5">
+              {TABS.map((t) => {
+                const count = t.key === "people" ? people.length : 0;
+                const on = tab === t.key;
+                /* A pink dot where something needs doing on that tab. */
+                const needs = t.key === "people" ? answered < people.length : false;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setTab(t.key)}
+                    className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-[12.5px] font-semibold transition-colors ${
+                      on ? "bg-[var(--brown)] text-white" : "border border-line/60 bg-white text-muted hover:border-ink/40 hover:text-ink"
+                    }`}
+                  >
+                    <DoodleIcon name={t.icon} size={13} className={on ? "text-white" : "text-accent-dark"} />
+                    {t.label}
+                    {count > 0 && (
+                      <span className={`figures rounded-full px-1.5 text-[10.5px] ${on ? "bg-white/20 text-white" : "bg-page text-muted"}`}>{count}</span>
+                    )}
+                    {needs && !on && (
+                      <span aria-label="Needs attention" className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-accent" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
 
-        {whoOpen && people.length > 0 && (
-          <div className="shrink-0 border-b border-line/70 bg-box px-6 py-4">
-            <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">
-              {people.length === 1 ? "The applicant" : `The applicants · ${people.length}`}
-            </p>
-            <Applicants people={people} leadIds={leadIds} />
-          </div>
-        )}
+          {tab === "home" && (
+            <div key="record" className="fade-up">
+              {/* ── THE HERO: the photograph left, who and what in the middle,
+                  At a glance in a white box on the right. ── */}
+              <header className="relative overflow-hidden rounded-[22px] border border-line/50" style={{ background: BLUSH_WASH }}>
+                <Doodles tone="blush" />
+                <div className="relative p-5">
+                  <div className="grid grid-cols-[minmax(0,1fr)] gap-5 md:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)_320px]">
+                    <div className="flex min-w-0 flex-col">
+                      <div className="relative h-[220px] w-full flex-1 overflow-hidden rounded-2xl border border-white/70 bg-white md:h-auto md:min-h-[240px]">
+                        <PropertyPhoto src={app.image} className="absolute inset-0 h-full w-full" />
+                      </div>
+                    </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="grid gap-5 p-6 xl:grid-cols-[1fr_1fr]">
-            {/* ══ left: where it is, and what to do ══ */}
-            <div className="flex flex-col gap-5">
-              {/* Above the next action, deliberately: once a deal is accepted
-                  the handover IS the next action, and burying it under the
-                  stage rail would put the work below the description. */}
-              {aside}
+                    <div className="min-w-0 md:pr-2">
+                      <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">Application · {stepWords}</p>
+                      <h2 className="hand mt-2 text-[28px] leading-[1.1]">
+                        {app.tenant}
+                        {others > 0 && <span className="ml-2 whitespace-nowrap text-[14px] font-normal text-muted">+ {others} other{others === 1 ? "" : "s"}</span>}
+                      </h2>
+                      <p className="mt-1.5 text-[13px] text-muted">{app.property} · {app.locality}</p>
+                      <p className="mt-3 flex items-baseline gap-1.5">
+                        <span className="figures text-[28px] leading-none">{rent ?? "—"}</span>
+                        <span className="text-[12px] text-muted">{rent ? "pcm" : "no offer recorded"} · moves {niceDate(app.moveIn)}</span>
+                      </p>
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-accent-dark">{stageLabel}</span>
+                        {app.flag && <Pill tone="accent">{app.flag}</Pill>}
+                        <span className="text-[11.5px] text-muted">with {app.agent}</span>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2.5">
+                        {/* The handover starts HERE, on the record. Offered once
+                            the landlord has the application: before that there is
+                            no tenancy to be compliant about. */}
+                        {plc && (
+                          <a href={`/plc/start?application=${encodeURIComponent(app.id)}`} className={brownButton}>
+                            <DoodleIcon name="shield" size={14} />
+                            Start the PLC check
+                          </a>
+                        )}
+                        {!plc && forYou[0]?.href && (
+                          <a href={forYou[0].href} className={brownButton}>
+                            <DoodleIcon name="rocket" size={14} />
+                            {forYou[0].label}
+                          </a>
+                        )}
+                        <button type="button" onClick={() => setTab("people")} className={whiteButton}>
+                          <DoodleIcon name="user" size={14} className="text-accent-dark" />
+                          {people.length === 1 ? "The applicant" : "The applicants"}
+                        </button>
+                      </div>
+                    </div>
 
-              {/* the one thing that matters on opening: what the journey says
-                  the agent should do, or REX's stage note until it has loaded */}
-              {journey?.ok && journey.actions ? (
-                <div className="rounded-2xl border border-line/80 bg-panel p-5">
-                  <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
-                    Needs you
-                  </p>
-                  {journey.actions.filter((a) => a.who === "you").length === 0 ? (
-                    <p className="mt-2.5 text-[13px] leading-relaxed text-muted">
-                      Nothing for you right now.
-                      {journey.actions[0] ? ` ${journey.actions[0].label} - ${journey.actions[0].detail}` : ""}
-                    </p>
-                  ) : (
-                    <ul className="mt-2.5 space-y-2.5">
-                      {journey.actions.map((a) => (
-                        <li key={a.id} className="flex items-start gap-2.5">
-                          <Pill tone={a.who === "you" ? "accent" : "neutral"}>
-                            {a.who === "you" ? "You" : a.who === "kirstie" ? "Kirstie" : a.who === "landlord" ? "Landlord" : "Tenant"}
-                          </Pill>
-                          <span className="min-w-0 flex-1">
-                            {a.href ? (
-                              <a href={a.href} className="block text-[13px] font-semibold leading-tight underline-offset-2 hover:underline">
-                                {a.label}
-                              </a>
-                            ) : (
-                              <span className="block text-[13px] font-semibold leading-tight">{a.label}</span>
-                            )}
-                            <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">{a.detail}</span>
+                    <aside className="rounded-2xl border border-line/40 bg-white p-4 md:col-span-2 xl:col-span-1">
+                      <p className="hand flex items-center gap-2 text-[14px]">
+                        <DoodleIcon name="magic-wand" size={14} className="text-accent-dark" />
+                        At a glance
+                      </p>
+                      <ul className="mt-4 space-y-3.5">
+                        <Glance icon="target" title={received ? `Came in ${niceDate(received.when)}` : "Came in"} sub={received ? `by ${received.by}` : "no date on the record"} />
+                        <Glance icon="list" title={stageLabel} sub={`Waiting on ${waitingOn.toLowerCase() === "you" ? "you" : waitingOn.toLowerCase()}`} />
+                        <Glance icon="checklist" title={`${ticked} of ${checklist.length} checks done`} sub={outstanding ? `${outstanding} still to tick` : "All ticked"} />
+                        <Glance icon="user" title={people.length === 1 ? "Sole applicant" : `${people.length} applicants`} sub={answered === people.length ? "Right to rent recorded for everyone" : `Right to rent recorded for ${answered} of ${people.length}`} />
+                      </ul>
+                    </aside>
+                  </div>
+                </div>
+              </header>
+
+              <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+                {/* ══ left: what to do, where it is, the checks ══ */}
+                <div className="flex min-w-0 flex-col gap-5">
+                  {/* Above the next action, deliberately: once a deal is accepted
+                      the handover IS the next action. */}
+                  {aside}
+
+                  <Card title="Needs you" icon="bell">
+                    {journey?.ok && journey.actions ? (
+                      <>
+                        {forYou.length === 0 ? (
+                          <p className="text-[13px] leading-relaxed text-muted">
+                            Nothing for you right now.
+                            {journey.actions[0] ? ` ${journey.actions[0].label} - ${journey.actions[0].detail}` : ""}
+                          </p>
+                        ) : (
+                          <ul className="space-y-2.5">
+                            {journey.actions.map((a) => (
+                              <li key={a.id} className="flex items-start gap-2.5">
+                                <Pill tone={a.who === "you" ? "accent" : "neutral"}>
+                                  {a.who === "you" ? "You" : a.who === "kirstie" ? "Kirstie" : a.who === "landlord" ? "Landlord" : "Tenant"}
+                                </Pill>
+                                <span className="min-w-0 flex-1">
+                                  {a.href ? (
+                                    <a href={a.href} className="block text-[13px] font-semibold leading-tight underline-offset-2 hover:underline">
+                                      {a.label}
+                                    </a>
+                                  ) : (
+                                    <span className="block text-[13px] font-semibold leading-tight">{a.label}</span>
+                                  )}
+                                  <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">{a.detail}</span>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {journey.flags && journey.flags.length > 0 && (
+                          <div className="mt-3.5 border-t border-line/50 pt-3">
+                            <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">From Kirstie&apos;s side</p>
+                            <ul className="mt-1.5 space-y-1 text-[12px] leading-snug">
+                              {journey.flags.map((f) => (
+                                <li key={f} className="flex gap-2">
+                                  <span aria-hidden className="mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                                  <span>{f}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </>
+                    ) : action ? (
+                      <>
+                        <p className="text-[13.5px] leading-relaxed">{action.do}</p>
+                        <p className="mt-3 flex items-center gap-2 text-[11px] text-muted">
+                          Waiting on
+                          <Pill tone={action.who === "Us" ? "accent" : "neutral"}>{action.who}</Pill>
+                          {journey === null && <span className="ml-auto">Reading the journey…</span>}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-[13px] text-muted">Nothing recorded against this stage.</p>
+                    )}
+                  </Card>
+
+                  <Card
+                    title="Where it's up to"
+                    icon="target"
+                    action={
+                      journey?.ok && journey.deal ? (
+                        <a href={journey.deal.url} target="_blank" rel="noreferrer" className="text-[11.5px] font-semibold text-accent-dark hover:underline">
+                          Kirstie&apos;s deal in Propoly →
+                        </a>
+                      ) : undefined
+                    }
+                  >
+                    {/* Across, like Kirstie's: REX's stops, then her eight, read
+                        from the same place her board reads them. It says it is
+                        checking rather than showing REX's four and redrawing
+                        (James, 10 Sep 2026). */}
+                    {stops ? (
+                      <div className="-mt-3">
+                        <StageSpine compact stops={stops} />
+                      </div>
+                    ) : journey && !journey.ok ? (
+                      <p className="text-[12px] text-muted">{journey.error ?? "Couldn't read where this is up to."}</p>
+                    ) : (
+                      <p className="flex items-center gap-2 text-[12px] text-muted">
+                        <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+                        Checking where this is up to&hellip;
+                      </p>
+                    )}
+                    {/* What moved, on this deal alone. Newest first. */}
+                    {journey?.ok && journey.history && journey.history.length > 0 && (
+                      <details className="group mt-3 border-t border-line/50 pt-3">
+                        <summary className="cursor-pointer list-none text-[11px] font-semibold uppercase tracking-wide text-muted">
+                          What moved
+                          <span className="ml-1.5 font-normal normal-case tracking-normal">
+                            · {journey.history.length} {journey.history.length === 1 ? "move" : "moves"}, last {whenWords(journey.history[0].at)}
+                          </span>
+                        </summary>
+                        <ol className="mt-2 space-y-1.5">
+                          {journey.history.slice(0, 8).map((e) => {
+                            const tone = eventTone(e.event);
+                            return (
+                              <li key={e.id} className="flex items-start gap-2 text-[12px] leading-snug">
+                                <span
+                                  aria-hidden
+                                  className={`mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full ${
+                                    tone === "ok" ? "bg-emerald-600" : tone === "warn" ? "bg-amber-500" : "bg-line"
+                                  }`}
+                                />
+                                <span className="min-w-0 flex-1">{eventSentence(e)}</span>
+                                <span className="shrink-0 text-[10.5px] tabular-nums text-muted">{whenWords(e.at)}</span>
+                              </li>
+                            );
+                          })}
+                        </ol>
+                      </details>
+                    )}
+                  </Card>
+
+                  <Card title="Checklist" icon="checklist" action={<span className="figures text-[12px] text-muted">{ticked}/{checklist.length}</span>}>
+                    <ul className="space-y-2.5">
+                      {checklist.map((c) => (
+                        <li key={c.label} className="flex items-start gap-2.5 text-[13px]">
+                          <span
+                            className={`mt-0.5 flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[9px] ${
+                              c.done ? "border-accent-dark bg-accent-dark text-white" : "border-line bg-white text-muted"
+                            }`}
+                          >
+                            {c.done ? "✓" : ""}
+                          </span>
+                          <span className="min-w-0">
+                            <span className={c.done ? "text-muted line-through" : "font-semibold"}>{c.label}</span>
+                            {c.note && <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">{c.note}</span>}
                           </span>
                         </li>
                       ))}
                     </ul>
-                  )}
-                  {journey.flags && journey.flags.length > 0 && (
-                    <div className="mt-3.5 border-t border-line/70 pt-3">
-                      <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">From Kirstie&apos;s side</p>
-                      <ul className="mt-1.5 space-y-1 text-[12px] leading-snug">
-                        {journey.flags.map((f) => (
-                          <li key={f} className="flex gap-2">
-                            <span aria-hidden className="mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-                            <span>{f}</span>
+                  </Card>
+                </div>
+
+                {/* ══ right: the running account of the deal ══ */}
+                <div className="flex min-w-0 flex-col gap-5">
+                  <Card
+                    title="Activity & comments"
+                    icon="message"
+                    action={<span className="text-[11px] text-muted">{comments === null ? "Loading…" : `${thread.length} ${thread.length === 1 ? "entry" : "entries"}`}</span>}
+                  >
+                    {thread.length === 0 ? (
+                      <p className="text-[12.5px] text-muted">
+                        Nothing recorded yet. A comment here is kept on the application and shows for everyone who opens it.
+                      </p>
+                    ) : (
+                      <ul className="space-y-3.5">
+                        {thread.map((a, i) => (
+                          <li key={i} className="flex gap-3">
+                            <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${a.note ? "bg-accent-dark" : "bg-line"}`} />
+                            <span className="min-w-0 flex-1">
+                              <span className={`block text-[12.5px] leading-snug ${a.note ? "" : "text-muted"}`}>{a.what}</span>
+                              <span className="mt-0.5 block text-[10.5px] text-muted">
+                                {a.by} · {a.when}
+                              </span>
+                            </span>
                           </li>
                         ))}
                       </ul>
-                    </div>
-                  )}
-                </div>
-              ) : action ? (
-                <div className="rounded-2xl border border-line/80 bg-panel p-5">
-                  <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
-                    Needs doing now
-                  </p>
-                  <p className="mt-2.5 text-[13.5px] leading-relaxed">{action.do}</p>
-                  <p className="mt-3 flex items-center gap-2 text-[11px] text-muted">
-                    Waiting on
-                    <Pill tone={action.who === "Us" ? "accent" : "neutral"}>{action.who}</Pill>
-                    {journey === null && <span className="ml-auto">Reading the journey…</span>}
-                    {outstanding > 0 && journey !== null && (
-                      <span className="ml-auto">
-                        {outstanding} of {checklist.length} still to tick
-                      </span>
                     )}
-                  </p>
+
+                    {/* The composer. A comment is the fastest thing anyone does on
+                        a stalled deal, so it is always in reach, not behind a button. */}
+                    <div className="mt-5 border-t border-line/50 pt-4">
+                      <textarea
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) post();
+                        }}
+                        placeholder="Add a comment - chased the tenant, spoke to the landlord…"
+                        rows={2}
+                        className="w-full resize-y rounded-xl border border-line/70 bg-page px-3 py-2.5 text-[12.5px] text-ink placeholder:text-muted focus:border-accent-dark focus:outline-none"
+                      />
+                      <div className="mt-2.5 flex items-center justify-between gap-3">
+                        <p className="text-[10.5px] text-muted">{postError ? <span className="font-semibold text-accent-dark">{postError}</span> : "⌘↵ to post"}</p>
+                        <button
+                          type="button"
+                          onClick={() => void post()}
+                          disabled={!draft.trim() || posting}
+                          className="press-ring rounded-full bg-[var(--brown)] px-4 py-2 text-[12px] font-semibold text-white transition-opacity disabled:opacity-40"
+                        >
+                          {posting ? "Posting…" : "Post comment"}
+                        </button>
+                      </div>
+                    </div>
+                  </Card>
                 </div>
-              ) : null}
-
-              <div className="rounded-2xl border border-line/80 bg-panel p-5">
-                <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
-                  Where it&apos;s up to
-                </p>
-                {/* Across, like Kirstie's: REX's stops, then her eight, read
-                    from the same place her board reads them.
-
-                    REX's four statuses used to stand in until the journey
-                    landed, so the drawer opened on Received → Communicated →
-                    Accepted → Unsuccessful and then redrew itself as something
-                    else entirely. James, 10 Sep 2026: "it shows a four-part
-                    process still... it loads up, and then it will change it
-                    through to the actual four systems. Don't show the four-part
-                    process, because that makes no sense."
-
-                    He is right, and not only because it flickers: those four
-                    are REX's answer to "has the landlord said yes", and this
-                    box is answering "where is this deal". Showing one while
-                    fetching the other is a wrong answer, briefly - and a wrong
-                    answer somebody might act on. It says it is checking. */}
-                {journey?.ok && journey.stops ? (
-                  <StageSpine compact stops={journey.stops} />
-                ) : journey && !journey.ok ? (
-                  <p className="mt-3 text-[12px] text-muted">
-                    {journey.error ?? "Couldn't read where this is up to."}
-                  </p>
-                ) : (
-                  <p className="mt-3 flex items-center gap-2 text-[12px] text-muted">
-                    <span
-                      aria-hidden
-                      className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark"
-                    />
-                    Checking where this is up to&hellip;
-                  </p>
-                )}
-                {journey?.ok && journey.deal && (
-                  <p className="mt-1 text-[11px] text-muted">
-                    Kirstie&apos;s deal:{" "}
-                    <a href={journey.deal.url} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
-                      open in Propoly
-                    </a>
-                  </p>
-                )}
-                {/* What moved, on this deal alone. The same rows as Kirstie's
-                    feed, so the agent reads "references came back Tuesday"
-                    here instead of asking her. Newest first, five by default. */}
-                {journey?.ok && journey.history && journey.history.length > 0 && (
-                  <details className="mt-3 group">
-                    <summary className="cursor-pointer list-none text-[11px] font-semibold uppercase tracking-wide text-muted">
-                      What moved
-                      <span className="ml-1.5 font-normal normal-case tracking-normal">
-                        · {journey.history.length} {journey.history.length === 1 ? "move" : "moves"}, last {whenWords(journey.history[0].at)}
-                      </span>
-                    </summary>
-                    <ol className="mt-2 space-y-1.5">
-                      {journey.history.slice(0, 8).map((e) => {
-                        const tone = eventTone(e.event);
-                        return (
-                          <li key={e.id} className="flex items-start gap-2 text-[12px] leading-snug">
-                            <span
-                              aria-hidden
-                              className={`mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full ${
-                                tone === "ok" ? "bg-emerald-600" : tone === "warn" ? "bg-amber-500" : "bg-line"
-                              }`}
-                            />
-                            <span className="min-w-0 flex-1">{eventSentence(e)}</span>
-                            <span className="shrink-0 text-[10.5px] tabular-nums text-muted">{whenWords(e.at)}</span>
-                          </li>
-                        );
-                      })}
-                    </ol>
-                  </details>
-                )}
-                {journey && !journey.ok && (
-                  <p className="mt-2 text-[11px] text-muted">{journey.error ?? "The journey could not be read."} Showing REX&apos;s stages.</p>
-                )}
               </div>
+            </div>
+          )}
 
-              <div className="rounded-2xl border border-line/80 bg-panel p-5">
-                <div className="flex items-baseline justify-between gap-3">
-                  <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
-                    Checklist
-                  </p>
-                  <p className="figures text-[11px] text-muted">
-                    {ticked}/{checklist.length}
-                  </p>
-                </div>
-                <ul className="mt-3.5 space-y-2">
-                  {checklist.map((c) => (
-                    <li key={c.label} className="flex items-start gap-2.5 text-[12.5px]">
-                      <span
-                        className={`mt-0.5 flex h-[16px] w-[16px] shrink-0 items-center justify-center rounded-[5px] border-[1.5px] text-[8px] ${
-                          c.done
-                            ? "border-accent-dark bg-accent-dark text-white"
-                            : "border-line text-muted"
-                        }`}
-                      >
-                        {c.done ? "✓" : ""}
-                      </span>
-                      <span className="min-w-0">
-                        <span className={c.done ? "text-muted line-through" : ""}>{c.label}</span>
-                        {c.note && (
-                          <span className="mt-0.5 block text-[11px] leading-snug text-muted">
-                            {c.note}
-                          </span>
+          {tab === "people" && (
+            <div key="people" className="fade-up">
+              <ViewTitle
+                title={people.length === 1 ? "The applicant" : `The applicants · ${people.length}`}
+                sub="Everyone on the application, and the ways through to each of them. Only the lead applicant is asked the four questions - the form stops after them."
+                art="/brand/art/moving-in.png"
+              />
+              <div className="grid gap-4 lg:grid-cols-2">
+                {people.map((p, i) => {
+                  const leadId = p.contactId ? leadIds[p.contactId] : null;
+                  const facts: Array<[string, React.ReactNode]> = [
+                    ["Income", p.income != null ? `${gbp(p.income)} a year` : "Not recorded"],
+                    ["Works", [p.employment, p.job].filter(Boolean).join(" · ") || "Not recorded"],
+                    ["Employer", p.company || "Not recorded"],
+                    ["Right to rent", <Answer key="rtr" v={p.rightToRent} yes="Recorded" no="Not recorded" />],
+                    ["Landlord reference", <Answer key="ref" v={p.landlordRef} />],
+                    ["Guarantor", <Answer key="g" v={p.guarantor} yes="Available" no="None" />],
+                    ["Adverse credit", <Answer key="ac" v={p.adverseCredit == null ? null : !p.adverseCredit} yes="None" no="Disclosed" />],
+                  ];
+                  return (
+                    <Card key={(p.contactId ?? "") + i} title={p.name} icon="user" action={p.isPrimary ? <Pill tone="accent">Lead applicant</Pill> : undefined}>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px]">
+                        {p.phone ? (
+                          <a href={`tel:${p.phone.replace(/\s+/g, "")}`} className="flex items-center gap-1.5 hover:underline">
+                            <DoodleIcon name="call" size={12} className="text-accent-dark" />
+                            {p.phone}
+                          </a>
+                        ) : (
+                          <span className="text-muted">No phone</span>
                         )}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                        {p.email ? (
+                          <a href={`mailto:${p.email}`} className="flex min-w-0 items-center gap-1.5 hover:underline">
+                            <DoodleIcon name="mail" size={12} className="text-accent-dark" />
+                            <span className="truncate">{p.email}</span>
+                          </a>
+                        ) : (
+                          <span className="text-muted">No email</span>
+                        )}
+                      </div>
+                      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-line/50 pt-3 text-[12px]">
+                        {facts.map(([k, v]) => (
+                          <div key={k} className="min-w-0">
+                            <dt className="text-[10.5px] text-muted">{k}</dt>
+                            <dd className={`truncate font-semibold ${v === "Not recorded" ? "font-normal text-muted" : ""}`}>{v}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {leadId && (
+                          <a href={`/leads?open=${encodeURIComponent(leadId)}`} className={brownButton.replace("px-4 py-2.5 text-[12.5px]", "px-3.5 py-1.5 text-[11.5px]")}>
+                            Open their file
+                          </a>
+                        )}
+                        {p.contactId && (
+                          <a href={rexContactUrl(p.contactId)} target="_blank" rel="noreferrer" className={whiteButton.replace("px-4 py-2.5 text-[12.5px]", "px-3.5 py-1.5 text-[11.5px]")}>
+                            Open in REX
+                          </a>
+                        )}
+                        {!leadId && !p.contactId && <span className="text-[11.5px] text-muted">No contact record on this application.</span>}
+                      </div>
+                    </Card>
+                  );
+                })}
               </div>
+              {lead && people.length > 1 && answered < people.length && (
+                <p className="mt-4 text-[12px] leading-relaxed text-muted">
+                  Right to rent is a statutory check on every adult who will live in the property. Record it for the others before the tenancy starts.
+                </p>
+              )}
             </div>
+          )}
 
-            {/* ══ right: the running account of the deal ══ */}
-            <div className="flex min-h-0 flex-col gap-5">
-              <div className="flex min-h-0 flex-col rounded-2xl border border-line/80 bg-panel p-5">
-                <div className="flex items-baseline justify-between gap-3">
-                  <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">
-                    Activity &amp; comments
-                  </p>
-                  <p className="text-[11px] text-muted">{comments === null ? "Loading…" : `${thread.length} entries`}</p>
-                </div>
-
-                {thread.length === 0 ? (
-                  <p className="mt-4 text-[12.5px] text-muted">
-                    Nothing recorded yet. A comment here is kept on the application and shows for
-                    everyone who opens it.
-                  </p>
-                ) : (
-                  <ul className="mt-4 space-y-3.5">
-                    {thread.map((a, i) => (
-                      <li key={i} className="flex gap-3">
-                        <span
-                          className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${
-                            a.note ? "bg-accent-dark" : "bg-line"
-                          }`}
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span
-                            className={`block text-[12.5px] leading-snug ${
-                              a.note ? "" : "text-muted"
-                            }`}
-                          >
-                            {a.what}
-                          </span>
-                          <span className="mt-0.5 block text-[10.5px] text-muted">
-                            {a.by} · {a.when}
-                          </span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {/* The composer. A comment is the fastest thing anyone does on a
-                    stalled deal, so it is always in reach, not behind a button. */}
-                <div className="mt-5 border-t border-line/70 pt-4">
-                  <textarea
-                    value={draft}
-                    onChange={(e) => setDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) post();
-                    }}
-                    placeholder="Add a comment — chased the tenant, spoke to the landlord…"
-                    rows={2}
-                    className="w-full resize-y rounded-xl border border-line bg-page px-3 py-2.5 text-[12.5px] text-ink placeholder:text-muted focus:border-accent-dark focus:outline-none"
-                  />
-                  <div className="mt-2.5 flex items-center justify-between gap-3">
-                    <p className="text-[10.5px] text-muted">{postError ? <span className="font-semibold text-accent-dark">{postError}</span> : "⌘↵ to post"}</p>
-                    <button
-                      type="button"
-                      onClick={() => void post()}
-                      disabled={!draft.trim() || posting}
-                      className="rounded-lg bg-accent-dark px-3.5 py-2 text-[12px] font-semibold text-white transition-opacity disabled:opacity-40"
-                    >
-                      {posting ? "Posting…" : "Post comment"}
-                    </button>
-                  </div>
-                </div>
-              </div>
+          {tab === "file" && (
+            <div key="file" className="fade-up">
+              <ViewTitle
+                title="The property file"
+                sub="What the tenancy has to be compliant about, and the certificates already held. A certificate filed here is on the property from then on."
+                art="/brand/art/keys-handover.png"
+              />
+              <PropertyFile propertyId={app.propertyId ?? null} address={app.propertyId ? null : `${app.property}, ${app.locality}`} screen="the application" />
             </div>
-          </div>
-          {/* The property file travels with the home: what the tenancy will
-              need to be compliant about, and the certificates already held. */}
-          <div className="px-6 pb-6">
-            <PropertyFile propertyId={app.propertyId ?? null} address={app.propertyId ? null : `${app.property}, ${app.locality}`} screen="the application" />
-          </div>
+          )}
         </div>
       </aside>
     </div>

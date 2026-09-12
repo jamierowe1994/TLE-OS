@@ -451,6 +451,14 @@ export default function Applications() {
               email: p.email,
               phone: p.phone,
               isPrimary: p.isPrimary,
+              income: p.incomePerYear,
+              employment: p.keyInfo?.employment ?? p.employmentRex,
+              job: p.keyInfo?.job ?? null,
+              company: p.keyInfo?.company ?? null,
+              rightToRent: p.keyInfo?.rightToRent ?? null,
+              landlordRef: p.keyInfo?.landlordRef ?? null,
+              guarantor: p.keyInfo?.guarantor ?? null,
+              adverseCredit: p.keyInfo?.adverseCredit ?? null,
             })),
             property: open.property,
             propertyId: open.propertyId,
@@ -472,7 +480,8 @@ export default function Applications() {
               open.dateAccepted
                 ? { when: open.dateAccepted, what: "Landlord accepted.", by: open.agent ?? "—" }
                 : null,
-              open.conditions
+              /* "N/A" is what the form writes when nothing was said - not a comment. */
+              open.conditions && !/^\s*(n\/?a|none|-)\s*\.?$/i.test(open.conditions)
                 ? { when: "with the application", what: open.conditions, by: "Applicant", note: true }
                 : null,
             ].filter((x): x is NonNullable<typeof x> => x !== null),
