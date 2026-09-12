@@ -1015,6 +1015,52 @@ body {
   border-color: rgba(86, 66, 62, 0.12);
 }
 
+/* The passport is one screen and never scrolls, so on desktop the left
+   column's type and spacing are sized to the height of the window: a small
+   laptop gets a smaller headline and tighter gaps rather than a question cut
+   off under the button. Below the desktop layout the page scrolls as normal
+   and the sizes are fixed. */
+[data-passport-page] {
+  --pp-title: 44px;
+  --pp-lead: 15px;
+  --pp-tight: 12px;
+  --pp-gap: 32px;
+  --pp-space: 28px;
+  --pp-foot: 24px;
+  --pp-pad: 32px;
+  --pp-field-y: 14px;
+  --pp-space2: 20px;
+  --pp-panel-title: 30px;
+  --pp-panel-x: 32px;
+  --pp-panel-y: 32px;
+}
+@media (min-width: 40rem) {
+  [data-passport-page] { --pp-title: 52px; }
+}
+@media (min-width: 64rem) {
+  [data-passport-page] {
+    --pp-title: clamp(34px, 5.6vh, 52px);
+    --pp-lead: clamp(13.5px, 1.95vh, 15px);
+    --pp-tight: clamp(6px, 1.3vh, 12px);
+    --pp-gap: clamp(14px, 3.2vh, 32px);
+    --pp-space: clamp(14px, 2.7vh, 28px);
+    --pp-foot: clamp(12px, 2.4vh, 24px);
+    --pp-pad: clamp(18px, 3.6vh, 36px);
+    --pp-field-y: clamp(10px, 1.5vh, 14px);
+    --pp-space2: clamp(10px, 2vh, 20px);
+    --pp-panel-title: clamp(24px, 4vh, 30px);
+    --pp-panel-x: clamp(22px, 3.4vh, 32px);
+    --pp-panel-y: clamp(18px, 3.4vh, 32px);
+  }
+}
+@media (min-width: 80rem) {
+  [data-passport-page] {
+    --pp-title: clamp(34px, 5.6vh, 60px);
+    --pp-panel-title: clamp(24px, 4vh, 36px);
+    --pp-panel-x: clamp(22px, 3.4vh, 40px);
+  }
+}
+
 /* The passport being made: it turns on its spindle. */
 @keyframes spinY {
   from { transform: rotateY(0deg); }

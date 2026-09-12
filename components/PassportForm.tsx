@@ -53,7 +53,7 @@ import {
 const BROWN = "var(--accent-dark)";
 
 const input =
-  "w-full rounded-[12px] border border-line/80 bg-white px-4 py-3.5 text-[15px] outline-none transition-[border-color,box-shadow] placeholder:text-muted/60 focus:border-[var(--accent-dark)] focus:shadow-[0_0_0_3px_rgba(86,66,62,0.10)]";
+  "w-full rounded-[12px] border border-line/80 bg-white px-4 py-[var(--pp-field-y)] text-[15px] outline-none transition-[border-color,box-shadow] placeholder:text-muted/60 focus:border-[var(--accent-dark)] focus:shadow-[0_0_0_3px_rgba(86,66,62,0.10)]";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -190,7 +190,7 @@ function Choice({ label, hint, value, options, placeholder = "Choose", onChange 
           type="button"
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
-          className={`flex w-full items-center justify-between rounded-[12px] border bg-white px-4 py-3.5 text-left text-[15px] transition-[border-color,box-shadow] ${
+          className={`flex w-full items-center justify-between rounded-[12px] border bg-white px-4 py-[var(--pp-field-y)] text-left text-[15px] transition-[border-color,box-shadow] ${
             open ? "border-[var(--accent-dark)] shadow-[0_0_0_3px_rgba(86,66,62,0.10)]" : "border-line/80 hover:border-ink/40"
           }`}
         >
@@ -344,7 +344,7 @@ function PhotoField({
 }) {
   const [busy, setBusy] = useState(false);
   const drag = useRef<{ x: number; y: number; fx: number; fy: number } | null>(null);
-  const SIZE = 112;
+  const SIZE = 96;
   const parse = (f: string) => {
     const m = /^(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)$/.exec(f.trim());
     return m ? { fx: Number(m[1]), fy: Number(m[2]) } : { fx: 50, fy: 22 };
@@ -384,7 +384,7 @@ function PhotoField({
   };
   const onUp = () => { drag.current = null; };
   return (
-    <div className="flex items-center gap-5 rounded-[12px] border border-dashed border-line/90 bg-white/60 px-4 py-4">
+    <div className="flex items-center gap-4 rounded-[12px] border border-dashed border-line/90 bg-white/60 px-4 py-3.5">
       <div
         className="flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--accent-soft)]"
         style={{ width: SIZE, height: SIZE, cursor: value ? "grab" : "default", touchAction: "none", boxShadow: value ? `0 0 0 3px #fff, 0 0 0 4.5px var(--accent)` : undefined }}
@@ -410,17 +410,17 @@ function PhotoField({
             ? "Drag the picture to centre your face. It only goes on your card, and your agent still checks your ID in person."
             : "A selfie is fine. It only goes on your card, and your agent still checks your ID in person."}
         </p>
-      </div>
-      <div className="flex shrink-0 items-center gap-3">
-        {value && (
-          <button type="button" onClick={() => { onChange(""); onFocus(""); }} className="text-[13px] text-muted underline underline-offset-4 hover:text-ink">
-            Remove
-          </button>
-        )}
-        <label className="cursor-pointer rounded-[10px] border border-line/80 bg-white px-3.5 py-2 text-[13px] font-medium transition-colors hover:border-ink">
-          {busy ? "One moment…" : value ? "Change" : "Choose or take one"}
-          <input type="file" accept="image/*" capture="user" className="sr-only" onChange={(e) => void pick(e.target.files?.[0])} />
-        </label>
+        <div className="mt-2.5 flex items-center gap-4">
+          <label className="cursor-pointer rounded-[10px] border border-line/80 bg-white px-3.5 py-2 text-[13px] font-medium transition-colors hover:border-ink">
+            {busy ? "One moment…" : value ? "Change" : "Choose or take one"}
+            <input type="file" accept="image/*" capture="user" className="sr-only" onChange={(e) => void pick(e.target.files?.[0])} />
+          </label>
+          {value && (
+            <button type="button" onClick={() => { onChange(""); onFocus(""); }} className="text-[13px] text-muted underline underline-offset-4 hover:text-ink">
+              Remove
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -560,7 +560,7 @@ function FinishStage({ data, phase, token, demo, onBack }: { data: PassportData;
     }
   }
 
-  const field = "w-full rounded-[12px] border border-line/80 bg-white px-4 py-3.5 text-[15px] outline-none transition-[border-color,box-shadow] focus:border-[var(--accent-dark)] focus:shadow-[0_0_0_3px_rgba(86,66,62,0.10)]";
+  const field = "w-full rounded-[12px] border border-line/80 bg-white px-4 py-[var(--pp-field-y)] text-[15px] outline-none transition-[border-color,box-shadow] focus:border-[var(--accent-dark)] focus:shadow-[0_0_0_3px_rgba(86,66,62,0.10)]";
   const card = (face: React.ReactNode) => (
     <div style={{ width: cw, height: ch, borderRadius: 30 * scale, boxShadow: edge }}>
       <div style={{ width: CARD_W_PX, height: CARD_H_PX, transform: `scale(${scale})`, transformOrigin: "0 0" }}>{face}</div>
@@ -632,7 +632,7 @@ function FinishStage({ data, phase, token, demo, onBack }: { data: PassportData;
               transition: `transform 850ms ${ease} 1350ms`,
             }}
           >
-            <div className="flex h-full flex-col overflow-y-auto rounded-[28px] bg-white px-8 pb-9 pt-8 shadow-[0_30px_70px_-40px_rgba(86,66,62,0.35)] xl:px-10">
+            <div className="flex h-full flex-col overflow-y-auto rounded-[28px] bg-white px-[var(--pp-panel-x)] py-[var(--pp-panel-y)] shadow-[0_30px_70px_-40px_rgba(86,66,62,0.35)]">
               {sampleDone ? (
                 <>
                   <p className="text-[11.5px] font-semibold uppercase tracking-[0.22em] text-muted">The sample</p>
@@ -648,22 +648,26 @@ function FinishStage({ data, phase, token, demo, onBack }: { data: PassportData;
               ) : (
                 <form onSubmit={create}>
                   <p className="text-[11.5px] font-semibold uppercase tracking-[0.22em] text-muted">Nearly there{first ? `, ${first}` : ""}</p>
-                  <h2 className="hand mt-2 text-[30px] leading-tight xl:text-[36px]">
+                  <h2 className="hand mt-2 text-[length:var(--pp-panel-title)] leading-tight">
                     Great. Now let&apos;s finish{" "}
                     <span className="inline-block" style={{ color: BROWN, boxShadow: `inset 0 -0.14em 0 0 #fff, inset 0 -0.2em 0 0 ${BROWN}` }}>your account</span>
                   </h2>
-                  <p className="mt-3 text-[15px] leading-relaxed text-muted">
+                  {/* The long version needs a wide panel; a narrow one gets the short. */}
+                  <p className="mt-[var(--pp-tight)] hidden text-[length:var(--pp-lead)] leading-relaxed text-muted xl:block">
                     That is your passport, front and back. Have a read; if anything is wrong, go back and change it.
                     Happy with it? Choose a password and you are in - your tenant area opens with everything already filled in.
                   </p>
+                  <p className="mt-[var(--pp-tight)] text-[length:var(--pp-lead)] leading-relaxed text-muted xl:hidden">
+                    Have a read of your passport. Happy with it? Choose a password and you are in.
+                  </p>
 
-                  <div className="mt-6 space-y-5">
+                  <div className="mt-[var(--pp-foot)] space-y-[var(--pp-space2)]">
                     <label className="block">
                       <span className="text-[14.5px] font-semibold">Your username</span>
-                      <span className="mt-1 block text-[13px] text-muted">The email on your passport.</span>
-                      <div className="mt-2 rounded-[12px] border border-line/60 bg-[var(--accent-soft)]/60 px-4 py-3.5 text-[15px]">{email || "Add your email on page one"}</div>
+                      <span className="mt-1 hidden text-[13px] text-muted xl:block">The email on your passport.</span>
+                      <div className="mt-2 rounded-[12px] border border-line/60 bg-[var(--accent-soft)]/60 px-4 py-[var(--pp-field-y)] text-[15px]">{email || "Add your email on page one"}</div>
                     </label>
-                    <div className="grid gap-5">
+                    <div className="grid gap-[var(--pp-space2)]">
                       <label className="block">
                         <span className="text-[14.5px] font-semibold">Choose a password</span>
                         <div className="relative mt-2">
@@ -681,24 +685,24 @@ function FinishStage({ data, phase, token, demo, onBack }: { data: PassportData;
                     <ul className="flex flex-wrap gap-x-5 gap-y-1 text-[12.5px] text-muted">
                       <li className={pw.length >= 8 ? "text-ink" : ""}>{pw.length >= 8 ? "✓" : "·"} At least 8 characters</li>
                       <li className={pw && pw === pw2 ? "text-ink" : ""}>{pw && pw === pw2 ? "✓" : "·"} Both the same</li>
-                      <li>· A mix of letters and numbers helps</li>
+                      <li className="hidden xl:block">· A mix of letters and numbers helps</li>
                     </ul>
                     {err && <p className="text-[13.5px]" style={{ color: "#9d4340" }}>{err}</p>}
                     <div className="flex flex-wrap items-center gap-4">
                       <button
                         type="submit"
                         disabled={busy || !ok}
-                        className={`flex items-center gap-3 rounded-[12px] px-7 py-3.5 text-[15px] font-semibold text-white transition-opacity ${busy || !ok ? "cursor-not-allowed opacity-40" : "hover:opacity-90"}`}
+                        className={`flex items-center gap-3 rounded-[12px] px-7 py-[var(--pp-field-y)] text-[15px] font-semibold text-white transition-opacity ${busy || !ok ? "cursor-not-allowed opacity-40" : "hover:opacity-90"}`}
                         style={{ background: BROWN }}
                       >
                         {busy ? "Opening your account…" : "Create my account"}
                         {!busy && <Arrow />}
                       </button>
-                      <button type="button" onClick={onBack} className="rounded-[12px] border border-line/80 bg-white px-6 py-3.5 text-[14.5px] font-medium transition-colors hover:border-ink">
-                        Not ready yet - go back
+                      <button type="button" onClick={onBack} className="rounded-[12px] border border-line/80 bg-white px-6 py-[var(--pp-field-y)] text-[14.5px] font-medium transition-colors hover:border-ink">
+                        Back
                       </button>
                     </div>
-                    <p className="flex items-center gap-2 text-[13px] text-muted">
+                    <p className="hidden items-center gap-2 text-[13px] text-muted xl:flex">
                       <Lock />
                       Your details are only shared when you apply for a property.
                     </p>
@@ -1491,6 +1495,7 @@ export default function PassportForm({
   const head = HEADLINES[sections[step].key] ?? { lead: agentName ? "A few more from" : "A few more", em: agentName || "questions" };
   const saveNote =
     demo ? "A sample - nothing you type is saved."
+    : submitted && accountExists && lastStep && lastScreen ? "Your passport is with us. Change anything here and it updates straight away."
     : state === "saving" ? "Saving…"
     : state === "error" ? "Not saved - check your connection"
     : state === "saved" ? "Saved"
@@ -1511,14 +1516,14 @@ export default function PassportForm({
       style={phase === "leaving" ? { opacity: 0, transform: "translateY(28px)", transition: "opacity 400ms ease, transform 400ms ease" } : undefined}
     >
       {/* ── Left: the headline, one question, the way on ── */}
-      <div className="flex flex-col px-5 pb-8 pt-8 sm:px-8 lg:h-full lg:min-h-0 lg:px-12 lg:pb-8 lg:pt-9 xl:px-16">
+      <div className="flex flex-col px-5 py-[var(--pp-pad)] sm:px-8 lg:h-full lg:min-h-0 lg:px-12 xl:px-16">
         <div
           key={step}
           className="shrink-0"
           style={{ animation: "slideIn 340ms cubic-bezier(0.22,1,0.36,1) both", ["--from" as string]: `${dir * 28}px` }}
         >
           <p className="text-[11.5px] font-semibold uppercase tracking-[0.22em] text-muted">Tenant Passport</p>
-          <h1 className="hand mt-3 text-[44px] leading-[0.98] sm:text-[52px] xl:text-[60px]">
+          <h1 className="hand mt-[var(--pp-tight)] text-[length:var(--pp-title)] leading-[0.98]">
             {head.lead}
             {head.before ? <br /> : " "}
             {head.before && `${head.before} `}
@@ -1526,26 +1531,28 @@ export default function PassportForm({
               {head.em}
             </span>
           </h1>
-          <p className="mt-3 max-w-[46ch] text-[15px] leading-relaxed text-muted">{sections[step].blurb}</p>
+          <p className="mt-[var(--pp-tight)] max-w-[46ch] text-[length:var(--pp-lead)] leading-relaxed text-muted">{sections[step].blurb}</p>
         </div>
 
         {/* The question. Keyed on the screen so each one slides in from the
-            side it came from; the container never scrolls because no screen
-            is taller than the room it has. */}
-        <div className="mt-8 min-h-0 flex-1 overflow-hidden">
+            side it came from. The type and spacing above shrink with the
+            height of the window (the --pp-* variables in globals.css), so
+            no screen should be taller than the room it has; if one ever is,
+            the box scrolls rather than cutting the question off. */}
+        <div className="mt-[var(--pp-gap)] min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
           <div
             key={curKey}
-            className="max-w-[680px] space-y-7"
+            className="max-w-[680px] space-y-[var(--pp-space)]"
             style={{ animation: "slideIn 380ms cubic-bezier(0.22,1,0.36,1) both", ["--from" as string]: `${dir * 44}px` }}
           >
             {cur?.node}
           </div>
         </div>
 
-        <div className="mt-6 max-w-[680px] shrink-0">
+        <div className="mt-[var(--pp-foot)] max-w-[680px] shrink-0">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
             {(step > 0 || at > 0) && (
-              <button type="button" onClick={back} className="rounded-[12px] border border-line/80 bg-white px-6 py-3.5 text-[14.5px] font-medium transition-colors hover:border-ink">
+              <button type="button" onClick={back} className="rounded-[12px] border border-line/80 bg-white px-6 py-[var(--pp-field-y)] text-[14.5px] font-medium transition-colors hover:border-ink">
                 Back
               </button>
             )}
@@ -1553,26 +1560,23 @@ export default function PassportForm({
               <button
                 type="button"
                 onClick={advance}
-                className="flex items-center gap-3 rounded-[12px] px-7 py-3.5 text-[15px] font-semibold text-white transition-opacity hover:opacity-90"
+                className="flex items-center gap-3 rounded-[12px] px-7 py-[var(--pp-field-y)] text-[15px] font-semibold text-white transition-opacity hover:opacity-90"
                 style={{ background: BROWN }}
               >
                 {lastScreen && !flowOpenTyped ? "Next step" : "Continue"}
                 <Arrow />
               </button>
             ) : submitted && accountExists && phase === "form" ? (
-              <div className="flex flex-wrap items-center gap-4">
-                <Link href="/tenant" className="flex items-center gap-3 rounded-[12px] px-7 py-3.5 text-[15px] font-semibold text-white hover:opacity-90" style={{ background: BROWN }}>
-                  Open my tenant area
-                  <Arrow />
-                </Link>
-                <p className="text-[13.5px] leading-relaxed text-muted">Your passport is with us. Change anything here and it updates straight away.</p>
-              </div>
+              <Link href="/tenant" className="flex items-center gap-3 rounded-[12px] px-7 py-[var(--pp-field-y)] text-[15px] font-semibold text-white hover:opacity-90" style={{ background: BROWN }}>
+                Open my tenant area
+                <Arrow />
+              </Link>
             ) : (
               <button
                 type="button"
                 onClick={finish}
                 disabled={!allDone}
-                className={`flex items-center gap-3 rounded-[12px] px-7 py-3.5 text-[15px] font-semibold text-white transition-opacity ${allDone ? "hover:opacity-90" : "cursor-not-allowed opacity-40"}`}
+                className={`flex items-center gap-3 rounded-[12px] px-7 py-[var(--pp-field-y)] text-[15px] font-semibold text-white transition-opacity ${allDone ? "hover:opacity-90" : "cursor-not-allowed opacity-40"}`}
                 style={{ background: BROWN }}
               >
                 {finishLabel}
@@ -1587,7 +1591,7 @@ export default function PassportForm({
 
           {/* The progress bar: one segment per section, every segment a
               button, so any section can be jumped to. Nothing is gated. */}
-          <div className="mt-6">
+          <div className="mt-[var(--pp-foot)]">
             <div className="flex items-baseline justify-between text-[12.5px] text-muted">
               <span>
                 Step {step + 1} of {sections.length}
