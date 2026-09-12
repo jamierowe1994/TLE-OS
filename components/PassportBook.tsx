@@ -80,11 +80,6 @@ export type PassportFocus = "legalName" | "knownAs" | "dob" | "nationality" | nu
 
 /* ── Paper, band, texture ────────────────────────────────────────────────── */
 
-/* A grain, drawn once as an SVG and tiled. Turbulence at low opacity is what
-   makes flat colour read as card stock. */
-const GRAIN =
-  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E\")";
-
 /** The wordmark, in pink, cut from the white logo with a mask. */
 function Wordmark({ height }: { height: number }) {
   const url = "url(/brand/tle-logo-white.png)";
@@ -151,8 +146,31 @@ function Card({ band, right, children }: { band: number; right: React.ReactNode;
           boxShadow: "inset 0 1.5px 0 rgba(74,54,50,0.28), 0 -3px 8px rgba(0,0,0,0.25)",
         }}
       />
-      {/* Grain over everything, last, so the band has it too. */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 mix-blend-multiply" style={{ backgroundImage: GRAIN, opacity: 0.16 }} />
+      {/* Guilloche, pressed in and kept quiet: concentric arcs from a centre
+          well off the card, a light copy a pixel up-left and a dark one
+          down-right. James liked these; the grain tile that read as a
+          square grid is what went. */}
+      {[
+        { dx: -1, dy: -1, col: "rgba(255,255,255,0.9)", op: 0.42 },
+        { dx: 1, dy: 1, col: "rgba(74,54,50,0.45)", op: 0.26 },
+      ].map((g, i) => (
+        <div
+          key={i}
+          aria-hidden
+          className="pointer-events-none absolute"
+          style={{
+            right: -560 + g.dx,
+            bottom: -600 + g.dy,
+            width: 1160,
+            height: 1160,
+            borderRadius: "50%",
+            opacity: g.op,
+            background: `repeating-radial-gradient(circle at 50% 50%, transparent 0 12px, ${g.col} 12px 13.2px)`,
+            WebkitMaskImage: "radial-gradient(circle at 50% 50%, transparent 46%, rgba(0,0,0,0.9) 52%, rgba(0,0,0,0.3) 60%, transparent 66%)",
+            maskImage: "radial-gradient(circle at 50% 50%, transparent 46%, rgba(0,0,0,0.9) 52%, rgba(0,0,0,0.3) 60%, transparent 66%)",
+          }}
+        />
+      ))}
       {children}
     </div>
   );
