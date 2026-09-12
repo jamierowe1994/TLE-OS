@@ -155,15 +155,12 @@ const WORKSPACES: Workspace[] = [
     needs: "see:business", primaryFor: ["super_admin"],
   },
   {
-    href: "/pre-tenancy", label: "Pre-tenancy", icon: "checklist",
-    /* Her four screens, dashboard first (James, 5 Sep): the board is where a
-       deal is worked, the dashboard is where she sees what needs working. */
-    children: [
-      { href: "/pre-tenancy/dashboard", label: "Dashboard" },
-      { href: "/pre-tenancy", label: "Board" },
-      { href: "/pre-tenancy/feed", label: "What moved" },
-      { href: "/pre-tenancy/plc", label: "PLC queue" },
-    ],
+    /* One door, landing on the dashboard (James, 5 Sep: the board is where
+       a deal is worked, the dashboard is where she sees what needs working).
+       Her screens are the rail inside, drawn by app/(os)/pre-tenancy/layout,
+       not children here (James, 12 Sep: "when she clicks pre-tenancy, it'll
+       launch her into an admin section"). */
+    href: "/pre-tenancy/dashboard", label: "Pre-tenancy", icon: "checklist",
     /* `support` too: it is deprecated in favour of `pretenancy` but anybody
        still carrying it keeps the board they had. */
     needs: "see:pretenancy", primaryFor: ["pretenancy", "support"],

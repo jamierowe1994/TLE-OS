@@ -8,18 +8,17 @@
 // tenant contacts and the full two-way notes thread with the agent, all
 // visible without digging.
 //
-// Auth flow mirrors /admin: refreshUser → inline login if signed out →
-// locked card unless PRETENANCY_EMAILS (or admin — Susan can look in).
+// Sits inside Kirstie's workspace (app/(os)/pre-tenancy/layout): the OS
+// session and the workspace gate decide who sees it, so the board carries no
+// login, no profile menu and no rail of its own - the stages run as a strip
+// above the deals, and the workspace rail beside it is the navigation.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import BrandMark from "@/components/business/BrandMark";
 import PasswordInput from "@/components/business/PasswordInput";
 import { NotesThread } from "@/components/business/DealNotes";
 import DoodleIcon from "@/components/business/DoodleIcon";
-import TleOsChips from "@/components/business/TleOsChips";
-import { getUser, logIn, refreshUser, signOut } from "@/lib/business/session";
 import { BRAND } from "@/lib/business/brand";
 import { formatGBP } from "@/lib/business/format";
 import {
@@ -43,7 +42,7 @@ import type { AgentApplication } from "@/lib/business/rex-stats";
 import { rexListingUrl } from "@/lib/business/rex-links";
 import { stageEvidence } from "@/lib/business/stage-evidence";
 import { dealAlerts, type DealAlert } from "@/lib/business/deal-alerts";
-import BoardLoading from "@/components/business/BoardLoading";
+import WorkspaceLoading from "@/components/WorkspaceLoading";
 
 /* ------------------------------- data shapes ------------------------------- */
 
@@ -318,87 +317,12 @@ export default function PreTenancyPage() {
     };
   }, []);
 
-  const handleSignOut = useCallback(async () => {
-    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-    window.location.href = "/sign-in";
-  }, []);
+  if (user === undefined) return <WorkspaceLoading />;
 
-  if (user === undefined) {
-    return <p className="text-[12.5px] text-muted">Loading pre-tenancy…</p>;
-  }
-
-  return <Board user={user} onSignOut={handleSignOut} />;
+  return <Board user={user} />;
 }
 
-/* ----------------------------- inline login ----------------------------- */
-
-function PreTenancyLogin({ onLoggedIn }: { onLoggedIn: (u: UserProfile) => void }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      onLoggedIn(await logIn(email.trim(), password));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not sign you in.");
-      setBusy(false);
-    }
-  }
-
-  /* FULL PAGE, not a panel inside the admin rail.
-
-     This is Kirstie's whole working screen. Squeezed into the admin content
-     column it reads as an embed of somebody else's product rather than as her
-     view — which is exactly what James saw. The rail is hidden the same way
-     the admin layout hides the agent sidebar: CSS against the element, so the
-     theme, the view-as bar and the bug button all survive. */
-  return (
-    <>
-<main className="flex min-h-screen items-center justify-center bg-white px-6">
-      <form onSubmit={submit} className="w-full max-w-sm">
-        <div className="mb-10 flex items-center justify-center gap-2.5">
-          <BrandMark size={32} />
-          <span className="text-sm font-semibold text-ink">{BRAND.name}</span>
-        </div>
-        <h1 className="text-center text-2xl font-semibold tracking-tight text-ink">
-          Pre-tenancy sign in
-        </h1>
-        <p className="mt-2 text-center text-sm text-muted">
-          The move-in board for the pre-tenancy team
-        </p>
-        <input
-          autoFocus
-          type="email"
-          className="mt-8 w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm text-ink outline-none transition focus:border-gray-400"
-          placeholder={`you@${BRAND.domains[0]}`}
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <div className="mt-3">
-          <PasswordInput placeholder="Password" value={password} onChange={setPassword} />
-        </div>
-        {error && <p className="mt-3 text-sm text-accent">{error}</p>}
-        <button
-          type="submit"
-          disabled={busy}
-          className="btn-press mt-4 w-full rounded-xl bg-accent py-3 text-sm font-medium text-white transition hover:bg-accent-dark disabled:opacity-50"
-        >
-          {busy ? "Signing in…" : "Sign in"}
-        </button>
-      </form>
-    </main>
-    </>
-  );
-}
-
-/* --------------------------------- board --------------------------------- */
-
-function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }) {
+function Board({ user }: { user: UserProfile }) {
   const [deals, setDeals] = useState<BoardDeal[] | null>(null);
   const [summary, setSummary] = useState<BoardSummary | null>(null);
   const [configured, setConfigured] = useState(true);
@@ -410,21 +334,6 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
   // Which stage tab is active. Always opens on the first stage.
   const [tab, setTab] = useState<string>("deal_started");
   const [moreOpen, setMoreOpen] = useState(false);
-  // TLE OS spring box at the foot of the rail — same behaviour as the partner
-  // shell: open pops the chips up, closing keeps them mounted long enough to
-  // tumble back down behind the line.
-  const [tleOpen, setTleOpen] = useState(false);
-  const [tleClosing, setTleClosing] = useState(false);
-  const toggleTle = () => {
-    if (tleOpen) {
-      setTleOpen(false);
-      setTleClosing(true);
-      setTimeout(() => setTleClosing(false), 600);
-    } else {
-      setTleClosing(false);
-      setTleOpen(true);
-    }
-  };
   // Board layout: focused tiles (one stage) or the full kanban.
   const [view, setView] = useState<"tiles" | "kanban">("tiles");
   const [mailboxOpen, setMailboxOpen] = useState(false);
@@ -632,7 +541,7 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
   const open = openId ? (deals ?? []).find((d) => d.app.id === openId) ?? null : null;
 
   return (
-    <main className="type-admin flex min-h-screen flex-col bg-page">
+    <div className="type-admin flex flex-col">
       {/* THERE IS NO HEADER ANY MORE, and that is the point.
 
           There used to be a full-width sticky bar across the top carrying the
@@ -661,235 +570,7 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
           Three nested wrappers became this one. They were a column inside a
           column inside a column, each adding padding to a layout that wanted to
           be a single row. */}
-      <div className="flex min-h-screen gap-6 py-3 pl-3 pr-5 sm:pr-8">
-
-        {/* ---- the stage rail down the left, the board beside it ----
-             The title and the filters now sit OVER the deals rather than over
-             the rail, so the rail reads as one uninterrupted column from the
-             header rule to TLE OS. The short rule that used to run above the
-             filters went with them: the header already draws a full-width
-             line, and a second one stopping short of the edge reads as a
-             mistake rather than a divider. */}
-        {/* ---- stage rail: the 8 stages stacked; Slipped/All/Cancelled
-             tucked behind a three-dot menu at the foot ---- */}
-        {deals && view === "tiles" ? (
-          (() => {
-            const STAGE_KEYS = new Set(PORTAL_STAGES.map((s) => s.key));
-            const stageTabs = tabs.filter((t) => STAGE_KEYS.has(t.key));
-            const extraTabs = tabs.filter((t) => !STAGE_KEYS.has(t.key)); // slipped, all, cancelled
-            const activeExtra = extraTabs.find((t) => t.key === activeTab.key) ?? null;
-
-            const TabButton = ({
-              t,
-              compact = false,
-            }: {
-              t: (typeof tabs)[number];
-              compact?: boolean;
-            }) => {
-              const activeT = t.key === activeTab.key;
-              const v = stageVisual(t.key);
-              return (
-                /**
-                 * The same nav item the home page draws, not a cousin of it.
-                 *
-                 * James, 29 Aug: "look at the icons and the Holding fee text.
-                 * Can you please replicate more similarly what we have in the
-                 * actual navigation bar for the home page? Same size and icon
-                 * likeness."
-                 *
-                 * Matched to NavLink in components/Shell.tsx, item for item:
-                 * rounded-xl px-3 py-2.5, the `hand` face at 13.5px, and a 17px
-                 * doodle rather than 26px. The old icon was half again too big
-                 * and the label a size up and bold, which is what made a rail
-                 * of eight stages read as a menu of buttons instead of a
-                 * sidebar — and what pushed "Tenancy agreement" into an
-                 * ellipsis at this width.
-                 *
-                 * Active is the soft tint the rest of the OS uses, not a
-                 * bordered box: highlight by reducing contrast, not adding it.
-                 * The icon takes the accent when active exactly as NavLink's
-                 * does, which is the "likeness" the rail was missing.
-                 *
-                 * The count stays. The home rail has nothing to count; this one
-                 * is a pipeline and the number IS the information.
-                 */
-                <button
-                  type="button"
-                  onClick={() => setTab(t.key)}
-                  className={`hand relative flex w-full items-center rounded-xl px-3 py-2.5 text-left text-[13.5px] transition-colors ${
-                    activeT
-                      ? "bg-accent-soft/50 font-medium text-ink"
-                      : "text-muted hover:bg-page hover:text-ink"
-                  }`}
-                >
-                  <span className={`relative shrink-0 ${activeT ? "text-accent-dark" : "text-muted"}`}>
-                    <StageIcon stageKey={t.key} size={17} />
-                    <MovementDot kind={t.movement} className="absolute -right-1 -top-1 ring-2 ring-page" />
-                  </span>
-                  <span className="ml-3 min-w-0 flex-1 truncate">{t.label}</span>
-                  <span
-                    className={`ml-2 shrink-0 text-[11px] ${activeT ? "text-accent-dark" : "text-muted"}`}
-                  >
-                    {t.deals.length}
-                  </span>
-                </button>
-              );
-            };
-
-            return (
-              /**
-               * The rail, in the house style at last.
-               *
-               * It was a 236px column with a single right-hand border, static,
-               * scrolling away with the page. Every other rail in the OS —
-               * the agent's and admin's — is the same thing: a floating panel
-               * with a border the whole way round, pinned near the top with a
-               * small inset. James, 29 Aug: "the nav bar is too big. It's not
-               * in the right position... put the navigation bar in a similar
-               * location to what we have on the actual agent view."
-               *
-               * `self-start` is the part that is easy to miss. In a flex row a
-               * child stretches to full height by default, and a sticky element
-               * that is already as tall as its container has nowhere to stick
-               * to — so it silently does nothing. Shell's rail avoids this by
-               * being a direct child of a `min-h-screen` row; here the row is a
-               * flex context, so the rail has to opt out of stretching first.
-               *
-               * The width matches the other two (w-60) rather than 236px,
-               * because "nearly the same" is what makes a screen feel like a
-               * different product.
-               */
-              <section
-                className="enter enter-up sticky top-3 flex h-[calc(100vh-24px)] w-60 shrink-0 flex-col gap-1 self-start overflow-y-auto rounded-3xl border border-line/80 bg-panel p-3"
-                style={enterAt(80)}
-              >
-                {/* The title lives over the deals now, not here — the rail is
-                    stages and nothing else, top to bottom. */}
-                {stageTabs.map((t) => (
-                  <TabButton key={t.key} t={t} />
-                ))}
-
-                {/* the active extra (Slipped/All/Cancelled) is promoted so you
-                    can always see the current view */}
-                {activeExtra ? <TabButton t={activeExtra} compact /> : null}
-
-                {/* ---- TLE OS, pinned at the foot of the rail ---- */}
-                <div className="mt-auto pt-2">
-                  {tleOpen || tleClosing ? (
-                    <div className="overflow-hidden">
-                      <TleOsChips closing={tleClosing} line="border-line" />
-                    </div>
-                  ) : null}
-                  <div className="border-t border-line pt-2">
-                    <button
-                      type="button"
-                      onClick={toggleTle}
-                      aria-expanded={tleOpen}
-                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[14px] font-semibold transition ${
-                        tleOpen ? "text-ink" : "text-muted hover:text-ink"
-                      }`}
-                    >
-                      <span className="shrink-0 text-ink">
-                        <DoodleIcon name="grid" size={24} />
-                      </span>
-                      <span className="flex-1">TLE OS</span>
-                      <svg
-                        className={`h-3.5 w-3.5 transition-transform duration-200 ${tleOpen ? "rotate-180" : ""}`}
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden
-                      >
-                        <path d="M18 15l-6-6-6 6" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-
-                {/* three-dot "more views" menu */}
-                <div className="relative flex shrink-0 items-center pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setMoreOpen((v) => !v)}
-                    aria-label="More views"
-                    className={`btn-press flex h-9 w-9 items-center justify-center rounded-lg transition ${
-                      moreOpen ? "bg-page text-ink" : "text-muted hover:bg-page hover:text-ink"
-                    }`}
-                  >
-                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-                      <circle cx={5} cy={12} r={1.6} />
-                      <circle cx={12} cy={12} r={1.6} />
-                      <circle cx={19} cy={12} r={1.6} />
-                    </svg>
-                  </button>
-                  {moreOpen ? (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setMoreOpen(false)} />
-                      <div className="menu-pop absolute left-0 top-full z-50 mt-1 w-52 rounded-xl border border-line bg-card p-1.5 shadow-lg">
-                        {[
-                          tabs.find((t) => t.key === "all"),
-                          tabs.find((t) => t.key === "slipped"),
-                          tabs.find((t) => t.key === "archive"),
-                        ]
-                          .filter((t): t is (typeof tabs)[number] => !!t)
-                          .map((t) => (
-                            <button
-                              key={t.key}
-                              type="button"
-                              onClick={() => {
-                                setTab(t.key);
-                                setMoreOpen(false);
-                              }}
-                              className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] transition hover:bg-page ${
-                                t.key === activeTab.key ? "font-semibold text-ink" : "text-ink"
-                              }`}
-                            >
-                              <span className="flex items-center gap-2">
-                                {t.label}
-                                <MovementDot kind={t.movement} />
-                              </span>
-                              <span className="text-[11px] text-muted">{t.deals.length}</span>
-                            </button>
-                          ))}
-                        <div className="my-1 border-t border-line" />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (showCancelled && activeTab.key === "cancelled") setTab("deal_started");
-                            setShowCancelled((v) => !v);
-                            setMoreOpen(false);
-                          }}
-                          className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] text-ink transition hover:bg-page"
-                        >
-                          {showCancelled ? "Hide cancelled" : "Show cancelled"}
-                          <span className="text-[11px] text-muted">{byStage.cancelled.length}</span>
-                        </button>
-                        {showCancelled ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setTab("cancelled");
-                              setMoreOpen(false);
-                            }}
-                            className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] transition hover:bg-page ${
-                              activeTab.key === "cancelled" ? "font-semibold text-ink" : "text-ink"
-                            }`}
-                          >
-                            View cancelled
-                            <span className="text-[11px] text-muted">{byStage.cancelled.length}</span>
-                          </button>
-                        ) : null}
-                      </div>
-                    </>
-                  ) : null}
-                </div>
-              </section>
-            );
-          })()
-        ) : null}
+      <div className="flex flex-col">
 
         {/* ---- the board column: title left, figures and filters hard right,
              deals underneath ----
@@ -897,7 +578,7 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
              last time these controls lived inside the tiles branch the view
              toggle vanished the moment you switched to kanban, leaving no way
              back. */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 flex-col">
           {/* The top bar, in the column rather than across the page — and with
               no rule under it. James: "we should be able to get rid of the line
               that goes across the top." The rail's own border is the only edge
@@ -956,24 +637,6 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
                 </span>
               ) : null}
             </button>
-            {/* The PLC queue is a SECOND inbox, not a stage of this board.
-                This board follows Propoly deals through their pipeline; a PLC
-                pack is an agent waiting on an answer from Kirstie, with its own
-                clock and its own ordering (longest wait first, always). Folding
-                it in as another stage tab would have meant either sorting it
-                wrongly or sorting the whole board wrongly. */}
-            <Link
-              href="/pre-tenancy/plc"
-              className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30"
-            >
-              <span className="text-accent">
-                {/* checklist, not a made-up name. DoodleIcon takes a plain
-                    string and renders nothing at all for one it does not have,
-                    so an invented name fails silently and looks like a CSS bug. */}
-                <DoodleIcon name="checklist" size={15} />
-              </span>
-              PLC queue
-            </Link>
             {/* The feed is the same board read as time rather than as stages:
                 what Propoly moved, newest first. Kirstie asked for one thing
                 to leave open instead of checking each file (4 Sep). */}
@@ -986,13 +649,18 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
               </span>
               What moved
             </Link>
-            <div className="ml-auto">
-              <ProfileMenu
-                user={user}
-                onOpenMailbox={() => setMailboxOpen(true)}
-                onSignOut={onSignOut}
-              />
-            </div>
+            {/* Her mailbox, for the Emails tab. It was behind a profile menu
+                of its own; the OS has a profile, so only this is left. */}
+            <button
+              type="button"
+              onClick={() => setMailboxOpen(true)}
+              className="btn-press ml-auto flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30"
+            >
+              <span className="text-accent">
+                <DoodleIcon name="mail" size={15} />
+              </span>
+              Mailbox
+            </button>
           </div>
 
           {!configured ? (
@@ -1073,10 +741,204 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
             </div>
           </div>
 
+        {/* ---- the stages, as a strip over the deals ----
+             They were a rail down the left. The workspace rail beside the
+             board is the navigation now, and two rails side by side is the
+             thing James asked to be rid of (12 Sep 2026), so the eight stages
+             run across the top with their counts; Slipped/All/Cancelled stay
+             behind the three-dot menu at the end of the strip. ---- */}
+        {deals && view === "tiles" ? (
+          (() => {
+            const STAGE_KEYS = new Set(PORTAL_STAGES.map((s) => s.key));
+            const stageTabs = tabs.filter((t) => STAGE_KEYS.has(t.key));
+            const extraTabs = tabs.filter((t) => !STAGE_KEYS.has(t.key)); // slipped, all, cancelled
+            const activeExtra = extraTabs.find((t) => t.key === activeTab.key) ?? null;
+
+            const TabButton = ({
+              t,
+              compact = false,
+            }: {
+              t: (typeof tabs)[number];
+              compact?: boolean;
+            }) => {
+              const activeT = t.key === activeTab.key;
+              const v = stageVisual(t.key);
+              return (
+                /**
+                 * The same nav item the home page draws, not a cousin of it.
+                 *
+                 * James, 29 Aug: "look at the icons and the Holding fee text.
+                 * Can you please replicate more similarly what we have in the
+                 * actual navigation bar for the home page? Same size and icon
+                 * likeness."
+                 *
+                 * Matched to NavLink in components/Shell.tsx, item for item:
+                 * rounded-xl px-3 py-2.5, the `hand` face at 13.5px, and a 17px
+                 * doodle rather than 26px. The old icon was half again too big
+                 * and the label a size up and bold, which is what made a rail
+                 * of eight stages read as a menu of buttons instead of a
+                 * sidebar — and what pushed "Tenancy agreement" into an
+                 * ellipsis at this width.
+                 *
+                 * Active is the soft tint the rest of the OS uses, not a
+                 * bordered box: highlight by reducing contrast, not adding it.
+                 * The icon takes the accent when active exactly as NavLink's
+                 * does, which is the "likeness" the rail was missing.
+                 *
+                 * The count stays. The home rail has nothing to count; this one
+                 * is a pipeline and the number IS the information.
+                 */
+                <button
+                  type="button"
+                  onClick={() => setTab(t.key)}
+                  className={`relative flex items-center rounded-full border px-3 py-1.5 text-left text-[12.5px] transition-colors ${
+                    activeT
+                      ? "border-transparent bg-accent-soft font-semibold text-ink"
+                      : "border-line/70 text-muted hover:border-ink/40 hover:text-ink"
+                  }`}
+                >
+                  <span className={`relative shrink-0 ${activeT ? "text-accent-dark" : "text-muted"}`}>
+                    <StageIcon stageKey={t.key} size={15} />
+                    <MovementDot kind={t.movement} className="absolute -right-1 -top-1 ring-2 ring-page" />
+                  </span>
+                  <span className="ml-2 whitespace-nowrap">{t.label}</span>
+                  <span
+                    className={`ml-2 shrink-0 text-[11px] ${activeT ? "text-accent-dark" : "text-muted"}`}
+                  >
+                    {t.deals.length}
+                  </span>
+                </button>
+              );
+            };
+
+            return (
+              /**
+               * The rail, in the house style at last.
+               *
+               * It was a 236px column with a single right-hand border, static,
+               * scrolling away with the page. Every other rail in the OS —
+               * the agent's and admin's — is the same thing: a floating panel
+               * with a border the whole way round, pinned near the top with a
+               * small inset. James, 29 Aug: "the nav bar is too big. It's not
+               * in the right position... put the navigation bar in a similar
+               * location to what we have on the actual agent view."
+               *
+               * `self-start` is the part that is easy to miss. In a flex row a
+               * child stretches to full height by default, and a sticky element
+               * that is already as tall as its container has nowhere to stick
+               * to — so it silently does nothing. Shell's rail avoids this by
+               * being a direct child of a `min-h-screen` row; here the row is a
+               * flex context, so the rail has to opt out of stretching first.
+               *
+               * The width matches the other two (w-60) rather than 236px,
+               * because "nearly the same" is what makes a screen feel like a
+               * different product.
+               */
+              <section
+                className="enter enter-up mb-4 flex flex-wrap items-center gap-1.5"
+                style={enterAt(80)}
+              >
+                {/* The title lives over the deals now, not here — the rail is
+                    stages and nothing else, top to bottom. */}
+                {stageTabs.map((t) => (
+                  <TabButton key={t.key} t={t} />
+                ))}
+
+                {/* the active extra (Slipped/All/Cancelled) is promoted so you
+                    can always see the current view */}
+                {activeExtra ? <TabButton t={activeExtra} compact /> : null}
+
+                {/* three-dot "more views" menu */}
+                <div className="relative flex shrink-0 items-center">
+                  <button
+                    type="button"
+                    onClick={() => setMoreOpen((v) => !v)}
+                    aria-label="More views"
+                    className={`btn-press flex h-9 w-9 items-center justify-center rounded-lg transition ${
+                      moreOpen ? "bg-page text-ink" : "text-muted hover:bg-page hover:text-ink"
+                    }`}
+                  >
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+                      <circle cx={5} cy={12} r={1.6} />
+                      <circle cx={12} cy={12} r={1.6} />
+                      <circle cx={19} cy={12} r={1.6} />
+                    </svg>
+                  </button>
+                  {moreOpen ? (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setMoreOpen(false)} />
+                      <div className="menu-pop absolute left-0 top-full z-50 mt-1 w-52 rounded-xl border border-line bg-card p-1.5 shadow-lg">
+                        {[
+                          tabs.find((t) => t.key === "all"),
+                          tabs.find((t) => t.key === "slipped"),
+                          tabs.find((t) => t.key === "archive"),
+                        ]
+                          .filter((t): t is (typeof tabs)[number] => !!t)
+                          .map((t) => (
+                            <button
+                              key={t.key}
+                              type="button"
+                              onClick={() => {
+                                setTab(t.key);
+                                setMoreOpen(false);
+                              }}
+                              className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] transition hover:bg-page ${
+                                t.key === activeTab.key ? "font-semibold text-ink" : "text-ink"
+                              }`}
+                            >
+                              <span className="flex items-center gap-2">
+                                {t.label}
+                                <MovementDot kind={t.movement} />
+                              </span>
+                              <span className="text-[11px] text-muted">{t.deals.length}</span>
+                            </button>
+                          ))}
+                        <div className="my-1 border-t border-line" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (showCancelled && activeTab.key === "cancelled") setTab("deal_started");
+                            setShowCancelled((v) => !v);
+                            setMoreOpen(false);
+                          }}
+                          className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] text-ink transition hover:bg-page"
+                        >
+                          {showCancelled ? "Hide cancelled" : "Show cancelled"}
+                          <span className="text-[11px] text-muted">{byStage.cancelled.length}</span>
+                        </button>
+                        {showCancelled ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTab("cancelled");
+                              setMoreOpen(false);
+                            }}
+                            className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] transition hover:bg-page ${
+                              activeTab.key === "cancelled" ? "font-semibold text-ink" : "text-ink"
+                            }`}
+                          >
+                            View cancelled
+                            <span className="text-[11px] text-muted">{byStage.cancelled.length}</span>
+                          </button>
+                        ) : null}
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              </section>
+            );
+          })()
+        ) : null}
+
         {view === "tiles" ? (
-          <section className="enter enter-up min-h-0 min-w-0 flex-1 overflow-y-auto pb-8 pl-1" style={enterAt(120)}>
+          <section className="enter enter-up min-w-0 pb-8" style={enterAt(120)}>
             {deals == null && !error ? (
-              <BoardLoading />
+              <WorkspaceLoading
+                height="min-h-[calc(100vh-360px)]"
+                label="Fetching the pipeline"
+                note="Propoly, REX and PayProp are all being asked at once - the slowest one decides."
+                slowNote="REX is usually the slow one. It is still going."
+              />
             ) : activeTab.deals.length === 0 ? (
               <div className="card card-flat p-12 text-center text-[13px] text-muted">
                 Nothing in {activeTab.label.toLowerCase()} right now.
@@ -1091,7 +953,7 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
           </section>
         ) : (
           /* ---- kanban: a column per stage ---- */
-          <section className="enter enter-up min-h-0 min-w-0 flex-1 overflow-x-auto overflow-y-hidden pb-4" style={enterAt(120)}>
+          <section className="enter enter-up h-[calc(100vh-320px)] min-h-[420px] min-w-0 overflow-x-auto overflow-y-hidden pb-4" style={enterAt(120)}>
             <div className="flex h-full gap-3">
               {[...PORTAL_STAGES.map((s) => s.key), ...(showCancelled ? ["cancelled"] : [])].map((key) => {
                 const col = tabs.find((t) => t.key === key);
@@ -1177,7 +1039,7 @@ function Board({ user, onSignOut }: { user: UserProfile; onSignOut: () => void }
           }}
         />
       ) : null}
-    </main>
+    </div>
   );
 }
 
@@ -3463,63 +3325,6 @@ function TasksTodayModal({
 }
 
 /* ------------------------- profile menu + mailbox ------------------------- */
-
-function ProfileMenu({
-  user,
-  onOpenMailbox,
-  onSignOut,
-}: {
-  user: UserProfile;
-  onOpenMailbox: () => void;
-  onSignOut: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="btn-press flex items-center gap-2 rounded-lg border border-line bg-card px-3 py-1.5 text-[12px] font-medium"
-      >
-        {user.name}
-        <svg viewBox="0 0 24 24" className={`h-3 w-3 transition ${open ? "rotate-180" : ""}`} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M6 9l6 6 6-6" />
-        </svg>
-      </button>
-      {open ? (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="menu-pop absolute right-0 z-50 mt-1.5 w-52 rounded-xl border border-line bg-card p-1.5 shadow-lg">
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onOpenMailbox();
-              }}
-              className="w-full rounded-lg px-3 py-2 text-left text-[12.5px] font-medium transition hover:bg-page"
-            >
-              Profile &amp; email
-              <span className="block text-[10.5px] font-normal text-muted">
-                Connect your mailbox for the Emails tab
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setOpen(false);
-                onSignOut();
-              }}
-              className="w-full rounded-lg px-3 py-2 text-left text-[12.5px] font-medium transition hover:bg-page"
-            >
-              Sign out
-            </button>
-          </div>
-        </>
-      ) : null}
-    </div>
-  );
-}
 
 const MAIL_PRESETS: { key: string; label: string; host: string }[] = [
   { key: "google", label: "Google Workspace / Gmail", host: "imap.gmail.com" },

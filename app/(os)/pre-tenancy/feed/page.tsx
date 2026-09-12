@@ -14,16 +14,19 @@ export const dynamic = "force-dynamic";
 
 export default function PreTenancyFeedPage() {
   return (
-    <div className="mx-auto max-w-6xl px-5 pb-16 pt-4 sm:px-8 lg:pt-14">
+    <div className="pb-8">
       <PageHeader
+        illustration="/illustrations/people/happy-call.svg"
+        illustrationAspect={1.0}
+        lineBreak="none"
         title="What moved"
         blurb="Every deal Propoly moved, as it happens. Leave it open."
         actions={
           <Link
-            href="/pre-tenancy"
+            href="/pre-tenancy/dashboard"
             className="flex items-center rounded-full border border-line/80 px-4 py-2 text-[12px] font-medium text-muted transition-colors hover:border-ink hover:text-ink"
           >
-            Back to the board
+            Back to the dashboard
           </Link>
         }
       />

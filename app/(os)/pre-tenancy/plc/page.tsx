@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { api, ComplianceSide, Note, Pill, prettyWhen, type Loaded } from "@/components/PlcReview";
 import type { PlcCase } from "@/lib/plc";
+import PageHeader from "@/components/PageHeader";
+import WorkspaceLoading from "@/components/WorkspaceLoading";
 
 /**
  * The PLC queue: what is with compliance, longest wait first.
@@ -89,21 +90,24 @@ export default function PlcQueuePage() {
 
   const overdue = (queue ?? []).filter((c) => ageOf(c.submittedAt).over).length;
 
+  if (queue === null && !error) return <WorkspaceLoading />;
+
   return (
-    <div className="mx-auto max-w-4xl px-5 pb-16 pt-4 sm:px-8 lg:pt-14">
-      <p className="text-xs uppercase tracking-[0.18em] text-muted">Pre-tenancy</p>
-      <h1 className="mt-1 text-2xl tracking-normal text-ink">PLC Queue</h1>
-      <p className="mt-2 max-w-2xl text-sm text-muted">
-        Packs handed over by agents, longest wait first. The agent is waiting on every one of these.
-      </p>
+    <div className="max-w-4xl pb-8">
+      <PageHeader
+        illustration="/illustrations/people/signature.svg"
+        illustrationAspect={1.0}
+        lineBreak="none"
+        title="PLC queue"
+        blurb="Packs handed over by agents, longest wait first. The agent is waiting on every one of these."
+        search={false}
+      />
 
       {error && (
         <div className="mt-4">
           <Note>{error}</Note>
         </div>
       )}
-
-      {queue === null && !error && <p className="mt-6 text-sm text-muted">Reading the queue…</p>}
 
       {queue?.length === 0 && (
         <p className="mt-6 rounded-xl border border-line p-4 text-sm text-muted">
@@ -177,11 +181,6 @@ export default function PlcQueuePage() {
         </>
       )}
 
-      <p className="mt-6 text-xs text-muted">
-        <Link href="/pre-tenancy" className="underline">
-          Back to the board
-        </Link>
-      </p>
     </div>
   );
 }

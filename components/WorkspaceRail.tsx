@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import DoodleIcon from "@/components/DoodleIcon";
 
 /**
  * The rail every workspace uses. One frame, whoever you are.
@@ -31,7 +32,9 @@ import { usePathname } from "next/navigation";
  * up with no navigation at all on a phone.
  */
 
-export type RailItem = { href: string; label: string; exact?: boolean };
+/** `icon` is a DoodleIcon name. Optional: the admin rail has none, and a
+ *  rail with icons on some rows and not others would look broken. */
+export type RailItem = { href: string; label: string; exact?: boolean; icon?: string };
 
 export type RailGroup = {
   /** Section heading. Null or omitted for the first, unlabelled group —
@@ -91,12 +94,13 @@ export default function WorkspaceRail({
                   <li key={t.href}>
                     <Link
                       href={t.href}
-                      className={`block rounded-lg px-3 py-2 text-[12.5px] transition-colors ${
+                      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[12.5px] transition-colors ${
                         isOn(t)
                           ? "bg-accent-soft font-semibold text-accent-dark"
                           : "text-muted hover:text-ink"
                       }`}
                     >
+                      {t.icon && <DoodleIcon name={t.icon} size={16} className={isOn(t) ? "text-accent-dark" : ""} />}
                       {t.label}
                     </Link>
                   </li>

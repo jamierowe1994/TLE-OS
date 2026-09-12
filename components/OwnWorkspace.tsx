@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import WorkspaceRail, { type RailGroup } from "@/components/WorkspaceRail";
 import { can, type Capability } from "@/lib/roles";
 import { workspacesFor } from "@/lib/nav";
 
@@ -11,9 +12,9 @@ import { workspacesFor } from "@/lib/nav";
  * ── What this is ──────────────────────────────────────────────────────────
  *
  * Company figures, Pre-tenancy and Marketing are each somebody's entire working
- * screen, with their own chrome and in two cases their own left rail. The
- * agent shell's sidebar on top of that is two rails fighting — on Susan's it
- * used to sit over her tabs so they could not be clicked at all.
+ * screen, with their own chrome. The agent shell's sidebar on top of that is
+ * two rails fighting — on Susan's it used to sit over her tabs so they could
+ * not be clicked at all.
  *
  * The rule used to live in app/(os)/admin/layout.tsx, which detected the three
  * routes and unmounted itself for them. That was the right rule in the wrong
@@ -21,6 +22,18 @@ import { workspacesFor } from "@/lib/nav";
  * the owner's rail responsible for getting out of everybody else's way. Now the
  * workspaces declare it themselves, and there is nowhere for a fourth one to
  * forget.
+ *
+ * ── Two shapes ────────────────────────────────────────────────────────────
+ *
+ * BARE (no `rail`): the sidebar goes, the shell's padding goes, and the page
+ * draws its own chrome edge to edge. Company figures is this.
+ *
+ * RAIL (`rail` given): the sidebar is replaced by a rail of the workspace's
+ * own screens, in the same frame as the owner's admin rail, and the pages sit
+ * beside it inside the shell's padding. The rail is drawn by the layout, so
+ * it stays put while the pages under it change (James, 12 Sep 2026: "the
+ * navigation bar should stay persistent ... it should all stay in place").
+ * Pre-tenancy is this.
  *
  * ── The gate ──────────────────────────────────────────────────────────────
  *
@@ -35,9 +48,15 @@ import { workspacesFor } from "@/lib/nav";
  */
 export default function OwnWorkspace({
   needs,
+  rail,
+  label,
   children,
 }: {
   needs: Capability;
+  /** The workspace's own screens. Given, the rail shape is drawn. */
+  rail?: RailGroup[];
+  /** The small caps line under the wordmark - "Pre-tenancy". */
+  label?: string;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -70,6 +89,47 @@ export default function OwnWorkspace({
   const backHref = can(role, "admin:open") ? "/admin" : "/dashboard";
   const backLabel = can(role, "admin:open") ? "← Back to my view" : "← Back to TLE OS";
 
+  if (allowed === false) {
+    return (
+      <div className="admin-scope">
+        <p className="py-10 text-center text-[13px] text-muted">Taking you to your own screen…</p>
+      </div>
+    );
+  }
+
+  if (rail) {
+    return (
+      <div className="admin-scope">
+        {/* The agent sidebar steps aside; the shell's padding stays, so the
+            pages are laid out exactly as the admin pages are. */}
+        <style>{`
+          [data-os-sidebar] { display: none !important; }
+        `}</style>
+        <div className="flex flex-col gap-5 md:flex-row">
+          <WorkspaceRail
+            label={label ?? ""}
+            groups={rail}
+            footer={
+              /* Held until we know: drawn immediately it would say "Back to
+                 my view" to Kirstie for a beat, naming a screen she does not
+                 have. */
+              allowed ? (
+                <button
+                  type="button"
+                  onClick={() => router.push(backHref)}
+                  className="w-full rounded-lg border border-line/80 px-3 py-2 text-[12px] text-muted transition-colors hover:border-ink"
+                >
+                  {backLabel}
+                </button>
+              ) : null
+            }
+          />
+          <div className="min-w-0 flex-1 py-3">{children}</div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="admin-scope">
       {/* ALL the padding, not just the left. These pages declare `min-h-screen`
@@ -80,35 +140,18 @@ export default function OwnWorkspace({
         [data-os-sidebar] { display: none !important; }
         [data-os-content] { padding: 0 !important; margin: 0 !important; }
       `}</style>
-      {allowed === false ? (
-        <p className="py-10 text-center text-[13px] text-muted">
-          Taking you to your own screen…
-        </p>
-      ) : (
-        <>
-          {/* Held back until we know. Drawn immediately it would say "Back to my
-              view" to Susan for a beat, which names a screen she does not have. */}
-          {/* BOTTOM centre, not top left.
-              Top left is where all three of these screens put their own brand
-              block, so the pill sat squarely on top of "The Lettings Expert /
-              BUSINESS" and covered the workspace switcher with it. It was
-              wrong before this change too — it just only ever landed on James.
-              Every other corner is taken as well: the month controls and
-              Present are top right, the profile chip bottom left, the
-              assistant bubble bottom right. The bottom centre is the one place
-              free on all three. */}
-          {allowed ? (
-            <button
-              type="button"
-              onClick={() => router.push(backHref)}
-              className="fixed bottom-4 left-1/2 z-[80] -translate-x-1/2 rounded-full border border-line/80 bg-panel px-3.5 py-1.5 text-[12px] shadow-[0_6px_18px_-8px_rgba(0,0,0,0.35)]"
-            >
-              {backLabel}
-            </button>
-          ) : null}
-          {children}
-        </>
-      )}
+      {/* BOTTOM centre, not top left: the one corner none of the bare
+          workspaces put anything on. */}
+      {allowed ? (
+        <button
+          type="button"
+          onClick={() => router.push(backHref)}
+          className="fixed bottom-4 left-1/2 z-[80] -translate-x-1/2 rounded-full border border-line/80 bg-panel px-3.5 py-1.5 text-[12px] shadow-[0_6px_18px_-8px_rgba(0,0,0,0.35)]"
+        >
+          {backLabel}
+        </button>
+      ) : null}
+      {children}
     </div>
   );
 }
