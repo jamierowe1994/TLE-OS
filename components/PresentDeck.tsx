@@ -2255,10 +2255,15 @@ function QuestionsHouse({ deck, show }: { deck: Deck; show: boolean }) {
   const fx = fit.staged;
   const HEAD = { fontFamily: HAND, fontWeight: 800, letterSpacing: "-0.02em" } as const;
   const SCRIPT = { fontFamily: "var(--font-shantell), cursive" } as const;
+  /* This slide goes green (James, 12 Sep 2026: "make this last one green...
+     textured, just to give some life to it, and maybe the writing as well").
+     The sage for the shape and the WhatsApp button, its ink for the words. */
+  const SAGE = "#b3bea5", SAGE_INK = "#56634a";
   const body = (
     <>
-      <header className={fx ? "h-[124px] shrink-0" : "h-[60px]"} />
-      <div className={`relative z-[2] flex flex-1 flex-col ${fx ? "justify-start pl-16 pr-[700px] pb-10" : "justify-center px-6 pb-10 pt-4 sm:px-12"}`}>
+      <header className={fx ? "h-[80px] shrink-0" : "h-[60px]"} />
+      {/* Centred in the height, not hung from the top (James, 12 Sep 2026). */}
+      <div className={`relative z-[2] flex flex-1 flex-col justify-center ${fx ? "pl-16 pr-[700px] pb-16" : "px-6 pb-10 pt-4 sm:px-12"}`}>
         <Rise show={show} i={0}>
           <Eyebrow>{eyebrow}</Eyebrow>
         </Rise>
@@ -2317,14 +2322,12 @@ function QuestionsHouse({ deck, show }: { deck: Deck; show: boolean }) {
         )}
         <Rise show={show} i={4}>
           <div className={`${signUrl ? "mt-5" : "mt-8"} flex flex-wrap items-center gap-3`}>
+            {/* Two ways in, side by side (James: "WhatsApp or email"), and
+                the phone as a quiet third. */}
             {a.phone && (
-              <a
-                href={`tel:${tel}`}
-                className={`flex items-center gap-2.5 rounded-[12px] px-6 py-3.5 text-[14px] font-semibold transition-opacity hover:opacity-90 ${signUrl ? "border bg-white" : "text-white"}`}
-                style={signUrl ? { borderColor: "rgba(59,59,60,0.2)" } : { background: "var(--p-accent)" }}
-              >
-                <Line name="phone" size={16} />
-                Call {first || "us"}
+              <a href={`https://wa.me/${wa}?text=${encodeURIComponent(subject)}`} target="_blank" rel="noreferrer" className="flex items-center gap-2.5 rounded-[12px] px-6 py-3.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90" style={{ background: SAGE_INK }}>
+                <Line name="whatsapp" size={17} />
+                WhatsApp {first || "us"}
               </a>
             )}
             {a.email && (
@@ -2334,8 +2337,8 @@ function QuestionsHouse({ deck, show }: { deck: Deck; show: boolean }) {
               </a>
             )}
             {a.phone && (
-              <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" aria-label="WhatsApp" title="WhatsApp" className="flex h-12 w-12 items-center justify-center rounded-full transition-colors hover:bg-black/10" style={{ background: "#f1f4ec", color: "#56634a" }}>
-                <Line name="whatsapp" size={18} />
+              <a href={`tel:${tel}`} aria-label={`Call ${first || "us"}`} title={a.phone} className="flex h-12 w-12 items-center justify-center rounded-full transition-colors hover:bg-black/10" style={{ background: "#f1f4ec", color: SAGE_INK }}>
+                <Line name="phone" size={17} />
               </a>
             )}
           </div>
@@ -2358,21 +2361,42 @@ function QuestionsHouse({ deck, show }: { deck: Deck; show: boolean }) {
 
       {fx && (
         <>
-          {/* THE DRAWING, in a rounded pink frame at the photographs'
-              proportions, so the one illustration in the deck sits where a
-              photograph would. */}
-          <Rise show={show} i={2} className="absolute right-[100px] top-[96px] z-[2] w-[560px]">
-            <div className="flex w-full items-end justify-center overflow-hidden rounded-[28px]" style={{ aspectRatio: "560 / 620", background: "#fbeae6" }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/brand/art/keys-handover.png" alt="" aria-hidden className="w-[92%] translate-y-[3%]" />
-            </div>
+          {/* THE SHAPE, sage and textured: a grain filter over the fill so it
+              reads as paper rather than a flat swatch - "green and textured,
+              just to give some life to it". Runs off the top-right corner. */}
+          <div className="pointer-events-none absolute -right-[40px] top-[70px] z-[1] h-[740px] w-[720px]">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden className="absolute inset-0 h-full w-full">
+              <defs>
+                <filter id="close-grain" x="0" y="0" width="100%" height="100%">
+                  <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7" result="n" />
+                  <feColorMatrix in="n" type="saturate" values="0" result="g" />
+                  <feComponentTransfer in="g" result="t">
+                    <feFuncA type="linear" slope="0.16" intercept="0" />
+                  </feComponentTransfer>
+                  <feBlend in="SourceGraphic" in2="t" mode="multiply" result="b" />
+                  {/* Clipped back to the shape: without this the grain showed
+                      as a faint rectangle across the whole filter box. */}
+                  <feComposite in="b" in2="SourceGraphic" operator="in" />
+                </filter>
+              </defs>
+              {/* Kept inside the box on every side, so no edge of it is ever
+                  cut flat - the earlier path ran past the bottom and left a
+                  hard corner. */}
+              <path d="M50 2C76 -4 100 8 100 32L100 78C99 90 90 96 74 96C50 96 26 88 16 72C4 54 6 30 18 16C28 5 38 4 50 2Z" fill={SAGE} opacity="0.55" filter="url(#close-grain)" />
+            </svg>
+          </div>
+          {/* THE PHOTOGRAPH: the hallway, in a rounded frame at the same
+              proportions as the welcome's door. */}
+          <Rise show={show} i={2} className="absolute right-[100px] top-[150px] z-[2] w-[540px]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/photo/close-door.webp" alt="" aria-hidden className="w-full rounded-[28px] object-cover shadow-[0_30px_60px_-30px_rgba(0,0,0,0.35)]" style={{ aspectRatio: "540 / 580" }} />
           </Rise>
-          <Rise show={show} i={5} className="absolute right-[120px] top-[748px] z-[2] w-[300px]">
-            <p className="text-[27px] leading-[1.1] text-black/70" style={{ ...SCRIPT, transform: "rotate(-6deg)" }}>
+          <Rise show={show} i={5} className="absolute right-[120px] top-[776px] z-[2] w-[320px]">
+            <p className="text-[28px] leading-[1.1]" style={{ ...SCRIPT, color: SAGE_INK, transform: "rotate(-6deg)" }}>
               {post ? "Let\u2019s get going." : "Bring your questions."}
             </p>
-            <svg viewBox="0 0 220 12" aria-hidden className="ml-6 mt-1 h-[12px] w-[220px]" style={{ transform: "rotate(-6deg)" }}>
-              <path d="M2 8C60 2 140 2 218 6" fill="none" stroke="var(--p-accent)" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+            <svg viewBox="0 0 240 12" aria-hidden className="ml-6 mt-1 h-[12px] w-[240px]" style={{ transform: "rotate(-6deg)" }}>
+              <path d="M2 8C60 2 150 2 238 6" fill="none" stroke={SAGE_INK} strokeWidth="2" strokeLinecap="round" opacity="0.7" />
             </svg>
           </Rise>
         </>
