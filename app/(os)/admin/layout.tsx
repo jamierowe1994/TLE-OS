@@ -68,10 +68,10 @@ const GROUPS: Array<{
          Onboarding, Tenant passport and PLC handover each had their own line
          here, which was three rail entries for one idea - "show me the thing I
          built" - and a rail that grows an entry per demo stops being a rail.
-         They all live under Portals now, in the folder for the person who
+         They all live under Process now, in the folder for the person who
          actually sees them. The pages are unchanged and still reachable
          directly; this is where you find them. */
-      { href: "/admin/portals", label: "Portals", needs: "see:reports" },
+      { href: "/admin/process", label: "Process", needs: "see:reports" },
     ],
   },
   {

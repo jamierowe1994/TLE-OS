@@ -39,11 +39,11 @@ function Bar() {
   return (
     <div className="fixed bottom-3 left-3 z-[300] print:hidden">
       <Link
-        href="/admin/portals"
+        href="/admin/process"
         className="flex items-center gap-2 rounded-full border border-black/10 bg-white/95 px-3.5 py-2 text-[12px] text-neutral-700 shadow-[0_10px_30px_-12px_rgba(0,0,0,0.45)] backdrop-blur transition-colors hover:text-black"
       >
         <span aria-hidden>←</span>
-        Back to Portals
+        Back to Process
         <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
           Preview
         </span>

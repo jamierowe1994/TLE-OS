@@ -2335,6 +2335,19 @@ CREATE TABLE IF NOT EXISTS os_sales_sync (
   finished_at TIMESTAMPTZ
 );
 
+-- ── PROCESS MAPS, added 12 Sep 2026 ──────────────────────────────────────
+--
+-- What the OS is meant to do to a tenant (and, in time, a landlord, an
+-- agent, a repair): the steps, the emails on them, the triggers, and the
+-- branches for when somebody stalls. Edited on Admin → Process; the map in
+-- code is the default and what a reset returns to. One row per audience.
+CREATE TABLE IF NOT EXISTS os_process_maps (
+  audience    TEXT PRIMARY KEY,
+  definition  JSONB NOT NULL,
+  updated_by  TEXT,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ── THE LANDLORD'S OWN RECORDS, added 2 Sep 2026 ─────────────────────────
 --
 -- What a landlord does from their file: the documents they upload and the

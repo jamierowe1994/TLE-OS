@@ -66,6 +66,15 @@ export default function AdminEmails() {
 
   const groups = Array.from(new Set(rows.map((r) => r.group)));
 
+  /* ?open=<id> lands on one email open - the process map's "Edit" link. */
+  useEffect(() => {
+    if (!rows.length) return;
+    const id = new URLSearchParams(window.location.search).get("open");
+    const row = id ? rows.find((r) => r.id === id) : null;
+    if (row) setOpen(row);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows.length]);
+
   return (
     <div className="space-y-8">
       <div>

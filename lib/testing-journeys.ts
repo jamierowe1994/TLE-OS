@@ -164,7 +164,7 @@ export const JOURNEYS: Journey[] = [
         title: "The video chase and the recorder",
         what: "If no video is recorded two days before the visit, the agent is chased. The link opens the recorder: QR on the laptop, record on the phone, saved to the appraisal.",
         how: ["Portals, Agent, item 4, Send it to myself.", "Click the link on the laptop: a QR appears. Scan it on the phone.", "Record, save. The laptop page should notice within five seconds and say All done.", "Re-record once and confirm the appraisal keeps the newest."],
-        where: "/admin/portals",
+        where: "/admin/process",
         state: "built",
         since: "2026-09-03",
         notes: ["Proven end to end on 3 Sep on James's phone and laptop. Not yet by another agent."],
