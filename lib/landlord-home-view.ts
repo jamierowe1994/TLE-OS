@@ -83,7 +83,7 @@ function stageOf(j: AppraisalJourney, offers: ViewOffer[] = []): Stage {
 }
 
 /** The documents a let needs, in the order we ask for them. */
-const REQUIRED: Array<{ kind: LandlordDocument["kind"]; title: string; missing: string }> = [
+export const REQUIRED_DOCS: Array<{ kind: LandlordDocument["kind"]; title: string; missing: string }> = [
   { kind: "id", title: "Photo ID", missing: "Missing" },
   { kind: "ownership", title: "Proof of ownership", missing: "Missing  •  a title register or mortgage statement" },
   { kind: "gas", title: "Gas safety certificate (CP12)", missing: "Missing, if there is gas" },
@@ -138,7 +138,7 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
       state: signed ? "uploaded" : "pending",
       href: signed ? `/api/landlord/signed/${j.signed[0].submitterId}` : null,
     },
-    ...REQUIRED.map((r) => {
+    ...REQUIRED_DOCS.map((r) => {
       const u = uploaded(r.kind);
       if (u) return { title: r.title, sub: `Uploaded  •  ${day(u.uploadedAt) ?? ""}`, state: "uploaded" as const, href: `/api/landlord/documents/${u.id}` };
       if (r.kind === "epc" && property?.epc) return { title: r.title, sub: `On record  •  rating ${property.epc}`, state: "uploaded" as const, href: null };
@@ -146,13 +146,13 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
     }),
     ...mine.filter((d) => d.kind === "other").map((d) => ({ title: d.name, sub: `Uploaded  •  ${day(d.uploadedAt) ?? ""}`, state: "uploaded" as const, href: `/api/landlord/documents/${d.id}` })),
   ];
-  const required = documents.filter((d) => REQUIRED.some((r) => r.title === d.title));
+  const required = documents.filter((d) => REQUIRED_DOCS.some((r) => r.title === d.title));
   const have = required.filter((d) => d.state === "uploaded").length;
   const allIn = have === required.length;
   const readiness = Math.round(((at + have / required.length) / STAGES.length) * 100);
 
   const activity: LandlordView["activity"] = [
-    ...mine.map((d) => ({ title: `${REQUIRED.find((r) => r.kind === d.kind)?.title ?? d.name} received`, sub: "Filed on your property", date: day(d.uploadedAt) ?? "", icon: "upload" })),
+    ...mine.map((d) => ({ title: `${REQUIRED_DOCS.find((r) => r.kind === d.kind)?.title ?? d.name} received`, sub: "Filed on your property", date: day(d.uploadedAt) ?? "", icon: "upload" })),
     ...msgs.filter((m) => m.direction === "landlord").slice(-2).map((m) => ({ title: "Message sent", sub: m.body.length > 60 ? `${m.body.slice(0, 60)}…` : m.body, date: day(m.sentAt) ?? "", icon: "message" })),
     ...j.signed.map((s) => ({ title: "Terms signed", sub: s.name, date: day(s.signedAt) ?? "", icon: "pencil" })),
     ...j.decks.map((d) => ({
@@ -190,7 +190,7 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
       /* Signed: off the list. Not yet: the tile opens the signing here. */
       sign: { id: "sign", label: "Sign your contract", sub: a.valuation != null ? "Review and sign your management terms" : "Follows the valuation", href: null, icon: "pencil", action: "sign", done: signed },
       /* Everything in: off the list. */
-      compliance: { id: "compliance", label: "Upload compliance documents", sub: `${required.length - have} of ${required.length} still to send`, href: "#documents", icon: "upload", done: allIn },
+      compliance: { id: "compliance", label: "Upload compliance documents", sub: `${required.length - have} of ${required.length} still to send`, href: "/landlord/documents", icon: "upload", done: allIn },
       message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: null, icon: "message", action: "message" },
       listing: { id: "listing", label: "See your listing", sub: "Live on the portals", href: null, icon: "home" },
       viewings: { id: "viewings", label: "Viewings and offers", sub: offersSub, href: offers.length ? "#offers" : null, icon: "key" },
@@ -259,7 +259,7 @@ function managedView(p: ManagedProperty, first: string, comp: LandlordCompliance
     steps: stepsForStage("let", {
       presentation: { id: "presentation", label: "View presentation", sub: "From when we valued it", href: null, icon: "analytics" },
       sign: { id: "sign", label: "Your contract", sub: "Coming to this file", href: null, icon: "pencil" },
-      compliance: { id: "compliance", label: "Certificates", sub: certsSub, href: comp ? "#documents" : null, icon: "shield" },
+      compliance: { id: "compliance", label: "Certificates", sub: certsSub, href: comp ? "/landlord/documents" : null, icon: "shield" },
       message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: null, icon: "message" },
       listing: { id: "listing", label: "Your listing", sub: "Let", href: null, icon: "home" },
       viewings: { id: "viewings", label: "Your tenancy", sub: tenant ? `${tenant.name}, since ${day(p.letSince) ?? "—"}` : "Let", href: null, icon: "key" },

@@ -5,7 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
 
 /**
- * The portal's sections. Home and Journey are pages; Documents, Maintenance
+ * The portal's sections. Home, Journey and Documents are pages; Maintenance
  * and Messages are sections of the home page. Knows which page it is on, so
  * the right row is lit, and keeps the demo inside the demo (with its
  * ?from=admin, so the preview bar survives the click).
@@ -16,10 +16,11 @@ export default function SideNav({ variant }: { variant: "side" | "pills" }) {
   const base = path.startsWith("/landlord/demo") ? "/landlord/demo" : "/landlord";
   const q = params?.get("from") === "admin" ? "?from=admin" : "";
   const onJourney = path.endsWith("/journey");
+  const onDocuments = path.endsWith("/documents");
   const items = [
-    { href: `${base}${q}`, label: "Home", icon: "home", on: !onJourney },
+    { href: `${base}${q}`, label: "Home", icon: "home", on: !onJourney && !onDocuments },
     { href: `${base}/journey${q}`, label: "Journey", icon: "trend-up", on: onJourney },
-    { href: `${base}${q}#documents`, label: "Documents", icon: "doc", on: false },
+    { href: `${base}/documents${q}`, label: "Documents", icon: "doc", on: onDocuments },
     { href: `${base}${q}#maintenance`, label: "Maintenance", icon: "setting", on: false },
     { href: `${base}${q}#messages`, label: "Messages", icon: "message", on: false },
   ];

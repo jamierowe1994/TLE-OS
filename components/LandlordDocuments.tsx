@@ -95,7 +95,7 @@ export default function LandlordDocuments({
             }}
           />
         </label>
-        <a href="#documents" className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-muted transition-colors hover:text-ink">
+        <a href={sample ? "/landlord/demo/documents?from=admin" : "/landlord/documents"} className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-muted transition-colors hover:text-ink">
           View all documents <span className="text-[11px]">›</span>
         </a>
       </div>
