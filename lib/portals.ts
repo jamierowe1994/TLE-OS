@@ -103,10 +103,18 @@ export const PORTAL_FOLDERS: PortalFolder[] = [
       },
       {
         kind: "open",
-        id: "tenant-passport",
+        id: "tenant-passport-sample",
         name: "The tenant passport",
         blurb:
-          "The form they fill in once and reuse. Make a throwaway to open, type in, or send to somebody.",
+          "The redesign of 12 Sep: one question at a time, and a passport card that fills in and turns over as they type. This is the sample link to send for approval - nothing typed into it is saved. The {token} in the address is the onboarding preview's share token, filled in when this page renders.",
+        href: "/preview/{token}/passport",
+      },
+      {
+        kind: "open",
+        id: "tenant-passport",
+        name: "Real passports, for testing",
+        blurb:
+          "Make a throwaway passport with a live link: open it, type in it, or send it to somebody to try. Real saving, on a record that belongs to nobody.",
         href: "/admin/tenant-passport",
       },
       {

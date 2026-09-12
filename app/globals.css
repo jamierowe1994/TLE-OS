@@ -93,6 +93,8 @@
   --accent-soft: var(--pal-pink);
 }
 [data-surface="tenant"] {
+  /* The OS's own title face on the tenant's headings too (James, 12 Sep). */
+  --font-heading: var(--font-bricolage), var(--font-manrope), system-ui, sans-serif;
   --accent: var(--pal-sage);
   --accent-dark: var(--pal-brown);
   --accent-soft: var(--pal-pink);
@@ -998,6 +1000,33 @@ body {
     from { opacity: 0; }
     to   { opacity: 1; }
   }
+}
+
+/* The passport page runs one colour edge to edge - the palette's pink - with
+   the masthead sitting on it rather than on a white strip. James, 12 Sep
+   2026: "I like colours to flow throughout. If we're going to pick a colour,
+   pick a colour." Keyed on the page, not the shell, so every other tenant
+   page keeps its white. */
+[data-surface="tenant"]:has([data-passport-page]) {
+  background: linear-gradient(180deg, #fdf4f1 0%, #fdefec 100%);
+}
+[data-surface="tenant"]:has([data-passport-page]) > header {
+  background: transparent;
+  border-color: rgba(86, 66, 62, 0.12);
+}
+
+/* The passport's page one: the name rises away, the rest rises in. */
+@keyframes riseOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-28px); }
+}
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  @keyframes riseOut { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes riseIn  { from { opacity: 0; } to { opacity: 1; } }
 }
 
 /* Bond's entrance: the word settles, then the tiles rise one after another. */

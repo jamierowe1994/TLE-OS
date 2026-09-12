@@ -87,6 +87,20 @@
         "3230"
       ],
       "port": 3230
+    },
+    {
+      "name": "tle-os-passport",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "DATABASE_URL=postgres://postgres:radar@localhost:55432/tleos",
+        "NEXT_DIST_DIR=.next-passport",
+        "npx",
+        "next",
+        "dev",
+        "-p",
+        "3295"
+      ],
+      "port": 3295
     }
   ]
 }

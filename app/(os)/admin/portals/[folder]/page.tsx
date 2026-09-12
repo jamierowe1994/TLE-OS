@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import PageHeader from "@/components/PageHeader";
 import { folderBySlug, PORTAL_FOLDERS } from "@/lib/portals";
+import { previewToken } from "@/lib/preview-token";
 import EmailCard from "./EmailCard";
 
 /**
@@ -37,6 +38,11 @@ export default async function PortalFolderPage({
   const { folder } = await params;
   const f = folderBySlug(folder);
   if (!f) notFound();
+  /* A few customer screens live behind the onboarding preview's share token
+     (lib/preview-token), which is derived, not stored - so it is filled in
+     here rather than written into the folder. */
+  const token = previewToken();
+  const hrefOf = (h: string) => h.replace("{token}", token);
 
   return (
     <>
@@ -62,7 +68,7 @@ export default async function PortalFolderPage({
               </span>
               {item.kind === "open" && (
                 <a
-                  href={item.href}
+                  href={hrefOf(item.href)}
                   /* New tab for the customer-facing ones: they take over the
                      window, and coming back to a folder you had scrolled is
                      better than re-finding it. The in-OS admin pages open in
@@ -88,7 +94,7 @@ export default async function PortalFolderPage({
 
             {item.kind === "open" && (
               <p className="mt-2 text-[11px] text-muted">
-                <code className="rounded bg-box px-1 py-0.5">{item.href.split("?")[0]}</code>
+                <code className="rounded bg-box px-1 py-0.5">{hrefOf(item.href).split("?")[0]}</code>
               </p>
             )}
           </section>

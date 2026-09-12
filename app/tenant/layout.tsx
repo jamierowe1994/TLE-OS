@@ -30,7 +30,7 @@ export default async function TenantLayout({ children }: { children: React.React
     <div data-surface="tenant" className="min-h-screen bg-white font-sans text-[#16181d]">
       {/* ── The masthead: wordmark left, quiet account links right. ── */}
       <header className="border-b border-black/10">
-        <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-5">
+        <div className="flex h-16 w-full items-center justify-between px-5 sm:px-8 lg:px-12">
           <Link href="/tenant" className="flex items-center">
             {/* The real logo, not a stand-in. Sized by height so the pin sits
                 on the same baseline as the nav; the alt text carries the name
@@ -57,10 +57,10 @@ export default async function TenantLayout({ children }: { children: React.React
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-5 pb-16">{children}</main>
+      <main className="w-full pb-16">{children}</main>
 
       <footer className="border-t border-black/10 bg-[#fafafa]">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 py-6 text-[11px] text-black/50">
+        <div className="flex w-full flex-wrap items-center justify-between gap-3 px-5 py-6 text-[11px] text-black/50 sm:px-8 lg:px-12">
           <span>© The Letting Experts · thelettingexperts.co.uk</span>
           <span className="flex gap-4">
             <a href="#" className="hover:text-black">Privacy &amp; your data</a>

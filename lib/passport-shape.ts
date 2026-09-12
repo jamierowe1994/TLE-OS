@@ -41,6 +41,11 @@ export interface PassportData {
   nationality: string;
   email: string;
   mobile: string;
+  /* A photo for the card, if they want one. Optional and decorative: it gives
+     no Right to Rent cover (only a share code, a certified IDSP or an agent
+     seeing the original does), so nothing reads it but the card. Held as a
+     small JPEG data URL, resized in the browser before it is sent. */
+  photo: string;
 
   /* ── Right to rent ──
      Asked the way the law works rather than the way a database would like it:
@@ -72,6 +77,13 @@ export interface PassportData {
   rentOnTime: boolean | null;
   landlordRef: boolean | null;
   currentAddress: string;
+  /** "YYYY-MM". Referencing looks back three years, so the move-in month
+   *  decides whether a previous address is asked for; livedThreeYears is set
+   *  from it and kept for the card and the file. */
+  movedIn: string;
+  /* Asked so the previous address is only asked of people who have one that
+     matters: three years is what referencing looks back over. */
+  livedThreeYears: boolean | null;
   previousAddress: string;
 
   /* ── The awkward ones, asked once ── */
@@ -84,12 +96,12 @@ export interface PassportData {
 }
 
 export const EMPTY_PASSPORT: PassportData = {
-  legalName: "", knownAs: "", dob: "", nationality: "", email: "", mobile: "",
+  legalName: "", knownAs: "", dob: "", nationality: "", email: "", mobile: "", photo: "",
   hasBritishPassport: null, shareCode: "",
   applicantType: "", annualIncome: "", savings: "",
   numAdults: "", numChildren: "", coOccupantIncomes: "",
   rentedLast12Months: null, rentOnTime: null, landlordRef: null,
-  currentAddress: "", previousAddress: "",
+  currentAddress: "", movedIn: "", livedThreeYears: null, previousAddress: "",
   adverseCredit: null, adverseCreditNote: "", guarantor: null,
   pets: null, petsNote: "", smoker: null,
 };
@@ -185,7 +197,7 @@ export const SECTIONS: {
     title: "Current rental",
     blurb: "Where you are now, and whether the rent has been paid on time.",
     stamp: "HISTORY",
-    done: (d) => Boolean(d.currentAddress.trim()) && d.rentedLast12Months !== null,
+    done: (d) => Boolean(d.currentAddress.trim()) && d.rentedLast12Months !== null && d.livedThreeYears !== null,
   },
   {
     key: "declarations",
@@ -220,7 +232,7 @@ export function completeness(d: PassportData): { done: number; total: number; pc
  */
 export function answered(d: PassportData): { done: number; total: number; pct: number } {
   const optional = new Set<keyof PassportData>([
-    "knownAs", "shareCode", "savings", "coOccupantIncomes", "previousAddress",
+    "knownAs", "photo", "movedIn", "shareCode", "savings", "coOccupantIncomes", "previousAddress",
     "adverseCreditNote", "petsNote", "rentOnTime", "landlordRef", "numChildren",
   ]);
   const keys = (Object.keys(EMPTY_PASSPORT) as (keyof PassportData)[]).filter((k) => !optional.has(k));

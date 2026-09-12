@@ -117,7 +117,7 @@ export default async function TenantHome() {
   const first = me.name.split(/\s+/)[0] || me.name;
 
   return (
-    <div className="space-y-5 pt-8">
+    <div className="mx-auto max-w-5xl space-y-5 px-5 pt-8">
       <div>
         <h1 className="text-[32px] font-semibold leading-none">Hello, {first}</h1>
         <p className="mt-2 text-[13.5px] text-black/60">
