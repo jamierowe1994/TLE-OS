@@ -101,7 +101,7 @@ export default function AdminSwitches() {
 
   return (
     <>
-      <PageHeader
+      <PageHeader illustration="/illustrations/people/lending-a-hand.svg" illustrationAspect={1.0} lineBreak="none"
         title="Switches"
         blurb="What the system is allowed to send. Nothing here is on until you turn it on."
       />
@@ -116,14 +116,14 @@ export default function AdminSwitches() {
       )}
 
       {flash && (
-        <p className="fade-up mt-4 rounded-xl border border-line/80 bg-panel p-3 text-[12.5px]">
+        <p className="fade-up mt-4 rounded-[18px] border border-line/50 bg-white p-3 text-[12.5px]">
           {flash}
         </p>
       )}
 
       <ul className="fade-up mt-6 space-y-2">
         {rows.map((s) => (
-          <li key={s.key} className="rounded-2xl border border-line/80 bg-panel p-4">
+          <li key={s.key} className="rounded-[22px] border border-line/50 bg-white p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <span className="text-[13.5px]">{s.label}</span>
               <Pill tone={s.on ? "accent" : "neutral"}>{s.on ? "on" : "off"}</Pill>
@@ -170,7 +170,7 @@ export default function AdminSwitches() {
                     value={typed}
                     onChange={(e) => setTyped(e.target.value)}
                     placeholder={s.confirm}
-                    className="min-w-[160px] flex-1 rounded-lg border border-line/80 bg-panel px-2.5 py-1.5 text-[12.5px]"
+                    className="min-w-[160px] flex-1 rounded-lg border border-line/80 bg-white px-2.5 py-1.5 text-[12.5px]"
                   />
                   <button
                     type="button"

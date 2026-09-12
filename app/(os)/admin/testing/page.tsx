@@ -28,7 +28,7 @@ const LIGHT_RING: Record<Light, string> = {
   green: "border-emerald-200 bg-emerald-50/40",
   amber: "border-amber-200 bg-amber-50/40",
   red: "border-rose-200 bg-rose-50/40",
-  grey: "border-line bg-panel",
+  grey: "border-line bg-white",
 };
 
 interface Payload {
@@ -132,7 +132,7 @@ export default function TestingPage() {
 
   return (
     <>
-      <PageHeader
+      <PageHeader illustration="/illustrations/people/checking-in.svg" illustrationAspect={1.0} lineBreak="none"
         title="Testing"
         blurb="Every process, walked by a person before agents are let in. Green is tested, amber is built and waiting for a walk, red needs somebody outside the code, grey is not built yet."
       />
@@ -242,7 +242,7 @@ export default function TestingPage() {
                         {s.where && (
                           <Link
                             href={s.where}
-                            className="rounded-full border border-line px-3 py-1.5 text-[12px] transition hover:border-ink"
+                            className="rounded-full border border-line px-3 py-1.5 text-[12px] transition hover:border-ink/40"
                           >
                             Open {s.where}
                           </Link>

@@ -90,13 +90,13 @@ export default function TenantPassportDemoPage() {
 
   return (
     <>
-      <PageHeader
+      <PageHeader illustration="/illustrations/people/studious-girl.svg" illustrationAspect={1.0} lineBreak="none"
         title="Tenant Passport"
         blurb="The form a tenant fills in once and reuses. Make a throwaway to show somebody, or to send them."
       />
 
-      <section className="fade-up mt-8 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">Make one to demo with</h2>
+      <section className="fade-up mt-8 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">Make one to demo with</h2>
         <p className="mt-1 text-[12px] leading-relaxed text-muted">
           Creates an empty passport for a made-up person, on the real public URL.
           You can open it, type in it, send it to somebody, and delete it after.
@@ -122,8 +122,8 @@ export default function TenantPassportDemoPage() {
         )}
       </section>
 
-      <section className="fade-up mt-3 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">Your demo passports</h2>
+      <section className="fade-up mt-3 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">Your demo passports</h2>
         {rows === null ? (
           <p className="mt-2 text-[12px] text-muted">Looking…</p>
         ) : rows.length === 0 ? (
@@ -161,8 +161,8 @@ export default function TenantPassportDemoPage() {
         )}
       </section>
 
-      <section className="fade-up mt-3 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">Why real tenants are not listed here</h2>
+      <section className="fade-up mt-3 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">Why real tenants are not listed here</h2>
         <ul className="mt-2.5 flex list-disc flex-col gap-1.5 pl-4 text-[12px] leading-relaxed text-muted">
           <li>
             <span className="text-ink">The link is the login.</span> Anyone holding

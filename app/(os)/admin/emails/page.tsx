@@ -100,7 +100,7 @@ export default function AdminEmails() {
                   <button
                     type="button"
                     onClick={() => setOpen(r)}
-                    className="flex w-full flex-col gap-1.5 rounded-2xl border border-line/70 bg-panel p-4 text-left transition-colors hover:border-ink/40"
+                    className="flex w-full flex-col gap-1.5 rounded-[22px] border border-line/50 bg-white p-4 text-left transition-colors hover:border-ink/40"
                   >
                     <span className="flex flex-wrap items-center gap-2">
                       <DoodleIcon name="mail" size={14} className="text-accent-dark" />
@@ -246,7 +246,7 @@ function Reader({ row, onClose }: { row: Row; onClose: () => void }) {
       {sent && (
         <p
           className={`border-b border-line/70 px-5 py-3 text-[11.5px] leading-relaxed ${
-            sent.ok ? "bg-panel text-muted" : "bg-accent-soft/50 text-accent-dark"
+            sent.ok ? "bg-white text-muted" : "bg-accent-soft/50 text-accent-dark"
           }`}
         >
           {sent.text}
@@ -254,7 +254,7 @@ function Reader({ row, onClose }: { row: Row; onClose: () => void }) {
       )}
 
       {facts && (
-        <dl className="grid gap-x-6 gap-y-2 border-b border-line/70 bg-panel px-5 py-4 text-[11.5px] sm:grid-cols-2">
+        <dl className="grid gap-x-6 gap-y-2 border-b border-line/70 bg-white px-5 py-4 text-[11.5px] sm:grid-cols-2">
           <div>
             <dt className="text-muted">Goes to</dt>
             <dd>{row.to}</dd>

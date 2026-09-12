@@ -16,20 +16,20 @@ export default function ViewsDoor() {
   const token = rehearsalToken();
   return (
     <>
-      <PageHeader
+      <PageHeader illustration="/illustrations/people/handywoman.svg" illustrationAspect={1.0} lineBreak="none"
         title="Maintenance Views"
         blurb="One repair, and what it looks like to the agent, the landlord, the tenant and the contractor. Four tabs, the real screens and the real emails."
       />
 
-      <section className="fade-up mt-8 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">The link</h2>
+      <section className="fade-up mt-8 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">The link</h2>
         <p className="mt-1 max-w-2xl text-[12px] leading-relaxed text-muted">
           No account needed. It reaches these views and nothing else, and stays the same string.
         </p>
         <CopyLink path={`/rehearsal/${token}`} />
       </section>
 
-      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
+      <section className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
         <ul className="flex list-disc flex-col gap-1.5 pl-4 text-[12px] leading-relaxed text-muted">
           <li>The job is flagged as a walkthrough, so it is off every list and figure in Maintenance and out of every reminder.</li>
           <li>No email leaves. Each is written in full and kept, which is what the landlord, tenant and contractor tabs read. The people are invented, on example.com.</li>

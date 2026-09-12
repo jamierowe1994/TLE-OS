@@ -43,8 +43,8 @@ type Data = {
 
 function Count({ label, c }: { label: string; c: Counted }) {
   return (
-    <div className="rounded-2xl border border-line/80 bg-panel p-4">
-      <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">{label}</p>
+    <div className="rounded-[22px] border border-line/50 bg-white p-4">
+      <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">{label}</p>
       {c.failed ? (
         <p className="mt-1.5 text-[12px] leading-snug text-accent-dark">Couldn&apos;t load</p>
       ) : (
@@ -94,7 +94,7 @@ export default function PersonPage({ params }: { params: Promise<{ who: string }
     <>
       <Link href="/admin/people" className="text-[12.5px] text-muted underline">← People</Link>
 
-      <header className="fade-up mt-3 flex flex-wrap items-start gap-4 rounded-2xl border border-line/80 bg-panel p-6">
+      <header className="fade-up mt-3 flex flex-wrap items-start gap-4 rounded-[22px] border border-line/50 bg-white p-6">
         {p.photo ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={p.photo} alt="" className="h-16 w-16 shrink-0 rounded-full object-cover" />
@@ -143,7 +143,7 @@ export default function PersonPage({ params }: { params: Promise<{ who: string }
       {!d.book ? (
         /* No REX record, so there is no book to count. Said in a sentence,
            because eight zeros would read as "this person does nothing". */
-        <p className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5 text-[12.5px] text-muted">
+        <p className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5 text-[12.5px] text-muted">
           {p.name.split(" ")[0]} isn&apos;t a REX lettings agent, so there is no book of listings,
           leads or appraisals to show. Their work lives on their own screens — press
           &ldquo;View as&rdquo; above to see exactly what they see.
@@ -161,8 +161,8 @@ export default function PersonPage({ params }: { params: Promise<{ who: string }
         <Count label="Contacts" c={d.book.contacts} />
       </div>
 
-      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">Their most recent listings</h2>
+      <section className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">Their most recent listings</h2>
         {d.book.recentListings.length === 0 ? (
           <p className="mt-2 text-[12.5px] text-muted">Nothing came back.</p>
         ) : (

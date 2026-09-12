@@ -156,12 +156,12 @@ export default function AssistantConsole() {
 
   return (
     <>
-      <PageHeader
+      <PageHeader illustration="/illustrations/people/idea-exchange.svg" illustrationAspect={1.0} lineBreak="none"
         title="Steve"
         blurb="What people have asked Steve, and what he can answer for himself."
       />
 
-      <section className="fade-up mt-8 flex flex-wrap items-center gap-5 rounded-2xl border border-line/70 bg-panel p-5">
+      <section className="fade-up mt-8 flex flex-wrap items-center gap-5 rounded-[22px] border border-line/50 bg-white p-5">
         <AssistantCharacter mood="thinking" size={92} track={false} />
         <div className="min-w-[220px] flex-1">
           {brain?.live ? (
@@ -197,7 +197,7 @@ export default function AssistantConsole() {
           <button
             type="button"
             onClick={load}
-            className="rounded-lg border border-line/80 px-3 py-1.5 text-[12px] text-muted transition-colors hover:border-ink hover:text-ink"
+            className="rounded-lg border border-line/80 px-3 py-1.5 text-[12px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
           >
             Refresh
           </button>
@@ -216,7 +216,7 @@ export default function AssistantConsole() {
         ) : (
           <ul className="mt-3 space-y-2">
             {questions.map((q) => (
-              <li key={q.id} className="rounded-xl border border-line/70 bg-panel p-3.5">
+              <li key={q.id} className="rounded-[18px] border border-line/50 bg-white p-3.5">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                   <span className="text-[12px] text-muted">
                     {q.userEmail} on {q.path || "—"}
@@ -236,7 +236,7 @@ export default function AssistantConsole() {
                         href={`/api/r2/file?key=${encodeURIComponent(a.key)}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="flex max-w-full items-center gap-1.5 rounded-full border border-line/80 bg-box px-2.5 py-1 text-[11px] text-muted transition-colors hover:border-ink hover:text-ink"
+                        className="flex max-w-full items-center gap-1.5 rounded-full border border-line/80 bg-box px-2.5 py-1 text-[11px] text-muted transition-colors hover:border-ink/40 hover:text-ink"
                       >
                         <DoodleIcon name="doc" size={11} />
                         <span className="truncate">{a.name}</span>
@@ -303,7 +303,7 @@ export default function AssistantConsole() {
             was telling him he had no material and to say so. He then refused to
             describe a system he could describe perfectly, and the page for
             diagnosing that was showing the wrong half. */}
-        <details className="mt-3 rounded-xl border border-line/70 bg-panel p-4">
+        <details className="mt-3 rounded-[18px] border border-line/50 bg-white p-4">
           <summary className="cursor-pointer text-[12.5px] text-muted hover:text-ink">
             Read it as he reads it
             {brain?.promptBlocks ? ` — all ${brain.promptBlocks} blocks` : ""}
@@ -385,7 +385,7 @@ export default function AssistantConsole() {
               <li
                 key={l.id}
                 className={`rounded-xl border p-3 ${
-                  l.role === "agent" ? "border-line/70 bg-panel" : "border-line/40 bg-box"
+                  l.role === "agent" ? "border-line/70 bg-white" : "border-line/40 bg-box"
                 }`}
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -403,7 +403,7 @@ export default function AssistantConsole() {
         )}
       </section>
 
-      <section className="fade-up mt-8 rounded-2xl border border-line/70 bg-panel p-5">
+      <section className="fade-up mt-8 rounded-[22px] border border-line/50 bg-white p-5">
         <h2 className="text-sm font-semibold uppercase tracking-wide">What he&rsquo;ll read from</h2>
         <p className="mt-1 max-w-[62ch] text-[12.5px] leading-relaxed text-muted">
           Two knowledge bases, deliberately separate: the operational one you write, and
@@ -414,13 +414,13 @@ export default function AssistantConsole() {
         <div className="mt-3 flex flex-wrap gap-2">
           <Link
             href="/company-figures"
-            className="rounded-lg border border-line/80 px-3 py-1.5 text-[12px] transition-colors hover:border-ink"
+            className="rounded-lg border border-line/80 px-3 py-1.5 text-[12px] transition-colors hover:border-ink/40"
           >
             Operational knowledge →
           </Link>
           <Link
             href="/marketing-hub"
-            className="rounded-lg border border-line/80 px-3 py-1.5 text-[12px] transition-colors hover:border-ink"
+            className="rounded-lg border border-line/80 px-3 py-1.5 text-[12px] transition-colors hover:border-ink/40"
           >
             Marketing knowledge →
           </Link>

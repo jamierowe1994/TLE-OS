@@ -41,15 +41,15 @@ export default function AdminOnboardingPage() {
 
   return (
     <>
-      <PageHeader
+      <PageHeader illustration="/illustrations/people/welcome.svg" illustrationAspect={1.0} lineBreak="none"
         title="Onboarding"
         blurb="What a new agent walks through, and a link you can send to somebody without an account."
       />
 
       <div className="fade-up mt-8 flex flex-col gap-3">
         {LINKS.map((l) => (
-          <section key={l.path} className="rounded-2xl border border-line/80 bg-panel p-5">
-            <h2 className="text-[15px]">{l.label}</h2>
+          <section key={l.path} className="rounded-[22px] border border-line/50 bg-white p-5">
+            <h2 className="hand text-[17px] leading-tight">{l.label}</h2>
             <p className="mt-1 text-[12px] leading-relaxed text-muted">{l.blurb}</p>
             <p className="mt-1.5 text-[11px] leading-relaxed text-muted">{l.detail}</p>
             <CopyLink path={`/preview/${token}/${l.path}`} />
@@ -57,8 +57,8 @@ export default function AdminOnboardingPage() {
         ))}
       </div>
 
-      <section className="fade-up mt-3 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">Both together</h2>
+      <section className="fade-up mt-3 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">Both together</h2>
         <p className="mt-1 text-[12px] leading-relaxed text-muted">
           The same two, on one page with a short explanation. This is the one to
           send if you are not standing next to somebody while they look.
@@ -66,8 +66,8 @@ export default function AdminOnboardingPage() {
         <CopyLink path={`/preview/${token}`} />
       </section>
 
-      <section className="fade-up mt-3 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">Worth knowing before you send it</h2>
+      <section className="fade-up mt-3 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">Worth knowing before you send it</h2>
         <ul className="mt-2.5 flex list-disc flex-col gap-1.5 pl-4 text-[12px] leading-relaxed text-muted">
           <li>
             <span className="text-ink">Anyone with the link can open it</span>, with no
@@ -98,8 +98,8 @@ export default function AdminOnboardingPage() {
           link, so it keeps its own page; these two are next door and a person
           arriving here to find "the thing to show somebody" should not have to
           know which of three rail entries it lives under. */}
-      <section className="fade-up mt-3 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">The other things you demo</h2>
+      <section className="fade-up mt-3 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">The other things you demo</h2>
         <p className="mt-1 text-[12px] leading-relaxed text-muted">
           Both are behind sign-in, so they are click-through rather than
           sendable. The passport is the exception: it makes a real public link.
@@ -120,8 +120,8 @@ export default function AdminOnboardingPage() {
         </div>
       </section>
 
-      <section className="fade-up mt-3 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">Your own account</h2>
+      <section className="fade-up mt-3 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">Your own account</h2>
         <p className="mt-1 text-[12px] leading-relaxed text-muted">
           These walk the real screens against your own login, rather than the
           stand-in. Neither one changes anything: setting up again will not undo

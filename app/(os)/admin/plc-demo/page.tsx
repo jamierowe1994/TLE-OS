@@ -79,13 +79,13 @@ export default function PlcDemoPage() {
 
   return (
     <>
-      <PageHeader
+      <PageHeader illustration="/illustrations/people/checking-the-calendar.svg" illustrationAspect={1.0} lineBreak="none"
         title="PLC Handover"
         blurb="The moment an accepted application becomes compliance's problem. Here are the doors, in the order you would open them."
       />
 
-      <section className="fade-up mt-8 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">The one you can send</h2>
+      <section className="fade-up mt-8 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">The one you can send</h2>
         <p className="mt-1 text-[12px] leading-relaxed text-muted">
           Both halves of the handover, running the real screens against an
           invented pack: a made-up address, two people called Sample, and a gas
@@ -95,8 +95,8 @@ export default function PlcDemoPage() {
         <CopyLink path={`/preview/${token}/plc`} />
       </section>
 
-      <section className="fade-up mt-3 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">The rule worth saying out loud</h2>
+      <section className="fade-up mt-3 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">The rule worth saying out loud</h2>
         <p className="mt-1.5 text-[12.5px] leading-relaxed">
           The scan never decides. It reads the documents and produces findings;
           a person presses the button. A case cannot leave review without
@@ -110,9 +110,9 @@ export default function PlcDemoPage() {
 
       <div className="fade-up mt-3 flex flex-col gap-3">
         {DOORS.map((d) => (
-          <section key={d.href} className="rounded-2xl border border-line/80 bg-panel p-5">
+          <section key={d.href} className="rounded-[22px] border border-line/50 bg-white p-5">
             <div className="flex flex-wrap items-baseline gap-2.5">
-              <h2 className="text-[15px]">{d.label}</h2>
+              <h2 className="hand text-[17px] leading-tight">{d.label}</h2>
               <span className="rounded-full bg-accent-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-dark">
                 {d.who}
               </span>
@@ -141,8 +141,8 @@ export default function PlcDemoPage() {
         ))}
       </div>
 
-      <section className="fade-up mt-3 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">A demo that leaves nothing behind</h2>
+      <section className="fade-up mt-3 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">A demo that leaves nothing behind</h2>
         <ol className="mt-2.5 flex list-decimal flex-col gap-1.5 pl-4 text-[12px] leading-relaxed text-muted">
           <li>Open the both-sides screen and start a handover with an invented address.</li>
           <li>Walk the agent&apos;s four steps and send it.</li>

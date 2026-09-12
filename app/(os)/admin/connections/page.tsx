@@ -131,10 +131,10 @@ export default function AdminConnections() {
 
   return (
     <>
-      <PageHeader title="Connections" blurb="What's wired up, and what's armed." />
+      <PageHeader illustration="/illustrations/people/collaboration.svg" illustrationAspect={1.0} lineBreak="none" title="Connections" blurb="What's wired up, and what's armed." />
       <ul className="fade-up mt-8 space-y-2">
         {rows.map(([name, ok, detail]) => (
-          <li key={name} className="rounded-2xl border border-line/80 bg-panel p-4">
+          <li key={name} className="rounded-[22px] border border-line/50 bg-white p-4">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <span className="text-[13.5px]">{name}</span>
               <Pill tone={ok ? "accent" : "neutral"}>{ok ? "on" : "off"}</Pill>
@@ -151,7 +151,7 @@ export default function AdminConnections() {
           key on this service and needs no button. The portal used to hold
           the connection and lend tokens; it is going, and its client settings
           were found blank on 5 Sep. */}
-      <section className="fade-up mt-6 rounded-2xl border border-line/80 bg-panel p-4">
+      <section className="fade-up mt-6 rounded-[22px] border border-line/50 bg-white p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <span className="text-[13.5px]">PayProp: England &amp; Wales connection</span>
           <a
@@ -173,7 +173,7 @@ export default function AdminConnections() {
           </p>
         )}
       </section>
-      <p className="mt-4 rounded-2xl border border-line/80 bg-panel p-4 text-[11.5px] leading-relaxed text-muted">
+      <p className="mt-4 rounded-[22px] border border-line/50 bg-white p-4 text-[11.5px] leading-relaxed text-muted">
         <span className="font-semibold">Email from this domain goes to colleagues only</span> —
         {" "}{h.emailPolicy.internalDomains.map((d) => `@${d}`).join(", ")}. Anything else is refused
         at the send path. {h.emailPolicy.note}

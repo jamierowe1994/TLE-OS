@@ -80,7 +80,7 @@ export default function Permissions() {
 
   return (
     <>
-      <PageHeader title="Permissions" blurb="Who can see what, and who decides." />
+      <PageHeader illustration="/illustrations/people/agreement-deal.svg" illustrationAspect={1.0} lineBreak="none" title="Permissions" blurb="Who can see what, and who decides." />
 
       {flash && (
         <p className="fade-up mt-8 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12.5px]">
@@ -88,8 +88,8 @@ export default function Permissions() {
         </p>
       )}
 
-      <section className="fade-up mt-8 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">People</h2>
+      <section className="fade-up mt-8 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">People</h2>
         <ul className="mt-3.5 space-y-2">
           {d.people.map((p) => (
             <li key={p.id} className="rounded-xl border border-line/70 p-3.5">
@@ -140,8 +140,8 @@ export default function Permissions() {
         </p>
       </section>
 
-      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">What each role means</h2>
+      <section className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">What each role means</h2>
         <p className="mt-1 text-[11.5px] text-muted">
           Shown in full, because &ldquo;Super admin&rdquo; tells you nothing on its own — and a
           label that sounds about right is how somebody ends up with more than they needed.

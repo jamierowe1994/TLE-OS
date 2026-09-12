@@ -38,7 +38,7 @@ export default function AdminTodo() {
 
   return (
     <>
-      <PageHeader title="To do" blurb="Everything still to build, tracked where you'll actually see it." />
+      <PageHeader illustration="/illustrations/people/productive.svg" illustrationAspect={1.0} lineBreak="none" title="To do" blurb="Everything still to build, tracked where you'll actually see it." />
       <form onSubmit={add} className="fade-up mt-8 flex gap-2">
         <input
           value={title}
@@ -57,7 +57,7 @@ export default function AdminTodo() {
       ) : (
         <ul className="fade-up mt-4 space-y-2">
           {d.todos.map((t) => (
-            <li key={t.id} className="rounded-xl border border-line/70 bg-panel p-3.5">
+            <li key={t.id} className="rounded-[18px] border border-line/50 bg-white p-3.5">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className={`text-[13px] ${t.state === "done" ? "text-muted line-through" : ""}`}>{t.title}</span>
                 <Pill tone={t.state === "doing" ? "accent" : "neutral"}>{t.state}</Pill>

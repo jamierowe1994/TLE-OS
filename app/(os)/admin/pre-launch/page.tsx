@@ -280,7 +280,7 @@ export default function PreLaunch() {
 
   return (
     <>
-      <PageHeader title="Pre-launch" blurb="Who's testing, what they use, and what they've found." />
+      <PageHeader illustration="/illustrations/people/high-five.svg" illustrationAspect={1.0} lineBreak="none" title="Pre-launch" blurb="Who's testing, what they use, and what they've found." />
 
       {flash && (
         <p className="fade-up mt-8 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12.5px]">
@@ -297,8 +297,8 @@ export default function PreLaunch() {
             ["Open reports", d.bugs.length],
           ] as const
         ).map(([k, v]) => (
-          <div key={k} className="rounded-2xl border border-line/80 bg-panel p-4">
-            <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">{k}</p>
+          <div key={k} className="rounded-[22px] border border-line/50 bg-white p-4">
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">{k}</p>
             <p className="figures mt-1.5 text-[24px] leading-none">{v}</p>
           </div>
         ))}
@@ -309,8 +309,8 @@ export default function PreLaunch() {
           flow used to be to burn one - or to make a throwaway account, which
           then sits in the roster forever. These two links replay the same
           screens against your own account. */}
-      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">What a new starter sees</h2>
+      <section className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">What a new starter sees</h2>
         <p className="mt-1 text-[11.5px] text-muted">
           Replays the joining screens against your own account. Setting up again
           will not undo your REX or email connection, and running the walkthrough
@@ -332,8 +332,8 @@ export default function PreLaunch() {
         </div>
       </section>
 
-      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">Who&apos;s on it</h2>
+      <section className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">Who&apos;s on it</h2>
         <p className="mt-1 text-[11.5px] text-muted">
           Adding somebody doesn&apos;t email them. Send the invite when you&apos;re ready.
         </p>
@@ -479,8 +479,8 @@ export default function PreLaunch() {
           LEAVE as them; the REX link says it will also land on the landlord's
           timeline where a colleague can see it. Showing only the first would
           read as ready when half the job is missing. */}
-      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">Emails</h2>
+      <section className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">Emails</h2>
         <p className="mt-1 max-w-[70ch] text-[11.5px] leading-relaxed text-muted">
           An email to a landlord goes from the agent&rsquo;s own Microsoft mailbox, so it sits in
           their Sent Items and the reply threads onto it. It is BCC&rsquo;d to their REX dropbox, so
@@ -543,8 +543,8 @@ export default function PreLaunch() {
         </p>
       </section>
 
-      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">What they actually use</h2>
+      <section className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">What they actually use</h2>
         <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
           The zeroes are the point. A tab nobody has opened is either a feature nobody needs or
           one nobody can find — and both are worth knowing before launch.
@@ -566,8 +566,8 @@ export default function PreLaunch() {
         </ul>
       </section>
 
-      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">What they&apos;ve found</h2>
+      <section className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">What they&apos;ve found</h2>
         {d.bugs.length === 0 ? (
           <p className="mt-2 text-[12.5px] text-muted">
             Nothing reported yet. Steve sits in the bottom-right of every screen; feedback given through him lands here.

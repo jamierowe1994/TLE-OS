@@ -60,13 +60,13 @@ export default function AdminActivity() {
 
   return (
     <>
-      <PageHeader
+      <PageHeader illustration="/illustrations/people/taking-notes.svg" illustrationAspect={1.0} lineBreak="none"
         title="Activity"
         blurb="Who's signed in, who couldn't, every view-as, and every email that went out."
       />
 
-      <section className="fade-up mt-8 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">Emails sent</h2>
+      <section className="fade-up mt-8 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">Emails sent</h2>
         <p className="mt-1 text-[11.5px] leading-relaxed text-muted">
           Open one to see it exactly as it was received, not as the template looks today.
           Sign-in links are removed from the stored copy, so the button is there but cannot be
@@ -102,8 +102,8 @@ export default function AdminActivity() {
         )}
       </section>
 
-      <section className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5">
-        <h2 className="text-[15px]">Who did what</h2>
+      <section className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
+        <h2 className="hand text-[17px] leading-tight">Who did what</h2>
         {d.audit.length === 0 ? (
           <p className="mt-2 text-[12.5px] text-muted">
             Nothing recorded yet. The log was created today, so it starts from here.

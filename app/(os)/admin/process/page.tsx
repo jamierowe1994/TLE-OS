@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export default function ProcessPage() {
   return (
     <>
-      <PageHeader
+      <PageHeader illustration="/illustrations/people/planning-board.svg" illustrationAspect={1.0} lineBreak="none"
         title="Process"
         blurb="How the product treats each person, step by step: the screens they meet, the emails that go to them, and what happens when they stall. Open one to see the map, the links and the emails - and to change it."
       />
@@ -25,7 +25,7 @@ export default function ProcessPage() {
         {PORTAL_FOLDERS.map((f) => {
           const mapped = Boolean(defaultProcess(f.slug));
           return (
-            <Link key={f.slug} href={`/admin/process/${f.slug}`} className="block-pop rounded-2xl border border-line/80 bg-panel p-5">
+            <Link key={f.slug} href={`/admin/process/${f.slug}`} className="block-pop rounded-[22px] border border-line/50 bg-white p-5">
               <div className="flex items-start gap-4">
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-accent-soft text-accent-dark">
                   <DoodleIcon name={f.icon} size={20} />

@@ -87,6 +87,13 @@ export default function AdminPeople() {
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [order, setOrder] = useState<"recent" | "stale" | "name">("recent");
+  /* ?filter=none lands on the people with no account yet; ?filter=stale puts
+     the longest-absent first. The overview's tiles link here with them. */
+  useEffect(() => {
+    const f = new URLSearchParams(window.location.search).get("filter");
+    if (f === "none") setRoleFilter("none");
+    if (f === "stale") setOrder("stale");
+  }, []);
 
   const load = useCallback(() => {
     loadAdmin().then((x) => (x ? setD(x) : setDenied(true)));
@@ -248,17 +255,17 @@ export default function AdminPeople() {
 
   return (
     <>
-      <PageHeader title="People" blurb="From REX, joined to who's actually got in." />
+      <PageHeader illustration="/illustrations/people/co-workers.svg" illustrationAspect={1.0} lineBreak="none" title="People" blurb="From REX, joined to who's actually got in." />
 
       {/* Re-pull the TEG Team Hub. James fills bios and headshots in there by
           hand, so the useful thing to show is not "synced ok" but how many are
           still blank — that is the worklist, and it shrinks as he works. */}
-      <div className="fade-up mt-6 flex flex-wrap items-center gap-3 rounded-xl border border-line/70 bg-panel p-3.5">
+      <div className="fade-up mt-6 flex flex-wrap items-center gap-3 rounded-[18px] border border-line/50 bg-white p-3.5">
         <button
           type="button"
           onClick={pullTeg}
           disabled={busy === "teg"}
-          className="rounded-lg border border-line/80 px-3 py-1.5 text-[12px] transition-colors hover:border-ink disabled:opacity-50"
+          className="rounded-lg border border-line/80 px-3 py-1.5 text-[12px] transition-colors hover:border-ink/40 disabled:opacity-50"
         >
           {busy === "teg" ? "Pulling…" : "Re-pull from TEG Hub"}
         </button>
@@ -281,7 +288,7 @@ export default function AdminPeople() {
             /* Full width on a phone, sharing the line with Order only when
                there is room for both: at 375px the two on one row squeezed
                the search box down to about sixty pixels. */
-            className="w-full min-w-0 rounded-xl border border-line/80 bg-panel px-3.5 py-2 text-[12.5px] sm:w-auto sm:flex-1"
+            className="w-full min-w-0 rounded-[18px] border border-line/50 bg-white px-3.5 py-2 text-[12.5px] sm:w-auto sm:flex-1"
           />
           <PickOne
             label="Order"
@@ -315,14 +322,14 @@ export default function AdminPeople() {
       </div>
 
       {rows.length === 0 && (
-        <p className="fade-up mt-6 rounded-2xl border border-dashed border-line/80 bg-panel p-8 text-center text-[12.5px] text-muted">
+        <p className="fade-up mt-6 rounded-2xl border border-dashed border-line/80 bg-white p-8 text-center text-[12.5px] text-muted">
           Nobody matches that.
         </p>
       )}
 
       <ul className="fade-up mt-8 space-y-2">
         {rows.map((p) => (
-          <li key={p.email} className="rounded-xl border border-line/70 bg-panel p-3.5 transition-colors hover:border-ink">
+          <li key={p.email} className="rounded-[18px] border border-line/50 bg-white p-3.5 transition-colors hover:border-ink/40">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               {/* A file for EVERYBODY, addressed by REX id where there is one
                   and by their account id where there is not. Susan, Francesca,
@@ -365,7 +372,7 @@ export default function AdminPeople() {
                 disabled={busy !== null}
                 onChange={(e) => setPersonRole(p, e.target.value)}
                 title={ROLE_BLURB[(p.role ?? "agent") as keyof typeof ROLE_BLURB]}
-                className="rounded-lg border border-line/80 bg-panel px-2.5 py-1.5 text-[11.5px] disabled:opacity-40"
+                className="rounded-lg border border-line/80 bg-white px-2.5 py-1.5 text-[11.5px] disabled:opacity-40"
               >
                 {ROLES.map((r) => (
                   <option key={r} value={r}>
