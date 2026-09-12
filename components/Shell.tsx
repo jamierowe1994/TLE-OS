@@ -25,6 +25,7 @@ function NavLink({
   collapsed,
   currentHref,
   open,
+  anyOpen,
   onToggle,
   go,
 }: {
@@ -34,6 +35,8 @@ function NavLink({
   currentHref: string;
   /** Opened by hand, rather than by being the section you are standing in. */
   open: boolean;
+  /** Some group is open by hand - so the one you stand in yields to it. */
+  anyOpen: boolean;
   onToggle: () => void;
   /** Plays the page out before it changes. See `goTo` in Shell. */
   go: (href: string) => void;
@@ -49,9 +52,16 @@ function NavLink({
    *
    * Still open while you are standing in the section, so walking into Leads
    * from anywhere else does not fold the children away behind you.
+   *
+   * ONE group open at a time (James, 12 Sep 2026: "when we click on things
+   * like Leads and Portfolio, the whole thing breaks... we can't see the
+   * other tabs"). Two open groups pushed the back office off the bottom of a
+   * rail that cannot scroll. So a group opened by hand closes the one you
+   * are standing in, and the rail itself scrolls if a screen is still too
+   * short for it.
    */
   const hasKids = Boolean(item.children?.length);
-  const showChildren = Boolean(hasKids && !collapsed && (active || open));
+  const showChildren = Boolean(hasKids && !collapsed && (anyOpen ? open : active));
   const asButton = hasKids && !collapsed;
   const Parent = (asButton ? "button" : Link) as React.ElementType;
   return (
@@ -323,8 +333,10 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               className="art h-10 w-10 shrink-0 object-contain"
             />
             <div
-              className={`hand overflow-hidden whitespace-nowrap text-xl leading-none transition-[max-width,opacity,margin] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                collapsed ? "ml-0 max-w-0 opacity-0" : "ml-2 max-w-[110px] opacity-100"
+              /* Nearly the height of the house beside it (James, 12 Sep
+                 2026: "make it as big as the small building icon"). */
+              className={`hand overflow-hidden whitespace-nowrap text-[29px] leading-none tracking-[-0.03em] transition-[max-width,opacity,margin] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+                collapsed ? "ml-0 max-w-0 opacity-0" : "ml-2 max-w-[130px] opacity-100"
               }`}
             >
               TLE OS
@@ -342,7 +354,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
 
         {/* The break bar, then the nav sits a touch lower. */}
         <div className="mt-4 border-t border-line/70" />
-        <nav className="mt-4 flex flex-col gap-1">
+        <nav className="os-rail mt-4 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden pb-2">
           {FRONT.map((item) => (
             <NavLink
               key={item.href}
@@ -351,6 +363,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               collapsed={collapsed}
               currentHref={currentHref}
               open={openSection === item.href}
+              anyOpen={openSection !== null}
               onToggle={() => setOpenSection((o) => (o === item.href ? null : item.href))}
               go={goTo}
             />
@@ -374,6 +387,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               collapsed={collapsed}
               currentHref={currentHref}
               open={openSection === item.href}
+              anyOpen={openSection !== null}
               onToggle={() => setOpenSection((o) => (o === item.href ? null : item.href))}
               go={goTo}
             />
@@ -401,6 +415,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
                   collapsed={collapsed}
                   currentHref={currentHref}
                   open={openSection === item.href}
+                  anyOpen={openSection !== null}
                   onToggle={() => setOpenSection((o) => (o === item.href ? null : item.href))}
                   go={goTo}
                 />
