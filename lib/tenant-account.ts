@@ -1,13 +1,13 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { hasDb, q } from "@/lib/db";
-import { TENANT_COOKIE, uid, verifyPortalToken } from "@/lib/auth";
+import { TENANT_COOKIE, hashPassword, uid, verifyPassword, verifyPortalToken } from "@/lib/auth";
 import { normaliseEmail } from "@/lib/users";
 import { getAllPropolyDeals, type BusinessDeal } from "@/lib/business/propoly-deals";
 import { getMeta } from "@/lib/business/deal-store";
 import { derivedStageFor } from "@/lib/business/deal-stage";
 import { PORTAL_STAGES } from "@/lib/business/propoly-stages";
-import { findPassportByEmail } from "@/lib/passport";
+import { findPassportByEmail, getPassport, type PassportRecord } from "@/lib/passport";
 
 /**
  * The tenant's account: who they are, and which deals are theirs.
@@ -108,6 +108,59 @@ export async function activateTenant(id: string): Promise<boolean> {
     [id]
   );
   return rows.length > 0;
+}
+
+/**
+ * An account made at the end of a passport.
+ *
+ * James, 12 Sep 2026: for most tenants the passport IS their first contact
+ * with us, so finishing it is where the account gets made - their email as
+ * the username, a password they choose, straight into the portal. This is
+ * the one place a tenant account gets a password; the magic link still
+ * works for anybody who arrives from a Propoly deal instead.
+ *
+ * Upsert on (email, kind): an email that already has a tenant row (a deal
+ * created it, or a passport was finished twice) gets its password set and
+ * its name refreshed rather than a second row.
+ */
+export async function createTenantFromPassport(opts: {
+  email: string;
+  name: string;
+  password: string;
+  passportToken: string;
+}): Promise<TenantAccount> {
+  const email = normaliseEmail(opts.email);
+  const rows = await q<Row>(
+    `INSERT INTO os_portal_accounts (id, kind, email, name, password_hash, rex_contact_id, activated_at, profile)
+     VALUES ($1, 'tenant', $2, $3, $4, NULL, NOW(), $5::jsonb)
+     ON CONFLICT (email, kind) DO UPDATE
+       SET name = EXCLUDED.name,
+           password_hash = EXCLUDED.password_hash,
+           activated_at = COALESCE(os_portal_accounts.activated_at, NOW()),
+           profile = os_portal_accounts.profile || EXCLUDED.profile
+     RETURNING id, email, name, activated_at`,
+    [uid(), email, opts.name.trim() || email, hashPassword(opts.password), JSON.stringify({ passportToken: opts.passportToken })]
+  );
+  return shape(rows[0]);
+}
+
+/** Email and password, or nothing. The same nothing for a wrong password,
+ *  an unknown email and an account with no password set. */
+export async function tenantByPassword(rawEmail: string, password: string): Promise<TenantAccount | null> {
+  if (!hasDb() || !password) return null;
+  const rows = await q<Row & { password_hash: string | null }>(
+    `SELECT id, email, name, activated_at, password_hash FROM os_portal_accounts WHERE kind = 'tenant' AND email = $1`,
+    [normaliseEmail(rawEmail)]
+  );
+  const r = rows[0];
+  if (!r?.password_hash || !verifyPassword(password, r.password_hash)) return null;
+  return shape(r);
+}
+
+/** Their passport in full, if one was ever minted for this email. */
+export async function tenantPassport(email: string): Promise<PassportRecord | null> {
+  const p = await findPassportByEmail(email, null).catch(() => null);
+  return p ? getPassport(p.token).catch(() => null) : null;
 }
 
 /** The signed-in tenant for this request, or null. Server components and routes. */

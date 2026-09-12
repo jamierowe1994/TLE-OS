@@ -9,7 +9,7 @@ import DoodleIcon from "@/components/DoodleIcon";
  * typed, so "gas" leaves the certificate, "presentation" leaves the deck.
  * Clearing the box brings everything back. Nothing leaves the browser.
  */
-export default function FileSearch() {
+export default function FileSearch({ placeholder = "Search your property file" }: { placeholder?: string } = {}) {
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<{ shown: number; total: number } | null>(null);
 
@@ -35,7 +35,7 @@ export default function FileSearch() {
         value={q}
         onChange={(e) => setQ(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Escape") setQ(""); }}
-        placeholder="Search your property file"
+        placeholder={placeholder}
         className="min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted"
         aria-label="Search your property file"
       />

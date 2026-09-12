@@ -1015,6 +1015,12 @@ body {
   border-color: rgba(86, 66, 62, 0.12);
 }
 
+/* The passport being made: it turns on its spindle. */
+@keyframes spinY {
+  from { transform: rotateY(0deg); }
+  to   { transform: rotateY(360deg); }
+}
+
 /* The passport's page one: the name rises away, the rest rises in. */
 @keyframes riseOut {
   from { opacity: 1; transform: translateY(0); }

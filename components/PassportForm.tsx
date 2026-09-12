@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { photoPosition, type PassportFocus } from "@/components/PassportBook";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import PassportBook, { CLAY, COVER, PassportBack, photoPosition, type PassportFocus } from "@/components/PassportBook";
 import PassportScene, { PassportFlat } from "@/components/PassportScene";
 import {
   APPLICANT_TYPES,
@@ -463,6 +465,257 @@ function since(ym: string): { months: number; text: string } {
   return { months, text: parts.length ? parts.join(" and ") : "less than a month" };
 }
 
+/* ── The finish ──────────────────────────────────────────────────────────── */
+
+/**
+ * The end of the passport, and the start of the account.
+ *
+ * James, 12 Sep 2026: the questions drop away and the card sits in the
+ * middle of the page while their details load in; it ticks done; then it
+ * slides to the top left at full size and its back drops out from beneath
+ * it, so both faces are there to read before anything is confirmed. On the
+ * right, level with the card, the account panel rises: their email as the
+ * username, a password, and they are in. A way back if they are not ready.
+ *
+ * In the sample (demo) the whole thing plays and nothing is created.
+ */
+type FinishPhase = "loading" | "done" | "docked";
+
+function FinishStage({ data, phase, token, demo, onBack }: { data: PassportData; phase: FinishPhase; token: string; demo: boolean; onBack: () => void }) {
+  const router = useRouter();
+  const box = useRef<HTMLDivElement>(null);
+  const [dim, setDim] = useState({ w: 0, h: 0 });
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [sampleDone, setSampleDone] = useState(false);
+  const email = data.email.trim();
+  const first = data.legalName.trim().split(/\s+/)[0] || "";
+  const docked = phase === "docked";
+
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const measure = () => setDim({ w: el.getBoundingClientRect().width, h: window.innerHeight - 64 });
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    window.addEventListener("resize", measure);
+    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+  }, []);
+
+  /* The geometry: two cards stacked on the left, the panel on the right. The
+     card is as big as the left column allows while both faces still fit the
+     height. In the middle of the page first; then its slot. */
+  const PAD = 40, TOP = 36, GAP = 22;
+  const scale = dim.w
+    ? Math.max(0.3, Math.min(640 / CARD_W_PX, ((dim.w - PAD * 3) * 0.5) / CARD_W_PX, ((dim.h - TOP - GAP - 40) / 2) / CARD_H_PX))
+    : 0;
+  const cw = CARD_W_PX * scale, ch = CARD_H_PX * scale;
+  const centre = { left: (dim.w - cw) / 2, top: Math.max(TOP, (dim.h - ch) / 2 - 36) };
+  const slot = { left: PAD, top: TOP };
+  const stageH = Math.max(dim.h, TOP + ch * 2 + GAP + 40);
+  const ease = "cubic-bezier(0.22,1,0.36,1)";
+  const edge = `0 0 0 ${1.2 * scale}px ${CLAY}99, ${2.5 * scale}px ${2.5 * scale}px 0 ${CLAY}, ${5 * scale}px ${5 * scale}px 0 ${COVER}dd, ${7 * scale}px ${7 * scale}px 0 ${COVER}99, 0 30px 60px -30px rgba(74,54,50,0.45)`;
+
+  /* Focus the password once the panel has finished rising, without scrolling. */
+  const pwRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!docked) return;
+    const id = window.setTimeout(() => pwRef.current?.focus({ preventScroll: true }), 1300);
+    return () => window.clearTimeout(id);
+  }, [docked]);
+
+  const ok = pw.length >= 8 && pw === pw2;
+
+  async function create(e: React.FormEvent) {
+    e.preventDefault();
+    if (pw.length < 8) return setErr("Your password needs at least 8 characters.");
+    if (pw !== pw2) return setErr("The two passwords don't match.");
+    setErr("");
+    if (demo) {
+      setSampleDone(true);
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await fetch("/api/tenant/passport/account", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, password: pw }),
+      });
+      const j = (await r.json()) as { ok?: boolean; error?: string };
+      if (!j.ok) {
+        setErr(j.error ?? "That didn't work. Try again in a moment.");
+        setBusy(false);
+        return;
+      }
+      router.push("/tenant?welcome=1");
+      router.refresh();
+    } catch {
+      setErr("Something went wrong. Try again in a moment.");
+      setBusy(false);
+    }
+  }
+
+  const field = "w-full rounded-[12px] border border-line/80 bg-white px-4 py-3.5 text-[15px] outline-none transition-[border-color,box-shadow] focus:border-[var(--accent-dark)] focus:shadow-[0_0_0_3px_rgba(86,66,62,0.10)]";
+  const card = (face: React.ReactNode) => (
+    <div style={{ width: cw, height: ch, borderRadius: 30 * scale, boxShadow: edge }}>
+      <div style={{ width: CARD_W_PX, height: CARD_H_PX, transform: `scale(${scale})`, transformOrigin: "0 0" }}>{face}</div>
+    </div>
+  );
+
+  return (
+    <div ref={box} className="relative w-full overflow-hidden" style={{ minHeight: stageH }}>
+      {scale > 0 && (
+        <>
+          {/* The front: the middle of the page, then its slot. */}
+          <div
+            className="absolute"
+            data-stage-card={docked ? "docked" : phase}
+            style={{
+              left: docked ? slot.left : centre.left,
+              top: docked ? slot.top : centre.top,
+              transition: `left 950ms ${ease}, top 950ms ${ease}`,
+              zIndex: 2,
+            }}
+          >
+            {card(<PassportBook data={data} />)}
+          </div>
+
+          {/* What it is doing, under the card in the middle. */}
+          <div
+            className="absolute flex items-center justify-center gap-3 text-[15.5px] font-medium"
+            style={{ left: 0, right: 0, top: centre.top + ch + 30, color: BROWN, opacity: docked ? 0 : 1, transition: "opacity 250ms" }}
+          >
+            {phase === "loading" ? (
+              <>
+                <span className="block h-4 w-4 animate-spin rounded-full border-2 border-[var(--accent)]" style={{ borderTopColor: BROWN }} />
+                Loading in your details now…
+              </>
+            ) : (
+              <>
+                <span className="flex h-6 w-6 items-center justify-center rounded-full text-white" style={{ background: BROWN, animation: "riseIn 300ms cubic-bezier(0.22,1,0.36,1) both" }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden><path d="M5 12.5l4.5 4.5L19 7.5" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                </span>
+                All in. That&apos;s your passport.
+              </>
+            )}
+          </div>
+
+          {/* The back, dropping out from beneath the front once it has docked. */}
+          <div
+            className="absolute"
+            style={{
+              left: slot.left,
+              top: slot.top + ch + GAP,
+              opacity: docked ? 1 : 0,
+              transform: docked ? "translateY(0)" : `translateY(-${ch * 0.6}px)`,
+              transition: `opacity 500ms ${ease} 650ms, transform 800ms ${ease} 650ms`,
+              zIndex: 1,
+            }}
+          >
+            {card(<PassportBack data={data} />)}
+          </div>
+
+          {/* The panel, up from the bottom to sit level with the card. */}
+          <div
+            className="absolute"
+            style={{
+              left: PAD * 2 + cw,
+              right: PAD,
+              top: slot.top,
+              height: ch * 2 + GAP,
+              transform: docked ? "translateY(0)" : `translateY(${stageH}px)`,
+              transition: `transform 850ms ${ease} 1350ms`,
+            }}
+          >
+            <div className="flex h-full flex-col overflow-y-auto rounded-[28px] bg-white px-8 pb-9 pt-8 shadow-[0_30px_70px_-40px_rgba(86,66,62,0.35)] xl:px-10">
+              {sampleDone ? (
+                <>
+                  <p className="text-[11.5px] font-semibold uppercase tracking-[0.22em] text-muted">The sample</p>
+                  <h2 className="hand mt-2 text-[30px] leading-tight">That is the whole journey.</h2>
+                  <p className="mt-3 text-[15px] leading-relaxed text-muted">
+                    Nothing was created - this page is a sample. A real tenant would now be inside their tenant area,
+                    with their passport and details already filled in.
+                  </p>
+                  <Link href="/preview" className="mt-6 inline-flex items-center gap-2 rounded-[12px] px-6 py-3.5 text-[15px] font-semibold text-white" style={{ background: BROWN }}>
+                    Back to the preview
+                  </Link>
+                </>
+              ) : (
+                <form onSubmit={create}>
+                  <p className="text-[11.5px] font-semibold uppercase tracking-[0.22em] text-muted">Nearly there{first ? `, ${first}` : ""}</p>
+                  <h2 className="hand mt-2 text-[30px] leading-tight xl:text-[36px]">
+                    Great. Now let&apos;s finish{" "}
+                    <span className="inline-block" style={{ color: BROWN, boxShadow: `inset 0 -0.14em 0 0 #fff, inset 0 -0.2em 0 0 ${BROWN}` }}>your account</span>
+                  </h2>
+                  <p className="mt-3 text-[15px] leading-relaxed text-muted">
+                    That is your passport, front and back. Have a read; if anything is wrong, go back and change it.
+                    Happy with it? Choose a password and you are in - your tenant area opens with everything already filled in.
+                  </p>
+
+                  <div className="mt-6 space-y-5">
+                    <label className="block">
+                      <span className="text-[14.5px] font-semibold">Your username</span>
+                      <span className="mt-1 block text-[13px] text-muted">The email on your passport.</span>
+                      <div className="mt-2 rounded-[12px] border border-line/60 bg-[var(--accent-soft)]/60 px-4 py-3.5 text-[15px]">{email || "Add your email on page one"}</div>
+                    </label>
+                    <div className="grid gap-5">
+                      <label className="block">
+                        <span className="text-[14.5px] font-semibold">Choose a password</span>
+                        <div className="relative mt-2">
+                          <input ref={pwRef} type={show ? "text" : "password"} autoComplete="new-password" className={`${field} pr-16`} value={pw} onChange={(e) => setPw(e.target.value)} />
+                          <button type="button" onClick={() => setShow((v) => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[12.5px] font-medium text-muted hover:text-ink">
+                            {show ? "Hide" : "Show"}
+                          </button>
+                        </div>
+                      </label>
+                      <label className="block">
+                        <span className="text-[14.5px] font-semibold">Type it again</span>
+                        <input type={show ? "text" : "password"} autoComplete="new-password" className={`${field} mt-2`} value={pw2} onChange={(e) => setPw2(e.target.value)} />
+                      </label>
+                    </div>
+                    <ul className="flex flex-wrap gap-x-5 gap-y-1 text-[12.5px] text-muted">
+                      <li className={pw.length >= 8 ? "text-ink" : ""}>{pw.length >= 8 ? "✓" : "·"} At least 8 characters</li>
+                      <li className={pw && pw === pw2 ? "text-ink" : ""}>{pw && pw === pw2 ? "✓" : "·"} Both the same</li>
+                      <li>· A mix of letters and numbers helps</li>
+                    </ul>
+                    {err && <p className="text-[13.5px]" style={{ color: "#9d4340" }}>{err}</p>}
+                    <div className="flex flex-wrap items-center gap-4">
+                      <button
+                        type="submit"
+                        disabled={busy || !ok}
+                        className={`flex items-center gap-3 rounded-[12px] px-7 py-3.5 text-[15px] font-semibold text-white transition-opacity ${busy || !ok ? "cursor-not-allowed opacity-40" : "hover:opacity-90"}`}
+                        style={{ background: BROWN }}
+                      >
+                        {busy ? "Opening your account…" : "Create my account"}
+                        {!busy && <Arrow />}
+                      </button>
+                      <button type="button" onClick={onBack} className="rounded-[12px] border border-line/80 bg-white px-6 py-3.5 text-[14.5px] font-medium transition-colors hover:border-ink">
+                        Not ready yet - go back
+                      </button>
+                    </div>
+                    <p className="flex items-center gap-2 text-[13px] text-muted">
+                      <Lock />
+                      Your details are only shared when you apply for a property.
+                    </p>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+const CARD_W_PX = 900;
+const CARD_H_PX = 596;
+
 /* ── The form ────────────────────────────────────────────────────────────── */
 
 export type PassportQuestion = { id: string; label: string; kind: string; options: string[]; required: boolean };
@@ -516,6 +769,7 @@ export default function PassportForm({
   initialAnswers = {},
   agentName = "",
   demo = false,
+  accountExists = false,
 }: {
   token: string;
   initial: PassportData;
@@ -527,10 +781,15 @@ export default function PassportForm({
   agentName?: string;
   /** Showing the form rather than filling one in: nothing is written. */
   demo?: boolean;
+  /** This email already has a tenant login, so the end opens it rather than
+   *  making another. */
+  accountExists?: boolean;
 }) {
   const [d, setD] = useState<PassportData>({ ...EMPTY_PASSPORT, ...initial });
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [submitted, setSubmitted] = useState(Boolean(submittedAt));
+  /** The end: the questions drop away, the card is made, the account panel rises. */
+  const [phase, setPhase] = useState<"form" | "leaving" | FinishPhase>("form");
   const [step, setStep] = useState(0);
   const [sub, setSub] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers);
@@ -623,12 +882,16 @@ export default function PassportForm({
   const unanswered = questions.filter((qn) => qn.required && (answers[qn.id] ?? "").trim() === "");
   const sectionsLeft = total - done + (questions.length > 0 && !extraDone ? 1 : 0);
   const finishLabel = allDone
-    ? "That's my passport done"
+    ? "Great, create my passport"
     : done === total && unanswered.length
       ? `${unanswered.length} question${unanswered.length === 1 ? "" : "s"} still to answer`
       : `${sectionsLeft} section${sectionsLeft === 1 ? "" : "s"} to go`;
 
   async function finish() {
+    setPhase("leaving");
+    window.setTimeout(() => setPhase("loading"), 420);
+    window.setTimeout(() => setPhase("done"), 420 + 2000);
+    window.setTimeout(() => setPhase("docked"), 420 + 2000 + 900);
     await save(d);
     if (!demo) {
       await fetch(`/api/tenant/passport?token=${encodeURIComponent(token)}&submit=1`, { method: "POST" }).catch(() => null);
@@ -1233,8 +1496,20 @@ export default function PassportForm({
     : state === "saved" ? "Saved"
     : "Everything saves as you go.";
 
+  if (phase === "loading" || phase === "done" || phase === "docked") {
+    return (
+      <div data-passport-page>
+        <FinishStage data={d} phase={phase} token={token} demo={demo} onBack={() => setPhase("form")} />
+      </div>
+    );
+  }
+
   return (
-    <div data-passport-page className="lg:grid lg:h-[calc(100vh-64px)] lg:grid-cols-[minmax(0,46%)_minmax(0,54%)] lg:overflow-hidden">
+    <div
+      data-passport-page
+      className="lg:grid lg:h-[calc(100vh-64px)] lg:grid-cols-[minmax(0,46%)_minmax(0,54%)] lg:overflow-hidden"
+      style={phase === "leaving" ? { opacity: 0, transform: "translateY(28px)", transition: "opacity 400ms ease, transform 400ms ease" } : undefined}
+    >
       {/* ── Left: the headline, one question, the way on ── */}
       <div className="flex flex-col px-5 pb-8 pt-8 sm:px-8 lg:h-full lg:min-h-0 lg:px-12 lg:pb-8 lg:pt-9 xl:px-16">
         <div
@@ -1284,10 +1559,14 @@ export default function PassportForm({
                 {lastScreen && !flowOpenTyped ? "Next step" : "Continue"}
                 <Arrow />
               </button>
-            ) : submitted ? (
-              <p className="text-[14px] leading-relaxed">
-                <strong>Your passport is with us.</strong> Change anything you like - it updates straight away, and this link keeps working.
-              </p>
+            ) : submitted && accountExists && phase === "form" ? (
+              <div className="flex flex-wrap items-center gap-4">
+                <Link href="/tenant" className="flex items-center gap-3 rounded-[12px] px-7 py-3.5 text-[15px] font-semibold text-white hover:opacity-90" style={{ background: BROWN }}>
+                  Open my tenant area
+                  <Arrow />
+                </Link>
+                <p className="text-[13.5px] leading-relaxed text-muted">Your passport is with us. Change anything here and it updates straight away.</p>
+              </div>
             ) : (
               <button
                 type="button"

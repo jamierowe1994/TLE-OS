@@ -2,6 +2,7 @@ import PassportForm from "@/components/PassportForm";
 import { getPassport } from "@/lib/passport";
 import { passportQuestions, valuesFor } from "@/lib/attributes";
 import { findUserById } from "@/lib/users";
+import { tenantAccountByEmail } from "@/lib/tenant-account";
 
 /**
  * The passport, reached by the link in the tenant's email.
@@ -49,10 +50,14 @@ export default async function Page({ params }: { params: Promise<{ token: string
    * All three are independent reads, and an agent with no questions makes the
    * last two cheap and the form identical to what it is today.
    */
-  const [questions, answers, agent] = await Promise.all([
+  const email = (record.data.email || record.email || "").trim();
+  const [questions, answers, agent, account] = await Promise.all([
     passportQuestions(record.agentId).catch(() => []),
     record.agentId ? valuesFor(record.agentId, token).catch(() => ({})) : Promise.resolve({}),
     record.agentId ? findUserById(record.agentId).catch(() => null) : Promise.resolve(null),
+    /* Whether this email already has a tenant login: decides if the last
+       screen makes an account or opens the one they have. */
+    email.includes("@") ? tenantAccountByEmail(email).catch(() => null) : Promise.resolve(null),
   ]);
 
   return (
@@ -63,6 +68,7 @@ export default async function Page({ params }: { params: Promise<{ token: string
         submittedAt={record.submittedAt}
         questions={questions}
         initialAnswers={answers}
+        accountExists={Boolean(account?.activatedAt)}
         /* First name only. "A few more from Sam" is a person asking; the full
            name reads like a letter from a solicitor. */
         agentName={(agent?.name ?? "").trim().split(/\s+/)[0] ?? ""}

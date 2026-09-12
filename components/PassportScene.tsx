@@ -30,7 +30,7 @@ const REST_Y = -16;
 
 type Side = "front" | "back";
 
-function useScale(ref: React.RefObject<HTMLDivElement | null>, fit: (w: number, h: number) => number) {
+export function useScale(ref: React.RefObject<HTMLDivElement | null>, fit: (w: number, h: number) => number) {
   const [scale, setScale] = useState(0);
   useEffect(() => {
     const el = ref.current;
@@ -49,7 +49,7 @@ function useScale(ref: React.RefObject<HTMLDivElement | null>, fit: (w: number, 
 }
 
 /** The two faces on one spindle, turned by `angle` degrees about Y. */
-function Faces({ data, focus, scale, angle, lean, dragging }: { data: PassportData; focus: PassportFocus; scale: number; angle: number; lean: boolean; dragging: boolean }) {
+export function Faces({ data, focus, scale, angle, lean, dragging }: { data: PassportData; focus: PassportFocus; scale: number; angle: number; lean: boolean; dragging: boolean }) {
   const w = CARD_W * scale;
   const h = CARD_H * scale;
   const r = 30 * scale;
