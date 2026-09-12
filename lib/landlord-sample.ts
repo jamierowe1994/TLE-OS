@@ -1,6 +1,7 @@
 import rexSample from "@/lib/rex-sample.json";
 import { STAGES, stepsForStage, type LandlordView, type Stage } from "@/lib/landlord-view";
 import type { DocsView } from "@/lib/landlord-documents-view";
+import type { MaintView } from "@/lib/landlord-maintenance-view";
 
 /**
  * THE SAMPLE. Raj Chauhan, two invented properties, every figure typed in.
@@ -120,4 +121,31 @@ export const RAJ_DOCUMENTS: DocsView = {
     },
   ],
   progress: { have: 2, total: 5 },
+};
+
+/**
+ * Raj's maintenance page, typed by hand to the same shape the live page
+ * builds: a boiler booked in, a fan being sorted, a fence quote waiting on
+ * him, two jobs done this year, and the visits to the house we look after.
+ */
+export const RAJ_MAINTENANCE: MaintView = {
+  properties: [{ name: "183 Walesby Lane, New Ollerton", locality: "Newark NG22 9PA  •  Fully managed  •  Tenanted", image: img("Walesby") }],
+  needsYou: [
+    { id: "j3", ref: 1043, title: "Fence panel down after the storm", property: "183 Walesby Lane", kind: "repair", state: "open", now: "Waiting on you", when: null, contractor: "Sherwood Fencing", cost: "£320", needsYou: "A quote of £320 needs your say-so - it is over your £150 authority", urgency: "Routine", reported: "Reported 8 Sep 2026 by your tenant" },
+  ],
+  open: [
+    { id: "j1", ref: 1041, title: "Boiler losing pressure", property: "183 Walesby Lane", kind: "repair", state: "open", now: "Booked for Tue 15 Sep", when: "Booked for Tue 15 Sep", contractor: "Notts Gas Services", cost: null, needsYou: null, urgency: "Urgent", reported: "Reported 10 Sep 2026 by your tenant" },
+    { id: "j2", ref: 1042, title: "Bathroom extractor fan not working", property: "183 Walesby Lane", kind: "repair", state: "open", now: "Finding the right contractor", when: null, contractor: null, cost: null, needsYou: null, urgency: "Routine", reported: "Reported 11 Sep 2026 by your tenant" },
+    { id: "j3", ref: 1043, title: "Fence panel down after the storm", property: "183 Walesby Lane", kind: "repair", state: "open", now: "Waiting on you", when: null, contractor: "Sherwood Fencing", cost: "£320", needsYou: "A quote of £320 needs your say-so - it is over your £150 authority", urgency: "Routine", reported: "Reported 8 Sep 2026 by your tenant" },
+  ],
+  done: [
+    { id: "j4", ref: 1027, title: "Kitchen tap dripping", property: "183 Walesby Lane", kind: "repair", state: "done", now: "Done", when: "Done 3 Aug 2026", contractor: "AJ Plumbing", cost: "£85", needsYou: null, urgency: "Routine", reported: "Reported 28 Jul 2026 by your tenant" },
+    { id: "j5", ref: 1012, title: "Annual gas safety check", property: "183 Walesby Lane", kind: "planned", state: "done", now: "Done", when: "Done 3 Mar 2026", contractor: "Notts Gas Services", cost: "£72", needsYou: null, urgency: null, reported: "Arranged 14 Feb 2026 by us" },
+  ],
+  visits: [
+    { id: "v1", label: "Property visit", property: "183 Walesby Lane", when: "Booked for Thu 24 Sep", state: "upcoming", note: "Your tenant has agreed the date" },
+    { id: "v2", label: "Property visit", property: "183 Walesby Lane", when: "12 Mar 2026", state: "done", note: "Good condition - kept well, nothing to raise" },
+  ],
+  spent: { figure: "£157", jobs: 2, year: 2026 },
+  authority: "£150",
 };
