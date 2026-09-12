@@ -76,18 +76,7 @@ export default function StylePicker({
           </Pick>
         ))}
       </Row>
-      <Row label="Style">
-        {PRESENT_STYLES.map((s) => (
-          <Pick
-            key={s.id}
-            href={`/present/sample?kind=${kind}&style=${s.id}`}
-            on={s.id === style}
-            title={s.blurb}
-          >
-            {s.label}
-          </Pick>
-        ))}
-      </Row>
+      {/* The style row went on 12 Sep 2026: House is the look. */}
     </div>
   );
 }

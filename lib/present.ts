@@ -821,13 +821,10 @@ const withValuation = (list: SlideId[]): SlideId[] =>
   );
 
 const SLIDES_BY_KIND: Record<DeckKind, SlideId[]> = {
-  /* Six, not five (James, 12 Sep 2026: "build the pre presentation").
-     Between who is coming and why us, one slide about THEIR house: what we
-     already know about it. Dropped by slidesFor when the research came back
-     empty, so a thin address still gets the original five. What is on the
-     market near them was tried here and taken out the same day - "no reason
-     for that to be on there" before the visit. */
-  "pre-appraisal": ["welcome", "appointment", "agent", "material", "why", "questions"],
+  /* Five. Two slides about THEIR house were tried on 12 Sep 2026 - what we
+     know about it, and what is on the market near them - and James took
+     both out the same day: nothing about the property before the visit. */
+  "pre-appraisal": ["welcome", "appointment", "agent", "why", "questions"],
   appraisal: MAIN,
   "post-appraisal": withValuation(MAIN),
 };

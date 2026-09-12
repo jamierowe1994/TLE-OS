@@ -312,11 +312,6 @@ function WelcomeHouse({ deck, show }: { deck: Deck; show: boolean }) {
               <path d="M52 2C78 -2 100 10 100 34L100 86C96 98 84 102 70 100C48 96 30 88 20 72C8 54 6 30 18 16C26 6 40 4 52 2Z" fill="#fbeae6" />
             </svg>
           </div>
-          {/* THE LOOP: one thin clay line curling out from behind the frame,
-              as in the reference - a pen mark, not a border. */}
-          <svg viewBox="0 0 220 160" aria-hidden className="pointer-events-none absolute left-[640px] top-[200px] z-[1] h-[160px] w-[220px]">
-            <path d="M212 40C170 8 60 6 22 46C-6 76 30 118 104 128C160 136 210 118 218 92" fill="none" stroke="#c9847a" strokeWidth="1.6" strokeLinecap="round" opacity="0.85" />
-          </svg>
           {/* THE DOOR. A rounded frame, portrait, at the reference's proportions. */}
           <Rise show={show} i={2} className="absolute right-[64px] top-[112px] z-[2] w-[560px]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -459,12 +454,14 @@ function AgentHouse({ deck, show }: { deck: Deck; show: boolean }) {
       {fx && (
         <>
           {/* THE SHAPE, off the top and right edges, and the loop behind. */}
-          <div className="pointer-events-none absolute -right-[40px] top-[20px] z-[1] h-[860px] w-[720px]">
+          <div className="pointer-events-none absolute -right-[40px] top-[20px] z-[1] h-[800px] w-[720px]">
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden className="absolute inset-0 h-full w-full">
               {/* The line first, the shape over it: both ends of the loop
                   start inside the pink, so only the curve that swings out
                   past the bottom-left edge is seen - no loose ends. */}
-              <path d="M30 30C6 40 -6 66 8 86C18 100 40 104 60 98" fill="none" stroke="#c9847a" strokeWidth="0.35" strokeLinecap="round" opacity="0.85" />
+              {/* Ends well inside the box, so the line is never cut by the
+                  stage's edge at any scale. */}
+              <path d="M30 30C8 40 -2 62 10 80C20 92 40 96 60 92" fill="none" stroke="#c9847a" strokeWidth="0.35" strokeLinecap="round" opacity="0.85" />
               <path d="M46 4C70 -2 96 8 100 30L100 72C98 90 86 100 66 100C46 100 30 92 20 78C6 60 0 40 12 22C20 10 32 8 46 4Z" fill="#fbeae6" />
             </svg>
           </div>
@@ -483,15 +480,6 @@ function AgentHouse({ deck, show }: { deck: Deck; show: boolean }) {
               <div className="flex w-full items-center justify-center rounded-[28px]" style={{ aspectRatio: "500 / 680", background: "#f1f4ec" }}>
                 <span className="text-[120px] leading-none" style={{ fontFamily: HAND, fontWeight: 800, color: "#56634a" }}>{initialsOf(a.name)}</span>
               </div>
-            )}
-            {a.photo && (
-              <p className="pointer-events-none absolute left-7 top-8 text-[24px] leading-[1.15] text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.45)]" style={{ ...SCRIPT, transform: "rotate(-5deg)" }}>
-                Local
-                <br />
-                <span className="ml-3">knowledge.</span>
-                <br />
-                <span className="ml-1">Real results.</span>
-              </p>
             )}
           </Rise>
           <Rise show={show} i={5} className="absolute right-[100px] top-[792px] z-[2] w-[220px]">
@@ -643,9 +631,14 @@ function useStage() {
 /** The stage wrapper: absolute, so its 900px never sets the slide's height. */
 function Stage({ fit, children }: { fit: { staged: boolean; scale: number }; children: React.ReactNode }) {
   return fit.staged ? (
+    /* `zoom`, not a transform. A transform scales a rasterised layer, and
+       the Rise wrappers are composited layers, so at any scale but 1 every
+       word went soft - James, 12 Sep 2026: "the whole deck seems a bit
+       blurry". Zoom lays the stage out again at the new size, so text and
+       edges are drawn crisp; the centring translate is unaffected. */
     <div
-      className="absolute left-1/2 top-1/2 flex h-[900px] w-[1440px] flex-col"
-      style={{ transform: `translate(-50%, -50%) scale(${fit.scale})`, transformOrigin: "center center" }}
+      className="absolute left-1/2 top-1/2 flex h-[900px] w-[1440px] -translate-x-1/2 -translate-y-1/2 flex-col"
+      style={{ zoom: fit.scale }}
     >
       {children}
     </div>
@@ -680,10 +673,10 @@ function AppointmentHouse({ deck, show }: { deck: Deck; show: boolean }) {
         <Rise
           show={show}
           i={1}
-          className="pointer-events-none absolute right-[300px] top-[60px] z-[1] h-[400px] w-[640px] overflow-hidden"
+          className="pointer-events-none absolute right-[320px] top-[60px] z-[1] h-[400px] w-[640px] overflow-hidden"
           style={{
-            WebkitMaskImage: "linear-gradient(to bottom, #000 76%, rgba(0,0,0,0) 100%)",
-            maskImage: "linear-gradient(to bottom, #000 76%, rgba(0,0,0,0) 100%)",
+            WebkitMaskImage: "linear-gradient(to bottom, #000 88%, rgba(0,0,0,0) 100%)",
+            maskImage: "linear-gradient(to bottom, #000 88%, rgba(0,0,0,0) 100%)",
           }}
         >
           <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden className="absolute inset-0 h-full w-full">
@@ -696,7 +689,7 @@ function AppointmentHouse({ deck, show }: { deck: Deck; show: boolean }) {
 
       {/* Anchored from the top on the stage rather than centred, so the
           eyebrow always clears the fixed logo whatever the window's shape. */}
-      <div className={`relative z-[2] flex flex-1 flex-col ${fx ? "justify-start pl-16 pr-[480px] pb-8 pt-2" : "justify-center px-6 pb-10 pt-4 sm:px-12"}`}>
+      <div className={`relative z-[2] flex flex-1 flex-col ${fx ? "justify-start pl-16 pr-[500px] pb-8 pt-2" : "justify-center px-6 pb-10 pt-4 sm:px-12"}`}>
         <div className="relative w-full">
           <div className="relative max-w-[500px]">
             <Rise show={show} i={0}>
@@ -711,12 +704,12 @@ function AppointmentHouse({ deck, show }: { deck: Deck; show: boolean }) {
                 </span>
               </h2>
             </Rise>
-            <Rise show={show} i={2}>
-              <p className="mt-5 max-w-[440px] text-[15px] leading-relaxed text-black/60">
-                We&rsquo;ll walk you through the property, take a few key details and handle the
-                rest. No prep stress. No jargon. Just clear advice from people who do this every day.
-              </p>
-            </Rise>
+            {/* The intro line is gone (James, 12 Sep 2026) but its space is
+                kept, so the cards stay exactly where they were. */}
+            <p aria-hidden className="invisible mt-5 max-w-[440px] text-[15px] leading-relaxed">
+              We&rsquo;ll walk you through the property, take a few key details and handle the
+              rest. No prep stress. No jargon. Just clear advice from people who do this every day.
+            </p>
           </div>
 
           {/* THE FOUR BEATS, as cards in a row with arrows between. On the
@@ -769,9 +762,12 @@ function AppointmentHouse({ deck, show }: { deck: Deck; show: boolean }) {
 
       {/* THE PANEL. Full height on the right of the stage, flush to its
           edge; stacked and rounded below tablet width. */}
-      <Rise show={show} i={2} className={fx ? "absolute inset-y-0 right-0 z-[3] w-[440px]" : "z-[3] px-6 pb-10 sm:px-12"}>
+      {/* Short of the top and the foot, with a margin on the right too, so it
+          sits inside the page rather than being the page's edge (James, 12 Sep
+          2026): its top lines up with the logo, its foot with the band. */}
+      <Rise show={show} i={2} className={fx ? "absolute bottom-[32px] right-[40px] top-[36px] z-[3] w-[420px]" : "z-[3] px-6 pb-10 sm:px-12"}>
         <aside
-          className={fx ? "flex h-full flex-col justify-center px-14 py-12" : "rounded-[18px] p-6 sm:p-8"}
+          className={fx ? "flex h-full flex-col justify-center rounded-[22px] px-12 py-10" : "rounded-[18px] p-6 sm:p-8"}
           style={{ background: "var(--p-panel)", color: INK }}
         >
           <ul>
@@ -2325,7 +2321,7 @@ function QuestionsHouse({ deck, show }: { deck: Deck; show: boolean }) {
             {/* Two ways in, side by side (James: "WhatsApp or email"), and
                 the phone as a quiet third. */}
             {a.phone && (
-              <a href={`https://wa.me/${wa}?text=${encodeURIComponent(subject)}`} target="_blank" rel="noreferrer" className="flex items-center gap-2.5 rounded-[12px] px-6 py-3.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90" style={{ background: SAGE_INK }}>
+              <a href={`https://wa.me/${wa}?text=${encodeURIComponent(subject)}`} target="_blank" rel="noreferrer" className="flex items-center gap-2.5 rounded-[12px] px-6 py-3.5 text-[14px] font-semibold transition-opacity hover:opacity-90" style={{ background: TINTS[0], color: "var(--p-accent)" }}>
                 <Line name="whatsapp" size={17} />
                 WhatsApp {first || "us"}
               </a>
