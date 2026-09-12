@@ -7,7 +7,7 @@ import PropertyPhoto from "@/components/PropertyPhoto";
 import PropertyFile from "@/components/PropertyFile";
 import { Pill } from "@/components/Wire";
 import { rexContactUrl } from "@/lib/business/rex-links";
-import StageSpine, { type SpineStop } from "@/components/StageSpine";
+import { type SpineStop } from "@/components/StageSpine";
 import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
 
 type JourneyAction = { id: string; label: string; detail: string; href: string | null; who: "you" | "kirstie" | "landlord" | "tenant" };
@@ -197,6 +197,71 @@ function ViewTitle({ title, sub, art }: { title: string; sub: string; art?: stri
         // eslint-disable-next-line @next/next/no-img-element
         <img src={art} alt="" aria-hidden className="pointer-events-none absolute -bottom-6 right-4 hidden h-[190px] w-auto sm:block" />
       )}
+    </div>
+  );
+}
+
+/**
+ * The journey as a track: numbered stops joined by a line, then a box for
+ * each stop with its one line of evidence - the listing record's shape, so
+ * the two read the same. Scrolls sideways rather than wrapping: eleven stops
+ * on two rows would put Move day under Received.
+ */
+function Track({ stops }: { stops: SpineStop[] }) {
+  const cols = { gridTemplateColumns: `repeat(${stops.length}, minmax(0, 1fr))` };
+  return (
+    <div className="-mx-2 overflow-x-auto px-2 pb-1">
+      <ol className="grid min-w-[1040px]" style={cols}>
+        {stops.map((s, i) => {
+          const done = s.state === "done";
+          const cur = s.state === "current";
+          const off = s.state === "off";
+          return (
+            <li key={s.id} className="relative flex flex-col items-center px-1 text-center">
+              {i > 0 && (
+                <span
+                  aria-hidden
+                  className={`absolute left-[-50%] right-[50%] top-[13px] ${done || cur ? "h-0.5 bg-accent-dark/60" : "h-0 border-t-2 border-dashed border-line/80"}`}
+                />
+              )}
+              <span
+                className={`relative z-[1] flex h-[26px] w-[26px] items-center justify-center rounded-full text-[11px] font-semibold ${
+                  done ? "bg-accent-dark/70 text-white" : cur ? "bg-accent-dark text-white" : off ? "border-[1.5px] border-line/60 bg-line/30 text-muted" : "border-[1.5px] border-line/80 bg-white text-muted"
+                }`}
+              >
+                {done ? "✓" : off ? "–" : i + 1}
+              </span>
+              <p className={`mt-2.5 text-[12px] leading-tight ${cur ? "font-semibold" : "text-muted"}`}>{s.label}</p>
+            </li>
+          );
+        })}
+      </ol>
+      <ol className="mt-4 grid min-w-[1040px] gap-2" style={cols}>
+        {stops.map((s) => {
+          const done = s.state === "done";
+          const cur = s.state === "current";
+          return (
+            <li
+              key={s.id}
+              className={`rounded-2xl border p-3 ${cur ? "border-accent/70 bg-accent-soft/50" : done ? "border-transparent" : "border-line/50"}`}
+              style={done ? { background: BLUSH_WASH } : undefined}
+            >
+              <p className={`text-[11.5px] leading-tight ${cur ? "font-semibold" : "text-muted"}`}>{s.label}</p>
+              {s.sub ? (
+                <p className="mt-2 flex items-start gap-1.5 text-[10.5px] leading-snug">
+                  <span
+                    aria-hidden
+                    className={`mt-[4px] h-1.5 w-1.5 shrink-0 rounded-full ${s.tone === "ok" ? "bg-emerald-600" : s.tone === "warn" ? "bg-amber-500" : "bg-line"}`}
+                  />
+                  <span className={done || cur ? "text-ink" : "text-muted"}>{s.sub}</span>
+                </p>
+              ) : cur ? (
+                <p className="mt-2 text-[10.5px] leading-snug text-muted">Here now</p>
+              ) : null}
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }
@@ -470,202 +535,203 @@ export default function ApplicationDrawer({
                 </div>
               </header>
 
-              <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-                {/* ══ left: what to do, where it is, the checks ══ */}
-                <div className="flex min-w-0 flex-col gap-5">
-                  {/* Above the next action, deliberately: once a deal is accepted
-                      the handover IS the next action. */}
-                  {aside}
+              {/* Above the boxes, deliberately: once a deal is accepted the
+                  handover IS the next action. */}
+              {aside && <div className="mt-5">{aside}</div>}
 
-                  <Card title="Needs you" icon="bell">
-                    {journey?.ok && journey.actions ? (
-                      <>
-                        {forYou.length === 0 ? (
-                          <p className="text-[13px] leading-relaxed text-muted">
-                            Nothing for you right now.
-                            {journey.actions[0] ? ` ${journey.actions[0].label} - ${journey.actions[0].detail}` : ""}
-                          </p>
-                        ) : (
-                          <ul className="space-y-2.5">
-                            {journey.actions.map((a) => (
-                              <li key={a.id} className="flex items-start gap-2.5">
-                                <Pill tone={a.who === "you" ? "accent" : "neutral"}>
-                                  {a.who === "you" ? "You" : a.who === "kirstie" ? "Kirstie" : a.who === "landlord" ? "Landlord" : "Tenant"}
-                                </Pill>
-                                <span className="min-w-0 flex-1">
-                                  {a.href ? (
-                                    <a href={a.href} className="block text-[13px] font-semibold leading-tight underline-offset-2 hover:underline">
-                                      {a.label}
-                                    </a>
-                                  ) : (
-                                    <span className="block text-[13px] font-semibold leading-tight">{a.label}</span>
-                                  )}
-                                  <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">{a.detail}</span>
-                                </span>
+              {/* ── THREE BOXES (James, 12 Sep 2026): what needs doing, the
+                  checks, and the running account of the deal, side by side;
+                  the spine runs across the bottom under them. ── */}
+              <div className="mt-5 grid gap-5 lg:grid-cols-3">
+                <Card title="Needs you" icon="bell">
+                  {journey?.ok && journey.actions ? (
+                    <>
+                      {forYou.length === 0 ? (
+                        <p className="text-[13px] leading-relaxed text-muted">
+                          Nothing for you right now.
+                          {journey.actions[0] ? ` ${journey.actions[0].label} - ${journey.actions[0].detail}` : ""}
+                        </p>
+                      ) : (
+                        <ul className="space-y-2.5">
+                          {journey.actions.map((a) => (
+                            <li key={a.id} className="flex items-start gap-2.5">
+                              <Pill tone={a.who === "you" ? "accent" : "neutral"}>
+                                {a.who === "you" ? "You" : a.who === "kirstie" ? "Kirstie" : a.who === "landlord" ? "Landlord" : "Tenant"}
+                              </Pill>
+                              <span className="min-w-0 flex-1">
+                                {a.href ? (
+                                  <a href={a.href} className="block text-[13px] font-semibold leading-tight underline-offset-2 hover:underline">
+                                    {a.label}
+                                  </a>
+                                ) : (
+                                  <span className="block text-[13px] font-semibold leading-tight">{a.label}</span>
+                                )}
+                                <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">{a.detail}</span>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {journey.flags && journey.flags.length > 0 && (
+                        <div className="mt-3.5 border-t border-line/50 pt-3">
+                          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">From Kirstie&apos;s side</p>
+                          <ul className="mt-1.5 space-y-1 text-[12px] leading-snug">
+                            {journey.flags.map((f) => (
+                              <li key={f} className="flex gap-2">
+                                <span aria-hidden className="mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                                <span>{f}</span>
                               </li>
                             ))}
                           </ul>
-                        )}
-                        {journey.flags && journey.flags.length > 0 && (
-                          <div className="mt-3.5 border-t border-line/50 pt-3">
-                            <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted">From Kirstie&apos;s side</p>
-                            <ul className="mt-1.5 space-y-1 text-[12px] leading-snug">
-                              {journey.flags.map((f) => (
-                                <li key={f} className="flex gap-2">
-                                  <span aria-hidden className="mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-                                  <span>{f}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </>
-                    ) : action ? (
-                      <>
-                        <p className="text-[13.5px] leading-relaxed">{action.do}</p>
-                        <p className="mt-3 flex items-center gap-2 text-[11px] text-muted">
-                          Waiting on
-                          <Pill tone={action.who === "Us" ? "accent" : "neutral"}>{action.who}</Pill>
-                          {journey === null && <span className="ml-auto">Reading the journey…</span>}
-                        </p>
-                      </>
-                    ) : (
-                      <p className="text-[13px] text-muted">Nothing recorded against this stage.</p>
-                    )}
-                  </Card>
-
-                  <Card
-                    title="Where it's up to"
-                    icon="target"
-                    action={
-                      journey?.ok && journey.deal ? (
-                        <a href={journey.deal.url} target="_blank" rel="noreferrer" className="text-[11.5px] font-semibold text-accent-dark hover:underline">
-                          Kirstie&apos;s deal in Propoly →
-                        </a>
-                      ) : undefined
-                    }
-                  >
-                    {/* Across, like Kirstie's: REX's stops, then her eight, read
-                        from the same place her board reads them. It says it is
-                        checking rather than showing REX's four and redrawing
-                        (James, 10 Sep 2026). */}
-                    {stops ? (
-                      <div className="-mt-3">
-                        <StageSpine compact stops={stops} />
-                      </div>
-                    ) : journey && !journey.ok ? (
-                      <p className="text-[12px] text-muted">{journey.error ?? "Couldn't read where this is up to."}</p>
-                    ) : (
-                      <p className="flex items-center gap-2 text-[12px] text-muted">
-                        <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
-                        Checking where this is up to&hellip;
+                        </div>
+                      )}
+                    </>
+                  ) : action ? (
+                    <>
+                      <p className="text-[13.5px] leading-relaxed">{action.do}</p>
+                      <p className="mt-3 flex items-center gap-2 text-[11px] text-muted">
+                        Waiting on
+                        <Pill tone={action.who === "Us" ? "accent" : "neutral"}>{action.who}</Pill>
+                        {journey === null && <span className="ml-auto">Reading the journey…</span>}
                       </p>
-                    )}
-                    {/* What moved, on this deal alone. Newest first. */}
-                    {journey?.ok && journey.history && journey.history.length > 0 && (
-                      <details className="group mt-3 border-t border-line/50 pt-3">
-                        <summary className="cursor-pointer list-none text-[11px] font-semibold uppercase tracking-wide text-muted">
-                          What moved
-                          <span className="ml-1.5 font-normal normal-case tracking-normal">
-                            · {journey.history.length} {journey.history.length === 1 ? "move" : "moves"}, last {whenWords(journey.history[0].at)}
-                          </span>
-                        </summary>
-                        <ol className="mt-2 space-y-1.5">
-                          {journey.history.slice(0, 8).map((e) => {
-                            const tone = eventTone(e.event);
-                            return (
-                              <li key={e.id} className="flex items-start gap-2 text-[12px] leading-snug">
-                                <span
-                                  aria-hidden
-                                  className={`mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full ${
-                                    tone === "ok" ? "bg-emerald-600" : tone === "warn" ? "bg-amber-500" : "bg-line"
-                                  }`}
-                                />
-                                <span className="min-w-0 flex-1">{eventSentence(e)}</span>
-                                <span className="shrink-0 text-[10.5px] tabular-nums text-muted">{whenWords(e.at)}</span>
-                              </li>
-                            );
-                          })}
-                        </ol>
-                      </details>
-                    )}
-                  </Card>
+                    </>
+                  ) : (
+                    <p className="text-[13px] text-muted">Nothing recorded against this stage.</p>
+                  )}
+                </Card>
 
-                  <Card title="Checklist" icon="checklist" action={<span className="figures text-[12px] text-muted">{ticked}/{checklist.length}</span>}>
-                    <ul className="space-y-2.5">
-                      {checklist.map((c) => (
-                        <li key={c.label} className="flex items-start gap-2.5 text-[13px]">
-                          <span
-                            className={`mt-0.5 flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[9px] ${
-                              c.done ? "border-accent-dark bg-accent-dark text-white" : "border-line bg-white text-muted"
-                            }`}
-                          >
-                            {c.done ? "✓" : ""}
-                          </span>
-                          <span className="min-w-0">
-                            <span className={c.done ? "text-muted line-through" : "font-semibold"}>{c.label}</span>
-                            {c.note && <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">{c.note}</span>}
+                <Card title="Checklist" icon="checklist" action={<span className="figures text-[12px] text-muted">{ticked}/{checklist.length}</span>}>
+                  <ul className="space-y-2.5">
+                    {checklist.map((c) => (
+                      <li key={c.label} className="flex items-start gap-2.5 text-[13px]">
+                        <span
+                          className={`mt-0.5 flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[9px] ${
+                            c.done ? "border-accent-dark bg-accent-dark text-white" : "border-line bg-white text-muted"
+                          }`}
+                        >
+                          {c.done ? "✓" : ""}
+                        </span>
+                        <span className="min-w-0">
+                          <span className={c.done ? "text-muted line-through" : "font-semibold"}>{c.label}</span>
+                          {c.note && <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">{c.note}</span>}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+
+                <Card
+                  title="Activity & comments"
+                  icon="message"
+                  action={<span className="text-[11px] text-muted">{comments === null ? "Loading…" : `${thread.length} ${thread.length === 1 ? "entry" : "entries"}`}</span>}
+                >
+                  {thread.length === 0 ? (
+                    <p className="text-[12.5px] text-muted">
+                      Nothing recorded yet. A comment here is kept on the application and shows for everyone who opens it.
+                    </p>
+                  ) : (
+                    <ul className="max-h-[220px] space-y-3.5 overflow-y-auto">
+                      {thread.map((a, i) => (
+                        <li key={i} className="flex gap-3">
+                          <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${a.note ? "bg-accent-dark" : "bg-line"}`} />
+                          <span className="min-w-0 flex-1">
+                            <span className={`block text-[12.5px] leading-snug ${a.note ? "" : "text-muted"}`}>{a.what}</span>
+                            <span className="mt-0.5 block text-[10.5px] text-muted">
+                              {a.by} · {a.when}
+                            </span>
                           </span>
                         </li>
                       ))}
                     </ul>
-                  </Card>
-                </div>
+                  )}
 
-                {/* ══ right: the running account of the deal ══ */}
-                <div className="flex min-w-0 flex-col gap-5">
-                  <Card
-                    title="Activity & comments"
-                    icon="message"
-                    action={<span className="text-[11px] text-muted">{comments === null ? "Loading…" : `${thread.length} ${thread.length === 1 ? "entry" : "entries"}`}</span>}
-                  >
-                    {thread.length === 0 ? (
-                      <p className="text-[12.5px] text-muted">
-                        Nothing recorded yet. A comment here is kept on the application and shows for everyone who opens it.
-                      </p>
-                    ) : (
-                      <ul className="space-y-3.5">
-                        {thread.map((a, i) => (
-                          <li key={i} className="flex gap-3">
-                            <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${a.note ? "bg-accent-dark" : "bg-line"}`} />
-                            <span className="min-w-0 flex-1">
-                              <span className={`block text-[12.5px] leading-snug ${a.note ? "" : "text-muted"}`}>{a.what}</span>
-                              <span className="mt-0.5 block text-[10.5px] text-muted">
-                                {a.by} · {a.when}
-                              </span>
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-
-                    {/* The composer. A comment is the fastest thing anyone does on
-                        a stalled deal, so it is always in reach, not behind a button. */}
-                    <div className="mt-5 border-t border-line/50 pt-4">
-                      <textarea
-                        value={draft}
-                        onChange={(e) => setDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) post();
-                        }}
-                        placeholder="Add a comment - chased the tenant, spoke to the landlord…"
-                        rows={2}
-                        className="w-full resize-y rounded-xl border border-line/70 bg-page px-3 py-2.5 text-[12.5px] text-ink placeholder:text-muted focus:border-accent-dark focus:outline-none"
-                      />
-                      <div className="mt-2.5 flex items-center justify-between gap-3">
-                        <p className="text-[10.5px] text-muted">{postError ? <span className="font-semibold text-accent-dark">{postError}</span> : "⌘↵ to post"}</p>
-                        <button
-                          type="button"
-                          onClick={() => void post()}
-                          disabled={!draft.trim() || posting}
-                          className="press-ring rounded-full bg-[var(--brown)] px-4 py-2 text-[12px] font-semibold text-white transition-opacity disabled:opacity-40"
-                        >
-                          {posting ? "Posting…" : "Post comment"}
-                        </button>
-                      </div>
+                  {/* The composer. A comment is the fastest thing anyone does on
+                      a stalled deal, so it is always in reach, not behind a button. */}
+                  <div className="mt-4 border-t border-line/50 pt-4">
+                    <textarea
+                      value={draft}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) post();
+                      }}
+                      placeholder="Add a comment - chased the tenant, spoke to the landlord…"
+                      rows={2}
+                      className="w-full resize-y rounded-xl border border-line/70 bg-page px-3 py-2.5 text-[12.5px] text-ink placeholder:text-muted focus:border-accent-dark focus:outline-none"
+                    />
+                    <div className="mt-2.5 flex items-center justify-between gap-3">
+                      <p className="text-[10.5px] text-muted">{postError ? <span className="font-semibold text-accent-dark">{postError}</span> : "⌘↵ to post"}</p>
+                      <button
+                        type="button"
+                        onClick={() => void post()}
+                        disabled={!draft.trim() || posting}
+                        className="press-ring rounded-full bg-[var(--brown)] px-4 py-2 text-[12px] font-semibold text-white transition-opacity disabled:opacity-40"
+                      >
+                        {posting ? "Posting…" : "Post comment"}
+                      </button>
                     </div>
-                  </Card>
-                </div>
+                  </div>
+                </Card>
+              </div>
+
+              {/* ── THE SPINE, across the bottom: the journey as a track, each
+                  step in its own box, the way the listing record draws its
+                  own. REX's stops then Kirstie's eight, read from where her
+                  board reads them; it says it is checking rather than showing
+                  REX's four and redrawing (James, 10 Sep 2026). ── */}
+              <div className="mt-5">
+                <Card
+                  title="Where it's up to"
+                  icon="target"
+                  action={
+                    <span className="flex items-center gap-3 text-[11.5px] text-muted">
+                      {stops && here && <span>Step {(hereIdx >= 0 ? hereIdx : stops.length - 1) + 1} of {stops.length}</span>}
+                      {journey?.ok && journey.deal && (
+                        <a href={journey.deal.url} target="_blank" rel="noreferrer" className="font-semibold text-accent-dark hover:underline">
+                          Kirstie&apos;s deal in Propoly →
+                        </a>
+                      )}
+                    </span>
+                  }
+                >
+                  {stops ? (
+                    <Track stops={stops} />
+                  ) : journey && !journey.ok ? (
+                    <p className="text-[12px] text-muted">{journey.error ?? "Couldn't read where this is up to."}</p>
+                  ) : (
+                    <p className="flex items-center gap-2 text-[12px] text-muted">
+                      <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
+                      Checking where this is up to&hellip;
+                    </p>
+                  )}
+                  {/* What moved, on this deal alone. Newest first. */}
+                  {journey?.ok && journey.history && journey.history.length > 0 && (
+                    <details className="group mt-4 border-t border-line/50 pt-3">
+                      <summary className="cursor-pointer list-none text-[11px] font-semibold uppercase tracking-wide text-muted">
+                        What moved
+                        <span className="ml-1.5 font-normal normal-case tracking-normal">
+                          · {journey.history.length} {journey.history.length === 1 ? "move" : "moves"}, last {whenWords(journey.history[0].at)}
+                        </span>
+                      </summary>
+                      <ol className="mt-2 space-y-1.5">
+                        {journey.history.slice(0, 8).map((e) => {
+                          const tone = eventTone(e.event);
+                          return (
+                            <li key={e.id} className="flex items-start gap-2 text-[12px] leading-snug">
+                              <span
+                                aria-hidden
+                                className={`mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full ${
+                                  tone === "ok" ? "bg-emerald-600" : tone === "warn" ? "bg-amber-500" : "bg-line"
+                                }`}
+                              />
+                              <span className="min-w-0 flex-1">{eventSentence(e)}</span>
+                              <span className="shrink-0 text-[10.5px] tabular-nums text-muted">{whenWords(e.at)}</span>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    </details>
+                  )}
+                </Card>
               </div>
             </div>
           )}
