@@ -46,6 +46,8 @@ export interface PassportData {
      seeing the original does), so nothing reads it but the card. Held as a
      small JPEG data URL, resized in the browser before it is sent. */
   photo: string;
+  /** Where the photo sits in its circle, "x y" in percent. They drag it. */
+  photoFocus: string;
 
   /* ── Right to rent ──
      Asked the way the law works rather than the way a database would like it:
@@ -96,7 +98,7 @@ export interface PassportData {
 }
 
 export const EMPTY_PASSPORT: PassportData = {
-  legalName: "", knownAs: "", dob: "", nationality: "", email: "", mobile: "", photo: "",
+  legalName: "", knownAs: "", dob: "", nationality: "", email: "", mobile: "", photo: "", photoFocus: "",
   hasBritishPassport: null, shareCode: "",
   applicantType: "", annualIncome: "", savings: "",
   numAdults: "", numChildren: "", coOccupantIncomes: "",
@@ -232,7 +234,7 @@ export function completeness(d: PassportData): { done: number; total: number; pc
  */
 export function answered(d: PassportData): { done: number; total: number; pct: number } {
   const optional = new Set<keyof PassportData>([
-    "knownAs", "photo", "movedIn", "shareCode", "savings", "coOccupantIncomes", "previousAddress",
+    "knownAs", "photo", "photoFocus", "movedIn", "shareCode", "savings", "coOccupantIncomes", "previousAddress",
     "adverseCreditNote", "petsNote", "rentOnTime", "landlordRef", "numChildren",
   ]);
   const keys = (Object.keys(EMPTY_PASSPORT) as (keyof PassportData)[]).filter((k) => !optional.has(k));

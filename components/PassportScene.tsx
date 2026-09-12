@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import PassportBook, { CARD_H, CARD_W, COVER, PassportBack, type PassportFocus } from "@/components/PassportBook";
+import PassportBook, { CARD_H, CARD_W, CLAY, COVER, PassportBack, type PassportFocus } from "@/components/PassportBook";
 import type { PassportData } from "@/lib/passport-shape";
 
 /**
@@ -52,14 +52,14 @@ function useScale(ref: React.RefObject<HTMLDivElement | null>, fit: (w: number, 
 function Faces({ data, focus, scale, angle, lean, dragging }: { data: PassportData; focus: PassportFocus; scale: number; angle: number; lean: boolean; dragging: boolean }) {
   const w = CARD_W * scale;
   const h = CARD_H * scale;
-  const r = 26 * scale;
+  const r = 30 * scale;
   /* Thickness: two hard shadows in the cover's brown, stepping away to the
      right and down. They are part of the face, so they turn with it. */
-  const edge = `${2 * scale}px ${2 * scale}px 0 ${COVER}, ${4 * scale}px ${4 * scale}px 0 ${COVER}cc, ${6 * scale}px ${6 * scale}px 0 ${COVER}99`;
+  const edge = `0 0 0 ${1.2 * scale}px ${CLAY}99, ${2.5 * scale}px ${2.5 * scale}px 0 ${CLAY}, ${5 * scale}px ${5 * scale}px 0 ${COVER}dd, ${7 * scale}px ${7 * scale}px 0 ${COVER}99`;
   const face = (side: Side) => ({
     position: "absolute" as const,
     inset: 0,
-    borderRadius: r,
+    borderRadius: 30 * scale,
     backfaceVisibility: "hidden" as const,
     WebkitBackfaceVisibility: "hidden" as const,
     transform: side === "back" ? "rotateY(180deg)" : "none",

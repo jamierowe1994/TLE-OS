@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { type PassportFocus } from "@/components/PassportBook";
+import { photoPosition, type PassportFocus } from "@/components/PassportBook";
 import PassportScene, { PassportFlat } from "@/components/PassportScene";
 import {
   APPLICANT_TYPES,
@@ -329,8 +329,24 @@ function TenantAddress({ label, hint, value, onChange, onEnter, onPicked }: { la
  * photo. Shrunk in the browser to a small JPEG; nothing reads it but the
  * card, and the Right to Rent check stays the agent's job.
  */
-function PhotoField({ value, onChange }: { value: string; onChange: (dataUrl: string) => void }) {
+function PhotoField({
+  value,
+  focus,
+  onChange,
+  onFocus,
+}: {
+  value: string;
+  focus: string;
+  onChange: (dataUrl: string) => void;
+  onFocus: (focus: string) => void;
+}) {
   const [busy, setBusy] = useState(false);
+  const drag = useRef<{ x: number; y: number; fx: number; fy: number } | null>(null);
+  const SIZE = 112;
+  const parse = (f: string) => {
+    const m = /^(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)$/.exec(f.trim());
+    return m ? { fx: Number(m[1]), fy: Number(m[2]) } : { fx: 50, fy: 22 };
+  };
   const pick = async (file: File | undefined) => {
     if (!file) return;
     setBusy(true);
@@ -342,20 +358,44 @@ function PhotoField({ value, onChange }: { value: string; onChange: (dataUrl: st
       const ctx = c.getContext("2d")!;
       const s = Math.max(W / bmp.width, H / bmp.height);
       const w = bmp.width * s, h = bmp.height * s;
-      ctx.drawImage(bmp, (W - w) / 2, (H - h) / 2, w, h);
+      ctx.drawImage(bmp, (W - w) / 2, (H - h) * 0.22, w, h);
       onChange(c.toDataURL("image/jpeg", 0.82));
+      onFocus("");
     } finally {
       setBusy(false);
     }
   };
+  /* Dragging the picture inside its circle moves what the circle shows. The
+     focus is stored, not the crop, so nothing is lost by moving it twice. */
+  const onDown = (e: React.PointerEvent) => {
+    if (!value) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    drag.current = { x: e.clientX, y: e.clientY, ...parse(focus) };
+  };
+  const onMove = (e: React.PointerEvent) => {
+    if (!drag.current) return;
+    const dx = ((e.clientX - drag.current.x) / SIZE) * 100;
+    const dy = ((e.clientY - drag.current.y) / SIZE) * 100;
+    const fx = Math.max(0, Math.min(100, drag.current.fx - dx));
+    const fy = Math.max(0, Math.min(100, drag.current.fy - dy));
+    onFocus(`${fx.toFixed(1)} ${fy.toFixed(1)}`);
+  };
+  const onUp = () => { drag.current = null; };
   return (
-    <div className="flex items-center gap-4 rounded-[12px] border border-dashed border-line/90 bg-white/60 px-4 py-4">
-      <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--accent-soft)]">
+    <div className="flex items-center gap-5 rounded-[12px] border border-dashed border-line/90 bg-white/60 px-4 py-4">
+      <div
+        className="flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--accent-soft)]"
+        style={{ width: SIZE, height: SIZE, cursor: value ? "grab" : "default", touchAction: "none", boxShadow: value ? `0 0 0 3px #fff, 0 0 0 4.5px var(--accent)` : undefined }}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerCancel={onUp}
+      >
         {value ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={value} alt="" className="h-full w-full object-cover" />
+          <img src={value} alt="" draggable={false} className="h-full w-full select-none object-cover" style={{ objectPosition: photoPosition(focus) }} />
         ) : (
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden style={{ color: BROWN }}>
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden style={{ color: BROWN }}>
             <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6H8l1.2-2h5.6L16 6h1.5A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5v-8Z" stroke="currentColor" strokeWidth="1.7" />
             <circle cx="12" cy="12.5" r="3.2" stroke="currentColor" strokeWidth="1.7" />
           </svg>
@@ -363,11 +403,15 @@ function PhotoField({ value, onChange }: { value: string; onChange: (dataUrl: st
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-[14.5px] font-semibold">{value ? "Your photo is on the card" : "A photo for your card"}</p>
-        <p className="text-[13px] leading-snug text-muted">A selfie is fine. It only goes on your card, and your agent still checks your ID in person.</p>
+        <p className="text-[13px] leading-snug text-muted">
+          {value
+            ? "Drag the picture to centre your face. It only goes on your card, and your agent still checks your ID in person."
+            : "A selfie is fine. It only goes on your card, and your agent still checks your ID in person."}
+        </p>
       </div>
       <div className="flex shrink-0 items-center gap-3">
         {value && (
-          <button type="button" onClick={() => onChange("")} className="text-[13px] text-muted underline underline-offset-4 hover:text-ink">
+          <button type="button" onClick={() => { onChange(""); onFocus(""); }} className="text-[13px] text-muted underline underline-offset-4 hover:text-ink">
             Remove
           </button>
         )}
@@ -705,7 +749,7 @@ export default function PassportForm({
                   <span className="ml-2 rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-semibold" style={{ color: BROWN }}>Optional</span>
                   <span className="mt-1 block text-[13px] leading-relaxed text-muted">You can carry on without one.</span>
                   <div className="mt-3">
-                    <PhotoField value={d.photo} onChange={(v) => set("photo", v)} />
+                    <PhotoField value={d.photo} focus={d.photoFocus} onChange={(v) => set("photo", v)} onFocus={(f) => set("photoFocus", f)} />
                   </div>
                 </div>
               </>
