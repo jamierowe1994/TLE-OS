@@ -13,7 +13,11 @@ export default function SideNav({ variant }: { variant: "side" | "pills" }) {
   const path = usePathname() ?? "/landlord";
   const params = useSearchParams();
   const base = path.startsWith("/landlord/demo") ? "/landlord/demo" : "/landlord";
-  const q = params?.get("from") === "admin" ? "?from=admin" : "";
+  /* Keeps the sample's stop and the preview bar across the pages. */
+  const keep = new URLSearchParams();
+  if (params?.get("stage")) keep.set("stage", params.get("stage")!);
+  if (params?.get("from") === "admin") keep.set("from", "admin");
+  const q = keep.size ? `?${keep.toString()}` : "";
   const onJourney = path.endsWith("/journey");
   const onDocuments = path.endsWith("/documents");
   const onMaintenance = path.endsWith("/maintenance");

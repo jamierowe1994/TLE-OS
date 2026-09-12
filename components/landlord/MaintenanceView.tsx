@@ -3,7 +3,7 @@ import PropertyPhoto from "@/components/PropertyPhoto";
 import AgentCard from "@/components/landlord/AgentCard";
 import ReportIssue from "@/components/landlord/ReportIssue";
 import type { MaintJob, MaintView, MaintVisit } from "@/lib/landlord-maintenance-view";
-import type { LandlordView } from "@/lib/landlord-view";
+import { isLet, type LandlordView } from "@/lib/landlord-view";
 
 /**
  * The Maintenance page (12 Sep 2026), in the home page's language, and the
@@ -27,6 +27,10 @@ const SAGE = "#b3bea5";
 export default function MaintenanceView({ view: v, m, sample = false }: { view: LandlordView; m: MaintView; sample?: boolean }) {
   const first = v.agent?.name.split(/\s+/)[0] ?? "your agent";
   const upcoming = m.visits.filter((x) => x.state !== "done");
+  /* Locked until there is a tenant to maintain for (James, 12 Sep 2026):
+     a landlord mid-journey with no managed property sees what this becomes
+     and where they are, not an empty board. */
+  if (!isLet(v) && m.properties.length === 0) return <Locked view={v} />;
   return (
     <div className="space-y-6">
       {/* ── title and the agent ── */}
@@ -263,5 +267,76 @@ function VisitRow({ x }: { x: MaintVisit }) {
         {done ? "Done" : x.state === "upcoming" ? "Booked" : "Arranging"}
       </span>
     </li>
+  );
+}
+
+/** Before the let: what this page becomes, and where they are on the way to it. */
+function Locked({ view: v }: { view: LandlordView }) {
+  const current = v.journey.find((s) => s.state === "current");
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[1fr_auto]">
+        <div className="pt-2">
+          <h1 className="text-[44px] leading-[1.05]">Maintenance</h1>
+          <p className="mt-3 max-w-xl text-[14.5px] text-muted">Opens once your property is let. Here is what it will hold.</p>
+        </div>
+        <AgentCard v={v} />
+      </div>
+
+      <section className="relative overflow-hidden rounded-[22px] p-7" style={{ background: SAGE_WASH }} data-search>
+        <span aria-hidden className="pointer-events-none absolute -bottom-28 -right-16 h-72 w-72 rounded-full" style={{ background: `${SAGE}33` }} />
+        <div className="relative max-w-[62%]">
+          <p className={eyebrow}>Not yet</p>
+          <div className="mt-4 flex items-start gap-5">
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-white/80" style={{ color: SAGE_INK }}>
+              <DoodleIcon name="lock" size={22} />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-[28px] leading-tight">Unlocks when your tenant moves in</h2>
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-muted">
+                {current ? `You are at ${current.label.toLowerCase()} just now.` : "Your let is under way."} Once the tenancy starts, this page becomes your maintenance hub.
+              </p>
+            </div>
+          </div>
+          <ul className="mt-6 grid gap-2.5">
+            {[
+              "Report a problem yourself, and see what your tenant has reported",
+              "Every job with what is happening now, who is doing it and what it costs",
+              "The visits we make through the tenancy, and what we found",
+              "Your authority: up to £150 we get on with it, above that we ask you first",
+            ].map((t) => (
+              <li key={t} className="flex items-start gap-2.5 text-[12.5px]">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/80 text-[10px] font-bold" style={{ color: SAGE_INK }}>✓</span>
+                {t}
+              </li>
+            ))}
+          </ul>
+        </div>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/art/family-home.png" alt="" className="pointer-events-none absolute -bottom-2 -right-3 hidden w-[34%] max-w-[260px] sm:block" />
+      </section>
+
+      <section className={`${card} p-6`} data-search>
+        <h2 className="text-[18px]">Where you are</h2>
+        <p className="mt-1.5 text-[12.5px] text-muted">The journey page has the detail; this is the short version.</p>
+        <ol className="mt-4 flex gap-1 overflow-x-auto pb-2">
+          {v.journey.map((s, i) => (
+            <li key={s.id} className="flex min-w-[96px] flex-1 flex-col">
+              <div className="flex items-center">
+                <span
+                  className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[10px] ${
+                    s.state === "done" ? "border-accent-dark bg-accent-soft text-accent-dark" : s.state === "current" ? "border-accent-dark bg-accent-dark text-white" : "border-line bg-white text-muted"
+                  }`}
+                >
+                  {s.state === "done" ? "✓" : i + 1}
+                </span>
+                {i < v.journey.length - 1 && <span aria-hidden className={`h-[1.5px] flex-1 ${s.state === "done" ? "bg-accent-dark/50" : "bg-line"}`} />}
+              </div>
+              <span className={`mt-2 pr-2 text-[11.5px] leading-tight ${s.state === "current" ? "font-semibold" : "text-muted"}`}>{s.label}</span>
+            </li>
+          ))}
+        </ol>
+      </section>
+    </div>
   );
 }

@@ -137,12 +137,12 @@ export default function DocumentsView({ view: v, docs: d, sample = false }: { vi
           ) : (
             <ul className="mt-4 divide-y divide-line/50">
               {p.certs.map((r) => (
-                <Row key={r.title} r={r} />
+                <Row key={r.title} r={r} upload={{ appraisalId: d.appraisalId, sample }} />
               ))}
             </ul>
           )}
           <p className="mt-4 text-[12px] text-muted">
-            We arrange renewals before they fall due. If a date here looks wrong, message {v.agent ? v.agent.name.split(/\s+/)[0] : "your agent"}.
+            We arrange renewals before they fall due. If your own engineer does one, send us the new certificate from its row. If a date here looks wrong, message {v.agent ? v.agent.name.split(/\s+/)[0] : "your agent"}.
           </p>
         </section>
       ))}
@@ -182,8 +182,9 @@ export default function DocumentsView({ view: v, docs: d, sample = false }: { vi
   );
 }
 
-/** One document: an icon, the name, its state, and the way to open it. */
-function Row({ r }: { r: DocRow }) {
+/** One document: an icon, the name, its state, and the way to open it - or,
+ *  for a certificate that is due, the way to send the new one. */
+function Row({ r, upload }: { r: DocRow; upload?: { appraisalId: string | null; sample: boolean } }) {
   const ok = r.state === "uploaded";
   const missing = r.state === "missing";
   const watch = r.state === "watch";
@@ -196,6 +197,7 @@ function Row({ r }: { r: DocRow }) {
         <span className="block truncate text-[13.5px] font-semibold">{r.title}</span>
         <span className={`block truncate text-[12px] ${missing ? "text-accent-dark" : "text-muted"}`}>{r.sub}</span>
       </span>
+      {upload && r.kind && r.state !== "uploaded" && <UploadDoc kind={r.kind} appraisalId={upload.appraisalId} sample={upload.sample} label="Send the new one" tone="light" />}
       {r.href && (
         <a
           href={r.href}

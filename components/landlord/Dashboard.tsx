@@ -5,7 +5,7 @@ import AgentCard from "@/components/landlord/AgentCard";
 import Spine from "@/components/landlord/Spine";
 import { HeroAction, pickHero } from "@/components/landlord/StepAction";
 import { fullJourney } from "@/lib/landlord-journey";
-import type { LandlordView } from "@/lib/landlord-view";
+import { isLet, type LandlordView } from "@/lib/landlord-view";
 
 /**
  * The landlord dashboard, to James's mock of 11 Sep 2026: light, airy,
@@ -46,6 +46,8 @@ export default function LandlordDashboard({
      order. The rest are quiet links under it. */
   const hero = pickHero(v);
   const others = v.steps.filter((s) => s !== hero && s.href && !s.action);
+  const maintenanceHref = v.steps.find((s) => s.id === "maintenance")?.href ?? "/landlord/maintenance";
+  void isLet;
 
   return (
     <div className="space-y-6">
@@ -165,6 +167,104 @@ export default function LandlordDashboard({
           <Spine stops={fullJourney(v)} />
         </div>
       </section>
+
+      {/* ── the listing, once marketing is live (James, 12 Sep 2026): the
+          photographs, where it is advertised, since when. ── */}
+      {v.marketing && (
+        <section id="listing" className={`${card} p-6`} data-search>
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <h2 className="text-[18px]">Your listing</h2>
+            <span className="text-[11.5px] text-muted">
+              {v.marketing.live ? `Live since ${v.marketing.liveSince ?? "today"}` : "Being prepared"}
+              {v.marketing.note ? `  •  ${v.marketing.note}` : ""}
+            </span>
+          </div>
+          {v.marketing.photos.length > 0 && (
+            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {v.marketing.photos.slice(0, 4).map((src, i) => (
+                <div key={src + i} className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-accent-soft/40">
+                  <PropertyPhoto src={src} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                  {i === 3 && v.marketing!.photos.length > 4 && (
+                    <span className="absolute bottom-2 right-2 rounded-full bg-black/50 px-2 py-0.5 text-[10.5px] font-semibold text-white">+{v.marketing!.photos.length - 4} more</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {v.marketing.portals.length > 0 && (
+            <p className="mt-4 flex flex-wrap items-center gap-2 text-[12.5px] text-muted">
+              <span>Advertised on</span>
+              {v.marketing.portals.map((p) =>
+                p.href ? (
+                  <a key={p.name} href={p.href} target="_blank" rel="noreferrer" className="rounded-full border border-line/60 bg-white px-3 py-1 text-[11.5px] font-semibold text-ink transition-colors hover:border-ink/40">
+                    {p.name}
+                  </a>
+                ) : (
+                  <span key={p.name} className="rounded-full border border-line/60 bg-white px-3 py-1 text-[11.5px] font-semibold text-ink">{p.name}</span>
+                )
+              )}
+            </p>
+          )}
+        </section>
+      )}
+
+      {/* ── viewings, once there are any: who has been and what they said ── */}
+      {v.viewings && v.viewings.length > 0 && (
+        <section className={`${card} p-6`} id="viewings" data-search>
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-[18px]">Viewings</h2>
+            <span className="text-[11.5px] text-muted">
+              {v.viewings.filter((x) => x.state === "booked").length} booked  •  {v.viewings.filter((x) => x.state === "done").length} been
+            </span>
+          </div>
+          <ul className="mt-3 divide-y divide-line/60">
+            {v.viewings.map((x) => (
+              <li key={x.id} className="flex flex-wrap items-start gap-x-4 gap-y-1 py-3">
+                <span className="w-36 shrink-0 text-[13.5px] font-semibold">{x.when}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px]">{x.who}</span>
+                  {x.feedback && <span className="mt-0.5 block text-[12px] text-muted">&ldquo;{x.feedback}&rdquo;</span>}
+                </span>
+                <span
+                  className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${x.state === "booked" ? "bg-accent-soft text-accent-dark" : x.state === "cancelled" ? "bg-[#f3f3f1] text-muted line-through" : ""}`}
+                  style={x.state === "done" ? { background: SAGE_WASH, color: SAGE_INK } : undefined}
+                >
+                  {x.state === "booked" ? "Booked" : x.state === "cancelled" ? "Cancelled" : "Been"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* ── the tenancy, once the tenant is in: the management profile ── */}
+      {v.tenancy && (
+        <section id="tenancy" className={`${card} p-6`} data-search>
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <h2 className="text-[18px]">Your tenancy</h2>
+            <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: SAGE_WASH, color: SAGE_INK }}>{v.tenancy.service ?? "Managed"}</span>
+          </div>
+          <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {([
+              ["Tenant", v.tenancy.tenant, v.tenancy.started ? `Since ${v.tenancy.started}` : null],
+              ["Rent", v.tenancy.rent, v.tenancy.rentStatus],
+              ["Tenancy ends", v.tenancy.ends ?? "Rolling", v.tenancy.renewal],
+              ["Deposit", v.tenancy.deposit ?? "Not recorded", v.tenancy.agreementSigned ? `Agreement signed ${v.tenancy.agreementSigned}` : null],
+            ] as Array<[string, string, string | null]>).map(([k, val, sub]) => (
+              <div key={k} className="min-w-0">
+                <p className={eyebrow}>{k}</p>
+                <p className="mt-1 text-[15px] font-semibold leading-snug">{val}</p>
+                {sub && <p className="mt-0.5 text-[12px] leading-snug text-muted">{sub}</p>}
+              </div>
+            ))}
+          </div>
+          {v.tenancy.agreementHref && (
+            <a href={v.tenancy.agreementHref} target="_blank" rel="noreferrer" className="mt-5 inline-flex items-center gap-2 rounded-full border border-line/70 px-4 py-2 text-[12.5px] font-semibold transition-colors hover:border-ink/40">
+              Open the tenancy agreement <span aria-hidden>→</span>
+            </a>
+          )}
+        </section>
+      )}
 
       {/* ── the let, step by step ──
           Kirstie's eight stages, derived the same way as her board and the
@@ -314,9 +414,33 @@ export default function LandlordDashboard({
           <p className="mt-4 text-[12px] text-muted">{v.snapshot.note}</p>
         </section>
 
-        {/* What the portal becomes once the property is let. Words about the
-            future, on purpose: maintenance on the landlord's side is not
-            built yet, so there is no button that pretends it is. */}
+        {/* Once the property is let, maintenance in one line with the way
+            through to the page; before that, what this becomes. */}
+        {v.maintenance ? (
+          <section id="maintenance" className="relative overflow-hidden rounded-[22px] p-6" style={{ background: SAGE_WASH }} data-search>
+            <div className="flex items-center gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/80" style={{ color: v.maintenance.needsYou ? "var(--accent-dark)" : SAGE_INK }}>
+                <DoodleIcon name="setting" size={17} />
+              </span>
+              <h2 className="text-[18px] leading-snug">Maintenance</h2>
+            </div>
+            <p className="mt-4 text-[22px] font-semibold leading-tight" style={{ color: v.maintenance.needsYou ? "var(--accent-dark)" : SAGE_INK }}>{v.maintenance.headline}</p>
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">{v.maintenance.sub}</p>
+            <dl className="mt-4 grid grid-cols-2 gap-3 text-[12px]">
+              <div>
+                <dt className="text-muted">Open jobs</dt>
+                <dd className="figures text-[18px]">{v.maintenance.open}</dd>
+              </div>
+              <div>
+                <dt className="text-muted">Next visit</dt>
+                <dd className="text-[13px] font-semibold">{v.maintenance.nextVisit ?? "None booked"}</dd>
+              </div>
+            </dl>
+            <Link href={maintenanceHref} className="mt-5 inline-flex items-center gap-2 rounded-full bg-white/80 px-4 py-2 text-[12.5px] font-semibold transition-colors hover:bg-white" style={{ color: SAGE_INK }}>
+              Open maintenance <span aria-hidden>→</span>
+            </Link>
+          </section>
+        ) : (
         <section
           id="maintenance"
           className="relative min-h-[260px] overflow-hidden rounded-[22px] p-6"
@@ -347,6 +471,7 @@ export default function LandlordDashboard({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/art/family-home.png" alt="" className="pointer-events-none absolute -bottom-2 -right-3 w-[40%] max-w-[200px]" />
         </section>
+        )}
       </div>
 
       {managed}

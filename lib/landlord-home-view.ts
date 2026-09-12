@@ -26,6 +26,81 @@ import type { ManagedProperty } from "@/lib/portfolio-types";
 
 type Me = NonNullable<Awaited<ReturnType<typeof currentLandlord>>>;
 
+import { listOrders } from "@/lib/works-orders";
+import { listInspections } from "@/lib/inspections";
+import { fetchListingBook } from "@/lib/rex-listings";
+import { portalLinksFor } from "@/lib/rex-portal-links";
+import { fetchViewingsFor } from "@/lib/rex-viewings";
+import { rexConfigured } from "@/lib/rex";
+import type { ViewMaintenance, ViewMarketing, ViewViewing } from "@/lib/landlord-view";
+
+const dayTime = (iso: string | null | undefined) =>
+  iso ? new Date(iso).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : null;
+
+/**
+ * The listing and its viewings, from REX, once a property is on the market:
+ * the photographs, where it is advertised and since when, and who has been.
+ * Empty on any failure - the portal renders without it rather than hang.
+ * Viewers are described, never named, before there is an offer.
+ */
+async function marketingFor(rexPropertyId: string | null): Promise<{ marketing: ViewMarketing | null; viewings: ViewViewing[] }> {
+  if (!rexPropertyId || !rexConfigured()) return { marketing: null, viewings: [] };
+  try {
+    const book = await fetchListingBook();
+    const listing = book.listings.find((l) => l.propertyId === rexPropertyId) ?? null;
+    if (!listing) return { marketing: null, viewings: [] };
+    const [portals, raw] = await Promise.all([
+      portalLinksFor(listing.id).catch(() => []),
+      fetchViewingsFor(listing.id, rexPropertyId).catch(() => []),
+    ]);
+    const live = listing.publicationStatus === "published";
+    const marketing: ViewMarketing = {
+      live,
+      liveSince: day(listing.publishedAt),
+      portals: portals.map((p) => ({ name: p.portal, href: p.url })),
+      photos: listing.images ?? (listing.image ? [listing.image] : []),
+      note: live ? `${listing.imageCount} photograph${listing.imageCount === 1 ? "" : "s"}` : "Being written up and photographed",
+    };
+    const now = Date.now();
+    const viewings: ViewViewing[] = raw
+      .filter((v) => v.kind === "viewing")
+      .map((v) => ({
+        id: v.id,
+        when: dayTime(v.startsAt) ?? "",
+        who: v.contacts.length > 1 ? `${v.contacts.length} people viewing together` : "A prospective tenant",
+        state: (v.cancelled ? "cancelled" : new Date(v.startsAt).getTime() >= now ? "booked" : "done") as ViewViewing["state"],
+        feedback: null,
+      }))
+      .sort((a, b) => (a.state === "booked" ? 0 : 1) - (b.state === "booked" ? 0 : 1));
+    return { marketing, viewings };
+  } catch {
+    return { marketing: null, viewings: [] };
+  }
+}
+
+/** Maintenance in one line for a managed property, from the board and the inspections book. */
+async function maintenanceFor(propertyId: string | null): Promise<ViewMaintenance> {
+  const [orders, visits] = await Promise.all([
+    propertyId ? listOrders({ propertyId, open: true }).catch(() => []) : Promise.resolve([]),
+    propertyId ? listInspections({ propertyId, open: true }).catch(() => []) : Promise.resolve([]),
+  ]);
+  const needsYou = orders.filter((o) => o.status === "approval" || (o.arranging === "landlord" && !o.landlordResolvedAt)).length;
+  const booked = visits.find((i) => i.status === "booked");
+  const nextVisit = booked ? (dayTime(booked.bookedAt ?? booked.offered[0] ?? booked.dueAt) ?? null) : null;
+  const open = orders.length;
+  return {
+    open,
+    needsYou,
+    nextVisit,
+    headline: needsYou ? `${needsYou} job${needsYou === 1 ? "" : "s"} waiting on you` : open ? `${open} job${open === 1 ? "" : "s"} in hand` : "All up to date",
+    sub: needsYou
+      ? "A quote needs your say-so, or a job is with your own contractor."
+      : open
+        ? "Nothing needs you. We are on it."
+        : "Nothing reported, nothing outstanding. Fantastic.",
+  };
+}
+
 export const money = (n: number | null | undefined) => (n == null ? "—" : `£${Math.round(n).toLocaleString("en-GB")}`);
 const day = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null;
@@ -60,7 +135,7 @@ export async function loadLandlordHome(me: Me) {
   const base = open[0]
     ? await appraisalView(open[0], first, docs, msgs, offers)
     : managed[0]
-      ? managedView(managed[0], first, compliance.get(managed[0].propertyId ?? "") ?? null, offers)
+      ? await managedView(managed[0], first, compliance.get(managed[0].propertyId ?? "") ?? null, offers)
       : null;
   const view = base ? { ...base, progress } : null;
   const rest = open[0] ? managed : managed.slice(1);
@@ -108,6 +183,8 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
     : "Who has been, and what they said";
 
   const geo = await geocode(`${a.address}, ${a.postcode}`).catch(() => null);
+  const onMarket = at >= STAGES.findIndex((s) => s.id === "marketing");
+  const { marketing, viewings } = onMarket ? await marketingFor(a.rexPropertyId) : { marketing: null, viewings: [] as ViewViewing[] };
 
   const deckLabel = latest ? (DECK_KINDS.find((k) => k.id === latest.kind)?.label ?? latest.kind) : null;
 
@@ -192,10 +269,16 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
       /* Everything in: off the list. */
       compliance: { id: "compliance", label: "Upload compliance documents", sub: `${required.length - have} of ${required.length} still to send`, href: "/landlord/documents", icon: "upload", done: allIn },
       message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: null, icon: "message", action: "message" },
-      listing: { id: "listing", label: "See your listing", sub: "Live on the portals", href: null, icon: "home" },
-      viewings: { id: "viewings", label: "Viewings and offers", sub: offersSub, href: offers.length ? "#offers" : null, icon: "key" },
+      listing: { id: "listing", label: "See your listing", sub: marketing?.live ? `Live on ${marketing.portals.map((p) => p.name).join(", ") || "the portals"}` : "Once marketing starts", href: marketing ? "#listing" : null, icon: "home" },
+      viewings: { id: "viewings", label: "Viewings and offers", sub: offersSub, href: offers.length ? "#offers" : viewings.length ? "#viewings" : null, icon: "key" },
+      tenancy: { id: "tenancy", label: "Your tenancy", sub: "Drawn up once referencing is back", href: null, icon: "file-contract" },
+      maintenance: { id: "maintenance", label: "Maintenance", sub: "Opens once your tenant moves in", href: null, icon: "setting" },
+      renewal: { id: "renewal", label: "Tenancy renewal", sub: "After the let", href: null, icon: "calendar" },
+      certificates: { id: "certificates", label: "Certificates", sub: "After the let", href: null, icon: "shield" },
     }),
     documents,
+    marketing,
+    viewings,
     snapshot: {
       readinessPct: readiness,
       note: at === 0 ? "It starts with the visit." : allIn ? "Everything we need is in." : `${required.length - have} document${required.length - have === 1 ? "" : "s"} still to send.`,
@@ -218,7 +301,8 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
   };
 }
 
-function managedView(p: ManagedProperty, first: string, comp: LandlordCompliance | null, offers: ViewOffer[] = []): LandlordView {
+async function managedView(p: ManagedProperty, first: string, comp: LandlordCompliance | null, offers: ViewOffer[] = []): Promise<LandlordView> {
+  const maintenance = await maintenanceFor(p.propertyId);
   const tenant = p.tenants[0];
   /* The certificates, as documents. A landlord reads "Gas safety - expires
      12 March 2027" the way they read "Contract - signed": a thing on the
@@ -241,8 +325,8 @@ function managedView(p: ManagedProperty, first: string, comp: LandlordCompliance
     : "Being read from your file";
   return {
     greeting: `Hello, ${first}`,
-    intro: "Your property with us, and everything we hold on it.",
-    stage: "let",
+    intro: "Your property is let and looked after. Here's how it's doing.",
+    stage: "managed",
     journey: STAGES.map((s) => ({ id: s.id, label: s.label, sub: s.id === "let" ? day(p.letSince) ?? "Done" : "Done", state: s.id === "let" ? "current" : "done" })),
     property: {
       address: p.name,
@@ -256,15 +340,36 @@ function managedView(p: ManagedProperty, first: string, comp: LandlordCompliance
       lat: p.lat,
       lng: p.lng,
     },
-    steps: stepsForStage("let", {
+    steps: stepsForStage("managed", {
       presentation: { id: "presentation", label: "View presentation", sub: "From when we valued it", href: null, icon: "analytics" },
       sign: { id: "sign", label: "Your contract", sub: "Coming to this file", href: null, icon: "pencil" },
       compliance: { id: "compliance", label: "Certificates", sub: certsSub, href: comp ? "/landlord/documents" : null, icon: "shield" },
-      message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: null, icon: "message" },
+      message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: null, icon: "message", action: "message" },
       listing: { id: "listing", label: "Your listing", sub: "Let", href: null, icon: "home" },
-      viewings: { id: "viewings", label: "Your tenancy", sub: tenant ? `${tenant.name}, since ${day(p.letSince) ?? "—"}` : "Let", href: null, icon: "key" },
+      viewings: { id: "viewings", label: "Your tenancy", sub: tenant ? `${tenant.name}, since ${day(p.letSince) ?? "—"}` : "Let", href: "#tenancy", icon: "key" },
+      /* The management profile's three: what needs doing, when the tenancy turns, what is due. */
+      maintenance: { id: "maintenance", label: "Maintenance", sub: maintenance.headline, href: "/landlord/maintenance", icon: "setting", done: maintenance.open === 0 },
+      renewal: { id: "renewal", label: "Tenancy renewal", sub: "We'll be in touch before the tenancy turns", href: "#tenancy", icon: "calendar" },
+      certificates: { id: "certificates", label: "Certificates", sub: certsSub, href: "/landlord/documents", icon: "shield", done: Boolean(comp?.allInDate) },
+      tenancy: { id: "tenancy", label: "Your tenancy", sub: tenant ? `${tenant.name}, since ${day(p.letSince) ?? "—"}` : "Let", href: "#tenancy", icon: "key" },
     }),
     documents: certDocs,
+    tenancy: {
+      tenant: tenant?.name ?? "Your tenant",
+      started: day(p.letSince),
+      /* REX holds the let date, not the end: the renewal is a conversation
+         your agent starts, and the line says so rather than guessing. */
+      ends: null,
+      renewal: "We'll be in touch before the tenancy turns to talk through renewal.",
+      renewalDue: null,
+      rent: p.rent == null ? "Not set" : `${money(p.rent)} per ${p.rentPeriod === "week" ? "week" : "month"}`,
+      rentStatus: "Collected by us",
+      deposit: null,
+      agreementHref: null,
+      agreementSigned: null,
+      service: p.service,
+    },
+    maintenance,
     offers,
     snapshot: {
       readinessPct: comp ? Math.round((100 * dated.filter((c) => c.status === "ok" || c.status === "watch").length) / Math.max(1, dated.length)) : 100,

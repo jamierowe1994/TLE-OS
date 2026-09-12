@@ -95,7 +95,7 @@ export const STAGE_COPY: Record<string, StageCopy> = {
  * done; upcoming before that.
  */
 export function fullJourney(v: LandlordView): Stop[] {
-  const tenanted = v.property.state === "Tenanted";
+  const tenanted = v.stage === "managed" || v.property.state === "Tenanted";
   const stops: Stop[] = v.journey.map((s) => ({ ...s }));
   if (tenanted) {
     const let_ = stops.find((s) => s.id === "let");

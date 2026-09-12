@@ -16,7 +16,16 @@
  * viewings and offers, let agreed.
  */
 
-export type Stage = "valuation" | "instruction" | "compliance" | "marketing" | "viewings" | "let";
+/**
+ * "managed" is the seventh stop (James, 12 Sep 2026): the tenant is in and
+ * the portal becomes a management profile - the tenancy, the contracts, the
+ * maintenance and the renewals. The six-stop spine treats it as everything
+ * done, with Move-in / Management current (lib/landlord-journey).
+ */
+export type Stage = "valuation" | "instruction" | "compliance" | "marketing" | "viewings" | "let" | "managed";
+
+/** Once the property is let, the pages that only make sense with a tenant unlock. */
+export const isLet = (v: { stage: Stage; property: { state: string } }) => v.stage === "managed" || v.property.state === "Tenanted";
 
 export const STAGES: Array<{ id: Stage; label: string }> = [
   { id: "valuation", label: "Valuation" },
@@ -36,7 +45,7 @@ export interface JourneyStop {
 }
 
 export interface ViewStep {
-  id: "presentation" | "sign" | "compliance" | "message" | "listing" | "viewings";
+  id: "presentation" | "sign" | "compliance" | "message" | "listing" | "viewings" | "maintenance" | "renewal" | "certificates" | "tenancy";
   label: string;
   sub: string;
   href: string | null;
@@ -102,6 +111,58 @@ export interface ViewMessage {
   emailed: boolean;
 }
 
+/** The listing, once marketing is live: what tenants are seeing. */
+export interface ViewMarketing {
+  live: boolean;
+  /** "2 June 2026" */
+  liveSince: string | null;
+  portals: Array<{ name: string; href: string | null }>;
+  /** Our photographs, in REX's order. */
+  photos: string[];
+  /** "Professional photos taken 28 May", "Listing being written up". */
+  note: string;
+}
+
+/** A viewing on the property, as the landlord should read it. */
+export interface ViewViewing {
+  id: string;
+  /** "Sat 13 Jun, 10:30" */
+  when: string;
+  /** "A couple, relocating for work" - never a full name before an offer. */
+  who: string;
+  state: "booked" | "done" | "cancelled";
+  /** What they said, once we have it. */
+  feedback: string | null;
+}
+
+/** The tenancy, once the tenant is in: the management profile's spine. */
+export interface ViewTenancy {
+  tenant: string;
+  started: string | null;
+  ends: string | null;
+  /** "Renewal due 30 September 2026 - we'll be in touch in July". */
+  renewal: string;
+  renewalDue: string | null;
+  rent: string;
+  /** "Paid on time, every month" / "October's rent is 3 days late". */
+  rentStatus: string;
+  deposit: string | null;
+  /** The signed tenancy agreement, once ours to open. */
+  agreementHref: string | null;
+  agreementSigned: string | null;
+  service: string | null;
+}
+
+/** Maintenance in one line, for the home page once the property is let. */
+export interface ViewMaintenance {
+  open: number;
+  needsYou: number;
+  nextVisit: string | null;
+  /** "All up to date" / "1 job waiting on you" / "2 jobs in hand". */
+  headline: string;
+  sub: string;
+}
+
 export interface ViewActivity {
   title: string;
   sub: string;
@@ -137,6 +198,14 @@ export interface LandlordView {
   offers?: ViewOffer[];
   /** The accepted let, step by step. Absent until a deal exists in Propoly. */
   progress?: ViewProgress | null;
+  /** The listing, from marketing onwards. */
+  marketing?: ViewMarketing | null;
+  /** Viewings on the property, from marketing onwards. */
+  viewings?: ViewViewing[];
+  /** The tenancy, once the tenant is in. */
+  tenancy?: ViewTenancy | null;
+  /** Maintenance in one line, once the property is let. */
+  maintenance?: ViewMaintenance | null;
   snapshot: { readinessPct: number; note: string; lines: Array<[string, string]> };
   activity: ViewActivity[];
   messages?: ViewMessage[];
@@ -157,7 +226,8 @@ export function stepsForStage(stage: Stage, all: Record<ViewStep["id"], ViewStep
     compliance: ["compliance", "presentation", "message", "sign"],
     marketing: ["listing", "compliance", "message", "presentation"],
     viewings: ["viewings", "listing", "message", "compliance"],
-    let: ["viewings", "message", "compliance", "listing"],
+    let: ["tenancy", "viewings", "message", "compliance"],
+    managed: ["maintenance", "renewal", "certificates", "message"],
   };
   return order[stage]
     .map((id) => all[id])

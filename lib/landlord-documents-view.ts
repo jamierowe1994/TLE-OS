@@ -121,6 +121,9 @@ export async function loadLandlordDocuments(me: LandlordAccount): Promise<DocsVi
         state: c.status === "ok" ? "uploaded" : c.status === "watch" || c.status === "urgent" ? "watch" : c.quiet ? "pending" : "missing",
         href: c.href,
         cta: c.href ? "Open" : undefined,
+        /* Gas, EICR and EPC can be renewed by the landlord's own engineer; the
+           row takes the new certificate once the old one is due. */
+        kind: c.status !== "ok" && (c.key === "gas" || c.key === "eicr" || c.key === "epc") ? c.key : undefined,
       })),
     };
   });
