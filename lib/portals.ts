@@ -95,11 +95,10 @@ export const PORTAL_FOLDERS: PortalFolder[] = [
       {
         kind: "open",
         id: "tenant-portal",
-        name: "The portal itself",
+        name: "The tenant portal",
         blurb:
-          "Their home: viewings they can move, homes picked for them, offers, and the parts that unlock as they get further along.",
-        href: "/tenant?from=admin",
-        caveat: SAMPLE_TENANT,
+          "Where a tenant lands after their passport: home, my tenancy, documents, maintenance, payments and messages, following the landlord's portal. This opens it on Sophie, a sample, with no sign-in; the real one at /tenant needs a tenant's own login.",
+        href: "/tenant/demo?from=admin",
       },
       {
         kind: "open",
