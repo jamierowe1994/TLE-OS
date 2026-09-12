@@ -110,7 +110,7 @@ import * as S from "@/components/PresentSlides";
 function Welcome({ deck, show }: { deck: Deck; show: boolean }) {
   const { property, recipientName } = deck;
   const isPhoto = useIsPhoto();
-
+  if (isPhoto) return <WelcomeHouse deck={deck} show={show} />;
   return (
     <section
       data-slide="welcome"
@@ -230,6 +230,296 @@ function Welcome({ deck, show }: { deck: Deck; show: boolean }) {
  * The arrow is drawn separately and points at the woman, not at the words —
  * it is her the note is about.
  */
+/**
+ * The welcome, house look. James, 12 Sep 2026, from his reference: the
+ * heading in the grotesque with "more" underlined, the intro and the
+ * "prepared for" line, the three promises along the foot with pink and
+ * sage discs and hairlines between them; on the right the door photograph
+ * in a rounded frame on a pink shape that runs off the top corner, a thin
+ * brown stroke curling out of it, and a handwritten line underneath. Laid
+ * out on the stage so it frames the same way at every window size.
+ */
+function WelcomeHouse({ deck, show }: { deck: Deck; show: boolean }) {
+  const { property, recipientName } = deck;
+  const { host, fit } = useStage();
+  const fx = fit.staged;
+  const SAGE_WASH = "#f1f4ec", SAGE_INK = "#56634a";
+  const HEAD = { fontFamily: HAND, fontWeight: 800, letterSpacing: "-0.02em" } as const;
+  const body = (
+    <>
+      <header className="h-[60px]" />
+      <div className={`relative z-[2] flex flex-1 flex-col justify-center ${fx ? "px-16 pb-16 pr-[700px]" : "px-6 pb-10 pt-4 sm:px-12"}`}>
+        <div className="relative">
+          <Rise show={show} i={0}>
+            <Eyebrow>Welcome</Eyebrow>
+          </Rise>
+          <Rise show={show} i={1}>
+            {/* Three lines, always: "from your property." must not wrap to a
+                fourth, so it is held on one line and the size is set to fit
+                the column at that width. */}
+            <h1 className={`mt-5 leading-[1.04] ${fx ? "text-[62px]" : "text-[40px] sm:text-[56px]"}`} style={HEAD}>
+              Let&rsquo;s get
+              <br />
+              you <Emphasis show={show}>more</Emphasis>
+              <br />
+              <span className={fx ? "whitespace-nowrap" : ""}>from your property.</span>
+            </h1>
+          </Rise>
+          <Rise show={show} i={2}>
+            <p className="mt-7 max-w-[560px] text-[17px] leading-[1.6] text-black/60">
+              We&rsquo;re The Letting Experts. A local team with the tools, experience and market
+              insight to help you get the most from your investment.
+            </p>
+          </Rise>
+          {(property.address || recipientName) && (
+            <Rise show={show} i={3}>
+              <p className="mt-4 text-[13px] text-black/45">
+                Prepared for{recipientName ? ` ${recipientName}` : " you"}
+                {property.address && (
+                  <>
+                    {" · "}
+                    <span className="text-black/70">{property.address}</span>
+                  </>
+                )}
+              </p>
+            </Rise>
+          )}
+          <Rise show={show} i={4}>
+            <ul className={`mt-12 grid grid-cols-3 ${fx ? "max-w-[760px]" : ""}`}>
+              {BANNER.map((b, n) => (
+                <li key={b.title} className={`pr-6 ${n > 0 ? "border-l pl-6" : ""}`} style={{ borderColor: "rgba(59,59,60,0.14)" }}>
+                  {/* Pink, sage, pink: the green sits in the middle of the row. */}
+                  <span
+                    className="flex h-[76px] w-[76px] items-center justify-center rounded-full"
+                    style={n === 1 ? { background: SAGE_WASH, color: SAGE_INK } : { background: TINTS[0], color: INK }}
+                  >
+                    <Line name={b.icon} size={26} />
+                  </span>
+                  <span className="mt-5 block text-[17px] font-semibold leading-snug">{b.title}</span>
+                  <span className="mt-1.5 block text-[13.5px] leading-[1.5] text-black/50">{b.body}</span>
+                </li>
+              ))}
+            </ul>
+          </Rise>
+        </div>
+      </div>
+
+      {fx && (
+        <>
+          {/* THE SHAPE, running off the top-right corner of the stage. */}
+          <div className="pointer-events-none absolute -right-[80px] -top-[60px] z-[1] h-[820px] w-[760px]">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden className="absolute inset-0 h-full w-full">
+              <path d="M52 2C78 -2 100 10 100 34L100 86C96 98 84 102 70 100C48 96 30 88 20 72C8 54 6 30 18 16C26 6 40 4 52 2Z" fill="#fbeae6" />
+            </svg>
+          </div>
+          {/* THE LOOP: one thin clay line curling out from behind the frame,
+              as in the reference - a pen mark, not a border. */}
+          <svg viewBox="0 0 220 160" aria-hidden className="pointer-events-none absolute left-[640px] top-[200px] z-[1] h-[160px] w-[220px]">
+            <path d="M212 40C170 8 60 6 22 46C-6 76 30 118 104 128C160 136 210 118 218 92" fill="none" stroke="#c9847a" strokeWidth="1.6" strokeLinecap="round" opacity="0.85" />
+          </svg>
+          {/* THE DOOR. A rounded frame, portrait, at the reference's proportions. */}
+          <Rise show={show} i={2} className="absolute right-[64px] top-[112px] z-[2] w-[560px]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/photo/welcome-door.webp" alt="" aria-hidden className="w-full rounded-[28px] object-cover shadow-[0_30px_60px_-30px_rgba(0,0,0,0.35)]" style={{ aspectRatio: "560 / 580" }} />
+          </Rise>
+          {/* THE HANDWRITTEN LINE, under the photograph, with its own stroke. */}
+          <Rise show={show} i={5} className="absolute right-[150px] top-[752px] z-[2] w-[300px]">
+            <p className="text-[27px] leading-[1.1] text-black/70" style={{ fontFamily: "var(--font-shantell), cursive", transform: "rotate(-6deg)" }}>
+              A smarter
+              <br />
+              <span className="ml-10">letting experience</span>
+            </p>
+            <svg viewBox="0 0 200 12" aria-hidden className="ml-12 mt-1 h-[12px] w-[200px]" style={{ transform: "rotate(-6deg)" }}>
+              <path d="M2 8C50 2 120 2 198 6" fill="none" stroke="var(--p-accent)" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+            </svg>
+          </Rise>
+        </>
+      )}
+    </>
+  );
+  return (
+    <section
+      ref={host}
+      data-slide="welcome"
+      className="relative flex min-h-full w-full shrink-0 items-center justify-center overflow-hidden"
+      style={{ background: CREAM, color: INK }}
+    >
+      <Stage fit={fit}>{body}</Stage>
+    </section>
+  );
+}
+
+
+/**
+ * Meet the agent, house look. James, 12 Sep 2026, from his reference: the
+ * heading with the first name underlined, title and patch, the bio, a
+ * brown call button with an outlined email beside it and a WhatsApp
+ * circle, the testimonial card when the deck carries one, and the three
+ * chips along the foot. On the right the portrait in a tall rounded frame
+ * on a pink shape, a thin clay loop behind it, and two handwritten lines -
+ * one over the photograph, one under it. On the stage, like the others.
+ */
+function AgentHouse({ deck, show }: { deck: Deck; show: boolean }) {
+  const a = deck.agent;
+  const { host, fit } = useStage();
+  const fx = fit.staged;
+  const HEAD = { fontFamily: HAND, fontWeight: 800, letterSpacing: "-0.02em" } as const;
+  const SCRIPT = { fontFamily: "var(--font-shantell), cursive" } as const;
+  const first = a.firstName || "";
+  const tel = a.phone.replace(/\s+/g, "");
+  const wa = tel.replace(/^0/, "44");
+  const paragraphs = (a.bio.trim() || defaultBio(first)).split(/\n{2,}/);
+  const t = deck.testimonial;
+  const body = (
+    <>
+      <header className={fx ? "h-[124px]" : "h-[60px]"} />
+      <div className={`relative z-[2] flex flex-1 flex-col ${fx ? "justify-start px-16 pb-10 pr-[720px]" : "justify-center px-6 pb-10 pt-4 sm:px-12"}`}>
+        <Rise show={show} i={0}>
+          <Eyebrow>Who you&rsquo;ll be meeting</Eyebrow>
+        </Rise>
+        <Rise show={show} i={1}>
+          <h2 className={`mt-4 leading-[1.04] ${fx ? "text-[62px]" : "text-[36px] sm:text-[50px]"}`} style={HEAD}>
+            You&rsquo;ll be dealing
+            <br />
+            with <Emphasis show={show}>{first || "us"}</Emphasis>.
+          </h2>
+          {(a.title || deck.property.postcode) && (
+            <p className="mt-4 text-[15px] text-black/45">
+              {a.title || "Lettings Expert"}
+              {deck.property.postcode && (
+                <>
+                  {" · "}
+                  <span style={{ color: "#c9847a" }}>{deck.property.postcode.split(" ")[0]}</span>
+                </>
+              )}
+            </p>
+          )}
+        </Rise>
+        <Rise show={show} i={2}>
+          <div className="mt-6 max-w-[560px] space-y-4">
+            {paragraphs.map((para, i) => (
+              <p key={i} className="text-[15.5px] leading-[1.65] text-black/65">{para}</p>
+            ))}
+          </div>
+        </Rise>
+        <Rise show={show} i={3}>
+          <div className="mt-7 flex flex-wrap items-center gap-3">
+            {a.phone && (
+              <a href={`tel:${tel}`} className="flex items-center gap-2.5 rounded-[12px] px-6 py-3.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90" style={{ background: "var(--p-accent)" }}>
+                <Line name="phone" size={16} />
+                Call {first || "us"}
+              </a>
+            )}
+            {a.email && (
+              <a href={`mailto:${a.email}`} className="flex items-center gap-2.5 rounded-[12px] border bg-white px-6 py-3.5 text-[14px] font-semibold transition-colors hover:border-black/40" style={{ borderColor: "rgba(59,59,60,0.2)" }}>
+                <Line name="mail" size={16} />
+                Email {first || "us"}
+              </a>
+            )}
+            {a.phone && (
+              <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" aria-label="WhatsApp" title="WhatsApp" className="flex h-12 w-12 items-center justify-center rounded-full transition-colors hover:bg-black/10" style={{ background: "#f1f4ec", color: "#56634a" }}>
+                <Line name="whatsapp" size={18} />
+              </a>
+            )}
+          </div>
+        </Rise>
+        {t?.quote && (
+          <Rise show={show} i={4}>
+            <div className="mt-6 flex max-w-[660px] items-start gap-5 rounded-[18px] px-6 py-5" style={{ background: TINTS[0] }}>
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-[26px] leading-none" style={{ color: "var(--p-accent)", fontFamily: HAND }}>&ldquo;</span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14.5px] leading-[1.6] text-black/75">&ldquo;{t.quote}&rdquo;</span>
+                <span className="mt-2 block text-[12px] text-black/45">{t.author}</span>
+              </span>
+              {t.rating != null && (
+                <span className="shrink-0 text-[15px] tracking-[0.15em]" style={{ color: "var(--p-accent)" }} aria-label={`${t.rating} out of 5`}>
+                  {"★".repeat(Math.max(0, Math.min(5, Math.round(t.rating))))}
+                </span>
+              )}
+            </div>
+          </Rise>
+        )}
+        <Rise show={show} i={5}>
+          <ul className="mt-8 grid max-w-[660px] grid-cols-3 border-t pt-6" style={{ borderColor: "rgba(59,59,60,0.14)" }}>
+            {AGENT_CHIPS.map((c, i) => (
+              <li key={c.title} className={`flex gap-3 pr-4 ${i > 0 ? "border-l pl-5" : ""}`} style={{ borderColor: "rgba(59,59,60,0.14)" }}>
+                <span className="mt-0.5 shrink-0" style={{ color: "var(--p-accent)" }}>
+                  <Line name={c.icon} size={20} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[14px] font-semibold leading-snug">{c.title}</span>
+                  <span className="mt-1 block text-[12.5px] leading-[1.5] text-black/50">{c.body}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Rise>
+      </div>
+
+      {fx && (
+        <>
+          {/* THE SHAPE, off the top and right edges, and the loop behind. */}
+          <div className="pointer-events-none absolute -right-[40px] top-[20px] z-[1] h-[860px] w-[720px]">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden className="absolute inset-0 h-full w-full">
+              {/* The line first, the shape over it: both ends of the loop
+                  start inside the pink, so only the curve that swings out
+                  past the bottom-left edge is seen - no loose ends. */}
+              <path d="M30 30C6 40 -6 66 8 86C18 100 40 104 60 98" fill="none" stroke="#c9847a" strokeWidth="0.35" strokeLinecap="round" opacity="0.85" />
+              <path d="M46 4C70 -2 96 8 100 30L100 72C98 90 86 100 66 100C46 100 30 92 20 78C6 60 0 40 12 22C20 10 32 8 46 4Z" fill="#fbeae6" />
+            </svg>
+          </div>
+          {/* THE PORTRAIT: a tall rounded frame. Initials on sage when REX
+              has no photograph, which is the same rule as the drawn look. */}
+          {/* Wider than the reference's frame (James, 12 Sep 2026: "a bit
+              thin... we're going to have to adjust based on the type of
+              photo"). 500 x 680 gives a portrait, a head-and-shoulders or a
+              landscape shot room to sit; object-cover crops whichever it is
+              to the frame, keeping the top fifth in view for faces. */}
+          <Rise show={show} i={2} className="absolute right-[150px] top-[96px] z-[2] w-[500px]">
+            {a.photo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={a.photo} alt={a.name} className="w-full rounded-[28px] object-cover object-[center_15%] shadow-[0_30px_60px_-30px_rgba(0,0,0,0.35)]" style={{ aspectRatio: "500 / 680" }} />
+            ) : (
+              <div className="flex w-full items-center justify-center rounded-[28px]" style={{ aspectRatio: "500 / 680", background: "#f1f4ec" }}>
+                <span className="text-[120px] leading-none" style={{ fontFamily: HAND, fontWeight: 800, color: "#56634a" }}>{initialsOf(a.name)}</span>
+              </div>
+            )}
+            {a.photo && (
+              <p className="pointer-events-none absolute left-7 top-8 text-[24px] leading-[1.15] text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.45)]" style={{ ...SCRIPT, transform: "rotate(-5deg)" }}>
+                Local
+                <br />
+                <span className="ml-3">knowledge.</span>
+                <br />
+                <span className="ml-1">Real results.</span>
+              </p>
+            )}
+          </Rise>
+          <Rise show={show} i={5} className="absolute right-[100px] top-[792px] z-[2] w-[220px]">
+            <p className="text-[27px] leading-[1.1] text-black/70" style={{ ...SCRIPT, transform: "rotate(-6deg)" }}>
+              Let&rsquo;s make
+              <br />
+              <span className="ml-8">a plan.</span>
+            </p>
+            <svg viewBox="0 0 160 12" aria-hidden className="ml-10 mt-1 h-[12px] w-[160px]" style={{ transform: "rotate(-6deg)" }}>
+              <path d="M2 8C40 2 100 2 158 6" fill="none" stroke="var(--p-accent)" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+            </svg>
+          </Rise>
+        </>
+      )}
+    </>
+  );
+  return (
+    <section
+      ref={host}
+      data-slide="agent"
+      className="relative flex min-h-full w-full shrink-0 items-center justify-center overflow-hidden"
+      style={{ background: CREAM, color: INK }}
+    >
+      <Stage fit={fit}>{body}</Stage>
+    </section>
+  );
+}
+
 function Aside({ show }: { show: boolean }) {
   return (
     <div
@@ -272,6 +562,274 @@ function Aside({ show }: { show: boolean }) {
 }
 
 function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
+  /* The house look has its own composition (James, 12 Sep 2026, from his
+     reference): the building on a pink shape, the four beats as a row of
+     cards, a "nothing to prepare" band, and the details panel on the right.
+     The drawn looks keep the slide they had. */
+  const house = useIsPhoto();
+  if (house) return <AppointmentHouse deck={deck} show={show} />;
+  return <AppointmentDrawn deck={deck} show={show} />;
+}
+
+/** The facts on the right, and the calendar file — shared by both looks. */
+function appointmentFacts(deck: Deck) {
+  const { whenPretty, property, agent, minutes } = deck;
+  const ics = deck.startsAt
+    ? icsFor(
+        {
+          landlordName: deck.recipientName,
+          address: property.address,
+          whenPretty,
+          startsAt: deck.startsAt,
+          minutes,
+          agentName: agent.name,
+          agentPhone: agent.phone,
+        },
+        deck.createdAt
+      )
+    : null;
+  const facts: { icon: IconName; label: string; value: string; soft?: boolean }[] = [
+    {
+      icon: "calendar",
+      label: "When",
+      value: whenPretty || `${agent.firstName || "Your agent"} will confirm a time with you directly`,
+      soft: !whenPretty,
+    },
+    {
+      icon: "pin",
+      label: "Where",
+      value: `${property.address}${property.postcode && !property.address.toUpperCase().includes(property.postcode.toUpperCase()) ? `, ${property.postcode}` : ""}`,
+    },
+    ...(agent.name
+      ? [
+          {
+            icon: "person" as IconName,
+            label: "Who",
+            value: `${agent.name}${agent.title ? ` · ${agent.title}` : ""}`,
+          },
+        ]
+      : []),
+  ];
+  return { ics, facts };
+}
+
+/**
+ * A STAGE, NOT A FLUID PAGE. James, 12 Sep 2026: "make sure this doesn't
+ * move too much when we scale the page... keep everything in the same
+ * place and give sidebars, otherwise we lose the framing." From tablet
+ * width up a house-look slide is laid out once, at 1440 x 900, and scaled
+ * as one piece to fit the window - the ground fills the sides. Below that
+ * width it stacks, because a phone cannot frame anything.
+ */
+function useStage() {
+  const host = useRef<HTMLElement>(null);
+  const [fit, setFit] = useState<{ staged: boolean; scale: number }>({ staged: false, scale: 1 });
+  useEffect(() => {
+    const el = host.current;
+    if (!el) return;
+    const measure = () => {
+      const w = el.clientWidth, h = el.clientHeight;
+      const staged = w >= 1024;
+      setFit({ staged, scale: staged ? Math.min(w / 1440, h / 900) : 1 });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return { host, fit };
+}
+
+/** The stage wrapper: absolute, so its 900px never sets the slide's height. */
+function Stage({ fit, children }: { fit: { staged: boolean; scale: number }; children: React.ReactNode }) {
+  return fit.staged ? (
+    <div
+      className="absolute left-1/2 top-1/2 flex h-[900px] w-[1440px] flex-col"
+      style={{ transform: `translate(-50%, -50%) scale(${fit.scale})`, transformOrigin: "center center" }}
+    >
+      {children}
+    </div>
+  ) : (
+    <div className="relative flex min-h-full w-full flex-col">{children}</div>
+  );
+}
+
+function AppointmentHouse({ deck, show }: { deck: Deck; show: boolean }) {
+  const { minutes } = deck;
+  const { ics, facts } = appointmentFacts(deck);
+  /* Sage, the one pop of green on the slide: the icon discs and the ticks. */
+  const SAGE = "#b3bea5", SAGE_WASH = "#f1f4ec", SAGE_INK = "#56634a";
+  const HEAD = { fontFamily: HAND, fontWeight: 800, letterSpacing: "-0.02em" } as const;
+
+  const { host, fit } = useStage();
+  const fx = fit.staged;
+
+  const body = (
+    <>
+      {/* Taller than the other slides' spacer: the logo is fixed to the
+          window, outside the stage, so on a small window (stage at 0.75)
+          the eyebrow needs the extra room to clear it. */}
+      <header className={fx ? "h-[124px]" : "h-[60px]"} />
+
+      {/* THE BUILDING. Positioned against the stage: it runs under the
+          panel's left edge and the panel cuts it off; the picture is
+          cropped into its top corner; and a short mask at the foot fades
+          it to nothing just before the cards - "a tight, small fade,
+          really only towards the bottom" (James). */}
+      {fx && (
+        <Rise
+          show={show}
+          i={1}
+          className="pointer-events-none absolute right-[300px] top-[60px] z-[1] h-[400px] w-[640px] overflow-hidden"
+          style={{
+            WebkitMaskImage: "linear-gradient(to bottom, #000 76%, rgba(0,0,0,0) 100%)",
+            maskImage: "linear-gradient(to bottom, #000 76%, rgba(0,0,0,0) 100%)",
+          }}
+        >
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden className="absolute inset-0 h-full w-full">
+            <path d="M44 0C70 -4 96 8 100 30L100 100L22 100C6 94 -4 74 4 50C10 28 24 4 44 0Z" fill="#f6dcd7" />
+          </svg>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/photo/appointment.webp" alt="" aria-hidden className="absolute left-[7%] -top-[2%] h-[134%] w-auto max-w-none" />
+        </Rise>
+      )}
+
+      {/* Anchored from the top on the stage rather than centred, so the
+          eyebrow always clears the fixed logo whatever the window's shape. */}
+      <div className={`relative z-[2] flex flex-1 flex-col ${fx ? "justify-start pl-16 pr-[480px] pb-8 pt-2" : "justify-center px-6 pb-10 pt-4 sm:px-12"}`}>
+        <div className="relative w-full">
+          <div className="relative max-w-[500px]">
+            <Rise show={show} i={0}>
+              <Eyebrow>What happens on the day</Eyebrow>
+            </Rise>
+            <Rise show={show} i={1}>
+              <h2 className={`mt-4 leading-[1.06] ${fx ? "text-[48px]" : "text-[34px] sm:text-[44px]"}`} style={HEAD}>
+                <span className="block">About {minutes} minutes,</span>
+                <span className="block">and you&rsquo;ll know</span>
+                <span className="block whitespace-nowrap">
+                  what it <Emphasis show={show}>lets</Emphasis> for.
+                </span>
+              </h2>
+            </Rise>
+            <Rise show={show} i={2}>
+              <p className="mt-5 max-w-[440px] text-[15px] leading-relaxed text-black/60">
+                We&rsquo;ll walk you through the property, take a few key details and handle the
+                rest. No prep stress. No jargon. Just clear advice from people who do this every day.
+              </p>
+            </Rise>
+          </div>
+
+          {/* THE FOUR BEATS, as cards in a row with arrows between. On the
+              stage they are always four across - that is the framing. */}
+          <ol className={`relative grid gap-5 ${fx ? "mt-10 grid-cols-4" : "mt-12 sm:grid-cols-2"}`}>
+            {VISIT_STEPS.map((st, i) => (
+              <li key={st.title} className="relative">
+                <Rise show={show} i={3 + i} className="h-full">
+                  <div className="relative flex h-full flex-col rounded-[18px] border bg-white p-6 pt-7 shadow-[0_10px_30px_-24px_rgba(0,0,0,0.25)]" style={{ borderColor: "rgba(59,59,60,0.1)" }}>
+                    <span
+                      className="absolute -left-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-bold text-white shadow-sm"
+                      style={{ background: "var(--p-accent)" }}
+                    >
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <span className="ml-3 flex h-14 w-14 items-center justify-center rounded-full" style={{ background: SAGE_WASH, color: SAGE_INK }}>
+                      <Line name={STEP_ICONS[i]} size={22} />
+                    </span>
+                    <h3 className="mt-4 text-[17px] leading-tight" style={HEAD}>{st.title}</h3>
+                    <p className="mt-2 text-[13px] leading-relaxed text-black/55">{st.body}</p>
+                  </div>
+                </Rise>
+                {fx && i < VISIT_STEPS.length - 1 && (
+                  <span aria-hidden className="absolute -right-[17px] top-1/2 z-[1] -translate-y-1/2 text-[16px]" style={{ color: "var(--p-accent)" }}>
+                    &rarr;
+                  </span>
+                )}
+              </li>
+            ))}
+          </ol>
+
+          {/* NOTHING TO PREPARE. One band, the pink wash, so the four cards
+              above it read as the thing to know and this as the reassurance. */}
+          <Rise show={show} i={7}>
+            <div className={`flex flex-col gap-4 rounded-[18px] px-6 py-5 sm:flex-row sm:items-center ${fx ? "mt-5" : "mt-6"}`} style={{ background: TINTS[0] }}>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white" style={{ background: SAGE }}>
+                <Line name="check" size={18} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-semibold">You don&rsquo;t need to prepare anything</span>
+                <span className="mt-0.5 block text-[12.5px] text-black/55">Just make sure we can get in, and have any paperwork to hand if you already have it.</span>
+              </span>
+              <span className="hidden text-[12.5px] leading-snug text-black/50 sm:block sm:max-w-[240px] sm:border-l sm:pl-4" style={{ fontFamily: DISPLAY, fontStyle: "italic", borderColor: "rgba(59,59,60,0.14)" }}>
+                None of it is essential. If you haven&rsquo;t got it, we&rsquo;ll sort it afterwards.
+              </span>
+            </div>
+          </Rise>
+        </div>
+      </div>
+
+      {/* THE PANEL. Full height on the right of the stage, flush to its
+          edge; stacked and rounded below tablet width. */}
+      <Rise show={show} i={2} className={fx ? "absolute inset-y-0 right-0 z-[3] w-[440px]" : "z-[3] px-6 pb-10 sm:px-12"}>
+        <aside
+          className={fx ? "flex h-full flex-col justify-center px-14 py-12" : "rounded-[18px] p-6 sm:p-8"}
+          style={{ background: "var(--p-panel)", color: INK }}
+        >
+          <ul>
+            {facts.map((f) => (
+              <li key={f.label} className="flex gap-4 border-b py-4 first:pt-0 last:border-b-0" style={{ borderColor: "rgba(59,59,60,0.12)" }}>
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white" style={{ color: "var(--p-accent)" }}>
+                  <Line name={f.icon} size={20} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-black/45">{f.label}</span>
+                  <span className={`mt-1 block leading-snug ${f.soft ? "text-[13px] text-black/65" : "text-[15.5px] font-medium"}`}>{f.value}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          {ics && (
+            <a
+              href={`data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`}
+              download="market-appraisal.ics"
+              className="mt-6 flex w-full items-center justify-center gap-2.5 rounded-[12px] px-5 py-3.5 text-[13.5px] font-semibold text-white transition-opacity hover:opacity-90"
+              style={{ background: "var(--p-accent)" }}
+            >
+              <Line name="calendar" size={16} />
+              Add it to my calendar
+            </a>
+          )}
+          <span className="mt-7 block text-[10px] font-semibold uppercase tracking-[0.18em] text-black/45">Handy to have out</span>
+          <ul className="mt-3 space-y-2.5">
+            {BRING_ALONG.map((b) => (
+              <li key={b} className="flex items-start gap-3 text-[13.5px] leading-snug text-black/75">
+                <span className="mt-[1px] flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white" style={{ background: SAGE }}>
+                  <Line name="check" size={12} />
+                </span>
+                <span>{b}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-5 text-[12.5px] leading-relaxed text-black/50" style={{ fontFamily: DISPLAY, fontStyle: "italic" }}>
+            None of it is essential. If you haven&rsquo;t got it, we&rsquo;ll sort it afterwards.
+          </p>
+        </aside>
+      </Rise>
+    </>
+  );
+
+  return (
+    <section
+      ref={host}
+      data-slide="appointment"
+      className="relative flex min-h-full w-full shrink-0 items-center justify-center overflow-hidden"
+      style={{ background: CREAM, color: INK }}
+    >
+      <Stage fit={fit}>{body}</Stage>
+    </section>
+  );
+}
+
+function AppointmentDrawn({ deck, show }: { deck: Deck; show: boolean }) {
   const { whenPretty, property, agent, minutes } = deck;
 
   /**
@@ -458,7 +1016,7 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
                 colour behind a whole screen of text is oppressive. */}
             <aside
               className="rounded-[16px] p-6 sm:p-8 lg:flex lg:h-full lg:flex-col lg:justify-center lg:rounded-none lg:p-10"
-              style={{ background: `${RED}80`, color: INK }}
+              style={{ background: "var(--p-panel)", color: INK }}
             >
               <ul>
                 {facts.map((f) => (
@@ -562,6 +1120,9 @@ function Appointment({ deck, show }: { deck: Deck; show: boolean }) {
  * absent. All four still have to look deliberate.
  */
 function Agent({ deck, show }: { deck: Deck; show: boolean }) {
+  /* The house look has no blob behind the portrait (James, 12 Sep 2026). */
+  const isPhoto = useIsPhoto();
+  if (isPhoto) return <AgentHouse deck={deck} show={show} />;
   const a = deck.agent;
   const video = deck.welcomeVideo ?? null;
   const tel = a.phone.replace(/\s+/g, "");
@@ -743,6 +1304,7 @@ function Agent({ deck, show }: { deck: Deck; show: boolean }) {
                 path resolve to a near-circle inside the 4:5 box, which reads
                 as a coloured disc rather than as a shape somebody drew. Let it
                 distort to the container and it becomes a blob again. */}
+            {!isPhoto && (
             <svg
               viewBox="0 0 100 100"
               preserveAspectRatio="none"
@@ -754,6 +1316,7 @@ function Agent({ deck, show }: { deck: Deck; show: boolean }) {
                 fill={TINTS[0]}
               />
             </svg>
+            )}
 
             {a.photo ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -768,8 +1331,8 @@ function Agent({ deck, show }: { deck: Deck; show: boolean }) {
                  (measured). Initials in the marker hand on the blob reads as
                  a drawing; an empty rectangle reads as a fault. */
               <div
-                className="relative flex w-full items-center justify-center"
-                style={{ aspectRatio: "4 / 5" }}
+                className={`relative flex w-full items-center justify-center ${isPhoto ? "rounded-[26px]" : ""}`}
+                style={{ aspectRatio: "4 / 5", ...(isPhoto ? { background: TINTS[1] } : {}) }}
               >
                 <span
                   className="text-[86px] leading-none"
@@ -1467,7 +2030,9 @@ function Terms({ deck, show }: { deck: Deck; show: boolean }) {
  * has seen the evidence, the marketing and the fee, so these read as a summary
  * of what they have just been shown rather than as claims made in advance.
  */
-function Why({ show }: { show: boolean }) {
+function Why({ deck, show }: { deck: Deck; show: boolean }) {
+  const house = useIsPhoto();
+  if (house) return <WhyHouse deck={deck} show={show} />;
   return (
     <CreamSlide id="why">
       <div className="mx-auto w-full max-w-[1120px]">
@@ -1518,7 +2083,315 @@ function Why({ show }: { show: boolean }) {
  * odd occasion". Keys changing hands is the only picture that belongs on the
  * page where somebody decides.
  */
+/* THE FOUR PROMISES, SHORT. WHY_TLE's bodies run to three or four lines in
+   a card this wide and the fourth item fell off the stage. Same four
+   titles, same claims, each cut to a line and a half. */
+const FROM_US: { title: string; body: string }[] = [
+  { title: "Lettings is all we do", body: "Not a sales agency with a lettings desk at the back. Rented property, all day, every day." },
+  { title: "One person, start to finish", body: "The agent who values it markets it, and rings you when there's an offer." },
+  { title: "Priced on evidence", body: "What let nearby, at what rent, and how long it took - you'll see exactly why." },
+  { title: "Straight about the fee", body: "One percentage, what it covers and what it doesn't. Quoted before, never after." },
+];
+
+/** What we ask of the landlord in return - the right-hand card. */
+const FROM_YOU: { title: string; body: string }[] = [
+  { title: "Access and information", body: "A way in when we need one, and anything you already know about the property." },
+  { title: "Timely decisions", body: "A quick yes or no on offers and tenants keeps the momentum, and the rent." },
+  { title: "Honesty", body: "What you want from it, and anything that worries you, so we can plan round it." },
+  { title: "A trusted partnership", body: "Work with us openly - the best lets come when we are on the same side." },
+];
+
+/**
+ * Four things you can hold us to, house look. James, 12 Sep 2026, from his
+ * reference: the heading with "hold us to." underlined, a line of intro,
+ * then two cards side by side - ours in the pink wash, theirs in the sage -
+ * each a numbered list of four; a white band along the foot with the
+ * "happy to go ahead" line and a brown button; and the shelf photograph
+ * cut into a large rounded shape that runs off the right of the stage.
+ */
+function WhyHouse({ deck, show }: { deck: Deck; show: boolean }) {
+  const a = deck.agent;
+  const first = a.firstName || "";
+  const { host, fit } = useStage();
+  const fx = fit.staged;
+  const HEAD = { fontFamily: HAND, fontWeight: 800, letterSpacing: "-0.02em" } as const;
+  const SAGE_WASH = "#f1f4ec", SAGE_INK = "#56634a";
+  const card = (
+    tone: "pink" | "sage",
+    icon: IconName,
+    title: React.ReactNode,
+    rows: { title: string; body: string }[],
+    i: number
+  ) => (
+    <Rise show={show} i={i} className="h-full">
+      <div className="flex h-full flex-col rounded-[20px] px-6 pb-3 pt-5" style={{ background: tone === "pink" ? TINTS[0] : SAGE_WASH }}>
+        <div className="flex items-center gap-4">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white" style={{ color: tone === "pink" ? "var(--p-accent)" : SAGE_INK }}>
+            <Line name={icon} size={22} />
+          </span>
+          <h3 className="text-[19px] leading-[1.15]" style={HEAD}>{title}</h3>
+        </div>
+        <ol className="mt-2 flex flex-1 flex-col">
+          {rows.map((r, n) => (
+            <li key={r.title} className={`flex items-start gap-3.5 py-3 ${n > 0 ? "border-t" : ""}`} style={{ borderColor: "rgba(59,59,60,0.08)" }}>
+              <span
+                className="figures flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold"
+                style={tone === "pink" ? { background: "#f6dcd7", color: "var(--p-accent)" } : { background: "#e2e8d9", color: SAGE_INK }}
+              >
+                {String(n + 1).padStart(2, "0")}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[13.5px] font-semibold leading-snug">{r.title}</span>
+                <span className="mt-0.5 line-clamp-2 block text-[12px] leading-[1.45] text-black/55">{r.body}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </Rise>
+  );
+  const body = (
+    <>
+      <header className={fx ? "h-[92px] shrink-0" : "h-[60px]"} />
+      <div className={`relative z-[2] flex flex-1 flex-col ${fx ? "justify-start pl-16 pr-[580px] pb-[150px]" : "justify-center px-6 pb-10 pt-4 sm:px-12"}`}>
+        <Rise show={show} i={0}>
+          <Eyebrow>Our commitment</Eyebrow>
+        </Rise>
+        <Rise show={show} i={1}>
+          <h2 className={`mt-3 leading-[1.06] ${fx ? "text-[48px]" : "text-[34px] sm:text-[46px]"}`} style={HEAD}>
+            Four things you can
+            <br />
+            <Emphasis show={show}>hold us to</Emphasis>.
+          </h2>
+        </Rise>
+        <Rise show={show} i={2}>
+          <p className="mt-3 max-w-[620px] text-[14.5px] leading-relaxed text-black/60">
+            A clear, honest service from start to finish. Here&rsquo;s what you can expect from us,
+            and what we&rsquo;ll need from you.
+          </p>
+        </Rise>
+        <div className={`mt-5 grid gap-5 ${fx ? "grid-cols-2" : "sm:grid-cols-2"}`}>
+          {card("pink", "heart", <>What to expect<br />from us</>, FROM_US, 3)}
+          {card("sage", "person", <>What we need<br />from you</>, FROM_YOU, 4)}
+        </div>
+      </div>
+
+      {/* THE FOOT: one white band across the stage, under the photograph. */}
+      <Rise show={show} i={5} className={fx ? "absolute inset-x-16 bottom-8 z-[3]" : "px-6 pb-10 sm:px-12"}>
+        <div className="flex flex-col gap-5 rounded-[20px] border bg-white px-7 py-4 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.25)] sm:flex-row sm:items-center" style={{ borderColor: "rgba(59,59,60,0.1)" }}>
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full" style={{ background: TINTS[0], color: "var(--p-accent)" }}>
+            <Line name="check" size={20} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[17px]" style={HEAD}>If you&rsquo;re happy to go ahead</span>
+            <span className="mt-0.5 block max-w-[640px] text-[13px] leading-relaxed text-black/55">
+              Once you&rsquo;re happy with everything we&rsquo;ve covered, we&rsquo;ll confirm the details, agree the next steps and get everything in motion. It&rsquo;s that simple.
+            </span>
+          </span>
+          <span className="flex shrink-0 flex-col items-center gap-2.5 sm:border-l sm:pl-7" style={{ borderColor: "rgba(59,59,60,0.12)" }}>
+            {a.email ? (
+              <a href={`mailto:${a.email}`} className="flex items-center gap-3 rounded-[12px] px-9 py-3.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90" style={{ background: "var(--p-accent)" }}>
+                Get in touch{first ? ` with ${first}` : ""} <span aria-hidden>&rarr;</span>
+              </a>
+            ) : null}
+            <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-black/40">Your property. Our priority.</span>
+          </span>
+        </div>
+      </Rise>
+
+      {fx && (
+        /* THE PHOTOGRAPH, cut into a large rounded shape off the right of
+           the stage, on the pink so the cut-out's edges have something to
+           sit on. Stops above the band. */
+        <div className="pointer-events-none absolute -right-[40px] -top-[60px] z-[1] h-[820px] w-[600px] overflow-hidden" style={{ clipPath: "path('M600 0 L600 820 L120 820 C40 760 0 640 0 420 C0 200 60 60 200 0 Z')" }}>
+          <div className="absolute inset-0" style={{ background: "#fbeae6" }} />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/photo/commitment.webp" alt="" aria-hidden className="absolute inset-0 h-full w-full object-cover object-[60%_center]" />
+        </div>
+      )}
+    </>
+  );
+  return (
+    <section
+      ref={host}
+      data-slide="why"
+      className="relative flex min-h-full w-full shrink-0 items-center justify-center overflow-hidden"
+      style={{ background: CREAM, color: INK }}
+    >
+      <Stage fit={fit}>{body}</Stage>
+    </section>
+  );
+}
+
 function Questions({ deck, show }: { deck: Deck; show: boolean }) {
+  const house = useIsPhoto();
+  if (house) return <QuestionsHouse deck={deck} show={show} />;
+  return <QuestionsDrawn deck={deck} show={show} />;
+}
+
+/**
+ * The close, house look (James, 12 Sep 2026: "the last page... make sure
+ * you're matching the theme to the rest of it"). The same bones as the
+ * agent slide - eyebrow, the heading with its underlined words, one
+ * paragraph, the brown call button with the outlined email and the sage
+ * WhatsApp circle - then the mark and the sign-off line. On the right the
+ * handover drawing, the one illustration kept in this deck, sits in a
+ * rounded pink frame at the photographs' proportions, with a handwritten
+ * line under it. Post-appraisal keeps its signing button first.
+ */
+function QuestionsHouse({ deck, show }: { deck: Deck; show: boolean }) {
+  const a = deck.agent;
+  const first = a.firstName || "";
+  const tel = a.phone.replace(/\s+/g, "");
+  const wa = tel.replace(/^0/, "44");
+  const kind = deckKind(deck);
+  const post = kind === "post-appraisal";
+  const subject = post
+    ? `Getting started — ${deck.property.address}`
+    : `About my appraisal — ${deck.property.address}`;
+  const signUrl = post ? deck.terms?.signUrl ?? null : null;
+  const eyebrow = post ? "The next step" : kind === "appraisal" ? "Before we go" : "Before we meet";
+  const { host, fit } = useStage();
+  const fx = fit.staged;
+  const HEAD = { fontFamily: HAND, fontWeight: 800, letterSpacing: "-0.02em" } as const;
+  const SCRIPT = { fontFamily: "var(--font-shantell), cursive" } as const;
+  const body = (
+    <>
+      <header className={fx ? "h-[124px] shrink-0" : "h-[60px]"} />
+      <div className={`relative z-[2] flex flex-1 flex-col ${fx ? "justify-start pl-16 pr-[700px] pb-10" : "justify-center px-6 pb-10 pt-4 sm:px-12"}`}>
+        <Rise show={show} i={0}>
+          <Eyebrow>{eyebrow}</Eyebrow>
+        </Rise>
+        <Rise show={show} i={1}>
+          <h2 className={`mt-4 leading-[1.04] ${fx ? "text-[62px]" : "text-[36px] sm:text-[50px]"}`} style={HEAD}>
+            {post ? (
+              <>
+                Shall we get it on
+                <br />
+                the <Emphasis show={show}>market</Emphasis>?
+              </>
+            ) : kind === "appraisal" ? (
+              <>
+                Anything we
+                <br />
+                didn&rsquo;t <Emphasis show={show}>cover</Emphasis>?
+              </>
+            ) : (
+              <>
+                Anything you want
+                <br />
+                to <Emphasis show={show}>ask first</Emphasis>?
+              </>
+            )}
+          </h2>
+        </Rise>
+        <Rise show={show} i={2}>
+          <p className="mt-6 max-w-[540px] text-[15.5px] leading-[1.65] text-black/65">
+            {post ? (
+              <>
+                You have the figure, what it costs and what we do for it. Sign the terms and{" "}
+                {first || "your agent"} will get the photographs booked this week - or ring
+                first if there is anything you want to go over again.
+              </>
+            ) : kind === "appraisal" ? (
+              <>
+                {first || "Your agent"} will send the figure and the terms across shortly. If
+                anything came to mind after we left - about the rent, the timing, or what&rsquo;s
+                worth doing first - ask now rather than wondering.
+              </>
+            ) : (
+              <>
+                If something comes to mind before {deck.whenPretty ? "we meet" : "the visit"} -
+                about the rent, the paperwork, or what the market&rsquo;s doing -{" "}
+                {first || "your agent"} would much rather hear it now than on the doorstep.
+              </>
+            )}
+          </p>
+        </Rise>
+        {signUrl && (
+          <Rise show={show} i={3}>
+            <a href={signUrl} className="mt-7 inline-flex items-center gap-3 rounded-[12px] px-7 py-3.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90" style={{ background: "var(--p-accent)" }}>
+              Read and sign the terms <span aria-hidden>&rarr;</span>
+            </a>
+          </Rise>
+        )}
+        <Rise show={show} i={4}>
+          <div className={`${signUrl ? "mt-5" : "mt-8"} flex flex-wrap items-center gap-3`}>
+            {a.phone && (
+              <a
+                href={`tel:${tel}`}
+                className={`flex items-center gap-2.5 rounded-[12px] px-6 py-3.5 text-[14px] font-semibold transition-opacity hover:opacity-90 ${signUrl ? "border bg-white" : "text-white"}`}
+                style={signUrl ? { borderColor: "rgba(59,59,60,0.2)" } : { background: "var(--p-accent)" }}
+              >
+                <Line name="phone" size={16} />
+                Call {first || "us"}
+              </a>
+            )}
+            {a.email && (
+              <a href={`mailto:${a.email}?subject=${encodeURIComponent(subject)}`} className="flex items-center gap-2.5 rounded-[12px] border bg-white px-6 py-3.5 text-[14px] font-semibold transition-colors hover:border-black/40" style={{ borderColor: "rgba(59,59,60,0.2)" }}>
+                <Line name="mail" size={16} />
+                Email {first || "us"}
+              </a>
+            )}
+            {a.phone && (
+              <a href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" aria-label="WhatsApp" title="WhatsApp" className="flex h-12 w-12 items-center justify-center rounded-full transition-colors hover:bg-black/10" style={{ background: "#f1f4ec", color: "#56634a" }}>
+                <Line name="whatsapp" size={18} />
+              </a>
+            )}
+          </div>
+        </Rise>
+        <Rise show={show} i={5}>
+          <div className="mt-10 flex max-w-[540px] items-center gap-4 border-t pt-5" style={{ borderColor: "rgba(59,59,60,0.14)" }}>
+            <Mark className="h-7" />
+            <p className="text-[14px] text-black/55">
+              {post
+                ? "Thank you for your time."
+                : kind === "appraisal"
+                  ? "Thanks for having us round."
+                  : deck.whenPretty
+                    ? `See you ${firstWord(deck.whenPretty)}.`
+                    : "We look forward to meeting you."}
+            </p>
+          </div>
+        </Rise>
+      </div>
+
+      {fx && (
+        <>
+          {/* THE DRAWING, in a rounded pink frame at the photographs'
+              proportions, so the one illustration in the deck sits where a
+              photograph would. */}
+          <Rise show={show} i={2} className="absolute right-[100px] top-[96px] z-[2] w-[560px]">
+            <div className="flex w-full items-end justify-center overflow-hidden rounded-[28px]" style={{ aspectRatio: "560 / 620", background: "#fbeae6" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/art/keys-handover.png" alt="" aria-hidden className="w-[92%] translate-y-[3%]" />
+            </div>
+          </Rise>
+          <Rise show={show} i={5} className="absolute right-[120px] top-[748px] z-[2] w-[300px]">
+            <p className="text-[27px] leading-[1.1] text-black/70" style={{ ...SCRIPT, transform: "rotate(-6deg)" }}>
+              {post ? "Let\u2019s get going." : "Bring your questions."}
+            </p>
+            <svg viewBox="0 0 220 12" aria-hidden className="ml-6 mt-1 h-[12px] w-[220px]" style={{ transform: "rotate(-6deg)" }}>
+              <path d="M2 8C60 2 140 2 218 6" fill="none" stroke="var(--p-accent)" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+            </svg>
+          </Rise>
+        </>
+      )}
+    </>
+  );
+  return (
+    <section
+      ref={host}
+      data-slide="questions"
+      className="relative flex min-h-full w-full shrink-0 items-center justify-center overflow-hidden"
+      style={{ background: CREAM, color: INK }}
+    >
+      <Stage fit={fit}>{body}</Stage>
+    </section>
+  );
+}
+
+function QuestionsDrawn({ deck, show }: { deck: Deck; show: boolean }) {
   const a = deck.agent;
   const tel = a.phone.replace(/\s+/g, "");
   const kind = deckKind(deck);
@@ -1832,7 +2705,7 @@ export default function PresentDeck({
       case "terms":
         return <Terms deck={deck} show={show(i)} />;
       case "why":
-        return <Why show={show(i)} />;
+        return <Why deck={deck} show={show(i)} />;
       case "questions":
         return <Questions deck={deck} show={show(i)} />;
 

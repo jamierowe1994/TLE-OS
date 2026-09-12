@@ -23,7 +23,9 @@ import type { PresentStyle, SlideId } from "@/lib/present";
  * The guidelines list "White #000000", which is a typo in the deck rather
  * than an instruction; white is white.
  */
-export const RED = "#e31f36";
+/* The brand red, as a token: the house look paints eyebrows, ticks and
+   buttons in the OS's brown instead, and nothing else has to know. */
+export const RED = "var(--p-brand)";
 export const INK = "#3b3b3c";
 
 /**
@@ -116,6 +118,7 @@ export const TINTS = ["var(--p-tint)", "var(--p-tint-2)", "var(--p-tint-3)"] as 
  * URL is just a broken parameter.
  */
 export const ACCENT_HEX: Record<PresentStyle, string> = {
+  house: "#56423e",
   hand: "#e08a73",
   brand: "#e31f36",
   photo: "#e31f36",
@@ -149,13 +152,41 @@ export type DeckTheme = {
   scriptEm: string;
   scriptLh: string;
   /** Drawn illustrations, or photographs where we have them. */
-  art: "drawn" | "photo";
+  /** mixed: photographs in a few slots, drawings in the rest - the house look. */
+  art: "drawn" | "photo" | "mixed";
+  /** Eyebrows, ticks, primary buttons: the brand red, or the house brown. */
+  brand: string;
+  /** The appointment slide's side panel. */
+  panel: string;
 };
 
 const INTER = "var(--font-inter), system-ui, -apple-system, sans-serif";
 const LORA_IT = "var(--font-display), Georgia, serif";
 
 export const THEMES: Record<PresentStyle, DeckTheme> = {
+  /* THE HOUSE LOOK. James, 12 Sep 2026: "bring it in line: same text, same
+     everything else... half-and-half: some illustrations, mixed with
+     real-world images... very clean, very neutral, balanced" - the landlord
+     portal as the reference. So: the OS's title face and body face, the
+     eggshell page, the brown for buttons and the emphasised word, the pink
+     and the sage wash as the only tints, and photographs where a slot has
+     one. No blobs. */
+  house: {
+    /* White, not cream. James, 12 Sep 2026: "that cream needs to have a
+       white background to give that really clean aesthetic". */
+    ground: "#ffffff",
+    accent: "#56423e",
+    tint: "#fdefec",
+    tint2: "#f1f4ec",
+    tint3: "#f4ede4",
+    display: "var(--font-bricolage), var(--font-manrope), system-ui, sans-serif",
+    script: "inherit",
+    scriptEm: "1em",
+    scriptLh: "inherit",
+    art: "mixed",
+    brand: "#56423e",
+    panel: "#fdefec",
+  },
   /* Untouched, deliberately. This is the one somebody already likes, and the
      whole point of adding the other two was to avoid changing it. */
   hand: {
@@ -179,6 +210,8 @@ export const THEMES: Record<PresentStyle, DeckTheme> = {
     scriptEm: "1em",
     scriptLh: "inherit",
     art: "drawn",
+    brand: "#e31f36",
+    panel: "#e31f3680",
   },
   /* Anti Flash White and Expert Red - a colourway the guidelines name, so the
      halfway house is not a compromise anybody has to defend. */
@@ -193,6 +226,8 @@ export const THEMES: Record<PresentStyle, DeckTheme> = {
     scriptEm: "1.22em",
     scriptLh: "1",
     art: "drawn",
+    brand: "#e31f36",
+    panel: "#e31f3680",
   },
   photo: {
     ground: "#ffffff",
@@ -205,6 +240,8 @@ export const THEMES: Record<PresentStyle, DeckTheme> = {
     scriptEm: "1.22em",
     scriptLh: "1",
     art: "photo",
+    brand: "#e31f36",
+    panel: "#e31f3680",
   },
 };
 
@@ -221,6 +258,8 @@ export function themeVars(style: PresentStyle): React.CSSProperties {
     ["--p-script" as string]: t.script,
     ["--p-script-em" as string]: t.scriptEm,
     ["--p-script-lh" as string]: t.scriptLh,
+    ["--p-brand" as string]: t.brand,
+    ["--p-panel" as string]: t.panel,
   };
 }
 
@@ -845,7 +884,7 @@ export function PropertyDetail({
  * the style is ALSO in context. The variables still do the styling; this only
  * answers "drawn or photographed?".
  */
-export const DeckStyleCtx = React.createContext<PresentStyle>("hand");
+export const DeckStyleCtx = React.createContext<PresentStyle>("house");
 
 /**
  * One picture, in whichever medium the deck is wearing.
@@ -863,6 +902,10 @@ export const DeckStyleCtx = React.createContext<PresentStyle>("hand");
  * today, and a sixth slot works the moment a file lands next to them.
  */
 const PHOTO_SLOTS = new Set(["welcome", "property", "marketing", "protection", "close"]);
+/* The house look photographs the opening, the property and the marketing,
+   and keeps the drawings for the rest - "some illustrations, kept to a
+   minimum". */
+const MIXED_SLOTS = new Set(["welcome", "property", "marketing"]);
 
 export function Art({
   slot,
@@ -883,7 +926,8 @@ export function Art({
   photoClassName?: string;
 }) {
   const style = React.useContext(DeckStyleCtx);
-  const asPhoto = THEMES[style]?.art === "photo" && PHOTO_SLOTS.has(slot);
+  const art = THEMES[style]?.art;
+  const asPhoto = (art === "photo" && PHOTO_SLOTS.has(slot)) || (art === "mixed" && MIXED_SLOTS.has(slot));
 
   if (asPhoto) {
     return (
@@ -906,5 +950,6 @@ export function Art({
 /** Whether the deck is wearing photographs — for the handful of places that
  *  need to drop a hand-drawn flourish rather than swap a picture. */
 export function useIsPhoto(): boolean {
-  return THEMES[React.useContext(DeckStyleCtx)]?.art === "photo";
+  /* "Not drawn": the mixed look drops the blobs and flourishes too. */
+  return THEMES[React.useContext(DeckStyleCtx)]?.art !== "drawn";
 }

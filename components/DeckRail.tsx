@@ -57,6 +57,42 @@ const when = (iso: string | null) =>
  * box on the appraisal page (components/appraisal/NextUp), so the two
  * screens that can make this deck make the same one.
  */
+/**
+ * What the pre-appraisal deck can say about the house before anyone has
+ * visited: the headline facts Homesearch holds. Empty when the research is
+ * thin, and the deck simply has one slide fewer.
+ */
+async function preAppraisalHomework(address: string, postcode: string): Promise<{
+  property?: { image: null; beds: number | null; baths: null; sqft: number | null; propertyType: string | null; epc: string | null };
+  material?: { label: string; value: string }[];
+}> {
+  try {
+    const q = new URLSearchParams({ address, postcode });
+    const r = await fetch(`/api/ma-research?${q}`, { signal: AbortSignal.timeout(45_000) });
+    if (!r.ok) return {};
+    const d = (await r.json()) as {
+      material?: { bedrooms?: number | null; groups?: { fields: { label: string; value: string; headline?: boolean }[] }[] } | null;
+      onMarketNearby?: {
+        address: string; postcode: string; rent: number | null; beds: number | null; type?: string | null;
+        image: string | null; photos?: string[]; agent?: string | null; advert?: string | null;
+        status: "on market" | "let agreed"; daysListed?: number | null;
+      }[];
+    };
+    const fields = (d.material?.groups ?? []).flatMap((g) => g.fields);
+    const by = (label: string) => fields.find((f) => f.label === label)?.value ?? null;
+    const sqft = Number((by("Floor area") ?? "").match(/([\d,]+)\s*sq ?ft/i)?.[1]?.replace(/,/g, "")) || null;
+    const material = fields.filter((f) => f.headline).slice(0, 8).map((f) => ({ label: f.label, value: f.value }));
+    return {
+      ...(d.material
+        ? { property: { image: null, beds: d.material.bedrooms ?? null, baths: null, sqft, propertyType: by("Property type"), epc: by("EPC rating") } }
+        : {}),
+      ...(material.length ? { material } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
 export async function mintPreAppraisalDeck(a: {
   refId: string;
   landlord: string;
@@ -65,6 +101,13 @@ export async function mintPreAppraisalDeck(a: {
   appointmentAt: string | null;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
+    /* THE HOMEWORK, DONE BEFORE WE KNOCK. James, 12 Sep 2026. The deck used
+       to carry nothing about the property; now it takes the same research
+       the builder pulls - what we know about the house and what is on the
+       market around it - so the landlord opens it and sees we have already
+       looked. Best effort: research that fails or runs out of time costs the
+       deck two slides, never the deck. */
+    const homework = await preAppraisalHomework(a.address, a.postcode);
     const r = await fetch("/api/presentations", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -74,6 +117,7 @@ export async function mintPreAppraisalDeck(a: {
         recipientName: a.landlord,
         address: a.address,
         postcode: a.postcode,
+        ...homework,
         /* The appointment IS the pre-appraisal deck's job, so it is passed
            rather than left to the deck's own "we'll confirm a time" fallback. */
         whenPretty: a.appointmentAt

@@ -692,16 +692,20 @@ export const SLIDES: { id: SlideId; title: string; removable: boolean; section: 
  * for the display face gets whichever one the deck is wearing without
  * knowing there is a choice. See components/present-kit.
  */
-export type PresentStyle = "hand" | "brand" | "photo";
+export type PresentStyle = "house" | "hand" | "brand" | "photo";
 
 export const PRESENT_STYLES: { id: PresentStyle; label: string; blurb: string }[] = [
+  /* The house look (James, 12 Sep 2026): the OS's own type and palette, a
+     few real photographs, the drawings kept to a minimum - "very clean, very
+     neutral, and balanced", like the landlord portal. The default. */
+  { id: "house", label: "House", blurb: "The OS's own type and palette. Photographs, a few drawings." },
   { id: "hand", label: "Drawn", blurb: "The marker hand and the illustrations." },
   { id: "brand", label: "Brand", blurb: "Brand typography, same illustrations." },
   { id: "photo", label: "Photographic", blurb: "Brand typography, photographs." },
 ];
 
 export const asStyle = (v: string | null | undefined): PresentStyle =>
-  PRESENT_STYLES.some((s) => s.id === v) ? (v as PresentStyle) : "hand";
+  PRESENT_STYLES.some((s) => s.id === v) ? (v as PresentStyle) : "house";
 
 /**
  * THE THREE DECKS, and why they are one component rather than three.
@@ -817,7 +821,13 @@ const withValuation = (list: SlideId[]): SlideId[] =>
   );
 
 const SLIDES_BY_KIND: Record<DeckKind, SlideId[]> = {
-  "pre-appraisal": ["welcome", "appointment", "agent", "why", "questions"],
+  /* Six, not five (James, 12 Sep 2026: "build the pre presentation").
+     Between who is coming and why us, one slide about THEIR house: what we
+     already know about it. Dropped by slidesFor when the research came back
+     empty, so a thin address still gets the original five. What is on the
+     market near them was tried here and taken out the same day - "no reason
+     for that to be on there" before the visit. */
+  "pre-appraisal": ["welcome", "appointment", "agent", "material", "why", "questions"],
   appraisal: MAIN,
   "post-appraisal": withValuation(MAIN),
 };
@@ -1139,7 +1149,10 @@ export const SAMPLE_DECK: PresentDeck = {
     title: "Property Expert",
     email: "you@thelettingexperts.co.uk",
     phone: "07000 000000",
-    photo: null,
+    /* A stand-in portrait for the SAMPLE only, so the house look's agent
+       slide can be judged with a photograph in it. Real decks carry the
+       agent's REX profile photo, or initials when there is none. */
+    photo: "/brand/photo/agent-sample.webp",
     bio: "",
   },
   createdAt: "2026-08-13T09:00:00.000Z",
