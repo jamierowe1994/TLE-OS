@@ -1650,7 +1650,7 @@ function Why({ deck, show }: { deck: Deck; show: boolean }) {
 /* THE FOUR PROMISES, SHORT. WHY_TLE's bodies run to three or four lines in
    a card this wide and the fourth item fell off the stage. Same four
    titles, same claims, each cut to a line and a half. */
-const FROM_US: { title: string; body: string }[] = [
+export const FROM_US: { title: string; body: string }[] = [
   { title: "Lettings is all we do", body: "Not a sales agency with a lettings desk at the back. Rented property, all day, every day." },
   { title: "One person, start to finish", body: "The agent who values it markets it, and rings you when there's an offer." },
   { title: "Priced on evidence", body: "What let nearby, at what rent, and how long it took - you'll see exactly why." },
@@ -1658,7 +1658,7 @@ const FROM_US: { title: string; body: string }[] = [
 ];
 
 /** What we ask of the landlord in return - the right-hand card. */
-const FROM_YOU: { title: string; body: string }[] = [
+export const FROM_YOU: { title: string; body: string }[] = [
   { title: "Access and information", body: "A way in when we need one, and anything you already know about the property." },
   { title: "Timely decisions", body: "A quick yes or no on offers and tenants keeps the momentum, and the rent." },
   { title: "Honesty", body: "What you want from it, and anything that worries you, so we can plan round it." },

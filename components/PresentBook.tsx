@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SlideBody } from "@/components/PresentDeck";
-import { BookAgenda, BookAgent, BookApproach, BookComparables, BookCompliance, BookLegal, BookListings, BookMarket, BookMarketing, BookMaterial, BookMaxPrice, BookOffer, BookPortals, BookProperty, BookSocial, BookWelcome } from "@/components/PresentBookPages";
+import { BookAgenda, BookAgent, BookApproach, BookCollection, BookComparables, BookCompliance, BookFees, BookLegal, BookLevels, BookListings, BookManagement, BookMarket, BookMarketing, BookMaterial, BookMaxPrice, BookOffer, BookPortals, BookProperty, BookQuestions, BookRegulated, BookRentLegal, BookScreening, BookSocial, BookTerms, BookTestimonial, BookValuation, BookWelcome, BookWhy } from "@/components/PresentBookPages";
 import { CREAM, HAND, INK, StageForceCtx } from "@/components/present-kit";
 import type { PresentDeck as Deck, SlideId } from "@/lib/present";
 
@@ -183,6 +183,18 @@ function Face({ deck, pages, n }: { deck: Deck; pages: SlideId[]; n: number }) {
   if (id === "social") return <BookSocial />;
   if (id === "compliance") return <BookCompliance deck={deck} />;
   if (id === "legal") return <BookLegal />;
+  if (id === "screening") return <BookScreening />;
+  if (id === "management") return <BookManagement />;
+  if (id === "levels") return <BookLevels deck={deck} />;
+  if (id === "collection") return <BookCollection />;
+  if (id === "rentlegal") return <BookRentLegal deck={deck} />;
+  if (id === "regulated") return <BookRegulated />;
+  if (id === "why") return <BookWhy />;
+  if (id === "testimonial") return <BookTestimonial deck={deck} />;
+  if (id === "valuation") return <BookValuation deck={deck} />;
+  if (id === "fees") return <BookFees deck={deck} />;
+  if (id === "terms") return <BookTerms deck={deck} />;
+  if (id === "questions") return <BookQuestions deck={deck} />;
   return <PageFace deck={deck} id={id} />;
 }
 

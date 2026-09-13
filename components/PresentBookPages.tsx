@@ -2,7 +2,8 @@
 
 import { INK, Line } from "@/components/present-kit";
 import { APPRAISAL_PROMISES, defaultBio, type PresentDeck as Deck } from "@/lib/present";
-import { AGENDA, APPROACH, COMPLIANCE, LEGAL_CAVEAT, LEGAL_ITEMS, MAX_PRICE, PORTALS_COPY, WHAT_WE_OFFER } from "@/lib/present-copy";
+import { AGENDA, APPROACH, COMPLIANCE, LEGAL_CAVEAT, LEGAL_ITEMS, MANAGEMENT, MAX_PRICE, NEXT_STEPS, PORTALS_COPY, PROTECTION, REGULATED, RENT_COLLECTION, RENT_LEGAL, SCREENING, SERVICE_LEVELS, SERVICE_LEVELS_INTRO, SERVICE_ROWS, WHAT_WE_OFFER } from "@/lib/present-copy";
+import { FROM_US, FROM_YOU } from "@/components/PresentDeck";
 import { DEMAND_STATS, PORTAL_STATS, statFooter } from "@/lib/present-stats";
 
 /**
@@ -1074,6 +1075,478 @@ export function BookLegal() {
             We take care of the detail, so you can enjoy the rewards. From documentation to deadlines, we&rsquo;ll keep you compliant and give you peace of mind.
           </p>
           <p className="mt-3 max-w-[1000px] text-[10.5px] leading-[1.6] text-black/40">{LEGAL_CAVEAT}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────────────────── the back half ─────────────────────────
+   Spreads 9-14, built to the booklet's own system without mock-ups (James,
+   13 Sep 2026: "tear through the last couple of pages on your own ... the
+   same kind of feel"). A different shape or picture on each, none of the
+   pictures used earlier in the booklet - the OS's own photographs instead. */
+
+/** A soft corner shape - sage or pink - in any corner. */
+function Corner({ where, tint = "sage" }: { where: "bl" | "br" | "tr" | "tl"; tint?: "sage" | "pink" }) {
+  const fill = tint === "sage" ? SAGE_WASH : "var(--p-tint)";
+  const d = {
+    bl: "M-20 560 C 30 690, 110 780, 240 830 C 380 880, 540 900, 700 920 L-20 920 Z",
+    br: "M1460 560 C 1410 690, 1330 780, 1200 830 C 1060 880, 900 900, 740 920 L1460 920 Z",
+    tr: "M1460 340 C 1410 210, 1330 120, 1200 70 C 1060 20, 900 0, 740 -20 L1460 -20 Z",
+    tl: "M-20 340 C 30 210, 110 120, 240 70 C 380 20, 540 0, 700 -20 L-20 -20 Z",
+  }[where];
+  return (
+    <svg viewBox={`0 0 ${PAGE_W} ${PAGE_H}`} aria-hidden className="pointer-events-none absolute left-0 top-0" style={{ width: PAGE_W, height: PAGE_H }}>
+      <path d={d} fill={fill} />
+    </svg>
+  );
+}
+
+/** A photograph in a soft shape, positioned by the caller. */
+function Soft({ src, style, radius = "62% 38% 54% 46% / 48% 56% 44% 52%" }: { src: string; style: React.CSSProperties; radius?: string }) {
+  return (
+    <div className="pointer-events-none absolute overflow-hidden" style={{ borderRadius: radius, ...style }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="" aria-hidden className="h-full w-full object-cover" />
+    </div>
+  );
+}
+
+function Hand({ children, className = "", style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
+  return (
+    <p className={`pointer-events-none absolute text-[21px] leading-[1.2] text-black/70 ${className}`} style={{ fontFamily: "var(--font-shantell), cursive", ...style }}>
+      {children}
+    </p>
+  );
+}
+
+/** Page 9L: HOW WE FIND AND SCREEN EVERY TENANT - the four paragraphs, two a side. */
+export function BookScreening() {
+  const [a, b] = [SCREENING.paragraphs.slice(0, 2), SCREENING.paragraphs.slice(2)];
+  return (
+    <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
+      <Corner where="bl" />
+      <div className="absolute left-[96px] top-[84px] w-[1200px]">
+        <EyebrowRule>{SCREENING.eyebrow}</EyebrowRule>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+          Checked before they are
+          <br />
+          through your <Ital width={130}>door</Ital>
+        </h1>
+        <div className="mt-10 grid grid-cols-2 gap-x-12" style={{ width: 1140 }}>
+          {[a, b].map((col, c) => (
+            <div key={c} className={`space-y-6 ${c === 1 ? "border-l pl-12" : "pr-4"}`} style={{ borderColor: "rgba(0,0,0,0.1)" }}>
+              {col.map((t) => (
+                <p key={t.slice(0, 20)} className="text-[15px] leading-[1.7] text-black/65">{t}</p>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+      <FootStrap lines={["People \u00b7 Properties \u00b7 Longer futures"]} />
+    </div>
+  );
+}
+
+/** Page 9R: MANAGEMENT AND SUPPORT - the four services with their discs. */
+export function BookManagement() {
+  const icons: ("check" | "shield" | "chart" | "home")[] = ["check", "shield", "chart", "home"];
+  return (
+    <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
+      <Corner where="br" />
+      <Hand className="right-[130px] top-[700px] w-[220px] text-right" style={{ transform: "rotate(-10deg)" }}>
+        Your property
+        <br />
+        in safe hands.
+      </Hand>
+      <div className="absolute left-[96px] top-[84px] w-[1250px]">
+        <EyebrowRule>Management and support</EyebrowRule>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+          How much of it you
+          <br />
+          want to run <Ital width={220}>yourself</Ital>
+        </h1>
+        <div className="mt-10 grid grid-cols-2 gap-x-14" style={{ width: 1200 }}>
+          {MANAGEMENT.map((m, i) => (
+            <div key={m.title} className={`flex gap-5 py-6 ${i >= 2 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.1)" }}>
+              <span className="flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-full" style={{ background: "var(--p-tint)", color: "var(--p-accent)" }}>
+                <Line name={icons[i]} size={22} />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-[18px] font-semibold leading-snug">{m.title}</span>
+                <span className="mt-2 block max-w-[420px] text-[14px] leading-[1.6] text-black/60">{m.body}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Page 10L: SERVICE LEVELS - the three, and what separates them, as a table. */
+export function BookLevels({ deck }: { deck: Deck }) {
+  const rows = SERVICE_ROWS.filter((r) => r.included.length === 3);
+  return (
+    <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
+      <div className="absolute left-[96px] top-[76px] w-[1250px]">
+        <EyebrowRule>Service levels</EyebrowRule>
+        <h1 className="mt-4 text-[46px] leading-[1.1]" style={SERIF}>
+          Three levels. This is what <Ital width={200}>separates</Ital> them
+        </h1>
+        <p className="mt-3 max-w-[760px] text-[13.5px] leading-[1.55] text-black/60">{SERVICE_LEVELS_INTRO}</p>
+        <table className="mt-4 w-full border-collapse text-left" style={{ width: 1240 }}>
+          <thead>
+            <tr className="border-b" style={{ borderColor: "rgba(0,0,0,0.14)" }}>
+              <th className="pb-3 pr-4 text-[10.5px] font-normal uppercase tracking-[0.22em] text-black/50">What you get</th>
+              {SERVICE_LEVELS.map((l, n) => (
+                <th key={l} className="w-[150px] pb-3 text-center text-[12.5px] font-semibold" style={{ color: n === 0 ? "var(--p-accent)" : "rgba(0,0,0,0.6)" }}>{l}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.service} className="border-b" style={{ borderColor: "rgba(0,0,0,0.07)" }}>
+                <td className="py-[4px] pr-4 text-[12.5px] text-black/75">{r.service}</td>
+                {r.included.map((on, n) => (
+                  <td key={n} className="py-[4px] text-center">
+                    {on ? (
+                      <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full" style={{ background: SAGE_WASH, color: SAGE_INK }}>
+                        <Line name="check" size={10} />
+                      </span>
+                    ) : (
+                      <span className="inline-block h-[5px] w-[5px] rounded-full" style={{ background: "rgba(0,0,0,0.15)" }} />
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <FootLeft deck={deck} />
+    </div>
+  );
+}
+
+/** Page 10R: RENT COLLECTION - the four points, and a home. */
+export function BookCollection() {
+  return (
+    <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
+      <Corner where="br" tint="pink" />
+      <Soft src="/brand/photo/appointment.webp" style={{ right: 60, bottom: 40, width: 460, height: 400 }} />
+      <div className="absolute left-[96px] top-[84px] w-[760px]">
+        <EyebrowRule>Rent collection</EyebrowRule>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+          Rent collection,
+          <br />
+          without the <Ital width={200}>chasing</Ital>
+        </h1>
+        <p className="mt-8 max-w-[600px] text-[16px] leading-[1.6] text-black/65">{RENT_COLLECTION.body}</p>
+        <ul className="mt-8" style={{ width: 620 }}>
+          {RENT_COLLECTION.points.map((t, i) => (
+            <li key={t} className={`flex items-start gap-4 py-4 ${i > 0 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+              <span className="mt-[2px] flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full" style={{ background: SAGE_WASH, color: SAGE_INK }}>
+                <Line name="check" size={13} />
+              </span>
+              <span className="text-[15.5px] leading-[1.5] text-black/75">{t}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <FootRight />
+    </div>
+  );
+}
+
+/** Page 11L: RENT & LEGAL PROTECTION - eight points, compact, the disclaimer under. */
+export function BookRentLegal({ deck }: { deck: Deck }) {
+  const half = Math.ceil(RENT_LEGAL.points.length / 2);
+  const cols = [RENT_LEGAL.points.slice(0, half), RENT_LEGAL.points.slice(half)];
+  return (
+    <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
+      <Corner where="tl" tint="pink" />
+      <div className="absolute left-[96px] top-[84px] w-[1250px]">
+        <EyebrowRule>{RENT_LEGAL.eyebrow}</EyebrowRule>
+        <h1 className="mt-6 text-[52px] leading-[1.1]" style={SERIF}>
+          More than management.
+          <br />
+          Real protection for your <Ital width={190}>income</Ital>
+        </h1>
+        <p className="mt-6 max-w-[900px] text-[14.5px] leading-[1.6] text-black/65">{RENT_LEGAL.standfirst}</p>
+        <div className="mt-6 grid grid-cols-2 gap-x-12" style={{ width: 1200 }}>
+          {cols.map((items, c) => (
+            <ul key={c}>
+              {items.map((pt, i) => (
+                <li key={pt.title} className={`flex items-start gap-4 py-[10px] ${i > 0 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+                  <span className="mt-[3px] flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full" style={{ background: "var(--p-tint)", color: "var(--p-accent)" }}>
+                    <Line name="shield" size={12} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[14.5px] font-semibold leading-snug">{pt.title}</span>
+                    <span className="mt-1 block text-[12.5px] leading-[1.5] text-black/55">{pt.body}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ))}
+        </div>
+        <p className="mt-5 max-w-[1000px] text-[10.5px] leading-[1.6] text-black/40">{RENT_LEGAL.disclaimer}</p>
+      </div>
+      <FootLeft deck={deck} />
+    </div>
+  );
+}
+
+/** Page 11R: REGULATED AND PROTECTED - the eight bodies, and a roofline. */
+export function BookRegulated() {
+  return (
+    <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
+      <Soft src="/brand/photo/property.jpg" style={{ right: -40, bottom: -60, width: 640, height: 300 }} radius="58% 42% 0 0 / 100% 100% 0 0" />
+      <div className="absolute left-[96px] top-[84px] w-[1250px]">
+        <EyebrowRule>Regulated and protected</EyebrowRule>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+          Regulated, insured
+          <br />
+          and <Ital width={270}>accountable</Ital>
+        </h1>
+        <p className="mt-6 max-w-[640px] text-[15px] leading-[1.6] text-black/65">{PROTECTION.paragraphs[2]}</p>
+        <div className="mt-7 grid grid-cols-2 gap-x-12" style={{ width: 1100 }}>
+          {REGULATED.map((r, i) => (
+            <div key={r.name} className={`py-3 ${i >= 2 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+              <p className="text-[14.5px] font-semibold leading-snug">{r.name}</p>
+              <p className="mt-1 text-[12.5px] leading-[1.5] text-black/55">{r.caption}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="absolute bottom-[56px] left-[96px] text-[10.5px] uppercase tracking-[0.3em] text-black/55">The Letting Experts</p>
+    </div>
+  );
+}
+
+/** Page 12L: OUR COMMITMENT - centred, the two lists as coloured cards, no button. */
+export function BookWhy() {
+  const card = (title: string, items: { title: string; body: string }[], bg: string) => (
+    <div className="rounded-[22px] px-8 py-7" style={{ background: bg }}>
+      <p className="text-[11px] uppercase tracking-[0.3em] text-black/55">{title}</p>
+      <ol className="mt-4">
+        {items.map((it, i) => (
+          <li key={it.title} className={`flex gap-4 py-3 ${i > 0 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+            <span className="w-[30px] shrink-0 text-[18px] leading-none" style={{ ...SERIF, color: "var(--p-accent)" }}>0{i + 1}</span>
+            <span className="min-w-0">
+              <span className="block text-[15px] font-semibold leading-snug">{it.title}</span>
+              <span className="mt-1 block text-[12.5px] leading-[1.5] text-black/55">{it.body}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+  return (
+    <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
+      <div className="absolute inset-x-0 top-[84px] flex flex-col items-center text-center">
+        <Eyebrow>Our commitment</Eyebrow>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+          Four things you can
+          <br />
+          hold us <Ital width={90}>to.</Ital>
+        </h1>
+        <div className="mt-12 grid grid-cols-2 gap-6 text-left" style={{ width: 1160 }}>
+          {card("What to expect from us", FROM_US, "var(--p-tint)")}
+          {card("What we need from you", FROM_YOU, SAGE_WASH)}
+        </div>
+      </div>
+      <p className="absolute bottom-[56px] left-1/2 -translate-x-1/2 text-[10.5px] uppercase tracking-[0.3em] text-black/55">A clear, honest service from start to finish</p>
+    </div>
+  );
+}
+
+/** Page 12R: WHAT LANDLORDS SAY - the real review, centred, on a pink disc. */
+export function BookTestimonial({ deck }: { deck: Deck }) {
+  const t = deck.testimonials?.[0] ?? deck.testimonial ?? null;
+  return (
+    <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
+      <div className="pointer-events-none absolute left-1/2 top-[300px] h-[620px] w-[620px] -translate-x-1/2 rounded-full" style={{ background: "var(--p-tint)", opacity: 0.8 }} />
+      <div className="absolute inset-x-0 top-[84px] flex flex-col items-center text-center">
+        <Eyebrow>What landlords say</Eyebrow>
+        <div className="mt-8 h-[170px] w-[170px] overflow-hidden rounded-full shadow-[0_20px_40px_-20px_rgba(0,0,0,0.35)]">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/photo/close.jpg" alt="" aria-hidden className="h-full w-full object-cover" />
+        </div>
+        {t?.quote ? (
+          <div className="relative mt-8 w-[860px]">
+            <span aria-hidden className="block text-[110px] leading-[0.5]" style={{ ...SERIF, color: CLAY }}>&ldquo;</span>
+            <p className="mt-6 text-[27px] italic leading-[1.5] text-black/80" style={{ ...SERIF, fontWeight: 400 }}>{t.quote}</p>
+            {t.rating != null && <p className="mt-6 text-[18px] tracking-[0.2em]" style={{ color: CLAY }}>{"\u2605".repeat(Math.max(0, Math.min(5, Math.round(t.rating))))}</p>}
+            <p className="mt-3 text-[11px] uppercase tracking-[0.3em] text-black/55">{t.author}</p>
+          </div>
+        ) : (
+          <p className="mt-10 text-[17px] text-black/55">What our landlords say about us will sit here.</p>
+        )}
+      </div>
+      <FootRight />
+    </div>
+  );
+}
+
+/** Page 13L: THE FIGURE - the rent we would put it on at, big, with the terms it comes with. */
+export function BookValuation({ deck }: { deck: Deck }) {
+  const v = deck.valuation;
+  return (
+    <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
+      <Corner where="bl" />
+      <div className="absolute left-[96px] top-[84px] w-[1200px]">
+        <EyebrowRule>What we&rsquo;d put it on at</EyebrowRule>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+          The figure, and
+          <br />
+          what comes <Ital width={180}>with it</Ital>
+        </h1>
+        {v ? (
+          <>
+            <p className="mt-10 leading-none">
+              <span className="text-[120px]" style={{ ...SERIF, color: "var(--p-accent)" }}>{gbp(v.rent)}</span>
+              <span className="ml-4 text-[30px] text-black/60" style={SERIF}>pcm</span>
+            </p>
+            <div className="mt-8 grid grid-cols-3 gap-x-10" style={{ width: 900 }}>
+              {[
+                v.serviceLevel ? { k: "Service", v: v.serviceLevel } : null,
+                v.feePct != null ? { k: "Fee", v: `${v.feePct}% of rent` } : null,
+                v.setupFee != null ? { k: "Set-up", v: `${gbp(v.setupFee)} one-off` } : null,
+              ]
+                .filter(Boolean)
+                .map((x) => (
+                  <div key={(x as { k: string }).k} className="border-t pt-4" style={{ borderColor: "rgba(0,0,0,0.12)" }}>
+                    <p className="text-[10.5px] uppercase tracking-[0.22em] text-black/50">{(x as { k: string }).k}</p>
+                    <p className="mt-2 text-[22px]" style={SERIF}>{(x as { v: string }).v}</p>
+                  </div>
+                ))}
+            </div>
+            {v.note && <p className="mt-8 max-w-[640px] text-[14.5px] italic leading-[1.6] text-black/60" style={{ ...SERIF, fontWeight: 400 }}>{v.note}</p>}
+          </>
+        ) : (
+          <p className="mt-10 text-[17px] text-black/55">The figure we agreed at the visit will sit here.</p>
+        )}
+      </div>
+      <FootLeft deck={deck} />
+    </div>
+  );
+}
+
+/** Page 13R: WHAT IT COSTS - the one fee, what it covers, and what is not in it. */
+export function BookFees({ deck }: { deck: Deck }) {
+  const f = deck.fees;
+  return (
+    <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
+      <Corner where="tr" tint="pink" />
+      <div className="absolute left-[96px] top-[84px] w-[1200px]">
+        <EyebrowRule>What it costs</EyebrowRule>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+          One fee.
+          <br />
+          Here&rsquo;s what it <Ital width={180}>covers</Ital>
+        </h1>
+        {f ? (
+          <>
+            {f.headline && (
+              <p className="mt-8 text-[40px] leading-none" style={{ ...SERIF, color: "var(--p-accent)" }}>
+                {f.headline}
+                {f.headlineFor && <span className="ml-4 text-[16px] text-black/55" style={{ fontFamily: "inherit" }}>{f.headlineFor}</span>}
+              </p>
+            )}
+            <dl className="mt-8" style={{ width: 900 }}>
+              {f.rows.map((r) => (
+                <div key={r.label} className="flex items-baseline justify-between gap-8 border-t py-4" style={{ borderColor: "rgba(0,0,0,0.1)" }}>
+                  <dt className="text-[17px]" style={SERIF}>{r.label}</dt>
+                  <dd className="text-right">
+                    <span className="text-[17px] font-semibold">{r.amount}</span>
+                    {r.note && <span className="ml-3 text-[12.5px] text-black/50">{r.note}</span>}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            {f.excluded.length > 0 && (
+              <div className="mt-6">
+                <p className="text-[10.5px] uppercase tracking-[0.22em] text-black/50">Not included</p>
+                <p className="mt-2 max-w-[800px] text-[13.5px] leading-[1.6] text-black/60">{f.excluded.join("  \u00b7  ")}</p>
+              </div>
+            )}
+            {f.note && <p className="mt-5 max-w-[800px] text-[12.5px] leading-[1.6] text-black/50">{f.note}</p>}
+          </>
+        ) : (
+          <p className="mt-10 text-[17px] text-black/55">Our fee schedule will sit here.</p>
+        )}
+      </div>
+      <FootRight />
+    </div>
+  );
+}
+
+/** Page 14L: GETTING STARTED - three steps, numbered, and where to sign. */
+export function BookTerms({ deck }: { deck: Deck }) {
+  return (
+    <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
+      <Corner where="bl" tint="pink" />
+      <div className="absolute left-[96px] top-[84px] w-[1200px]">
+        <EyebrowRule>Getting started</EyebrowRule>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+          Three steps,
+          <br />
+          and we&rsquo;re <Ital width={130}>away</Ital>
+        </h1>
+        <ol className="mt-10" style={{ width: 760 }}>
+          {NEXT_STEPS.map((st, i) => (
+            <li key={st.title} className={`flex gap-6 py-6 ${i > 0 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.1)" }}>
+              <span className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full text-[15px]" style={{ ...SERIF, background: "var(--p-tint)", color: "var(--p-accent)" }}>0{i + 1}</span>
+              <span className="min-w-0">
+                <span className="block text-[19px] leading-snug" style={SERIF}>{st.title}</span>
+                <span className="mt-2 block max-w-[560px] text-[14px] leading-[1.6] text-black/60">{st.body}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+        <p className="mt-6 max-w-[640px] text-[14px] leading-[1.6] text-black/60">
+          {deck.terms?.summary ?? (deck.terms?.signUrl ? "Your terms are ready - press Sign your contract below the booklet whenever you are." : `Your terms are being prepared. ${deck.agent.firstName || "Your agent"} will send them across, and Sign your contract below the booklet will take you straight to them.`)}
+        </p>
+      </div>
+      <FootLeft deck={deck} />
+    </div>
+  );
+}
+
+/** Page 14R: ANY QUESTIONS - the door, the ask, and how to reach them. */
+export function BookQuestions({ deck }: { deck: Deck }) {
+  const a = deck.agent;
+  const first = a.firstName || "us";
+  return (
+    <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
+      <Corner where="br" />
+      <Soft src="/brand/photo/welcome.jpg" style={{ right: 80, top: 100, width: 420, height: 520 }} radius="50% 50% 46% 54% / 60% 60% 40% 40%" />
+      <Hand className="right-[90px] top-[660px] w-[260px] text-right" style={{ transform: "rotate(-8deg)" }}>
+        Let&rsquo;s get going.
+      </Hand>
+      <div className="absolute left-[96px] top-[84px] w-[760px]">
+        <EyebrowRule>Any questions</EyebrowRule>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+          Anything we
+          <br />
+          didn&rsquo;t <Ital width={150}>cover</Ital>?
+        </h1>
+        <p className="mt-8 max-w-[560px] text-[16px] leading-[1.65] text-black/65">
+          If anything came to mind after we left - about the rent, the paperwork, or what the market&rsquo;s doing - ask {first}. There is no such thing as a small question at this stage.
+        </p>
+        <div className="mt-10 border-t pt-6" style={{ width: 520, borderColor: "rgba(0,0,0,0.1)" }}>
+          <p className="text-[19px]" style={SERIF}>{a.name}</p>
+          {a.title && <p className="mt-1 text-[12.5px] text-black/55">{a.title}</p>}
+          {a.phone && <p className="mt-4 text-[15px] text-black/75">{a.phone}</p>}
+          {a.email && <p className="mt-1 text-[15px] text-black/75">{a.email}</p>}
+        </div>
+        <div className="mt-10 flex items-center gap-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/brand/tle-logo-coral.png" alt="The Letting Experts" className="h-[40px] w-auto" />
+          <p className="text-[14px] text-black/55">Thank you for your time.</p>
         </div>
       </div>
     </div>
