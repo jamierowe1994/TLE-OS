@@ -40,7 +40,14 @@
  * and a number invented in a source file has a way of becoming the number.
  */
 
-export type ToolStatus = "live" | "building";
+/**
+ * `locked` is not a softer "building": it is a finished-looking screen we are
+ * deliberately keeping shut. Bond looks ready and is not - finding the owner
+ * needs the Land Registry route and the print house behind it (James, 13 Sep
+ * 2026: "a lock symbol on it now, because it's going to take a bigger build").
+ * The card says so and the door does not open.
+ */
+export type ToolStatus = "live" | "building" | "locked";
 export type ToolAccess = "included" | "paid";
 export type ToolGroupKey = "prospecting" | "money";
 
@@ -132,7 +139,12 @@ export const TOOLS: Tool[] = [
       "The prospecting workspace. Every landlord in the patch who looks ready to move, on a map and a list, with the owner lookup and the postcard on the way.",
     icon: "analytics",
     href: "/tools/bond",
-    status: "live",
+    /* Locked for the pilot (James, 13 Sep 2026). The map, the scoring and the
+       postcard studio are all real; what is not there is the owner behind the
+       address, and outreach that names a property rather than a person is not
+       something to hand an agent. */
+    status: "locked",
+    note: "Locked for now. Finding the owner behind an address needs the Land Registry route, and that is a build of its own.",
     /* Ours, built on data we already pay for. Whether it is ever sold
        separately is James's call; until then it comes with the package. */
     access: "included",

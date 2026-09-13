@@ -73,11 +73,16 @@ function ToolCard({ tool, access }: { tool: Tool; access: Access | null }) {
     <>
       <div className="flex items-start justify-between gap-3">
         <span
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line/80 bg-card ${
+          className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line/80 bg-card ${
             live ? "text-ink" : "text-muted"
           }`}
         >
           <DoodleIcon name={tool.icon} size={20} />
+          {tool.status === "locked" && (
+            <span className="absolute -bottom-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-line/80 bg-page text-muted">
+              <DoodleIcon name="lock" size={10} />
+            </span>
+          )}
         </span>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
           {tool.access === "paid" && (
@@ -85,11 +90,16 @@ function ToolCard({ tool, access }: { tool: Tool; access: Access | null }) {
               Paid
             </span>
           )}
-          {tool.status !== "live" && (
+          {tool.status === "locked" ? (
+            <span className="flex items-center gap-1.5 rounded-full border border-line/70 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-muted">
+              <DoodleIcon name="lock" size={10} />
+              Locked
+            </span>
+          ) : tool.status !== "live" ? (
             <span className="rounded-full border border-line/70 px-2 py-0.5 text-[9.5px] font-bold uppercase tracking-wider text-muted">
               Building
             </span>
-          )}
+          ) : null}
         </div>
       </div>
       <p className={`mt-3.5 text-[15px] ${live ? "text-ink" : "text-muted"}`}>{tool.name}</p>

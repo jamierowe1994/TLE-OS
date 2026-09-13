@@ -220,8 +220,8 @@ export default function ListingDrawer({
      portal it is on (0..2), then 3 for the tick and the confetti. */
   const [pushing, setPushing] = useState<number | null>(null);
   useEffect(() => {
-    if (pushing == null || pushing >= 3) return;
-    const t = setTimeout(() => setPushing((p) => (p == null ? null : p + 1)), 1400);
+    if (pushing == null || pushing < 0 || pushing >= 3) return;
+    const t = setTimeout(() => setPushing((p) => (p == null ? null : p + 1)), 1250);
     return () => clearTimeout(t);
   }, [pushing]);
   /* The certificates on the property, for the legal minimum before the
@@ -1138,7 +1138,7 @@ export default function ListingDrawer({
                           is still missing (James, 11 Sep). */}
                       <span className="group relative">
                         <PressButton
-                          onClick={() => readyToGoLive && setPushing(0)}
+                          onClick={() => readyToGoLive && setPushing(-1)}
                           className={`press-ring flex items-center gap-2 rounded-full bg-[var(--brown)] px-5 py-2.5 text-[12.5px] font-semibold text-white ${readyToGoLive ? "" : "cursor-not-allowed"}`}
                         >
                           <DoodleIcon name="megaphone" size={14} />
@@ -2092,6 +2092,8 @@ export default function ListingDrawer({
         <PushCeremony
           at={pushing}
           address={listing.name}
+          onStart={() => setPushing(0)}
+          onCancel={() => setPushing(null)}
           onDone={() => {
             setPushing(null);
             advance();
@@ -2151,7 +2153,8 @@ function ViewTitle({ title, sub, wash, art }: { title: string; sub: string; wash
 
 /* ── pushing it to the portals: the moment ────────────────────────────── */
 
-const PORTALS = ["Rightmove", "Zoopla", "OnTheMarket"];
+/* James, 13 Sep 2026: Rightmove, then OnTheMarket, then Zoopla. */
+const PORTALS = ["Rightmove", "OnTheMarket", "Zoopla"];
 
 /**
  * A listing going live is a big deal for the person doing it (James, 11
@@ -2162,21 +2165,32 @@ const PORTALS = ["Rightmove", "Zoopla", "OnTheMarket"];
  * push into REX itself waits on the REX write allowlist, and the line at
  * the foot says so until it is wired.
  */
-function PushCeremony({ at, address, onDone }: { at: number; address: string; onDone: () => void }) {
+function PushCeremony({ at, address, onStart, onCancel, onDone }: { at: number; address: string; onStart: () => void; onCancel: () => void; onDone: () => void }) {
   const [shown, setShown] = useState(false);
   useEffect(() => {
     const t = requestAnimationFrame(() => setShown(true));
     return () => cancelAnimationFrame(t);
   }, []);
+  const asking = at < 0;
   const done = at >= 3;
+  /* Escape leaves the question or the finished card; never mid-push, where
+     half the portals would have been told and the screen would say nothing. */
+  useEffect(() => {
+    if (!asking && !done) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") (asking ? onCancel : onDone)(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [asking, done, onCancel, onDone]);
   /* The confetti, made once: sixty pieces in the palette's colours, each
      with its own start, delay, drift and spin. */
   const [pieces] = useState(() =>
-    Array.from({ length: 70 }, (_, i) => ({
+    Array.from({ length: 54 }, (_, i) => ({
       id: i,
       left: Math.random() * 100,
-      delay: Math.random() * 1.6,
-      dur: 2.8 + Math.random() * 2,
+      /* Quick, and only for a moment (James, 13 Sep 2026): it falls from the
+         top, and the card is readable again before anybody reaches for it. */
+      delay: Math.random() * 0.45,
+      dur: 1.5 + Math.random() * 1.1,
       size: 6 + Math.random() * 8,
       color: ["#de968f", "#a85a51", "#b3bea5", "#56634a", "#fdefec", "#56423e"][i % 6],
       round: i % 3 === 0,
@@ -2190,7 +2204,16 @@ function PushCeremony({ at, address, onDone }: { at: number; address: string; on
         @keyframes tle-pop { 0% { transform: scale(0.4); opacity: 0 } 60% { transform: scale(1.12); opacity: 1 } 100% { transform: scale(1) } }
         @keyframes tle-draw { to { stroke-dashoffset: 0 } }
       `}</style>
-      <span aria-hidden className={`absolute inset-0 bg-ink/50 transition-opacity duration-500 ${shown ? "opacity-100" : "opacity-0"}`} />
+      {asking || done ? (
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={asking ? onCancel : onDone}
+          className={`absolute inset-0 cursor-default bg-ink/50 transition-opacity duration-500 ${shown ? "opacity-100" : "opacity-0"}`}
+        />
+      ) : (
+        <span aria-hidden className={`absolute inset-0 bg-ink/50 transition-opacity duration-500 ${shown ? "opacity-100" : "opacity-0"}`} />
+      )}
       {done && (
         <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
           {pieces.map((p) => (
@@ -2219,7 +2242,33 @@ function PushCeremony({ at, address, onDone }: { at: number; address: string; on
           transition: "transform 620ms cubic-bezier(0.18, 1.35, 0.32, 1), opacity 260ms ease-out",
         }}
       >
-        {!done ? (
+        {asking ? (
+          <>
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+              <DoodleIcon name="megaphone" size={24} />
+            </span>
+            <h2 className="hand mt-4 text-[23px] leading-tight">Are you sure you want to push it live onto the platforms?</h2>
+            <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
+              {address} goes out to Rightmove, OnTheMarket and Zoopla. Check the photographs and the description first - once it is out there, it is out there.
+            </p>
+            <div className="mt-7 flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={onCancel}
+                className="rounded-full border border-line/80 px-5 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40"
+              >
+                Not yet
+              </button>
+              <PressButton
+                onClick={onStart}
+                className="press-ring flex items-center gap-2 rounded-full bg-[var(--brown)] px-6 py-2.5 text-[13px] font-semibold text-white"
+              >
+                <DoodleIcon name="megaphone" size={14} />
+                Yes, push it live
+              </PressButton>
+            </div>
+          </>
+        ) : !done ? (
           <>
             <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-accent-dark">Going live</p>
             <h2 className="hand mt-2 text-[24px] leading-tight">{address}</h2>
@@ -2235,7 +2284,7 @@ function PushCeremony({ at, address, onDone }: { at: number; address: string; on
                       {state === "done" ? "✓" : state === "now" ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-accent-dark" /> : "·"}
                     </span>
                     <span className={`text-[14px] ${state === "next" ? "text-muted" : "font-semibold"}`}>
-                      {state === "done" ? `Pushed to ${name}` : state === "now" ? `Pushing it to ${name}…` : name}
+                      {state === "done" ? `Posted to ${name}` : state === "now" ? `Posting to ${name}…` : name}
                     </span>
                   </li>
                 );
@@ -2252,8 +2301,10 @@ function PushCeremony({ at, address, onDone }: { at: number; address: string; on
                 <path d="M10 25 L20 35 L38 14" strokeDasharray="50" strokeDashoffset="50" style={{ animation: "tle-draw 600ms 350ms ease-out forwards" }} />
               </svg>
             </span>
-            <h2 className="hand mt-6 text-[26px] leading-tight">Your property listing is now live</h2>
-            <p className="mt-2 text-[13.5px] leading-relaxed text-muted">{address} is on Rightmove, Zoopla and OnTheMarket. Nice one.</p>
+            <h2 className="hand mt-6 text-[26px] leading-tight">Congratulations</h2>
+            <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
+              Your listing will be live within the next 5 to 10 minutes. {address}, on Rightmove, OnTheMarket and Zoopla.
+            </p>
             <button
               type="button"
               onClick={onDone}
