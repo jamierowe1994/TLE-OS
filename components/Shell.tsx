@@ -328,7 +328,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             dark-mode inversion - the dark theme gets its own copy with the
             words in white and the house as painted. The collapse toggle sits
             beside it on the same row. */}
-        <div className={`flex items-center px-1 ${collapsed ? "flex-col gap-2" : "justify-between"}`}>
+        <div className={`relative flex items-center px-1 ${collapsed ? "flex-col gap-2" : "justify-between"}`}>
           {collapsed ? (
             <img src="/brand/tle-os-house.png" alt="TLE OS" className="h-12 w-auto shrink-0 object-contain" />
           ) : (
@@ -337,12 +337,17 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               <img src="/brand/tle-os-logo-dark.png" alt="" aria-hidden className="art-dark h-auto w-[78%] object-contain" />
             </>
           )}
-          {/* The collapse toggle, beside the logo on the same row (James, 13 Sep 2026). */}
+          {/* The collapse toggle, beside the logo on the same row, centred on
+              the WORDS rather than the whole drawing (James, 13 Sep 2026): the
+              house stands taller than TLE OS, and the wordmark's middle sits
+              64.5% of the way down the image. */}
           <button
             type="button"
             onClick={toggleCollapsed}
             title={collapsed ? "Expand" : "Collapse"}
-            className="flex h-6 w-6 items-center justify-center rounded-full border border-line/80 text-[11px] text-muted transition-colors hover:text-ink"
+            className={`flex h-6 w-6 items-center justify-center rounded-full border border-line/80 text-[11px] text-muted transition-colors hover:text-ink ${
+              collapsed ? "" : "absolute right-1 top-[64.5%] -translate-y-1/2"
+            }`}
           >
             {collapsed ? "»" : "«"}
           </button>
