@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import DoorFrame from "@/components/DoorFrame";
 
 /**
  * The front door: one shared access code, sent to Susan and Howard by hand,
@@ -67,9 +68,8 @@ function Door() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-6">
-      <div className="fade-up w-full max-w-sm text-center">
-        <h1 className="hand text-5xl">TLE OS</h1>
+    <DoorFrame art="building">
+      <div>
 
         {!choosing ? (
           <>
@@ -122,7 +122,7 @@ function Door() {
           </>
         )}
       </div>
-    </main>
+    </DoorFrame>
   );
 }
 

@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import DoorFrame from "@/components/DoorFrame";
 
 /**
  * Joining — one page, two states.
@@ -28,12 +29,7 @@ import { useRouter, useSearchParams } from "next/navigation";
  */
 
 function Panel({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
-      <div className="rounded-2xl border border-line/80 bg-panel p-7">{children}</div>
-      <p className="mt-4 text-center text-[11px] text-muted">The Letting Experts</p>
-    </main>
-  );
+  return <DoorFrame art="desk">{children}</DoorFrame>;
 }
 
 function AskForEmail() {
@@ -71,7 +67,7 @@ function AskForEmail() {
   if (sent) {
     return (
       <Panel>
-        <h1 className="hand text-[22px] leading-tight">Check your email</h1>
+        <h1 className="hand text-[26px] leading-tight">Check your email</h1>
         <p className="mt-3 text-[13px] leading-relaxed">
           If that address can have an account, a link is on its way. It works once and
           lasts 24 hours.
@@ -93,7 +89,7 @@ function AskForEmail() {
 
   return (
     <Panel>
-      <h1 className="hand text-[22px] leading-tight">Set up your account</h1>
+      <h1 className="hand text-[26px] leading-tight">Set up your account</h1>
       <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
         Your work email address. We&apos;ll send a link to confirm it&apos;s yours.
       </p>
@@ -172,7 +168,7 @@ function ChoosePassword({ token }: { token: string }) {
 
   return (
     <Panel>
-      <h1 className="hand text-[22px] leading-tight">Choose your password</h1>
+      <h1 className="hand text-[26px] leading-tight">Choose your password</h1>
       {/* "Two things and you're in" was true when this was the last screen.
           It is now the first of five, and a promise that turns out to be four
           screens short is worse than no promise. */}
@@ -252,7 +248,7 @@ function Join() {
   if (token) return <ChoosePassword token={token} />;
   return (
     <Panel>
-      <h1 className="hand text-[22px] leading-tight">You&apos;ll need an invite</h1>
+      <h1 className="hand text-[26px] leading-tight">You&apos;ll need an invite</h1>
       <p className="mt-3 text-[13px] leading-relaxed">
         TLE OS is invite only. When somebody adds you, a link arrives by email and brings
         you back here to set your password.

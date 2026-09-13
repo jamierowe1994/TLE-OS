@@ -3,8 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-/* The random line-drawing person is gone (James, 13 Sep 2026): one drawing,
-   in the OS's own colours, sunk into a sage panel beside the form. */
+import DoorFrame from "@/components/DoorFrame";
 
 /**
  * Signing in.
@@ -81,24 +80,8 @@ function SignIn() {
   }
 
   return (
-    <main className="os-type flex min-h-screen items-center justify-center bg-page px-5 py-10">
-      {/* One card, the form on the left and the drawing sunk into a sage panel
-          on the right, cut off by the card's own edge - the same language as
-          the hero on a lead or an appraisal. Under md the panel drops away:
-          on a phone the form is the whole job. */}
-      <div className="w-full max-w-[1020px] overflow-hidden rounded-[28px] border border-line/50 bg-card shadow-[0_40px_90px_-50px_rgba(0,0,0,0.35)]">
-        <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)]">
-        <div className="min-w-0 p-8 sm:p-11">
-        {/* The logo itself, not the words (James, 13 Sep 2026). Two files
-            because the wordmark is ink: the dark theme gets the white copy. */}
-        <h1 className="leading-none">
-          <span className="sr-only">TLE OS</span>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/tle-os-logo.png" alt="" aria-hidden className="art-light h-auto w-[188px] object-contain" />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/tle-os-logo-dark.png" alt="" aria-hidden className="art-dark h-auto w-[188px] object-contain" />
-        </h1>
-        <p className="mt-4 text-[13.5px] leading-relaxed text-muted">
+    <DoorFrame art="street">
+      <p className="text-[13.5px] leading-relaxed text-muted">
           Sign in with your work email.
         </p>
 
@@ -176,25 +159,7 @@ function SignIn() {
         <p className="mt-5 border-t border-line/70 pt-4 text-[11.5px] leading-relaxed text-muted">
           Accounts are by invite. If you should have one and don&apos;t, ask James. Coffee usually speeds it up.
         </p>
-        <p className="mt-5 text-[11px] text-muted">The Letting Experts</p>
-        </div>
-
-        {/* The street, filling its half of the card edge to edge - James's
-            painting is a scene rather than a cut-out, so it is the panel
-            rather than something sitting on one. Held to the right so the
-            door and the bicycle survive the crop at every width. */}
-        <div className="relative hidden overflow-hidden md:block">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/brand/art/sign-in.webp"
-            alt=""
-            aria-hidden
-            className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[78%_center]"
-          />
-        </div>
-        </div>
-      </div>
-    </main>
+    </DoorFrame>
   );
 }
 

@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import DoorFrame from "@/components/DoorFrame";
 
 /**
  * Forgotten password — the same two-state shape as /join.
@@ -13,12 +14,7 @@ import { useRouter, useSearchParams } from "next/navigation";
  */
 
 function Panel({ children }: { children: React.ReactNode }) {
-  return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
-      <div className="rounded-2xl border border-line/80 bg-panel p-7">{children}</div>
-      <p className="mt-4 text-center text-[11px] text-muted">The Letting Experts</p>
-    </main>
-  );
+  return <DoorFrame art="house">{children}</DoorFrame>;
 }
 
 function AskForEmail() {
@@ -55,7 +51,7 @@ function AskForEmail() {
   if (sent) {
     return (
       <Panel>
-        <h1 className="hand text-[22px] leading-tight">Check your email</h1>
+        <h1 className="hand text-[26px] leading-tight">Check your email</h1>
         <p className="mt-3 text-[13px] leading-relaxed">
           If there&apos;s an account on that address, a reset link is on its way. It works
           once and lasts an hour.
@@ -72,7 +68,7 @@ function AskForEmail() {
 
   return (
     <Panel>
-      <h1 className="hand text-[22px] leading-tight">Forgotten your password</h1>
+      <h1 className="hand text-[26px] leading-tight">Forgotten your password</h1>
       <p className="mt-2 text-[12.5px] leading-relaxed text-muted">
         Your work email. We&apos;ll send a link to set a new one.
       </p>
@@ -141,7 +137,7 @@ function NewPassword({ token }: { token: string }) {
 
   return (
     <Panel>
-      <h1 className="hand text-[22px] leading-tight">Choose a new password</h1>
+      <h1 className="hand text-[26px] leading-tight">Choose a new password</h1>
       {error && (
         <p className="mt-4 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[12.5px] leading-relaxed">
           {error}

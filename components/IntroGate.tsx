@@ -16,17 +16,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
  * Reduced motion skips it entirely, and it only shows once per session.
  */
 
-/** The stock set. Anything welcoming — no empty states, no error faces. */
+/** James's own paintings (13 Sep 2026), not the stock line drawings. */
 const ART = [
-  "/illustrations/notioly/looking-out-the-window.svg",
-  "/illustrations/notioly/home-caring.svg",
-  "/illustrations/notioly/buildings.svg",
-  "/illustrations/notioly/checking-the-calendar.svg",
-  "/illustrations/notioly/moving.svg",
-  "/illustrations/notioly/growth.svg",
-  "/illustrations/notioly/tasks.svg",
-  "/illustrations/notioly/place-search.svg",
-  "/illustrations/notioly/inbox.svg",
+  "/brand/art/sign-in.webp",
+  "/brand/art/lead-house.webp",
+  "/brand/art/lead-building.webp",
+  "/brand/art/appraisal-house.webp",
 ];
 
 /** A line under the title, drawn from the same shuffle so it varies too. */
@@ -93,7 +88,7 @@ export default function IntroGate({ children }: { children: React.ReactNode }) {
       {show && pick && (
         <div
           onClick={dismiss}
-          className={`fixed inset-0 z-[100] flex cursor-pointer flex-col items-center justify-center gap-6 bg-page px-6 transition-opacity duration-700 ${
+          className={`os-type fixed inset-0 z-[100] flex cursor-pointer flex-col items-center justify-center gap-7 bg-page px-6 transition-opacity duration-700 ${
             fading ? "pointer-events-none opacity-0" : "opacity-100"
           }`}
         >
@@ -102,11 +97,17 @@ export default function IntroGate({ children }: { children: React.ReactNode }) {
             src={pick.art}
             alt=""
             aria-hidden
-            className="art intro-rise h-[clamp(160px,34vh,320px)] w-auto"
+            className="intro-rise h-[clamp(180px,36vh,340px)] w-auto max-w-[min(90vw,620px)] rounded-[24px] object-contain"
           />
           <div className="intro-rise-late text-center">
-            <h1 className="hand text-[clamp(28px,5vw,44px)] leading-none">Welcome to TLE OS</h1>
-            <p className="mt-2.5 text-[13px] text-muted">{pick.line}</p>
+            <h1 className="leading-none">
+              <span className="sr-only">Welcome to TLE OS</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/tle-os-logo.png" alt="" aria-hidden className="art-light mx-auto h-auto w-[clamp(180px,22vw,240px)]" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/tle-os-logo-dark.png" alt="" aria-hidden className="art-dark mx-auto h-auto w-[clamp(180px,22vw,240px)]" />
+            </h1>
+            <p className="mt-3 text-[13px] text-muted">{pick.line}</p>
           </div>
 
           <button
