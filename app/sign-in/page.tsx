@@ -87,7 +87,7 @@ function SignIn() {
           the hero on a lead or an appraisal. Under md the panel drops away:
           on a phone the form is the whole job. */}
       <div className="w-full max-w-[1020px] overflow-hidden rounded-[28px] border border-line/50 bg-card shadow-[0_40px_90px_-50px_rgba(0,0,0,0.35)]">
-        <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+        <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)]">
         <div className="min-w-0 p-8 sm:p-11">
         {/* The logo itself, not the words (James, 13 Sep 2026). Two files
             because the wordmark is ink: the dark theme gets the white copy. */}
@@ -179,15 +179,17 @@ function SignIn() {
         <p className="mt-5 text-[11px] text-muted">The Letting Experts</p>
         </div>
 
-        {/* The drawing: bottom-anchored and wider than its panel, so it runs
-            off both the bottom and the sides rather than sitting in a box. */}
-        <div className="relative hidden overflow-hidden bg-sage/25 md:block">
+        {/* The street, filling its half of the card edge to edge - James's
+            painting is a scene rather than a cut-out, so it is the panel
+            rather than something sitting on one. Held to the right so the
+            door and the bicycle survive the crop at every width. */}
+        <div className="relative hidden overflow-hidden md:block">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/brand/art/sign-in.webp"
             alt=""
             aria-hidden
-            className="pointer-events-none absolute bottom-0 left-1/2 w-[118%] max-w-none -translate-x-1/2"
+            className="pointer-events-none absolute inset-0 h-full w-full object-cover object-[78%_center]"
           />
         </div>
         </div>
