@@ -94,8 +94,18 @@ export default function LandlordSignIn() {
           </form>
         )}
       </div>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/illustrations/notioly/looking-out-the-window.svg" alt="" className="hidden w-full md:block" />
+      {/* James's own painting (13 Sep 2026), sunk into a pink panel and cut
+          off by its bottom edge - the landlord's surface, so pink rather than
+          the OS's sage. */}
+      <div className="relative hidden h-[300px] overflow-hidden rounded-[24px] bg-accent-soft/50 md:block">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/brand/art/lead-house.webp"
+          alt=""
+          aria-hidden
+          className="pointer-events-none absolute bottom-[-6%] left-1/2 w-[125%] max-w-none -translate-x-1/2"
+        />
+      </div>
     </div>
   );
 }

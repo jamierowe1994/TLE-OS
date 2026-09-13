@@ -69,16 +69,10 @@ export default function BoardLoading() {
           still for them. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/illustrations/loading.gif"
+        src="/brand/art/lead-building.webp"
         alt=""
-        className="art h-auto w-[min(260px,60vw)] select-none motion-reduce:hidden"
-        draggable={false}
-      />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/illustrations/notioly/looking-for-something.svg"
-        alt=""
-        className="art board-loading-art hidden h-auto w-[min(260px,60vw)] select-none motion-reduce:block"
+        aria-hidden
+        className="bond-float h-auto w-[min(250px,58vw)] select-none opacity-90"
         draggable={false}
       />
       <p className="hand mt-6 text-[17px] text-ink">Fetching the pipeline</p>

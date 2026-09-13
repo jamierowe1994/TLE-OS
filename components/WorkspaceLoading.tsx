@@ -42,10 +42,11 @@ export default function WorkspaceLoading({
     /* The height is the window less the shell's own top and bottom padding,
        so the centre of this is the centre of the white space. */
     <div className={`flex ${height} flex-col items-center justify-center px-6 text-center`} role="status" aria-live="polite">
+      {/* One painting of James's, breathing gently. The GIF and the stock
+          drawing behind it are gone (13 Sep 2026): a GIF cannot honour
+          prefers-reduced-motion, and the CSS float can. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/illustrations/loading.gif" alt="" className="art h-auto w-[min(220px,50vw)] select-none motion-reduce:hidden" draggable={false} />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/illustrations/notioly/looking-for-something.svg" alt="" className="art hidden h-auto w-[min(220px,50vw)] select-none motion-reduce:block" draggable={false} />
+      <img src="/brand/art/lead-building.webp" alt="" aria-hidden className="bond-float h-auto w-[min(230px,52vw)] select-none opacity-90" draggable={false} />
       <p className="hand mt-5 text-[17px] text-ink">{label}</p>
       {note && <p className="mt-1.5 max-w-[380px] text-[12.5px] leading-relaxed text-muted">{note}</p>}
       {slowNote && (
