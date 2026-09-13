@@ -324,25 +324,19 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         {/* Wordmark + the collapse toggle. The logo's pin follows the accent. */}
         <div className={`flex items-center ${collapsed ? "flex-col gap-2" : "justify-between"} px-1`}>
           <div className="flex items-center">
-            {/* The tower (James, 13 Sep 2026): a colour illustration, so it
-                is never put through the dark-mode inversion. The mark is the mark. */}
-            <img
-              src="/brand/tle-tower.png"
-              alt=""
-              aria-hidden
-              className="h-[64px] w-[52px] shrink-0 object-contain"
-            />
-            <div
-              /* Nearly the height of the house beside it (James, 12 Sep
-                 2026: "make it as big as the small building icon"). */
-              /* Lighter than the headings (James, 12 Sep): at 800 the mark
-                 sat heavy against the dainty items under it. */
-              className={`hand overflow-hidden whitespace-nowrap text-[29px] font-semibold leading-none tracking-[-0.02em] transition-[max-width,opacity,margin] duration-[360ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
-                collapsed ? "ml-0 max-w-0 opacity-0" : "ml-2 max-w-[130px] opacity-100"
-              }`}
-            >
-              TLE OS
-            </div>
+            {/* The logo (James, 13 Sep 2026): the house and the wordmark in
+                one drawing. The house alone when the rail is collapsed. A
+                painted illustration, so never put through the dark-mode
+                inversion - the dark theme gets its own copy with the words
+                in white and the house as painted. */}
+            {collapsed ? (
+              <img src="/brand/tle-os-house.png" alt="TLE OS" className="h-12 w-auto shrink-0 object-contain" />
+            ) : (
+              <>
+                <img src="/brand/tle-os-logo.png" alt="TLE OS" className="art-light h-[64px] w-auto shrink-0 object-contain" />
+                <img src="/brand/tle-os-logo-dark.png" alt="" aria-hidden className="art-dark h-[64px] w-auto shrink-0 object-contain" />
+              </>
+            )}
           </div>
           <button
             type="button"
