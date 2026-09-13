@@ -1193,17 +1193,57 @@ function DealWorkspace({
     ? CHECKLIST_ITEMS.filter((i) => meta.checklist[i.key]?.done).length
     : 0;
 
+  const lead = deal.app.tenants.find((t) => t.isPrimary) ?? deal.app.tenants[0];
+  const daysToGo =
+    deal.app.startDate != null
+      ? Math.round((new Date(deal.app.startDate).getTime() - new Date(today()).getTime()) / 86_400_000)
+      : null;
+  const outstanding = CHECKLIST_ITEMS.length - checklistDone;
+  const dealAge =
+    deal.app.dateReceived != null
+      ? Math.round((new Date(today()).getTime() - new Date(deal.app.dateReceived).getTime()) / 86_400_000)
+      : null;
+  const current = currentIdx >= 0 ? PORTAL_STAGES[currentIdx] : null;
+  const depositValue = meta?.depositScheme?.startsWith("Flatfair")
+    ? "Flatfair"
+    : meta?.depositScheme
+      ? p?.deposit != null
+        ? formatGBP(p.deposit)
+        : "—"
+      : p?.depositReplacement
+        ? "Flatfair"
+        : p?.deposit != null
+          ? formatGBP(p.deposit)
+          : "—";
+
+  /* The drawer, to James's mock of 13 Sep 2026: from the right, the head with
+     the photograph and the two systems the deal lives in, four tiles, then
+     the property, the progress and the working tabs side by side, and the
+     three people along the foot. The page scrolls as one; only the tabs keep
+     their own scroll, because a long thread should not push the people off
+     the bottom. */
   return (
-    <div className="fixed inset-0 z-50 bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-[#2b201d]/40" onClick={onClose}>
       <div
-        className="panel-slide fixed inset-y-0 left-0 flex w-full max-w-[85vw] flex-col bg-page shadow-2xl lg:w-[85vw]"
+        className="drawer-in fixed inset-y-0 right-0 flex w-full max-w-[1320px] flex-col overflow-hidden bg-page shadow-[-20px_0_60px_-30px_rgba(40,25,20,0.5)] lg:w-[86vw] lg:rounded-l-[28px]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* ---- panel header ---- */}
-        <div className="flex items-center gap-4 border-b border-line px-5 py-4 sm:px-8">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold ${stagePill(cancelled ? "cancelled" : effective)}`}>
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="px-5 pb-8 pt-5 sm:px-7">
+            {/* ── the head ── */}
+            <div className="relative flex items-start gap-5">
+              <Photo src={deal.app.image} className="hidden h-[150px] w-[160px] shrink-0 rounded-2xl sm:flex" />
+              <div className="min-w-0 flex-1 pt-1">
+                <h2 className="truncate text-[32px] font-bold leading-tight">{deal.app.propertyName}</h2>
+                <p className="mt-1 flex items-center gap-1.5 text-[14px] text-muted">
+                  <DoodleIcon name="home-1" size={14} />
+                  {deal.app.locality}
+                </p>
+                <p className="mt-2 text-[13.5px]">
+                  <span className="text-muted">Agent</span> <span className="ml-1 font-semibold">{deal.agentName ?? "Unassigned"}</span>
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                  <span className={`rounded-full px-2.5 py-0.5 text-[10.5px] font-semibold ${cancelled ? "bg-page text-muted" : "bg-[#fdefec] text-[#9d4340]"}`}>
                 {(cancelled ? "Cancelled" : stageLabel(effective)).toUpperCase()}
               </span>
               {/* Propoly first. It carries tenancy_service_level on every
@@ -1211,7 +1251,7 @@ function DealWorkspace({
                   fallback for a deal Propoly has not labelled, and for the
                   managed book, where there is no Propoly deal at all. */}
               {p?.service || deal.serviceLevel ? (
-                <span className="rounded-full border border-line bg-page px-2 py-0.5 text-[9px] font-semibold text-muted">
+                <span className="rounded-full bg-page px-2.5 py-0.5 text-[10.5px] font-semibold text-muted">
                   {(p?.service ?? deal.serviceLevel ?? "").toUpperCase()}
                 </span>
               ) : null}
@@ -1221,9 +1261,9 @@ function DealWorkspace({
               {deal.rlp ? (
                 <span
                   title={deal.rlp.evidence}
-                  className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold ${
+                  className={`rounded-full border px-2.5 py-0.5 text-[10.5px] font-semibold ${
                     deal.rlp.status === "protected"
-                      ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                      ? "border-transparent bg-[#f1f4ec] text-[#56634a]"
                       : "border-line bg-page text-muted"
                   }`}
                 >
@@ -1237,7 +1277,7 @@ function DealWorkspace({
                   title={`PayProp deposit ${deal.tenancy.depositId}${
                     deal.tenancy.startDate ? ` · tenancy from ${deal.tenancy.startDate}` : ""
                   }`}
-                  className="rounded-full border border-line bg-page px-2 py-0.5 text-[9px] font-semibold text-muted"
+                  className="rounded-full bg-page px-2.5 py-0.5 text-[10.5px] font-semibold text-muted"
                 >
                   DEPOSIT HELD
                 </span>
@@ -1257,17 +1297,17 @@ function DealWorkspace({
                 deal.compliance.outstanding === 0 ? (
                   <span
                     title="Every required certificate is on file and in date"
-                    className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[9px] font-semibold text-emerald-700"
+                    className="rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-[10.5px] font-semibold text-emerald-700"
                   >
                     COMPLIANT
                   </span>
                 ) : (
                   <span
                     title={deal.compliance.problems.join(", ")}
-                    className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold ${
+                    className={`rounded-full border px-2.5 py-0.5 text-[10.5px] font-semibold ${
                       deal.compliance.expired > 0
-                        ? "border-red-300 bg-red-50 text-red-700"
-                        : "border-amber-300 bg-amber-50 text-amber-700"
+                        ? "border-transparent bg-[#fdefec] text-[#9d4340]"
+                        : "border-transparent bg-amber-50 text-amber-700"
                     }`}
                   >
                     {deal.compliance.expired > 0
@@ -1285,7 +1325,7 @@ function DealWorkspace({
                         ? `Signed ${fmtDate(deal.tobStatus.completedAt)}`
                         : "Signed"
                     }
-                    className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[9px] font-semibold text-emerald-700"
+                    className="rounded-full border border-emerald-300 bg-emerald-50 px-2.5 py-0.5 text-[10.5px] font-semibold text-emerald-700"
                   >
                     TOB SIGNED
                   </span>
@@ -1293,63 +1333,49 @@ function DealWorkspace({
                   deal.tobStatus.status === "partially_signed" ? (
                   <span
                     title="Sent, not yet signed"
-                    className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[9px] font-semibold text-amber-700"
+                    className="rounded-full border border-transparent bg-amber-50 px-2.5 py-0.5 text-[10.5px] font-semibold text-amber-700"
                   >
                     TOB SENT
                   </span>
                 ) : (
                   <span
                     title={`DocuSign envelope status: ${deal.tobStatus.status} — needs a look`}
-                    className="rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[9px] font-semibold text-red-700"
+                    className="rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[10.5px] font-semibold text-red-700"
                   >
                     TOB — CHECK
                   </span>
                 )
               ) : null}
+
+                </div>
+              </div>
+              {/* The street, and the line: the drawer's own masthead. */}
+              <div aria-hidden className="pointer-events-none absolute bottom-0 right-[300px] hidden w-[360px] xl:block">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/illustrations/houses-row.webp" alt="" className="art w-full opacity-90" />
+                <p className="absolute -right-[150px] top-2 w-[150px] text-[17px] leading-tight text-accent-dark" style={{ fontFamily: "var(--font-shantell), cursive", transform: "rotate(-6deg)" }}>
+                  Great homes, happier tenancies
+                </p>
+              </div>
+              <div className="ml-auto flex shrink-0 items-center gap-2">
+                <a href={PROPOLY_APP_URL} target="_blank" rel="noopener noreferrer" className="btn-press hidden rounded-xl border border-line bg-card px-3.5 py-2.5 text-[12.5px] font-semibold transition hover:border-black/30 sm:block">
+                  Open in Propoly ↗
+                </a>
+                {deal.app.listingId ? (
+                  <a href={rexListingUrl(deal.app.listingId, "rental")} target="_blank" rel="noopener noreferrer" className="btn-press hidden rounded-xl bg-accent-soft px-3.5 py-2.5 text-[12.5px] font-semibold text-ink transition hover:bg-accent-soft/70 sm:block">
+                    Open in REX ↗
+                  </a>
+                ) : null}
+                <button type="button" onClick={onOpenMailbox} title="Connect your mailbox for the Emails tab" className="btn-press flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-card text-muted transition hover:text-ink">
+                  <DoodleIcon name="mail" size={15} />
+                </button>
+                <button onClick={onClose} aria-label="Close" className="flex h-10 w-10 items-center justify-center rounded-xl text-muted transition hover:bg-card hover:text-ink">
+                  <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
+                  </svg>
+                </button>
+              </div>
             </div>
-            <h2 className="mt-1.5 truncate text-[19px] font-semibold leading-snug">
-              {deal.app.propertyName}
-            </h2>
-            <p className="truncate text-[13px] text-muted">
-              {deal.app.locality}
-              {deal.agentName ? ` · ${deal.agentName}` : ""}
-            </p>
-          </div>
-          {/* The two systems this deal actually lives in, side by side and
-              outlined rather than filled — the same treatment as everything
-              else on the page. REX only appears when the deal carries a
-              listing id; without one there is nothing to open, and a button
-              that goes nowhere is worse than no button. */}
-          <div className="ml-auto flex shrink-0 items-center gap-2">
-            <a
-              href={PROPOLY_APP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-press hidden rounded-lg border border-line bg-transparent px-3.5 py-2 text-[12px] font-semibold transition hover:border-black/30 sm:block"
-            >
-              Open in Propoly ↗
-            </a>
-            {deal.app.listingId ? (
-              <a
-                href={rexListingUrl(deal.app.listingId, "rental")}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-press hidden rounded-lg border border-line bg-transparent px-3.5 py-2 text-[12px] font-semibold transition hover:border-black/30 sm:block"
-              >
-                Open in REX ↗
-              </a>
-            ) : null}
-            <button
-              onClick={onClose}
-              aria-label="Close"
-              className="rounded-full border border-line p-2 text-muted transition hover:text-ink"
-            >
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
-          </div>
-        </div>
 
         {/* ---- banners ---- */}
         {(moved && meta?.stageBy) ||
@@ -1357,7 +1383,7 @@ function DealWorkspace({
         cancelled ||
         deal.archived ||
         (deal.flags ?? []).some((f) => f.kind === "scheme-missing") ? (
-          <div className="space-y-2 px-5 pt-4 sm:px-8">
+          <div className="mt-4 space-y-2">
             {cancelled ? (
               <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-[12px] text-red-700">
                 This deal was cancelled before completion.
@@ -1377,7 +1403,7 @@ function DealWorkspace({
               </p>
             ) : null}
             {moved && meta?.stageBy ? (
-              <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-800">
+              <p className="rounded-xl border border-transparent bg-amber-50 px-4 py-2.5 text-[12px] text-amber-800">
                 Moved to <span className="font-semibold">{stageLabel(effective)}</span> by{" "}
                 {meta.stageBy}
                 {meta.stageAt ? ` · ${fmtDateTime(meta.stageAt)}` : ""} — Propoly itself still
@@ -1410,7 +1436,7 @@ function DealWorkspace({
             {(deal.flags ?? []).filter((f) => f.kind === "scheme-missing").map((f) => (
               <p
                 key={f.kind}
-                className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12px] text-amber-800"
+                className="rounded-xl border border-transparent bg-amber-50 px-4 py-2.5 text-[12px] text-amber-800"
               >
                 {f.label}
               </p>
@@ -1418,166 +1444,43 @@ function DealWorkspace({
           </div>
         ) : null}
 
-        {/* ---- the strip: the four things she looks for first ----
-             Only figures that can actually be sourced. The compliance score
-             and the documents count from the reference need a business-wide
-             REX pull and a Propoly documents GET that does not exist, so they
-             are absent rather than shown empty. */}
-        <div className="relative px-5 pt-4 sm:px-8">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {(() => {
-            const days =
-              deal.app.startDate != null
-                ? Math.round(
-                    (new Date(deal.app.startDate).getTime() - new Date(today()).getTime()) /
-                      86_400_000
-                  )
-                : null;
-            const outstanding = CHECKLIST_ITEMS.length - checklistDone;
-            const idx = PORTAL_STAGES.findIndex((x) => x.key === effective);
-            const age =
-              deal.app.dateReceived != null
-                ? Math.round(
-                    (new Date(today()).getTime() - new Date(deal.app.dateReceived).getTime()) /
-                      86_400_000
-                  )
-                : null;
-            const tiles: Array<{
-              icon: string;
-              label: string;
-              value: string;
-              note?: string;
-              alert?: boolean;
-              /** Present = the tile is a button, not a readout. */
-              onClick?: () => void;
-              open?: boolean;
-            }> = [
-              {
-                icon: "calendar",
-                label: "Move-in date",
-                value: fmtDate(deal.app.startDate) ?? "No date",
-                note:
-                  days == null
-                    ? "Not set yet"
-                    : days < 0
-                      ? `${Math.abs(days)} days ago`
-                      : days === 0
-                        ? "Today"
-                        : `In ${days} days`,
-                alert: days != null && days < 0 && effective !== "move_day",
-              },
-              {
-                icon: "checklist",
-                label: "Outstanding",
-                value: String(outstanding),
-                note: outstanding === 0 ? "All done" : `of ${CHECKLIST_ITEMS.length} steps`,
-                alert: outstanding > 0 && days != null && days <= 7,
-                onClick: () => setChecklistOpen((v) => !v),
-                open: checklistOpen,
-              },
-              {
-                icon: "trend-up",
-                label: "Stage",
-                value: stageLabel(effective),
-                note: idx >= 0 ? `${idx + 1} of ${PORTAL_STAGES.length}` : undefined,
-              },
-              {
-                icon: "clock",
-                label: "Deal age",
-                value: age == null ? "—" : `${age} days`,
-                note: fmtDate(deal.app.dateReceived) ?? undefined,
-              },
-            ];
-            return tiles.map((t) => {
-              const body = (
-                <>
-                  <div className="flex items-center gap-2 text-muted">
-                    <DoodleIcon name={t.icon} size={15} />
-                    <span className="text-[10px] font-semibold uppercase tracking-wide">
-                      {t.label}
-                    </span>
-                    {t.onClick ? (
-                      <svg
-                        className={`ml-auto h-3.5 w-3.5 transition-transform duration-200 ${t.open ? "rotate-180" : ""}`}
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden
-                      >
-                        <path d="M6 9l6 6 6-6" />
-                      </svg>
-                    ) : null}
-                  </div>
-                  <p
-                    className={`mt-1.5 truncate text-left text-[17px] font-semibold ${
-                      t.alert ? "text-accent" : "text-ink"
-                    }`}
-                  >
-                    {t.value}
-                  </p>
-                  {t.note ? (
-                    <p className="text-left text-[11px] text-muted">{t.note}</p>
-                  ) : null}
-                </>
-              );
-              if (!t.onClick) {
-                return (
-                  <div key={t.label} className="rounded-2xl border border-line px-4 py-3">
-                    {body}
-                  </div>
-                );
-              }
-              return (
-                <button
-                  key={t.label}
-                  type="button"
-                  onClick={t.onClick}
-                  aria-expanded={t.open}
-                  title="Show the pre-tenancy checklist"
-                  className={`btn-press block w-full rounded-2xl border px-4 py-3 text-left transition ${
-                    t.open ? "border-black/30" : "border-line hover:border-black/25"
-                  }`}
-                >
-                  {body}
-                </button>
-              );
-            });
-          })()}
-        </div>
 
-        {/* ---- the checklist, dropped out of the Outstanding tile ----
-             It used to sit across the foot of the panel, which read as
-             somewhere to put it rather than somewhere it belonged. It hangs
-             off the tile that reports the count instead: the number tells you
-             there is work, clicking it shows you what.
-
-             Absolutely positioned, so opening it never reflows the columns
-             underneath — the panel keeps the fit it has. */}
-        {checklistOpen ? (
-          <>
-            <div className="fixed inset-0 z-20" onClick={() => setChecklistOpen(false)} />
-            <div className="menu-pop absolute inset-x-5 top-full z-30 mt-2 rounded-2xl border border-line bg-page p-4 shadow-xl sm:inset-x-8">
-              <div className="mb-3 flex items-center gap-2">
-                <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Pre-tenancy checklist
-                </h3>
-                <span className="text-[11px] text-muted">
-                  {checklistDone}/{CHECKLIST_ITEMS.length} done
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setChecklistOpen(false)}
-                  aria-label="Close the checklist"
-                  className="ml-auto rounded-full p-1 text-muted transition hover:text-ink"
-                >
-                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
-                  </svg>
-                </button>
+            {/* ── the four things she looks for first ── */}
+            <div className="relative mt-5">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <DrawerTile
+                  icon="calendar"
+                  tone={daysToGo != null && daysToGo < 0 && effective !== "move_day" ? "red" : "green"}
+                  label="Move-in date"
+                  value={fmtDate(deal.app.startDate) ?? "No date"}
+                  note={daysToGo == null ? "Not set yet" : daysToGo < 0 ? `${Math.abs(daysToGo)} days ago` : daysToGo === 0 ? "Today" : `In ${daysToGo} days`}
+                />
+                <DrawerTile icon="trend-up" tone="green" label="Stage" value={cancelled ? "Cancelled" : stageLabel(effective)} note={currentIdx >= 0 ? `${currentIdx + 1} of ${PORTAL_STAGES.length}` : undefined} />
+                <DrawerTile
+                  icon="checklist"
+                  tone={outstanding > 0 ? "red" : "green"}
+                  label="Outstanding"
+                  value={String(outstanding)}
+                  note={outstanding === 0 ? "All done" : `of ${CHECKLIST_ITEMS.length} steps`}
+                  onClick={() => setChecklistOpen((v) => !v)}
+                  open={checklistOpen}
+                />
+                <DrawerTile icon="clock" tone="green" label="Deal age" value={dealAge == null ? "—" : `${dealAge} days`} note={fmtDate(deal.app.dateReceived) ? `Since ${fmtDate(deal.app.dateReceived)}` : undefined} />
               </div>
+
+              {/* The checklist drops out of the Outstanding tile. Absolutely
+                  positioned, so opening it never reflows the columns. */}
+              {checklistOpen ? (
+                <>
+                  <div className="fixed inset-0 z-20" onClick={() => setChecklistOpen(false)} />
+                  <div className="menu-pop absolute inset-x-0 top-full z-30 mt-2 rounded-2xl border border-line bg-page p-4 shadow-xl">
+                    <div className="mb-3 flex items-center gap-2">
+                      <h3 className="text-[13px] font-bold">Pre-tenancy checklist</h3>
+                      <span className="text-[11px] text-muted">{checklistDone}/{CHECKLIST_ITEMS.length} done</span>
+                      <button type="button" onClick={() => setChecklistOpen(false)} aria-label="Close the checklist" className="ml-auto rounded-full p-1 text-muted transition hover:text-ink">
+                        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" /></svg>
+                      </button>
+                    </div>
               <div className="grid gap-x-6 gap-y-0.5 sm:grid-cols-2 lg:grid-cols-3">
                 {CHECKLIST_ITEMS.map((item) => {
                   const tick = meta?.checklist[item.key];
@@ -1609,60 +1512,26 @@ function DealWorkspace({
                   );
                 })}
               </div>
+                  </div>
+                </>
+              ) : null}
             </div>
-          </>
-        ) : null}
-        </div>
 
-        {/* ---- three working columns ---- */}
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5 sm:p-8 lg:overflow-hidden">
-        <div className="grid min-h-0 flex-1 gap-5 lg:grid-cols-12">
-          {/* -- the deal: numbers, then the property --
-               Back to 3 now the checklist has moved out to its own full-width
-               row, which gives the middle column back the width Progression
-               needs. A flex column, so the illustration at the foot can take
-               the leftover space rather than leaving a hole under the photo. */}
-          <div className="flex min-h-0 flex-col gap-4 lg:col-span-3 lg:overflow-y-auto lg:pr-1">
-            <div className="card card-flat shrink-0 p-5">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                The numbers
-              </h3>
-              {/* Stacked label-left/value-right rows in a narrow column, so
-                  two per line rather than six down. Label above value here —
-                  side by side in half the width, the longer dates collided. */}
-              <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
-                <NumberRow label="Rent / month" value={deal.app.offer != null ? formatGBP(deal.app.offer) : "—"} big />
-                <NumberRow
-                  label="Deposit"
-                  // A Flatfair deal takes NO cash deposit — the Propoly figure
-                  // is a liability cap, and showing it as money to collect is
-                  // how someone chases a deposit that does not exist. But the
-                  // clause flag is a regex guess, so Kirstie's own scheme
-                  // entry OUTRANKS it in both directions (review find).
-                  value={
-                    meta?.depositScheme?.startsWith("Flatfair")
-                      ? "Flatfair"
-                      : meta?.depositScheme
-                        ? p?.deposit != null
-                          ? formatGBP(p.deposit)
-                          : "—"
-                        : p?.depositReplacement
-                          ? "Flatfair"
-                          : p?.deposit != null
-                            ? formatGBP(p.deposit)
-                            : "—"
-                  }
-                />
-                <NumberRow label="Holding fee" value={p?.holdingFee != null ? formatGBP(p.holdingFee) : "—"} />
-                <NumberRow
-                  label="Move-in date"
-                  value={fmtDate(deal.app.startDate) ?? "TBC"}
-                  alert={isOverdue(deal)}
-                />
-                <NumberRow label="Deal received" value={fmtDate(deal.app.dateReceived) ?? "—"} />
-                {deal.app.hasPets ? <NumberRow label="Pets" value="Yes" /> : null}
-              </dl>
-
+            {/* ── the property, the progress, the work ── */}
+            <div className="mt-5 grid gap-4 lg:grid-cols-12">
+              <section className="card lg:col-span-3 p-5">
+                <DrawerHead icon="home-1" title="Property" />
+                <Photo src={deal.app.image} className="mt-4 aspect-[16/11] w-full rounded-xl" />
+                <p className="mt-3 text-[17px] font-bold leading-tight">{deal.app.propertyName}</p>
+                <p className="text-[12.5px] text-muted">{deal.app.locality}</p>
+                <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-4">
+                  <NumberRow label="Rent (pcm)" value={deal.app.offer != null ? formatGBP(deal.app.offer) : "—"} big />
+                  <NumberRow label="Deposit" value={depositValue} big />
+                  <NumberRow label="Holding fee" value={p?.holdingFee != null ? formatGBP(p.holdingFee) : "—"} big />
+                  <NumberRow label="Move-in date" value={fmtDate(deal.app.startDate) ?? "TBC"} big alert={isOverdue(deal)} sub={daysToGo == null ? undefined : daysToGo < 0 ? `${Math.abs(daysToGo)} days ago` : daysToGo === 0 ? "Today" : `${daysToGo} days to go`} />
+                  <NumberRow label="Deal received" value={fmtDate(deal.app.dateReceived) ?? "—"} />
+                  {deal.app.hasPets ? <NumberRow label="Pets" value="Yes" /> : null}
+                </dl>
               {/* Which scheme holds the deposit. The portal IS the register —
                   no upstream system records this (probed 2 Aug 2026), which is
                   why it's an input rather than a readout. Ruled like every
@@ -1719,61 +1588,14 @@ function DealWorkspace({
                   </p>
                 ) : null}
               </div>
-            </div>
+              </section>
 
-            {deal.app.image ? (
-              <div className="card card-flat shrink-0 overflow-hidden p-0">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={deal.app.image}
-                  alt=""
-                  aria-hidden
-                  className="h-[136px] w-full object-cover"
-                />
-                <div className="px-5 py-3.5">
-                  <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                    Property
-                  </h3>
-                  <p className="mt-1 text-[13px] font-medium text-ink">
-                    {deal.app.propertyName}
-                  </p>
-                  <p className="text-[12px] text-muted">{deal.app.locality}</p>
-                  {/* The REX link moved up to the panel header, next to
-                      Propoly. Buried down here it was the only way out to REX
-                      and it only existed when the property had a photo. */}
+              <section className="card flex flex-col lg:col-span-4 p-5">
+                <div className="flex items-center justify-between gap-3">
+                  <DrawerHead icon="info" title="Tenancy progress" />
+                  {!cancelled && currentIdx >= 0 ? <span className="rounded-full bg-page px-2.5 py-1 text-[11px] font-semibold text-muted">{currentIdx + 1} of {PORTAL_STAGES.length}</span> : null}
                 </div>
-              </div>
-            ) : null}
-
-            {/* Fills whatever the numbers and the photo leave, and collapses
-                to nothing when they leave nothing — min-h-0 on a flex child is
-                what lets an image shrink instead of forcing a scrollbar. */}
-            <div className="mt-auto hidden min-h-0 flex-1 items-end justify-center pt-2 lg:flex">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/illustrations/notioly/checking-the-calendar.svg"
-                alt=""
-                aria-hidden
-                className="max-h-full w-auto max-w-[85%] object-contain opacity-60"
-              />
-            </div>
-          </div>
-
-          {/* -- progression, then who the deal belongs to --
-               Back to 4 columns wide: at 3 the stage labels and the hover
-               "Move here" were fighting over the same 290px.
-
-               A flex column where Progression takes the slack and the two
-               small cards below it don't. Opening the tenant fold therefore
-               costs Progression height rather than pushing the panel into a
-               scrollbar — its own list scrolls if it has to, which is a much
-               smaller thing to scroll than the whole file. */}
-          <div className="flex min-h-0 flex-col gap-4 lg:col-span-4">
-            <div className="card card-flat flex min-h-0 flex-1 flex-col p-5">
-              <h3 className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Progression
-              </h3>
-              <ol className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1">
+                <ol className="mt-4">
                 {PORTAL_STAGES.map((s, i) => {
                   const state = cancelled
                     ? "off"
@@ -1787,14 +1609,14 @@ function DealWorkspace({
                     <li key={s.key} className="group/stage flex gap-3">
                       <div className="flex flex-col items-center">
                         {state === "done" ? (
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-100">
-                            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-green-700" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#f1f4ec]">
+                            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-[#56634a]" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
                               <path d="M5 13l4 4L19 7" />
                             </svg>
                           </span>
                         ) : state === "current" ? (
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full accent-soft-bg">
-                            <span className="h-2.5 w-2.5 animate-pulse rounded-full" style={{ background: BRAND.accent }} />
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#fdefec]">
+                            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[#c0504a]" />
                           </span>
                         ) : (
                           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-page">
@@ -1802,7 +1624,7 @@ function DealWorkspace({
                           </span>
                         )}
                         {!last ? (
-                          <span className={`w-px flex-1 ${state === "done" ? "bg-green-200" : "bg-line"}`} />
+                          <span className={`w-px flex-1 ${state === "done" ? "bg-[#b3bea5]" : "bg-line"}`} />
                         ) : null}
                       </div>
                       {/* "Move here" shares the label's line and only shows on
@@ -1813,8 +1635,8 @@ function DealWorkspace({
                         <p className={`flex items-baseline gap-2 text-[13.5px] font-medium leading-6 ${state === "todo" || state === "off" ? "text-muted" : "text-ink"}`}>
                           <span className="truncate">{s.label}</span>
                           {state === "current" && !cancelled ? (
-                            <span className="shrink-0 rounded-full accent-soft-bg px-2 py-0.5 text-[9px] font-semibold accent-text">
-                              NOW
+                            <span className="shrink-0 rounded-full bg-[#fdefec] px-2 py-0.5 text-[10.5px] font-semibold text-[#9d4340]">
+                              Current
                             </span>
                           ) : null}
                           {/* Only Move day moves by hand (4 Sep). The other
@@ -1966,150 +1788,142 @@ function DealWorkspace({
                   );
                 })}
               </ol>
+                {/* Next up: the current stage, in her words, and the checklist behind it. */}
+                {!cancelled && current ? (
+                  <div className="mt-4 flex items-center gap-4 rounded-2xl bg-accent-soft p-4">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/80 text-[#9d4340]"><DoodleIcon name="calendar" size={16} /></span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Next up</p>
+                      <p className="text-[14px] font-bold leading-tight">{current.label}</p>
+                      <p className="mt-0.5 text-[12px] leading-snug text-ink/70">{current.blurb}</p>
+                    </div>
+                    <button type="button" onClick={() => setChecklistOpen(true)} className="btn-press shrink-0 rounded-full bg-accent-dark px-4 py-2 text-[12px] font-semibold text-white">
+                      View details
+                    </button>
+                  </div>
+                ) : null}
+              </section>
+
+              <section className="flex min-h-0 flex-col lg:col-span-5 lg:h-[640px]">
+                <WorkTabs
+                  deal={deal}
+                  notes={notes}
+                  privateNotes={privateNotes}
+                  busy={busy}
+                  onSend={sendNote}
+                  onOpenMailbox={onOpenMailbox}
+                  onActivityChanged={() => void fetchNotes()}
+                />
+              </section>
             </div>
 
-            {/* Tenant details fold away. They matter when she is contacting
-                someone and are noise the rest of the time. */}
-            <details className="card card-flat group shrink-0 p-5">
-              <summary className="flex cursor-pointer list-none items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted marker:content-none">
-                <span className="flex-1">
-                  {deal.app.tenants.length === 1
-                    ? "Tenant"
-                    : `Tenants (${deal.app.tenants.length})`}
-                </span>
-                <span className="truncate text-[11px] font-medium normal-case tracking-normal text-ink">
-                  {(deal.app.tenants.find((t) => t.isPrimary) ?? deal.app.tenants[0])?.name ?? ""}
-                </span>
-                <svg
-                  viewBox="0 0 16 16"
-                  className="h-3.5 w-3.5 shrink-0 transition group-open:rotate-180"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.8}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M4 6l4 4 4-4" />
-                </svg>
-              </summary>
-              <div className="mt-3 space-y-2.5">
+            {/* ── the people ── */}
+            <div className="mt-4 grid gap-4 lg:grid-cols-3">
+              <PersonCard label={deal.app.tenants.length > 1 ? `Tenants (${deal.app.tenants.length})` : "Tenant"} icon="user">
                 {deal.app.tenants.length ? (
                   deal.app.tenants.map((t, i) => (
-                    <div key={i} className="rounded-xl border border-line px-3.5 py-2.5">
-                      <p className="text-[13px] font-medium">
-                        {t.name}
-                        {t.isPrimary ? (
-                          <span className="ml-2 rounded-full border border-line bg-page px-1.5 py-0.5 text-[9px] font-semibold text-muted">
-                            LEAD
-                          </span>
-                        ) : null}
-                      </p>
-                      <div className="mt-0.5 space-y-0.5 text-[12px] text-muted">
-                        {t.email ? (
-                          <a href={`mailto:${t.email}`} className="block truncate hover:text-ink">
-                            {t.email}
-                          </a>
-                        ) : null}
-                        {t.phone ? (
-                          <a href={`tel:${t.phone}`} className="block hover:text-ink">
-                            {t.phone}
-                          </a>
-                        ) : null}
-                      </div>
+                    <div key={i} className={i > 0 ? "mt-2 border-t border-line/60 pt-2" : ""}>
+                      <p className="text-[15px] font-bold leading-tight">{t.name}{t.isPrimary && deal.app.tenants.length > 1 ? <span className="ml-2 rounded-full bg-page px-1.5 py-0.5 text-[9.5px] font-semibold text-muted">LEAD</span> : null}</p>
+                      {t.email ? <a href={`mailto:${t.email}`} className="block truncate text-[12.5px] text-muted hover:text-ink">{t.email}</a> : null}
+                      {t.phone ? <a href={`tel:${t.phone}`} className="block text-[12.5px] text-muted hover:text-ink">{t.phone}</a> : null}
                     </div>
                   ))
                 ) : (
                   <p className="text-[13px] text-muted">No tenant details recorded yet.</p>
                 )}
-              </div>
-            </details>
-
-            <div className="card card-flat shrink-0 p-5">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Agent
-              </h3>
-              <p className="mt-2 text-[13px] font-medium">{deal.agentName ?? "Unassigned"}</p>
-              {deal.agentEmail ? (
-                <a
-                  href={`mailto:${deal.agentEmail}`}
-                  className="block truncate text-[12px] text-muted hover:text-ink"
-                >
-                  {deal.agentEmail}
-                </a>
-              ) : null}
+              </PersonCard>
+              <PersonCard label="Agent" icon="user">
+                <p className="text-[15px] font-bold leading-tight">{deal.agentName ?? "Unassigned"}</p>
+                {deal.agentEmail ? <a href={`mailto:${deal.agentEmail}`} className="block truncate text-[12.5px] text-muted hover:text-ink">{deal.agentEmail}</a> : null}
+              </PersonCard>
+              <PersonCard label="Landlord" icon="user">
+                {p?.landlord ? (
+                  <>
+                    <p className="text-[15px] font-bold leading-tight">{p.landlord.name ?? "—"}</p>
+                    {p.landlord.email ? <a href={`mailto:${p.landlord.email}`} className="block truncate text-[12.5px] text-muted hover:text-ink">{p.landlord.email}</a> : null}
+                    {p.landlord.phone ? <a href={`tel:${p.landlord.phone}`} className="block text-[12.5px] text-muted hover:text-ink">{p.landlord.phone}</a> : null}
+                  </>
+                ) : (
+                  <p className="text-[13px] text-muted">Not on the deal in Propoly.</p>
+                )}
+              </PersonCard>
             </div>
-
-            {/* The landlord. Propoly has carried this on 99% of deals the
-                whole time and the portal threw it away — Kirstie has never
-                had a landlord contact on the file. */}
-            {p?.landlord ? (
-              <div className="card card-flat shrink-0 p-5">
-                <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Landlord
-                </h3>
-                <p className="mt-2 text-[13px] font-medium">{p.landlord.name ?? "—"}</p>
-                {p.landlord.email ? (
-                  <a
-                    href={`mailto:${p.landlord.email}`}
-                    className="block truncate text-[12px] text-muted hover:text-ink"
-                  >
-                    {p.landlord.email}
-                  </a>
-                ) : null}
-                {p.landlord.phone ? (
-                  <a
-                    href={`tel:${p.landlord.phone}`}
-                    className="block text-[12px] text-muted hover:text-ink"
-                  >
-                    {p.landlord.phone}
-                  </a>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-
-          {/* -- the working tabs: activity, emails, private notes, tasks -- */}
-          <div className="flex min-h-0 flex-col lg:col-span-5">
-            <WorkTabs
-              deal={deal}
-              notes={notes}
-              privateNotes={privateNotes}
-              busy={busy}
-              onSend={sendNote}
-              onOpenMailbox={onOpenMailbox}
-              onActivityChanged={() => void fetchNotes()}
-            />
           </div>
         </div>
-
-      </div>
       </div>
     </div>
   );
 }
 
+/** A heading inside the drawer's cards: the round icon and the title. */
+function DrawerHead({ icon, title }: { icon: string; title: string }) {
+  return (
+    <h3 className="flex items-center gap-2.5 text-[15px] font-bold">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark"><DoodleIcon name={icon} size={14} /></span>
+      {title}
+    </h3>
+  );
+}
+
+function DrawerTile({ icon, tone, label, value, note, onClick, open }: { icon: string; tone: "green" | "red"; label: string; value: string; note?: string; onClick?: () => void; open?: boolean }) {
+  const body = (
+    <>
+      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${tone === "green" ? GREEN_PILL : RED_PILL}`}><DoodleIcon name={icon} size={18} /></span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[11.5px] text-muted">{label}</span>
+        <span className={`block truncate text-[19px] font-bold leading-tight ${tone === "red" ? "text-[#9d4340]" : "text-ink"}`}>{value}</span>
+        {note ? <span className="block text-[11.5px] text-muted">{note}</span> : null}
+      </span>
+      {onClick ? (
+        <svg className={`h-3.5 w-3.5 shrink-0 text-muted transition-transform duration-200 ${open ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M6 9l6 6 6-6" /></svg>
+      ) : null}
+    </>
+  );
+  const cls = "flex w-full items-center gap-3.5 rounded-[18px] border bg-card px-4 py-3.5 text-left";
+  return onClick ? (
+    <button type="button" onClick={onClick} aria-expanded={open} title="Show the pre-tenancy checklist" className={`btn-press ${cls} transition ${open ? "border-ink/40" : "border-line/70 hover:border-black/25"}`}>{body}</button>
+  ) : (
+    <div className={`${cls} border-line/70`}>{body}</div>
+  );
+}
+
+function PersonCard({ label, icon, children }: { label: string; icon: string; children: React.ReactNode }) {
+  return (
+    <section className="card flex items-start gap-3.5 p-4">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark"><DoodleIcon name={icon} size={16} /></span>
+      <div className="min-w-0 flex-1">
+        <p className="text-[11.5px] text-muted">{label}</p>
+        <div className="mt-0.5">{children}</div>
+      </div>
+    </section>
+  );
+}
 function NumberRow({
   label,
   value,
   big = false,
   alert = false,
+  sub,
 }: {
   label: string;
   value: string;
   big?: boolean;
   alert?: boolean;
+  /** A quiet line under the value: "11 days to go". */
+  sub?: string;
 }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[11px] leading-4 text-muted">{label}</dt>
+      <dt className="text-[11.5px] leading-4 text-muted">{label}</dt>
       <dd
-        className={`truncate ${big ? "text-[17px] font-semibold leading-6" : "text-[13px] font-medium leading-5"} ${
-          alert ? "text-red-600" : "text-ink"
+        className={`truncate ${big ? "text-[17px] font-bold leading-6" : "text-[13px] font-medium leading-5"} ${
+          alert ? "text-[#9d4340]" : "text-ink"
         }`}
       >
         {value}
         {alert ? " · slipped" : ""}
       </dd>
+      {sub ? <dd className="text-[11px] text-muted">{sub}</dd> : null}
     </div>
   );
 }
@@ -2141,16 +1955,16 @@ function WorkTabs({
 
   const tabs: { key: WorkTab; label: string }[] = [
     { key: "activity", label: "Activity" },
-    { key: "emails", label: "Emails" },
     { key: "notes", label: "Notes" },
     { key: "tasks", label: "Tasks" },
+    { key: "emails", label: "Emails" },
   ];
 
   return (
     // Outline only, like every other panel in the file. It was the last white
     // box on a page-coloured surface, which made it read as a different kind
     // of thing from the panels stacked beside it.
-    <div className="card card-flat flex min-h-0 flex-1 flex-col">
+    <div className="card flex min-h-0 flex-1 flex-col">
       <div className="flex border-b border-line px-2 pt-1.5">
         {tabs.map((t) => (
           <button
@@ -2163,10 +1977,7 @@ function WorkTabs({
           >
             {t.label}
             {tab === t.key ? (
-              <span
-                className="absolute inset-x-3 bottom-0 h-0.5 rounded-full"
-                style={{ background: BRAND.accent }}
-              />
+              <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-accent-dark" />
             ) : null}
           </button>
         ))}

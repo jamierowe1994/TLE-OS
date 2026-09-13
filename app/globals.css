@@ -878,6 +878,15 @@ body {
 .type-admin .btn-press:active { transform: translateY(0) scale(0.95); }
 .type-admin .fade-up { animation: fade-up 0.24s ease both; }
 .type-admin .menu-pop { animation: menu-pop 0.13s cubic-bezier(0.22, 1, 0.36, 1) both; }
+/* The deal drawer arriving from the right edge (pre-tenancy board). */
+@keyframes drawer-in {
+  from { transform: translateX(40px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+.type-admin .drawer-in { animation: drawer-in 0.32s cubic-bezier(0.23, 1, 0.32, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .type-admin .drawer-in { animation: none; }
+}
 .type-admin .swing-down {
   transform-origin: top center;
   animation: swing-down 0.45s cubic-bezier(0.34, 1.4, 0.5, 1) both;
