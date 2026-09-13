@@ -3,7 +3,8 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import SignInArt from "@/components/SignInArt";
+/* The random line-drawing person is gone (James, 13 Sep 2026): one drawing,
+   in the OS's own colours, sunk into a sage panel beside the form. */
 
 /**
  * Signing in.
@@ -80,17 +81,16 @@ function SignIn() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-4xl flex-col justify-center px-6 py-12">
-      {/* One card, the illustration inside it rather than beside it — the box
-          in the middle of the page is the bit James liked, and a drawing
-          floating outside it would undo that. It drops away under md: on a
-          phone the form is the whole job and 320px of artwork above it just
-          pushes the password field off the screen. */}
-      <div className="flex items-center gap-8 rounded-2xl border border-line/80 bg-panel p-7 md:p-10">
-        <SignInArt />
-        <div className="min-w-0 flex-1">
-        <h1 className="hand text-[26px] leading-tight">TLE OS</h1>
-        <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted">
+    <main className="os-type flex min-h-screen items-center justify-center bg-page px-5 py-10">
+      {/* One card, the form on the left and the drawing sunk into a sage panel
+          on the right, cut off by the card's own edge - the same language as
+          the hero on a lead or an appraisal. Under md the panel drops away:
+          on a phone the form is the whole job. */}
+      <div className="w-full max-w-[1020px] overflow-hidden rounded-[28px] border border-line/50 bg-card shadow-[0_40px_90px_-50px_rgba(0,0,0,0.35)]">
+        <div className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+        <div className="min-w-0 p-8 sm:p-11">
+        <h1 className="hand text-[34px] leading-[1.05]">TLE OS</h1>
+        <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
           Sign in with your work email.
         </p>
 
@@ -142,7 +142,7 @@ function SignIn() {
               type="checkbox"
               checked={remember}
               onChange={(e) => setRemember(e.target.checked)}
-              className="h-4 w-4 accent-[#e31f36]"
+              className="h-4 w-4 accent-[var(--brown)]"
             />
             Stay signed in on this device
           </label>
@@ -150,7 +150,7 @@ function SignIn() {
           <button
             type="submit"
             disabled={busy || !email.includes("@") || !password}
-            className="mt-4 w-full rounded-lg bg-accent-dark py-2.5 text-[13px] font-semibold text-white transition-opacity disabled:opacity-40"
+            className="mt-5 w-full rounded-full bg-[var(--brown)] py-3 text-[13.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
           >
             {busy ? "Signing in…" : "Sign in"}
           </button>
@@ -165,12 +165,25 @@ function SignIn() {
             here, and a self-serve doorway quietly makes it so. The /join route
             still exists — it is where an invite link lands — but you have to
             have been sent one. */}
-        <p className="mt-4 border-t border-line/70 pt-4 text-[11.5px] leading-relaxed text-muted">
+        <p className="mt-5 border-t border-line/70 pt-4 text-[11.5px] leading-relaxed text-muted">
           Accounts are by invite. If you should have one and don&apos;t, ask James.
         </p>
+        <p className="mt-5 text-[11px] text-muted">The Letting Experts</p>
+        </div>
+
+        {/* The drawing: bottom-anchored and wider than its panel, so it runs
+            off both the bottom and the sides rather than sitting in a box. */}
+        <div className="relative hidden overflow-hidden bg-sage/25 md:block">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/art/sign-in.webp"
+            alt=""
+            aria-hidden
+            className="pointer-events-none absolute bottom-[-4%] left-1/2 w-[116%] max-w-none -translate-x-1/2"
+          />
+        </div>
         </div>
       </div>
-      <p className="mt-4 text-center text-[11px] text-muted">The Letting Experts</p>
     </main>
   );
 }
