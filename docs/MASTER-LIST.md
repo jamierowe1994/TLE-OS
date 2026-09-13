@@ -342,23 +342,47 @@ These come from each screen's own caveats in `lib/screens.ts` - the screen tells
 | G3.2 | **Market appraisal page (TLE OS), once you click into one** - "a lot of boxes and a bit of a mess". Restyle it and make the order make sense, in the white-with-outline language of the landlord portal | Claude, James to review |
 | G3.3 | **Tenant enquiries: show the tenant's own message and when it came in, first.** REX keeps the full message (plain_body, up to ~1,000 characters) - we were reading the 100-character preview, and the drawer did not show it at all. Waiting on James's "go" | Claude |
 
-## G4. From James and Danielle's walkthrough, 11 Sep (Wispr Flow: "Builder Presentation Deck Workflow")
+## G4. From James and Danielle's walkthrough, 11 Sep (Wispr Flow: "Builder Presentation Deck Workflow") - re-read against the code on 13 Sep
 
 Decisions: **DocuSeal is the contract tool.** **The valuation deck emails to the agent, not the client** - it is used live in the valuation.
 
-| # | What | Who |
+| # | What | Where it stands, 13 Sep |
 |---|---|---|
-| G4.1 | Check how the pre-appraisal email to the agent behaves | Claude |
-| G4.2 | Build the generic pre-appraisal client deck - about 5 or 6 slides, with the booking confirmation | Claude (the decks are James's - confirm before touching /present) |
-| G4.3 | Move the valuation slides to the front of the deck, so the client sees them first. Susan wants 28 slides | Claude, with James |
-| G4.4 | **Slim the contract with Susan**, and split compliance into its own document | James and Susan, then Claude |
-| G4.5 | TMKE banner offering professional photos with Jack - book into Jack's diary and the videography CRM | Claude, James for Jack's diary |
-| G4.6 | A description step with an AI draft, before a listing goes live | Claude |
-| G4.7 | Move "push live" to the end of the market appraisal; the listing then lands with confetti | Claude |
-| G4.8 | Split viewings and offers into two separate stages | Claude |
-| G4.9 | Listings view feels squashed: make the spine or next action collapsible, or move the tabs to the top; the process bar is too long across - try it vertical, keep the photo large | Claude |
-| G4.10 | Applications view: photo on the left, collapse the completed items | Claude |
-| G4.11 | Settings: a section for custom email templates | Claude |
+| G4.1 | Check how the pre-appraisal email to the agent behaves (James thought the agent-email option also showed on the pre-appraisal) | **Still to check** - not found either way in the code yet |
+| G4.2 | The generic pre-appraisal client deck, 5-6 slides, booking confirmation | **DONE 12 Sep** - the House look, the green close slide, James's own edits |
+| G4.3 | Move the valuation slides to the front so the client sees them first (Susan wants 28 slides) | **NOT DONE - and it is a decision.** The deck still puts the figure, the fee and the terms in the close section, on purpose (present.ts: "figure first, then what it costs"). Say the word and the valuation block moves to the front. |
+| G4.4 | Slim the contract with Susan; compliance as its own document | **OPEN - James and Susan.** Susan asked for the same session on 1 Sep (G5.12). Nothing can be sent from DocuSeal until it happens (E5). |
+| G4.5 | TMKE banner: professional photos with Jack, booked into Jack's diary and the videography CRM | **NOT DONE.** Nothing in the take-on step mentions TMKE or Jack. Jack's diary link and the CRM hook are James's to supply. |
+| G4.6 | A description step with an AI draft before a listing goes live | **NOT DONE.** The listing record has the Marketing write-up box (saves to REX), but there is no description step in the appraisal and no AI draft button. |
+| G4.7 | Move "push live" to the end of the market appraisal; the listing lands with confetti | **HALF.** "Push to the portals" with the tick and confetti exists (11 Sep) - but on the listing record, not at the end of the appraisal. Moving it is still open. |
+| G4.8 | Split viewings and offers into two stages | **NOT DONE.** The listing track still reads On market, Viewings & offers, Landlord review, Offer accepted, Handover. |
+| G4.9 | Listings view squashed: collapsible spine / next action, tabs across the top, process bar vertical, photo large | **DONE 11-12 Sep.** Tabs across the top, the sage hero, the list and tiles restyled. |
+| G4.10 | Applications: photo on the left, collapse the completed items | **DONE 12 Sep** - the drawer has the photograph left, three boxes across, the spine along the bottom. Whether completed items collapse: to check by eye. |
+| G4.11 | Settings: custom email templates | **NOT DONE.** No templates section in Settings. |
+| G4.12 | Own-book comparables: no padding, and the same add animation as the area comparables | **To check** on the appraisal builder |
+| G4.13 | A preview inside the deck builder before Create presentation | **To check** |
+| G4.14 | Mark as lost sends the landlord into a nurture campaign "which has not been set up" | **OPEN** - D4 (whose name it comes from) and C18 (Francesca's three emails) |
+| G4.15 | The take-on could not be reached without a signed contract coming back | **DONE** - "Skip it - move on" and "They've already got it - move on" on the terms step |
+
+## G5. From James and Susan's walkthrough, 1 Sep (Wispr Flow: "DocuSeal Implementation and Cost Review") - re-read against the code on 13 Sep
+
+| # | What | Where it stands, 13 Sep |
+|---|---|---|
+| G5.1 | Susan finds out what TLE pays DocuSign (via Ian) | **Susan** - not heard back |
+| G5.2 | Terms of business move from DocuSign to DocuSeal | **BUILT** - Cloud Pro, EU, template 763089 on production. Sending stays locked until the contract is agreed (E5, G4.4). |
+| G5.3 | Michael's back-end admin area | **BUILT** as the compliance role and /agent-compliance. **He has no account** (A1). |
+| G5.4 | Pre-launch list, magic-link sign-up | **BUILT**, sent once to four people on 3 Sep. Waiting on the pilot names (A1). |
+| G5.5 | Tenant passport in-house, with extra questions per agent | **BUILT**; the passport was redesigned 12 Sep (one question a screen, the card that fills in). |
+| G5.6 | Tenant portal front end ("done nothing with this yet") | **DONE 12 Sep** - follows the landlord's; a sample at /tenant/demo. |
+| G5.7 | Landlord portal pages | **DONE 11-12 Sep** - home, journey, documents, maintenance, messages. |
+| G5.8 | Two sending domains: customers from the Letting Experts domain, internal from tle-os.co.uk | **HALF.** Internal is set. Customer mail needs `RESEND_FROM_PUBLIC` on the Letting Experts domain verified in Resend - **B1, still yours.** |
+| G5.9 | Steve: guides, reads the screen, drafts emails | **BUILT.** His knowledge base is empty (J26) - Susan and Francesca write, Claude loads. |
+| G5.10 | Feedback tab (broken / confusing / idea, with a screenshot) to James's list | **BUILT** (HelpDock). |
+| G5.11 | Pre-appraisal deck a day before, agent's personalised video by QR | **BUILT**; the sweep runs on the daily cron. |
+| G5.12 | The contract: property and landlord details as a form straight after signing, the account locked until it is filled; a session on what is mandatory vs nice to have | **NOT BUILT, session not held.** Same blocker as G4.4. |
+| G5.13 | After signing: push to REX, create the Propoly deal | REX push built behind the writes lock; **Propoly will not let us create a deal** (C4). |
+| G5.14 | Susan's presentation materials (the 20 tips guide); Francesca on the deck's look | Decks reworked 12 Sep. The fee page still waits on Susan's answers (C17). |
+| G5.15 | Susan's dashboard figures, July then August | **To re-check** (J23). |
 
 ## H. Ideas captured, not scheduled
 
