@@ -324,13 +324,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         {/* Wordmark + the collapse toggle. The logo's pin follows the accent. */}
         <div className={`flex items-center ${collapsed ? "flex-col gap-2" : "justify-between"} px-1`}>
           <div className="flex items-center">
-            {/* Monochrome ink, so `.art` alone flips it black → white in the
-                dark. It doesn't follow the accent — the mark is the mark. */}
+            {/* The tower (James, 13 Sep 2026): a colour illustration, so it
+                is never put through the dark-mode inversion. The mark is the mark. */}
             <img
-              src="/brand/house.png"
+              src="/brand/tle-tower.png"
               alt=""
               aria-hidden
-              className="art h-10 w-10 shrink-0 object-contain"
+              className="h-10 w-10 shrink-0 object-contain"
             />
             <div
               /* Nearly the height of the house beside it (James, 12 Sep
