@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import DoodleIcon from "@/components/DoodleIcon";
 import type { Check, CheckId, Finding, PlcCase } from "@/lib/plc";
 
 /**
@@ -59,15 +60,22 @@ export const prettyWhen = (iso: string | null) =>
 
 /* ────────────────────────────── small pieces ───────────────────────────── */
 
+/* The two colours that carry state on every pre-tenancy screen (the board,
+   the drawer, the dashboard): green is fine or done, red is late, wrong or
+   waiting on a person. Amber is the in-between - with somebody else. */
+export const PLC_GREEN = "bg-[#f1f4ec] text-[#56634a]";
+export const PLC_RED = "bg-[#fdefec] text-[#9d4340]";
+export const PLC_AMBER = "bg-amber-50 text-amber-700";
+
 export function Pill({ state }: { state: PlcCase["state"] }) {
   const tone: Record<PlcCase["state"], string> = {
-    assembling: "bg-box text-muted",
-    submitted: "bg-amber-50 text-amber-800",
-    scanning: "bg-amber-50 text-amber-800",
-    reviewing: "bg-sky-50 text-sky-800",
-    approved: "bg-emerald-50 text-emerald-800",
-    deferred: "bg-orange-50 text-orange-800",
-    declined: "bg-rose-50 text-rose-800",
+    assembling: "bg-page text-muted",
+    submitted: PLC_AMBER,
+    scanning: PLC_AMBER,
+    reviewing: PLC_RED,
+    approved: PLC_GREEN,
+    deferred: PLC_AMBER,
+    declined: PLC_RED,
   };
   const label: Record<PlcCase["state"], string> = {
     assembling: "Assembling",
@@ -79,7 +87,7 @@ export function Pill({ state }: { state: PlcCase["state"] }) {
     declined: "Declined",
   };
   return (
-    <span className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-xs tracking-wide ${tone[state]}`}>
+    <span className={`shrink-0 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${tone[state]}`}>
       {label[state]}
     </span>
   );
@@ -87,7 +95,7 @@ export function Pill({ state }: { state: PlcCase["state"] }) {
 
 export function Note({ children }: { children: React.ReactNode }) {
   return (
-    <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+    <p className="rounded-xl bg-[#fdefec] px-4 py-2.5 text-[13px] text-[#9d4340]">
       {children}
     </p>
   );
@@ -107,22 +115,39 @@ export function Btn({
   disabled?: boolean;
 }) {
   const styles = {
-    plain:
-      "border-line text-ink hover:bg-box",
-    primary:
-      "border-ink bg-ink text-page hover:opacity-90",
-    danger:
-      "border-rose-300 text-rose-700 hover:bg-rose-50",
+    plain: "border-line/80 bg-card text-ink hover:border-ink/40",
+    primary: "border-transparent bg-accent-dark text-white hover:opacity-90",
+    danger: "border-transparent bg-[#fdefec] text-[#9d4340] hover:bg-[#f9e2dd]",
   }[tone];
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={busy || disabled}
-      className={`rounded-lg border px-3.5 py-2 text-sm transition disabled:cursor-not-allowed disabled:opacity-40 ${styles}`}
+      className={`rounded-full border px-4 py-2 text-[13px] font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${styles}`}
     >
       {busy ? "Working…" : children}
     </button>
+  );
+}
+
+function Head({ icon, title, tone = "neutral" }: { icon: string; title: string; tone?: "neutral" | "pink" }) {
+  return (
+    <h2 className="flex items-center gap-2.5 text-[15px] font-bold tracking-normal">
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${tone === "pink" ? "bg-white/80 text-[#9d4340]" : "bg-accent-soft text-accent-dark"}`}>
+        <DoodleIcon name={icon} size={14} />
+      </span>
+      {title}
+    </h2>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-[11.5px] text-muted">{label}</p>
+      <p className="mt-0.5 text-[14px] font-semibold">{value}</p>
+    </div>
   );
 }
 
@@ -133,16 +158,16 @@ export function Btn({
 function FindingRow({ f, checks }: { f: Finding; checks: Check[] }) {
   const label = checks.find((c) => c.id === f.checkId)?.label ?? f.checkId;
   const dot = {
-    blocker: "bg-rose-500",
+    blocker: "bg-[#c0504a]",
     query: "bg-amber-500",
-    ok: "bg-emerald-500",
+    ok: "bg-[#56634a]",
   }[f.level];
   return (
-    <li className="flex gap-3 border-b border-line px-4 py-3 last:border-0">
+    <li className="flex gap-3 border-b border-line/60 px-5 py-3 last:border-0">
       <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot}`} />
       <div className="min-w-0">
-        <p className="text-sm text-ink">{f.message}</p>
-        <p className="mt-0.5 text-xs text-muted">
+        <p className="text-[13.5px] text-ink">{f.message}</p>
+        <p className="mt-0.5 text-[12px] text-muted">
           {label}
           {f.documentName ? ` · ${f.documentName}` : ""}
           {f.foundDate ? ` · ${prettyDate(f.foundDate)}` : ""}
@@ -204,33 +229,24 @@ export function ComplianceSide({
   const decided = c.state === "approved" || c.state === "deferred" || c.state === "declined";
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-xl border border-line p-4">
-        <div className="grid gap-3 text-sm sm:grid-cols-3">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted">From</p>
-            <p>{c.agentName}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted">Move-in</p>
-            <p>{prettyDate(c.moveInDate)}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted">Submitted</p>
-            <p>{prettyWhen(c.submittedAt)}</p>
-          </div>
+    <div className="space-y-4">
+      <section className="rounded-[18px] border border-line/70 bg-card p-5">
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Fact label="From" value={c.agentName} />
+          <Fact label="Move-in" value={prettyDate(c.moveInDate)} />
+          <Fact label="Handed over" value={prettyWhen(c.submittedAt)} />
         </div>
         {c.agentNote && (
-          <p className="mt-3 whitespace-pre-wrap border-l-2 border-line pl-3 text-sm text-muted">
+          <p className="mt-4 whitespace-pre-wrap rounded-xl bg-page px-4 py-3 text-[13px] leading-relaxed text-ink/80">
             {c.agentNote}
           </p>
         )}
       </section>
 
       {(c.state === "submitted" || c.state === "scanning") && (
-        <section className="rounded-xl border border-line p-4">
-          <h2 className="text-base tracking-normal">Read the Pack</h2>
-          <p className="mt-1 text-sm text-muted">
+        <section className="rounded-[18px] border border-line/70 bg-card p-5">
+          <Head icon="search" title="Read the pack" />
+          <p className="mt-3 text-[13px] leading-relaxed text-muted">
             The scan reads dates and names out of the documents and tells you what it found. It does
             not decide anything. You still approve, defer or decline.
           </p>
@@ -280,15 +296,15 @@ export function ComplianceSide({
       )}
 
       {c.scannedAt && (
-        <section className="rounded-xl border border-line">
-          <div className="border-b border-line px-4 py-3">
-            <h2 className="text-base tracking-normal">What the Scan Found</h2>
-            <p className="mt-0.5 text-xs text-muted">
+        <section className="rounded-[18px] border border-line/70 bg-card">
+          <div className="border-b border-line/60 px-5 py-4">
+            <Head icon="search" title="What the scan found" />
+            <p className="mt-1.5 text-[12px] text-muted">
               {data.summary} · read {prettyWhen(c.scannedAt)}
             </p>
           </div>
           {c.findings.length === 0 ? (
-            <p className="px-4 py-4 text-sm text-muted">
+            <p className="px-5 py-4 text-[13px] text-muted">
               Nothing flagged. That is not an approval - the documents still need your eyes.
             </p>
           ) : (
@@ -301,23 +317,27 @@ export function ComplianceSide({
         </section>
       )}
 
-      <section className="rounded-xl border border-line">
-        <div className="border-b border-line px-4 py-3">
-          <h2 className="text-base tracking-normal">The Pack</h2>
+      <section className="rounded-[18px] border border-line/70 bg-card">
+        <div className="border-b border-line/60 px-5 py-4">
+          <Head icon="doc" title="The pack" />
         </div>
         <ul>
           {data.checks.map((check) => {
             const filed = c.documents.filter((d) => d.checkId === check.id);
+            const waived = (c.waivers ?? []).find((w) => w.checkId === check.id);
             return (
               <li
                 key={check.id}
-                className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line px-4 py-2.5 text-sm last:border-0"
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-line/60 px-5 py-2.5 text-[13px] last:border-0"
               >
-                {/* Full width on a phone so the filenames sit under the check
-                    name rather than being squeezed into a few characters. */}
-                <span className="w-full shrink-0 text-muted sm:w-44">{check.label}</span>
+                {/* The dot says whether the check has anything behind it,
+                    before the words do: green filed, red nothing, quiet
+                    waived. Full width on a phone so the filenames sit under
+                    the check name. */}
+                <span className={`h-2 w-2 shrink-0 rounded-full ${filed.length ? "bg-[#56634a]" : waived ? "bg-line" : "bg-[#c0504a]"}`} />
+                <span className="w-full shrink-0 font-medium sm:w-44">{check.label}</span>
                 {filed.length === 0 ? (
-                  <span className="text-muted">nothing filed</span>
+                  <span className="text-muted">{waived ? `not needed · ${waived.reason}` : "nothing filed"}</span>
                 ) : (
                   filed.map((d) =>
                     /* A placeholder is a NAME, not a file: the bytes were
@@ -337,7 +357,7 @@ export function ComplianceSide({
                         href={d.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="underline decoration-neutral-300 underline-offset-2"
+                        className="rounded-full bg-page px-2.5 py-1 text-[12px] font-medium underline decoration-line underline-offset-2 transition hover:text-accent-dark"
                       >
                         {d.name}
                       </a>
@@ -351,9 +371,9 @@ export function ComplianceSide({
       </section>
 
       {c.state === "reviewing" && (
-        <section className="rounded-xl border border-line p-4">
-          <h2 className="text-base tracking-normal">Your Decision</h2>
-          <p className="mt-1 text-sm text-muted">
+        <section className="rounded-[18px] bg-accent-soft p-5">
+          <Head icon="pencil" title="Your decision" tone="pink" />
+          <p className="mt-3 text-[13px] leading-relaxed text-ink/70">
             This goes back to {who(c.agentName)} exactly as you write it. It is the only thing they
             see.
           </p>
@@ -362,7 +382,7 @@ export function ComplianceSide({
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="What is missing, or why this is fine."
-            className="mt-3 w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm"
+            className="mt-3 w-full rounded-xl border border-line/70 bg-white px-4 py-3 text-[13.5px] outline-none transition focus:border-ink/40"
           />
           <div className="mt-3 flex flex-wrap gap-3">
             <Btn
@@ -383,19 +403,19 @@ export function ComplianceSide({
               Decline
             </Btn>
           </div>
-          <p className="mt-2 text-xs text-muted">
+          <p className="mt-2 text-[12px] text-ink/60">
             A deferral or a decline needs a reason. An approval does not.
           </p>
         </section>
       )}
 
       {decided && (
-        <section className="rounded-xl border border-line p-4 text-sm">
-          <p className="text-ink">
+        <section className={`rounded-[18px] p-5 text-[13.5px] ${c.state === "approved" ? "bg-[#f1f4ec]" : "bg-[#fdefec]"}`}>
+          <p className="font-semibold text-ink">
             {c.state === "approved" ? "Approved" : c.state === "deferred" ? "Deferred" : "Declined"} by{" "}
             {c.decidedBy} on {prettyWhen(c.decidedAt)}.
           </p>
-          {c.decisionNote && <p className="mt-1 text-muted">{c.decisionNote}</p>}
+          {c.decisionNote && <p className="mt-1 text-ink/70">{c.decisionNote}</p>}
         </section>
       )}
 
@@ -405,11 +425,11 @@ export function ComplianceSide({
           on approval when the switch is on; this is the by-hand run and the
           record of the last one, file by file. */}
       {c.state === "approved" && (
-        <section className="rounded-xl border border-line p-4 text-sm">
+        <section className="rounded-[18px] border border-line/70 bg-card p-5 text-[13px]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-base tracking-normal text-ink">Into Propoly</h2>
-              <p className="mt-0.5 text-xs text-muted">
+              <Head icon="upload" title="Into Propoly" />
+              <p className="mt-1.5 text-[12px] text-muted">
                 {c.propolyPush
                   ? `Last pushed by ${c.propolyPush.by} on ${prettyWhen(c.propolyPush.at)}${c.propolyPush.dealId ? "" : " - no deal matched"}.`
                   : "Not pushed yet. Each file goes into the deal's matching document slot."}
@@ -426,10 +446,10 @@ export function ComplianceSide({
                   <span
                     className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 ${
                       r.outcome === "uploaded" || r.outcome === "already"
-                        ? "bg-emerald-50 text-emerald-800"
+                        ? PLC_GREEN
                         : r.outcome === "failed"
-                          ? "bg-rose-50 text-rose-800"
-                          : "bg-box text-muted"
+                          ? PLC_RED
+                          : "bg-page text-muted"
                     }`}
                   >
                     {r.outcome === "uploaded" ? "uploaded" : r.outcome === "already" ? "already there" : r.outcome}
@@ -452,11 +472,11 @@ export function ComplianceSide({
           stop calling them missing. Runs on approval when its switch is on;
           this is the by-hand run and the record of the last one. */}
       {c.state === "approved" && (
-        <section className="rounded-xl border border-line p-4 text-sm">
+        <section className="rounded-[18px] border border-line/70 bg-card p-5 text-[13px]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-base tracking-normal text-ink">Into REX</h2>
-              <p className="mt-0.5 text-xs text-muted">
+              <Head icon="upload" title="Into REX" />
+              <p className="mt-1.5 text-[12px] text-muted">
                 {c.rexPush
                   ? `Last written by ${c.rexPush.by} on ${prettyWhen(c.rexPush.at)}${c.rexPush.propertyId ? "" : " - no property matched"}.`
                   : "Not written yet. Gas, EICR, EPC and licence go onto the property as compliance entries, with the expiry."}
@@ -473,10 +493,10 @@ export function ComplianceSide({
                   <span
                     className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 ${
                       r.outcome === "uploaded" || r.outcome === "already"
-                        ? "bg-emerald-50 text-emerald-800"
+                        ? PLC_GREEN
                         : r.outcome === "failed"
-                          ? "bg-rose-50 text-rose-800"
-                          : "bg-box text-muted"
+                          ? PLC_RED
+                          : "bg-page text-muted"
                     }`}
                   >
                     {r.outcome === "uploaded" ? "written" : r.outcome}

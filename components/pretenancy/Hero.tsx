@@ -41,10 +41,13 @@ export default function PreTenancyHero({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={photo} alt="" className="absolute inset-y-0 right-0 h-full w-[56%] object-cover" style={{ objectPosition: photoPosition }} />
         <div aria-hidden className="absolute inset-y-0 left-[36%] w-[24%] bg-gradient-to-r from-[#fdefec] to-transparent" />
+        {/* The last word carries the red underline, drawn under the letters
+            themselves so it lands right however many lines the sentence
+            takes (the passport headline's trick). */}
         <p className="absolute left-8 top-1/2 w-[38%] text-[28px] leading-[1.15]" style={{ ...SCRIPT, color: "#56423e", transform: "translateY(-50%) rotate(-4deg)" }}>
-          {line}
+          {line.split(" ").slice(0, -1).join(" ")}{" "}
+          <span style={{ boxShadow: "inset 0 -0.1em 0 0 #fdefec, inset 0 -0.22em 0 0 rgba(192,80,74,0.7)" }}>{line.split(" ").slice(-1)[0]}</span>
         </p>
-        <span aria-hidden className="absolute left-9 top-[calc(50%+52px)] h-[3px] w-[110px] rounded-full bg-[#c0504a]/70" style={{ transform: "rotate(-4deg)" }} />
       </div>
     </div>
   );
