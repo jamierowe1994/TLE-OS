@@ -43,6 +43,7 @@ import { rexListingUrl } from "@/lib/business/rex-links";
 import { stageEvidence } from "@/lib/business/stage-evidence";
 import { dealAlerts, type DealAlert } from "@/lib/business/deal-alerts";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
+import PreTenancyHero from "@/components/pretenancy/Hero";
 
 /* ------------------------------- data shapes ------------------------------- */
 
@@ -334,8 +335,13 @@ function Board({ user }: { user: UserProfile }) {
   // Which stage tab is active. Always opens on the first stage.
   const [tab, setTab] = useState<string>("deal_started");
   const [moreOpen, setMoreOpen] = useState(false);
-  // Board layout: focused tiles (one stage) or the full kanban.
-  const [view, setView] = useState<"tiles" | "kanban">("tiles");
+  // Board layout: the columns (Board) or one stage as a grid of tiles (List).
+  // Opens on the columns - James's mock of 12 Sep 2026 is the columns.
+  const [view, setView] = useState<"tiles" | "kanban">("kanban");
+  /* The chips over the columns: everything, what needs a look, what has
+     not moved in a week, what moves in soon. A filter on top of `base`, so
+     the columns thin rather than change shape. */
+  const [chip, setChip] = useState<"all" | "attention" | "stalled" | "soon">("all");
   const [mailboxOpen, setMailboxOpen] = useState(false);
   const [tasksTodayOpen, setTasksTodayOpen] = useState(false);
   const [todayCount, setTodayCount] = useState<number | null>(null);
@@ -368,6 +374,17 @@ function Board({ user }: { user: UserProfile }) {
         deals: BoardDeal[] | null;
         summary: BoardSummary | null;
       };
+      /* The local preview, with Propoly not connected: ?sample=1 draws the
+         board on invented deals so the layout can be looked at. Never in
+         production, and never when Propoly is there. */
+      if (!d.configured && process.env.NODE_ENV !== "production" && new URLSearchParams(window.location.search).get("sample") === "1") {
+        const { SAMPLE_BOARD } = await import("@/lib/business/sample-board");
+        setConfigured(true);
+        setDeals(SAMPLE_BOARD.deals as unknown as BoardDeal[]);
+        setSummary(SAMPLE_BOARD.summary as unknown as BoardSummary);
+        setError(null);
+        return true;
+      }
       setConfigured(d.configured);
       if (d.configured && d.deals == null) {
         // Propoly cache still warming (first hit after a deploy) — keep the
@@ -537,456 +554,230 @@ function Board({ user }: { user: UserProfile }) {
     return (base ?? []).filter((d) => ids.has(d.app.id));
   }, [base, attention]);
 
+  /* Nothing has happened on the deal for a week: no note, no stage move,
+     and it did not arrive this week. The same idea as the dashboard's
+     48-hour queue, at the board's pace. */
+  const stalled = useMemo(
+    () => base.filter((d) => d.statusKey !== "cancelled" && daysSince(lastActivity(d)) >= STALLED_DAYS),
+    [base]
+  );
+  const thisMonth = useMemo(() => {
+    const ym = today().slice(0, 7);
+    return base.filter((d) => d.statusKey !== "cancelled" && d.app.startDate?.startsWith(ym));
+  }, [base]);
+  const flaggedIds = useMemo(() => new Set(flaggedDeals.map((d) => d.app.id)), [flaggedDeals]);
+  const stalledIds = useMemo(() => new Set(stalled.map((d) => d.app.id)), [stalled]);
+  const soonIds = useMemo(() => new Set(upcomingMoveIns.map((d) => d.app.id)), [upcomingMoveIns]);
+  const passesChip = useCallback(
+    (d: BoardDeal) =>
+      chip === "all" ? true : chip === "attention" ? flaggedIds.has(d.app.id) : chip === "stalled" ? stalledIds.has(d.app.id) : soonIds.has(d.app.id),
+    [chip, flaggedIds, stalledIds, soonIds]
+  );
+
   const activeTab = tabs.find((t) => t.key === tab) ?? tabs[0];
   const open = openId ? (deals ?? []).find((d) => d.app.id === openId) ?? null : null;
 
   return (
-    <div className="type-admin flex flex-col">
-      {/* THERE IS NO HEADER ANY MORE, and that is the point.
+    <div className="type-admin flex flex-col gap-5 pb-8">
+      {/* ── the head: title, the line, the sofa ── */}
+      <PreTenancyHero
+        title="Pre-tenancy pipeline"
+        blurb="Every deal from application to move-in, across every agent, with what needs attention first."
+        photo="/brand/living-room.jpg"
+        photoPosition="60% 40%"
+        line="Smoother move-ins, happier homes"
+      >
+        <button type="button" onClick={() => setMoveInsOpen(true)} className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-3.5 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30">
+          <span className="text-accent-dark"><DoodleIcon name="calendar" size={14} /></span>
+          Moving soon
+          {upcomingMoveIns.length ? <span className="rounded-full bg-ink/10 px-1.5 py-0.5 text-[11px]">{upcomingMoveIns.length}</span> : null}
+        </button>
+        <button type="button" onClick={() => setTasksTodayOpen(true)} className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-3.5 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30">
+          <span className="text-accent-dark"><DoodleIcon name="checklist" size={14} /></span>
+          Tasks
+          {todayCount ? <span className="rounded-full bg-accent-dark px-1.5 py-0.5 text-[11px] text-white">{todayCount}</span> : null}
+        </button>
+        <Link href="/pre-tenancy/feed" className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-3.5 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30">
+          <span className="text-accent-dark"><DoodleIcon name="bell" size={14} /></span>
+          What moved
+        </Link>
+        <button type="button" onClick={() => setMailboxOpen(true)} className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-3.5 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30" title="Connect your mailbox for the Emails tab">
+          <span className="text-accent-dark"><DoodleIcon name="mail" size={14} /></span>
+          Mailbox
+        </button>
+      </PreTenancyHero>
 
-          There used to be a full-width sticky bar across the top carrying the
-          Letting Experts mark, a workspace switcher and her profile. The mark
-          and the switcher went first — she signs into one product, on her own
-          screen, all day, and the switcher linked to /pretenancy, a route this
-          app does not have. The bar itself has now gone too, because a
-          full-width strip is exactly the thing that stops a left rail reaching
-          the top of the window.
-
-          What is left of it — her profile, and the two standing questions that
-          used to float in a corner — lives at the head of the column on the
-          right, beside the rail rather than above it.
-
-          Left padding is 12px so the rail sits exactly where the home page's
-          does: Shell pins that one with `ml-3`, and "nearly the same margin" is
-          the thing that makes a screen feel like a different product. The right
-          stays roomy; only the rail has to line up with anything. */}
-      {/* ONE row, the full height of the window. James: "can we make sure the
-          navigation bar goes all the way from the top to the bottom." It could
-          not before, because a full-width header sat above this and the rail
-          could only start underneath it. So the header stopped being full-width
-          and moved into the column on the right, which is the only structural
-          change that lets the rail own the whole left edge.
-
-          Three nested wrappers became this one. They were a column inside a
-          column inside a column, each adding padding to a layout that wanted to
-          be a single row. */}
-      <div className="flex flex-col">
-
-        {/* ---- the board column: title left, figures and filters hard right,
-             deals underneath ----
-             It wraps BOTH views, not just tiles. Kanban has no rail, and the
-             last time these controls lived inside the tiles branch the view
-             toggle vanished the moment you switched to kanban, leaving no way
-             back. */}
-        <div className="flex min-w-0 flex-col">
-          {/* The top bar, in the column rather than across the page — and with
-              no rule under it. James: "we should be able to get rid of the line
-              that goes across the top." The rail's own border is the only edge
-              this layout needs, and a second one stopping at the rail read as a
-              mistake anyway.
-
-              Her two standing questions came up here from a floating dock.
-              James offered the rail's foot or "next to the name"; next to the
-              name wins, because the rail is only drawn in tile view and chips
-              that vanish when she flicks to kanban are worse than chips in a
-              slightly duller place. They also stop fighting the assistant in
-              the bottom-right corner for good. */}
-          <div className="mb-4 flex shrink-0 flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setMoveInsOpen(true)}
-              className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30"
-            >
-              <span className="text-accent">
-                <DoodleIcon name="calendar" size={15} />
-              </span>
-              Moving soon
-              {upcomingMoveIns.length ? (
-                <span className="rounded-full bg-ink/10 px-1.5 py-0.5 text-[11px]">
-                  {upcomingMoveIns.length}
-                </span>
-              ) : null}
-            </button>
-            {/* Only exists when something needs checking — an always-there
-                "Checks: 0" chip would train her to stop seeing it. */}
-            {flaggedDeals.length > 0 ? (
-              <button
-                type="button"
-                onClick={() => setChecksOpen(true)}
-                className="btn-press flex items-center gap-2 rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-[12.5px] font-semibold text-amber-800 transition hover:border-amber-400"
-              >
-                <DoodleIcon name="search" size={15} />
-                Checks
-                <span className="rounded-full bg-amber-200 px-1.5 py-0.5 text-[11px]">
-                  {flaggedDeals.length}
-                </span>
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => setTasksTodayOpen(true)}
-              className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30"
-            >
-              <span className="text-accent">
-                <DoodleIcon name="checklist" size={15} />
-              </span>
-              Tasks
-              {todayCount ? (
-                <span className="rounded-full bg-accent px-1.5 py-0.5 text-[11px] text-white">
-                  {todayCount}
-                </span>
-              ) : null}
-            </button>
-            {/* The feed is the same board read as time rather than as stages:
-                what Propoly moved, newest first. Kirstie asked for one thing
-                to leave open instead of checking each file (4 Sep). */}
-            <Link
-              href="/pre-tenancy/feed"
-              className="btn-press flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30"
-            >
-              <span className="text-accent">
-                <DoodleIcon name="bell" size={15} />
-              </span>
-              What moved
-            </Link>
-            {/* Her mailbox, for the Emails tab. It was behind a profile menu
-                of its own; the OS has a profile, so only this is left. */}
-            <button
-              type="button"
-              onClick={() => setMailboxOpen(true)}
-              className="btn-press ml-auto flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-black/30"
-            >
-              <span className="text-accent">
-                <DoodleIcon name="mail" size={15} />
-              </span>
-              Mailbox
-            </button>
-          </div>
-
-          {!configured ? (
-            <div className="card mb-4 p-6 text-sm text-muted">
-              Propoly isn&apos;t connected yet — the deal board appears as soon as the
-              integration keys are in place.
-            </div>
-          ) : null}
-          {error ? <div className="card mb-4 p-6 text-sm text-muted">{error}</div> : null}
-
-          <div className="mb-5 flex shrink-0 flex-wrap items-center justify-between gap-x-8 gap-y-4">
-            <h1 className="written shrink-0 text-[27px] leading-none text-ink">
-              Pre-tenancy pipeline
-            </h1>
-            <div className="flex flex-wrap items-center justify-end gap-x-6 gap-y-3">
-              {deals ? (
-                <div className="flex items-center gap-6">
-                  <MiniStat label="In progression" value={activeCount} />
-                  <MiniStat label="Moved in this month" value={summary?.completedMtd ?? "—"} />
-                  <MiniStat label="No date" value={undatedCount} />
-                </div>
-              ) : null}
-              {/* tiles ↔ kanban flick toggle */}
-              {deals ? (
-                <div className="flex items-center rounded-xl border border-line p-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setView("tiles")}
-                    title="Tile view"
-                    className={`btn-press flex h-8 w-8 items-center justify-center rounded-lg transition ${
-                      view === "tiles" ? "bg-page text-ink shadow-sm" : "text-muted hover:text-ink"
-                    }`}
-                  >
-                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
-                      <rect x={3} y={3} width={7} height={7} rx={1.5} />
-                      <rect x={14} y={3} width={7} height={7} rx={1.5} />
-                      <rect x={3} y={14} width={7} height={7} rx={1.5} />
-                      <rect x={14} y={14} width={7} height={7} rx={1.5} />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setView("kanban")}
-                    title="Board view"
-                    className={`btn-press flex h-8 w-8 items-center justify-center rounded-lg transition ${
-                      view === "kanban" ? "bg-page text-ink shadow-sm" : "text-muted hover:text-ink"
-                    }`}
-                  >
-                    <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
-                      <rect x={3} y={4} width={5} height={16} rx={1.5} />
-                      <rect x={9.5} y={4} width={5} height={11} rx={1.5} />
-                      <rect x={16} y={4} width={5} height={14} rx={1.5} />
-                    </svg>
-                  </button>
-                </div>
-              ) : null}
-              <div className="flex items-center gap-2">
-                <input
-                  type="search"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder="Search property, tenant or agent…"
-                  className="w-52 rounded-xl border border-line bg-transparent px-3.5 py-2 text-[13px] outline-none transition focus:border-black/30"
-                />
-                <select
-                  value={agent}
-                  onChange={(e) => setAgent(e.target.value)}
-                  className="rounded-xl border border-line bg-transparent px-3 py-2 text-[13px] outline-none"
-                >
-                  <option value="all">All agents</option>
-                  {agents.map((a) => (
-                    <option key={a} value={a}>
-                      {a}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-        {/* ---- the stages, as a strip over the deals ----
-             They were a rail down the left. The workspace rail beside the
-             board is the navigation now, and two rails side by side is the
-             thing James asked to be rid of (12 Sep 2026), so the eight stages
-             run across the top with their counts; Slipped/All/Cancelled stay
-             behind the three-dot menu at the end of the strip. ---- */}
-        {deals && view === "tiles" ? (
-          (() => {
-            const STAGE_KEYS = new Set(PORTAL_STAGES.map((s) => s.key));
-            const stageTabs = tabs.filter((t) => STAGE_KEYS.has(t.key));
-            const extraTabs = tabs.filter((t) => !STAGE_KEYS.has(t.key)); // slipped, all, cancelled
-            const activeExtra = extraTabs.find((t) => t.key === activeTab.key) ?? null;
-
-            const TabButton = ({
-              t,
-              compact = false,
-            }: {
-              t: (typeof tabs)[number];
-              compact?: boolean;
-            }) => {
-              const activeT = t.key === activeTab.key;
-              const v = stageVisual(t.key);
-              return (
-                /**
-                 * The same nav item the home page draws, not a cousin of it.
-                 *
-                 * James, 29 Aug: "look at the icons and the Holding fee text.
-                 * Can you please replicate more similarly what we have in the
-                 * actual navigation bar for the home page? Same size and icon
-                 * likeness."
-                 *
-                 * Matched to NavLink in components/Shell.tsx, item for item:
-                 * rounded-xl px-3 py-2.5, the `hand` face at 13.5px, and a 17px
-                 * doodle rather than 26px. The old icon was half again too big
-                 * and the label a size up and bold, which is what made a rail
-                 * of eight stages read as a menu of buttons instead of a
-                 * sidebar — and what pushed "Tenancy agreement" into an
-                 * ellipsis at this width.
-                 *
-                 * Active is the soft tint the rest of the OS uses, not a
-                 * bordered box: highlight by reducing contrast, not adding it.
-                 * The icon takes the accent when active exactly as NavLink's
-                 * does, which is the "likeness" the rail was missing.
-                 *
-                 * The count stays. The home rail has nothing to count; this one
-                 * is a pipeline and the number IS the information.
-                 */
-                <button
-                  type="button"
-                  onClick={() => setTab(t.key)}
-                  className={`relative flex items-center rounded-full border px-3 py-1.5 text-left text-[12.5px] transition-colors ${
-                    activeT
-                      ? "border-transparent bg-accent-soft font-semibold text-ink"
-                      : "border-line/70 text-muted hover:border-ink/40 hover:text-ink"
-                  }`}
-                >
-                  <span className={`relative shrink-0 ${activeT ? "text-accent-dark" : "text-muted"}`}>
-                    <StageIcon stageKey={t.key} size={15} />
-                    <MovementDot kind={t.movement} className="absolute -right-1 -top-1 ring-2 ring-page" />
-                  </span>
-                  <span className="ml-2 whitespace-nowrap">{t.label}</span>
-                  <span
-                    className={`ml-2 shrink-0 text-[11px] ${activeT ? "text-accent-dark" : "text-muted"}`}
-                  >
-                    {t.deals.length}
-                  </span>
-                </button>
-              );
-            };
-
-            return (
-              /**
-               * The rail, in the house style at last.
-               *
-               * It was a 236px column with a single right-hand border, static,
-               * scrolling away with the page. Every other rail in the OS —
-               * the agent's and admin's — is the same thing: a floating panel
-               * with a border the whole way round, pinned near the top with a
-               * small inset. James, 29 Aug: "the nav bar is too big. It's not
-               * in the right position... put the navigation bar in a similar
-               * location to what we have on the actual agent view."
-               *
-               * `self-start` is the part that is easy to miss. In a flex row a
-               * child stretches to full height by default, and a sticky element
-               * that is already as tall as its container has nowhere to stick
-               * to — so it silently does nothing. Shell's rail avoids this by
-               * being a direct child of a `min-h-screen` row; here the row is a
-               * flex context, so the rail has to opt out of stretching first.
-               *
-               * The width matches the other two (w-60) rather than 236px,
-               * because "nearly the same" is what makes a screen feel like a
-               * different product.
-               */
-              <section
-                className="enter enter-up mb-4 flex flex-wrap items-center gap-1.5"
-                style={enterAt(80)}
-              >
-                {/* The title lives over the deals now, not here — the rail is
-                    stages and nothing else, top to bottom. */}
-                {stageTabs.map((t) => (
-                  <TabButton key={t.key} t={t} />
-                ))}
-
-                {/* the active extra (Slipped/All/Cancelled) is promoted so you
-                    can always see the current view */}
-                {activeExtra ? <TabButton t={activeExtra} compact /> : null}
-
-                {/* three-dot "more views" menu */}
-                <div className="relative flex shrink-0 items-center">
-                  <button
-                    type="button"
-                    onClick={() => setMoreOpen((v) => !v)}
-                    aria-label="More views"
-                    className={`btn-press flex h-9 w-9 items-center justify-center rounded-lg transition ${
-                      moreOpen ? "bg-page text-ink" : "text-muted hover:bg-page hover:text-ink"
-                    }`}
-                  >
-                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-                      <circle cx={5} cy={12} r={1.6} />
-                      <circle cx={12} cy={12} r={1.6} />
-                      <circle cx={19} cy={12} r={1.6} />
-                    </svg>
-                  </button>
-                  {moreOpen ? (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setMoreOpen(false)} />
-                      <div className="menu-pop absolute left-0 top-full z-50 mt-1 w-52 rounded-xl border border-line bg-card p-1.5 shadow-lg">
-                        {[
-                          tabs.find((t) => t.key === "all"),
-                          tabs.find((t) => t.key === "slipped"),
-                          tabs.find((t) => t.key === "archive"),
-                        ]
-                          .filter((t): t is (typeof tabs)[number] => !!t)
-                          .map((t) => (
-                            <button
-                              key={t.key}
-                              type="button"
-                              onClick={() => {
-                                setTab(t.key);
-                                setMoreOpen(false);
-                              }}
-                              className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] transition hover:bg-page ${
-                                t.key === activeTab.key ? "font-semibold text-ink" : "text-ink"
-                              }`}
-                            >
-                              <span className="flex items-center gap-2">
-                                {t.label}
-                                <MovementDot kind={t.movement} />
-                              </span>
-                              <span className="text-[11px] text-muted">{t.deals.length}</span>
-                            </button>
-                          ))}
-                        <div className="my-1 border-t border-line" />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (showCancelled && activeTab.key === "cancelled") setTab("deal_started");
-                            setShowCancelled((v) => !v);
-                            setMoreOpen(false);
-                          }}
-                          className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] text-ink transition hover:bg-page"
-                        >
-                          {showCancelled ? "Hide cancelled" : "Show cancelled"}
-                          <span className="text-[11px] text-muted">{byStage.cancelled.length}</span>
-                        </button>
-                        {showCancelled ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setTab("cancelled");
-                              setMoreOpen(false);
-                            }}
-                            className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] transition hover:bg-page ${
-                              activeTab.key === "cancelled" ? "font-semibold text-ink" : "text-ink"
-                            }`}
-                          >
-                            View cancelled
-                            <span className="text-[11px] text-muted">{byStage.cancelled.length}</span>
-                          </button>
-                        ) : null}
-                      </div>
-                    </>
-                  ) : null}
-                </div>
-              </section>
-            );
-          })()
-        ) : null}
-
-        {view === "tiles" ? (
-          <section className="enter enter-up min-w-0 pb-8" style={enterAt(120)}>
-            {deals == null && !error ? (
-              <WorkspaceLoading
-                height="min-h-[calc(100vh-360px)]"
-                label="Fetching the pipeline"
-                note="Propoly, REX and PayProp are all being asked at once - the slowest one decides."
-                slowNote="REX is usually the slow one. It is still going."
-              />
-            ) : activeTab.deals.length === 0 ? (
-              <div className="card card-flat p-12 text-center text-[13px] text-muted">
-                Nothing in {activeTab.label.toLowerCase()} right now.
-              </div>
-            ) : (
-              <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                {activeTab.deals.map((d) => (
-                  <DealTile key={d.app.id} d={d} onOpen={() => setOpenId(d.app.id)} />
-                ))}
-              </div>
-            )}
-          </section>
-        ) : (
-          /* ---- kanban: a column per stage ---- */
-          <section className="enter enter-up h-[calc(100vh-320px)] min-h-[420px] min-w-0 overflow-x-auto overflow-y-hidden pb-4" style={enterAt(120)}>
-            <div className="flex h-full gap-3">
-              {[...PORTAL_STAGES.map((s) => s.key), ...(showCancelled ? ["cancelled"] : [])].map((key) => {
-                const col = tabs.find((t) => t.key === key);
-                const dealsIn = col?.deals ?? [];
-                const v = stageVisual(key);
-                return (
-                  <div key={key} className="flex w-64 shrink-0 flex-col rounded-2xl bg-black/[0.02]">
-                    <div className="flex items-center gap-2 px-3 pb-2 pt-3">
-                      <span className={`flex h-6 w-6 items-center justify-center rounded-lg ${v.iconBg} ${v.iconText}`}>
-                        <StageIcon stageKey={key} size={13} />
-                      </span>
-                      <span className="text-[12px] font-semibold text-ink">{stageLabel(key)}</span>
-                      <span className="ml-auto flex items-center gap-1.5">
-                        <MovementDot kind={col?.movement ?? null} />
-                        <span className="text-[11px] font-medium text-muted">{dealsIn.length}</span>
-                      </span>
-                    </div>
-                    <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-2 pb-2">
-                      {dealsIn.map((d) => (
-                        <DealCardMini key={d.app.id} d={d} onOpen={() => setOpenId(d.app.id)} />
-                      ))}
-                      {dealsIn.length === 0 ? (
-                        <p className="px-2 py-6 text-center text-[11px] text-muted">Nothing here</p>
-                      ) : null}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
+      {!configured ? (
+        <div className="card p-5 text-[13px] text-muted">
+          Propoly isn&apos;t connected yet - the deal board appears as soon as the integration keys are in place.
         </div>
-      </div>
+      ) : null}
+      {error ? <div className="card p-5 text-[13px] text-muted">{error}</div> : null}
+
+      {deals == null && !error ? (
+        <WorkspaceLoading
+          height="min-h-[calc(100vh-460px)]"
+          label="Fetching the pipeline"
+          note="Propoly, REX and PayProp are all being asked at once - the slowest one decides."
+          slowNote="REX is usually the slow one. It is still going."
+        />
+      ) : deals ? (
+        <>
+          {/* ── the four numbers, and the view ── */}
+          <div className="fade-up grid gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
+            <StatTile icon="home" tone="green" value={activeCount} label="In progression" onClick={() => setChip("all")} on={chip === "all"} />
+            <StatTile icon="key" tone="green" value={thisMonth.length} label="Moving this month" onClick={() => setMoveInsOpen(true)} />
+            <StatTile icon="calendar" tone="red" value={todayCount ?? 0} label="Due today" onClick={() => setTasksTodayOpen(true)} />
+            <StatTile icon="clock" tone="red" value={stalled.length} label={`Stalled (${STALLED_DAYS}+ days)`} onClick={() => setChip(chip === "stalled" ? "all" : "stalled")} on={chip === "stalled"} />
+            <div className="flex items-center gap-2 xl:justify-end">
+              <div className="flex items-center rounded-full border border-line bg-card p-1">
+                <button type="button" onClick={() => setView("kanban")} className={`btn-press flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition ${view === "kanban" ? "bg-accent-soft text-ink" : "text-muted hover:text-ink"}`}>
+                  <DoodleIcon name="grid" size={14} /> Board
+                </button>
+                <button type="button" onClick={() => setView("tiles")} className={`btn-press flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition ${view === "tiles" ? "bg-accent-soft text-ink" : "text-muted hover:text-ink"}`}>
+                  <DoodleIcon name="list" size={14} /> List
+                </button>
+              </div>
+              {/* Slipped, All, Archive and Cancelled: the views that are
+                  not a stage, behind the three dots. */}
+              <div className="relative">
+                <button type="button" onClick={() => setMoreOpen((v) => !v)} aria-label="More views" className={`btn-press flex h-10 w-10 items-center justify-center rounded-full border border-line bg-card transition ${moreOpen ? "text-ink" : "text-muted hover:text-ink"}`}>
+                  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor"><circle cx={5} cy={12} r={1.6} /><circle cx={12} cy={12} r={1.6} /><circle cx={19} cy={12} r={1.6} /></svg>
+                </button>
+                {moreOpen ? (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setMoreOpen(false)} />
+                    <div className="menu-pop absolute right-0 top-full z-50 mt-1 w-52 rounded-xl border border-line bg-card p-1.5 shadow-lg">
+                      {[tabs.find((t) => t.key === "all"), tabs.find((t) => t.key === "slipped"), tabs.find((t) => t.key === "archive")]
+                        .filter((t): t is (typeof tabs)[number] => !!t)
+                        .map((t) => (
+                          <button key={t.key} type="button" onClick={() => { setTab(t.key); setView("tiles"); setMoreOpen(false); }} className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] transition hover:bg-page ${t.key === activeTab.key && view === "tiles" ? "font-semibold text-ink" : "text-ink"}`}>
+                            <span className="flex items-center gap-2">{t.label}<MovementDot kind={t.movement} /></span>
+                            <span className="text-[11px] text-muted">{t.deals.length}</span>
+                          </button>
+                        ))}
+                      <div className="my-1 border-t border-line" />
+                      <button type="button" onClick={() => { if (showCancelled && activeTab.key === "cancelled") setTab("deal_started"); setShowCancelled((v) => !v); setMoreOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] text-ink transition hover:bg-page">
+                        {showCancelled ? "Hide cancelled" : "Show cancelled"}
+                        <span className="text-[11px] text-muted">{byStage.cancelled.length}</span>
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          {/* ── today's focus: the deals asking for a look ── */}
+          {attention.length > 0 ? (
+            <section className="fade-up card p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[#9d4340]"><DoodleIcon name="target" size={17} /></span>
+                  <div>
+                    <h2 className="text-[17px] font-bold leading-tight">Today&apos;s focus</h2>
+                    <p className="mt-0.5 text-[12px] text-muted">Deals that need your attention today.</p>
+                  </div>
+                </div>
+                <button type="button" onClick={() => setChecksOpen(true)} className="flex shrink-0 items-center gap-1 pt-1 text-[12px] font-semibold text-muted transition-colors hover:text-ink">
+                  View all ({attention.length}) <DoodleIcon name="trend-up" size={11} />
+                </button>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {attention.slice(0, 3).map((al) => {
+                  const d = (deals ?? []).find((x) => x.app.id === al.dealId);
+                  if (!d) return null;
+                  const lead = d.app.tenants.find((t) => t.isPrimary) ?? d.app.tenants[0];
+                  return (
+                    <button key={al.key} type="button" onClick={() => setOpenId(d.app.id)} className="btn-press flex items-start gap-3 rounded-2xl border border-line/70 p-2.5 text-left transition hover:border-black/25">
+                      <Photo src={d.app.image} className="h-[72px] w-24 shrink-0 rounded-xl" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13.5px] font-semibold">{d.app.propertyName}</span>
+                        <span className="block truncate text-[12px] text-muted">{lead ? lead.name : d.agentName ?? ""}</span>
+                        <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${RED_PILL}`}>{stageLabel(al.stageKey)}</span>
+                          <span className="line-clamp-1 text-[11.5px] text-[#9d4340]">{al.text.split(" — ")[1] ?? al.text}</span>
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
+          {/* ── the chips, the search and the agent ── */}
+          <div className="fade-up flex flex-wrap items-center gap-2">
+            <Chip on={chip === "all"} onClick={() => setChip("all")} count={activeCount}>All properties</Chip>
+            <Chip on={chip === "attention"} onClick={() => setChip(chip === "attention" ? "all" : "attention")} count={flaggedDeals.length} tone="red">Needs attention</Chip>
+            <Chip on={chip === "stalled"} onClick={() => setChip(chip === "stalled" ? "all" : "stalled")} count={stalled.length} tone="red">Stalled</Chip>
+            <Chip on={chip === "soon"} onClick={() => setChip(chip === "soon" ? "all" : "soon")} count={upcomingMoveIns.length} tone="green">Moving soon</Chip>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search property, tenant or agent…" className="w-56 rounded-full border border-line bg-card px-4 py-2 text-[12.5px] outline-none transition focus:border-black/30" />
+              <select value={agent} onChange={(e) => setAgent(e.target.value)} className="rounded-full border border-line bg-card px-3.5 py-2 text-[12.5px] outline-none">
+                <option value="all">All agents</option>
+                {agents.map((a) => (<option key={a} value={a}>{a}</option>))}
+              </select>
+            </div>
+          </div>
+
+          {view === "kanban" ? (
+            /* ── the columns: one per stage ── */
+            <section className="fade-up -mx-1 overflow-x-auto px-1 pb-4">
+              <div className="flex items-start gap-3">
+                {[...PORTAL_STAGES.map((s) => s.key), ...(showCancelled ? ["cancelled"] : [])].map((key) => {
+                  const col = tabs.find((t) => t.key === key);
+                  const dealsIn = (col?.deals ?? []).filter(passesChip);
+                  return (
+                    <div key={key} className={`flex w-[218px] shrink-0 flex-col rounded-[18px] p-2 ${COLUMN_TINT[key] ?? "bg-panel"}`}>
+                      <div className="flex items-center gap-2 px-1.5 pb-2 pt-1">
+                        <span className="truncate text-[13px] font-semibold text-ink">{stageLabel(key)}</span>
+                        <span className="ml-auto flex items-center gap-1.5">
+                          <MovementDot kind={col?.movement ?? null} />
+                          <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-semibold text-ink">{dealsIn.length}</span>
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {dealsIn.map((d) => (<DealCard key={d.app.id} d={d} stageKey={key} onOpen={() => setOpenId(d.app.id)} />))}
+                        {dealsIn.length === 0 ? <p className="rounded-xl border border-dashed border-line/70 px-2 py-6 text-center text-[11px] text-muted">Nothing here</p> : null}
+                      </div>
+                      <a href={PROPOLY_APP_URL} target="_blank" rel="noreferrer" className="mt-2 flex items-center justify-center gap-1.5 rounded-xl border border-line/70 bg-white/70 py-2 text-[12px] font-semibold text-muted transition hover:text-ink">
+                        + Add deal
+                      </a>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ) : (
+            /* ── the list: one stage at a time, as tiles ── */
+            <section className="fade-up">
+              <div className="mb-4 flex flex-wrap items-center gap-1.5">
+                {tabs.filter((t) => PORTAL_STAGES.some((s) => s.key === t.key) || t.key === activeTab.key).map((t) => {
+                  const activeT = t.key === activeTab.key;
+                  return (
+                    <button key={t.key} type="button" onClick={() => setTab(t.key)} className={`relative flex items-center rounded-full border px-3 py-1.5 text-left text-[12.5px] transition-colors ${activeT ? "border-transparent bg-accent-soft font-semibold text-ink" : "border-line/70 text-muted hover:border-ink/40 hover:text-ink"}`}>
+                      <span className={`relative shrink-0 ${activeT ? "text-accent-dark" : "text-muted"}`}>
+                        <StageIcon stageKey={t.key} size={15} />
+                        <MovementDot kind={t.movement} className="absolute -right-1 -top-1 ring-2 ring-page" />
+                      </span>
+                      <span className="ml-2 whitespace-nowrap">{t.label}</span>
+                      <span className={`ml-2 shrink-0 text-[11px] ${activeT ? "text-accent-dark" : "text-muted"}`}>{t.deals.filter(passesChip).length}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {activeTab.deals.filter(passesChip).length === 0 ? (
+                <div className="card card-flat p-12 text-center text-[13px] text-muted">Nothing in {activeTab.label.toLowerCase()} right now.</div>
+              ) : (
+                <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                  {activeTab.deals.filter(passesChip).map((d) => (<DealTile key={d.app.id} d={d} onOpen={() => setOpenId(d.app.id)} />))}
+                </div>
+              )}
+            </section>
+          )}
+        </>
+      ) : null}
 
       {open ? (
         <DealWorkspace
@@ -1062,6 +853,124 @@ function MiniStat({ label, value }: { label: string; value: number | string }) {
 // the stage, so no pill). Tenant & agent, the rent/move-in line, and a footer
 // showing pipeline progress (dots filled to the current stage) + notes. A
 // movement dot flags anything new or updated at a glance.
+
+/* ── the board's small pieces ─────────────────────────────────────────── */
+
+const STALLED_DAYS = 7;
+const GREEN_PILL = "bg-[#f1f4ec] text-[#56634a]";
+const RED_PILL = "bg-[#fdefec] text-[#9d4340]";
+const AMBER_PILL = "bg-amber-50 text-amber-700";
+const QUIET_PILL = "bg-page text-muted";
+
+/** A soft tint per column, so the eye can tell where it is along the row. */
+const COLUMN_TINT: Record<string, string> = {
+  deal_started: "bg-[#fdefec]/70",
+  holding_fee: "bg-amber-50/70",
+  referencing: "bg-orange-50/70",
+  plc: "bg-[#f1f4ec]",
+  deposit: "bg-sky-50/70",
+  tenancy_agreement: "bg-[#f1f4ec]",
+  rent_payment: "bg-[#f1f4ec]",
+  move_day: "bg-[#fdefec]/70",
+  cancelled: "bg-panel",
+};
+
+/** When something last happened on the deal: a note, a stage move, or it arriving. */
+function lastActivity(d: BoardDeal): string | null {
+  const cands = [d.portal.lastNote?.at ?? null, d.portal.override?.at ?? null, d.app.dateReceived].filter((x): x is string => !!x);
+  return cands.sort().at(-1) ?? null;
+}
+
+function agoLabel(iso: string | null): string {
+  const days = daysSince(iso);
+  if (!Number.isFinite(days)) return "";
+  if (days < 1) return "Today";
+  const n = Math.floor(days);
+  return n === 1 ? "1 day ago" : `${n} days ago`;
+}
+
+/**
+ * The one line on a card that says where the deal is, in a colour that says
+ * whether that is fine. Green is done or received; amber is waiting on
+ * somebody; red is slipped or the agent waiting on us. The same evidence
+ * the panel's Progression column reads, in three words.
+ */
+function cardStatus(d: BoardDeal, stageKey: string): { text: string; tone: string } {
+  if (isOverdue(d)) return { text: "Move-in slipped", tone: RED_PILL };
+  const ln = d.portal.lastNote;
+  if (ln && ln.authorRole === "agent" && daysSince(ln.at) <= AWAITING_DAYS) return { text: "Agent waiting on you", tone: RED_PILL };
+  const start = d.app.startDate;
+  switch (stageKey) {
+    case "deal_started": return { text: "Application received", tone: QUIET_PILL };
+    case "holding_fee": return d.money?.holding ? { text: "Fee received", tone: GREEN_PILL } : d.holdingInvoice ? { text: "Fee invoiced", tone: AMBER_PILL } : { text: "Awaiting fee", tone: AMBER_PILL };
+    case "referencing": return { text: "References in progress", tone: AMBER_PILL };
+    case "plc": return d.plc ? { text: d.plc.label, tone: d.plc.state === "approved" ? GREEN_PILL : AMBER_PILL } : { text: "PLC in progress", tone: AMBER_PILL };
+    case "deposit": return d.money?.deposit ? { text: "Deposit received", tone: GREEN_PILL } : { text: "Awaiting deposit", tone: AMBER_PILL };
+    case "tenancy_agreement": return d.tobStatus?.status === "completed" ? { text: "Agreement signed", tone: GREEN_PILL } : d.tobStatus?.sentAt ? { text: "Agreement sent", tone: AMBER_PILL } : { text: "Agreement to send", tone: AMBER_PILL };
+    case "rent_payment": return d.rentReceived ? { text: "First rent received", tone: GREEN_PILL } : { text: "Awaiting first payment", tone: AMBER_PILL };
+    case "move_day": {
+      if (!start) return { text: "Move-in date TBC", tone: AMBER_PILL };
+      const diff = Math.round((new Date(`${start}T00:00:00`).getTime() - new Date(new Date().toDateString()).getTime()) / 86_400_000);
+      if (diff < 0) return { text: "Completed", tone: GREEN_PILL };
+      if (diff === 0) return { text: "Moving in today", tone: GREEN_PILL };
+      if (diff === 1) return { text: "Move-in tomorrow", tone: GREEN_PILL };
+      return { text: `Move-in ${fmtDate(start)}`, tone: GREEN_PILL };
+    }
+    case "cancelled": return { text: "Cancelled", tone: QUIET_PILL };
+    default: return { text: stageLabel(stageKey), tone: QUIET_PILL };
+  }
+}
+
+function Photo({ src, className = "" }: { src: string | null; className?: string }) {
+  return src ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt="" aria-hidden className={`object-cover ${className}`} />
+  ) : (
+    <span className={`flex items-center justify-center bg-page text-muted ${className}`}><DoodleIcon name="home-1" size={22} /></span>
+  );
+}
+
+function StatTile({ icon, tone, value, label, onClick, on = false }: { icon: string; tone: "green" | "red"; value: number | string; label: string; onClick: () => void; on?: boolean }) {
+  return (
+    <button type="button" onClick={onClick} className={`btn-press flex items-center gap-4 rounded-[18px] border bg-card px-4 py-3.5 text-left transition ${on ? "border-ink/40" : "border-line/70 hover:border-black/25"}`}>
+      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${tone === "green" ? GREEN_PILL : RED_PILL}`}><DoodleIcon name={icon} size={18} /></span>
+      <span className="min-w-0">
+        <span className="figures block text-[24px] font-bold leading-none">{value}</span>
+        <span className={`mt-1 block text-[12px] leading-tight ${tone === "red" && typeof value === "number" && value > 0 ? "text-[#9d4340]" : "text-muted"}`}>{label}</span>
+      </span>
+    </button>
+  );
+}
+
+function Chip({ on, onClick, count, tone = "neutral", children }: { on: boolean; onClick: () => void; count: number; tone?: "neutral" | "red" | "green"; children: React.ReactNode }) {
+  return (
+    <button type="button" onClick={onClick} className={`btn-press flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-[12.5px] font-semibold transition ${on ? "border-transparent bg-accent-soft text-ink" : "border-line/70 bg-card text-muted hover:text-ink"}`}>
+      {children}
+      <span className={`rounded-full px-1.5 py-0.5 text-[10.5px] ${on ? "bg-white/80 text-ink" : tone === "red" && count > 0 ? RED_PILL : tone === "green" && count > 0 ? GREEN_PILL : "bg-page text-muted"}`}>{count}</span>
+    </button>
+  );
+}
+
+/** A deal in a column: the photo, the address, whose it is, the one status
+ *  line in colour, and when it last moved. */
+function DealCard({ d, stageKey, onOpen }: { d: BoardDeal; stageKey: string; onOpen: () => void }) {
+  const lead = d.app.tenants.find((t) => t.isPrimary) ?? d.app.tenants[0];
+  const st = cardStatus(d, stageKey);
+  return (
+    <button type="button" onClick={onOpen} className="btn-press group flex w-full flex-col overflow-hidden rounded-2xl border border-line/60 bg-card p-2 text-left transition hover:border-black/25">
+      <Photo src={d.app.image} className="aspect-[16/10] w-full rounded-xl" />
+      <div className="px-1 pb-1 pt-2.5">
+        <p className="truncate text-[13px] font-semibold leading-tight">{d.app.propertyName}</p>
+        <p className="mt-0.5 truncate text-[11.5px] text-muted">{lead ? lead.name : d.agentName ?? "No tenant recorded"}{d.app.tenants.length > 1 ? ` +${d.app.tenants.length - 1}` : ""}</p>
+        <span className={`mt-2 inline-block max-w-full truncate rounded-full px-2.5 py-1 text-[11px] font-semibold ${st.tone}`}>{st.text}</span>
+        <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted">
+          <span>{agoLabel(lastActivity(d))}</span>
+          {d.portal.notesCount > 0 ? <span className="flex items-center gap-1"><DoodleIcon name="message" size={11} />{d.portal.notesCount}</span> : null}
+        </div>
+      </div>
+    </button>
+  );
+}
 
 function DealTile({ d, onOpen }: { d: BoardDeal; onOpen: () => void }) {
   const attn = dealNeedsAttention(d);
@@ -2647,46 +2556,6 @@ function EmailsTab({ deal, onOpenMailbox }: { deal: BoardDeal; onOpenMailbox: ()
 
 // Compact card for the kanban columns — the column header already says the
 // stage, so this is address + tenant/agent + move-in, with a movement dot.
-function DealCardMini({ d, onOpen }: { d: BoardDeal; onOpen: () => void }) {
-  const lead = d.app.tenants.find((t) => t.isPrimary) ?? d.app.tenants[0];
-  const overdue = isOverdue(d);
-  const attn = dealNeedsAttention(d);
-  const upd = dealHasUpdate(d);
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="btn-press w-full rounded-xl border border-line p-2.5 text-left transition hover:border-black/20"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <p className="min-w-0 flex-1 truncate text-[12.5px] font-semibold leading-snug">{d.app.propertyName}</p>
-        <MovementDot kind={attn ? "red" : upd ? "green" : null} className="mt-1 shrink-0" />
-      </div>
-      <p className="mt-0.5 truncate text-[11px] text-muted">
-        {lead ? lead.name : "No tenant recorded"}
-        {d.app.tenants.length > 1 ? ` +${d.app.tenants.length - 1}` : ""}
-      </p>
-      <div className="mt-1 flex items-center justify-between gap-2 text-[11px]">
-        <span className="truncate text-muted">{d.agentName ?? "—"}</span>
-        <span className="shrink-0 text-ink">
-          {d.app.startDate ? `${fmtDate(d.app.startDate)}${overdue ? " · slipped" : ""}` : "TBC"}
-        </span>
-      </div>
-      {d.portal.notesCount > 0 ? (
-        <div className="mt-1.5 flex items-center gap-1 text-[10px] text-muted">
-          <svg viewBox="0 0 24 24" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
-          {d.portal.notesCount}
-          {d.portal.lastNote?.authorRole === "agent" ? (
-            <span className="ml-0.5 rounded bg-red-50 px-1 text-[9px] font-semibold text-red-600">reply</span>
-          ) : null}
-        </div>
-      ) : null}
-    </button>
-  );
-}
-
 function EmailBubble({ e }: { e: DealEmail }) {
   const [open, setOpen] = useState(false);
   const out = e.direction === "out";

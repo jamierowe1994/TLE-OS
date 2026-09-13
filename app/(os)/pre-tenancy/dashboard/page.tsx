@@ -6,6 +6,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import DealFeed from "@/components/DealFeed";
 import DesktopInstall from "@/components/DesktopInstall";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
+import PreTenancyHero from "@/components/pretenancy/Hero";
 import { whenAgo } from "@/lib/lead-spine";
 
 /**
@@ -43,7 +44,6 @@ const DOT_GREEN = "bg-[#56634a]";
 const DOT_RED = "bg-[#c0504a]";
 
 const card = "rounded-[22px] border border-line/70 bg-card";
-const SCRIPT = { fontFamily: "var(--font-shantell), cursive" } as const;
 
 function greeting(name: string): string {
   const h = new Date().getHours();
@@ -168,33 +168,16 @@ export default function PreTenancyDashboard() {
   return (
     <div className="space-y-5 pb-8">
       {/* ── the greeting, and the shelf ── */}
-      <div className="grid items-stretch gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,46%)]">
-        <div className="fade-up flex flex-col justify-center py-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-dark">Pre-tenancy compliance</p>
-          <h1 className="mt-2 text-[44px] leading-[1.02]">{greeting(data?.firstName ?? "")}</h1>
-          <p className="mt-3 max-w-[48ch] text-[14.5px] leading-relaxed text-muted">
-            What needs you today, who is moving in, and what moved across pre-tenancy.
-            {data?.lastSeenAt ? ` Propoly last looked at ${whenAgo(data.lastSeenAt)}.` : ""}
-          </p>
-          <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2">
-            <p className="flex items-center gap-2 text-[13.5px] text-ink"><DoodleIcon name="calendar" size={15} className="text-accent-dark" />{today}</p>
-            <DesktopInstall shortcutHref="/api/pretenancy/feed/shortcut?to=dashboard" />
-          </div>
-          {error && <p className="mt-4 text-[12.5px] text-[#9d4340]">{error}</p>}
-        </div>
-        {/* The shelf from the deck's commitment slide: the frame and the plant
-            kept to the right, a wash of the pink on the left for the line to
-            sit on, and the photograph left alone otherwise. */}
-        <div className="fade-up relative hidden min-h-[250px] overflow-hidden rounded-[22px] bg-[#fdefec] xl:block">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/photo/commitment.webp" alt="" className="absolute inset-y-0 right-0 h-full w-[56%] object-cover object-[100%_35%]" />
-          <div aria-hidden className="absolute inset-y-0 left-[36%] w-[24%] bg-gradient-to-r from-[#fdefec] to-transparent" />
-          <p className="absolute left-8 top-1/2 w-[38%] text-[28px] leading-[1.15]" style={{ ...SCRIPT, color: "#56423e", transform: "translateY(-50%) rotate(-4deg)" }}>
-            Great tenancies start with great compliance
-          </p>
-          <span aria-hidden className="absolute left-9 top-[calc(50%+52px)] h-[3px] w-[110px] rounded-full bg-[#c0504a]/70" style={{ transform: "rotate(-4deg)" }} />
-        </div>
-      </div>
+      <PreTenancyHero
+        title={greeting(data?.firstName ?? "")}
+        blurb={`What needs you today, who is moving in, and what moved across pre-tenancy.${data?.lastSeenAt ? ` Propoly last looked at ${whenAgo(data.lastSeenAt)}.` : ""}`}
+        photo="/brand/photo/commitment.webp"
+        line="Great tenancies start with great compliance"
+      >
+        <p className="flex items-center gap-2 text-[13.5px] text-ink"><DoodleIcon name="calendar" size={15} className="text-accent-dark" />{today}</p>
+        <DesktopInstall shortcutHref="/api/pretenancy/feed/shortcut?to=dashboard" />
+        {error && <p className="w-full text-[12.5px] text-[#9d4340]">{error}</p>}
+      </PreTenancyHero>
 
       {/* ── today, this week, what moved ── */}
       <div className="grid gap-4 lg:grid-cols-3">
