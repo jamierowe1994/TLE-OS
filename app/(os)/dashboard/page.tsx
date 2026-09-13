@@ -69,7 +69,16 @@ export default function Dashboard() {
            scene is wide rather than tall - 330 gives it about 400 across,
            which still leaves the greeting its one line. */
         illustration="/illustrations/home/armchair.webp"
-        illustrationHeight={330}
+        /* 13 Sep, later: bigger, and sat further under the line (James: "it
+           looks better when the images are coming from underneath the line").
+           400 tall with the rule crossing at 0.80 keeps 320 above the line -
+           a touch more masthead than before - and hides the bottom fifth: the
+           chair legs, the table's base and the shoes are under the line now. */
+        illustrationHeight={400}
+        /* And the masthead itself a touch taller than the shared 268, so the
+           bigger scene has room above the rule and the head clears the search
+           row (James, 13 Sep 2026). */
+        minHeight={300}
         /* 13 Sep: James swapped in the stripped-down version of the same scene
            - the dog, the books, the framed print, the magazines and the rug are
            all gone, and it comes on a transparent ground instead of white. The
@@ -84,7 +93,7 @@ export default function Dashboard() {
            and the front shoe runs INTO it. Tried 0.97 first - everything
            hovered 30px above the line with nothing under it - and 0.895, which
            chopped the front leg of the chair. */
-        seat={0.92}
+        seat={0.8}
         illustrationCrop
         lineBreak="none"
         /* Off the right edge, and back from it.
