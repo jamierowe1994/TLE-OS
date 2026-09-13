@@ -4,6 +4,7 @@ import PropertyPhoto from "@/components/PropertyPhoto";
 import AgentCard from "@/components/landlord/AgentCard";
 import Spine from "@/components/landlord/Spine";
 import { HeroAction, pickHero } from "@/components/landlord/StepAction";
+import PresentTile from "@/components/landlord/PresentTile";
 import { fullJourney } from "@/lib/landlord-journey";
 import { isLet, type LandlordView } from "@/lib/landlord-view";
 
@@ -45,7 +46,10 @@ export default function LandlordDashboard({
      nothing else moves until it is done; otherwise the first in the stage's
      order. The rest are quiet links under it. */
   const hero = pickHero(v);
-  const others = v.steps.filter((s) => s !== hero && s.href && !s.action);
+  /* Plain links, and the presentation - which acts here (PresentTile) but
+     belongs in this list all the same, or "View presentation" vanishes the
+     moment the contract becomes the hero. */
+  const others = v.steps.filter((s) => s !== hero && (s.action === "presentation" ? Boolean(v.presentation) : s.href && !s.action));
   const maintenanceHref = v.steps.find((s) => s.id === "maintenance")?.href ?? "/landlord/maintenance";
   void isLet;
 
@@ -141,7 +145,9 @@ export default function LandlordDashboard({
                 <p className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-muted">
                   <span>Also:</span>
                   {others.map((s) =>
-                    s.external ? (
+                    s.action === "presentation" && v.presentation ? (
+                      <PresentTile key={s.id} variant="link" deck={v.presentation} label={s.label} sub={s.sub} icon={s.icon} />
+                    ) : s.external ? (
                       <a key={s.id} href={s.href!} target="_blank" rel="noreferrer" className="font-semibold text-ink underline decoration-line underline-offset-4 hover:decoration-ink">
                         {s.label}
                       </a>

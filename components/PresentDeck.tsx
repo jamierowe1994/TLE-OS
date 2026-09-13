@@ -1990,6 +1990,89 @@ function QuestionsHouse({ deck, show }: { deck: Deck; show: boolean }) {
 
 const firstWord = (s: string) => s.trim().split(/\s+/)[0];
 
+
+/**
+ * ONE SLIDE, by id. The viewer's switch, lifted out so the flipbook can
+ * render a slide on its own (components/PresentBook): a book page is a
+ * slide rendered at the stage's size and clipped to a half. Everything the
+ * viewer does - which slides, in what order, when they reveal - stays in
+ * the viewer; this only says what a slide id looks like.
+ */
+export function SlideBody({ id, deck, show }: { id: SlideId; deck: Deck; show: boolean }) {
+  switch (id) {
+    case "welcome":
+      return <Welcome deck={deck} show={show} />;
+    case "appointment":
+      return <Appointment deck={deck} show={show} />;
+    case "agent":
+      return <Agent deck={deck} show={show} />;
+    case "comparables":
+      return <Comparables deck={deck} show={show} />;
+    case "valuation":
+      return <Valuation deck={deck} show={show} />;
+    case "market":
+      return <Market deck={deck} show={show} />;
+    case "terms":
+      return <Terms deck={deck} show={show} />;
+    case "why":
+      return <Why deck={deck} show={show} />;
+    case "questions":
+      return <Questions deck={deck} show={show} />;
+
+    /* The market-appraisal middle. See components/PresentSlides. */
+    case "agenda":
+      return <S.Agenda deck={deck} show={show} />;
+    case "approach":
+      return <S.Approach show={show} />;
+    case "property":
+      return <S.PropertyDivider deck={deck} show={show} />;
+    case "material":
+      return <S.Material deck={deck} show={show} />;
+    case "listings":
+      return <S.Listings deck={deck} show={show} />;
+    case "history":
+      return <S.History deck={deck} show={show} />;
+    case "marketing":
+      return <S.MarketingDivider deck={deck} show={show} />;
+    case "offer":
+      return <S.Offer show={show} />;
+    case "maxprice":
+      return <S.MaxPrice show={show} />;
+    case "video":
+      return <S.Video deck={deck} show={show} />;
+    case "brochure":
+      return <S.Brochure show={show} />;
+    case "portals":
+      return <S.Portals show={show} />;
+    case "social":
+      return <S.Social show={show} />;
+    case "compliance":
+      return <S.Compliance show={show} />;
+    case "legal":
+      return <S.Legal show={show} />;
+    case "screening":
+      return <S.Screening show={show} />;
+    case "management":
+      return <S.Management show={show} />;
+    case "levels":
+      return <S.Levels show={show} />;
+    case "collection":
+      return <S.Collection show={show} />;
+    case "protection":
+      return <S.Protection show={show} />;
+    case "rentlegal":
+      return <S.RentLegal show={show} />;
+    case "regulated":
+      return <S.Regulated show={show} />;
+    case "network":
+      return <S.Network show={show} />;
+    case "testimonial":
+      return <S.Testimonial deck={deck} show={show} />;
+    case "fees":
+      return <S.Fees deck={deck} show={show} />;
+  }
+}
+
 /* ───────────────────────── the viewer ───────────────────────── */
 
 export default function PresentDeck({
@@ -2162,80 +2245,7 @@ export default function PresentDeck({
     return () => window.removeEventListener("keydown", onKey);
   }, [at, go, slides.length]);
 
-  const body = (id: SlideId, i: number) => {
-    switch (id) {
-      case "welcome":
-        return <Welcome deck={deck} show={show(i)} />;
-      case "appointment":
-        return <Appointment deck={deck} show={show(i)} />;
-      case "agent":
-        return <Agent deck={deck} show={show(i)} />;
-      case "comparables":
-        return <Comparables deck={deck} show={show(i)} />;
-      case "valuation":
-        return <Valuation deck={deck} show={show(i)} />;
-      case "market":
-        return <Market deck={deck} show={show(i)} />;
-      case "terms":
-        return <Terms deck={deck} show={show(i)} />;
-      case "why":
-        return <Why deck={deck} show={show(i)} />;
-      case "questions":
-        return <Questions deck={deck} show={show(i)} />;
-
-      /* The market-appraisal middle. See components/PresentSlides. */
-      case "agenda":
-        return <S.Agenda deck={deck} show={show(i)} />;
-      case "approach":
-        return <S.Approach show={show(i)} />;
-      case "property":
-        return <S.PropertyDivider deck={deck} show={show(i)} />;
-      case "material":
-        return <S.Material deck={deck} show={show(i)} />;
-      case "listings":
-        return <S.Listings deck={deck} show={show(i)} />;
-      case "history":
-        return <S.History deck={deck} show={show(i)} />;
-      case "marketing":
-        return <S.MarketingDivider deck={deck} show={show(i)} />;
-      case "offer":
-        return <S.Offer show={show(i)} />;
-      case "maxprice":
-        return <S.MaxPrice show={show(i)} />;
-      case "video":
-        return <S.Video deck={deck} show={show(i)} />;
-      case "brochure":
-        return <S.Brochure show={show(i)} />;
-      case "portals":
-        return <S.Portals show={show(i)} />;
-      case "social":
-        return <S.Social show={show(i)} />;
-      case "compliance":
-        return <S.Compliance show={show(i)} />;
-      case "legal":
-        return <S.Legal show={show(i)} />;
-      case "screening":
-        return <S.Screening show={show(i)} />;
-      case "management":
-        return <S.Management show={show(i)} />;
-      case "levels":
-        return <S.Levels show={show(i)} />;
-      case "collection":
-        return <S.Collection show={show(i)} />;
-      case "protection":
-        return <S.Protection show={show(i)} />;
-      case "rentlegal":
-        return <S.RentLegal show={show(i)} />;
-      case "regulated":
-        return <S.Regulated show={show(i)} />;
-      case "network":
-        return <S.Network show={show(i)} />;
-      case "testimonial":
-        return <S.Testimonial deck={deck} show={show(i)} />;
-      case "fees":
-        return <S.Fees deck={deck} show={show(i)} />;
-    }
-  };
+  const body = (id: SlideId, i: number) => <SlideBody id={id} deck={deck} show={show(i)} />;
 
   const here = slides[at]?.id;
   /* Which slides carry white type, so the chrome can invert under them. Read

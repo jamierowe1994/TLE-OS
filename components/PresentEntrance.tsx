@@ -93,6 +93,10 @@ const CLAY = "#cfa096";
 
 /** When each thing starts to leave, from Enter, in ms - James's order. */
 const OUT = { right: 0, left: 140, far: 280, words: 400 };
+/** The squeeze's order is the other way about: the words drop first and
+ *  the street folds into the middle behind them, so the two are never
+ *  crossing at once. */
+const OUT_SQUEEZE = { right: 220, left: 220, far: 360, words: 0 };
 const OUT_MS = 460;
 /** When the words start folding in: as the far houses are coming up. */
 const WORDS_IN = 700;
@@ -100,12 +104,57 @@ const WORDS_IN = 700;
 export default function PresentEntrance({
   onFly,
   onDone,
+  heading,
+  exit = "drop",
+  transparentGround = false,
+  z = 40,
+  inline = false,
+  frameShift,
 }: {
   /** Enter was pressed: the deck should start landing now, behind the scene. */
   onFly: () => void;
   /** The scene has gone: unmount, and let the first slide rise. */
   onDone: () => void;
+  /** The two lines in the sky. The deck's own is "Let's talk about / your
+   *  property."; the landlord's book (PresentModal) says "View your /
+   *  presentation." */
+  heading?: { top: string; bottom: string };
+  /**
+   * How it leaves. "drop": everything falls out of the frame in order (the
+   * deck). "squeeze": the two terraces slide INTO the middle and shrink as
+   * they go, the far houses and the words fall - James, 13 Sep 2026: "we'll
+   * squeeze the screen together, and both sides of the buildings will
+   * collapse in to show it's actually a pop-out", and a line appears where
+   * they met: the spine of the book (drawn by PresentModal).
+   */
+  exit?: "drop" | "squeeze" | "fade" | "frame";
+  /** No ground of its own: the pop-out paints the white and then the dimmed
+   *  portal underneath, and the street must not cover that change. */
+  transparentGround?: boolean;
+  /** Where it sits. The deck's is 40. */
+  z?: number;
+  /**
+   * INSIDE A BOX rather than over the window: absolute, not fixed, and the
+   * street sized to the box (container units) rather than the viewport.
+   * The pop-out (PresentModal) opens on this - James, 13 Sep 2026: "start
+   * it at the same size ... the entrance image will feel like it will
+   * expand outward."
+   */
+  inline?: boolean;
+  /**
+   * For exit "frame": how far each terrace travels outward, in px, to
+   * stand at the edge of the window and FRAME what is revealed between
+   * them - James, 13 Sep 2026: "the left-hand side will move over to the
+   * left and attach into the corners, and the right-hand side will do the
+   * same thing ... we'll use the left- and right-hand sides to frame the
+   * presentation." They stay there; nothing else does.
+   */
+  frameShift?: { left: number; right: number };
 }) {
+  /* The street's units: the window's, or the box's. */
+  const VH = inline ? "cqh" : "vh";
+  const VW = inline ? "cqw" : "vw";
+  const head = heading ?? { top: "Let\u2019s talk about", bottom: "your property." };
   const { host, fit } = useStage();
   const fx = fit.staged;
   /* in → up: the street builds. up → out: Enter, and everything drops off. */
@@ -129,7 +178,7 @@ export default function PresentEntrance({
       if (done.current) return;
       done.current = true;
       onDone();
-    }, still.current ? 250 : ENTRANCE_FLY_MS);
+    }, still.current ? 250 : exit === "fade" ? 480 : exit === "frame" ? 950 : ENTRANCE_FLY_MS);
   };
 
   /* Enter and Right both go in - Right because that is the deck's own Next,
@@ -149,15 +198,24 @@ export default function PresentEntrance({
   const up = phase !== "in";
   const out = phase === "out";
   const noMotion = still.current;
+  const O = exit === "squeeze" ? OUT_SQUEEZE : OUT;
 
   /**
    * One piece of the street. In: opacity eases out while the transform
    * overshoots (the pop). Out: it falls out of the bottom of the frame on
    * its own delay.
    */
-  const layer = (inDelay: number, from: string, outDelay: number, inMs = 720): React.CSSProperties => {
+  const layer = (inDelay: number, from: string, outDelay: number, inMs = 720, squeezeTo?: string, frameTo?: string): React.CSSProperties => {
+    if (noMotion && out && exit === "frame" && frameTo) return { opacity: 1, transform: frameTo };
     if (noMotion) return { opacity: up && !out ? 1 : 0, transition: "opacity 200ms ease-out" };
-    if (out) return { opacity: 0, transform: "translateY(18vh)", transition: `opacity ${OUT_MS}ms ease-in ${outDelay}ms, transform ${OUT_MS}ms ${FALL} ${outDelay}ms` };
+    if (out && exit === "fade") return { opacity: 0, transition: "opacity 420ms ease-out" };
+    if (out && exit === "frame")
+      return frameTo
+        ? { opacity: 1, transform: frameTo, transition: `transform 900ms cubic-bezier(0.22, 1, 0.36, 1) 120ms` }
+        : { opacity: 0, transition: "opacity 420ms ease-out" };
+    if (out && exit === "squeeze" && squeezeTo)
+      return { opacity: 0, transform: squeezeTo, transition: `opacity ${OUT_MS + 200}ms ease-in ${outDelay + 240}ms, transform ${OUT_MS + 240}ms cubic-bezier(0.7, 0, 0.3, 1) ${outDelay}ms` };
+    if (out) return { opacity: 0, transform: `translateY(18${VH})`, transition: `opacity ${OUT_MS}ms ease-in ${outDelay}ms, transform ${OUT_MS}ms ${FALL} ${outDelay}ms` };
     return { opacity: up ? 1 : 0, transform: up ? "none" : from, transition: `opacity ${inMs}ms ease-out ${inDelay}ms, transform ${inMs}ms ${POP} ${inDelay}ms` };
   };
 
@@ -168,9 +226,14 @@ export default function PresentEntrance({
    */
   const fold = (i: number): React.CSSProperties => {
     if (noMotion) return { opacity: up && !out ? 1 : 0, transition: "opacity 200ms ease-out" };
+    if (out && exit === "fade") return { opacity: 0, transition: "opacity 420ms ease-out" };
+    if (out && exit === "frame") {
+      const d = i * 30;
+      return { opacity: 0, transform: `translateY(-30${VH})`, transition: `opacity 360ms ease-in ${d}ms, transform 520ms cubic-bezier(0.55, 0, 0.85, 0.25) ${d}ms` };
+    }
     if (out) {
-      const d = OUT.words + i * 40;
-      return { opacity: 0, transform: "translateY(9vh)", transition: `opacity ${OUT_MS}ms ease-in ${d}ms, transform ${OUT_MS}ms ${FALL} ${d}ms` };
+      const d = O.words + i * 40;
+      return { opacity: 0, transform: `translateY(9${VH})`, transition: `opacity ${OUT_MS}ms ease-in ${d}ms, transform ${OUT_MS}ms ${FALL} ${d}ms` };
     }
     const d = WORDS_IN + i * 90;
     return {
@@ -198,9 +261,9 @@ export default function PresentEntrance({
       </div>
       <div className={fx ? "mt-[72px]" : "mt-12"} style={fold(2)}>
         <h1 className={`leading-[1.0] ${fx ? "text-[76px]" : "text-[44px] sm:text-[60px]"}`} style={HEAD}>
-          Let&rsquo;s talk about
+          {head.top}
           <br />
-          <span style={{ color: CLAY }}>your property.</span>
+          <span style={{ color: CLAY }}>{head.bottom}</span>
         </h1>
         {/* The stroke under the second line, drawn by hand rather than a rule. */}
         <svg viewBox="0 0 420 14" aria-hidden className={`mx-auto mt-2 h-[14px] ${fx ? "w-[380px]" : "w-[70%]"}`}>
@@ -235,13 +298,15 @@ export default function PresentEntrance({
           flick strokes from James's reference beside it; he took them out on
           13 Sep 2026, the same way he took them out of the transition on 4
           Sep. It leaves with the far houses. */}
-      <div className="absolute -right-[4vh] -top-[10vh] h-[62vh] w-[58vh]" style={layer(0, "scale(0.9)", OUT.far, 900)}>
+      {!inline && (
+      <div className="absolute" style={{ ...layer(0, "scale(0.9)", O.far, 900), right: `-4${VH}`, top: `-10${VH}`, height: `62${VH}`, width: `58${VH}` }}>
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden className="absolute inset-0 h-full w-full">
           <path d="M40 0L100 0L100 62C98 78 90 88 78 90C60 92 44 84 36 70C26 54 24 30 30 14C32 8 36 3 40 0Z" fill="var(--p-tint)" />
         </svg>
       </div>
+      )}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/brand/art/entrance-right.webp" alt="" aria-hidden className="absolute z-[3] h-[114vh] w-auto max-w-none" style={{ ...layer(120, "translateX(3vw) scale(0.94)", OUT.right), right: "-10vw", bottom: "-8.2vh", transformOrigin: "100% 100%" }} />
+      <img src="/brand/art/entrance-right.webp" alt="" aria-hidden className="absolute z-[3] w-auto max-w-none" style={{ ...layer(120, `translateX(3${VW}) scale(0.94)`, O.right, 720, `translateX(-42${VW}) scale(0.5)`, frameShift ? `translateX(${frameShift.right}px)` : undefined), height: `114${VH}`, right: `-10${VW}`, bottom: `-8.2${VH}`, transformOrigin: exit === "squeeze" ? "50% 100%" : "100% 100%" }} />
       {/* The left sits 13.6vh under the edge so its road ends level with the
           right's - and 3.3vw further out than the right, because the drawing
           carries its trees and houses further into the frame: with both at
@@ -250,13 +315,13 @@ export default function PresentEntrance({
           centred, looked off-centre. James, 13 Sep: "the properties are
           lopsided". */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/brand/art/entrance-left.webp" alt="" aria-hidden className="absolute z-[3] h-[114vh] w-auto max-w-none" style={{ ...layer(360, "translateX(-3vw) scale(0.94)", OUT.left), left: "-13.3vw", bottom: "-13.6vh", transformOrigin: "0% 100%" }} />
+      <img src="/brand/art/entrance-left.webp" alt="" aria-hidden className="absolute z-[3] w-auto max-w-none" style={{ ...layer(360, `translateX(-3${VW}) scale(0.94)`, O.left, 720, `translateX(42${VW}) scale(0.5)`, frameShift ? `translateX(${-frameShift.left}px)` : undefined), height: `114${VH}`, left: `-13.3${VW}`, bottom: `-13.6${VH}`, transformOrigin: exit === "squeeze" ? "50% 100%" : "0% 100%" }} />
       {/* Centred by the class (Tailwind's `translate`), and ONLY there: the
           inline transform is the pop, and a translateX(-50%) in it as well
           centred the strip twice - it sat 490px left, and its right edge drew
           a hard line down the middle of the road (13 Sep 2026). */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/brand/art/entrance-far.webp" alt="" aria-hidden className="absolute bottom-[5vh] left-1/2 z-[2] w-[56vw] max-w-none -translate-x-1/2" style={layer(640, "translateY(2vh)", OUT.far, 800)} />
+      <img src="/brand/art/entrance-far.webp" alt="" aria-hidden className="absolute left-1/2 z-[2] max-w-none -translate-x-1/2" style={{ ...layer(640, `translateY(2${VH})`, O.far, 800), bottom: `5${VH}`, width: `56${VW}` }} />
     </div>
   );
 
@@ -268,7 +333,7 @@ export default function PresentEntrance({
           terraces are a screen tall and have nowhere to stand. */}
       {centre}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/brand/art/entrance-far.webp" alt="" aria-hidden className="pointer-events-none absolute bottom-[40px] left-1/2 w-[140%] max-w-none -translate-x-1/2" style={layer(300, "translateY(2vh)", OUT.far, 800)} />
+      <img src="/brand/art/entrance-far.webp" alt="" aria-hidden className="pointer-events-none absolute bottom-[40px] left-1/2 w-[140%] max-w-none -translate-x-1/2" style={layer(300, "translateY(2vh)", O.far, 800)} />
     </>
   );
 
@@ -276,13 +341,21 @@ export default function PresentEntrance({
     <section
       ref={host}
       aria-label="Welcome"
-      className="fixed inset-0 z-40 overflow-hidden"
+      className={`${inline ? "absolute" : "fixed"} inset-0 ${inline && out ? "overflow-visible" : "overflow-hidden"}`}
       style={{
-        background: CREAM,
+        zIndex: z,
+        background: transparentGround || (out && exit === "frame") ? "transparent" : CREAM,
+        borderRadius: inline ? 22 : 0,
         color: INK,
-        /* The ground goes last, once the words have dropped through it. */
-        opacity: out ? 0 : 1,
-        transition: noMotion ? "opacity 250ms ease-out" : `opacity 320ms ease-in ${ENTRANCE_FLY_MS - 340}ms`,
+        /* The ground goes last, once the words have dropped through it -
+           except when the terraces stay to frame the book: then the section
+           stays and only its ground goes. */
+        opacity: out && exit !== "frame" ? 0 : 1,
+        transition: noMotion
+          ? "opacity 250ms ease-out"
+          : exit === "frame"
+            ? "background 500ms ease-out 200ms"
+            : `opacity 320ms ease-in ${ENTRANCE_FLY_MS - 340}ms`,
         pointerEvents: out ? "none" : "auto",
       }}
     >

@@ -2,6 +2,7 @@ import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import SignTile from "@/components/landlord/SignTile";
 import MessageTile from "@/components/landlord/MessageTile";
+import PresentTile from "@/components/landlord/PresentTile";
 import type { LandlordView, ViewStep } from "@/lib/landlord-view";
 
 /**
@@ -35,6 +36,9 @@ export function HeroAction({ s, v, anchorBase = "", label }: { s: ViewStep; v: L
       <MessageTile variant="button" appraisalId={v.appraisalId ?? null} agentName={v.agent?.name ?? null} messages={v.messages ?? []} label={text} sub={s.sub} icon={s.icon} />
     );
   }
+  if (s.action === "presentation" && v.presentation) {
+    return <PresentTile variant="button" deck={v.presentation} label={text} sub={s.sub} icon={s.icon} />;
+  }
   const href = hrefOf(s, anchorBase);
   if (!href) return null;
   return s.external ? (
@@ -57,6 +61,9 @@ export function StepRow({ s, v, anchorBase = "" }: { s: ViewStep; v: LandlordVie
     return (
       <MessageTile variant="row" appraisalId={v.appraisalId ?? null} agentName={v.agent?.name ?? null} messages={v.messages ?? []} label={s.label} sub={s.sub} icon={s.icon} />
     );
+  }
+  if (s.action === "presentation" && v.presentation) {
+    return <PresentTile variant="row" deck={v.presentation} label={s.label} sub={s.sub} icon={s.icon} />;
   }
   const inner = (
     <>

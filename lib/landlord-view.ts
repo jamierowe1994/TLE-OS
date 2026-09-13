@@ -61,7 +61,7 @@ export interface ViewStep {
    * a DocuSeal session for this landlord, "message" opens the thread with
    * their agent. The live home sets these; the sample links.
    */
-  action?: "sign" | "message";
+  action?: "sign" | "message" | "presentation";
 }
 
 /** An offer on the landlord's property, as they should read it. */
@@ -175,6 +175,14 @@ export interface LandlordView {
   intro: string;
   /** The OS appraisal this file is about, for the tiles that act on it. */
   appraisalId?: string | null;
+  /**
+   * The post-appraisal deck, when one has been sent, for the "View
+   * presentation" step to open as a book here (components/PresentModal)
+   * rather than linking away. The sample carries the showroom deck; the
+   * live home will carry the landlord's own once decks are looked up by
+   * appraisal - nothing does that yet.
+   */
+  presentation?: import("@/lib/present").PresentDeck | null;
   stage: Stage;
   journey: JourneyStop[];
   property: {

@@ -1,4 +1,5 @@
 import rexSample from "@/lib/rex-sample.json";
+import { SAMPLE_DECK } from "@/lib/present";
 import { STAGES, stepsForStage, type LandlordView, type Stage, type ViewStep } from "@/lib/landlord-view";
 import type { DocsView } from "@/lib/landlord-documents-view";
 import type { MaintView } from "@/lib/landlord-maintenance-view";
@@ -70,7 +71,7 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
 
   /* ── the steps, every one a real place to go ── */
   const all: Record<ViewStep["id"], ViewStep> = {
-    presentation: { id: "presentation", label: "View presentation", sub: "See how we'll let your property for you", href: "#", icon: "analytics", external: true },
+    presentation: { id: "presentation", label: "View presentation", sub: "See how we'll let your property for you", href: "#", icon: "analytics", action: "presentation" },
     sign: { id: "sign", label: "Sign your contract", sub: "Review and sign your management terms", href: "#", icon: "pencil", external: true, done: done("instruction") },
     compliance: {
       id: "compliance",
@@ -130,6 +131,9 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
 
   const view: LandlordView = {
     greeting: "Hello, Raj",
+    /* The showroom deck as the post-appraisal, so "View presentation" opens
+       the book here. A real landlord's view will carry their own deck. */
+    presentation: { ...SAMPLE_DECK, kind: "post-appraisal", style: "house" },
     intro: managed
       ? "Your property is let and looked after. Here's how it's doing."
       : let_

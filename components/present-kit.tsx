@@ -303,10 +303,21 @@ export function Rise({
  *
  * Lived in PresentDeck until 13 Sep 2026; the entrance needed it too.
  */
+/**
+ * A host that already knows the answer. The book (PresentBook) renders a
+ * slide inside a box of a known size, and measuring it after mount meant
+ * every page painted its stacked phone layout for one frame before the
+ * observer fired - the flicker James saw on every turn (13 Sep 2026).
+ * Provide the fit here and useStage renders it right the first time.
+ */
+export const StageForceCtx = React.createContext<{ staged: boolean; scale: number } | null>(null);
+
 export function useStage() {
+  const forced = React.useContext(StageForceCtx);
   const host = React.useRef<HTMLElement>(null);
-  const [fit, setFit] = React.useState<{ staged: boolean; scale: number }>({ staged: false, scale: 1 });
+  const [fit, setFit] = React.useState<{ staged: boolean; scale: number }>(forced ?? { staged: false, scale: 1 });
   React.useEffect(() => {
+    if (forced) return;
     const el = host.current;
     if (!el) return;
     const measure = () => {
@@ -318,8 +329,8 @@ export function useStage() {
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
-  return { host, fit };
+  }, [forced]);
+  return { host, fit: forced ?? fit };
 }
 
 /** The stage wrapper: absolute, so its 900px never sets the slide's height. */
