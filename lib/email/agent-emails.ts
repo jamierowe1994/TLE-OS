@@ -1,5 +1,6 @@
 import "server-only";
 import { emailShell, type ShellRow } from "@/lib/email/shell";
+import { skyListShell } from "@/lib/email/shell-sky";
 import { eventSentence, type DealEvent } from "@/lib/business/deal-events";
 import { digestText, type DealAlert } from "@/lib/business/deal-alerts";
 
@@ -42,7 +43,17 @@ export function lineToRow(line: string): ShellRow {
   const title = at === -1 ? plain : plain.slice(0, at);
   const detail = at === -1 ? undefined : plain.slice(at + 3);
   const hot = /expired|not on file|no certificate|overdue|missing/i.test(detail ?? plain);
-  return { title, detail, tone: hot ? "attention" : "neutral" };
+
+  /* The badge. A number when there is one to give, and the plain fact when
+     there is not - "Action needed" rather than a blank, because a row with
+     nothing on the right of it reads as the row that is fine. Fourteen days
+     is where it turns clay: that is the middle chase band, and the point at
+     which booking a contractor stops being comfortable. */
+  const days = /expires? in (\d+) days?/i.exec(detail ?? "");
+  const pill = hot ? "Action needed" : days ? `${days[1]} day${days[1] === "1" ? "" : "s"}` : undefined;
+  const urgent = hot || (days ? Number(days[1]) <= 14 : false);
+
+  return { title, detail, tone: hot ? "attention" : "neutral", pill, pillTone: urgent ? "urgent" : "calm" };
 }
 
 const textRows = (rows: ShellRow[]) => rows.map((r) => `  ${r.title}${r.detail ? ` - ${r.detail}` : ""}`).join("\n");
@@ -58,16 +69,19 @@ export function certificateChaseEmail(input: { firstName: string; lines: string[
   const link = `${SITE}/compliance`;
   return {
     subject,
-    html: emailShell({
+    /* The first of the list emails onto the sky look, 13 Sep 2026. The other
+       three on emailShell come across one at a time, each looked at on its
+       own, which is why both shells are still here. */
+    html: skyListShell({
       heading: `Certificates due, ${input.firstName}`,
       intro,
       rows,
       rowsLead: `${n} propert${n === 1 ? "y" : "ies"} on your book`,
+      rowHref: link,
       button: "Open Compliance",
       link,
-      image: "illustrations/email/certificates.gif",
-      footnote:
-        "If a property on this list isn't yours any more, say so - it means the record is wrong, and the landlord may be getting chased by nobody.",
+      hero: "hero-certificates.png",
+      tip: "If a property on this list isn't yours any more, say so - it means the record is wrong, and the landlord may be getting chased by nobody.",
     }),
     text: [`Certificates due, ${input.firstName}`, "", intro, "", textRows(rows), "", `Open Compliance: ${link}`].join("\n"),
   };

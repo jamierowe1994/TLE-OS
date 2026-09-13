@@ -158,6 +158,47 @@ async function cloudGif({ name, src, width, side, bleed, ampY, ampX, frames, del
   console.log(name + ".gif", W + "x" + H, frames + " frames", size(out));
 }
 
+/* ── The hero picture for a list email ──────────────────────────────────
+   The drawing and the pink shape behind it are ONE flat picture. They have
+   to be: there is no layering in an inbox, and a shape that has to sit
+   behind a drawing is a shape that has to be painted with it. */
+async function hero({ name, art, blob }) {
+  const W = 1200, H = 760;
+  const drawing = await sharp(`${ART}/${art}`).resize({ width: 1130 }).toBuffer();
+  const dm = await sharp(drawing).metadata();
+  fs.mkdirSync(OUT, { recursive: true });
+  await sharp({ create: { width: W, height: H, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } } })
+    .composite([
+      { input: Buffer.from(`<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">${blob}</svg>`), top: 0, left: 0 },
+      { input: drawing, top: Math.round((H - dm.height) / 2), left: Math.round((W - dm.width) / 2) },
+    ])
+    .png({ palette: true, quality: 92, effort: 10 })
+    .toFile(`${OUT}/${name}.png`);
+  console.log(name + ".png", W + "x" + H, size(`${OUT}/${name}.png`));
+}
+
+/* ── A row marker: one doodle glyph in a soft disc ─────────────────────
+   SVG does not render in Outlook at all, so every one of these is baked to
+   PNG at twice its size on the page. The glyphs are solid black on clear,
+   which is what lets a flat colour be poured through them. */
+async function disc({ name, glyph, ring, ink, d = 84, g = 40 }) {
+  const black = await sharp(`public/icons/doodle/${glyph}.svg`).resize({ width: g, height: g, fit: "inside" }).png().toBuffer();
+  const bm = await sharp(black).metadata();
+  const tinted = await sharp({ create: { width: bm.width, height: bm.height, channels: 4, background: ink } })
+    .composite([{ input: black, blend: "dest-in" }])
+    .png()
+    .toBuffer();
+  const circle = `<svg width="${d}" height="${d}" xmlns="http://www.w3.org/2000/svg"><circle cx="${d / 2}" cy="${d / 2}" r="${d / 2}" fill="${ring}"/></svg>`;
+  await sharp({ create: { width: d, height: d, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+    .composite([
+      { input: Buffer.from(circle), top: 0, left: 0 },
+      { input: tinted, top: Math.round((d - bm.height) / 2), left: Math.round((d - bm.width) / 2) },
+    ])
+    .png()
+    .toFile(`${OUT}/${name}.png`);
+  console.log(name + ".png", d + "x" + d, size(`${OUT}/${name}.png`));
+}
+
 const size = (f) => (fs.statSync(f).size / 1024).toFixed(0) + "KB";
 
 const cutArg = process.argv.indexOf("--cut");
@@ -167,4 +208,21 @@ if (cutArg > -1) {
   await band();
   await cloudGif({ name: "cloud-left", src: "cloud-1.png", width: 160, side: "left", bleed: 0.26, ampY: 9, ampX: 4, frames: 18, delayMs: 220 });
   await cloudGif({ name: "cloud-right", src: "cloud-3.png", width: 172, side: "right", bleed: 0.3, ampY: 8, ampX: 4, frames: 18, delayMs: 240 });
+
+  await hero({
+    name: "hero-certificates",
+    art: "desk.png",
+    /* One sweep that bleeds off both edges, high on the right where the
+       plant is and dropping away to the left behind the notebook. */
+    /* The bottom edge DIPS under the right sleeve rather than cutting across
+       it. James, 13 Sep 2026: "the arm on the right-hand side is getting cut
+       off ... have the pink look like it's framing it a bit around that arm."
+       The cuff bottoms out at y=675 on this canvas, so the shape carries on
+       to 714 beneath it and only rises once it is past the elbow. */
+    blob: `<path d="M0,486 C120,392 268,470 402,452 C548,432 592,214 786,150 C930,102 1094,150 1200,116 L1200,724 C1160,744 1084,740 1020,716 C958,692 918,702 866,678 C760,632 600,650 420,630 C280,616 140,628 0,582 Z" fill="#fbe6e0"/>`,
+  });
+
+  await disc({ name: "disc-attention", glyph: "bell", ring: "#fbe3de", ink: { r: 0xa8, g: 0x5a, b: 0x51, alpha: 1 } });
+  await disc({ name: "disc-ok", glyph: "shield", ring: "#e7ecdf", ink: { r: 0x6c, g: 0x7a, b: 0x5e, alpha: 1 } });
+  await disc({ name: "disc-tip", glyph: "info", ring: "#ffffff", ink: { r: 0xa8, g: 0x5a, b: 0x51, alpha: 1 }, d: 76, g: 34 });
 }

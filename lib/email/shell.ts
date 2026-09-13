@@ -77,6 +77,15 @@ export interface ShellRow {
   title: string;
   detail?: string;
   tone?: "attention" | "good" | "neutral";
+  /**
+   * The badge on the right of the row in the sky shell - "12 days", "Action
+   * needed". Separate from `detail` because it is the one part of a chase
+   * somebody reads without reading: the number, or the fact that there isn't
+   * one. The white shell above ignores both of these fields.
+   */
+  pill?: string;
+  /** Clay when it is close or already gone, sage when there is time. */
+  pillTone?: "urgent" | "calm";
 }
 
 export interface ShellOpts {
