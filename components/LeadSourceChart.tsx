@@ -129,9 +129,11 @@ export default function LeadSourceChart({ leads }: { leads: Lead[] }) {
           const isMover = !hot && b.key === mover?.key;
           const strong = lit || isMover;
           return (
-            <button
+            /* A div, not a button (13 Sep 2026): hovering lights the bar and
+               nothing happens on a click, and something that looks pressable
+               and is not is the complaint James keeps finding. */
+            <div
               key={b.key}
-              type="button"
               onMouseEnter={() => setHot(b.key)}
               onMouseLeave={() => setHot(null)}
               className="group flex min-w-0 flex-1 flex-col items-stretch text-left"
@@ -173,7 +175,7 @@ export default function LeadSourceChart({ leads }: { leads: Lead[] }) {
                 {b.key}
               </span>
               <span className="figures mt-0.5 block text-[13px] leading-none">{b.pct}%</span>
-            </button>
+            </div>
           );
         })}
       </div>
