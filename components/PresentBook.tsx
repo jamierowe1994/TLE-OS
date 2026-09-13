@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SlideBody } from "@/components/PresentDeck";
-import { BookAgenda, BookAgent, BookApproach, BookComparables, BookListings, BookMarket, BookMarketing, BookMaterial, BookMaxPrice, BookOffer, BookPortals, BookProperty, BookSocial, BookWelcome } from "@/components/PresentBookPages";
+import { BookAgenda, BookAgent, BookApproach, BookComparables, BookCompliance, BookLegal, BookListings, BookMarket, BookMarketing, BookMaterial, BookMaxPrice, BookOffer, BookPortals, BookProperty, BookSocial, BookWelcome } from "@/components/PresentBookPages";
 import { CREAM, HAND, INK, StageForceCtx } from "@/components/present-kit";
 import type { PresentDeck as Deck, SlideId } from "@/lib/present";
 
@@ -181,6 +181,8 @@ function Face({ deck, pages, n }: { deck: Deck; pages: SlideId[]; n: number }) {
   if (id === "maxprice") return <BookMaxPrice />;
   if (id === "portals") return <BookPortals />;
   if (id === "social") return <BookSocial />;
+  if (id === "compliance") return <BookCompliance deck={deck} />;
+  if (id === "legal") return <BookLegal />;
   return <PageFace deck={deck} id={id} />;
 }
 
@@ -578,6 +580,12 @@ export default function PresentBook({
   const leftSheets = at < 0 ? 0 : Math.min(6, 2 + Math.floor(Math.max(at, 0) / 2));
   const rightSheets = at < 0 ? 6 : Math.min(6, 2 + Math.floor((spreads - 1 - Math.max(at, 0)) / 2));
   const open = leftN != null;
+  /* Opening the cover: there is no left page yet, but the sheet needs
+     something to land on from the first frame - a blank sheet with its
+     shadow - or the shadow of the whole left side appears at the end of
+     the turn in one go (James, 13 Sep 2026: "all of a sudden just loads
+     in"). The welcome replaces it, in the same place, when the turn ends. */
+  const landingBlank = !!turn && forward && here < 0;
   const settleStyle = (side: "left" | "right"): React.CSSProperties =>
     settle === side ? { transform: "scale(0.997)", transition: "transform 90ms ease-out" } : { transform: "none", transition: "transform 140ms cubic-bezier(0.22, 0.61, 0.36, 1)" };
 
@@ -600,24 +608,16 @@ export default function PresentBook({
       >
         {/* THE BLOCK on the table: an ambient shadow under the whole of it,
             a firmer one under its bottom edge. */}
-        <div
-          className="absolute left-0 top-0 flex"
-          style={{
-            /* The block's shadow only once it is open: closed, the block
-               still spans the empty left slot, and a shadow round that drew
-               a line across the table beside the cover (James, 13 Sep
-               2026). Closed, the cover carries the shadow itself. */
-            boxShadow: open ? BLOCK_SHADOW : "none",
-            borderRadius: 4,
-          }}
-        >
-          {/* Left page. */}
+        <div className="absolute left-0 top-0 flex" style={{ borderRadius: 4 }}>
+          {/* Left page. Each page carries its own shadow: on the block, the
+              shadow spanned the empty left slot while the book was closed
+              and drew a line across the table beside the cover. */}
           <div className="relative" style={{ width: PAGE_W, height: PAGE_H }}>
-            {open && (
+            {(open || landingBlank) && (
               <>
-                <Stack side="left" sheets={leftSheets} />
-                <div key={`L${leftN}`} className="relative overflow-hidden" style={{ borderRadius: "4px 0 0 4px", background: PAPER, ...settleStyle("left") }}>
-                  <Face deck={deck} pages={pages} n={leftN as number} />
+                <Stack side="left" sheets={open ? leftSheets : 1} />
+                <div key={open ? `L${leftN}` : "L-blank"} className="relative overflow-hidden" style={{ borderRadius: "4px 0 0 4px", background: PAPER, boxShadow: BLOCK_SHADOW, ...settleStyle("left") }}>
+                  {open ? <Face deck={deck} pages={pages} n={leftN as number} /> : <div style={{ width: PAGE_W, height: PAGE_H, background: PAPER }} />}
                   <PaperFinish />
                   <Gutter side="left" deepRef={(el) => (nodes.current.gutterLeft = el)} />
                   {/* the shadow a turning sheet throws on this page */}
@@ -631,10 +631,10 @@ export default function PresentBook({
           {/* Right page. */}
           <div className="relative" style={{ width: PAGE_W, height: PAGE_H }}>
             <Stack side="right" sheets={rightSheets} />
-            <div key={`R${rightN}`} className="relative overflow-hidden" style={{ borderRadius: open ? "0 4px 4px 0" : 4, background: PAPER, boxShadow: open ? undefined : BLOCK_SHADOW, ...settleStyle("right") }}>
+            <div key={`R${rightN}`} className="relative overflow-hidden" style={{ borderRadius: open || landingBlank ? "0 4px 4px 0" : 4, background: PAPER, boxShadow: BLOCK_SHADOW, ...settleStyle("right") }}>
               <Face deck={deck} pages={pages} n={rightN} />
               <PaperFinish />
-              {open && <Gutter side="right" deepRef={(el) => (nodes.current.gutterRight = el)} />}
+              {(open || landingBlank) && <Gutter side="right" deepRef={(el) => (nodes.current.gutterRight = el)} />}
               <div ref={(el) => {
                     nodes.current.shadowRight = el;
                   }} className="pointer-events-none absolute inset-0" style={{ opacity: 0 }} />
@@ -644,7 +644,7 @@ export default function PresentBook({
 
         {/* THE SEAM: the contact shadow exactly where the two sheets meet,
             over both pages - and the narrow shadow a passing sheet adds. */}
-        {open && (
+        {(open || landingBlank) && (
           <>
             <div className="pointer-events-none absolute top-0 z-[6]" style={{ left: PAGE_W - 3, width: 6, height: PAGE_H, background: `linear-gradient(to right, rgba(${SHADE},0) 0%, rgba(${SHADE},0.30) 50%, rgba(${SHADE},0) 100%)` }} />
             <div ref={(el) => {

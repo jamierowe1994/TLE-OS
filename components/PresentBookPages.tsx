@@ -2,7 +2,7 @@
 
 import { INK, Line } from "@/components/present-kit";
 import { APPRAISAL_PROMISES, defaultBio, type PresentDeck as Deck } from "@/lib/present";
-import { AGENDA, APPROACH, MAX_PRICE, PORTALS_COPY, WHAT_WE_OFFER } from "@/lib/present-copy";
+import { AGENDA, APPROACH, COMPLIANCE, LEGAL_CAVEAT, LEGAL_ITEMS, MAX_PRICE, PORTALS_COPY, WHAT_WE_OFFER } from "@/lib/present-copy";
 import { DEMAND_STATS, PORTAL_STATS, statFooter } from "@/lib/present-stats";
 
 /**
@@ -831,7 +831,6 @@ export function BookMaxPrice() {
       </div>
       <div className="absolute bottom-[56px] right-[120px] text-right">
         <p className="text-[10.5px] uppercase tracking-[0.3em] text-black/60">The Letting Experts</p>
-        <p className="mt-2 text-[9.5px] uppercase tracking-[0.3em] text-black/45">People &middot; Properties &middot; Longer futures</p>
       </div>
     </div>
   );
@@ -854,11 +853,14 @@ function Swoosh({ side }: { side: "left" | "right" }) {
          at the right and running out under the picture. Right: in below
          the source line (about 610), looping under the figures, under the
          pink, up the gap left of the "20 days" column to the phone. */
-      ? "M1460 780 C 1300 740, 1250 860, 1120 830 C 1060 815, 1040 760, 1090 750 C 1140 740, 1130 820, 1080 810 C 980 790, 880 860, 760 850 C 660 840, 600 860, 520 860"
-      : "M-20 720 C 200 690, 380 800, 560 770 C 660 750, 700 690, 760 720 C 820 750, 740 830, 700 780 C 660 730, 800 680, 940 730 C 1080 790, 1150 870, 1250 840 C 1330 810, 1360 700, 1350 620 C 1340 560, 1360 500, 1380 470";
+      /* The two halves meet at the spine at the same height and the curve
+         runs straight through it: the left rises going left, so the right
+         falls going right. */
+      ? "M1440 780 C 1320 750, 1250 860, 1120 830 C 1060 815, 1040 760, 1090 750 C 1140 740, 1130 820, 1080 810 C 980 790, 880 860, 760 850 C 660 840, 600 860, 520 860"
+      : "M0 780 C 120 810, 380 830, 560 780 C 660 750, 700 690, 760 720 C 820 750, 740 830, 700 780 C 660 730, 800 680, 940 730 C 1080 790, 1150 870, 1250 840 C 1330 810, 1360 700, 1350 620 C 1340 560, 1360 500, 1380 470";
   return (
     <svg viewBox={`0 0 ${PAGE_W} ${PAGE_H}`} aria-hidden className="pointer-events-none absolute left-0 top-0 z-0" style={{ width: PAGE_W, height: PAGE_H }}>
-      <path d={d} fill="none" stroke={CLAY} strokeWidth="2" strokeLinecap="round" opacity="0.75" />
+      <path d={d} fill="none" stroke="var(--p-accent)" strokeWidth="2" strokeLinecap="round" opacity="0.8" />
     </svg>
   );
 }
@@ -998,6 +1000,81 @@ export function BookSocial() {
           ))}
         </div>
         <p className="mt-8 text-[11px] text-black/40">{statFooter(DEMAND_STATS)}</p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Page: COMPLIANCE AND GUIDANCE. James's mock-up, 13 Sep 2026: plain -
+ * the heading with "out" in the pink, then the four things in a 2x2 with
+ * a hairline over each, no numbers, no pictures, no shapes. The copy is
+ * the deck's.
+ */
+export function BookCompliance({ deck }: { deck: Deck }) {
+  return (
+    <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
+      <div className="absolute left-[96px] top-[150px] w-[1180px]">
+        <EyebrowRule>Compliance and guidance</EyebrowRule>
+        <h1 className="mt-6 text-[64px] leading-[1.1]" style={SERIF}>
+          The part that catches
+          <br />
+          landlords <Ital width={110}>out</Ital>
+        </h1>
+        <div className="mt-12 grid grid-cols-2 gap-x-14 gap-y-10" style={{ width: 1160 }}>
+          {COMPLIANCE.map((c) => (
+            <div key={c.title} className="border-t pt-6" style={{ borderColor: "rgba(0,0,0,0.1)" }}>
+              <p className="text-[19px] font-semibold leading-snug">{c.title}</p>
+              <p className="mt-3 max-w-[480px] text-[15px] leading-[1.6] text-black/60">{c.body}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      <FootLeft deck={deck} />
+    </div>
+  );
+}
+
+/**
+ * Page: WHAT THE LAW ASKS OF YOU. The mock-up's "Eight things, and who
+ * keeps track of each": the eight numbered in the pink discs, two columns
+ * with hairlines, and the closing line under a rule. The obligations are
+ * the deck's, each with our half attached; the caveat that half the book
+ * is under different law stays, small.
+ */
+export function BookLegal() {
+  const half = Math.ceil(LEGAL_ITEMS.length / 2);
+  const cols = [LEGAL_ITEMS.slice(0, half), LEGAL_ITEMS.slice(half)];
+  return (
+    <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
+      <div className="absolute left-[96px] top-[84px] w-[1250px]">
+        <EyebrowRule>What the law asks of you</EyebrowRule>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+          Eight things, and who
+          <br />
+          keeps <Ital width={150}>track</Ital> of each
+        </h1>
+        <div className="mt-8 grid grid-cols-2 gap-x-14" style={{ width: 1240 }}>
+          {cols.map((items, c) => (
+            <ol key={c}>
+              {items.map((it, i) => (
+                <li key={it.title} className={`flex items-start gap-4 py-[12px] ${i > 0 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+                  <span className="flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-full text-[12px] font-semibold" style={{ background: "var(--p-tint)", color: "var(--p-accent)" }}>0{c * half + i + 1}</span>
+                  <span className="min-w-0">
+                    <span className="block text-[15.5px] font-semibold leading-snug">{it.title}</span>
+                    <span className="mt-1 block text-[12.5px] leading-[1.55] text-black/55">{it.body}</span>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          ))}
+        </div>
+        <div className="mt-6 border-t pt-5" style={{ width: 1240, borderColor: "rgba(0,0,0,0.1)" }}>
+          <p className="max-w-[1000px] text-[14px] leading-[1.6] text-black/65">
+            We take care of the detail, so you can enjoy the rewards. From documentation to deadlines, we&rsquo;ll keep you compliant and give you peace of mind.
+          </p>
+          <p className="mt-3 max-w-[1000px] text-[10.5px] leading-[1.6] text-black/40">{LEGAL_CAVEAT}</p>
+        </div>
       </div>
     </div>
   );
