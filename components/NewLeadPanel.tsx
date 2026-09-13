@@ -146,6 +146,8 @@ export default function NewLeadPanel({
   const [emailPreview, setEmailPreview] = useState(false);
   /** REX's own id for the contact we just pushed, so "Open in REX" can go somewhere. */
   const [rexId, setRexId] = useState<string | null>(null);
+  /** Our own id for the row we just wrote, so the record can be opened. */
+  const [savedId, setSavedId] = useState<string | null>(null);
   // The fork: who is this lead? Everything downstream hangs off it.
   const [kind, setKind] = useState<null | "tenant" | "landlord">(null);
   const [dossier, setDossier] = useState<Dossier | null>(null);
@@ -182,6 +184,7 @@ export default function NewLeadPanel({
     setGeo(null);
     setSaved(false);
     setRexId(null);
+    setSavedId(null);
     setSaving(false);
     setSaveError(null);
     setRexNote(null);
@@ -331,6 +334,7 @@ export default function NewLeadPanel({
       }
       setRexNote(j.rex ? { ok: Boolean(j.rex.ok), detail: String(j.rex.detail ?? "") } : null);
       setRexId(j.contact?.rexId ? String(j.contact.rexId) : null);
+      setSavedId(j.contact?.id ? String(j.contact.id) : null);
       onCreated?.(d);
       setSaved(true);
     } catch {
@@ -532,6 +536,13 @@ export default function NewLeadPanel({
                   What next?
                 </p>
                 <div className="grid grid-cols-2 gap-2.5">
+                  <a
+                    href={`/leads?open=os-${savedId ?? ""}&side=${kind === "landlord" ? "landlord" : "tenant"}`}
+                    className="flex items-center gap-2.5 rounded-xl border border-line/80 px-3.5 py-3 text-left text-[12.5px] transition-colors hover:border-ink/40"
+                  >
+                    <DoodleIcon name="user" size={16} className="shrink-0 text-accent-dark" />
+                    Open the record
+                  </a>
                   {rexId ? (
                     <a
                       href={rexContactUrl(rexId)}
@@ -571,7 +582,7 @@ export default function NewLeadPanel({
                   <PressButton
                     onClick={() => {
                       setD({ ...EMPTY, ...(initial ?? {}) });
-                      setGeo(null); setSaved(false); setRexId(null);
+                      setGeo(null); setSaved(false); setRexId(null); setSavedId(null);
                       setSaveError(null); setRexNote(null);
                       setPicked([]); setPicking(false); setKind(initialKind ?? null);
                       setDossier(null); setBeds(0); setBaths(0);

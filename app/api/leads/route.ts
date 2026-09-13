@@ -6,6 +6,8 @@ import { hiddenLeadIds } from "@/lib/hidden-leads";
 import { ago } from "@/lib/rex-leads";
 import { hasDb, q } from "@/lib/db";
 import { rexConfigured } from "@/lib/rex";
+import { contactsAsLeads } from "@/lib/contact-leads";
+import { whoIs } from "@/lib/admin";
 
 /**
  * The lead book, cached.
@@ -129,7 +131,24 @@ export async function GET(req: NextRequest) {
   /* Leads removed from the OS by hand never leave the server, cached copy or
      not; the ids go with the answer so the page can hide its own records too. */
   const hidden = await hiddenLeadIds().catch(() => new Set<string>());
-  const out = <B extends { leads: { id: string }[] }>(b: B) => ({ ...b, leads: b.leads.filter((l) => !hidden.has(l.id)), hiddenIds: [...hidden] });
+
+  /* CONTACTS ADDED BY HAND. Merged here rather than inside the cache, so one
+     typed in ten seconds ago is on the board now instead of after the next
+     refresh - and so the REX book stays exactly what REX said. An owner sees
+     them all; anybody else sees the ones they typed. */
+  const { actor } = await whoIs(req).catch(() => ({ actor: null }));
+  const mine = await contactsAsLeads(scope.everything ? null : (actor?.email ?? null)).catch(() => []);
+  const out = <B extends { leads: { id: string }[] }>(b: B) => {
+    /* A contact pushed to REX can come back as a REX lead later. When it
+       does, REX's row is the one with the enquiry on it, so ours steps
+       aside rather than showing the same person twice. */
+    const rexContacts = new Set(
+      (b.leads as { contactId?: string }[]).map((l) => l.contactId).filter(Boolean) as string[]
+    );
+    const ours = mine.filter((l) => !l.contactId || !rexContacts.has(l.contactId));
+    const leads = [...ours, ...(b.leads as typeof ours)].filter((l) => !hidden.has(l.id));
+    return { ...b, leads, hiddenIds: [...hidden] };
+  };
 
   const held = memory.get(key) ?? (await readStored(key));
   const age = held ? Date.now() - held.at : Infinity;
