@@ -8,6 +8,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import type { ScoredMatch } from "@/lib/contact-match";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { LEAD_SOURCES } from "@/lib/leads-sample";
+import { rexContactUrl } from "@/lib/business/rex-links";
 import rexSample from "@/lib/rex-sample.json";
 
 /** They chose an existing REX record to carry on with, rather than a new one. */
@@ -92,13 +93,6 @@ function postcodeOf(address: string): string | null {
   return m ? m[1].toUpperCase() : null;
 }
 
-const NEXT_ACTIONS = [
-  { label: "Schedule a viewing", icon: "calendar" },
-  { label: "Send an email", icon: "mail" },
-  { label: "Set a follow-up", icon: "clock" },
-  { label: "Open the record", icon: "user" },
-];
-
 function Section({
   title,
   icon,
@@ -150,6 +144,8 @@ export default function NewLeadPanel({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [rexNote, setRexNote] = useState<{ ok: boolean; detail: string } | null>(null);
   const [emailPreview, setEmailPreview] = useState(false);
+  /** REX's own id for the contact we just pushed, so "Open in REX" can go somewhere. */
+  const [rexId, setRexId] = useState<string | null>(null);
   // The fork: who is this lead? Everything downstream hangs off it.
   const [kind, setKind] = useState<null | "tenant" | "landlord">(null);
   const [dossier, setDossier] = useState<Dossier | null>(null);
@@ -185,6 +181,7 @@ export default function NewLeadPanel({
     setD({ ...EMPTY, ...(initial ?? {}) });
     setGeo(null);
     setSaved(false);
+    setRexId(null);
     setSaving(false);
     setSaveError(null);
     setRexNote(null);
@@ -333,6 +330,7 @@ export default function NewLeadPanel({
         return;
       }
       setRexNote(j.rex ? { ok: Boolean(j.rex.ok), detail: String(j.rex.detail ?? "") } : null);
+      setRexId(j.contact?.rexId ? String(j.contact.rexId) : null);
       onCreated?.(d);
       setSaved(true);
     } catch {
@@ -488,14 +486,21 @@ export default function NewLeadPanel({
                   and the portal is the welcome — one envelope, two jobs. */}
               {kind === "tenant" && (
                 <div className="mt-5 w-full rounded-2xl border border-line/70 p-4 text-left">
+                  {/* It said "queued" and nothing was queued (James found it,
+                      13 Sep 2026): saving a contact writes to the OS and pushes
+                      to REX, and sends nothing at all. Until customer email is
+                      sending from the Letting Experts domain this says so, and
+                      the preview below is a draft rather than a receipt. */}
                   <p className="flex items-center gap-2 text-[12.5px] font-semibold">
                     <DoodleIcon name="mail" size={15} className="text-accent-dark" />
-                    Welcome email queued — GDPR notice with their portal invite inside
+                    The welcome email has NOT gone
                   </p>
                   <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
-                    {d.name.split(" ")[0] || "They"} gets one email: how we look after
-                    their details (the legal bit), and a button to set a password and
-                    open their own Letting Experts account.
+                    {d.name.split(" ")[0] || "They"} should get one email: how we look after
+                    their details (the legal bit), and a button to set a password and open
+                    their own Letting Experts account. It is written and not yet wired -
+                    customer email waits on the Letting Experts sending domain. Send it from
+                    Outlook for now.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
@@ -517,20 +522,65 @@ export default function NewLeadPanel({
                 </div>
               )}
 
+              {/* Four tiles used to sit here with no handler on any of them
+                  (James, 13 Sep 2026). These three do what they say, and there
+                  is no fourth because there is nowhere else honest to go: a
+                  contact saved here is not on the Leads board, which reads
+                  REX's own book. */}
               <div className="mt-8 w-full">
                 <p className="mb-3 text-left text-[10px] font-bold uppercase tracking-wider text-muted">
                   What next?
                 </p>
                 <div className="grid grid-cols-2 gap-2.5">
-                  {NEXT_ACTIONS.map((a) => (
-                    <PressButton
-                      key={a.label}
+                  {rexId ? (
+                    <a
+                      href={rexContactUrl(rexId)}
+                      target="_blank"
+                      rel="noreferrer"
                       className="flex items-center gap-2.5 rounded-xl border border-line/80 px-3.5 py-3 text-left text-[12.5px] transition-colors hover:border-ink/40"
                     >
-                      <DoodleIcon name={a.icon} size={16} className="shrink-0 text-accent-dark" />
-                      {a.label}
-                    </PressButton>
-                  ))}
+                      <DoodleIcon name="user" size={16} className="shrink-0 text-accent-dark" />
+                      Open in REX ↗
+                    </a>
+                  ) : (
+                    <span
+                      title="Not in REX yet, so there is no record to open."
+                      className="flex cursor-not-allowed items-center gap-2.5 rounded-xl border border-line/60 px-3.5 py-3 text-left text-[12.5px] text-muted opacity-60"
+                    >
+                      <DoodleIcon name="user" size={16} className="shrink-0" />
+                      Open in REX
+                    </span>
+                  )}
+                  {d.email ? (
+                    <a
+                      href={`mailto:${encodeURIComponent(d.email)}`}
+                      className="flex items-center gap-2.5 rounded-xl border border-line/80 px-3.5 py-3 text-left text-[12.5px] transition-colors hover:border-ink/40"
+                    >
+                      <DoodleIcon name="mail" size={16} className="shrink-0 text-accent-dark" />
+                      Email them
+                    </a>
+                  ) : (
+                    <span
+                      title="No email address on this contact."
+                      className="flex cursor-not-allowed items-center gap-2.5 rounded-xl border border-line/60 px-3.5 py-3 text-left text-[12.5px] text-muted opacity-60"
+                    >
+                      <DoodleIcon name="mail" size={16} className="shrink-0" />
+                      Email them
+                    </span>
+                  )}
+                  <PressButton
+                    onClick={() => {
+                      setD({ ...EMPTY, ...(initial ?? {}) });
+                      setGeo(null); setSaved(false); setRexId(null);
+                      setSaveError(null); setRexNote(null);
+                      setPicked([]); setPicking(false); setKind(initialKind ?? null);
+                      setDossier(null); setBeds(0); setBaths(0);
+                    }}
+                    className="col-span-2 flex items-center gap-2.5 rounded-xl border border-line/80 px-3.5 py-3 text-left text-[12.5px] transition-colors hover:border-ink/40"
+                  >
+                    <DoodleIcon name="target" size={16} className="shrink-0 text-accent-dark" />
+                    Add another lead
+                  </PressButton>
                 </div>
                 <button
                   type="button"

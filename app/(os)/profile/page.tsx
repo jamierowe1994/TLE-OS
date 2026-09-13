@@ -118,6 +118,60 @@ const DEFAULT_PROFILE: Profile = {
  * just now and got an answer - not that somebody once pressed a button
  * (James, 9 Sep 2026).
  */
+/**
+ * "Send yourself a test." The one thing that turns a connected mailbox into a
+ * mailbox somebody has watched work.
+ */
+function MailboxTest({ defaultTo }: { defaultTo: string }) {
+  const [to, setTo] = useState(defaultTo);
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function send() {
+    if (busy) return;
+    setBusy(true);
+    setSaid(null);
+    const j = await fetch("/api/mailbox/test", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ to }),
+    })
+      .then((r) => r.json())
+      .catch(() => null);
+    setBusy(false);
+    setSaid(j?.ok ? { ok: true, text: j.message } : { ok: false, text: j?.error ?? "That didn't send." });
+  }
+
+  return (
+    <div className="rounded-2xl border border-line/70 bg-card p-4">
+      <p className="text-[13px] font-semibold">Send yourself a test</p>
+      <p className="mt-1 text-[12px] leading-relaxed text-muted">
+        One message from your own mailbox, so you can see it arrive. Nobody else is copied.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <input
+          type="email"
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          placeholder="you@example.com"
+          className="min-w-[200px] flex-1 rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink"
+        />
+        <button
+          type="button"
+          onClick={send}
+          disabled={busy || !to.includes("@")}
+          className="rounded-full bg-[var(--brown)] px-5 py-2 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+        >
+          {busy ? "Sending…" : "Send it"}
+        </button>
+      </div>
+      {said && (
+        <p className={`mt-2.5 text-[12px] leading-relaxed ${said.ok ? "" : "text-accent-dark"}`}>{said.text}</p>
+      )}
+    </div>
+  );
+}
+
 function ConnectionTile({
   icon, name, what, live, pending, note, onConnect, onDisconnect,
 }: {
@@ -196,7 +250,7 @@ export default function ProfilePage() {
   }, []);
   /* Whether their mailbox and REX are actually connected, asked of the
      server rather than remembered in the page. */
-  const [setup, setSetup] = useState<{ emailConnected?: boolean; rexConnected?: boolean } | null>(null);
+  const [setup, setSetup] = useState<{ emailConnected?: boolean; rexConnected?: boolean; email?: string } | null>(null);
   const loadSetup = useCallback(() => {
     fetch("/api/setup", { cache: "no-store" })
       .then((r) => r.json())
@@ -642,6 +696,12 @@ export default function ProfilePage() {
                   loadSetup();
                 }}
               />
+
+              {/* Proving it, rather than assuming it (James, 13 Sep 2026).
+                  Connecting only proves Microsoft said yes; this proves a
+                  message actually leaves and arrives. One fixed message to an
+                  address they choose - usually their own. */}
+              {setup?.emailConnected === true && <MailboxTest defaultTo={setup?.email ?? ""} />}
 
               {/* REX signs in with their own credentials, so it brings its own
                   form. Same tile shape as the other two. */}
