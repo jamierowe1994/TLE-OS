@@ -176,6 +176,10 @@ export default function PreTenancyDashboard() {
       >
         <p className="flex items-center gap-2 text-[13.5px] text-ink"><DoodleIcon name="calendar" size={15} className="text-accent-dark" />{today}</p>
         <DesktopInstall shortcutHref="/api/pretenancy/feed/shortcut?to=dashboard" />
+        <Link href="/pre-tenancy/knowledge?guide=dashboard" className="flex items-center gap-2 rounded-full border border-line/80 bg-card px-3.5 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-ink/40">
+          <span className="text-accent-dark"><DoodleIcon name="note" size={14} /></span>
+          How this works
+        </Link>
         {error && <p className="w-full text-[12.5px] text-[#9d4340]">{error}</p>}
       </PreTenancyHero>
 

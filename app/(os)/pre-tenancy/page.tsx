@@ -605,6 +605,10 @@ function Board({ user }: { user: UserProfile }) {
           <span className="text-accent-dark"><DoodleIcon name="mail" size={14} /></span>
           Mailbox
         </button>
+        <Link href="/pre-tenancy/knowledge?guide=board" className="flex items-center gap-2 rounded-full border border-line/80 bg-card px-3.5 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-ink/40">
+          <span className="text-accent-dark"><DoodleIcon name="note" size={14} /></span>
+          How this works
+        </Link>
       </PreTenancyHero>
 
       {!configured ? (

@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import PreTenancyHero from "@/components/pretenancy/Hero";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
@@ -79,10 +80,17 @@ export default function PlcQueuePage() {
   /* The local preview with nothing in the queue: ?sample=1 draws invented
      packs so the page can be looked at. Never in production. */
   const [sample, setSample] = useState<{ cases: PlcCase[]; loaded: (c: PlcCase) => Loaded } | null>(null);
+  const sampleRef = useRef<{ cases: PlcCase[]; loaded: (c: PlcCase) => Loaded } | null>(null);
 
   const loadQueue = useCallback(async () => {
     try {
       if (process.env.NODE_ENV !== "production" && new URLSearchParams(window.location.search).get("sample") === "1") {
+        /* Built once: a decision in the sample changes the case in place,
+           and rebuilding on every reload would put it back. */
+        if (sampleRef.current) {
+          setQueue([...sampleRef.current.cases]);
+          return;
+        }
         const { demoCase, DEMO_SCANNED, DEMO_SUMMARY } = await import("@/lib/plc-demo");
         const { missingDocuments, PLC_CHECKS } = await import("@/lib/plc");
         const h = (n: number) => new Date(Date.now() - n * 3_600_000).toISOString();
@@ -91,11 +99,13 @@ export default function PlcQueuePage() {
           { ...DEMO_SCANNED, id: "s2", address: "Flat 3, 61 Musters Road, West Bridgford", agentName: "Emily Watson", submittedAt: h(31), moveInDate: "2026-09-25" },
           demoCase({ id: "s3", state: "submitted", address: "27 Lady Bay Road, Lady Bay NG2", agentName: "Sam Whitaker", submittedAt: h(6), moveInDate: "2026-10-02" }),
         ];
-        setSample({
+        const built = {
           cases,
-          loaded: (c) => ({ case: c, checks: PLC_CHECKS, missing: missingDocuments(c).map((x) => x.id), summary: c.scannedAt ? DEMO_SUMMARY : null, scanConfigured: true }),
-        });
-        setQueue(cases);
+          loaded: (c: PlcCase): Loaded => ({ case: c, checks: PLC_CHECKS, missing: missingDocuments(c).map((x) => x.id), summary: c.scannedAt ? DEMO_SUMMARY : null, scanConfigured: true }),
+        };
+        sampleRef.current = built;
+        setSample(built);
+        setQueue([...cases]);
         return;
       }
       const res = await api<{ cases: PlcCase[] }>("/api/plc?queue=1");
@@ -164,7 +174,12 @@ export default function PlcQueuePage() {
         photo="/brand/photo/close-door.webp"
         photoPosition="50% 40%"
         line="Compliant homes, confident move-ins"
-      />
+      >
+        <Link href="/pre-tenancy/knowledge?guide=plc" className="flex items-center gap-2 rounded-full border border-line/80 bg-card px-3.5 py-1.5 text-[12.5px] font-semibold text-ink transition hover:border-ink/40">
+          <span className="text-accent-dark"><DoodleIcon name="note" size={14} /></span>
+          How this works
+        </Link>
+      </PreTenancyHero>
 
       {error && <Note>{error}</Note>}
 

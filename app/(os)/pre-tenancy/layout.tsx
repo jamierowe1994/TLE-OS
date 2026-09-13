@@ -12,7 +12,9 @@ import type { RailGroup } from "@/components/WorkspaceRail";
  * owner's admin rail, and it stays put while the pages beside it change.
  * Dashboard first (James, 5 Sep): the board is where a deal is worked, the
  * dashboard is where she sees what needs working. What moved is the feed
- * the dashboard opens; it is under the rail but not on it.
+ * the dashboard opens; it is under the rail but not on it. Knowledge is the
+ * guides to these screens (James, 13 Sep 2026), not the shared hub that
+ * feeds Steve - that stays at /knowledge on her main sidebar.
  */
 const RAIL: RailGroup[] = [
   {
@@ -26,7 +28,7 @@ const RAIL: RailGroup[] = [
   {
     title: null,
     rule: true,
-    items: [{ href: "/knowledge", label: "Knowledge", icon: "note" }],
+    items: [{ href: "/pre-tenancy/knowledge", label: "Knowledge", icon: "note" }],
   },
 ];
 
