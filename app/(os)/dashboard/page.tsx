@@ -60,27 +60,31 @@ export default function Dashboard() {
       <PageHeader
         title={greeting(name)}
         blurb="Here's what's happening with your lettings business today."
-        /* Its bottom edge is the rug, so the rug IS the rule and nothing
-           sits below the line - which is what the fall needs. Anything under
-           the rule is hidden the moment the masthead starts to drop, so a
+        /* Nothing sits below the line - which is what the fall needs. Anything
+           under the rule is hidden the moment the masthead starts to drop, so a
            figure that hangs below it loses its legs the instant you navigate.
            Every illustration in the OS now stops at the line for that reason.
 
            Bigger than the shared 250 because it is the home screen and the
-           scene is wide rather than tall - 330 gives it about 458 across,
+           scene is wide rather than tall - 330 gives it about 400 across,
            which still leaves the greeting its one line. */
         illustration="/illustrations/home/armchair.webp"
         illustrationHeight={330}
-        illustrationAspect={1.3879}
-        /* Pushed down so the rug runs INTO the line rather than stopping
-           politely above it - the bottom 6% goes under and is erased, which
-           takes the front of the rug and a little of his shoe. That is what
-           makes it sit in the page rather than on it. */
-        /* Down again on 10 Sep: 6% under the line was the rug's front edge,
-           and James wanted more of it in the page. 12% takes the rug and the
-           foot of the chair, which is what sits him in the room rather than
-           on the rule. */
-        seat={0.88}
+        /* 13 Sep: James swapped in the stripped-down version of the same scene
+           - the dog, the books, the framed print, the magazines and the rug are
+           all gone, and it comes on a transparent ground instead of white. The
+           file is trimmed to its content, so the aspect moved 1.3879 -> 1.2113
+           and the seat had to move with it: the rug used to be the bottom edge,
+           and now the lowest thing in the drawing is the front shoe on its own.
+           0.88 would have taken the whole foot. */
+        illustrationAspect={1.2113}
+        /* The rug was what tied the furniture to the ground, and it has gone
+           with it, so the line has to do that job instead: at 0.92 the side
+           table's ring base lands ON the rule, the chair legs come down to it
+           and the front shoe runs INTO it. Tried 0.97 first - everything
+           hovered 30px above the line with nothing under it - and 0.895, which
+           chopped the front leg of the chair. */
+        seat={0.92}
         illustrationCrop
         lineBreak="none"
         /* Off the right edge, and back from it.
