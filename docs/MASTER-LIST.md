@@ -203,7 +203,7 @@ still A1 (agent accounts), the palette (now received) and J15 (the full run).
 | B3 | **Turn the REX automations off on launch day.** Work from the audit on /emails. Howard holds the Zapier webhook. Running both is how a landlord gets two emails. | James + Howard | Launch day |
 | B4 | **Run the REX PM certificate pull again** a day or two before launch. Steps in the memory note `tle-os-rex-pm-pull`. | James signs in, Claude runs it | ~12 Oct |
 | B5 | **Invoice settings are blank on production** - address, VAT and company numbers, bank details, terms. They are frozen onto each invoice. 0 rows. | James | 0 rows |
-| B6 | **Whether the OS gets its own database before launch.** It shares the portal's production database today. | James | Decision |
+| B6 | ~~Whether the OS gets its own database before launch~~ **DECIDED 13 Sep: yes.** The OS becomes the system of record and REX the mirror - every write pushes to REX apart from what REX cannot take, anything a search pulls is saved on the way past (never a bulk copy), and the far end is being able to drop REX. Speed is the reason. The work is tracked under "Data & architecture" in the pilot tracker: its own Postgres, read-through saving, a staleness rule per record type, the mirror-to-REX list, and a restore that has actually been run. | James, then Claude | Decided |
 | B7 | **The pre-launch plan** (= J20): the list, the send date, what testers do, the session | James | Not written |
 
 ## C. Waiting on somebody else
@@ -240,7 +240,7 @@ still A1 (agent accounts), the palette (now received) and J15 (the full run).
 | D5 | **The 161 unpublished drafts** out of 268 current rentals | Any bulk publish |
 | D6 | **Where a compliance blocker bites** - offer accepted or move-in, and whether a manager can override | Idea H4 |
 | D7 | **Input on the pre-presentation and the PLC check designs** (= J3) - flagged in `CLAUDE.md` | Board items 2 and 4 |
-| D8 | **Stannp is out of test mode.** `STANNP_TEST_MODE=false`, so a postcard sent with `live: true` is really printed and posted. That flag is the only lock left. Confirm it is intended. | Money leaves on a click |
+| D8 | ~~Stannp is out of test mode~~ **CONFIRMED 13 Sep: intended.** James had the test postcard and it arrived. Was: **Stannp is out of test mode.** `STANNP_TEST_MODE=false`, so a postcard sent with `live: true` is really printed and posted. That flag is the only lock left. Confirm it is intended. | Money leaves on a click |
 | D9 | **Whose fee is whose** (= J7). PayProp knows the fee, not the agent. | Agent Finances |
 | D10 | **"The Lettings Experts" vs "The Letting Experts"** - the email footer disagrees with the logo, domain and prose | Fix everywhere once decided |
 | D11 | **Should a landlord's invoice follow the agent's accent?** Today it is fixed to the brand, deliberately. | Minor - may fold into J4 |
