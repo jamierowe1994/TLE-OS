@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AGENT_CHIPS,
+  APPRAISAL_PROMISES,
   BANNER,
   BRING_ALONG,
   asStyle,
@@ -17,6 +18,7 @@ import {
   type SlideId,
 } from "@/lib/present";
 import { NEXT_STEPS } from "@/lib/present-copy";
+import PresentEntrance, { ENTRANCE_FLY_MS } from "@/components/PresentEntrance";
 import { icsFor } from "@/lib/appraisal-email";
 
 /**
@@ -60,6 +62,8 @@ import {
   RED,
   Rise,
   HAND,
+  Stage,
+  useStage,
   STEP_ICONS,
   CreamSlide,
   HandHead,
@@ -105,7 +109,14 @@ import * as S from "@/components/PresentSlides";
  *    cannot hold both columns. A phone gets the argument, not the artwork.
  */
 function Welcome({ deck, show }: { deck: Deck; show: boolean }) {
-  return <WelcomeHouse deck={deck} show={show} />;
+  /* Two welcomes. The pre-appraisal keeps WelcomeHouse exactly as James
+     signed it off on 12 Sep 2026 - it is out for review and not to be
+     touched. The two long decks open on WelcomeAppraisal instead, so a
+     landlord who saw the sneak peek yesterday is not shown the same
+     screen again today. */
+  return deckKind(deck) === "pre-appraisal"
+    ? <WelcomeHouse deck={deck} show={show} />
+    : <WelcomeAppraisal deck={deck} show={show} />;
 }
 
 /**
@@ -208,6 +219,154 @@ function WelcomeHouse({ deck, show }: { deck: Deck; show: boolean }) {
           </Rise>
         </>
       )}
+    </>
+  );
+  return (
+    <section
+      ref={host}
+      data-slide="welcome"
+      className="relative flex min-h-full w-full shrink-0 items-center justify-center overflow-hidden"
+      style={{ background: CREAM, color: INK }}
+    >
+      <Stage fit={fit}>{body}</Stage>
+    </section>
+  );
+}
+
+
+/**
+ * The welcome for the APPRAISAL and POST-APPRAISAL decks. James, 13 Sep
+ * 2026, from his second reference of the day (the first, a landscape
+ * hallway on a sage shape bottom-right, was built and then superseded the
+ * same morning): the hallway photograph TALL on the left in a rounded
+ * frame, standing on a pink shape that runs off the bottom-left corner
+ * with the handwritten line on it; on the right a sage panel the words sit
+ * on - three-line heading with the last line in the accent and a sage
+ * stroke under it, the intro, the "prepared for" line, and three WHITE
+ * CARDS along the foot, each with an icon disc, a title and a line; a
+ * second handwritten line on the panel. "I quite like how the pink wraps around the edge underneath the
+ * image and then comes over the top, and I like the green." The brand line
+ * top-right by a short rule ("People. Property. A brighter tomorrow.") was
+ * built from the reference and James took it out the same afternoon; the
+ * chapter rail has that corner to itself.
+ *
+ * The words are all new on purpose - see APPRAISAL_PROMISES. The sneak
+ * peek's welcome said "get you more"; a deck opening on the same sentence
+ * a day later reads as the same deck.
+ *
+ * The olive branch in the reference's top-right corner is not here: there
+ * is no asset for it yet. A pink shape held that corner for an hour and
+ * James took it out - the panel's corner is plain until the branch exists.
+ */
+function WelcomeAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
+  const { property, recipientName } = deck;
+  const { host, fit } = useStage();
+  const fx = fit.staged;
+  const SAGE = "#b3bea5", SAGE_WASH = "#f1f4ec", SAGE_INK = "#56634a";
+  const HEAD = { fontFamily: HAND, fontWeight: 800, letterSpacing: "-0.02em" } as const;
+  const HANDWRITING = { fontFamily: "var(--font-shantell), cursive" } as const;
+  const body = (
+    <>
+      <header className="h-[60px]" />
+      {fx && (
+        <>
+          {/* THE PINK, under the photograph and out past the bottom-left corner. */}
+          <div className="pointer-events-none absolute -bottom-[150px] -left-[130px] z-[1] h-[660px] w-[720px]">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden className="absolute inset-0 h-full w-full">
+              <path d="M0 28C8 12 28 4 50 8C74 12 94 30 97 54C100 76 90 96 66 100L0 100Z" fill="var(--p-tint)" />
+            </svg>
+          </div>
+          {/* THE SAGE PANEL the words sit on, from just past the photograph's
+              edge off the right and bottom of the stage, so its corner never
+              shows on the right. */}
+          <div className="pointer-events-none absolute z-[1] rounded-[72px]" style={{ left: 660, top: 88, right: -90, bottom: -70, background: SAGE_WASH }} />
+          {/* THE HALLWAY, tall, in the rounded frame. */}
+          <Rise show={show} i={1} className="absolute left-[44px] top-[88px] z-[2] w-[580px]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/photo/appraisal-hall-tall.webp" alt="" aria-hidden className="w-full rounded-[44px] object-cover shadow-[0_30px_60px_-30px_rgba(0,0,0,0.35)]" style={{ aspectRatio: "6 / 7" }} />
+          </Rise>
+          {/* THE HANDWRITTEN LINE on the pink, bottom-left. */}
+          <Rise show={show} i={6} className="absolute left-[78px] top-[792px] z-[3] w-[320px]">
+            <p className="text-[27px] leading-[1.1] text-black/70" style={{ ...HANDWRITING, transform: "rotate(-6deg)" }}>
+              A smarter
+              <br />
+              <span className="ml-10">letting experience</span>
+            </p>
+            <svg viewBox="0 0 200 12" aria-hidden className="ml-12 mt-1 h-[12px] w-[200px]" style={{ transform: "rotate(-6deg)" }}>
+              <path d="M2 8C50 2 120 2 198 6" fill="none" stroke="var(--p-accent)" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+            </svg>
+          </Rise>
+          {/* THE SECOND HANDWRITTEN LINE, on the panel. */}
+          <Rise show={show} i={5} className="absolute right-[60px] top-[440px] z-[3] w-[200px] text-right">
+            <p className="text-[24px] leading-[1.1] text-black/70" style={{ ...HANDWRITING, transform: "rotate(-8deg)" }}>
+              More
+              <br />
+              from your
+              <br />
+              property
+            </p>
+            <svg viewBox="0 0 200 12" aria-hidden className="ml-auto mt-1 h-[12px] w-[130px]" style={{ transform: "rotate(-8deg)" }}>
+              <path d="M2 8C50 2 120 2 198 6" fill="none" stroke="var(--p-accent)" strokeWidth="2" strokeLinecap="round" opacity="0.7" />
+            </svg>
+          </Rise>
+        </>
+      )}
+      <div className={`relative z-[2] flex flex-1 flex-col justify-center ${fx ? "pb-10 pl-[712px] pr-[44px]" : "px-6 pb-10 pt-4 sm:px-12"}`}>
+        <div className={`relative ${fx ? "pr-[210px]" : ""}`}>
+          <Rise show={show} i={1}>
+            <h1 className={`leading-[1.04] ${fx ? "text-[64px]" : "text-[40px] sm:text-[56px]"}`} style={HEAD}>
+              Let&rsquo;s make
+              <br />
+              a plan for
+              <br />
+              <span className="whitespace-nowrap" style={{ color: CORAL }}>your property.</span>
+            </h1>
+            {/* The sage stroke under the last line. */}
+            <svg viewBox="0 0 420 14" aria-hidden className={`mt-1 h-[14px] ${fx ? "w-[400px]" : "w-[80%]"}`}>
+              <path d="M4 10C90 3 200 2 300 5C350 6 390 7 416 9" fill="none" stroke={SAGE} strokeWidth="3.5" strokeLinecap="round" opacity="0.9" />
+            </svg>
+          </Rise>
+          <Rise show={show} i={2}>
+            <p className="mt-6 max-w-[560px] text-[17px] leading-[1.6] text-black/60">
+              We&rsquo;ll walk through the market, what your property could achieve and the clearest
+              route to getting it let.
+            </p>
+          </Rise>
+          {(property.address || recipientName) && (
+            <Rise show={show} i={3}>
+              <p className="mt-4 text-[13px] text-black/45">
+                Prepared for{recipientName ? ` ${recipientName}` : " you"}
+                {property.address && (
+                  <>
+                    {" · "}
+                    <span className="text-black/70">{property.address}</span>
+                  </>
+                )}
+              </p>
+            </Rise>
+          )}
+        </div>
+        <Rise show={show} i={4}>
+          {/* Three white cards. Three across on the stage; one under another
+              on a phone, where three columns of 100px turned every promise
+              into a ladder of single words. */}
+          <ul className={`mt-9 grid gap-[14px] ${fx ? "grid-cols-3" : "grid-cols-1 sm:grid-cols-3"}`}>
+            {APPRAISAL_PROMISES.map((b, n) => (
+              <li key={b.title} className="rounded-[22px] bg-white p-[22px] shadow-[0_10px_30px_-18px_rgba(0,0,0,0.25)]">
+                {/* Sage, pink, sage: the pink sits in the middle of the row. */}
+                <span
+                  className="flex h-[76px] w-[76px] items-center justify-center rounded-full"
+                  style={n === 1 ? { background: TINTS[0], color: INK } : { background: SAGE_WASH, color: SAGE_INK }}
+                >
+                  <Line name={b.icon} size={26} />
+                </span>
+                <span className="mt-5 block text-[18px] font-semibold leading-snug">{b.title}</span>
+                <span className="mt-1.5 block text-[13.5px] leading-[1.5] text-black/55">{b.body}</span>
+              </li>
+            ))}
+          </ul>
+        </Rise>
+      </div>
     </>
   );
   return (
@@ -432,51 +591,6 @@ function appointmentFacts(deck: Deck) {
   return { ics, facts };
 }
 
-/**
- * A STAGE, NOT A FLUID PAGE. James, 12 Sep 2026: "make sure this doesn't
- * move too much when we scale the page... keep everything in the same
- * place and give sidebars, otherwise we lose the framing." From tablet
- * width up a house-look slide is laid out once, at 1440 x 900, and scaled
- * as one piece to fit the window - the ground fills the sides. Below that
- * width it stacks, because a phone cannot frame anything.
- */
-function useStage() {
-  const host = useRef<HTMLElement>(null);
-  const [fit, setFit] = useState<{ staged: boolean; scale: number }>({ staged: false, scale: 1 });
-  useEffect(() => {
-    const el = host.current;
-    if (!el) return;
-    const measure = () => {
-      const w = el.clientWidth, h = el.clientHeight;
-      const staged = w >= 1024;
-      setFit({ staged, scale: staged ? Math.min(w / 1440, h / 900) : 1 });
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-  return { host, fit };
-}
-
-/** The stage wrapper: absolute, so its 900px never sets the slide's height. */
-function Stage({ fit, children }: { fit: { staged: boolean; scale: number }; children: React.ReactNode }) {
-  return fit.staged ? (
-    /* `zoom`, not a transform. A transform scales a rasterised layer, and
-       the Rise wrappers are composited layers, so at any scale but 1 every
-       word went soft - James, 12 Sep 2026: "the whole deck seems a bit
-       blurry". Zoom lays the stage out again at the new size, so text and
-       edges are drawn crisp; the centring translate is unaffected. */
-    <div
-      className="absolute left-1/2 top-1/2 flex h-[900px] w-[1440px] -translate-x-1/2 -translate-y-1/2 flex-col"
-      style={{ zoom: fit.scale }}
-    >
-      {children}
-    </div>
-  ) : (
-    <div className="relative flex min-h-full w-full flex-col">{children}</div>
-  );
-}
 
 function AppointmentHouse({ deck, show }: { deck: Deck; show: boolean }) {
   const { minutes } = deck;
@@ -657,7 +771,215 @@ function AppointmentHouse({ deck, show }: { deck: Deck; show: boolean }) {
 }
 
 function Agent({ deck, show }: { deck: Deck; show: boolean }) {
-  return <AgentHouse deck={deck} show={show} />;
+  /* Two agent slides. The pre-appraisal keeps AgentHouse as James signed it
+     off - it goes out by email, so it needs the call and email buttons. The
+     long decks are presented in the room, by the person on the slide, so
+     they get AgentAppraisal: no buttons, no chips, the reviews instead. */
+  return deckKind(deck) === "pre-appraisal"
+    ? <AgentHouse deck={deck} show={show} />
+    : <AgentAppraisal deck={deck} show={show} />;
+}
+
+/**
+ * Meet the agent, for the APPRAISAL and POST-APPRAISAL decks. James, 13 Sep
+ * 2026, from his reference: "this is going to be presented in person, so
+ * sat with the landlord. We can remove all of the email, call Sam, email
+ * Sam and WhatsApp ... it should feel really, really personal." And the
+ * three chips - local expert, straight advice, here to help - go too:
+ * "that just gets repeated throughout."
+ *
+ * What is left is the person: the heading with their first name, what they
+ * do and where, their own words about themselves, and what landlords have
+ * said about them. The portrait is a tilted print on a sage shape with a
+ * sticky note on its corner and a handwritten line pointing at it. The
+ * reviews sit in a pink card on the right; with more than one the card
+ * slides through them on its own (see Reviews), and with one it just sits.
+ * A handwritten "Let's make a plan" with an arrow up to the print was in
+ * the reference and built; James took it out the same afternoon.
+ *
+ * The photograph and the bio come from the agent's record - REX profile
+ * photo, bio written in the OS - so every agent's slide is theirs.
+ */
+function AgentAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
+  const a = deck.agent;
+  const { host, fit } = useStage();
+  const fx = fit.staged;
+  const HEAD = { fontFamily: HAND, fontWeight: 800, letterSpacing: "-0.02em" } as const;
+  const SCRIPT = { fontFamily: "var(--font-shantell), cursive" } as const;
+  const CLAY = "#cfa096", SAGE_WASH = "#f1f4ec";
+  const first = a.firstName || "";
+  const paragraphs = (a.bio.trim() || defaultBio(first)).split(/\n{2,}/);
+  const reviews = (deck.testimonials?.length ? deck.testimonials : deck.testimonial?.quote ? [deck.testimonial] : []).filter((r) => r.quote);
+  const district = deck.property.postcode?.split(" ")[0];
+  const body = (
+    <>
+      <header className={fx ? "h-[124px]" : "h-[60px]"} />
+      <div className={`relative z-[2] flex flex-1 flex-col ${fx ? "justify-start px-[100px] pb-10 pr-[900px]" : "justify-center px-6 pb-10 pt-4 sm:px-12"}`}>
+        <Rise show={show} i={0}>
+          <Eyebrow>Who you&rsquo;ll be meeting</Eyebrow>
+          <span aria-hidden className="mt-4 block h-[3px] w-[120px] rounded-full" style={{ background: TINTS[0] }} />
+        </Rise>
+        <Rise show={show} i={1}>
+          <h2 className={`mt-9 leading-[1.02] ${fx ? "text-[68px]" : "text-[36px] sm:text-[50px]"}`} style={HEAD}>
+            You&rsquo;ll be
+            <br />
+            dealing with
+            <br />
+            <span style={{ color: CLAY }}>{first || "us"}.</span>
+          </h2>
+          <svg viewBox="0 0 200 12" aria-hidden className="mt-1 h-[12px] w-[180px]">
+            <path d="M2 8C50 2 120 2 198 6" fill="none" stroke={CLAY} strokeWidth="3" strokeLinecap="round" opacity="0.9" />
+          </svg>
+          {(a.title || district) && (
+            <p className="mt-5 text-[15px] text-black/45">
+              {a.title || "Lettings Expert"}
+              {district && (
+                <>
+                  {" · "}
+                  covers <span style={{ color: CLAY }}>{district}</span> and around
+                </>
+              )}
+            </p>
+          )}
+        </Rise>
+        <Rise show={show} i={2}>
+          <div className="mt-6 max-w-[500px] space-y-4">
+            {paragraphs.map((para, i) => (
+              <p key={i} className="text-[15.5px] leading-[1.65] text-black/65">{para}</p>
+            ))}
+          </div>
+        </Rise>
+        <Rise show={show} i={3}>
+          <p className="mt-8 text-[11px] uppercase tracking-[0.3em] text-black/50">Same person. Every step of the way.</p>
+          <span aria-hidden className="mt-4 block h-[3px] w-[120px] rounded-full" style={{ background: TINTS[0] }} />
+        </Rise>
+        {!fx && reviews.length > 0 && (
+          <Rise show={show} i={4}>
+            <div className="mt-8">
+              <Reviews reviews={reviews} />
+            </div>
+          </Rise>
+        )}
+      </div>
+
+      {fx && (
+        <>
+          {/* THE SAGE behind the print. */}
+          <div className="pointer-events-none absolute left-[570px] top-[70px] z-[1] h-[740px] w-[560px]">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden className="absolute inset-0 h-full w-full">
+              <path d="M40 4C62 -4 88 8 96 30C104 54 92 80 70 92C48 104 18 96 8 74C-4 50 12 14 40 4Z" fill={SAGE_WASH} />
+            </svg>
+          </div>
+          {/* THE PRINT: a white-bordered photograph, set a few degrees off
+              square. Initials on sage when REX has no photograph. */}
+          <Rise show={show} i={2} className="absolute left-[600px] top-[140px] z-[2] w-[430px]">
+            <div className="rounded-[10px] bg-white p-[14px] pb-[16px] shadow-[0_30px_60px_-30px_rgba(0,0,0,0.4)]" style={{ transform: "rotate(-3deg)" }}>
+              {a.photo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={a.photo} alt={a.name} className="w-full rounded-[6px] object-cover object-[center_15%]" style={{ aspectRatio: "440 / 560" }} />
+              ) : (
+                <div className="flex w-full items-center justify-center rounded-[6px]" style={{ aspectRatio: "440 / 560", background: SAGE_WASH }}>
+                  <span className="text-[120px] leading-none" style={{ fontFamily: HAND, fontWeight: 800, color: "#56634a" }}>{initialsOf(a.name)}</span>
+                </div>
+              )}
+            </div>
+          </Rise>
+          {/* THE STICKY NOTE on the print's top-right corner. */}
+          <Rise show={show} i={4} className="absolute left-[905px] top-[92px] z-[3] w-[200px]">
+            <div className="rounded-[4px] px-5 py-4 shadow-[0_18px_40px_-22px_rgba(0,0,0,0.45)]" style={{ background: "#fbf6ec", transform: "rotate(4deg)" }}>
+              <p className="text-[21px] leading-[1.15] text-black/75" style={SCRIPT}>
+                Here to help you get the most from your property.
+              </p>
+              <svg viewBox="0 0 160 10" aria-hidden className="mt-1 h-[10px] w-[150px]">
+                <path d="M2 7C40 2 100 2 158 5" fill="none" stroke={INK} strokeWidth="1.6" strokeLinecap="round" opacity="0.7" />
+              </svg>
+            </div>
+          </Rise>
+          {/* THE REVIEWS, on the right, centred on the print. 330 wide from
+              48 in: at 380 from 64 the card ran into the print's edge. */}
+          {reviews.length > 0 && (
+            <Rise show={show} i={3} className="absolute right-[48px] top-[300px] z-[2] w-[330px]">
+              <Reviews reviews={reviews} />
+            </Rise>
+          )}
+        </>
+      )}
+    </>
+  );
+  return (
+    <section
+      ref={host}
+      data-slide="agent"
+      className="relative flex min-h-full w-full shrink-0 items-center justify-center overflow-hidden"
+      style={{ background: CREAM, color: INK }}
+    >
+      <Stage fit={fit}>{body}</Stage>
+    </section>
+  );
+}
+
+/**
+ * What landlords have said, in a pink card. One review sits still. More
+ * than one slides through on its own, six seconds apiece, with a dot per
+ * review that can be pressed to jump; it pauses while the pointer is over
+ * it, and under prefers-reduced-motion it does not move at all - the dots
+ * are the only way through. The cards are stacked in one grid cell, so the
+ * tallest sets the height and nothing below it jumps as they change.
+ */
+function Reviews({ reviews }: { reviews: { quote: string; author: string; rating: number | null }[] }) {
+  const [at, setAt] = useState(0);
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    if (reviews.length < 2 || held) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const id = window.setInterval(() => setAt((n) => (n + 1) % reviews.length), 6000);
+    return () => window.clearInterval(id);
+  }, [reviews.length, held]);
+  return (
+    <div onPointerEnter={() => setHeld(true)} onPointerLeave={() => setHeld(false)}>
+      <div className="rounded-[22px] px-7 pb-7 pt-6" style={{ background: TINTS[0] }}>
+        <div className="grid">
+          {reviews.map((r, i) => (
+            <div
+              key={i}
+              aria-hidden={i !== at}
+              className="col-start-1 row-start-1 transition-opacity duration-700"
+              style={{ opacity: i === at ? 1 : 0, pointerEvents: i === at ? "auto" : "none" }}
+            >
+              <div className="flex items-start justify-between">
+                {/* The mark on its own, big - James, 13 Sep 2026: "get rid of
+                    the circle ... and make the quotation much bigger". Its
+                    line-height is pulled in so it sits as a mark, not a line
+                    of text. */}
+                <span aria-hidden className="-mb-3 block h-[44px] text-[84px] leading-[0.6]" style={{ color: "var(--p-accent)", fontFamily: HAND, fontWeight: 800 }}>&ldquo;</span>
+                {r.rating != null && (
+                  <span className="mt-1 text-[15px] tracking-[0.15em]" style={{ color: "var(--p-accent)" }} aria-label={`${r.rating} out of 5`}>
+                    {"★".repeat(Math.max(0, Math.min(5, Math.round(r.rating))))}
+                  </span>
+                )}
+              </div>
+              <p className="mt-4 text-[15px] leading-[1.6] text-black/75">&ldquo;{r.quote}&rdquo;</p>
+              <p className="mt-4 text-[12.5px] text-black/45">{r.author}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+      {reviews.length > 1 && (
+        <div className="mt-4 flex items-center justify-center gap-2">
+          {reviews.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              aria-label={`Review ${i + 1} of ${reviews.length}`}
+              onClick={() => setAt(i)}
+              className="h-2 rounded-full transition-[width,background-color] duration-300"
+              style={{ width: i === at ? 22 : 8, background: i === at ? "var(--p-accent)" : "rgba(0,0,0,0.18)" }}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function Comparables({ deck, show }: { deck: Deck; show: boolean }) {
@@ -1418,7 +1740,11 @@ function WhyHouse({ deck, show }: { deck: Deck; show: boolean }) {
         </div>
       </div>
 
-      {/* THE FOOT: one white band across the stage, under the photograph. */}
+      {/* THE FOOT: one white band across the stage, under the photograph.
+          NOT on the appraisal deck - James, 13 Sep 2026: "they can't sign at
+          this stage because we haven't generated the full deck". The
+          pre-appraisal and the post-appraisal keep it. */}
+      {deckKind(deck) !== "appraisal" && (
       <Rise show={show} i={5} className={fx ? "absolute inset-x-16 bottom-8 z-[3]" : "px-6 pb-10 sm:px-12"}>
         <div className="flex flex-col gap-5 rounded-[20px] border bg-white px-7 py-4 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.25)] sm:flex-row sm:items-center" style={{ borderColor: "rgba(59,59,60,0.1)" }}>
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full" style={{ background: TINTS[0], color: "var(--p-accent)" }}>
@@ -1440,6 +1766,7 @@ function WhyHouse({ deck, show }: { deck: Deck; show: boolean }) {
           </span>
         </div>
       </Rise>
+      )}
 
       {fx && (
         /* THE PHOTOGRAPH, cut into a large rounded shape off the right of
@@ -1561,6 +1888,11 @@ function QuestionsHouse({ deck, show }: { deck: Deck; show: boolean }) {
           </Rise>
         )}
         <Rise show={show} i={4}>
+          {/* NOT on the appraisal deck: the agent is in the room - James,
+              13 Sep 2026: "they're going to be there, so you don't need to
+              do that". The pre-appraisal and the post-appraisal go out by
+              link, and keep them. */}
+          {kind !== "appraisal" && (
           <div className={`${signUrl ? "mt-5" : "mt-8"} flex flex-wrap items-center gap-3`}>
             {/* Two ways in, side by side (James: "WhatsApp or email"), and
                 the phone as a quiet third. */}
@@ -1582,6 +1914,7 @@ function QuestionsHouse({ deck, show }: { deck: Deck; show: boolean }) {
               </a>
             )}
           </div>
+          )}
         </Rise>
         <Rise show={show} i={5}>
           <div className="mt-10 flex max-w-[540px] items-center gap-4 border-t pt-5" style={{ borderColor: "rgba(59,59,60,0.14)" }}>
@@ -1688,12 +2021,31 @@ export default function PresentDeck({
   const [seen, setSeen] = useState<number[]>([]);
   const show = (i: number) => seen.includes(i);
 
+  /**
+   * THE ENTRANCE, on the two long decks. The pre-appraisal opens straight
+   * on its welcome (it is a six-slide note, not a presentation), and the
+   * builder's preview box skips it too - nobody proofing slide nine wants
+   * to press Enter first.
+   *
+   * `entered` is the gate: the chrome and the first slide's rise both wait
+   * on it. `landed` is the deck's own half of the fly-in - see the scroller.
+   */
+  const gated = !embedded && deckKind(deck) !== "pre-appraisal";
+  const [entered, setEntered] = useState(!gated);
+  const [landed, setLanded] = useState(!gated);
+  const still = useRef(false);
+  useEffect(() => {
+    still.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }, []);
+
   /* The first screen rises on arrival: server and client both paint it
      hidden, then this flips it a frame later. Everything after it is the
-     reveal observer's job. */
+     reveal observer's job. Behind an entrance it waits for Enter, so the
+     welcome rises as the street clears rather than having already happened. */
   useEffect(() => {
+    if (!entered) return;
     setSeen((prev) => (prev.length ? prev : [0]));
-  }, []);
+  }, [entered]);
 
   /* Count the open, once. See app/api/present/opened for why it isn't done
      in the page render. */
@@ -1845,7 +2197,7 @@ export default function PresentDeck({
       case "history":
         return <S.History deck={deck} show={show(i)} />;
       case "marketing":
-        return <S.MarketingDivider show={show(i)} />;
+        return <S.MarketingDivider deck={deck} show={show(i)} />;
       case "offer":
         return <S.Offer show={show(i)} />;
       case "maxprice":
@@ -2000,7 +2352,16 @@ export default function PresentDeck({
         className="flex h-full w-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden scroll-smooth"
         // The counter and the two buttons are the navigation; the browser's
         // own bars are noise across the foot of a slide.
-        style={{ scrollbarWidth: "none" }}
+        style={{
+          scrollbarWidth: "none",
+          /* LANDING. Behind the entrance the deck waits a touch too big;
+             when Enter flies the street into the screen, this settles to
+             true on the same clock, so the first slide is where the road
+             was going. Nothing under reduced motion: the flag is read once
+             on mount, and this transform is the only thing that reads it. */
+          transform: landed || still.current ? "none" : "scale(1.08)",
+          transition: still.current ? "none" : `transform ${ENTRANCE_FLY_MS}ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
+        }}
       >
         {slides.map((s, i) => (
           <div
@@ -2036,6 +2397,7 @@ export default function PresentDeck({
           James, 7 Sep. One logo, in one place, for the whole deck rather than
           reprinted on every slide. With the contents column gone this and the
           position indicator opposite it are the only chrome the deck has. */}
+      {entered && (<>
       <div className="pointer-events-none fixed left-0 top-0 z-30 px-6 pt-6 sm:px-10 sm:pt-7 lg:px-14">
         <Mark className="h-9 sm:h-10" />
       </div>
@@ -2094,6 +2456,56 @@ export default function PresentDeck({
           </div>
         </div>
       </div>
+
+      {/* ── Back and Next, bottom right ──
+          James, 13 Sep 2026: "arrows in the bottom right to go backwards and
+          forward through the presentation". Two round buttons; the one that
+          has nowhere to go fades rather than disappears, so the pair keeps
+          its place. On the two long decks only - the pre-appraisal is his
+          and unchanged. Left and Right on the keyboard still work.
+
+          Not on a phone: fixed to the corner they sat on top of whatever
+          scrolled under them (the review card, on the agent slide), and a
+          phone is swiped anyway. From sm up there is a margin to sit in. */}
+      {gated && (
+        <div className="fixed bottom-8 right-10 z-30 hidden items-center gap-2 sm:flex lg:right-14">
+          {([["Back", -1], ["Next", 1]] as const).map(([label, dir]) => {
+            const to = at + dir;
+            const can = to >= 0 && to < slides.length;
+            return (
+              <button
+                key={label}
+                type="button"
+                aria-label={label}
+                title={label}
+                disabled={!can}
+                onClick={() => can && go(to)}
+                className="flex h-11 w-11 items-center justify-center rounded-full border transition-[opacity,transform,background-color] hover:scale-[1.05] active:scale-[0.97] disabled:hover:scale-100"
+                style={{
+                  opacity: can ? 1 : 0.3,
+                  cursor: can ? "pointer" : "default",
+                  background: onDark ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.85)",
+                  borderColor: onDark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.14)",
+                  color: onDark ? "#ffffff" : INK,
+                  backdropFilter: "blur(6px)",
+                }}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden className="h-[18px] w-[18px]" style={{ transform: dir < 0 ? "scaleX(-1)" : undefined }}>
+                  <path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      </>)}
+
+      {!entered && (
+        <PresentEntrance
+          onFly={() => setLanded(true)}
+          onDone={() => setEntered(true)}
+        />
+      )}
 
     </div>
     </DeckStyleCtx.Provider>

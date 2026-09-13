@@ -51,6 +51,9 @@ import {
   Rise,
   Slide,
   TINTS,
+  Stage,
+  useStage,
+  CREAM,
 } from "@/components/present-kit";
 
 /**
@@ -335,37 +338,28 @@ export function Approach({ show }: { show: boolean }) {
 /* ───────────────────────── your property ───────────────────────── */
 
 /**
- * YOUR PROPERTY — the section divider, and the one slide allowed to be fun.
+ * Your property. James, 13 Sep 2026, from his reference: the eyebrow and
+ * the heading centred, the address and the facts under it, and then THEIR
+ * HOUSE, big - a landscape photograph in a rounded frame on a sage shape,
+ * a handwritten "A place with potential" beside its foot, and a strapline
+ * under it. Laid out on the stage so it frames the same at every size.
  *
- * James, 4 Sep: "in a perfect world we need to create something that will
- * capture people's attention and make it so it's not another boring slide".
- * A divider is the right place to spend that: it carries no argument, so
- * nothing is lost by making it a moment, and it is the exact point where a
- * landlord's own property enters a deck that has so far been about us.
+ * The photograph is the property's own (`property.image`, from the dossier
+ * or Rightmove) and it is often null - half the book has no photo anywhere.
+ * With none, the frame shows the drawn street instead, so the slide still
+ * reads as deliberate rather than as a hole. The sample carries a stand-in
+ * cottage so the slide can be judged with a photograph in it.
  *
- * ── The idea is one word ───────────────────────────────────────────────────
- *
- * A hand-drawn street with one house picked out in red — already in the repo,
- * already in the OS's line — and their own address written beside it in the
- * marker hand with an arrow. Not "your property" as a heading. THAT one. The
- * whole slide is a person pointing at a house and saying "this is the one we
- * are talking about", which is what the section is.
- *
- * It is centred, and it is the only centred slide in the deck. Everything else
- * is a left-aligned page of argument; this is a breath between two of them,
- * and the change of axis is what makes it read as a pause rather than as more
- * of the same.
- *
- * ── The photograph, when there is one ──────────────────────────────────────
- *
- * Roughly half the records have no image, so the drawing is the ground and the
- * photograph is a guest: pinned over the right of the street, tilted, in a
- * white print border. A snapshot laid on a drawing. Absent, the drawing is a
- * finished composition on its own — which is the test every empty state in
- * this deck has to pass.
+ * The arrow-and-note that pointed at the red house in the drawn street is
+ * gone with this version: the point of the slide is now the photograph.
  */
 export function PropertyDivider({ deck, show }: { deck: Deck; show: boolean }) {
   const p = deck.property;
+  const { host, fit } = useStage();
+  const fx = fit.staged;
+  const HEAD = { fontFamily: HAND, fontWeight: 800, letterSpacing: "-0.02em" } as const;
+  const SCRIPT = { fontFamily: "var(--font-shantell), cursive" } as const;
+  const SAGE_WASH = "#f1f4ec";
   /* Only the facts we actually hold. A row of dashes under a photograph of
      somebody's home is worse than a shorter row. */
   const facts = [
@@ -376,118 +370,69 @@ export function PropertyDivider({ deck, show }: { deck: Deck; show: boolean }) {
     p.epc ? `EPC ${p.epc}` : null,
   ].filter(Boolean) as string[];
 
-  /* The street name on its own for the annotation. The full address is on the
-     line above it already, and a handwritten note is a note — repeating the
-     town and the postcode in it turns a scribble into a label. */
-  const short = (p.address || "").split(",")[0].trim();
-  const isPhoto = useIsPhoto();
+  const frame = p.image ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={p.image} alt={p.address} className="w-full rounded-[40px] object-cover shadow-[0_40px_80px_-40px_rgba(0,0,0,0.4)]" style={{ aspectRatio: "21 / 10" }} />
+  ) : (
+    <div className="w-full overflow-hidden rounded-[40px]" style={{ aspectRatio: "21 / 10", background: SAGE_WASH }}>
+      <Art slot="property" drawing="/illustrations/houses-still.png" ratio="21 / 10" />
+    </div>
+  );
 
-  return (
-    <CreamSlide id="property">
-      <div className="mx-auto w-full max-w-[1080px] text-center">
+  const body = (
+    <>
+      <header className={fx ? "h-[124px]" : "h-[60px]"} />
+      <div className={`relative z-[2] flex flex-1 flex-col items-center text-center ${fx ? "px-[100px]" : "px-6 pb-10 pt-4 sm:px-12"}`}>
         <Rise show={show} i={0}>
-          <span className="block text-[11px] font-semibold uppercase tracking-[0.3em] text-black/40">
-            Your property
-          </span>
+          <Eyebrow>Your property</Eyebrow>
         </Rise>
         <Rise show={show} i={1}>
-          <h2
-            className="mt-4 leading-[1.04] tracking-[-0.015em]"
-            style={{ fontFamily: HAND, fontWeight: 700, fontSize: "clamp(30px, 3.4vw, 50px)" }}
-          >
+          <h2 className={`mt-5 leading-[1.04] ${fx ? "text-[62px]" : "text-[34px] sm:text-[48px]"}`} style={HEAD}>
             Right then. Let&rsquo;s talk about <Emphasis show={show}>yours</Emphasis>
           </h2>
         </Rise>
-
         {(p.address || facts.length > 0) && (
           <Rise show={show} i={2}>
-            <p className="mt-5 text-[13.5px] font-light text-black/50">
-              {[p.address, p.postcode].filter(Boolean).join(", ")}
-              {facts.length > 0 && (
-                <span className="block pt-1 text-[12.5px] text-black/40">
-                  {facts.join("  ·  ")}
-                </span>
-              )}
-            </p>
+            {p.address && (
+              <p className="mt-5 text-[17px] text-black/70">{[p.address, p.postcode].filter(Boolean).join(", ")}</p>
+            )}
+            {facts.length > 0 && (
+              <p className="mt-1.5 text-[15px] text-black/50">{facts.join(" · ")}</p>
+            )}
           </Rise>
         )}
-
-        {/* ── the street ── */}
-        <Rise show={show} i={3}>
-          <div className="relative mx-auto mt-6 w-full max-w-[720px]">
-            <Art slot="property" drawing="/illustrations/houses-still.png" ratio="16 / 7" />
-
-            {/* The note, and the point of the slide. Positioned against the
-                DRAWING rather than the slide, so it keeps pointing at the red
-                house however the picture scales.
-
-                GONE in the photographic style, and it has to be: the joke is
-                an arrow pointing at the one house picked out in red, and there
-                is no red house in a photograph. An arrow aimed at a random
-                window is not a quieter version of the joke, it is a mistake.
-                The address is already on the line above. */}
-            {short && !isPhoto && (
-              <div
-                className="pointer-events-none absolute left-[6%] top-[-6%] w-[46%] text-left"
-                style={{
-                  opacity: show ? 1 : 0,
-                  transform: show ? "none" : "translateY(8px)",
-                  transition:
-                    "opacity 600ms ease-out 700ms, transform 600ms cubic-bezier(0.22,1,0.36,1) 700ms",
-                }}
-              >
-                <p
-                  className="text-[15px] leading-[1.35] text-black/70 sm:text-[17px]"
-                  style={{ fontFamily: HAND, transform: "rotate(-3deg)" }}
-                >
-                  {short}
-                </p>
-                {/* Long enough to actually reach the red house. Measured, not
-                    guessed: the first version's tip landed on the tree two
-                    doors down, which makes the whole joke fall over. */}
-                <svg viewBox="0 0 190 80" aria-hidden className="mt-1 h-[58px] w-[172px]">
-                  <path
-                    d="M7 6C22 36 62 62 152 70"
-                    fill="none"
-                    stroke={CORAL}
-                    strokeWidth={2.4}
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M138 73L153 70.5L145 57"
-                    fill="none"
-                    stroke={CORAL}
-                    strokeWidth={2.4}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-            )}
-
-            {/* Their own photograph, pinned over the street. */}
-            {p.image && (
-              <div
-                className="absolute right-[-2%] top-[6%] w-[34%] rounded-[6px] bg-white p-[6px] pb-[18px] shadow-[0_10px_30px_rgba(0,0,0,0.12)]"
-                style={{
-                  transform: "rotate(2.5deg)",
-                  opacity: show ? 1 : 0,
-                  transition: "opacity 600ms ease-out 820ms",
-                }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={p.image}
-                  alt={p.address}
-                  className="w-full rounded-[3px] object-cover"
-                  style={{ aspectRatio: "4 / 3" }}
-                />
-              </div>
-            )}
-          </div>
+        <Rise show={show} i={3} className={`relative ${fx ? "mt-8 w-[1000px]" : "mt-6 w-full"}`}>
+          {frame}
+          {fx && (
+            <p className="pointer-events-none absolute -right-[205px] bottom-[140px] w-[185px] text-left text-[26px] leading-[1.1] text-black/60" style={{ ...SCRIPT, transform: "rotate(-12deg)" }}>
+              A place
+              <br />
+              <span className="ml-3">with potential</span>
+            </p>
+          )}
+        </Rise>
+        <Rise show={show} i={4}>
+          <p className="mt-7 text-[11px] uppercase tracking-[0.3em] text-black/45">Same great spaces. A brighter tomorrow.</p>
         </Rise>
       </div>
-    </CreamSlide>
+      {fx && (
+        /* THE SAGE behind the frame: a long tilted ellipse, wider than the
+           photograph, so it shows either side and under the handwriting. */
+        <div className="pointer-events-none absolute left-[150px] top-[310px] z-[1] h-[540px] w-[1140px]" style={{ transform: "rotate(-9deg)" }}>
+          <div className="h-full w-full rounded-[50%]" style={{ background: SAGE_WASH }} />
+        </div>
+      )}
+    </>
+  );
+  return (
+    <section
+      ref={host}
+      data-slide="property"
+      className="relative flex min-h-full w-full shrink-0 items-center justify-center overflow-hidden"
+      style={{ background: CREAM, color: INK }}
+    >
+      <Stage fit={fit}>{body}</Stage>
+    </section>
   );
 }
 
@@ -600,7 +545,23 @@ export function Listings({ deck, show }: { deck: Deck; show: boolean }) {
   const [openAt, setOpenAt] = useState<number | null>(null);
   if (!rows.length) return null;
   const ours = rows.filter((r) => r.ours).length;
-  const shown = rows.slice(0, 6);
+  /**
+   * How many, and which. James, 13 Sep 2026: up to four sit one under
+   * another as they always have; more than four go TWO ACROSS, up to eight
+   * (a 2x4), with the row shrunk and the rent moved onto the second line
+   * so a narrow column is not fighting a right-aligned figure. More than
+   * eight and "we filter down per month": only what was advertised in the
+   * last month, freshest first, and still eight at most. Ours is never
+   * filtered out - the point of the slide is that theirs sits beside ours.
+   */
+  const MAX = 8;
+  const fresh = rows.length > MAX ? rows.filter((r) => r.ours || r.days == null || r.days <= 31) : rows;
+  const ordered =
+    fresh.length > MAX
+      ? [...fresh].sort((a, b) => Number(b.ours) - Number(a.ours) || (a.days ?? 999) - (b.days ?? 999))
+      : fresh;
+  const shown = ordered.slice(0, MAX);
+  const twoUp = shown.length > 4;
   const galleryOf = (r: (typeof rows)[number]) =>
     (r.photos?.length ? r.photos : r.image ? [r.image] : []).filter(Boolean);
   const active = openAt != null ? shown[openAt] : null;
@@ -623,20 +584,23 @@ export function Listings({ deck, show }: { deck: Deck; show: boolean }) {
         </div>
 
         <Rise show={show} i={3}>
-          <ul className="mt-7 lg:mt-8">
+          <ul className={`mt-7 lg:mt-8 ${twoUp ? "grid grid-cols-1 gap-x-12 lg:grid-cols-2" : ""}`}>
             {shown.map((r, n) => {
               const gallery = galleryOf(r);
               const openable = gallery.length > 0;
+              /* The hairline: every row but the first - and two across, the
+                 first row is two rows wide. */
+              const rule = twoUp ? (n < 2 ? "border-t lg:border-t-0" : "border-t") : n === 0 ? "" : "border-t";
               return (
                 <li
                   key={`${r.address}-${r.rent}`}
-                  style={{ borderTop: n === 0 ? "none" : "1px solid rgba(0,0,0,0.07)" }}
+                  className={`${n === 0 ? "" : rule} border-black/[0.07]`}
                 >
                   <button
                     type="button"
                     disabled={!openable}
                     onClick={() => setOpenAt(n)}
-                    className="flex w-full items-center gap-4 py-2.5 text-left transition-opacity disabled:cursor-default"
+                    className={`flex w-full items-center gap-4 text-left transition-opacity disabled:cursor-default ${twoUp ? "py-2" : "py-2.5"}`}
                   >
                     {/* The thumbnail is the invitation. Without it the row is a
                         line of text that happens to be clickable, which nobody
@@ -647,11 +611,11 @@ export function Listings({ deck, show }: { deck: Deck; show: boolean }) {
                         src={r.image}
                         alt=""
                         aria-hidden
-                        className="h-[46px] w-[62px] shrink-0 rounded-[7px] object-cover"
+                        className={`shrink-0 rounded-[7px] object-cover ${twoUp ? "h-[40px] w-[54px]" : "h-[46px] w-[62px]"}`}
                       />
                     ) : (
                       <span
-                        className="h-[46px] w-[62px] shrink-0 rounded-[7px]"
+                        className={`shrink-0 rounded-[7px] ${twoUp ? "h-[40px] w-[54px]" : "h-[46px] w-[62px]"}`}
                         style={{ background: TINTS[0] }}
                       />
                     )}
@@ -676,22 +640,35 @@ export function Listings({ deck, show }: { deck: Deck; show: boolean }) {
                           </span>
                         )}
                       </span>
-                      <span className="mt-0.5 block truncate text-[12.5px] font-light text-black/45">
-                        {[
-                          r.locality,
-                          r.beds != null ? `${r.beds} bed` : null,
-                          r.type,
-                          r.agent,
-                        ]
-                          .filter(Boolean)
-                          .join("  ·  ")}
-                      </span>
+                      {twoUp ? (
+                        /* Two across: "2-bed terraced house · £1,095 pcm" - the
+                           rent on this line, at the left, where the eye is
+                           already. The agent and the postcode are in the detail. */
+                        <span className="mt-0.5 block truncate text-[12.5px] text-black/50">
+                          {[r.beds != null ? `${r.beds}-bed` : null, r.type?.toLowerCase()].filter(Boolean).join(" ")}
+                          {(r.beds != null || r.type) && "  ·  "}
+                          <span className="font-semibold text-black/75" style={{ fontFamily: HAND }}>{r.rent}</span>
+                        </span>
+                      ) : (
+                        <span className="mt-0.5 block truncate text-[12.5px] font-light text-black/45">
+                          {[
+                            r.locality,
+                            r.beds != null ? `${r.beds} bed` : null,
+                            r.type,
+                            r.agent,
+                          ]
+                            .filter(Boolean)
+                            .join("  ·  ")}
+                        </span>
+                      )}
                     </span>
 
                     <span className="flex shrink-0 items-center gap-3">
-                      <span className="text-[17px]" style={{ fontFamily: HAND, fontWeight: 700 }}>
-                        {r.rent}
-                      </span>
+                      {!twoUp && (
+                        <span className="text-[17px]" style={{ fontFamily: HAND, fontWeight: 700 }}>
+                          {r.rent}
+                        </span>
+                      )}
                       {openable && (
                         <span className="text-black/25" aria-hidden>
                           <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -707,11 +684,21 @@ export function Listings({ deck, show }: { deck: Deck; show: boolean }) {
           </ul>
         </Rise>
 
-        {ours > 0 && (
+        {(ours > 0 || shown.length < rows.length) && (
           <Rise show={show} i={4}>
             <p className="mt-5 text-[14px] text-black/55" style={{ fontFamily: HAND }}>
-              {ours === 1 ? "One of these is ours." : `${ours} of these are ours.`} The rest are
-              what a tenant sees beside yours.
+              {ours > 0 && (
+                <>
+                  {ours === 1 ? "One of these is ours." : `${ours} of these are ours.`} The rest are
+                  what a tenant sees beside yours.
+                </>
+              )}
+              {shown.length < rows.length && (
+                <>
+                  {ours > 0 && " "}
+                  The {shown.length} advertised in the last month, of {rows.length} nearby.
+                </>
+              )}
             </p>
           </Rise>
         )}
@@ -850,60 +837,153 @@ export function History({ deck, show }: { deck: Deck; show: boolean }) {
 /* ───────────────────────── marketing ───────────────────────── */
 
 /**
- * MARKETING - the second section divider, and the last red slide to go.
+ * Marketing. James, 13 Sep 2026, from his second reference of the day for
+ * this slide ("I think we can do better than this ... a better use of space
+ * and design"): the flat on the LEFT, cut into a soft shape with the plant
+ * poking out over the edge, on a pink shape that runs off the left of the
+ * stage; a handwritten line above it with a small arrow pointing down at it;
+ * and the words on the right - eyebrow with a short pink rule, the heading,
+ * the paragraph, three discs in a row with hairlines between, a pink review
+ * card, and a second handwritten line in the corner.
  *
- * Built on the same idea as Your Property: a divider carries no argument, so
- * it can afford to be a moment. Where that one pointed at a house and said
- * "that one", this one is about reach, so the drawing is a street of them and
- * the type sits over it rather than beside it.
+ * The cut-out is his - the photograph already shaped, plant and all, so it
+ * drops in as one transparent image rather than being masked here.
  *
- * Centred like its sibling. Two dividers, one shape, so a landlord recognises
- * the second as the same kind of pause as the first rather than reading it as
- * a new sort of page.
+ * THE REVIEW is a real one or none. His mock carried "Tom & Emily Carter",
+ * who do not exist, and the deck's first rule is no invented figures - a
+ * made-up review on a slide about trust is the worst kind. The card shows
+ * the deck's SECOND review when there is one, so the agent slide and this
+ * one do not repeat each other, and falls back to the first; with no review
+ * on the deck the card is simply not there.
  */
-export function MarketingDivider({ show }: { show: boolean }) {
-  return (
-    <CreamSlide id="marketing">
-      <div className="mx-auto w-full max-w-[1080px] text-center">
-        <Rise show={show} i={0}>
-          <span className="block text-[11px] font-semibold uppercase tracking-[0.3em] text-black/40">
-            Marketing
+export function MarketingDivider({ deck, show }: { deck: Deck; show: boolean }) {
+  const { host, fit } = useStage();
+  const fx = fit.staged;
+  const HEAD = { fontFamily: HAND, fontWeight: 800, letterSpacing: "-0.02em" } as const;
+  const SCRIPT = { fontFamily: "var(--font-shantell), cursive" } as const;
+  const SAGE_WASH = "#f1f4ec", SAGE_INK = "#56634a";
+  const POINTS: { icon: "camera" | "people" | "chart"; title: string; body: string }[] = [
+    { icon: "camera", title: "Standout presentation", body: "Beautiful photography and compelling listings that get results." },
+    { icon: "people", title: "Targeted reach", body: "Social and local marketing to attract the right audience." },
+    { icon: "chart", title: "Major portals", body: "Your property in front of serious renters, everywhere it matters." },
+  ];
+  const review = deck.testimonials?.[1] ?? deck.testimonials?.[0] ?? deck.testimonial ?? null;
+
+  const points = (
+    <ul className={`grid ${fx ? "grid-cols-[auto_auto_auto] justify-between" : "grid-cols-1 gap-8 sm:grid-cols-3 sm:gap-0"}`}>
+      {POINTS.map((b, n) => (
+        <li key={b.title} className={`flex flex-col items-center px-1.5 text-center ${n > 0 ? (fx ? "border-l" : "sm:border-l") : ""}`} style={{ borderColor: "rgba(59,59,60,0.12)" }}>
+          <span
+            className="flex h-[64px] w-[64px] items-center justify-center rounded-full"
+            style={n === 1 ? { background: SAGE_WASH, color: SAGE_INK } : { background: TINTS[0], color: INK }}
+          >
+            <Line name={b.icon} size={22} />
           </span>
+          <span className="mt-4 block whitespace-nowrap text-[14.5px] font-semibold leading-snug">{b.title}</span>
+          <span className="mt-1.5 block max-w-[170px] text-[13px] leading-[1.5] text-black/55">{b.body}</span>
+        </li>
+      ))}
+    </ul>
+  );
+
+  const card = review?.quote && (
+    <div className="flex items-start gap-5 rounded-[22px] px-6 py-4" style={{ background: TINTS[0] }}>
+      {/* The mark on its own - James, 13 Sep 2026: "just put the quotation
+          mark", no circle round it. */}
+      <span aria-hidden className="block h-[30px] shrink-0 text-[64px] leading-[0.6]" style={{ color: "var(--p-accent)", fontFamily: HAND, fontWeight: 800 }}>&ldquo;</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[14.5px] italic leading-[1.55] text-black/75">&ldquo;{review.quote}&rdquo;</span>
+        <span className="mt-2 block text-[12px] text-black/45">{review.author}</span>
+      </span>
+      {review.rating != null && (
+        <span className="shrink-0 text-[15px] tracking-[0.15em]" style={{ color: "var(--p-accent)" }} aria-label={`${review.rating} out of 5`}>
+          {"★".repeat(Math.max(0, Math.min(5, Math.round(review.rating))))}
+        </span>
+      )}
+    </div>
+  );
+
+  const body = (
+    <>
+      <header className={fx ? "h-[84px]" : "h-[60px]"} />
+      <div className={`relative z-[2] flex flex-1 flex-col ${fx ? "justify-start pb-10 pl-[830px] pr-[56px]" : "justify-center px-6 pb-10 pt-4 sm:px-12"}`}>
+        <Rise show={show} i={0}>
+          <Eyebrow>Marketing</Eyebrow>
+          <span aria-hidden className="mt-3 block h-[3px] w-[56px] rounded-full" style={{ background: TINTS[0] }} />
         </Rise>
         <Rise show={show} i={1}>
-          <h2
-            className="mt-4 leading-[1.04] tracking-[-0.015em]"
-            style={{ fontFamily: HAND, fontWeight: 700, fontSize: "clamp(30px, 3.4vw, 50px)" }}
-          >
-            Now, how we find <Emphasis show={show}>the one</Emphasis>
+          <h2 className={`mt-6 leading-[1.02] ${fx ? "text-[68px]" : "text-[36px] sm:text-[50px]"}`} style={HEAD}>
+            Now, how we
+            <br />
+            find <Emphasis show={show}>the one.</Emphasis>
           </h2>
         </Rise>
         <Rise show={show} i={2}>
-          <p className="mx-auto mt-5 max-w-[520px] text-[15px] font-light leading-[1.6] text-black/55">
-            The best rent and the shortest void come from the same thing: reaching people who
-            would move for your property, not just the ones already searching for one.
+          <p className="mt-5 max-w-[560px] text-[17px] leading-[1.55] text-black/60">
+            We combine local knowledge, standout presentation and targeted marketing to put your
+            property in front of the right people - not just more people.
           </p>
         </Rise>
-
-        {/* James, 7 Sep: swap the row of houses for one of the new
-            illustrations. The street was a diagram of the market; this is the
-            work - an agent shooting a room that has been dressed for it - and
-            that is what the slide is actually announcing.
-
-            SQUARE, so it is capped far tighter than the 720px strip it
-            replaces: at the old width a 1:1 drawing would stand taller than
-            the headline above it and turn a divider into a poster. */}
-        <Rise show={show} i={3}>
-          <div className="relative mx-auto mt-6 w-full max-w-[400px]">
-            <Art
-              slot="marketing"
-              drawing="/brand/art/marketing-shoot.webp"
-              ratio="1 / 1"
-            />
-          </div>
-        </Rise>
+        {!fx && (
+          <Rise show={show} i={3} className="mt-8">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/photo/marketing-flat-cut.webp" alt="" aria-hidden className="w-full" />
+          </Rise>
+        )}
+        <Rise show={show} i={4} className="mt-7">{points}</Rise>
+        {card && <Rise show={show} i={5} className="mt-6">{card}</Rise>}
       </div>
-    </CreamSlide>
+
+      {fx && (
+        <>
+          {/* THE PINK, behind the flat and off the left edge. */}
+          <div className="pointer-events-none absolute -left-[160px] top-[40px] z-[1] h-[880px] w-[960px]">
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden className="absolute inset-0 h-full w-full">
+              <path d="M18 8C40 -2 70 2 86 18C100 32 100 60 90 78C80 96 56 102 34 96C12 90 0 72 2 50C3 32 6 14 18 8Z" fill="var(--p-tint)" />
+            </svg>
+          </div>
+          {/* THE FLAT, already cut to its shape, the plant over the edge. */}
+          <Rise show={show} i={2} className="absolute left-[30px] top-[196px] z-[2] w-[770px]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/photo/marketing-flat-cut.webp" alt="" aria-hidden className="w-full drop-shadow-[0_30px_40px_rgba(0,0,0,0.18)]" />
+          </Rise>
+          {/* THE HANDWRITTEN LINE above it, and the arrow down to it. */}
+          <Rise show={show} i={5} className="absolute left-[600px] top-[84px] z-[3] w-[220px]">
+            <p className="text-[24px] leading-[1.15] text-black/70" style={{ ...SCRIPT, transform: "rotate(-8deg)" }}>
+              Great tenants
+              <br />
+              <span className="ml-2">start with great</span>
+              <br />
+              <span className="ml-5">marketing.</span>
+            </p>
+          </Rise>
+          <svg viewBox="0 0 60 60" aria-hidden className="pointer-events-none absolute left-[538px] top-[118px] z-[3] h-[56px] w-[56px]">
+            <path d="M54 6C40 10 26 22 12 46M12 46L14 32M12 46L26 42" fill="none" stroke={INK} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.75" />
+          </svg>
+          {/* THE SECOND LINE, bottom-left on the pink under the flat. The
+              reference had it bottom-right, where this deck keeps its Back
+              and Next. Three words, as on the entrance - James took "longer"
+              out of it there on 13 Sep. */}
+          <Rise show={show} i={6} className="absolute left-[64px] top-[818px] z-[3] w-[220px]">
+            <p className="text-[19px] leading-[1.15] text-black/65" style={{ ...SCRIPT, transform: "rotate(-8deg)" }}>
+              People. Homes.
+              <br />
+              Relationships.
+            </p>
+          </Rise>
+        </>
+      )}
+    </>
+  );
+  return (
+    <section
+      ref={host}
+      data-slide="marketing"
+      className="relative flex min-h-full w-full shrink-0 items-center justify-center overflow-hidden"
+      style={{ background: CREAM, color: INK }}
+    >
+      <Stage fit={fit}>{body}</Stage>
+    </section>
   );
 }
 
@@ -1142,10 +1222,10 @@ export function Brochure({ show }: { show: boolean }) {
  * who cannot tell one of these from one of ours is being misled even when both
  * are true, so the footer says "National figures, not ours" every time.
  */
-function Stats({ stats, show, from }: { stats: NationalStat[]; show: boolean; from: number }) {
+function Stats({ stats, show, from, cols = 3 }: { stats: NationalStat[]; show: boolean; from: number; cols?: 2 | 3 }) {
   return (
     <>
-      <div className="grid gap-x-8 gap-y-7 sm:grid-cols-3">
+      <div className={`grid gap-x-8 gap-y-7 ${cols === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
         {stats.map((st, n) => (
           <Rise key={st.value + st.label} show={show} i={from + n}>
             <div className="border-t pt-4" style={{ borderColor: "rgba(0,0,0,0.12)" }}>
@@ -1178,55 +1258,43 @@ export function Portals({ show }: { show: boolean }) {
   };
   return (
     <CreamSlide id="portals">
-      {/* James, 7 Sep: "rather than just having small icons, we could literally
-          have the names of the brands all on the right-hand side to pad them
-          out." A strip of 24px logos under a paragraph was the thinnest thing
-          in the deck - 40% of a laptop screen, measured - and it under-sold
-          the point: the answer to "where will it appear" is four names, and
-          they should be read as a list rather than squinted at as a badge
-          rail. */}
-      <div className="mx-auto grid w-full max-w-[1180px] items-start gap-10 lg:grid-cols-[1fr_0.78fr] lg:gap-20">
-        <div>
-          <HandHead eyebrow="Where it appears" show={show} lines={2}>
-            Everywhere a tenant
-            <br />
-            is <Emphasis show={show}>looking</Emphasis>
-          </HandHead>
-          <Rise show={show} i={2}>
-            <p className="mt-6 max-w-[560px] text-[14.5px] font-light leading-[1.7] text-black/60">
-              {PORTALS_COPY.body}
-            </p>
-          </Rise>
-          <div className="mt-9">
-            <Stats stats={PORTAL_STATS} show={show} from={3} />
+      {/* James, 13 Sep 2026: the heading and its paragraph on the left, the
+          FOUR figures on the right as a two-by-two, and the names underneath
+          across the full width. "One of the most important" slides, so the
+          evidence gets the right-hand half rather than a strip under the
+          paragraph. (7 Sep had the names on the right, stacked; they were
+          the thinnest thing in the deck and this gives them the width.) */}
+      <div className="mx-auto w-full max-w-[1180px]">
+        <div className="grid items-start gap-10 lg:grid-cols-[1fr_1fr] lg:gap-16">
+          <div>
+            <HandHead eyebrow="Where it appears" show={show} lines={2}>
+              Everywhere a tenant
+              <br />
+              is <Emphasis show={show}>looking</Emphasis>
+            </HandHead>
+            <Rise show={show} i={2}>
+              <p className="mt-6 max-w-[520px] text-[14.5px] font-light leading-[1.7] text-black/60">
+                {PORTALS_COPY.body}
+              </p>
+            </Rise>
+          </div>
+          <div className="lg:pt-4">
+            <Stats stats={PORTAL_STATS} show={show} from={3} cols={2} />
           </div>
         </div>
 
-        {/* The names, stacked and set large. The two we have marks for keep
-            them - a landlord recognises the Rightmove green before they read
-            the word - and the two we do not are set in the same hand as every
-            other heading rather than in a made-up lockup. */}
-        <Rise show={show} i={3} className="lg:pt-3">
-          <ul className="flex flex-col">
-            {PORTALS_COPY.portals.map((p, n) => (
-              <li
-                key={p}
-                className="flex items-center py-5 first:pt-0 last:pb-0"
-                style={{ borderTop: n === 0 ? "none" : "1px solid rgba(0,0,0,0.09)" }}
-              >
-                {/* The mark AND the name, never the mark on its own. The two
-                    files we hold are the app icons rather than wordmarks, so a
-                    logo-only row put a 24px green square where the other rows
-                    had a word - which is what James was looking at when he
-                    said to use the names. */}
+        {/* The names, across the foot. The mark AND the name, never the mark
+            on its own: the two files we hold are app icons rather than
+            wordmarks, and a green square beside three words is not a list. */}
+        <Rise show={show} i={8}>
+          <ul className="mt-12 flex flex-wrap items-center justify-between gap-x-8 gap-y-5 border-t pt-8" style={{ borderColor: "rgba(0,0,0,0.09)" }}>
+            {PORTALS_COPY.portals.map((p) => (
+              <li key={p} className="flex items-center">
                 {LOGOS[p] && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={LOGOS[p]} alt="" aria-hidden className="mr-3.5 h-7 w-auto shrink-0 opacity-90" />
                 )}
-                <span
-                  className="text-[21px] leading-none text-black/70 sm:text-[24px]"
-                  style={{ fontFamily: HAND, fontWeight: 700 }}
-                >
+                <span className="text-[21px] leading-none text-black/70 sm:text-[24px]" style={{ fontFamily: HAND, fontWeight: 700 }}>
                   {p}
                 </span>
               </li>
@@ -1506,20 +1574,25 @@ export function Levels({ show }: { show: boolean }) {
             decision", sitting directly above the part that is. Beside the
             table it costs nothing, and the reading is better for it: standard
             on the left, what more buys you on the right. */}
-        <div className="mt-6 grid gap-x-12 gap-y-6 lg:mt-7 lg:grid-cols-[0.78fr_1.22fr]">
+        {/* The two columns STRETCH to one height. James, 13 Sep 2026: the
+            pink box was "about half the height of all of the boxes" beside
+            the table - so it fills the row now, with a bigger title and the
+            items spaced down it rather than bunched at the top. */}
+        <div className="mt-6 grid items-stretch gap-x-12 gap-y-6 lg:mt-7 lg:grid-cols-[0.78fr_1.22fr]">
           {every.length > 0 && (
-            <Rise show={show} i={2}>
-              <div className="rounded-2xl px-5 py-4" style={{ background: TINTS[0] }}>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-black/45">
+            <Rise show={show} i={2} className="flex">
+              <div className="flex w-full flex-col rounded-2xl px-6 py-6" style={{ background: TINTS[0] }}>
+                <p className="text-[19px] leading-snug" style={{ fontFamily: HAND, fontWeight: 700 }}>
                   On all three levels
                 </p>
-                <ul className="mt-2.5 grid gap-x-8 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-1">
+                <p className="mt-1 text-[12.5px] font-light text-black/50">Whichever you choose, you get every one of these.</p>
+                <ul className="mt-5 grid flex-1 content-around gap-x-8 gap-y-2 sm:grid-cols-2 lg:grid-cols-1">
                   {every.map((r) => (
                     <li key={r.service} className="flex items-start gap-2.5">
                       <span className="mt-[3px] shrink-0" style={{ color: CORAL }}>
-                        <Line name="check" size={14} />
+                        <Line name="check" size={15} />
                       </span>
-                      <span className="text-[12.5px] font-light leading-snug">{r.service}</span>
+                      <span className="text-[13.5px] font-light leading-snug">{r.service}</span>
                     </li>
                   ))}
                 </ul>

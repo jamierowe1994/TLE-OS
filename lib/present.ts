@@ -313,6 +313,14 @@ export type PresentDeck = {
   history?: PresentHistory | null;
   /** A real review, with a real name on it. Never a composite. */
   testimonial?: { quote: string; author: string; rating: number | null } | null;
+  /**
+   * More than one review, for the appraisal agent slide's slider (James, 13
+   * Sep 2026: "if there's more than one review, we can make them sliders").
+   * Optional and additive: a deck with only `testimonial` shows that one,
+   * still. Nothing mints this yet - where the reviews come from is an open
+   * question for James.
+   */
+  testimonials?: { quote: string; author: string; rating: number | null }[] | null;
   /** The agent's walk-through of THIS property, if one has been filmed. */
   propertyVideoUrl?: string | null;
   /** The local market, if the agent chose to include any of it. */
@@ -384,6 +392,35 @@ export const BANNER: { icon: "people" | "shield" | "chart"; title: string; body:
     icon: "chart",
     title: "Better returns",
     body: "Smarter strategy, stronger rent.",
+  },
+];
+
+/**
+ * The three promises on the APPRAISAL welcome - the deck presented on the
+ * day, and the post-appraisal copy of it.
+ *
+ * Not BANNER. James, 13 Sep 2026: the text must not carry over from the
+ * pre-appraisal, "because it looks like we haven't bothered changing the
+ * presentation". The sneak peek sells who we are; on the day the agent is
+ * in the room and the deck is about THEIR property, so these three preview
+ * the deck's own parts - the market, the tenant, the money - rather than
+ * repeating the brand promises the landlord read the day before.
+ */
+export const APPRAISAL_PROMISES: { icon: "pin" | "home" | "chart"; title: string; body: string }[] = [
+  {
+    icon: "pin",
+    title: "Local market",
+    body: "Clear, up-to-date insight into demand, rents and opportunities.",
+  },
+  {
+    icon: "home",
+    title: "Your property",
+    body: "A tailored view of what your home could achieve in today's market.",
+  },
+  {
+    icon: "chart",
+    title: "The plan",
+    body: "A clear strategy to get you the best result, with less hassle.",
   },
 ];
 
@@ -780,6 +817,12 @@ export const DECK_KINDS: { id: DeckKind; label: string; blurb: string }[] = [
  * What the post-appraisal deck adds is the RENT — the figure that needed the
  * visit — and the paperwork that follows from it.
  */
+/* Four went on 12 Sep 2026, James cutting the deck towards 25: "How the
+   area has moved" (one thin chart), "Your property on film" (an empty
+   frame), "The point is that you stop thinking about it" (a paragraph the
+   protection slide already carries) and "The Experts Group" (nine chips).
+   "The brochure" went on 13 Sep: "we don't actually generate brochures".
+   The slide components stay; nothing lists them. */
 const MAIN: SlideId[] = [
   "welcome",
   "agenda",
@@ -790,12 +833,9 @@ const MAIN: SlideId[] = [
   "listings",
   "comparables",
   "market",
-  "history",
   "marketing",
   "offer",
   "maxprice",
-  "video",
-  "brochure",
   "portals",
   "social",
   "compliance",
@@ -804,10 +844,8 @@ const MAIN: SlideId[] = [
   "management",
   "levels",
   "collection",
-  "protection",
   "rentlegal",
   "regulated",
-  "network",
   "why",
   "testimonial",
   "fees",
@@ -1127,7 +1165,10 @@ export const SAMPLE_DECK: PresentDeck = {
   property: {
     address: "12 Example Street, Lincoln",
     postcode: "LN5 9AB",
-    image: null,
+    /* A stand-in for the SAMPLE only, so the property slide can be judged
+       with a photograph in it. Real decks carry the property's own image,
+       or the drawn street when there is none. */
+    image: "/brand/photo/property-sample.webp",
     beds: 3,
     baths: 1,
     sqft: 912,

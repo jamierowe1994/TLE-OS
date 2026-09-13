@@ -293,6 +293,54 @@ export function Rise({
   );
 }
 
+/* ───────────────────────── the stage ───────────────────────── */
+
+/**
+ * A fixed 1440x900 stage that scales as one piece to fit the window, so a
+ * slide composed on it frames the same way at every size - the ground fills
+ * the sides. Below 1024px it is not staged at all: the slide lays itself out
+ * normally and stacks, because a phone cannot frame anything.
+ *
+ * Lived in PresentDeck until 13 Sep 2026; the entrance needed it too.
+ */
+export function useStage() {
+  const host = React.useRef<HTMLElement>(null);
+  const [fit, setFit] = React.useState<{ staged: boolean; scale: number }>({ staged: false, scale: 1 });
+  React.useEffect(() => {
+    const el = host.current;
+    if (!el) return;
+    const measure = () => {
+      const w = el.clientWidth, h = el.clientHeight;
+      const staged = w >= 1024;
+      setFit({ staged, scale: staged ? Math.min(w / 1440, h / 900) : 1 });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return { host, fit };
+}
+
+/** The stage wrapper: absolute, so its 900px never sets the slide's height. */
+export function Stage({ fit, children }: { fit: { staged: boolean; scale: number }; children: React.ReactNode }) {
+  return fit.staged ? (
+    /* `zoom`, not a transform. A transform scales a rasterised layer, and
+       the Rise wrappers are composited layers, so at any scale but 1 every
+       word went soft - James, 12 Sep 2026: "the whole deck seems a bit
+       blurry". Zoom lays the stage out again at the new size, so text and
+       edges are drawn crisp; the centring translate is unaffected. */
+    <div
+      className="absolute left-1/2 top-1/2 flex h-[900px] w-[1440px] -translate-x-1/2 -translate-y-1/2 flex-col"
+      style={{ zoom: fit.scale }}
+    >
+      {children}
+    </div>
+  ) : (
+    <div className="relative flex min-h-full w-full flex-col">{children}</div>
+  );
+}
+
 /* ───────────────────────── small parts ───────────────────────── */
 
 export function Eyebrow({ children, on = "light" }: { children: React.ReactNode; on?: "light" | "dark" }) {
@@ -311,7 +359,10 @@ export function Mark({ on = "light", className = "h-9" }: { on?: "light" | "dark
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={on === "dark" ? "/brand/tle-logo-white.png" : "/brand/tle-logo.png"}
+      /* The pink mark on the light ground, not the red one - James, 13 Sep
+         2026: "anywhere it says The Letting Experts as a logo ... the light
+         pink logo", on the pre-appraisal and the appraisal alike. */
+      src={on === "dark" ? "/brand/tle-logo-white.png" : "/brand/tle-logo-coral.png"}
       alt="The Letting Experts"
       className={`${className} w-auto`}
     />
@@ -393,12 +444,19 @@ export type IconName =
   | "chat"
   | "heart"
   | "whatsapp"
-  | "mail";
+  | "mail"
+  | "camera";
 
 /** Which icon belongs to which beat of the visit, in order. */
 export const STEP_ICONS: IconName[] = ["home", "chart", "people", "star"];
 
 const PATHS: Record<IconName, React.ReactNode> = {
+  camera: (
+    <>
+      <path d="M4 8h3l2-3h6l2 3h3v11H4z" />
+      <circle cx="12" cy="13" r="3.5" />
+    </>
+  ),
   people: (
     <>
       <circle cx="9" cy="8" r="3" />
@@ -523,7 +581,13 @@ export function CreamSlide({
   return (
     <section
       data-slide={id}
-      className="relative flex min-h-full w-full shrink-0 flex-col justify-center px-6 pb-20 pt-20 sm:px-10 lg:px-14"
+      /* justify-START from lg, with one top padding for all of them, so the
+         eyebrow and the heading begin at the same height on every standard
+         slide - James, 13 Sep 2026: "they should all start in the same
+         place". Centred, they wandered between 204px and 323px down with
+         the length of what was under them. A slide taller than the window
+         still scrolls inside its own cell. */
+      className="relative flex min-h-full w-full shrink-0 flex-col justify-center px-6 pb-20 pt-20 sm:px-10 lg:justify-start lg:px-14 lg:pt-[150px]"
       style={{ background: CREAM, color: INK }}
     >
       {children}

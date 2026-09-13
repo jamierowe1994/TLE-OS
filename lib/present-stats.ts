@@ -82,6 +82,18 @@ export const PORTAL_STATS: NationalStat[] = [
     asAt: "June 2025",
     url: "https://www.rightmove.co.uk/c/claims/",
   },
+  /* The fourth, added 13 Sep 2026 so the slide's stats sit as a 2x2 (James:
+     "add one more stat ... then we've got four"). Same claims page, same
+     measurer, read off the page that day - not remembered. It is a
+     different thing from the first: that one is where people FIND the home,
+     this one is where the completed TENANCY's enquiry came from. */
+  {
+    value: "3 in 4",
+    label: "completed tenancies started with a Rightmove enquiry",
+    source: "Street, via Rightmove's audited claims",
+    asAt: "Jan 2024 - Apr 2025",
+    url: "https://www.rightmove.co.uk/c/claims/",
+  },
 ];
 
 /**
