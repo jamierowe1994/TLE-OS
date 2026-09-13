@@ -14,6 +14,9 @@ import { uid } from "@/lib/auth";
  */
 const CATALOG = "email-catalog";
 
+/** The absolute origin the email templates bake into every image src. */
+const LIVE_ORIGIN = (process.env.OS_ORIGIN ?? "https://tle-os.co.uk").replace(/\/+$/, "");
+
 /**
  * Owner, or marketing. James, 7 Sep 2026: the maintenance and invoice
  * emails go in "the marketing section so they can edit them" - and every
@@ -73,7 +76,13 @@ export async function GET(req: NextRequest) {
         id: entry.id,
         name: entry.name,
         subject,
-        html,
+        /* Every image in an email is an ABSOLUTE url at the live site, because
+           a relative one resolves against the mail client. That is right in an
+           inbox and wrong here: a picture added today does not exist on the
+           live site yet, so the preview of the email being worked on is the
+           one place it would never appear. Pointed at whatever origin this
+           page was served from, the preview shows the files on disk. */
+        html: html.replaceAll(LIVE_ORIGIN, req.nextUrl.origin),
         index: TLE_EMAILS.indexOf(entry),
         /* The document as it stands, so the builder opens on what is on
            screen rather than on the version in code. */

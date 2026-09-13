@@ -60,13 +60,11 @@ export default function AdminEmails() {
       .catch(() => setState("off"));
   }, []);
 
-  if (state === "off") {
-    return <p className="text-[13px] text-muted">Nothing here.</p>;
-  }
-
-  const groups = Array.from(new Set(rows.map((r) => r.group)));
-
-  /* ?open=<id> lands on one email open - the process map's "Edit" link. */
+  /* ?open=<id> lands on one email open - the process map's "Edit" link.
+     ABOVE the early return, and it has to be: React counts hooks, and a
+     render that bails out before this one has called fewer than the last,
+     which is a hard crash rather than a missing feature. It surfaced the
+     first time the catalogue failed to load. */
   useEffect(() => {
     if (!rows.length) return;
     const id = new URLSearchParams(window.location.search).get("open");
@@ -74,6 +72,12 @@ export default function AdminEmails() {
     if (row) setOpen(row);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows.length]);
+
+  if (state === "off") {
+    return <p className="text-[13px] text-muted">Nothing here.</p>;
+  }
+
+  const groups = Array.from(new Set(rows.map((r) => r.group)));
 
   return (
     <div className="space-y-8">
@@ -284,7 +288,14 @@ function Reader({ row, onClose }: { row: Row; onClose: () => void }) {
           <iframe
             title={`${row.name} preview`}
             srcDoc={html}
-            sandbox=""
+            /* allow-same-origin, and no more. A fully closed sandbox gives the
+               document an opaque origin, and Chrome then refuses to fetch the
+               pictures - so every email previewed here rendered as alt text
+               with a broken-image glyph where the logo should be, which is
+               the one thing this screen exists to show. Scripts stay barred,
+               which is the restriction that matters: these documents are our
+               own HTML and there is no script in any of them. */
+            sandbox="allow-same-origin"
             className="mx-auto block h-full min-h-[70vh] w-full max-w-[720px] rounded-2xl border border-line/60 bg-white shadow-sm"
           />
         )}

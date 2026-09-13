@@ -1,4 +1,4 @@
-import { emailShell } from "@/lib/email/shell";
+import { skyShell } from "@/lib/email/shell-sky";
 import type { VerifyEmail } from "@/lib/verify-email";
 
 /**
@@ -50,7 +50,7 @@ export function pilotInviteEmail(link: string, firstName?: string): VerifyEmail 
        rather than personal. */
     subject: "You're in",
     text,
-    html: emailShell({
+    html: skyShell({
       heading: name ? `You're in, ${name}.` : "You're in.",
       /* Enough to say why they should care, and no more. It was one line and
          read as shy for something that is meant to feel like an opening; the
@@ -60,7 +60,6 @@ export function pilotInviteEmail(link: string, firstName?: string): VerifyEmail 
         "Welcome to TLE OS. We're building it now, and you're one of the first through the door - what you tell us over the next few weeks is what shapes it for everybody else.",
       button: "Set up your account",
       link,
-      image: "illustrations/door-open.gif",
       footnote:
         "Nothing to prepare. Have a look around when it suits you, and say so when something feels wrong.",
     }),
