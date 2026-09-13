@@ -253,6 +253,27 @@ export const PORTAL_FOLDERS: PortalFolder[] = [
         href: "/admin/plc-demo",
       },
       {
+        /* James, 13 Sep 2026: "when I click admin, then process, then agent
+           process, there should be one on there that will show presentations
+           ... all three." The showroom carries the three decks on its bar. */
+        kind: "open",
+        id: "agent-presentations",
+        name: "The three presentations",
+        blurb:
+          "The pre-appraisal sneak peek, the appraisal deck presented in the room, and the post-appraisal copy - switch between them on the bar across the top.",
+        href: "/present/sample?kind=appraisal&from=admin",
+        caveat: "Sample landlord and agent; no customer data.",
+      },
+      {
+        kind: "open",
+        id: "agent-booklet",
+        name: "The landlord's booklet",
+        blurb:
+          "What the landlord opens from their portal after the visit: the post-appraisal deck as a booklet, with the contract to sign along the foot. Press View presentation on the sample.",
+        href: "/landlord/demo?stage=valuation&from=admin",
+        caveat: "The sample landlord, Raj, carrying the showroom deck.",
+      },
+      {
         /* The only email in the OS addressed to an agent about their own work,
            which is why it sits here rather than in the landlord folder with the
            rest of the appraisal run. Placed after the joining steps because it

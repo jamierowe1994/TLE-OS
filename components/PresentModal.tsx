@@ -57,7 +57,7 @@ export default function PresentModal({
   }, [signOpen, onClose]);
 
   /* The open spread fits the room with air round it. */
-  const fit = room.w ? Math.min((room.w - 140) / (PAGE_W * 2), (room.h - 210) / PAGE_H) : 0.4;
+  const fit = room.w ? Math.min((room.w - 140) / (PAGE_W * 2), (room.h - 230) / PAGE_H) : 0.4;
   const onSpread = useCallback((at: number, of: number) => setPage({ at, of }), []);
   const open = page.at >= 0;
   /* The agent's spread: a "Contact" button appears above the booklet while
@@ -113,48 +113,51 @@ export default function PresentModal({
           </div>
         )}
 
-        {/* THE FOOT: the way to sign on the left, in the clay; the arrows
-            under the right-hand side of the page, with where you are. */}
-        <div className="absolute inset-x-0 bottom-0 z-[86] flex items-center justify-between px-8 py-5 sm:px-12" style={{ minHeight: 84 }}>
-          <div>
-            {open && (
-              <button
-                type="button"
-                onClick={() => setSignOpen(true)}
-                className="inline-flex h-[48px] items-center gap-3 rounded-full px-7 text-[14px] font-semibold text-white shadow-[0_18px_40px_-18px_rgba(0,0,0,0.6)] transition-transform hover:scale-[1.03]"
-                style={{ background: "#cfa096" }}
-              >
-                Sign your contract
-                <svg viewBox="0 0 24 24" aria-hidden className="h-[16px] w-[16px]">
-                  <path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-4">
-            <p className="mr-2 text-[12.5px] text-white/70">
-              {open ? `${page.at + 1} of ${page.of}` : page.of ? "Open the cover" : ""}
-            </p>
-            {([["Back", -1], ["Next", 1]] as const).map(([label, dir]) => {
-              const can = dir < 0 ? page.at > -1 : page.at < page.of - 1;
-              return (
+        {/* THE FOOT, hung under the booklet itself: the way to sign centred
+            under the left-hand page, the arrows centred under the right, both
+            a small gap below the pages - James, 13 Sep 2026. */}
+        {room.w > 0 && (
+          <div className="relative z-[86] mt-6 grid grid-cols-2" style={{ width: PAGE_W * 2 * fit }}>
+            <div className="flex items-center justify-center">
+              {open && (
                 <button
-                  key={label}
                   type="button"
-                  aria-label={label}
-                  disabled={!can}
-                  onClick={() => api?.go(dir)}
-                  className="flex h-11 w-11 items-center justify-center rounded-full border transition-transform hover:scale-[1.05] disabled:hover:scale-100"
-                  style={{ opacity: can ? 1 : 0.3, background: "rgba(255,255,255,0.9)", borderColor: "rgba(0,0,0,0.14)", color: INK }}
+                  onClick={() => setSignOpen(true)}
+                  className="inline-flex h-[48px] items-center gap-3 rounded-full px-7 text-[14px] font-semibold text-white shadow-[0_18px_40px_-18px_rgba(0,0,0,0.6)] transition-transform hover:scale-[1.03]"
+                  style={{ background: "#cfa096" }}
                 >
-                  <svg viewBox="0 0 24 24" aria-hidden className="h-[18px] w-[18px]" style={{ transform: dir < 0 ? "scaleX(-1)" : undefined }}>
-                    <path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  Sign your contract
+                  <svg viewBox="0 0 24 24" aria-hidden className="h-[16px] w-[16px]">
+                    <path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
-              );
-            })}
+              )}
+            </div>
+            <div className="flex items-center justify-center gap-4">
+              <p className="mr-2 text-[12.5px] text-white/70">
+                {open ? `${page.at + 1} of ${page.of}` : page.of ? "Open the cover" : ""}
+              </p>
+              {([["Back", -1], ["Next", 1]] as const).map(([label, dir]) => {
+                const can = dir < 0 ? page.at > -1 : page.at < page.of - 1;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    aria-label={label}
+                    disabled={!can}
+                    onClick={() => api?.go(dir)}
+                    className="flex h-11 w-11 items-center justify-center rounded-full border transition-transform hover:scale-[1.05] disabled:hover:scale-100"
+                    style={{ opacity: can ? 1 : 0.3, background: "rgba(255,255,255,0.9)", borderColor: "rgba(0,0,0,0.14)", color: INK }}
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden className="h-[18px] w-[18px]" style={{ transform: dir < 0 ? "scaleX(-1)" : undefined }}>
+                      <path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* CONTACT, above the booklet, only while the agent's page is showing. */}
         {onAgent && (

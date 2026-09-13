@@ -908,18 +908,6 @@ export function BookPortals() {
           put it back. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/brand/photo/book-plant-books.webp" alt="" aria-hidden className="pointer-events-none absolute max-w-none" style={{ width: 820, left: -40, bottom: -30 }} />
-      <div className="pointer-events-none absolute left-[560px] top-[596px] w-[220px]">
-        <p className="text-[19px] leading-[1.2] text-black/70" style={{ fontFamily: "var(--font-shantell), cursive", transform: "rotate(-8deg)" }}>
-          More of the right people
-          <br />
-          in the right homes
-          <br />
-          at the right time.
-        </p>
-        <svg viewBox="0 0 60 60" aria-hidden className="ml-[80px] mt-1 h-[44px] w-[44px]">
-          <path d="M40 6C36 24 28 38 12 50M12 50L16 36M12 50L26 48" fill="none" stroke={INK} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
-        </svg>
-      </div>
 
       <div className="absolute left-[96px] top-[100px]" style={{ width: 1250 }}>
         <div className="grid grid-cols-[1fr_1fr] gap-x-16">
@@ -1239,7 +1227,11 @@ export function BookCollection() {
       {/* The pink, big, off the top-right corner; the building standing in
           front of it and rising off the top of the page - James, 13 Sep 2026. */}
       <div className="pointer-events-none absolute -right-[260px] -top-[360px] h-[760px] w-[760px] rounded-full" style={{ background: "var(--p-tint)" }} />
-      <Soft src="/brand/photo/appointment.webp" style={{ right: 110, top: -60, width: 380, height: 540 }} radius="0 0 190px 190px" />
+      {/* The right-hand terrace from the presentation's entrance, standing
+          on the bottom line of the page with its foliage off the edge and its
+          chimneys rising into the pink - James, 13 Sep 2026. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/brand/art/entrance-right.webp" alt="" aria-hidden className="pointer-events-none absolute max-w-none" style={{ height: 740, right: -70, bottom: 0 }} />
       <div className="absolute left-[96px] top-[84px] w-[760px]">
         <EyebrowRule>Rent collection</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
@@ -1258,8 +1250,8 @@ export function BookCollection() {
             </li>
           ))}
         </ul>
+        <p className="mt-8 text-[10.5px] uppercase tracking-[0.3em] text-black/55">People &middot; Homes &middot; Relationships</p>
       </div>
-      <FootRight />
     </div>
   );
 }
@@ -1270,8 +1262,6 @@ export function BookRentLegal({ deck }: { deck: Deck }) {
   const cols = [RENT_LEGAL.points.slice(0, half), RENT_LEGAL.points.slice(half)];
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/brand/photo/book-plant-corner.webp" alt="" aria-hidden className="pointer-events-none absolute max-w-none" style={{ width: 300, right: -60, top: -70 }} />
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>{RENT_LEGAL.eyebrow}</EyebrowRule>
         <h1 className="mt-6 text-[52px] leading-[1.1]" style={SERIF}>
@@ -1308,6 +1298,8 @@ export function BookRentLegal({ deck }: { deck: Deck }) {
 export function BookRegulated() {
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/brand/photo/book-plant-corner.webp" alt="" aria-hidden className="pointer-events-none absolute max-w-none" style={{ width: 360, right: -50, top: -60 }} />
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>Regulated and protected</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
@@ -1592,16 +1584,19 @@ export function BookQuestions({ deck }: { deck: Deck }) {
   const first = a.firstName || "us";
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
-      {/* A big sage shape with loose, wavy edges, covering the right of the
-          page, with the door in front of it - James, 13 Sep 2026: "a big old
-          green box ... fairly loose lines, kind of fairly wavy all the way
-          around". */}
+      {/* The sage with loose edges, and the deck's own closing picture in
+          its rounded frame in front - styled after the presentation's last
+          page, as James asked - with the line under it. */}
       <Blob d="M860 -20 C 900 60, 840 140, 880 230 C 920 320, 860 400, 900 500 C 940 600, 870 700, 920 800 C 950 860, 1000 900, 1040 920 L1460 920 L1460 -20 Z" />
-      <Soft src="/brand/photo/welcome.jpg" style={{ right: 110, top: 90, width: 400, height: 520 }} radius="46% 54% 48% 52% / 56% 58% 42% 44%" />
-      <Hand className="right-[90px] top-[660px] w-[260px] text-right" style={{ transform: "rotate(-8deg)" }}>
+      <div className="pointer-events-none absolute overflow-hidden rounded-[28px] shadow-[0_30px_60px_-30px_rgba(0,0,0,0.35)]" style={{ right: 110, top: 130, width: 470, height: 505 }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/photo/close-door.webp" alt="" aria-hidden className="h-full w-full object-cover" />
+      </div>
+      <Hand className="right-[150px] top-[680px] w-[300px]" style={{ transform: "rotate(-6deg)", color: SAGE_INK, fontSize: 27 }}>
         Let&rsquo;s get going.
       </Hand>
-      <div className="absolute left-[96px] top-[84px] w-[760px]">
+      {/* The words, centred on the page's height. */}
+      <div className="absolute left-[96px] top-0 flex h-full w-[760px] flex-col justify-center">
         <EyebrowRule>Any questions</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
           Anything we
