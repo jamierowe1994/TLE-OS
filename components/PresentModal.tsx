@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import PresentBook, { PAGE_H, PAGE_W } from "@/components/PresentBook";
 import { DeckStyleCtx, themeVars, INK } from "@/components/present-kit";
 import { asStyle, slidesFor, type PresentDeck as Deck } from "@/lib/present";
+import { BookActionsCtx } from "@/components/PresentBookPages";
 
 /**
  * THE POP-OUT. What happens when a landlord presses "View presentation" on
@@ -106,7 +107,9 @@ export default function PresentModal({
         {/* THE BOOKLET, folding out onto the table. */}
         {room.w > 0 && (
           <div className="relative z-[84]" style={{ transformOrigin: "50% 100%", animation: "present-fold 820ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both" }}>
-            <PresentBook deck={deck} pages={pages} fit={fit} onSpread={onSpread} onApi={setApi} />
+            <BookActionsCtx.Provider value={{ sign: () => setSignOpen(true) }}>
+              <PresentBook deck={deck} pages={pages} fit={fit} onSpread={onSpread} onApi={setApi} />
+            </BookActionsCtx.Provider>
           </div>
         )}
 

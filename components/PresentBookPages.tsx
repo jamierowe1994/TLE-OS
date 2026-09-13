@@ -4,6 +4,10 @@ import { INK, Line } from "@/components/present-kit";
 import { APPRAISAL_PROMISES, defaultBio, type PresentDeck as Deck } from "@/lib/present";
 import { AGENDA, APPROACH, COMPLIANCE, LEGAL_CAVEAT, LEGAL_ITEMS, MANAGEMENT, MAX_PRICE, NEXT_STEPS, PORTALS_COPY, PROTECTION, REGULATED, RENT_COLLECTION, RENT_LEGAL, SCREENING, SERVICE_LEVELS, SERVICE_LEVELS_INTRO, SERVICE_ROWS, WHAT_WE_OFFER } from "@/lib/present-copy";
 import { FROM_US, FROM_YOU } from "@/components/PresentDeck";
+import { createContext, useContext } from "react";
+
+/** What a page can ask the pop-out to do. The modal provides it. */
+export const BookActionsCtx = createContext<{ sign: () => void } | null>(null);
 import { DEMAND_STATS, PORTAL_STATS, statFooter } from "@/lib/present-stats";
 
 /**
@@ -442,7 +446,9 @@ function Thumb({ src, tint }: { src: string | null | undefined; tint?: boolean }
  * pink band. The same rows and the same cap as the deck's slide.
  */
 export function BookListings({ deck }: { deck: Deck }) {
-  const rows = (deck.listings ?? []).slice(0, 5);
+  /* Four in the booklet - James, 13 Sep 2026: "What's on the market should be
+     limited to 4". The deck keeps its own cap. */
+  const rows = (deck.listings ?? []).slice(0, 4);
   const ours = rows.filter((r) => r.ours).length;
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
@@ -497,7 +503,8 @@ export function BookListings({ deck }: { deck: Deck }) {
 export function BookComparables({ deck }: { deck: Deck }) {
   const c = deck.comparables;
   if (!c) return <div style={{ width: PAGE_W, height: PAGE_H, background: PAPER }} />;
-  const rows = c.rows.slice(0, 6);
+  /* Five in the booklet; the deck shows more. */
+  const rows = c.rows.slice(0, 5);
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="pointer-events-none absolute -right-[260px] -top-[240px] h-[560px] w-[560px] rounded-full" style={{ background: "var(--p-tint)", opacity: 0.9 }} />
@@ -1087,18 +1094,11 @@ export function BookLegal() {
    same kind of feel"). A different shape or picture on each, none of the
    pictures used earlier in the booklet - the OS's own photographs instead. */
 
-/** A soft corner shape - sage or pink - in any corner. */
-function Corner({ where, tint = "sage" }: { where: "bl" | "br" | "tr" | "tl"; tint?: "sage" | "pink" }) {
-  const fill = tint === "sage" ? SAGE_WASH : "var(--p-tint)";
-  const d = {
-    bl: "M-20 560 C 30 690, 110 780, 240 830 C 380 880, 540 900, 700 920 L-20 920 Z",
-    br: "M1460 560 C 1410 690, 1330 780, 1200 830 C 1060 880, 900 900, 740 920 L1460 920 Z",
-    tr: "M1460 340 C 1410 210, 1330 120, 1200 70 C 1060 20, 900 0, 740 -20 L1460 -20 Z",
-    tl: "M-20 340 C 30 210, 110 120, 240 70 C 380 20, 540 0, 700 -20 L-20 -20 Z",
-  }[where];
+/** A free-drawn shape in the page's own units, sage or pink. */
+function Blob({ d, tint = "sage" }: { d: string; tint?: "sage" | "pink" }) {
   return (
     <svg viewBox={`0 0 ${PAGE_W} ${PAGE_H}`} aria-hidden className="pointer-events-none absolute left-0 top-0" style={{ width: PAGE_W, height: PAGE_H }}>
-      <path d={d} fill={fill} />
+      <path d={d} fill={tint === "sage" ? SAGE_WASH : "var(--p-tint)"} />
     </svg>
   );
 }
@@ -1126,7 +1126,9 @@ export function BookScreening() {
   const [a, b] = [SCREENING.paragraphs.slice(0, 2), SCREENING.paragraphs.slice(2)];
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
-      <Corner where="bl" />
+      {/* The sage as a wave along the foot: down off the left, back up, and
+          down again to finish over the strap - James, 13 Sep 2026. */}
+      <Blob d="M-20 520 C 40 620, 90 720, 200 700 C 290 684, 320 600, 400 630 C 470 656, 500 740, 620 780 C 700 806, 760 860, 780 920 L-20 920 Z" />
       <div className="absolute left-[96px] top-[84px] w-[1200px]">
         <EyebrowRule>{SCREENING.eyebrow}</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
@@ -1154,7 +1156,7 @@ export function BookManagement() {
   const icons: ("check" | "shield" | "chart" | "home")[] = ["check", "shield", "chart", "home"];
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
-      <Corner where="br" />
+      <Blob d="M1460 600 C 1400 560, 1340 660, 1260 650 C 1180 640, 1150 580, 1070 610 C 990 640, 980 740, 900 780 C 840 810, 800 860, 780 920 L1460 920 Z" />
       <Hand className="right-[130px] top-[700px] w-[220px] text-right" style={{ transform: "rotate(-10deg)" }}>
         Your property
         <br />
@@ -1234,8 +1236,10 @@ export function BookLevels({ deck }: { deck: Deck }) {
 export function BookCollection() {
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
-      <Corner where="br" tint="pink" />
-      <Soft src="/brand/photo/appointment.webp" style={{ right: 60, bottom: 40, width: 460, height: 400 }} />
+      {/* The pink, big, off the top-right corner; the building standing in
+          front of it and rising off the top of the page - James, 13 Sep 2026. */}
+      <div className="pointer-events-none absolute -right-[260px] -top-[360px] h-[760px] w-[760px] rounded-full" style={{ background: "var(--p-tint)" }} />
+      <Soft src="/brand/photo/appointment.webp" style={{ right: 110, top: -60, width: 380, height: 540 }} radius="0 0 190px 190px" />
       <div className="absolute left-[96px] top-[84px] w-[760px]">
         <EyebrowRule>Rent collection</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
@@ -1266,7 +1270,8 @@ export function BookRentLegal({ deck }: { deck: Deck }) {
   const cols = [RENT_LEGAL.points.slice(0, half), RENT_LEGAL.points.slice(half)];
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
-      <Corner where="tl" tint="pink" />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/brand/photo/book-plant-corner.webp" alt="" aria-hidden className="pointer-events-none absolute max-w-none" style={{ width: 300, right: -60, top: -70 }} />
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>{RENT_LEGAL.eyebrow}</EyebrowRule>
         <h1 className="mt-6 text-[52px] leading-[1.1]" style={SERIF}>
@@ -1303,7 +1308,6 @@ export function BookRentLegal({ deck }: { deck: Deck }) {
 export function BookRegulated() {
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
-      <Soft src="/brand/photo/property.jpg" style={{ right: -40, bottom: -60, width: 640, height: 300 }} radius="58% 42% 0 0 / 100% 100% 0 0" />
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>Regulated and protected</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
@@ -1368,25 +1372,24 @@ export function BookTestimonial({ deck }: { deck: Deck }) {
   const t = deck.testimonials?.[0] ?? deck.testimonial ?? null;
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
-      <div className="pointer-events-none absolute left-1/2 top-[300px] h-[620px] w-[620px] -translate-x-1/2 rounded-full" style={{ background: "var(--p-tint)", opacity: 0.8 }} />
       <div className="absolute inset-x-0 top-[84px] flex flex-col items-center text-center">
         <Eyebrow>What landlords say</Eyebrow>
-        <div className="mt-8 h-[170px] w-[170px] overflow-hidden rounded-full shadow-[0_20px_40px_-20px_rgba(0,0,0,0.35)]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/photo/close.jpg" alt="" aria-hidden className="h-full w-full object-cover" />
-        </div>
         {t?.quote ? (
-          <div className="relative mt-8 w-[860px]">
-            <span aria-hidden className="block text-[110px] leading-[0.5]" style={{ ...SERIF, color: CLAY }}>&ldquo;</span>
-            <p className="mt-6 text-[27px] italic leading-[1.5] text-black/80" style={{ ...SERIF, fontWeight: 400 }}>{t.quote}</p>
-            {t.rating != null && <p className="mt-6 text-[18px] tracking-[0.2em]" style={{ color: CLAY }}>{"\u2605".repeat(Math.max(0, Math.min(5, Math.round(t.rating))))}</p>}
-            <p className="mt-3 text-[11px] uppercase tracking-[0.3em] text-black/55">{t.author}</p>
+          <div className="relative mt-6 w-[1060px]">
+            <span aria-hidden className="block text-[150px] leading-[0.55]" style={{ ...SERIF, color: CLAY }}>&ldquo;</span>
+            <p className="mt-6 text-[36px] italic leading-[1.4] text-black/85" style={{ ...SERIF, fontWeight: 400 }}>{t.quote}</p>
+            {t.rating != null && <p className="mt-8 text-[26px] tracking-[0.25em]" style={{ color: CLAY }}>{"\u2605".repeat(Math.max(0, Math.min(5, Math.round(t.rating))))}</p>}
+            <p className="mt-4 text-[14px] uppercase tracking-[0.3em] text-black/60">{t.author}</p>
+            <div className="mx-auto mt-8 h-[150px] w-[150px] overflow-hidden rounded-full shadow-[0_20px_40px_-20px_rgba(0,0,0,0.35)]">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/photo/close.jpg" alt="" aria-hidden className="h-full w-full object-cover" />
+            </div>
           </div>
         ) : (
           <p className="mt-10 text-[17px] text-black/55">What our landlords say about us will sit here.</p>
         )}
       </div>
-      <FootRight />
+      <p className="absolute bottom-[56px] left-1/2 -translate-x-1/2 text-[10.5px] uppercase tracking-[0.3em] text-black/55">People &middot; Homes &middot; Relationships</p>
     </div>
   );
 }
@@ -1394,10 +1397,26 @@ export function BookTestimonial({ deck }: { deck: Deck }) {
 /** Page 13L: THE FIGURE - the rent we would put it on at, big, with the terms it comes with. */
 export function BookValuation({ deck }: { deck: Deck }) {
   const v = deck.valuation;
+  /* Which of the three levels the agreed service is, by its name. */
+  const levelIndex = (name: string | null) => {
+    const n = (name ?? "").toLowerCase();
+    if (/manag/.test(n)) return 0;
+    if (/collect/.test(n)) return 1;
+    if (/find/.test(n)) return 2;
+    return -1;
+  };
+  const li = v ? levelIndex(v.serviceLevel) : -1;
+  const included = li >= 0 ? SERVICE_ROWS.filter((r) => r.included[li as 0 | 1 | 2]).map((r) => r.service) : [];
+  const lines = v
+    ? ([
+        v.serviceLevel ? ["Service", v.serviceLevel] : null,
+        v.feePct != null ? ["Fee", `${v.feePct}% of rent, ${gbp(Math.round((v.rent * v.feePct) / 100))} a month at this rent`] : null,
+        v.setupFee != null ? ["Set-up", `${gbp(v.setupFee)} one-off`] : null,
+      ].filter(Boolean) as [string, string][])
+    : [];
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
-      <Corner where="bl" />
-      <div className="absolute left-[96px] top-[84px] w-[1200px]">
+      <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>What we&rsquo;d put it on at</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
           The figure, and
@@ -1405,27 +1424,38 @@ export function BookValuation({ deck }: { deck: Deck }) {
           what comes <Ital width={180}>with it</Ital>
         </h1>
         {v ? (
-          <>
-            <p className="mt-10 leading-none">
-              <span className="text-[120px]" style={{ ...SERIF, color: "var(--p-accent)" }}>{gbp(v.rent)}</span>
-              <span className="ml-4 text-[30px] text-black/60" style={SERIF}>pcm</span>
-            </p>
-            <div className="mt-8 grid grid-cols-3 gap-x-10" style={{ width: 900 }}>
-              {[
-                v.serviceLevel ? { k: "Service", v: v.serviceLevel } : null,
-                v.feePct != null ? { k: "Fee", v: `${v.feePct}% of rent` } : null,
-                v.setupFee != null ? { k: "Set-up", v: `${gbp(v.setupFee)} one-off` } : null,
-              ]
-                .filter(Boolean)
-                .map((x) => (
-                  <div key={(x as { k: string }).k} className="border-t pt-4" style={{ borderColor: "rgba(0,0,0,0.12)" }}>
-                    <p className="text-[10.5px] uppercase tracking-[0.22em] text-black/50">{(x as { k: string }).k}</p>
-                    <p className="mt-2 text-[22px]" style={SERIF}>{(x as { v: string }).v}</p>
+          <div className="mt-8 grid grid-cols-[520px_1fr] gap-x-16">
+            <div>
+              <p className="leading-none">
+                <span className="text-[104px]" style={{ ...SERIF, color: "var(--p-accent)" }}>{gbp(v.rent)}</span>
+                <span className="ml-3 text-[26px] text-black/60" style={SERIF}>pcm</span>
+              </p>
+              <dl className="mt-8">
+                {lines.map(([k, val]) => (
+                  <div key={k} className="flex items-baseline gap-6 border-t py-4" style={{ borderColor: "rgba(0,0,0,0.12)" }}>
+                    <dt className="w-[90px] shrink-0 text-[10.5px] uppercase tracking-[0.22em] text-black/50">{k}</dt>
+                    <dd className="text-[20px]" style={SERIF}>{val}</dd>
                   </div>
                 ))}
+              </dl>
+              {v.note && <p className="mt-6 max-w-[500px] text-[14px] italic leading-[1.6] text-black/60" style={{ ...SERIF, fontWeight: 400 }}>{v.note}</p>}
             </div>
-            {v.note && <p className="mt-8 max-w-[640px] text-[14.5px] italic leading-[1.6] text-black/60" style={{ ...SERIF, fontWeight: 400 }}>{v.note}</p>}
-          </>
+            {included.length > 0 && (
+              <div className="rounded-[22px] px-8 py-7" style={{ background: SAGE_WASH }}>
+                <p className="text-[11px] uppercase tracking-[0.3em] text-black/55">Included in {v.serviceLevel}</p>
+                <ul className="mt-4 grid grid-cols-1 gap-y-[6px]">
+                  {included.map((t) => (
+                    <li key={t} className="flex items-start gap-3">
+                      <span className="mt-[3px] flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-white" style={{ color: SAGE_INK }}>
+                        <Line name="check" size={10} />
+                      </span>
+                      <span className="text-[13px] leading-[1.45] text-black/75">{t}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         ) : (
           <p className="mt-10 text-[17px] text-black/55">The figure we agreed at the visit will sit here.</p>
         )}
@@ -1438,10 +1468,12 @@ export function BookValuation({ deck }: { deck: Deck }) {
 /** Page 13R: WHAT IT COSTS - the one fee, what it covers, and what is not in it. */
 export function BookFees({ deck }: { deck: Deck }) {
   const f = deck.fees;
+  const rent = deck.valuation?.rent ?? null;
+  const monthly = (r: { pct?: number | null; oneOff?: number | null }) =>
+    r.pct != null && rent != null ? `${gbp(Math.round((rent * r.pct) / 100))} a month` : r.oneOff != null ? `${gbp(r.oneOff)} one-off` : null;
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
-      <Corner where="tr" tint="pink" />
-      <div className="absolute left-[96px] top-[84px] w-[1200px]">
+      <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>What it costs</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
           One fee.
@@ -1450,30 +1482,54 @@ export function BookFees({ deck }: { deck: Deck }) {
         </h1>
         {f ? (
           <>
-            {f.headline && (
-              <p className="mt-8 text-[40px] leading-none" style={{ ...SERIF, color: "var(--p-accent)" }}>
-                {f.headline}
-                {f.headlineFor && <span className="ml-4 text-[16px] text-black/55" style={{ fontFamily: "inherit" }}>{f.headlineFor}</span>}
+            <div className="mt-8 grid grid-cols-[1fr_440px] items-start gap-x-14">
+              <div>
+                {f.headline && (
+                  <p className="leading-none">
+                    <span className="text-[56px]" style={{ ...SERIF, color: "var(--p-accent)" }}>{f.headline}</span>
+                    {f.headlineFor && <span className="ml-4 text-[18px] text-black/55">{f.headlineFor}</span>}
+                  </p>
+                )}
+                <dl className="mt-8">
+                  {f.rows.map((r) => (
+                    <div key={r.label} className="grid grid-cols-[1fr_auto] items-baseline gap-x-8 border-t py-4" style={{ borderColor: "rgba(0,0,0,0.1)" }}>
+                      <dt>
+                        <span className="text-[22px]" style={SERIF}>{r.label}</span>
+                        {r.note && <span className="ml-3 text-[13px] text-black/50">{r.note}</span>}
+                      </dt>
+                      <dd className="text-right">
+                        <span className="block text-[22px] font-semibold">{r.amount}</span>
+                        {monthly(r) && <span className="block text-[13px] text-black/50">{monthly(r)}</span>}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+              <p className="pt-3 text-[16px] leading-[1.65] text-black/65">
+                One percentage of the rent we collect, and it covers the tenancy from start to finish. Nothing is added later that is not on this page, and what is not included is written here too.
               </p>
+            </div>
+            {rent != null && (
+              <div className="mt-8 rounded-[22px] px-8 py-6" style={{ background: "var(--p-tint)", width: 1200 }}>
+                <p className="text-[11px] uppercase tracking-[0.3em] text-black/55">At {gbp(rent)} a month, that is</p>
+                <p className="mt-3 text-[19px] leading-[1.6] text-black/80" style={SERIF}>
+                  {f.rows
+                    .map((r) => {
+                      const m = monthly(r);
+                      return m ? `${r.label}: ${m}` : null;
+                    })
+                    .filter(Boolean)
+                    .join("  \u00b7  ")}
+                </p>
+              </div>
             )}
-            <dl className="mt-8" style={{ width: 900 }}>
-              {f.rows.map((r) => (
-                <div key={r.label} className="flex items-baseline justify-between gap-8 border-t py-4" style={{ borderColor: "rgba(0,0,0,0.1)" }}>
-                  <dt className="text-[17px]" style={SERIF}>{r.label}</dt>
-                  <dd className="text-right">
-                    <span className="text-[17px] font-semibold">{r.amount}</span>
-                    {r.note && <span className="ml-3 text-[12.5px] text-black/50">{r.note}</span>}
-                  </dd>
-                </div>
-              ))}
-            </dl>
             {f.excluded.length > 0 && (
               <div className="mt-6">
                 <p className="text-[10.5px] uppercase tracking-[0.22em] text-black/50">Not included</p>
-                <p className="mt-2 max-w-[800px] text-[13.5px] leading-[1.6] text-black/60">{f.excluded.join("  \u00b7  ")}</p>
+                <p className="mt-2 max-w-[800px] text-[14px] leading-[1.6] text-black/60">{f.excluded.join("  \u00b7  ")}</p>
               </div>
             )}
-            {f.note && <p className="mt-5 max-w-[800px] text-[12.5px] leading-[1.6] text-black/50">{f.note}</p>}
+            {f.note && <p className="mt-5 max-w-[800px] text-[13px] leading-[1.6] text-black/50">{f.note}</p>}
           </>
         ) : (
           <p className="mt-10 text-[17px] text-black/55">Our fee schedule will sit here.</p>
@@ -1486,29 +1542,43 @@ export function BookFees({ deck }: { deck: Deck }) {
 
 /** Page 14L: GETTING STARTED - three steps, numbered, and where to sign. */
 export function BookTerms({ deck }: { deck: Deck }) {
+  const actions = useContext(BookActionsCtx);
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
-      <Corner where="bl" tint="pink" />
-      <div className="absolute left-[96px] top-[84px] w-[1200px]">
+      <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>Getting started</EyebrowRule>
-        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-6 text-[64px] leading-[1.1]" style={SERIF}>
           Three steps,
           <br />
-          and we&rsquo;re <Ital width={130}>away</Ital>
+          and we&rsquo;re <Ital width={140}>away</Ital>
         </h1>
-        <ol className="mt-10" style={{ width: 760 }}>
+        <ol className="mt-10" style={{ width: 1000 }}>
           {NEXT_STEPS.map((st, i) => (
-            <li key={st.title} className={`flex gap-6 py-6 ${i > 0 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.1)" }}>
-              <span className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full text-[15px]" style={{ ...SERIF, background: "var(--p-tint)", color: "var(--p-accent)" }}>0{i + 1}</span>
-              <span className="min-w-0">
-                <span className="block text-[19px] leading-snug" style={SERIF}>{st.title}</span>
-                <span className="mt-2 block max-w-[560px] text-[14px] leading-[1.6] text-black/60">{st.body}</span>
+            <li key={st.title} className={`flex items-start gap-7 py-7 ${i > 0 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.1)" }}>
+              <span className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full text-[17px]" style={{ ...SERIF, background: "var(--p-tint)", color: "var(--p-accent)" }}>0{i + 1}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[24px] leading-snug" style={SERIF}>{st.title}</span>
+                <span className="mt-2 block max-w-[640px] text-[16px] leading-[1.6] text-black/60">{st.body}</span>
               </span>
+              {i === 0 && (
+                /* Above the turn zones (z-7), so the press reaches it. */
+                <button
+                  type="button"
+                  onClick={() => actions?.sign()}
+                  className="relative z-[8] mt-1 inline-flex h-[54px] shrink-0 items-center gap-3 rounded-full px-7 text-[15px] font-semibold text-white shadow-[0_18px_40px_-18px_rgba(0,0,0,0.5)] transition-transform hover:scale-[1.03]"
+                  style={{ background: "#cfa096", pointerEvents: "auto" }}
+                >
+                  Sign the terms
+                  <svg viewBox="0 0 24 24" aria-hidden className="h-[16px] w-[16px]">
+                    <path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              )}
             </li>
           ))}
         </ol>
-        <p className="mt-6 max-w-[640px] text-[14px] leading-[1.6] text-black/60">
-          {deck.terms?.summary ?? (deck.terms?.signUrl ? "Your terms are ready - press Sign your contract below the booklet whenever you are." : `Your terms are being prepared. ${deck.agent.firstName || "Your agent"} will send them across, and Sign your contract below the booklet will take you straight to them.`)}
+        <p className="mt-6 max-w-[760px] text-[15px] leading-[1.6] text-black/60">
+          {deck.terms?.summary ?? (deck.terms?.signUrl ? "Your terms are ready - press Sign the terms whenever you are." : `Your terms are being prepared. ${deck.agent.firstName || "Your agent"} will send them across, and Sign the terms will take you straight to them.`)}
         </p>
       </div>
       <FootLeft deck={deck} />
@@ -1522,8 +1592,12 @@ export function BookQuestions({ deck }: { deck: Deck }) {
   const first = a.firstName || "us";
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
-      <Corner where="br" />
-      <Soft src="/brand/photo/welcome.jpg" style={{ right: 80, top: 100, width: 420, height: 520 }} radius="50% 50% 46% 54% / 60% 60% 40% 40%" />
+      {/* A big sage shape with loose, wavy edges, covering the right of the
+          page, with the door in front of it - James, 13 Sep 2026: "a big old
+          green box ... fairly loose lines, kind of fairly wavy all the way
+          around". */}
+      <Blob d="M860 -20 C 900 60, 840 140, 880 230 C 920 320, 860 400, 900 500 C 940 600, 870 700, 920 800 C 950 860, 1000 900, 1040 920 L1460 920 L1460 -20 Z" />
+      <Soft src="/brand/photo/welcome.jpg" style={{ right: 110, top: 90, width: 400, height: 520 }} radius="46% 54% 48% 52% / 56% 58% 42% 44%" />
       <Hand className="right-[90px] top-[660px] w-[260px] text-right" style={{ transform: "rotate(-8deg)" }}>
         Let&rsquo;s get going.
       </Hand>
