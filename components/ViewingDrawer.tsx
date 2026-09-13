@@ -380,12 +380,11 @@ export default function ViewingDrawer({
                 Complete the viewing
               </PressButton>
             )}
-            {past && (
-              <PressButton className="press-ring flex items-center gap-2 rounded-full border border-ink/25 px-4 py-2 text-[11.5px] font-semibold">
-                <DoodleIcon name="clock" size={13} />
-                Schedule a review
-              </PressButton>
-            )}
+            {/* "Schedule a review" sat here with no handler on it - the same
+                class as the three sends hidden for the pilot (D16), missed
+                because it is not a send. Hidden rather than wired: what a
+                review IS has never been decided, and a button that books
+                nothing is worse than no button. */}
             <button
               type="button"
               onClick={onClose}

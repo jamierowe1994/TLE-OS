@@ -62,10 +62,13 @@ export default async function TenantPublicLayout({ children }: { children: React
       <footer className="border-t border-black/10 bg-[#fafafa]">
         <div className="flex w-full flex-wrap items-center justify-between gap-3 px-5 py-6 text-[11px] text-black/50 sm:px-8 lg:px-12">
           <span>© The Letting Experts · thelettingexperts.co.uk</span>
+          {/* The real pages on thelettingexperts.co.uk, checked live 13 Sep 2026.
+              They were href="#" - three dead links in a customer footer, one of
+              them the privacy notice. */}
           <span className="flex gap-4">
-            <a href="#" className="hover:text-black">Privacy &amp; your data</a>
-            <a href="#" className="hover:text-black">Contact us</a>
-            <a href="#" className="hover:text-black">Complaints</a>
+            <a href="https://thelettingexperts.co.uk/privacy-policy" target="_blank" rel="noreferrer" className="hover:text-black">Privacy &amp; your data</a>
+            <a href="https://thelettingexperts.co.uk/contact-us" target="_blank" rel="noreferrer" className="hover:text-black">Contact us</a>
+            <a href="https://thelettingexperts.co.uk/complaints-handling" target="_blank" rel="noreferrer" className="hover:text-black">Complaints</a>
           </span>
         </div>
       </footer>

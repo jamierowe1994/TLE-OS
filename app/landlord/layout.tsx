@@ -101,10 +101,13 @@ export default async function LandlordLayout({ children }: { children: React.Rea
         <footer>
           <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-6 text-[11.5px] text-muted sm:px-10">
             <span>The Letting Experts · thelettingexperts.co.uk</span>
+            {/* The real pages on thelettingexperts.co.uk, checked live 13 Sep 2026.
+              They were href="#" - three dead links in a customer footer, one of
+              them the privacy notice. */}
             <span className="flex gap-4">
-              <a href="#" className="transition-colors hover:text-ink">Privacy and your data</a>
-              <a href="#" className="transition-colors hover:text-ink">Contact us</a>
-              <a href="#" className="transition-colors hover:text-ink">Complaints</a>
+              <a href="https://thelettingexperts.co.uk/privacy-policy" target="_blank" rel="noreferrer" className="transition-colors hover:text-ink">Privacy and your data</a>
+              <a href="https://thelettingexperts.co.uk/contact-us" target="_blank" rel="noreferrer" className="transition-colors hover:text-ink">Contact us</a>
+              <a href="https://thelettingexperts.co.uk/complaints-handling" target="_blank" rel="noreferrer" className="transition-colors hover:text-ink">Complaints</a>
             </span>
           </div>
         </footer>

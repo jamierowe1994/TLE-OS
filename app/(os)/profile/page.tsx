@@ -251,6 +251,8 @@ export default function ProfilePage() {
   /* Whether their mailbox and REX are actually connected, asked of the
      server rather than remembered in the page. */
   const [setup, setSetup] = useState<{ emailConnected?: boolean; rexConnected?: boolean; email?: string } | null>(null);
+  /** "Upgrade to Pro" used to be a dead button; it now says who does it. */
+  const [askedPro, setAskedPro] = useState(false);
   const loadSetup = useCallback(() => {
     fetch("/api/setup", { cache: "no-store" })
       .then((r) => r.json())
@@ -766,10 +768,23 @@ export default function ProfilePage() {
               ))}
             </div>
 
+            {/* It was a button with no handler on it (found 13 Sep 2026 in the
+                sweep that followed James's two). Pro is a licence change and
+                the price is not ours to state, so the honest thing it can do
+                is say who actually switches it on. */}
             <div className="mx-auto mt-8 flex max-w-sm flex-col items-center gap-3">
-              <PressButton className="press-ring press-wobble w-full rounded-full bg-accent-dark px-8 py-3.5 text-[14px] font-semibold text-page">
+              <PressButton
+                onClick={() => setAskedPro(true)}
+                className="press-ring press-wobble w-full rounded-full bg-accent-dark px-8 py-3.5 text-[14px] font-semibold text-page"
+              >
                 Upgrade to Pro — unlock Ads
               </PressButton>
+              {askedPro && (
+                <p className="fade-up rounded-xl border border-line/70 bg-card px-4 py-3 text-center text-[12px] leading-relaxed">
+                  Pro sits on your licence rather than in here, so it is Susan who turns it on.
+                  Ask her and it is live on your next sign-in.
+                </p>
+              )}
               <p className="text-[10.5px] leading-relaxed text-muted">
                 Pro sits on top of your monthly licence. Campaigns for every new listing,
                 a landlord-switch ad always running, and the cost-per-lead on your
