@@ -327,8 +327,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             is collapsed. A painted illustration, so never put through the
             dark-mode inversion - the dark theme gets its own copy with the
             words in white and the house as painted. The collapse toggle sits
-            under it, at the end of the rule, so the logo has the whole row. */}
-        <div className={`flex ${collapsed ? "justify-center" : ""} px-1`}>
+            beside it on the same row. */}
+        <div className={`flex items-center px-1 ${collapsed ? "flex-col gap-2" : "justify-between"}`}>
           {collapsed ? (
             <img src="/brand/tle-os-house.png" alt="TLE OS" className="h-12 w-auto shrink-0 object-contain" />
           ) : (
@@ -337,8 +337,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               <img src="/brand/tle-os-logo-dark.png" alt="" aria-hidden className="art-dark h-auto w-[78%] object-contain" />
             </>
           )}
-        </div>
-        <div className={`mt-3 flex ${collapsed ? "justify-center" : "justify-end"} px-1`}>
+          {/* The collapse toggle, beside the logo on the same row (James, 13 Sep 2026). */}
           <button
             type="button"
             onClick={toggleCollapsed}
@@ -350,7 +349,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* The break bar, then the nav sits a touch lower. */}
-        <div className="mt-2 border-t border-line/70" />
+        <div className="mt-4 border-t border-line/70" />
         <nav className="os-rail mt-4 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden pb-2">
           {FRONT.map((item) => (
             <NavLink
