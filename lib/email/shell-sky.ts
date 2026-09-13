@@ -226,8 +226,10 @@ export interface SkyListOpts {
   intro: string;
   button: string;
   link: string;
-  /** A file in /email/sky - the drawing and its pink shape, already one picture. */
-  hero: string;
+  /** A file in /email/sky - the drawing and its pink shape, already one
+   *  picture. Left out when there isn't a drawing for this one yet: better a
+   *  mail that looks deliberately plain than one with a broken box at the top. */
+  hero?: string;
   rows?: ShellRow[];
   /** The small line above the list - "3 properties on your book". */
   rowsLead?: string;
@@ -238,8 +240,14 @@ export interface SkyListOpts {
    * guessing one from an address.
    */
   rowHref?: string;
-  /** The quiet aside at the foot, in the sage panel. */
+  /** The aside at the foot. */
   tip?: string;
+  /**
+   * A single line sits as plain grey text; anything longer gets the sage
+   * panel. A one-line aside in a full panel reads as a warning rather than
+   * an afterthought, which is the opposite of what an aside is for.
+   */
+  tipQuiet?: boolean;
 }
 
 /** One row: marker, words, badge, chevron. Four cells, because there is no
@@ -254,7 +262,7 @@ function listRow(r: ShellRow, href: string | undefined, last: boolean): string {
                     }</p>${
                       r.detail
                         ? `
-                    <p style="margin:4px 0 0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13.5px;line-height:1.45;color:#7d736e;background-color:${PANEL}">${esc(r.detail)}</p>`
+                    <p style="margin:4px 0 0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13.5px;line-height:1.45;color:${r.tone === "attention" ? "#b3655b" : "#7d736e"};background-color:${PANEL}">${esc(r.detail)}</p>`
                         : ""
                     }`;
   return `
@@ -306,6 +314,9 @@ export function skyListShell(o: SkyListOpts): string {
           </td>
         </tr>
 
+${
+  o.hero
+    ? `
         <tr>
           <!-- The drawing and the pink shape behind it are one flat picture:
                there is no layering in an inbox. -->
@@ -313,7 +324,9 @@ export function skyListShell(o: SkyListOpts): string {
             <img src="${ORIGIN}/email/sky/${o.hero}?v=${ASSET_V}" width="600" alt=""
                  style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none">
           </td>
-        </tr>
+        </tr>`
+    : ""
+}
 
         <tr>
           <td align="center" class="sky-pad" style="padding:28px 46px 0;text-align:center;background-color:#ffffff">
@@ -354,7 +367,16 @@ ${pressable(o.button, safe, BROWN)}
           </td>
         </tr>
 ${
-  o.tip
+  o.tip && o.tipQuiet
+    ? `
+        <tr>
+          <td align="center" class="sky-pad" style="padding:26px 46px 0;text-align:center;background-color:#ffffff">
+            <p style="margin:0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:12.5px;line-height:1.6;color:#8a817c;background-color:#ffffff">${esc(o.tip)}</p>
+          </td>
+        </tr>`
+    : ""
+}${
+  o.tip && !o.tipQuiet
     ? `
         <tr>
           <td class="sky-pad" style="padding:34px 30px 0;background-color:#ffffff">

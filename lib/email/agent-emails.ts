@@ -37,11 +37,16 @@ export interface AgentEmail {
  * routes are not restyled here: their lines are also what the Admin dry-run
  * prints, and one source for both is the point.
  */
+/** "2026-08-30" reads as a database. "30 Aug 2026" reads as a date. */
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const prettyDates = (s: string) =>
+  s.replace(/(\d{4})-(\d{2})-(\d{2})/g, (_, y: string, m: string, d: string) => `${Number(d)} ${MONTHS[Number(m) - 1]} ${y}`);
+
 export function lineToRow(line: string): ShellRow {
   const plain = line.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
   const at = plain.indexOf(" - ");
   const title = at === -1 ? plain : plain.slice(0, at);
-  const detail = at === -1 ? undefined : plain.slice(at + 3);
+  let detail = at === -1 ? undefined : plain.slice(at + 3);
   const hot = /expired|not on file|no certificate|overdue|missing/i.test(detail ?? plain);
 
   /* The badge. A number when there is one to give, and the plain fact when
@@ -49,9 +54,21 @@ export function lineToRow(line: string): ShellRow {
      nothing on the right of it reads as the row that is fine. Fourteen days
      is where it turns clay: that is the middle chase band, and the point at
      which booking a contractor stops being comfortable. */
-  const days = /expires? in (\d+) days?/i.exec(detail ?? "");
+  /* Two shapes of line reach this, because two different routes write them:
+     "expires in 12 days" from the certificate chase, and "runs out
+     2026-09-28 (22 days)" from an agent's own compliance. Both give a
+     number; neither is worth rewriting at the source, since those strings
+     are also what the Admin dry-run prints. */
+  const days = /(?:\bin |\()(\d+) days?\)?/i.exec(detail ?? "");
   const pill = hot ? "Action needed" : days ? `${days[1]} day${days[1] === "1" ? "" : "s"}` : undefined;
   const urgent = hot || (days ? Number(days[1]) <= 14 : false);
+
+  if (detail) {
+    /* The count in brackets has become the badge, so it goes: "runs out
+       28 Sep 2026 (22 days)" beside a badge reading "22 days" says it twice. */
+    detail = prettyDates(detail).replace(/\s*\(\d+ days?\)/i, "").trim();
+    detail = detail.charAt(0).toUpperCase() + detail.slice(1);
+  }
 
   return { title, detail, tone: hot ? "attention" : "neutral", pill, pillTone: urgent ? "urgent" : "calm" };
 }
@@ -98,15 +115,17 @@ export function ownComplianceEmail(input: { firstName: string; lines: string[] }
   const link = `${SITE}/profile`;
   return {
     subject,
-    html: emailShell({
+    html: skyListShell({
       heading: "Your own compliance",
       intro,
       rows,
       rowsLead: "Worst first",
+      rowHref: link,
       button: "Open your profile",
       link,
-      image: "illustrations/email/own-compliance.gif",
-      footnote: "Michael checks it from his side. Only his tick reads as checked.",
+      hero: "hero-own-compliance.png",
+      tip: "Michael checks it from his side. Only his tick reads as checked.",
+      tipQuiet: true,
     }),
     text: ["Your own compliance", "", intro, "", textRows(rows), "", `Open your profile: ${link}`].join("\n"),
   };

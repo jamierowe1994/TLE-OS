@@ -162,9 +162,9 @@ async function cloudGif({ name, src, width, side, bleed, ampY, ampX, frames, del
    The drawing and the pink shape behind it are ONE flat picture. They have
    to be: there is no layering in an inbox, and a shape that has to sit
    behind a drawing is a shape that has to be painted with it. */
-async function hero({ name, art, blob }) {
-  const W = 1200, H = 760;
-  const drawing = await sharp(`${ART}/${art}`).resize({ width: 1130 }).toBuffer();
+async function hero({ name, art, blob, H = 760, drawWidth = 1130 }) {
+  const W = 1200;
+  const drawing = await sharp(`${ART}/${art}`).resize({ width: drawWidth }).toBuffer();
   const dm = await sharp(drawing).metadata();
   fs.mkdirSync(OUT, { recursive: true });
   await sharp({ create: { width: W, height: H, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } } })
@@ -181,8 +181,17 @@ async function hero({ name, art, blob }) {
    SVG does not render in Outlook at all, so every one of these is baked to
    PNG at twice its size on the page. The glyphs are solid black on clear,
    which is what lets a flat colour be poured through them. */
+const BANG = `<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+  <rect x="17" y="7" width="6" height="18" rx="3" fill="#000"/>
+  <circle cx="20" cy="32" r="3.4" fill="#000"/>
+</svg>`;
+
 async function disc({ name, glyph, ring, ink, d = 84, g = 40 }) {
-  const black = await sharp(`public/icons/doodle/${glyph}.svg`).resize({ width: g, height: g, fit: "inside" }).png().toBuffer();
+  /* A glyph is either a name in the doodle set or raw SVG for something the
+     set does not have. Either way it arrives as solid black on clear, which
+     is what lets a flat colour be poured through it. */
+  const src = glyph.trimStart().startsWith("<svg") ? Buffer.from(glyph) : `public/icons/doodle/${glyph}.svg`;
+  const black = await sharp(src).resize({ width: g, height: g, fit: "inside" }).png().toBuffer();
   const bm = await sharp(black).metadata();
   const tinted = await sharp({ create: { width: bm.width, height: bm.height, channels: 4, background: ink } })
     .composite([{ input: black, blend: "dest-in" }])
@@ -222,7 +231,26 @@ if (cutArg > -1) {
     blob: `<path d="M0,486 C120,392 268,470 402,452 C548,432 592,214 786,150 C930,102 1094,150 1200,116 L1200,724 C1160,744 1084,740 1020,716 C958,692 918,702 866,678 C760,632 600,650 420,630 C280,616 140,628 0,582 Z" fill="#fbe6e0"/>`,
   });
 
-  await disc({ name: "disc-attention", glyph: "bell", ring: "#fbe3de", ink: { r: 0xa8, g: 0x5a, b: 0x51, alpha: 1 } });
-  await disc({ name: "disc-ok", glyph: "shield", ring: "#e7ecdf", ink: { r: 0x6c, g: 0x7a, b: 0x5e, alpha: 1 } });
+  /* Solid discs with a white glyph, 13 Sep 2026, from James's second list
+     drawing: a clay circle with an exclamation for anything already gone,
+     a sage clock for anything still running. The pale-circle version said
+     nothing at a glance, which on a list of three is the whole job. */
+  await hero({
+    name: "hero-own-compliance",
+    art: "papers.png",
+    H: 700,
+    drawWidth: 800,
+    /* Not an oval. James, 13 Sep 2026: "a bit not flat-shaped ... shorter on
+       the right and left-hand sides and then come up at the top ... tuck it
+       at the bottom a little bit more, just so it falls behind the
+       briefcase." So it is lower at both shoulders, rises over the middle,
+       and the bottom edge lifts across the briefcase - which is the one
+       thing in the drawing that should stand in FRONT of the shape rather
+       than sit inside it. */
+    blob: `<path d="M150,392 C158,222 286,88 462,42 C556,16 632,8 700,12 C822,20 986,50 1052,178 C1100,272 1076,436 948,528 C866,588 772,546 680,560 C600,572 548,640 424,644 C320,648 186,598 160,498 C140,444 146,424 150,392 Z" fill="#fbe6e0"/>`,
+  });
+
+  await disc({ name: "disc-attention", glyph: BANG, ring: "#c0736a", ink: { r: 255, g: 255, b: 255, alpha: 1 }, g: 34 });
+  await disc({ name: "disc-ok", glyph: "clock", ring: "#8a9a76", ink: { r: 255, g: 255, b: 255, alpha: 1 }, g: 38 });
   await disc({ name: "disc-tip", glyph: "info", ring: "#ffffff", ink: { r: 0xa8, g: 0x5a, b: 0x51, alpha: 1 }, d: 76, g: 34 });
 }
