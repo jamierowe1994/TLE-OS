@@ -333,8 +333,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
             <img src="/brand/tle-os-house.png" alt="TLE OS" className="h-12 w-auto shrink-0 object-contain" />
           ) : (
             <>
-              <img src="/brand/tle-os-logo.png" alt="TLE OS" className="art-light h-auto w-[88%] object-contain" />
-              <img src="/brand/tle-os-logo-dark.png" alt="" aria-hidden className="art-dark h-auto w-[88%] object-contain" />
+              <img src="/brand/tle-os-logo.png" alt="TLE OS" className="art-light h-auto w-[78%] object-contain" />
+              <img src="/brand/tle-os-logo-dark.png" alt="" aria-hidden className="art-dark h-auto w-[78%] object-contain" />
             </>
           )}
         </div>
