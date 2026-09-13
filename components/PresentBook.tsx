@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SlideBody } from "@/components/PresentDeck";
+import { BookAgenda, BookAgent, BookApproach, BookWelcome } from "@/components/PresentBookPages";
 import { CREAM, HAND, INK, StageForceCtx } from "@/components/present-kit";
 import type { PresentDeck as Deck, SlideId } from "@/lib/present";
 
@@ -79,46 +80,69 @@ function BlankFace() {
  */
 function CoverFace({ deck }: { deck: Deck }) {
   const HEAD = { fontFamily: HAND, fontWeight: 800, letterSpacing: "-0.02em" } as const;
-  const SCRIPT = { fontFamily: "var(--font-shantell), cursive" } as const;
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: "#fbf8f4", color: INK }}>
-      {/* THE PINK behind the street, as on the mock-up: a disc high on the
-          right, half behind the roofs. */}
-      <div className="pointer-events-none absolute -top-[120px] right-[300px] h-[560px] w-[560px] rounded-full" style={{ background: "var(--p-tint)", opacity: 0.85 }} />
+      {/* THE PINK: in the top-right corner, three-quarters of it off the
+          page - "a nice little shadow of pink just above one or two of the
+          houses" (James, 13 Sep 2026). */}
+      <div className="pointer-events-none absolute -right-[300px] -top-[330px] h-[640px] w-[640px] rounded-full" style={{ background: "var(--p-tint)", opacity: 0.9 }} />
       {/* THE STREET: James's terrace cut-out (Presentation folder, 13 Sep
           2026 - "literally the same as the example image"), on a transparent
           ground so it sits IN the cover; the road fades out on its own. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/brand/photo/cover-terrace.webp" alt="" aria-hidden className="pointer-events-none absolute max-w-none" style={{ height: 760, right: -30, bottom: 60 }} />
+      <img src="/brand/photo/cover-terrace.webp" alt="" aria-hidden className="pointer-events-none absolute max-w-none" style={{ height: 790, right: -150, bottom: 30 }} />
       <div className="absolute left-[96px] top-[84px]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/brand/tle-logo-coral.png" alt="The Letting Experts" className="h-[64px] w-auto" />
         <p className="mt-4 text-[11px] uppercase tracking-[0.3em] text-black/50">People &middot; Homes &middot; Relationships</p>
-        <h1 className="mt-[110px] text-[96px] leading-[1.0]" style={HEAD}>
+        <h1 className="mt-[100px] text-[92px] leading-[1.0]" style={HEAD}>
           Your
           <br />
-          <span style={{ color: "var(--p-accent)" }}>Letting Plan.</span>
+          <span style={{ color: "#cfa096" }}>Letting Plan.</span>
         </h1>
-        <span aria-hidden className="mt-6 block h-[3px] w-[260px] rounded-full" style={{ background: "var(--p-accent)", opacity: 0.7 }} />
+        {/* The stroke under it: hand-drawn, with a bow, set under the middle
+            of the title rather than flush left. */}
+        <svg viewBox="0 0 400 14" aria-hidden className="ml-[36px] mt-3" style={{ width: 340, height: 14 }}>
+          <path d="M4 11C90 3 220 2 396 8" fill="none" stroke="#cfa096" strokeWidth="3" strokeLinecap="round" opacity="0.9" />
+        </svg>
         <p className="mt-6 text-[12px] uppercase tracking-[0.3em] text-black/55">A smarter letting experience</p>
       </div>
-      {deck.property.address && (
-        <p className="absolute bottom-[80px] left-[96px] max-w-[360px] text-[12px] uppercase leading-[1.6] tracking-[0.22em] text-black/55">{deck.property.address}</p>
+      {(deck.property.address || deck.property.postcode) && (
+        <p className="absolute bottom-[80px] left-[96px] max-w-[400px] text-[12px] uppercase leading-[1.6] tracking-[0.22em] text-black/55">
+          {[deck.property.address, deck.property.postcode].filter(Boolean).join(", ")}
+        </p>
       )}
-      <p className="absolute bottom-[64px] right-[110px] w-[300px] text-right text-[24px] leading-[1.15] text-black/70" style={{ ...SCRIPT, transform: "rotate(-6deg)" }}>
+      {/* In the script face, not the marker: "some nice handwritten text". */}
+      <p className="absolute bottom-[56px] right-[110px] w-[340px] text-right text-[34px] leading-[1.1] text-black/70" style={{ fontFamily: "var(--font-script), 'Snell Roundhand', cursive", transform: "rotate(-5deg)" }}>
         More than
         <br />
         just a letting agent.
       </p>
+      {/* THE SPINE. A hardback's ridge down the left edge - the board turns
+          in and the cloth rounds over it: a dark line where it folds, a
+          highlight where the light catches, and a soft band of shadow
+          across the first 40px of the cover. James, 13 Sep 2026: "I think
+          the ridge is where it sells it." */}
+      <div className="pointer-events-none absolute inset-y-0 left-0 w-[44px]" style={{ background: "linear-gradient(to right, rgba(0,0,0,0.22) 0px, rgba(0,0,0,0.05) 8px, rgba(255,255,255,0.35) 12px, rgba(0,0,0,0.06) 18px, rgba(0,0,0,0.10) 24px, rgba(0,0,0,0) 44px)" }} />
+      <div className="pointer-events-none absolute inset-y-0 left-[16px] w-px" style={{ background: "rgba(0,0,0,0.18)" }} />
+      {/* The board's edge: a whisper of a bevel round the cover. */}
+      <div className="pointer-events-none absolute inset-0" style={{ boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.6)" }} />
     </div>
   );
 }
 
-/** Which face goes where: page index -1 is the cover, N is the blank end. */
+/** Which face goes where: page index -1 is the cover, N is the blank end.
+ *  A slide with a page of its own in PresentBookPages gets that; the rest
+ *  are drawn as the slide. */
 function Face({ deck, pages, n }: { deck: Deck; pages: SlideId[]; n: number }) {
   if (n < 0) return <CoverFace deck={deck} />;
   if (n >= pages.length) return <BlankFace />;
-  return <PageFace deck={deck} id={pages[n]} />;
+  const id = pages[n];
+  if (id === "welcome") return <BookWelcome deck={deck} />;
+  if (id === "agenda") return <BookAgenda />;
+  if (id === "agent") return <BookAgent deck={deck} />;
+  if (id === "approach") return <BookApproach />;
+  return <PageFace deck={deck} id={id} />;
 }
 
 /** A few sheets' worth of edge under a page, so the block has thickness. */
@@ -150,6 +174,7 @@ export default function PresentBook({
   pages,
   fit,
   onSpread,
+  onApi,
 }: {
   deck: Deck;
   pages: SlideId[];
@@ -157,6 +182,8 @@ export default function PresentBook({
   fit: number;
   /** -1 while closed, then the spread; and how many spreads there are. */
   onSpread?: (at: number, of: number) => void;
+  /** The turn, for the arrows in the pop-out's foot. */
+  onApi?: (api: { go: (dir: 1 | -1) => void }) => void;
 }) {
   const spreads = Math.ceil(pages.length / 2);
   /* -1 is closed on the cover. */
@@ -188,6 +215,10 @@ export default function PresentBook({
     },
     [at, turn, spreads],
   );
+
+  useEffect(() => {
+    onApi?.({ go });
+  }, [go, onApi]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
