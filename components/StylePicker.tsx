@@ -53,10 +53,11 @@ export default function StylePicker({
 }) {
   return (
     <div
-      /* Below the logo on a phone, not on top of it. The mark is fixed to the
-         top left of every deck now, and a review control printed over the
-         brand is the first thing anybody reviewing would report. */
-      className="fixed left-1/2 top-[74px] z-40 flex -translate-x-1/2 flex-col gap-1 rounded-[20px] px-1.5 py-1.5 sm:top-4"
+      /* Below the logo on a phone, not on top of it; docked to the top right
+         on a desktop since 13 Sep 2026, because the entrance screen centres
+         the brand at the top and a review control printed over the logo is
+         the first thing anybody reviewing would report. */
+      className="fixed left-1/2 top-[74px] z-40 flex -translate-x-1/2 flex-col gap-1 rounded-[20px] px-1.5 py-1.5 sm:left-auto sm:right-4 sm:top-4 sm:translate-x-0"
       style={{
         background: "rgba(255,255,255,0.94)",
         boxShadow: "0 6px 24px rgba(0,0,0,0.13)",
