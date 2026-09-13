@@ -67,7 +67,7 @@ export default function WorkspaceRail({
       >
         <div className="flex items-center px-1">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/tle-tower.png" alt="" className="h-8 w-8 object-contain" />
+          <img src="/brand/tle-tower.png" alt="" className="h-12 w-10 object-contain" />
           <span className="hand ml-2 text-[17px] leading-none">TLE OS</span>
         </div>
         <p className="mt-1 px-1 text-[9px] font-bold uppercase tracking-[0.16em] text-accent-dark">

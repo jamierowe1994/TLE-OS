@@ -330,7 +330,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               src="/brand/tle-tower.png"
               alt=""
               aria-hidden
-              className="h-10 w-10 shrink-0 object-contain"
+              className="h-[64px] w-[52px] shrink-0 object-contain"
             />
             <div
               /* Nearly the height of the house beside it (James, 12 Sep

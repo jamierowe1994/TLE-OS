@@ -58,7 +58,7 @@ export default async function PreviewHome({
     <main className="flex min-h-screen flex-col items-center justify-center px-5 py-12">
       <div className="w-full max-w-lg">
         <div className="mb-8 flex items-center justify-center gap-2">
-          <img src="/brand/tle-tower.png" alt="" aria-hidden className="h-8 w-8 object-contain" />
+          <img src="/brand/tle-tower.png" alt="" aria-hidden className="h-12 w-10 object-contain" />
           <span className="hand text-[16px]">TLE OS</span>
         </div>
 

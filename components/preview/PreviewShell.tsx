@@ -174,7 +174,7 @@ export default function PreviewShell() {
         className="sticky top-3 mb-3 ml-3 mt-3 hidden h-[calc(100vh-24px)] w-60 shrink-0 flex-col overflow-hidden rounded-3xl border border-line/80 bg-panel px-4 py-5 lg:flex"
       >
         <div className="flex items-center px-1">
-          <img src="/brand/tle-tower.png" alt="" aria-hidden className="h-10 w-10 shrink-0 object-contain" />
+          <img src="/brand/tle-tower.png" alt="" aria-hidden className="h-14 w-11 shrink-0 object-contain" />
           <div className="hand ml-2 text-xl leading-none">TLE OS</div>
         </div>
         <div className="mt-4 border-t border-line/70" />

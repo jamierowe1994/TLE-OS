@@ -74,7 +74,7 @@ export default function Frame({
         {/* Wordmark. Small, and the only branding on the page - the screen is
             about them, not us. */}
         <div className="mb-8 flex items-center justify-center gap-2">
-          <img src="/brand/tle-tower.png" alt="" aria-hidden className="h-7 w-7 object-contain" />
+          <img src="/brand/tle-tower.png" alt="" aria-hidden className="h-11 w-9 object-contain" />
           <span className="hand text-[15px]">TLE OS</span>
         </div>
 
