@@ -1255,6 +1255,8 @@ export function Portals({ show }: { show: boolean }) {
   const LOGOS: Record<string, string> = {
     Rightmove: "/brand/rightmove.png",
     Zoopla: "/brand/zoopla.png",
+    /* James's, 13 Sep 2026, white ground keyed out. */
+    OnTheMarket: "/brand/onthemarket.png",
   };
   return (
     <CreamSlide id="portals">

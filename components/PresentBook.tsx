@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SlideBody } from "@/components/PresentDeck";
-import { BookAgenda, BookAgent, BookApproach, BookWelcome } from "@/components/PresentBookPages";
+import { BookAgenda, BookAgent, BookApproach, BookComparables, BookListings, BookMarket, BookMarketing, BookMaterial, BookMaxPrice, BookOffer, BookPortals, BookProperty, BookSocial, BookWelcome } from "@/components/PresentBookPages";
 import { CREAM, HAND, INK, StageForceCtx } from "@/components/present-kit";
 import type { PresentDeck as Deck, SlideId } from "@/lib/present";
 
@@ -10,42 +10,71 @@ import type { PresentDeck as Deck, SlideId } from "@/lib/present";
  * THE BOOKLET. The post-appraisal deck as a landscape booklet - a closed
  * cover on the table, turned open, then page by page.
  *
- * James, 13 Sep 2026, fourth pass: "we want it to actually feel like a
- * proper booklet ... landscape ... Things like the crease in the book, the
- * line, and the shadow will all play a factor in how the page turns over.
- * All of this kind of stuff needs to be bang on ... I think we can drop the
- * entrance animation."
+ * James, 13 Sep 2026: "we want it to actually feel like a proper booklet
+ * ... things like the crease in the book, the line, and the shadow will
+ * all play a factor in how the page turns over. All of this kind of stuff
+ * needs to be bang on." And, on the first attempt: "the turning page feels
+ * like a flat rectangle simply rotating upward. The shadow looks detached
+ * from the page, the centre seam is poor, and the animation does not feel
+ * like paper."
  *
  * ── A page is a slide ──────────────────────────────────────────────────────
  *
- * His mock-up's pages are the deck's slides, one to a page, in the deck's
- * order - the welcome on the left, the agenda on the right. So every page
- * here is a slide drawn whole at its stage size (1440x900) and the booklet
- * is scaled to fit the window. The front cover is the booklet's own,
- * composed here from the cover art, and its back is page one.
+ * Every page is a slide drawn whole at its stage size (1440x900), or one of
+ * the booklet's own pages (PresentBookPages). Which face goes where, the
+ * cover, the order and the navigation are unchanged by the physics below.
  *
- * ── Closed, then open ──────────────────────────────────────────────────────
+ * ── Why the first version looked flat ──────────────────────────────────────
  *
- * It arrives closed, the cover centred. Opening it is a turn like any
- * other - the cover is a leaf whose back is the first page - while the
- * whole book slides half a page left so the open spread is centred on the
- * spine. Closing it from the first spread is the same in reverse.
+ * 1. The turning page was ONE rigid rectangle on a hinge - a card flip.
+ *    Paper bends: the outer corner lifts first, the sheet bows, and it
+ *    floats down outer-edge last.
+ * 2. Its shadow was a gradient painted ON the page, so it never moved with
+ *    the sheet or fell on the page underneath.
+ * 3. The gutter was a 1px grey line: a border, not two sheets curving
+ *    down into a binding.
+ * 4. The pages were flat white with no thickness under them.
  *
- * ── What makes it real ─────────────────────────────────────────────────────
+ * ── The turn now ───────────────────────────────────────────────────────────
  *
- * The stack: the pages still to read are a few sheets thick under the
- * right-hand page, the pages read under the left. The crease: each page
- * darkens a little into the spine, and a hairline runs down it. The turn:
- * a leaf on a hinge with a shadow that deepens across it as it lifts, and a
- * shadow it casts on the page beneath as it comes down. Under prefers-
- * reduced-motion the spread simply changes.
+ * The turning sheet is a chain of vertical STRIPS, each hinged on the
+ * previous, from the spine outward. The chain as a whole swings on the
+ * spine (the hinge angle) while each strip adds a small angle of its own
+ * (the bend), so the sheet BOWS: the outer edge runs ahead early - the
+ * corner lifting first - is convex through the middle, and lags behind at
+ * the end - the sheet floating down onto the stack. Every frame is driven
+ * by requestAnimationFrame writing transforms straight to the DOM; React
+ * renders the sheet once at the start and once at the end.
+ *
+ * With it, per frame: a shadow that FALLS on the page beneath (on the
+ * right at first, then on the left as the sheet crosses), soft when the
+ * sheet is high and tighter as it lands; the sheet's own face darkening
+ * toward its fold and its underside a shade darker; a highlight along the
+ * lifted outer edge; the gutter deepening a touch as the sheet passes
+ * over it; and a tiny settle as it lands.
+ *
+ * ── The book at rest ───────────────────────────────────────────────────────
+ *
+ * Warm paper, not white, with a grain you only feel. A gutter with a narrow
+ * contact shadow exactly at the seam, a wide soft fall-off either side, a
+ * hairline of light beside the shadow on the right (the light is from the
+ * upper left) and no hard line. A few fine sheets under the outer edges
+ * for thickness. A soft ambient shadow under the whole block and a firmer
+ * one under its bottom edges.
+ *
+ * Reduced motion: no physics - the spread crossfades.
  */
 
 export const PAGE_W = 1440;
 export const PAGE_H = 900;
 const TURN_MS = 1000;
-const TURN_EASE = "cubic-bezier(0.42, 0.05, 0.28, 1)";
 const STAGED = { staged: true, scale: 1 };
+/** Warm paper, and the warm neutral every shadow here is made from. */
+const PAPER = "#fbfaf7";
+const BLOCK_SHADOW = "0 60px 100px -30px rgba(55,45,40,0.32), 0 22px 40px -18px rgba(55,45,40,0.22), 0 6px 10px -4px rgba(55,45,40,0.16)";
+const SHADE = "55, 45, 40";
+/** A restrained grain: SVG turbulence, drawn once, tiled. */
+const GRAIN = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.3 0 0 0 0 0.25 0 0 0 0 0.2 0 0 0 0.5 0'/></filter><rect width='180' height='180' filter='url(%23n)'/></svg>\")";
 
 /** One slide, on one page, at the stage's size. */
 function PageFace({ deck, id }: { deck: Deck; id: SlideId }) {
@@ -142,31 +171,295 @@ function Face({ deck, pages, n }: { deck: Deck; pages: SlideId[]; n: number }) {
   if (id === "agenda") return <BookAgenda />;
   if (id === "agent") return <BookAgent deck={deck} />;
   if (id === "approach") return <BookApproach />;
+  if (id === "property") return <BookProperty deck={deck} />;
+  if (id === "material") return <BookMaterial deck={deck} />;
+  if (id === "listings") return <BookListings deck={deck} />;
+  if (id === "comparables") return <BookComparables deck={deck} />;
+  if (id === "market") return <BookMarket deck={deck} />;
+  if (id === "marketing") return <BookMarketing />;
+  if (id === "offer") return <BookOffer />;
+  if (id === "maxprice") return <BookMaxPrice />;
+  if (id === "portals") return <BookPortals />;
+  if (id === "social") return <BookSocial />;
   return <PageFace deck={deck} id={id} />;
 }
 
-/** A few sheets' worth of edge under a page, so the block has thickness. */
+
+/* ───────────────────────── the book ───────────────────────── */
+
+/** The thickness under a page: a few fine sheets, unevenly spaced. */
 function Stack({ side, sheets }: { side: "left" | "right"; sheets: number }) {
-  const n = Math.max(0, Math.min(5, sheets));
+  const n = Math.max(0, Math.min(6, sheets));
+  const offsets = [1, 2.5, 4, 5, 6.5, 8];
   return (
     <>
-      {Array.from({ length: n }).map((_, i) => (
+      {offsets.slice(0, n).map((o, i) => (
         <div
           key={i}
           className="pointer-events-none absolute top-0"
           style={{
             width: PAGE_W,
             height: PAGE_H,
-            left: side === "left" ? -(i + 1) * 3 : (i + 1) * 3,
-            top: (i + 1) * 2,
-            background: "#f4f1ec",
-            boxShadow: "0 0 0 1px rgba(0,0,0,0.06)",
+            left: side === "left" ? -o : o,
+            top: o * 0.8,
+            background: i % 2 ? "#f6f3ee" : "#f2efe9",
+            boxShadow: `0 0 0 1px rgba(${SHADE},0.05), 0 1px 1px rgba(${SHADE},0.04)`,
             zIndex: -1 - i,
           }}
         />
       ))}
     </>
   );
+}
+
+/** The grain and the paper-edge light, over every page. */
+function PaperFinish() {
+  return (
+    <>
+      <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: GRAIN, opacity: 0.045, mixBlendMode: "multiply" }} />
+      <div className="pointer-events-none absolute inset-0" style={{ boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.5)" }} />
+    </>
+  );
+}
+
+/**
+ * The gutter, painted on the inner edge of each page: a narrow contact
+ * shadow at the seam, a wide soft fall-off, and on the right a hairline
+ * of light beside the shadow. Slightly deeper on the left, which faces
+ * away from a light in the upper left. `deep` is added while a sheet
+ * passes over.
+ */
+function Gutter({ side, deepRef }: { side: "left" | "right"; deepRef?: (el: HTMLDivElement | null) => void }) {
+  const base =
+    side === "left"
+      ? `linear-gradient(to left, rgba(${SHADE},0.26) 0px, rgba(${SHADE},0.13) 5px, rgba(${SHADE},0.06) 22px, rgba(${SHADE},0.025) 70px, rgba(${SHADE},0) 150px)`
+      : `linear-gradient(to right, rgba(${SHADE},0.22) 0px, rgba(${SHADE},0.10) 4px, rgba(255,255,255,0.28) 7px, rgba(${SHADE},0.05) 16px, rgba(${SHADE},0.02) 60px, rgba(${SHADE},0) 130px)`;
+  return (
+    <>
+      <div className="pointer-events-none absolute inset-y-0" style={{ [side === "left" ? "right" : "left"]: 0, width: 160, background: base }} />
+      {/* deepens while a sheet crosses */}
+      <div ref={deepRef} className="pointer-events-none absolute inset-y-0" style={{ [side === "left" ? "right" : "left"]: 0, width: 90, opacity: 0, background: side === "left" ? `linear-gradient(to left, rgba(${SHADE},0.22), rgba(${SHADE},0))` : `linear-gradient(to right, rgba(${SHADE},0.22), rgba(${SHADE},0))` }} />
+    </>
+  );
+}
+
+/** A cubic bezier, sampled - the easing the turn runs on. */
+function bezier(x1: number, y1: number, x2: number, y2: number) {
+  const A = (a1: number, a2: number) => 1 - 3 * a2 + 3 * a1;
+  const B = (a1: number, a2: number) => 3 * a2 - 6 * a1;
+  const C = (a1: number) => 3 * a1;
+  const calc = (t: number, a1: number, a2: number) => ((A(a1, a2) * t + B(a1, a2)) * t + C(a1)) * t;
+  const slope = (t: number, a1: number, a2: number) => 3 * A(a1, a2) * t * t + 2 * B(a1, a2) * t + C(a1);
+  return (x: number) => {
+    let t = x;
+    for (let i = 0; i < 6; i++) {
+      const s = slope(t, x1, x2);
+      if (s === 0) break;
+      t -= (calc(t, x1, x2) - x) / s;
+    }
+    return calc(t, y1, y2);
+  };
+}
+/* Quick off the table, smooth through the middle, gentle to land. */
+const EASE = bezier(0.22, 0.61, 0.36, 1);
+
+/**
+ * THE SHEET: the page that turns, as strips hinged one on the next.
+ *
+ * Forward (dir 1): it is the right-hand page; its hinge is the spine at
+ * its left edge; it swings to the left, and its back is the next spread's
+ * left page. Backward (dir -1) is the mirror. Each strip carries its slice
+ * of the front page and, rotated half a turn about its own axis, its slice
+ * of the back page - laid in so it reads correctly, not mirrored, when the
+ * sheet has landed. The strips overlap by a pixel so no seam shows.
+ */
+function Sheet({
+  deck,
+  pages,
+  dir,
+  frontN,
+  backN,
+  strips,
+  nodes,
+}: {
+  deck: Deck;
+  pages: SlideId[];
+  dir: 1 | -1;
+  frontN: number;
+  backN: number;
+  strips: number;
+  nodes: React.MutableRefObject<SheetNodes>;
+}) {
+  const w = PAGE_W / strips;
+  /* From the spine outward. Forward, strip 0 is at the left of the right
+     page and the chain grows to the right; backward, strip 0 is at the
+     right of the left page and the chain grows to the left. */
+  const grow = dir === 1 ? "left" : "right";
+  const origin = dir === 1 ? "0% 50%" : "100% 50%";
+  const stripStyle = (i: number): React.CSSProperties => ({
+    position: "absolute",
+    top: 0,
+    [grow]: i === 0 ? 0 : w - 1,
+    width: w + 1,
+    height: PAGE_H,
+    transformStyle: "preserve-3d",
+    transformOrigin: origin,
+    willChange: "transform",
+  });
+  /* Where this strip's slice sits on the page: forward, strip i is the
+     i-th from the left; backward, the i-th from the right. */
+  const sliceX = (i: number, mirrored: boolean) => {
+    const fromLeft = dir === 1 ? i : strips - 1 - i;
+    const x = mirrored ? strips - 1 - fromLeft : fromLeft;
+    return -x * w;
+  };
+  const render = (i: number): React.ReactNode => (
+    <div
+      key={i}
+      ref={(el) => {
+        nodes.current.strips[i] = el;
+      }}
+      style={stripStyle(i)}
+    >
+      {/* FRONT */}
+      <div className="absolute inset-0 overflow-hidden" style={{ backfaceVisibility: "hidden", background: PAPER }}>
+        <div className="absolute top-0" style={{ left: sliceX(i, false), width: PAGE_W, height: PAGE_H }}>
+          <Face deck={deck} pages={pages} n={frontN} />
+        </div>
+        {/* fold shading, deepest toward the spine */}
+        <div
+          ref={(el) => {
+            nodes.current.frontShade[i] = el;
+          }}
+          className="pointer-events-none absolute inset-0"
+          style={{
+            opacity: 0,
+            /* ONE gradient the width of the sheet, each strip showing its
+               own slice of it - shading per strip showed as bands where
+               the strips met. */
+            backgroundImage: `linear-gradient(to ${dir === 1 ? "right" : "left"}, rgba(${SHADE},0.24) 0%, rgba(${SHADE},0.10) 30%, rgba(${SHADE},0.03) 70%, rgba(${SHADE},0) 100%)`,
+            backgroundSize: `${PAGE_W}px 100%`,
+            backgroundPosition: `${sliceX(i, false)}px 0`,
+            backgroundRepeat: "no-repeat",
+          }}
+        />
+      </div>
+      {/* BACK, turned about its own axis so it faces the other way */}
+      <div className="absolute inset-0 overflow-hidden" style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)", background: PAPER }}>
+        <div className="absolute top-0" style={{ left: sliceX(i, true), width: PAGE_W, height: PAGE_H }}>
+          <Face deck={deck} pages={pages} n={backN} />
+        </div>
+        {/* the underside, a shade darker, deepest at the spine */}
+        <div
+          ref={(el) => {
+            nodes.current.backShade[i] = el;
+          }}
+          className="pointer-events-none absolute inset-0"
+          style={{
+            opacity: 0,
+            backgroundImage: `linear-gradient(to ${dir === 1 ? "left" : "right"}, rgba(${SHADE},0.16) 0%, rgba(${SHADE},0.08) 40%, rgba(${SHADE},0.05) 100%)`,
+            backgroundSize: `${PAGE_W}px 100%`,
+            backgroundPosition: `${sliceX(i, true)}px 0`,
+            backgroundRepeat: "no-repeat",
+          }}
+        />
+      </div>
+      {/* the highlight along the lifted outer edge, on the last strip only */}
+      {i === strips - 1 && (
+        <div
+          ref={(el) => {
+            nodes.current.edge = el;
+          }}
+          className="pointer-events-none absolute inset-y-0"
+          style={{ [dir === 1 ? "right" : "left"]: 0, width: 3, opacity: 0, background: "linear-gradient(to bottom, rgba(255,255,255,0.0), rgba(255,255,255,0.85) 30%, rgba(255,255,255,0.85) 70%, rgba(255,255,255,0))", transform: "translateZ(1px)" }}
+        />
+      )}
+      {i + 1 < strips && render(i + 1)}
+    </div>
+  );
+  return (
+    <div
+      ref={(el) => {
+        nodes.current.hinge = el;
+      }}
+      className="absolute top-0"
+      style={{
+        left: dir === 1 ? PAGE_W : 0,
+        width: PAGE_W,
+        height: PAGE_H,
+        transformStyle: "preserve-3d",
+        transformOrigin: origin,
+        zIndex: 5,
+        willChange: "transform",
+      }}
+    >
+      {render(0)}
+    </div>
+  );
+}
+
+type SheetNodes = {
+  hinge: HTMLDivElement | null;
+  strips: (HTMLDivElement | null)[];
+  frontShade: (HTMLDivElement | null)[];
+  backShade: (HTMLDivElement | null)[];
+  edge: HTMLDivElement | null;
+  /* on the table */
+  shadowRight: HTMLDivElement | null;
+  shadowLeft: HTMLDivElement | null;
+  gutterLeft: HTMLDivElement | null;
+  gutterRight: HTMLDivElement | null;
+  contact: HTMLDivElement | null;
+};
+const emptyNodes = (): SheetNodes => ({ hinge: null, strips: [], frontShade: [], backShade: [], edge: null, shadowRight: null, shadowLeft: null, gutterLeft: null, gutterRight: null, contact: null });
+
+/**
+ * One frame of the turn, at progress p in [0,1]. Writes transforms and
+ * opacities straight to the nodes - nothing here touches React.
+ *
+ * bend(p): how far the outer edge runs ahead of (+) or behind (-) the
+ * hinge. Positive early - the corner lifts first - through a convex middle
+ * - the sheet bowed toward the reader at the top of its arc - to negative
+ * late, the outer edge floating down last.
+ */
+function applyFrame(n: SheetNodes, dir: 1 | -1, p: number, strips: number) {
+  const e = EASE(p);
+  const hinge = -dir * 180 * e;
+  const lift = Math.sin(Math.PI * p);
+  const bend = 0.62 * Math.sin(2 * Math.PI * p) + 0.38 * lift;
+  /* 14 degrees across the sheet at most, shared out from the spine. */
+  const perStrip = (14 / strips) * bend * -dir;
+  if (n.hinge) n.hinge.style.transform = `rotateY(${hinge}deg)`;
+  n.strips.forEach((el, i) => {
+    if (!el) return;
+    /* The spine-side strip barely bends; the outer ones bend most. */
+    const k = i === 0 ? 0.35 : 1;
+    el.style.transform = `rotateY(${perStrip * k}deg)`;
+  });
+  n.frontShade.forEach((el) => el && (el.style.opacity = String(0.85 * lift)));
+  n.backShade.forEach((el) => el && (el.style.opacity = String(0.2 + 0.8 * lift)));
+  if (n.edge) n.edge.style.opacity = String(0.7 * Math.pow(lift, 1.5));
+  /* The shadow it casts: on the page it is leaving while it is over that
+     side, on the page it lands on as it comes down - softer when high,
+     tighter near the surface. */
+  const leaving = dir === 1 ? n.shadowRight : n.shadowLeft;
+  const landing = dir === 1 ? n.shadowLeft : n.shadowRight;
+  if (leaving) {
+    const a = 0.2 * lift * Math.pow(1 - p, 0.6);
+    const reach = 35 + 45 * lift;
+    leaving.style.opacity = String(a);
+    leaving.style.backgroundImage = `linear-gradient(to ${dir === 1 ? "right" : "left"}, rgba(${SHADE},1) 0%, rgba(${SHADE},0.5) ${reach * 0.35}%, rgba(${SHADE},0) ${reach}%)`;
+  }
+  if (landing) {
+    const a = 0.22 * Math.pow(p, 1.2) * Math.pow(lift, 0.5);
+    const reach = 20 + 55 * lift;
+    landing.style.opacity = String(a);
+    landing.style.backgroundImage = `linear-gradient(to ${dir === 1 ? "left" : "right"}, rgba(${SHADE},1) 0%, rgba(${SHADE},0.5) ${reach * 0.35}%, rgba(${SHADE},0) ${reach}%)`;
+  }
+  const g = 0.9 * lift;
+  if (n.gutterLeft) n.gutterLeft.style.opacity = String(g);
+  if (n.gutterRight) n.gutterRight.style.opacity = String(g);
+  if (n.contact) n.contact.style.opacity = String(0.7 * lift);
 }
 
 export default function PresentBook({
@@ -188,8 +481,16 @@ export default function PresentBook({
   const spreads = Math.ceil(pages.length / 2);
   /* -1 is closed on the cover. */
   const [at, setAt] = useState(-1);
-  const [turn, setTurn] = useState<{ dir: 1 | -1; from: number; going: boolean } | null>(null);
+  const [turn, setTurn] = useState<{ dir: 1 | -1; from: number } | null>(null);
+  const [settle, setSettle] = useState<"left" | "right" | null>(null);
   const still = useRef(false);
+  const nodes = useRef<SheetNodes>(emptyNodes());
+  const raf = useRef(0);
+  /* Six is enough for the bow to read as a curve; every strip is a whole
+     copy of the page, so the first frame of a turn - when all of them are
+     built - is the cost to keep down. Four where there is less to spend. */
+  const strips = fit < 0.42 ? 4 : 6;
+
   useEffect(() => {
     still.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   }, []);
@@ -206,15 +507,40 @@ export default function PresentBook({
         setAt(to);
         return;
       }
-      setTurn({ dir, from: at, going: false });
-      requestAnimationFrame(() => requestAnimationFrame(() => setTurn((t) => (t ? { ...t, going: true } : t))));
-      window.setTimeout(() => {
-        setAt(to);
-        setTurn(null);
-      }, TURN_MS + 30);
+      nodes.current = emptyNodes();
+      setTurn({ dir, from: at });
     },
     [at, turn, spreads],
   );
+
+  /* The turn runs on the clock, not on React: one frame at a time into
+     the nodes the sheet registered, then the spread changes and the sheet
+     is gone. */
+  useEffect(() => {
+    if (!turn) return;
+    let start = 0;
+    const n = nodes.current;
+    const step = (now: number) => {
+      if (!start) start = now;
+      const p = Math.min(1, (now - start) / TURN_MS);
+      applyFrame(n, turn.dir, p, strips);
+      if (p < 1) {
+        raf.current = requestAnimationFrame(step);
+      } else {
+        setAt(turn.from + turn.dir);
+        setTurn(null);
+        /* The landing: a breath of compression on the page it lands on. */
+        setSettle(turn.dir === 1 ? "left" : "right");
+        window.setTimeout(() => setSettle(null), 180);
+      }
+    };
+    raf.current = requestAnimationFrame((t0) => {
+      applyFrame(n, turn.dir, 0, strips);
+      raf.current = requestAnimationFrame(step);
+      void t0;
+    });
+    return () => cancelAnimationFrame(raf.current);
+  }, [turn, strips]);
 
   useEffect(() => {
     onApi?.({ go });
@@ -245,14 +571,15 @@ export default function PresentBook({
   const rightOf = (k: number) => (k < 0 ? -1 : 2 * k + 1);
   const leftN = turn && !forward ? leftOf(here - 1) : leftOf(here);
   const rightN = turn && forward ? rightOf(here + 1) : rightOf(here);
-  /* Where the book sits: closed, the cover is centred; open, the spine is. */
   const closedNow = turn ? (forward ? false : here - 1 < 0) : at < 0;
   const shiftX = closedNow ? -PAGE_W / 2 : 0;
   const canBack = at > -1 && !turn;
   const canNext = at < spreads - 1 && !turn;
-  const readSheets = Math.max(0, at) ;
-  const leftSheets = at < 0 ? 0 : Math.min(5, 1 + Math.floor(readSheets / 2));
-  const rightSheets = Math.min(5, 1 + Math.floor((spreads - 1 - Math.max(at, 0)) / 2));
+  const leftSheets = at < 0 ? 0 : Math.min(6, 2 + Math.floor(Math.max(at, 0) / 2));
+  const rightSheets = at < 0 ? 6 : Math.min(6, 2 + Math.floor((spreads - 1 - Math.max(at, 0)) / 2));
+  const open = leftN != null;
+  const settleStyle = (side: "left" | "right"): React.CSSProperties =>
+    settle === side ? { transform: "scale(0.997)", transition: "transform 90ms ease-out" } : { transform: "none", transition: "transform 140ms cubic-bezier(0.22, 0.61, 0.36, 1)" };
 
   return (
     <div className="relative" style={{ width: PAGE_W * 2 * fit, height: PAGE_H * fit }}>
@@ -262,23 +589,41 @@ export default function PresentBook({
           zoom: fit,
           width: PAGE_W * 2,
           height: PAGE_H,
-          perspective: 3200,
+          /* Shallow: a sheet turning in front of us, not an object in
+             deep space. */
+          perspective: 2600,
+          perspectiveOrigin: "50% 42%",
           color: INK,
           transform: `translateX(${shiftX}px)`,
-          transition: `transform ${TURN_MS}ms ${TURN_EASE}`,
+          transition: `transform ${TURN_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)`,
         }}
       >
-        {/* THE BLOCK on the table. */}
-        <div className="absolute left-0 top-0 flex" style={{ filter: "drop-shadow(0 40px 60px rgba(0,0,0,0.35)) drop-shadow(0 6px 10px rgba(0,0,0,0.15))" }}>
+        {/* THE BLOCK on the table: an ambient shadow under the whole of it,
+            a firmer one under its bottom edge. */}
+        <div
+          className="absolute left-0 top-0 flex"
+          style={{
+            /* The block's shadow only once it is open: closed, the block
+               still spans the empty left slot, and a shadow round that drew
+               a line across the table beside the cover (James, 13 Sep
+               2026). Closed, the cover carries the shadow itself. */
+            boxShadow: open ? BLOCK_SHADOW : "none",
+            borderRadius: 4,
+          }}
+        >
           {/* Left page. */}
           <div className="relative" style={{ width: PAGE_W, height: PAGE_H }}>
-            {leftN != null && (
+            {open && (
               <>
                 <Stack side="left" sheets={leftSheets} />
-                <div key={`L${leftN}`} className="relative overflow-hidden rounded-l-[6px]">
-                  <Face deck={deck} pages={pages} n={leftN} />
-                  {/* THE CREASE: the page darkens into the spine. */}
-                  <div className="pointer-events-none absolute inset-y-0 right-0 w-[90px]" style={{ background: "linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.05) 60%, rgba(0,0,0,0.14) 100%)" }} />
+                <div key={`L${leftN}`} className="relative overflow-hidden" style={{ borderRadius: "4px 0 0 4px", background: PAPER, ...settleStyle("left") }}>
+                  <Face deck={deck} pages={pages} n={leftN as number} />
+                  <PaperFinish />
+                  <Gutter side="left" deepRef={(el) => (nodes.current.gutterLeft = el)} />
+                  {/* the shadow a turning sheet throws on this page */}
+                  <div ref={(el) => {
+                    nodes.current.shadowLeft = el;
+                  }} className="pointer-events-none absolute inset-0" style={{ opacity: 0 }} />
                 </div>
               </>
             )}
@@ -286,58 +631,40 @@ export default function PresentBook({
           {/* Right page. */}
           <div className="relative" style={{ width: PAGE_W, height: PAGE_H }}>
             <Stack side="right" sheets={rightSheets} />
-            <div key={`R${rightN}`} className={`relative overflow-hidden rounded-r-[6px] ${leftN == null ? "rounded-l-[6px]" : ""}`}>
+            <div key={`R${rightN}`} className="relative overflow-hidden" style={{ borderRadius: open ? "0 4px 4px 0" : 4, background: PAPER, boxShadow: open ? undefined : BLOCK_SHADOW, ...settleStyle("right") }}>
               <Face deck={deck} pages={pages} n={rightN} />
-              {leftN != null && (
-                <div className="pointer-events-none absolute inset-y-0 left-0 w-[90px]" style={{ background: "linear-gradient(to left, rgba(0,0,0,0) 0%, rgba(0,0,0,0.05) 60%, rgba(0,0,0,0.14) 100%)" }} />
-              )}
-              {/* The shadow the turning leaf casts as it comes down. */}
-              {turn && forward && (
-                <div className="pointer-events-none absolute inset-0" style={{ background: "linear-gradient(to right, rgba(0,0,0,0.35), rgba(0,0,0,0) 70%)", animation: `present-cast ${TURN_MS}ms ease-in-out both` }} />
-              )}
+              <PaperFinish />
+              {open && <Gutter side="right" deepRef={(el) => (nodes.current.gutterRight = el)} />}
+              <div ref={(el) => {
+                    nodes.current.shadowRight = el;
+                  }} className="pointer-events-none absolute inset-0" style={{ opacity: 0 }} />
             </div>
           </div>
         </div>
 
-        {/* THE LEAF, only while a turn is on. Hinged on the spine. */}
+        {/* THE SEAM: the contact shadow exactly where the two sheets meet,
+            over both pages - and the narrow shadow a passing sheet adds. */}
+        {open && (
+          <>
+            <div className="pointer-events-none absolute top-0 z-[6]" style={{ left: PAGE_W - 3, width: 6, height: PAGE_H, background: `linear-gradient(to right, rgba(${SHADE},0) 0%, rgba(${SHADE},0.30) 50%, rgba(${SHADE},0) 100%)` }} />
+            <div ref={(el) => {
+                    nodes.current.contact = el;
+                  }} className="pointer-events-none absolute top-0 z-[6]" style={{ left: PAGE_W - 8, width: 16, height: PAGE_H, opacity: 0, background: `linear-gradient(to right, rgba(${SHADE},0) 0%, rgba(${SHADE},0.28) 50%, rgba(${SHADE},0) 100%)` }} />
+          </>
+        )}
+
+        {/* THE SHEET, only while a turn is on. */}
         {turn && (
-          <div
-            className="absolute top-0"
-            style={{
-              left: forward ? PAGE_W : 0,
-              width: PAGE_W,
-              height: PAGE_H,
-              transformStyle: "preserve-3d",
-              transformOrigin: forward ? "0% 50%" : "100% 50%",
-              transform: turn.going ? `rotateY(${forward ? -180 : 180}deg)` : "rotateY(0deg)",
-              transition: `transform ${TURN_MS}ms ${TURN_EASE}`,
-              zIndex: 5,
-              /* NO filter here: a filter forces the leaf flat and the back
-                 face never shows - the front came through mirrored (13 Sep
-                 2026). The shadow is on each face instead. */
-            }}
-          >
-            <div className="absolute inset-0 overflow-hidden" style={{ backfaceVisibility: "hidden", borderRadius: forward ? "0 6px 6px 0" : "6px 0 0 6px", boxShadow: "0 30px 50px rgba(0,0,0,0.3)" }}>
-              <Face deck={deck} pages={pages} n={forward ? rightOf(here) : (leftOf(here) as number)} />
-              <div className="pointer-events-none absolute inset-0" style={{ background: forward ? "linear-gradient(to right, rgba(0,0,0,0.28), rgba(0,0,0,0.06) 35%, rgba(0,0,0,0) 60%)" : "linear-gradient(to left, rgba(0,0,0,0.28), rgba(0,0,0,0.06) 35%, rgba(0,0,0,0) 60%)", animation: `present-lift ${TURN_MS}ms ease-in-out both` }} />
-            </div>
-            <div className="absolute inset-0 overflow-hidden" style={{ backfaceVisibility: "hidden", transform: "rotateY(180deg)", borderRadius: forward ? "6px 0 0 6px" : "0 6px 6px 0", boxShadow: "0 30px 50px rgba(0,0,0,0.3)" }}>
-              <Face deck={deck} pages={pages} n={forward ? leftOf(here + 1) as number : rightOf(here - 1)} />
-              <div className="pointer-events-none absolute inset-0" style={{ background: forward ? "linear-gradient(to left, rgba(0,0,0,0.26), rgba(0,0,0,0.06) 35%, rgba(0,0,0,0) 60%)" : "linear-gradient(to right, rgba(0,0,0,0.26), rgba(0,0,0,0.06) 35%, rgba(0,0,0,0) 60%)", animation: `present-settle ${TURN_MS}ms ease-in-out both` }} />
-            </div>
-          </div>
+          <Sheet
+            deck={deck}
+            pages={pages}
+            dir={turn.dir}
+            frontN={forward ? rightOf(here) : (leftOf(here) as number)}
+            backN={forward ? (leftOf(here + 1) as number) : rightOf(here - 1)}
+            strips={strips}
+            nodes={nodes}
+          />
         )}
-
-        {/* THE SPINE: the hairline, only when the book is open. */}
-        {leftN != null && (
-          <div className="pointer-events-none absolute top-0 z-[6]" style={{ left: PAGE_W - 0.5, width: 1, height: PAGE_H, background: "rgba(0,0,0,0.28)" }} />
-        )}
-
-        <style>{`
-          @keyframes present-lift { 0% { opacity: 0 } 45% { opacity: 1 } 100% { opacity: 0.2 } }
-          @keyframes present-settle { 0% { opacity: 1 } 55% { opacity: 0.8 } 100% { opacity: 0 } }
-          @keyframes present-cast { 0% { opacity: 0 } 40% { opacity: 0.15 } 75% { opacity: 0.9 } 100% { opacity: 0 } }
-        `}</style>
 
         {/* Tap a page to turn it; the cover to open it. */}
         <button type="button" aria-label="Previous page" disabled={!canBack} onClick={() => go(-1)} className="absolute left-0 top-0 z-[7] h-full w-[50%] cursor-w-resize disabled:cursor-default" style={{ background: "transparent" }} />
