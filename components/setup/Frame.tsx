@@ -74,8 +74,8 @@ export default function Frame({
         {/* Wordmark. Small, and the only branding on the page - the screen is
             about them, not us. */}
         <div className="mb-8 flex items-center justify-center gap-2">
-          <img src="/brand/tle-os-logo.png" alt="TLE OS" className="art-light h-11 w-auto object-contain" />
-          <img src="/brand/tle-os-logo-dark.png" alt="" aria-hidden className="art-dark h-11 w-auto object-contain" />
+          <img src="/brand/tle-os-logo.png" alt="TLE OS" className="art-light h-14 w-auto object-contain" />
+          <img src="/brand/tle-os-logo-dark.png" alt="" aria-hidden className="art-dark h-14 w-auto object-contain" />
         </div>
 
         {/* The rail. Labels hide on the narrowest screens, where five words
