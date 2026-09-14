@@ -295,6 +295,9 @@ function stageProgress(key: string): { done: number; total: number } {
  * Nothing is loosened. Middleware requires a session to reach any page, and
  * every route this screen calls requires the see:pretenancy capability.
  */
+/* Gaps before asking REX for the certificates again, in ms. */
+const CHASE_AFTER = [6_000, 15_000, 30_000];
+
 export default function PreTenancyPage() {
   const [user, setUser] = useState<UserProfile | undefined>(undefined);
 
@@ -392,8 +395,8 @@ function Board({ user }: { user: UserProfile }) {
     void refreshTodayCount();
   }, [refreshTodayCount]);
 
-  /** So the compliance catch-up runs once a session, not once a refresh. */
-  const chased = useRef(false);
+  /** How long to leave REX before asking again for the certificates. */
+  const chased = useRef(0);
   const load = useCallback(async (): Promise<boolean> => {
     try {
       const res = await fetch("/api/pretenancy/deals", { cache: "no-store" });
@@ -438,11 +441,14 @@ function Board({ user }: { user: UserProfile }) {
       }
       setSummary(d.summary);
       setError(null);
-      /* Once, and only when there is something to come back for. The board is
-         already on screen and usable; this just fills the compliance in. */
-      if (d.compliancePending && !chased.current) {
-        chased.current = true;
-        setTimeout(() => void load(), 6_000);
+      /* The board is already on screen and usable; these just fill the
+         certificates in as REX answers. Three tries, spaced out, then it
+         stops - a property REX will not answer for must not turn into a
+         page that asks forever. */
+      if (d.compliancePending && chased.current < CHASE_AFTER.length) {
+        const wait = CHASE_AFTER[chased.current];
+        chased.current += 1;
+        setTimeout(() => void load(), wait);
       }
       return true;
     } catch {

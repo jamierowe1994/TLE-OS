@@ -1370,7 +1370,16 @@ const STATE_URGENCY: Record<ComplianceState, number> = {
 // ComplianceEntries searches slow superlinearly with the id count (92 ids →
 // 21s measured 29 Jul 2026) and hard-cap at 100 rows. Small parallel chunks
 // keep each call fast and under the cap.
-const COMPLIANCE_CHUNK = 10;
+//
+// Ten was still too many. 14 Sep 2026, on Kirstie's board: every chunk of ten
+// blew through rex.ts's 8 second per-call ceiling and was abandoned at page
+// zero, so eleven of the twelve matched properties came back "REX did not
+// finish answering" and the board showed no certificates at all. Halved, and
+// given a longer ceiling of its own below, because nothing waits on this call
+// any more - it fills a cache behind the page.
+const COMPLIANCE_CHUNK = 5;
+/** This one call's ceiling. It runs behind the screen, so it can take its time. */
+const COMPLIANCE_CALL_TIMEOUT_MS = 25_000;
 // 10 parents can genuinely exceed one page — a property holds up to 14 types
 // against BOTH its property and listing record, so ~5 properties per chunk can
 // reach 100+ rows. Page until a page comes back short; a chunk still full at
@@ -1405,11 +1414,16 @@ async function fetchComplianceByParent(ids: string[]): Promise<ComplianceFetch> 
     chunks.map(async (chunk) => {
       const rows: Array<Record<string, unknown>> = [];
       for (let page = 0; page < COMPLIANCE_MAX_PAGES; page++) {
-        const res = await rexCall("ComplianceEntries", "search", {
-          criteria: [{ name: "parent_object_id", type: "in", value: chunk }],
-          limit: COUNT_LIMIT,
-          offset: page * COUNT_LIMIT,
-        }).catch(() => null);
+        const res = await rexCall(
+          "ComplianceEntries",
+          "search",
+          {
+            criteria: [{ name: "parent_object_id", type: "in", value: chunk }],
+            limit: COUNT_LIMIT,
+            offset: page * COUNT_LIMIT,
+          },
+          { timeoutMs: COMPLIANCE_CALL_TIMEOUT_MS }
+        ).catch(() => null);
         // Keep whatever earlier pages gave us, but the answer is incomplete.
         if (!res || !res.ok) return { chunk, rows, complete: false };
         const batch = rexRows(res.result);
@@ -1537,6 +1551,51 @@ export async function getComplianceItemsFor(propertyId: string): Promise<{ items
   return { items: addMissingRequired(byParent.get(String(propertyId)) ?? [], checked), checked };
 }
 
+/**
+ * Per-property compliance, kept for a few minutes.
+ *
+ * ComplianceEntries is the slowest thing REX does, and Kirstie's board asks it
+ * about every deal on every load. Measured 14 Sep 2026: the whole route took
+ * 4.6 seconds, of which 4.0 was this call being cut off by its deadline and
+ * throwing the half-finished answer away - so she waited four seconds on every
+ * load for compliance that never once arrived.
+ *
+ * Now the answer is kept. A load that misses the deadline still fills this on
+ * its own time, and the next one has it for nothing. Five minutes: long enough
+ * to serve a morning's work, short enough that a certificate filed at 10am is
+ * on the board before lunch.
+ */
+const DEAL_COMPLIANCE_TTL_MS = 5 * 60_000;
+/* A property REX did not finish answering for is kept too, but only for a
+   minute. Not keeping it at all meant every load asked again and the board
+   never got below the cost of the slowest thing REX does; keeping it for five
+   minutes would freeze "we don't know" onto the screen. */
+const DEAL_COMPLIANCE_UNKNOWN_TTL_MS = 60_000;
+const dealComplianceCache = new Map<string, { at: number; data: DealCompliance }>();
+
+function dealComplianceFresh(id: string, now: number): DealCompliance | null {
+  const hit = dealComplianceCache.get(id);
+  if (!hit) return null;
+  const ttl = hit.data.checked ? DEAL_COMPLIANCE_TTL_MS : DEAL_COMPLIANCE_UNKNOWN_TTL_MS;
+  return now - hit.at < ttl ? hit.data : null;
+}
+
+/* One fetch at a time for the same set of properties. The board asks again
+   while the first answer is still coming, and two identical walks through
+   ComplianceEntries would make the slow thing slower. */
+const complianceInFlight = new Map<string, Promise<Map<string, DealCompliance>>>();
+
+/** Whatever is already known about these properties, without asking REX. */
+export function dealComplianceCached(propertyIds: string[]): Map<string, DealCompliance> {
+  const out = new Map<string, DealCompliance>();
+  const now = Date.now();
+  for (const id of new Set(propertyIds.filter(Boolean).map(String))) {
+    const fresh = dealComplianceFresh(id, now);
+    if (fresh) out.set(id, fresh);
+  }
+  return out;
+}
+
 export async function getComplianceForProperties(
   propertyIds: string[]
 ): Promise<Map<string, DealCompliance>> {
@@ -1544,9 +1603,34 @@ export async function getComplianceForProperties(
   const ids = [...new Set(propertyIds.filter(Boolean).map(String))];
   if (!rexConfigured() || ids.length === 0) return out;
 
-  const { byParent, unchecked } = await fetchComplianceByParent(ids);
-
+  /* Anything still fresh comes back without asking REX, and only the rest is
+     fetched. On a board where the same properties come round every load, that
+     is usually all of them. */
+  const now = Date.now();
+  const wanted: string[] = [];
   for (const id of ids) {
+    const fresh = dealComplianceFresh(id, now);
+    if (fresh) out.set(id, fresh);
+    else wanted.push(id);
+  }
+  if (wanted.length === 0) return out;
+
+  const key = [...wanted].sort().join(",");
+  const running = complianceInFlight.get(key);
+  const work = running ?? fetchDealCompliance(wanted);
+  if (!running) {
+    complianceInFlight.set(key, work);
+    void work.finally(() => complianceInFlight.delete(key));
+  }
+  for (const [id, entry] of await work) out.set(id, entry);
+  return out;
+}
+
+async function fetchDealCompliance(wanted: string[]): Promise<Map<string, DealCompliance>> {
+  const out = new Map<string, DealCompliance>();
+  const { byParent, unchecked } = await fetchComplianceByParent(wanted);
+
+  for (const id of wanted) {
     const checked = !unchecked.has(id);
     const items = addMissingRequired(byParent.get(id) ?? [], checked);
     // A property REX never answered for is reported as unchecked with nothing
@@ -1554,12 +1638,14 @@ export async function getComplianceForProperties(
     const problems = items.filter(
       (i) => complianceNeedsWork(i.state) || i.conflictingFieldExpiry
     );
-    out.set(id, {
+    const entry: DealCompliance = {
       outstanding: problems.length,
       expired: problems.filter((i) => i.state === "expired").length,
       problems: problems.map((i) => i.label),
       checked,
-    });
+    };
+    out.set(id, entry);
+    dealComplianceCache.set(id, { at: Date.now(), data: entry });
   }
   return out;
 }

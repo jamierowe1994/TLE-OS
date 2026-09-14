@@ -6,6 +6,7 @@ import {
   matchListingConfident,
   matchListingPhoto,
   getComplianceForProperties,
+  dealComplianceCached,
   type DealCompliance,
 } from "@/lib/business/rex-stats";
 import { getOverlays } from "@/lib/business/deal-store";
@@ -26,9 +27,18 @@ import type { DealPortalOverlay } from "@/lib/business/types";
 // walk keeps going after this and fills the cache, so a first load that misses
 // the deadline costs one photo-less render and nothing after it.
 const PHOTO_DEADLINE_MS = 2_500;
-// ComplianceEntries is superlinearly slow on large id sets; the board is more
-// useful on time without compliance than late with it.
-const COMPLIANCE_DEADLINE_MS = 4_000;
+/* ComplianceEntries is the slowest thing REX does, and this board asks it
+   about every deal on the screen.
+
+   Measured 14 Sep 2026: everything else on this route took 600ms cold and
+   70ms warm. The other four seconds were a deadline on compliance that the
+   call never once beat - so Kirstie waited four seconds, every load, for an
+   answer that was then thrown away and never once reached the board.
+
+   So there is no deadline any more, because there was nothing to wait for.
+   The board is served with whatever compliance is already cached and the
+   fetch runs on behind it, filling the cache for the next ask. The payload
+   says when more is still coming and the board asks again on its own. */
 
 export interface PreTenancyDeal {
   // AgentApplication fields the board renders, via the same shape the agent sees
@@ -207,14 +217,17 @@ export async function GET(req: NextRequest) {
       if (m?.propertyId) confidentByDeal.set(d.app.id, String(m.propertyId));
     }
   }
-  const compliance = await Promise.race([
-    getComplianceForProperties([...confidentByDeal.values()]).catch(
-      () => new Map<string, DealCompliance>()
-    ),
-    new Promise<Map<string, DealCompliance>>((r) =>
-      setTimeout(() => r(new Map()), COMPLIANCE_DEADLINE_MS)
-    ),
-  ]);
+  /* Deduped: two deals in the same building share a property id, and counting
+     it twice would leave the board asking again for something it has. */
+  const complianceIds = [...new Set(confidentByDeal.values())];
+  /* Whatever is known already, and not one millisecond of waiting for the
+     rest. The fetch runs on, fills the cache in rex-stats and is there for the
+     next ask - which the board makes on its own a few seconds later. */
+  const compliance = dealComplianceCached(complianceIds);
+  const compliancePending = compliance.size < complianceIds.length;
+  if (compliancePending) {
+    void getComplianceForProperties(complianceIds).catch(() => null);
+  }
 
   const out: PreTenancyDeal[] = deals.map((d) => {
     const entry = overlays.get(d.app.id);
@@ -408,5 +421,5 @@ export async function GET(req: NextRequest) {
     },
   };
 
-  return NextResponse.json({ configured: true, deals: out, summary });
+  return NextResponse.json({ configured: true, deals: out, summary, compliancePending });
 }
