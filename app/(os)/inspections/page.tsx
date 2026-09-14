@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import DoodleIcon from "@/components/DoodleIcon";
 import { Pill } from "@/components/Wire";
@@ -9,6 +10,7 @@ import { PressButton } from "@/components/Bits";
 import { STEPS, stepOf, type StepId } from "@/lib/inspection-steps";
 import type { DueVisit, Finding, Inspection, InspectionEvent, InspectionRules } from "@/lib/inspections";
 import ReportSheet from "@/components/inspections/ReportSheet";
+import { REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-catalogue";
 
 /**
  * Inspections: the visits we owe the book, and the permission that lets us in.
@@ -521,6 +523,64 @@ function Now({ step, inspection, busy, onMove }: { step: StepId; inspection: Ins
   }
 }
 
+/**
+ * The one control that turns a finding into a job.
+ *
+ * The screen used to say "Raise it on Maintenance and it carries from there",
+ * which meant retyping the room, the item and what was seen into a second
+ * screen - and every time somebody did not, a finding marked "raise a works
+ * order" quietly never became one. `works_order_id` has been on the finding
+ * since the table was written; nothing filled it in.
+ *
+ * The trade and the urgency are ASKED FOR rather than guessed. Neither is on
+ * the finding: "window catch does not hold shut" is a locksmith or a joiner
+ * depending on the window, and how fast it matters is a judgement made
+ * standing in front of it. Defaulting them would put a wrong trade on a real
+ * job and make somebody's diary wrong.
+ */
+function RaiseWorksOrder({ finding, busy, onMove }: { finding: Finding; busy: boolean; onMove: (b: unknown) => void }) {
+  const [open, setOpen] = useState(false);
+  const [category, setCategory] = useState<string>(REPAIR_CATEGORIES[0]);
+  const [urgency, setUrgency] = useState<string>("routine");
+
+  if (finding.worksOrderId) {
+    return (
+      <p className="mt-1.5 text-[11px] text-muted">
+        Raised as a works order. It carries on{" "}
+        <Link href={`/maintenance?open=${encodeURIComponent(finding.worksOrderId)}`} className="underline">
+          Maintenance
+        </Link>
+        .
+      </p>
+    );
+  }
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="mt-1.5 text-[11px] font-semibold text-accent-dark underline">
+        Raise the works order
+      </button>
+    );
+  }
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <select value={category} onChange={(e) => setCategory(e.target.value)} className="rounded-xl border border-line/80 bg-page px-2.5 py-1.5 text-[12px]">
+        {REPAIR_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+      </select>
+      <select value={urgency} onChange={(e) => setUrgency(e.target.value)} className="rounded-xl border border-line/80 bg-page px-2.5 py-1.5 text-[12px]">
+        {URGENCIES.map((u) => <option key={u.id} value={u.id}>{u.label} · {u.within}</option>)}
+      </select>
+      <PressButton
+        disabled={busy}
+        onClick={() => onMove({ raiseWorksOrder: { findingId: finding.id, category, urgency } })}
+        className="rounded-full bg-ink px-3.5 py-1.5 text-[12px] font-semibold text-page"
+      >
+        Raise it
+      </PressButton>
+      <button type="button" onClick={() => setOpen(false)} className="text-[11px] text-muted underline">Cancel</button>
+    </div>
+  );
+}
+
 function Findings({ inspection, findings, busy, onMove }: { inspection: Inspection; findings: Finding[]; busy: boolean; onMove: (b: unknown) => void }) {
   const [room, setRoom] = useState(ROOMS[0]);
   const [item, setItem] = useState("");
@@ -534,15 +594,20 @@ function Findings({ inspection, findings, busy, onMove }: { inspection: Inspecti
       <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">What we found</p>
       <ul className="mt-3 divide-y divide-line/50">
         {findings.map((f) => (
-          <li key={f.id} className="flex items-start justify-between gap-3 py-2.5 text-[12px]">
-            <span className="min-w-0">
-              <span className="block truncate font-semibold">{[f.room, f.item].filter(Boolean).join(" · ")}</span>
-              {f.note && <span className="block text-muted">{f.note}</span>}
-            </span>
-            <span className="flex shrink-0 items-center gap-2">
-              <Pill tone={f.condition === "poor" ? "accent" : "neutral"}>{f.condition}</Pill>
-              <span className="text-[11px] text-muted">{ACTIONS.find((a) => a.id === f.action)?.label}</span>
-            </span>
+          <li key={f.id} className="py-2.5 text-[12px]">
+            <div className="flex items-start justify-between gap-3">
+              <span className="min-w-0">
+                <span className="block truncate font-semibold">{[f.room, f.item].filter(Boolean).join(" · ")}</span>
+                {f.note && <span className="block text-muted">{f.note}</span>}
+              </span>
+              <span className="flex shrink-0 items-center gap-2">
+                <Pill tone={f.condition === "poor" ? "accent" : "neutral"}>{f.condition}</Pill>
+                <span className="text-[11px] text-muted">{ACTIONS.find((a) => a.id === f.action)?.label}</span>
+              </span>
+            </div>
+            {/* A finding that asked for work, and the job it became - or the
+                one control that makes it one. */}
+            {f.action === "works_order" && <RaiseWorksOrder finding={f} busy={busy} onMove={onMove} />}
           </li>
         ))}
         {findings.length === 0 && <li className="py-2 text-[12px] text-muted">{canAdd ? "Nothing recorded yet." : "Recorded after the visit."}</li>}

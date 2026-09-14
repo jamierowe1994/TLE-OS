@@ -10,6 +10,7 @@ import Segmented from "@/components/Segmented";
 import { PressButton } from "@/components/Bits";
 import { openDocument } from "@/lib/doc-sheet";
 import type { Contractor, WorksOrder, WorksEvent, WorksSummary, Kind, Move, Status, Urgency, PaidHow } from "@/lib/works-orders";
+import { PLANNED_CATEGORIES, REPAIR_CATEGORIES, URGENCIES } from "@/lib/works-catalogue";
 import { STEPS, stepOf } from "@/lib/works-steps";
 import { WorksNow, ContractorForm, BLANK_CONTRACTOR } from "@/components/WorksNow";
 
@@ -26,15 +27,9 @@ import { WorksNow, ContractorForm, BLANK_CONTRACTOR } from "@/components/WorksNo
  * next thing to do, and the row says what that is.
  */
 
-/* The constants are typed in lib/works-orders (server-only); these are the
-   client-side copies the screen draws with. Keep them in step. */
-const URGENCIES: { id: Urgency; label: string; within: string; blurb: string }[] = [
-  { id: "emergency", label: "Emergency", within: "24 hours", blurb: "No heating in winter, a burst pipe, no power, a security risk." },
-  { id: "urgent", label: "Urgent", within: "3 days", blurb: "Something broken that makes the home hard to live in." },
-  { id: "routine", label: "Routine", within: "14 days", blurb: "Everything else." },
-];
-const REPAIR_CATEGORIES = ["Plumbing", "Heating & boiler", "Electrical", "Gas", "Appliance", "Roof & gutters", "Windows & doors", "Locks & security", "Damp & mould", "Decoration", "Flooring", "Garden & fences", "Pests", "Cleaning", "Structural", "Other"];
-const PLANNED_CATEGORIES = ["Gas safety (CP12)", "EICR", "EPC", "Boiler service", "Legionella risk assessment", "PAT test", "Smoke & CO alarms", "Fire risk assessment", "HMO licence inspection", "Property inspection", "Inventory & check-in", "Check-out", "Other"];
+/* Imported now, not copied. These used to be client-side duplicates under a
+   comment reading "Keep them in step", which is a sync nobody can check - they
+   live in lib/works-catalogue, which both sides can read. */
 const REPORTED_BY = ["Tenant", "Landlord", "Agent", "Inspection", "Compliance tracker", "Contractor"];
 const STATUS_LABEL: Record<Status, string> = { reported: "Reported", approval: "Awaiting landlord", approved: "Approved", scheduled: "Booked", done: "Done", invoiced: "Invoiced", paid: "Paid", cancelled: "Cancelled" };
 const STATUS_ORDER: Status[] = ["reported", "approval", "approved", "scheduled", "done", "invoiced", "paid", "cancelled"];
@@ -351,7 +346,7 @@ function RaiseJob({ kind, contractors, onClose, onRaised }: { kind: Kind; contra
   const [manual, setManual] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [category, setCategory] = useState(kind === "repair" ? REPAIR_CATEGORIES[0] : PLANNED_CATEGORIES[0]);
+  const [category, setCategory] = useState<string>(kind === "repair" ? REPAIR_CATEGORIES[0] : PLANNED_CATEGORIES[0]);
   const [urgency, setUrgency] = useState<Urgency>("routine");
   const [dueAt, setDueAt] = useState("");
   const [reportedBy, setReportedBy] = useState(kind === "repair" ? "Tenant" : "Compliance tracker");

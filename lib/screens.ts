@@ -251,7 +251,8 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     wiring: "partial",
     caveats: [
       "The cadence - three months then every six - is a sensible guess and has not been signed off by Michael yet. It is a settings document, so it changes without a deploy.",
-      "A finding marked for a works order does not raise one yet. Raise it on Maintenance and it carries from there.",
+      /* Built 14 Sep: Raise the works order, on the finding itself. */
+      "A finding that asks for a works order carries Raise the works order. Pick the trade and how urgent it is - neither is on the finding, so neither is guessed - and the job opens on Maintenance with the room, the item and what you saw already on it.",
       "The Due list needs REX for the managed book. Where REX is not connected the screen says so rather than showing an empty board.",
       /* The printable report landed 14 Sep - Print the report on a written-up
          visit. Photographs on a finding are still open. */

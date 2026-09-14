@@ -5,6 +5,8 @@ import {
   deleteFinding, getInspection, logEvent, moveInspection, saveFinding, type Finding, type Move,
 } from "@/lib/inspections";
 import { emailsForMove, outcomeLine } from "@/lib/inspection-emails";
+import { createOrder } from "@/lib/works-orders";
+import type { Urgency as NewOrderUrgency } from "@/lib/works-catalogue";
 
 /**
  * One inspection: read it with its findings and timeline, or move it along.
@@ -30,6 +32,12 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
 type Body =
   | ({ finding: Partial<Finding> & { room: string } } & { action?: never })
   | ({ deleteFinding: string } & { action?: never })
+  /* Turn one finding into a works order. The agent names the trade and the
+     urgency, because neither is on the finding and neither is ours to guess:
+     "window catch does not hold shut" is a locksmith or a joiner depending on
+     the window, and how fast it matters is a judgement made standing in front
+     of it. */
+  | ({ raiseWorksOrder: { findingId: string; category: string; urgency: string } } & { action?: never })
   | Move;
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -51,6 +59,52 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       const after = await getInspection(id);
       return NextResponse.json({ ok: true, ...after });
     }
+    /* ── A finding becomes a job ────────────────────────────────────────
+       The screen has been telling agents to "Raise it on Maintenance and it
+       carries from there", which meant retyping the room, the item and what
+       was seen into a second screen - and, every time somebody did not, a
+       finding marked "raise a works order" that quietly never became one.
+       `works_order_id` has been on the finding since the table was written;
+       this is the thing that fills it in. */
+    if ("raiseWorksOrder" in body && body.raiseWorksOrder) {
+      const { findingId, category, urgency } = body.raiseWorksOrder;
+      const found = await getInspection(id);
+      if (!found) return NextResponse.json({ ok: false, error: "No such inspection." }, { status: 404 });
+      const f = found.findings.find((x) => x.id === findingId);
+      if (!f) return NextResponse.json({ ok: false, error: "No such finding." }, { status: 404 });
+      if (f.worksOrderId) return NextResponse.json({ ok: false, error: "That one already has a works order." }, { status: 400 });
+
+      const i = found.inspection;
+      const order = await createOrder(
+        {
+          kind: "repair",
+          propertyId: i.propertyId,
+          propertyName: i.propertyName,
+          locality: i.locality,
+          landlord: i.landlord,
+          landlordEmail: i.landlordEmail,
+          tenant: i.tenant,
+          tenantEmail: i.tenantEmail,
+          tenantPhone: i.tenantPhone,
+          /* The room is the title's context - "Bedroom 2 - window catch" is
+             what a contractor needs to find it. */
+          title: [f.room, f.item].filter(Boolean).join(" - ") || "From a property visit",
+          description: f.note,
+          category,
+          urgency: (urgency as NewOrderUrgency) ?? "routine",
+          /* Already one of the options on a works order, from before this
+             existed - the system expected inspections to feed it. */
+          reportedBy: "Inspection",
+          rehearsal: i.rehearsal,
+        },
+        by
+      );
+      await saveFinding(id, { ...f, worksOrderId: order.id }, by);
+      await logEvent(id, by, "works_order", `${[f.room, f.item].filter(Boolean).join(" - ")} raised as works order ${order.ref}.`);
+      const after = await getInspection(id);
+      return NextResponse.json({ ok: true, ...after, worksOrder: { id: order.id, ref: order.ref } });
+    }
+
     if ("deleteFinding" in body && body.deleteFinding) {
       await deleteFinding(body.deleteFinding);
       const after = await getInspection(id);

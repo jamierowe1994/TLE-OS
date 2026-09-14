@@ -43,25 +43,13 @@ import { uid } from "@/lib/auth";
  * through PayProp" is recorded here as the fact and done there by a person.
  */
 
-export const KINDS = ["repair", "planned"] as const;
-export type Kind = (typeof KINDS)[number];
-
-export const URGENCIES = [
-  { id: "emergency", label: "Emergency", within: "24 hours", hours: 24, blurb: "No heating in winter, a burst pipe, no power, a security risk." },
-  { id: "urgent", label: "Urgent", within: "3 days", hours: 72, blurb: "Something broken that makes the home hard to live in." },
-  { id: "routine", label: "Routine", within: "14 days", hours: 24 * 14, blurb: "Everything else." },
-] as const;
-export type Urgency = (typeof URGENCIES)[number]["id"];
-
-export const REPAIR_CATEGORIES = [
-  "Plumbing", "Heating & boiler", "Electrical", "Gas", "Appliance", "Roof & gutters", "Windows & doors", "Locks & security", "Damp & mould",
-  "Decoration", "Flooring", "Garden & fences", "Pests", "Cleaning", "Structural", "Other",
-] as const;
-
-export const PLANNED_CATEGORIES = [
-  "Gas safety (CP12)", "EICR", "EPC", "Boiler service", "Legionella risk assessment", "PAT test", "Smoke & CO alarms", "Fire risk assessment",
-  "HMO licence inspection", "Property inspection", "Inventory & check-in", "Check-out", "Other",
-] as const;
+/* The words live in lib/works-catalogue, which is NOT server-only, so a client
+   component can draw an urgency without keeping its own copy. Imported for use
+   in this file AND re-exported, so every existing importer of this module
+   carries on unchanged. */
+import { KINDS, URGENCIES, REPAIR_CATEGORIES, PLANNED_CATEGORIES, type Kind, type Urgency } from "./works-catalogue";
+export { KINDS, URGENCIES, REPAIR_CATEGORIES, PLANNED_CATEGORIES };
+export type { Kind, Urgency };
 
 export const STATUSES = [
   { id: "reported", label: "Reported", blurb: "In, and not yet cleared to go." },
