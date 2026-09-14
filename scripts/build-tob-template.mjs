@@ -59,17 +59,29 @@ const expand = (p) => (p.startsWith("~") ? p.replace("~", homedir()) : p);
 const DETAIL_X = 272;                 // left edge of the value column
 const DETAIL_W = 595.5 - 272 - 51.4;  // to the table's right edge
 const ROW_H = 17;
+/**
+ * `fill` marks the two the AGENT can type into. The other eight are derived
+ * from the record and are readonly, because a contract whose fee the signer
+ * can retype is not a contract.
+ *
+ * The two exceptions earn it. The OS does not hold the landlord's own address
+ * separately from the property's - sending the property address for both is
+ * wrong on a contract - so it arrives blank, and a blank box nobody can fill
+ * is worse than no box: it would go out empty on every single contract.
+ * Additional Fees Agreed is negotiated at the table, so it is prefilled "None"
+ * and the agent can say otherwise.
+ */
 const DETAILS = [
   ["Partner Agent", 118.2],
   ["Landlord", 138.5],
-  ["Landlord Address", 158.7],
+  ["Landlord Address", 158.7, { fill: true }],
   ["Contact Number", 179.0],
   ["Email Address", 199.3],
   ["Property Address", 219.5],
   ["Service Level", 239.8],
   ["Set-Up / Tenant Find Fee", 293.4],
   ["Management / Rent Collection Fee", 322.0],
-  ["Additional Fees Agreed", 347.8],
+  ["Additional Fees Agreed", 347.8, { fill: true }],
 ];
 
 /* ── page 12: the signatures ──────────────────────────────────────────────
@@ -90,11 +102,11 @@ const LANDLORD_SIG_TOP = fromBottom(509.4, SIG.h); // 279.9
 const AGENT_SIG_TOP = fromBottom(403.3, SIG.h);    // 386.0
 
 const fields = [
-  ...DETAILS.map(([name, y]) => ({
+  ...DETAILS.map(([name, y, opt]) => ({
     name,
     role: "Agent",
     type: "text",
-    readonly: true,
+    readonly: !opt?.fill,
     required: true,
     areas: [{ page: 2, x: DETAIL_X, y: y - 3, w: DETAIL_W, h: ROW_H }],
   })),

@@ -3,7 +3,7 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { getAppraisal, markTermsSent } from "@/lib/appraisal-store";
 import { SERVICE_LEVELS } from "@/lib/market-appraisal";
-import { docusealConfigured, openTermsSigning, DocusealBlocked } from "@/lib/docuseal";
+import { docusealConfigured, openTermsSigning, feeWording, DocusealBlocked } from "@/lib/docuseal";
 
 /**
  * Open a signing session for one appraisal's terms of business.
@@ -84,8 +84,13 @@ export async function POST(req: NextRequest) {
   const service = SERVICE_LEVELS.find((s) => s.id === ma.serviceLevel);
 
   try {
+    const fees = feeWording(service?.label ?? ma.serviceLevel, ma.feePct ?? null, ma.setupFee ?? null);
     const session = await openTermsSigning(tpl, {
       agentName: ma.agent ?? me.name ?? "",
+      /* The agent signs first, so they need an address of their own. Theirs if
+         the appraisal names somebody we know, otherwise whoever is pressing
+         the button - which is the agent, standing in front of the landlord. */
+      agentEmail: me.email,
       landlordName: ma.landlord,
       landlordEmail: email,
       /* The landlord's own address is not held separately from the property's
@@ -95,8 +100,12 @@ export async function POST(req: NextRequest) {
       landlordAddress: "",
       contactNumber: (ma.landlordMobile ?? "").trim(),
       propertyAddress: [ma.address, ma.postcode].filter(Boolean).join(", "),
-      feeAmount: ma.setupFee ?? null,
-      feePercent: ma.feePct ?? null,
+      serviceLevel: service?.label ?? "",
+      setUpFee: fees.setUp,
+      managementFee: fees.management,
+      /* Said, not left blank. An empty box on a signed contract is an argument
+         waiting to happen. */
+      additionalFees: "None",
       externalId: ma.id,
     });
 
@@ -105,7 +114,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      ...session,
+      /* The AGENT's session is the one that opens now. The landlord's is minted
+         at the same moment and waits for them; their portal finds it rather
+         than starting a second contract. */
+      ...session.agent,
+      landlordSlug: session.landlord.slug,
+      submissionId: session.submissionId,
       /* Said back so the panel can show what the landlord is about to see
          without re-deriving it. */
       serviceLevel: service?.label ?? null,

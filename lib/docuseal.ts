@@ -342,17 +342,60 @@ export const WEBHOOK_EVENTS = [
 export interface TermsPrefill {
   /** Who the landlord is dealing with — the agent named on the appraisal. */
   agentName: string;
+  /**
+   * The agent's own address. They are a SUBMITTER now, not a name in a box:
+   * they sign first and the landlord never sees it until they have.
+   */
+  agentEmail: string;
   landlordName: string;
   landlordEmail: string;
   landlordAddress: string;
   contactNumber: string;
   propertyAddress: string;
-  /** Set-up fee, £. Rendered into the service row that was agreed. */
-  feeAmount: number | null;
-  /** Management fee, percent of rent. */
-  feePercent: number | null;
+  /** "Experts Management Service" and the like, as the contract words it. */
+  serviceLevel: string;
+  /** Both fee boxes, already in words — see `feeWording`. */
+  setUpFee: string;
+  managementFee: string;
+  /** Anything agreed on top. "None" rather than empty: a blank box on a
+   *  signed contract is an argument waiting to happen. */
+  additionalFees: string;
   /** Our own id for this appraisal, so a webhook can find its way home. */
   externalId: string;
+}
+
+/**
+ * THE STANDARD FEES, from the contract itself (page 5 of the Sep 26 England
+ * Terms of Business), used when the agent has not recorded their own.
+ *
+ * Susan's condition, 14 Sep: the fees must be filled in before it reaches the
+ * landlord, because the printed schedule carries the standard ones and a
+ * contract that disagrees with its own fee table is worse than no contract.
+ * So this never returns an empty string.
+ */
+export function feeWording(
+  serviceLevel: string | null,
+  feePercent: number | null,
+  setUpAmount: number | null
+): { setUp: string; management: string } {
+  const money = (n: number) => `£${n.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+  const id = (serviceLevel ?? "").toLowerCase();
+  const tenantFind = id.includes("tenant");
+  const standardPct = id.includes("manage") ? "14% + VAT (16.8% inc VAT)" : "12% + VAT (14.4% inc VAT)";
+
+  const management = tenantFind
+    ? "Not applicable — Tenant Find"
+    : feePercent != null
+      ? `${feePercent}% + VAT`
+      : standardPct;
+
+  const setUp = setUpAmount != null
+    ? `${money(setUpAmount)} + VAT`
+    : tenantFind
+      ? "75% of the first month's rent + VAT (minimum £500 + VAT)"
+      : "50% of the first month's rent + VAT (minimum £500 + VAT)";
+
+  return { setUp, management };
 }
 
 export interface SigningSession {
@@ -361,6 +404,13 @@ export interface SigningSession {
   /** Where the embedded form is pointed. */
   embedSrc: string;
   status: string;
+}
+
+/** Both halves of a two-part signing, in the order they are signed. */
+export interface TermsSigningPair {
+  agent: SigningSession;
+  landlord: SigningSession;
+  submissionId: number | null;
 }
 
 /**
@@ -372,51 +422,111 @@ export interface SigningSession {
  * function running. The whole point of embedding is that the landlord signs on
  * our screen, in front of the agent, so nothing should be emailed at all.
  */
+/**
+ * The landlord's half of a contract the agent has already started.
+ *
+ * THE LANDLORD NEVER MINTS A CONTRACT. Their portal used to call
+ * openTermsSigning itself, which created a SECOND submission against the same
+ * appraisal - two contracts for one property, both signable, and nothing on
+ * either saying which one counted. Now it finds the one the agent made.
+ *
+ * Null when the agent has not sent the terms yet, which is a real answer and
+ * not an error: the landlord is told their agent is still preparing them.
+ */
+export async function findLandlordSigning(externalId: string): Promise<SigningSession | null> {
+  const raw = await ds<{ data?: Array<{ id?: number; slug?: string; embed_src?: string; status?: string; role?: string; external_id?: string }> }>(
+    `/submitters?external_id=${encodeURIComponent(externalId)}&limit=20`
+  ).catch(() => null);
+  const rows = raw?.data ?? [];
+  /* Newest first, so a contract re-sent after a correction wins over the one
+     it replaced. DocuSeal returns them in creation order. */
+  const landlord = [...rows].reverse().find((r) => (r.role ?? "").toLowerCase() === "landlord" && r.slug);
+  if (!landlord?.slug) return null;
+  const base = signingBase(baseUrl() ?? "");
+  return {
+    submitterId: Number(landlord.id),
+    slug: landlord.slug,
+    embedSrc: landlord.embed_src || `${base}/s/${landlord.slug}`,
+    status: landlord.status ?? "awaiting",
+  };
+}
+
 export async function openTermsSigning(
   templateId: number,
   p: TermsPrefill
-): Promise<SigningSession> {
+): Promise<TermsSigningPair> {
   const raw = await ds<
-    Array<{ id?: number; slug?: string; embed_src?: string; status?: string }>
+    Array<{ id?: number; slug?: string; embed_src?: string; status?: string; role?: string; submission_id?: number }>
   >("/submissions", {
     method: "POST",
     body: {
       template_id: templateId,
       send_email: false,
       send_sms: false,
+      /* ORDER IS THE CONTRACT. James, 14 Sep 2026: "we would get the agent to
+         sign before it goes off. When they're prepared to send it off, they'll
+         then sign it, date and time it, and send it back to us." DocuSeal
+         signs in the order the submitters are listed, so the agent is first
+         and the landlord cannot open theirs until the agent is done.
+
+         It also puts the ten detail boxes in front of the person who can tell
+         whether they are right, at the moment they are committing to them. */
       submitters: [
         {
-          role: "Landlord",
-          name: p.landlordName,
-          email: p.landlordEmail,
-          /* Ours, not theirs. The webhook uses this to find the appraisal
-             again — see the note on document URLs expiring in 40 minutes. */
+          role: "Agent",
+          name: p.agentName,
+          email: p.agentEmail,
           external_id: p.externalId,
+          /* THE FIELD NAMES ARE THE TEMPLATE'S, CHARACTER FOR CHARACTER.
+             DocuSeal drops a prefill whose name it does not recognise without
+             a word of complaint, so a rename does not fail here - it arrives
+             as a blank box on a contract somebody is about to sign. They are
+             built by scripts/build-tob-template.mjs; change them there and
+             here together or not at all. */
           values: {
             "Partner Agent": p.agentName,
-            "Landlord Name": p.landlordName,
+            Landlord: p.landlordName,
             "Landlord Address": p.landlordAddress,
             "Contact Number": p.contactNumber,
             "Email Address": p.landlordEmail,
             "Property Address": p.propertyAddress,
-            "Management Fee Amount": p.feeAmount != null ? p.feeAmount.toFixed(2) : "",
-            "Management Fee Percent": p.feePercent != null ? String(p.feePercent) : "",
+            "Service Level": p.serviceLevel,
+            "Set-Up / Tenant Find Fee": p.setUpFee,
+            "Management / Rent Collection Fee": p.managementFee,
+            "Additional Fees Agreed": p.additionalFees,
           },
+        },
+        {
+          role: "Landlord",
+          name: p.landlordName,
+          email: p.landlordEmail,
+          external_id: p.externalId,
         },
       ],
     },
   });
 
-  const s = Array.isArray(raw) ? raw[0] : null;
-  if (!s?.slug) throw new DocusealBlocked("DocuSeal created no submitter to sign.");
+  const list = Array.isArray(raw) ? raw : [];
+  const pick = (role: string) => list.find((s) => (s.role ?? "").toLowerCase() === role);
+  const agent = pick("agent") ?? list[0];
+  const landlord = pick("landlord") ?? list[1];
+  if (!agent?.slug || !landlord?.slug) {
+    throw new DocusealBlocked("DocuSeal created the contract without both signers on it.");
+  }
 
+  const base = signingBase(baseUrl() ?? "");
   /* embed_src is preferred over a URL we build: it is what DocuSeal itself
      says the form lives at, and it already carries the right region. */
-  const base = signingBase(baseUrl() ?? "");
+  const toSession = (s: typeof agent): SigningSession => ({
+    submitterId: Number(s!.id),
+    slug: s!.slug!,
+    embedSrc: s!.embed_src || `${base}/s/${s!.slug}`,
+    status: s!.status ?? "awaiting",
+  });
+
   return {
-    submitterId: Number(s.id),
-    slug: s.slug,
-    embedSrc: s.embed_src || `${base}/s/${s.slug}`,
-    status: s.status ?? "awaiting",
+    agent: toSession(agent),
+    landlord: toSession(landlord),
+    submissionId: agent.submission_id ?? null,
   };
 }

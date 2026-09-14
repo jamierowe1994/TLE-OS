@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { currentLandlord, landlordOwnsAppraisal } from "@/lib/landlord-account";
 import { getAppraisal } from "@/lib/appraisal-store";
-import { docusealConfigured, DocusealBlocked, openTermsSigning } from "@/lib/docuseal";
+import { docusealConfigured, DocusealBlocked, findLandlordSigning } from "@/lib/docuseal";
 
 /**
  * The landlord signs their terms from their own file.
@@ -41,17 +41,18 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const session = await openTermsSigning(tpl, {
-      agentName: ma.agent ?? "",
-      landlordName: ma.landlord,
-      landlordEmail: me.email,
-      landlordAddress: "",
-      contactNumber: (ma.landlordMobile ?? "").trim(),
-      propertyAddress: [ma.address, ma.postcode].filter(Boolean).join(", "),
-      feeAmount: ma.setupFee ?? null,
-      feePercent: ma.feePct ?? null,
-      externalId: ma.id,
-    });
+    /* FINDS, NEVER MINTS. This used to open a contract of its own, which meant
+       a landlord pressing sign in their portal created a SECOND submission
+       against the same appraisal - two live contracts for one property and
+       nothing saying which counted. The agent signs first and their send is
+       what brings this into existence; see openTermsSigning. */
+    const session = await findLandlordSigning(ma.id);
+    if (!session) {
+      return NextResponse.json(
+        { ok: false, error: "Your terms aren't ready to sign yet. Your agent is preparing them." },
+        { status: 409 }
+      );
+    }
     return NextResponse.json({ ok: true, url: session.embedSrc });
   } catch (e) {
     const msg = e instanceof DocusealBlocked ? e.message : e instanceof Error ? e.message : "Couldn't open the terms.";
