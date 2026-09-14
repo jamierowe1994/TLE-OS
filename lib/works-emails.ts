@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import { hasDb, q } from "@/lib/db";
 import { sendEmail, ResendBlocked } from "@/lib/resend";
 import { renderTleEmailLive } from "@/lib/email/tle-emails";
-import { emailShell } from "@/lib/email/shell";
+import { accountsInvoiceEmail, complianceJobEmail } from "@/lib/email/works-internal";
 import { msConnectionFor, msSendMail, MailboxNotConnected } from "@/lib/microsoft";
 import { switchOn } from "@/lib/switches";
 import { pounds, URGENCIES, type Move, type WorksOrder } from "@/lib/works-orders";
@@ -148,33 +148,16 @@ async function send(o: WorksOrder, id: string, to: string, vars: Record<string, 
   }
 }
 
-/** The accounts inbox: a contractor's invoice is on a job (Michael, 7 Sep 2026). Internal shell, internal sender. */
+/** The accounts inbox: a contractor's invoice is on a job (Michael, 7 Sep 2026).
+ *  The words live in lib/email/works-internal.ts so the catalogue can show
+ *  them without a job having to move. */
 export async function tellAccounts(o: WorksOrder, accountsEmail: string): Promise<SendOutcome> {
   const address = accountsEmail.trim();
   if (!address.includes("@")) return { to: "accounts", sent: false, reason: "no accounts inbox set under Maintenance, Invoices, Who invoices are from" };
-  const payee = o.payee === "agent" ? `${o.raisedBy} (paid the contractor themselves)` : o.contractorName || "the contractor";
-  const subject = `Invoice in: #${o.ref} ${o.title}, ${pounds(o.invoicePence)} to ${payee}`;
+  const mail = accountsInvoiceEmail(o);
+  if (o.rehearsal) return keep(o.id, "accounts", address, mail.subject, mail.html);
   try {
-    const html = emailShell({
-        heading: `Invoice in on job #${o.ref}`,
-        intro: `${o.contractorName || "The contractor"}'s invoice is on the job and it is ready to key into PayProp. Nothing here has been paid.`,
-        rows: [
-          { title: o.propertyName + (o.locality ? `, ${o.locality}` : ""), detail: o.title, tone: "neutral" },
-          { title: `${pounds(o.invoicePence)} to ${payee}`, detail: `Invoice ${o.invoiceRef || "no number"} · reference #${o.ref}${o.landlord ? ` · landlord ${o.landlord}` : ""}`, tone: "attention" },
-        ],
-        rowsLead: "To pay",
-        button: "Open the job",
-        link: `${ORIGIN}/maintenance?open=${encodeURIComponent(o.id)}`,
-        image: "illustrations/email/certificates.gif",
-      footnote: "Mark it paid on the job once it has gone through PayProp, and it drops off the accounts list.",
-    });
-    if (o.rehearsal) return keep(o.id, "accounts", address, subject, html);
-    await sendEmail({
-      to: address,
-      subject,
-      html,
-      text: `Invoice in on job #${o.ref}: ${o.title} at ${o.propertyName}. ${pounds(o.invoicePence)} to ${payee}. Reference #${o.ref}. Open: ${ORIGIN}/maintenance?open=${o.id}`,
-    });
+    await sendEmail({ to: address, subject: mail.subject, html: mail.html, text: mail.text });
     return { to: "accounts", sent: true, address, via: "internal sender" };
   } catch (e) {
     return { to: "accounts", sent: false, address, reason: e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "the email did not send" };
@@ -209,50 +192,10 @@ export async function tellCompliance(
 ): Promise<SendOutcome> {
   const address = complianceEmail.trim();
   if (!address.includes("@")) return { to: "compliance", sent: false, reason: "no compliance inbox set under Maintenance, Invoices" };
-
-  const where = o.propertyName + (o.locality ? `, ${o.locality}` : "");
-  const docs = o.files ?? [];
-  const kindWord = o.kind === "planned" ? o.category : "Repair";
-
-  const rows: { title: string; detail: string; tone: "neutral" | "attention" | "good" }[] = [
-    { title: where, detail: `${kindWord} · job #${o.ref}${o.landlord ? ` · landlord ${o.landlord}` : ""}`, tone: "neutral" },
-  ];
-  let heading: string, intro: string, subject: string;
-
-  if (trigger === "document") {
-    subject = `Document on job #${o.ref}: ${file?.name ?? "a file"} - ${where}`;
-    heading = `A document has landed on job #${o.ref}`;
-    intro = `${file?.by || "Somebody"} added a document to a job that is already finished. It is on the job with the rest of the paperwork.`;
-    rows.push({ title: file?.name ?? "a file", detail: "Open the job to read or download it", tone: "attention" });
-  } else {
-    subject = `${kindWord} done at ${where} - job #${o.ref}`;
-    heading = `Job #${o.ref} is done`;
-    intro = `${o.title}${o.contractorName ? `, done by ${o.contractorName}` : ""}${o.completedAt ? ` on ${when(o.completedAt)}` : ""}.${o.completionNote ? ` ${o.completionNote}` : ""}`;
-    rows.push(
-      docs.length
-        ? { title: `${docs.length} document${docs.length === 1 ? "" : "s"} on the job`, detail: docs.map((d) => d.name).join(" · "), tone: "attention" }
-        : { title: "No documents yet", detail: "Anything added from here on is sent over as it lands", tone: "neutral" }
-    );
-  }
-
-  const html = emailShell({
-    heading,
-    intro,
-    rows,
-    rowsLead: "The job",
-    button: "Open the job",
-    link: `${ORIGIN}/maintenance?open=${encodeURIComponent(o.id)}`,
-    image: "illustrations/email/certificates.gif",
-    footnote: "Sent because the job finished. Nothing goes over while a job is still open.",
-  });
-  if (o.rehearsal) return keep(o.id, "compliance", address, subject, html);
+  const mail = complianceJobEmail(o, trigger, file);
+  if (o.rehearsal) return keep(o.id, "compliance", address, mail.subject, mail.html);
   try {
-    await sendEmail({
-      to: address,
-      subject,
-      html,
-      text: `${heading}. ${o.title} at ${where}. Job #${o.ref}. Open: ${ORIGIN}/maintenance?open=${o.id}`,
-    });
+    await sendEmail({ to: address, subject: mail.subject, html: mail.html, text: mail.text });
     return { to: "compliance", sent: true, address, via: "internal sender" };
   } catch (e) {
     return { to: "compliance", sent: false, address, reason: e instanceof ResendBlocked ? e.message : e instanceof Error ? e.message : "the email did not send" };

@@ -29,7 +29,9 @@ import { tleBrand, type EmailAudience } from "@/lib/campaign-mail";
 import { verifyEmailFor, resetEmailFor } from "@/lib/verify-email";
 import { pilotInviteEmail } from "@/lib/email/pilot-email";
 import { videoChaseEmail } from "@/lib/email/video-chase-email";
-import { certificateChaseEmail, ownComplianceEmail, pretenancyDigestEmail, dealMovedEmail, radarDigestEmail } from "@/lib/email/agent-emails";
+import { certificateChaseEmail, ownComplianceEmail, ownComplianceRollupEmail, pretenancyDigestEmail, dealMovedEmail, radarDigestEmail } from "@/lib/email/agent-emails";
+import { accountsInvoiceEmail, complianceJobEmail } from "@/lib/email/works-internal";
+import type { WorksOrder } from "@/lib/works-orders";
 import {
   bodyFor,
   confirmBodyFor,
@@ -732,3 +734,88 @@ export function renderLandlordSignIn(input: { firstName: string; link: string })
   ].join("\n");
   return { ...out, text };
 }
+
+/* ── The three that were never in the catalogue ──────────────────────────
+ *
+ * All three go to OUR OWN inboxes, and all three were invisible here: the
+ * roll-up because it was never added, and the two maintenance ones because
+ * their words were written inline inside the sending code, so the only way
+ * to read one was to make a job move and send it.
+ *
+ * This screen exists so an email can be read before it goes out. An email
+ * that cannot be read here is the one that goes out wrong.
+ */
+
+/** One finished job, so both maintenance inbox emails preview as real ones. */
+const JOB_SAMPLE = {
+  id: "job-sample",
+  ref: 1042,
+  kind: "repair",
+  category: "Heating & boiler",
+  title: "Boiler not firing, no hot water",
+  propertyName: "41 Harewood Road",
+  locality: "Coventry CV4 8LP",
+  landlord: "Helen Marsh",
+  contractorName: "R. Holt Heating",
+  completedAt: "2026-09-08T10:30:00.000Z",
+  completionNote: "PCB replaced, system repressurised and tested.",
+  completionNote2: "",
+  payee: "contractor",
+  raisedBy: "Michael Healy",
+  invoicePence: 26400,
+  invoiceRef: "INV-00042",
+  files: [{ name: "Gas safety certificate.pdf" }, { name: "Boiler photo.jpg" }],
+} as unknown as WorksOrder;
+
+TLE_EMAILS.push(
+  {
+    id: "own-compliance-rollup",
+    group: "Compliance",
+    name: "Own Compliance Roll-up — Compliance",
+    audience: "internal",
+    trigger: "Every morning, alongside the agents' own reminders",
+    fires: "app/api/agent-compliance/remind (cron, POST with x-cron-key)",
+    to: "Whoever holds the compliance role — Michael",
+    summary:
+      "The same morning as every short agent gets their own reminder, one list of who is short and on what, from the other side. Nobody is chased twice by it: it reports, it does not ask.",
+    render: () => {
+      const m = ownComplianceRollupEmail({
+        people: [
+          { name: "Helen Marsh", lines: ["Right to Rent training - expired 2026-08-30", "DBS check - not on file"] },
+          { name: "Dan Richards", lines: ["Professional indemnity - runs out 2026-09-28 (22 days)"] },
+        ],
+      });
+      return { subject: m.subject, html: m.html };
+    },
+  },
+  {
+    id: "works-accounts-invoice",
+    group: "Maintenance",
+    name: "Invoice In — Accounts",
+    audience: "internal",
+    trigger: "When a contractor's invoice lands on a job",
+    fires: "lib/works-emails → tellAccounts",
+    to: "The accounts inbox set under Maintenance, Invoices",
+    summary:
+      "A figure to key into PayProp, not a receipt: nothing in it has been paid. Says who is owed, against which job and which property, and drops off the accounts list once it is marked paid.",
+    render: () => {
+      const m = accountsInvoiceEmail(JOB_SAMPLE);
+      return { subject: m.subject, html: m.html };
+    },
+  },
+  {
+    id: "works-compliance-done",
+    group: "Maintenance",
+    name: "Job Finished — Compliance",
+    audience: "internal",
+    trigger: "When a job is marked done, and again if a document lands on a job that is already finished",
+    fires: "lib/works-emails → tellCompliance",
+    to: "The compliance inbox set under Maintenance, Invoices — Michael",
+    summary:
+      "Compliance hears twice at most and never while a job is open. Once when it is finished with every document on it listed, and again for the certificate that follows the visit. A photo taken mid-visit is silent.",
+    render: () => {
+      const m = complianceJobEmail(JOB_SAMPLE, "done");
+      return { subject: m.subject, html: m.html };
+    },
+  }
+);
