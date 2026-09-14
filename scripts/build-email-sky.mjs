@@ -158,6 +158,101 @@ async function cloudGif({ name, src, width, side, bleed, ampY, ampX, frames, del
   console.log(name + ".gif", W + "x" + H, frames + " frames", size(out));
 }
 
+/* ── A checkerboard that is not a checkerboard ───────────────────────────
+   The invoice drawing came out of ChatGPT with the transparency PATTERN
+   drawn into it as real pixels: mid-greys, perfectly neutral, in squares.
+   Colour-keying them would eat the drawing's own paper, so this floods in
+   from the border instead and only clears greys it can REACH from outside.
+   Anything enclosed by the drawing is left alone whatever colour it is. */
+async function stripChecker(file, out) {
+  const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { width: W, height: H } = info;
+  const isChecker = (i) => {
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    if (max - min > 14) return false;
+    const l = (r + g + b) / 3;
+    return l > 95 && l < 228;
+  };
+  const seen = new Uint8Array(W * H);
+  const stack = new Int32Array(W * H);
+  let sp = 0;
+  const push = (x, y) => {
+    const p = y * W + x;
+    if (seen[p] || !isChecker(p * 4)) return;
+    seen[p] = 1;
+    stack[sp++] = p;
+  };
+  for (let x = 0; x < W; x++) { push(x, 0); push(x, H - 1); }
+  for (let y = 0; y < H; y++) { push(0, y); push(W - 1, y); }
+  while (sp) {
+    const p = stack[--sp];
+    const x = p % W, y = (p / W) | 0;
+    data[p * 4 + 3] = 0;
+    if (x > 0) push(x - 1, y);
+    if (x < W - 1) push(x + 1, y);
+    if (y > 0) push(x, y - 1);
+    if (y < H - 1) push(x, y + 1);
+  }
+  /* The squares also sit INSIDE the drawing wherever it has a hole - the
+     gap in the binder clip, the loop of the mug handle - and the border
+     flood cannot reach those. Any remaining patch of checker is cleared
+     only if it actually alternates: two grey levels more than 25 apart
+     inside one connected run is a checkerboard, and a flat grey object
+     (the plant pot) is not. */
+  for (let p0 = 0; p0 < W * H; p0++) {
+    if (seen[p0] || !isChecker(p0 * 4)) continue;
+    sp = 0;
+    stack[sp++] = p0;
+    seen[p0] = 1;
+    const run = [];
+    let lo = 255, hi = 0;
+    while (sp) {
+      const p = stack[--sp];
+      run.push(p);
+      const l = (data[p * 4] + data[p * 4 + 1] + data[p * 4 + 2]) / 3;
+      if (l < lo) lo = l;
+      if (l > hi) hi = l;
+      const x = p % W, y = (p / W) | 0;
+      for (const q of [x > 0 ? p - 1 : -1, x < W - 1 ? p + 1 : -1, y > 0 ? p - W : -1, y < H - 1 ? p + W : -1]) {
+        if (q >= 0 && !seen[q] && isChecker(q * 4)) { seen[q] = 1; stack[sp++] = q; }
+      }
+    }
+    if (hi - lo > 25) for (const p of run) data[p * 4 + 3] = 0;
+  }
+
+  /* One pass of erosion, because the drawing's edges are anti-aliased
+     against the squares and a hard cut leaves a grey rind on them. */
+  const alpha = new Uint8Array(W * H);
+  for (let p = 0; p < W * H; p++) alpha[p] = data[p * 4 + 3];
+  for (let y = 1; y < H - 1; y++) {
+    for (let x = 1; x < W - 1; x++) {
+      const p = y * W + x;
+      if (!alpha[p]) continue;
+      const open = !alpha[p - 1] + !alpha[p + 1] + !alpha[p - W] + !alpha[p + W];
+      if (open >= 1 && isChecker(p * 4)) data[p * 4 + 3] = 0;
+    }
+  }
+  /* Trimmed to what is actually drawn, then the bottom eighth taken off:
+     the cuffs run out of the frame anyway and the mail does not need two
+     inches of jumper above the words. */
+  const clean = await sharp(data, { raw: { width: W, height: H, channels: 4 } }).png().toBuffer();
+  let x0 = W, y0 = H, x1 = -1, y1 = -1;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (data[(y * W + x) * 4 + 3] > 12) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+    }
+  }
+  const h = Math.round((y1 - y0 + 1) * 0.86);
+  await sharp(clean).extract({ left: x0, top: y0, width: x1 - x0 + 1, height: h }).png().toFile(out);
+  console.log("checkerboard stripped from " + file.split("/").pop() + " -> " + (x1 - x0 + 1) + "x" + h);
+}
+
 /* ── Calming a drawing down ──────────────────────────────────────────────
    James, 14 Sep 2026, on the password drawing: "it is a little bit too
    green, so we might just want to level that out." Blanket desaturation
@@ -341,12 +436,24 @@ if (cutArg > -1) {
   await hero({ name: "hero-radar", art: "radar.png", H: 620, drawWidth: 1120, blob: "" });
   await hero({ name: "hero-reset", art: "reset.png", H: 730, drawWidth: 940, blob: "" });
 
+  await stripChecker(`${ART}/invoice-raw.png`, `${ART}/invoice.png`);
+  /* The invoice drawing arrives cut out on clear, with no wash of its own,
+     so it gets a soft one behind it - otherwise the hands float on white. */
+  await hero({
+    name: "hero-invoice",
+    art: "invoice.png",
+    H: 900,
+    drawWidth: 880,
+    blob: `<path d="M142,352 C160,206 300,96 470,62 C610,34 780,44 908,104 C1030,162 1104,268 1090,396 C1076,520 1002,606 880,650 C760,694 594,700 452,672 C316,646 196,570 158,468 C142,424 138,388 142,352 Z" fill="#f3eee9"/>`,
+  });
+
   await hero({ name: "hero-job", art: "job.png", H: 720, drawWidth: 1040, blob: "" });
 
   /* Row marks for the maintenance inbox mails: a pale disc with an outline
      glyph, not the solid alarm discs. "2 documents on the job" is a record,
      not a warning, and a clay exclamation beside it would read as one. */
   await disc({ name: "mark-home", glyph: "home", ring: "#eeeceb", ink: { r: 0x6f, g: 0x67, b: 0x63, alpha: 1 }, g: 36 });
+  await disc({ name: "mark-money", glyph: "coin", ring: "#fbe3de", ink: { r: 0xa8, g: 0x5a, b: 0x51, alpha: 1 }, g: 36 });
   await disc({ name: "mark-doc", glyph: "file-contract", ring: "#fbe3de", ink: { r: 0xa8, g: 0x5a, b: 0x51, alpha: 1 }, g: 34 });
 
   await hero({ name: "hero-video", art: "video.png", H: 700, drawWidth: 760, blob: "" });

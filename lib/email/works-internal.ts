@@ -36,24 +36,29 @@ export function accountsInvoiceEmail(o: WorksOrder): AgentEmail {
   const subject = `Invoice in: #${o.ref} ${o.title}, ${pounds(o.invoicePence)} to ${payee}`;
   return {
     subject,
-    html: emailShell({
+    html: skyListShell({
       heading: `Invoice in on job #${o.ref}`,
       /* "Nothing here has been paid" is the whole point of the email: it is
          a thing to key in, not a receipt. */
       intro: `${o.contractorName || "The contractor"}'s invoice is on the job and it is ready to key into PayProp. Nothing here has been paid.`,
       rows: [
-        { title: where(o), detail: o.title, tone: "neutral" },
+        { title: where(o), detail: o.title, tone: "neutral", icon: "mark-home.png" },
         {
           title: `${pounds(o.invoicePence)} to ${payee}`,
           detail: `Invoice ${o.invoiceRef || "no number"} · reference #${o.ref}${o.landlord ? ` · landlord ${o.landlord}` : ""}`,
           tone: "attention",
+          icon: "mark-money.png",
         },
       ],
       rowsLead: "To pay",
+      /* Same bare rows as its twin to compliance: two facts about one job,
+         in an inbox that gets worked rather than read. */
+      rowStyle: "bare",
       button: "Open the job",
       link: jobLink(o.id),
-      image: "illustrations/email/certificates.gif",
-      footnote: "Mark it paid on the job once it has gone through PayProp, and it drops off the accounts list.",
+      hero: "hero-invoice.png",
+      tip: "Mark it paid on the job once it has gone through PayProp, and it drops off the accounts list.",
+      tipQuiet: true,
     }),
     text: `Invoice in on job #${o.ref}: ${o.title} at ${o.propertyName}. ${pounds(o.invoicePence)} to ${payee}. Reference #${o.ref}. Open: ${jobLink(o.id)}`,
   };
