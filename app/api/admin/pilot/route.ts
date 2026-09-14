@@ -3,7 +3,7 @@ import { requireCapability, requireOwner } from "@/lib/admin";
 import { asRole } from "@/lib/roles";
 import { addInvite, invites, markInviteSent, removeInvite, tabUsage, bugs } from "@/lib/pilot";
 import { lettingsAgents } from "@/lib/rex-agents";
-import { findUserByEmail } from "@/lib/users";
+import { accountsByEmail, findUserByEmail } from "@/lib/users";
 import { startVerification } from "@/lib/verification";
 import { pilotInviteEmail } from "@/lib/email/pilot-email";
 import { sendEmail } from "@/lib/resend";
@@ -32,23 +32,34 @@ export async function GET(req: NextRequest) {
   const invited = await invites();
   const byEmail = new Map(invited.map((i) => [i.email.toLowerCase(), i]));
 
-  const candidates = await Promise.all(
-    roster.map(async (r) => {
-      const inv = byEmail.get(r.email.toLowerCase());
-      const acct = await findUserByEmail(r.email);
-      return {
-        ...r,
-        invited: Boolean(inv),
-        sentAt: inv?.sentAt ?? null,
-        /* So the picker shows what was already chosen rather than resetting to
-           Agent every time the page loads — which would invite somebody to
-           re-send an invite and silently demote the person. */
-        role: inv?.role ?? null,
-        hasAccount: Boolean(acct),
-        lastSeenAt: null as string | null,
-      };
-    })
-  );
+  /* One query for the whole roster, not one per person: this was 28 awaits on
+     a page that already waits on REX. */
+  const accounts = await accountsByEmail(roster.map((r) => r.email));
+
+  const candidates = roster.map((r) => {
+    const inv = byEmail.get(r.email.toLowerCase());
+    const acct = accounts.get(r.email.toLowerCase());
+    return {
+      ...r,
+      invited: Boolean(inv),
+      sentAt: inv?.sentAt ?? null,
+      /* THE ACCOUNT FIRST, the invite only as a fallback.
+         This read `inv?.role` alone, so it showed what somebody was invited AS
+         rather than what they ARE. Francesca was invited as an agent on 4 Sep
+         and made marketing afterwards, and her row on the People screen said
+         Agent - which is precisely the silent demotion the comment here was
+         written to prevent, one press away. The invite still answers for
+         anybody who has not joined yet, because that is all there is. */
+      role: acct?.role ?? inv?.role ?? null,
+      hasAccount: Boolean(acct),
+      /* WAS HARDCODED NULL. The People screen sorts by "last in" and by
+         "longest since", shows a last-seen column, and every one of those was
+         reading a constant. See touchSeen for the other half: the timestamp
+         behind it only moved on a password sign-in, so it answered a question
+         nobody was asking. */
+      lastSeenAt: acct?.lastSeenAt ?? null,
+    };
+  });
 
   /* Anyone invited who is NOT on the REX roster — marketing, ops, head
      office. Without this they vanish the moment they are added: the list is
@@ -66,7 +77,7 @@ export async function GET(req: NextRequest) {
         sentAt: i.sentAt,
         role: i.role,
         hasAccount: Boolean(await findUserByEmail(i.email)),
-        lastSeenAt: null as string | null,
+        lastSeenAt: (await accountsByEmail([i.email])).get(i.email.toLowerCase())?.lastSeenAt ?? null,
       }))
   );
 

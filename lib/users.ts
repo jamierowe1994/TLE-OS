@@ -171,3 +171,53 @@ export async function ensureRexLink(user: OsUser): Promise<string | null> {
     return null;
   }
 }
+
+/**
+ * WHEN SOMEBODY WAS LAST ACTUALLY IN.
+ *
+ * `last_seen_at` was written in one place only - `authenticate`, which runs on
+ * a PASSWORD sign-in. A session lasts thirty days, so somebody who signs in
+ * once and then uses the OS every day for a month reads as "last seen a month
+ * ago", and somebody who joined by magic link reads as never seen at all.
+ * Kirstie was on the board the morning this was written and her row said null.
+ *
+ * That is fine for "when did they last type their password" and useless for
+ * the question the pilot actually asks, which is who has opened the thing.
+ * So it is touched from /api/auth/me instead, which every screen calls on
+ * arrival, for the ACTOR only - viewing as somebody must never leave a
+ * footprint that says they were here.
+ *
+ * Self-throttling in one statement: the WHERE clause is the throttle, so a
+ * person clicking around all afternoon costs one write every fifteen minutes
+ * and no read at all. Failure is swallowed on purpose - a page must not fail
+ * to load because a timestamp could not be written.
+ */
+export async function touchSeen(userId: string): Promise<void> {
+  if (!hasDb()) return;
+  await q(
+    `UPDATE os_users SET last_seen_at = NOW()
+      WHERE id = $1
+        AND (last_seen_at IS NULL OR last_seen_at < NOW() - INTERVAL '15 minutes')`,
+    [userId]
+  ).catch(() => []);
+}
+
+/** Role and last-seen for a set of addresses, in one query rather than one each. */
+export async function accountsByEmail(
+  emails: string[]
+): Promise<Map<string, { id: string; role: string; lastSeenAt: string | null }>> {
+  const out = new Map<string, { id: string; role: string; lastSeenAt: string | null }>();
+  if (!hasDb() || emails.length === 0) return out;
+  const rows = await q<{ id: string; email: string; role: string; last_seen_at: Date | string | null }>(
+    `SELECT id, email, role, last_seen_at FROM os_users WHERE email = ANY($1)`,
+    [emails.map(normaliseEmail)]
+  ).catch(() => []);
+  for (const r of rows) {
+    out.set(normaliseEmail(r.email), {
+      id: r.id,
+      role: asRole(r.role),
+      lastSeenAt: r.last_seen_at ? new Date(r.last_seen_at).toISOString() : null,
+    });
+  }
+  return out;
+}

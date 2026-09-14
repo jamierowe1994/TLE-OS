@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { countUsers } from "@/lib/users";
+import { countUsers, touchSeen } from "@/lib/users";
 import { hasDb } from "@/lib/db";
 import { whoIs } from "@/lib/admin";
 import { can } from "@/lib/roles";
@@ -30,6 +30,12 @@ export async function GET(req: NextRequest) {
   }
 
   const { actor, subject, viewingAs } = await whoIs(req);
+  /* THEY ARE HERE NOW, so record it. Every screen calls this on arrival, which
+     makes it the only honest place to answer "who has actually been in" - see
+     touchSeen. The ACTOR, never the subject: viewing as somebody must not
+     leave a footprint saying they were here. Not awaited, because a timestamp
+     is not worth a millisecond of the page it sits behind. */
+  if (actor) void touchSeen(actor.id);
   /* A view-as can target somebody with no OS account, so the banner's name
      comes off the token rather than out of os_users. */
   /* Measured on the live site 29 Aug: this endpoint answered 200 with NO
