@@ -611,19 +611,34 @@ export default function ApplicationDrawer({
                 </Card>
 
                 <Card title="Checklist" icon="checklist" action={<span className="figures text-[12px] text-muted">{ticked}/{checklist.length}</span>}>
+                  {/* WHAT IS DONE COLLAPSES; WHAT IS LEFT DOES NOT.
+                      Danielle, 11 Sep: the completed items should fold away.
+                      They were all drawn the same - four items, every one with
+                      its explanatory line under it - so a checklist reading 3
+                      of 4 gave the same weight to the three that are finished
+                      as to the one thing somebody has to go and do, and the
+                      outstanding item did not stand out at all.
+
+                      A done row keeps its tick and its label and loses the
+                      note: the note explains what is needed, and nothing is
+                      needed any more. The outstanding rows keep everything and
+                      are the only ones in full ink. Nothing is hidden - a
+                      checklist that hides what was ticked cannot be audited,
+                      and this one is read months later by somebody asking why
+                      a tenancy was allowed to start. */}
                   <ul className="space-y-2.5">
-                    {checklist.map((c) => (
-                      <li key={c.label} className="flex items-start gap-2.5 text-[13px]">
+                    {[...checklist].sort((a, b) => Number(a.done) - Number(b.done)).map((c) => (
+                      <li key={c.label} className={`flex items-start gap-2.5 ${c.done ? "text-[12px]" : "text-[13px]"}`}>
                         <span
-                          className={`mt-0.5 flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-full border-[1.5px] text-[9px] ${
-                            c.done ? "border-accent-dark bg-accent-dark text-white" : "border-line bg-white text-muted"
+                          className={`flex shrink-0 items-center justify-center rounded-full border-[1.5px] text-[9px] ${
+                            c.done ? "mt-0 h-[15px] w-[15px] border-accent-dark bg-accent-dark text-white" : "mt-0.5 h-[17px] w-[17px] border-line bg-white text-muted"
                           }`}
                         >
                           {c.done ? "✓" : ""}
                         </span>
                         <span className="min-w-0">
                           <span className={c.done ? "text-muted line-through" : "font-semibold"}>{c.label}</span>
-                          {c.note && <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">{c.note}</span>}
+                          {c.note && !c.done ? <span className="mt-0.5 block text-[11.5px] leading-snug text-muted">{c.note}</span> : null}
                         </span>
                       </li>
                     ))}
