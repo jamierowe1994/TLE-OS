@@ -1099,6 +1099,12 @@ export default function AppraisalTrack({
                   feePercent: shownFeePct,
                   availableFrom: c.availableFrom,
                   summary: c.summary || c.condition,
+                  /* Their file, and it works whether or not they have ever
+                     signed in: the sign-in page takes their email, sends a
+                     one-time link, and the first landing is the welcome that
+                     sets the account up. That is the backup path James asked
+                     for on 14 Sep for landlords who never made an account. */
+                  fileUrl: typeof window !== "undefined" ? `${window.location.origin}/landlord/sign-in` : null,
                 })
           }
           attachments={c.docs}

@@ -134,6 +134,20 @@ export type AppraisalOutcomeFacts = {
   feePercent: number | null;
   availableFrom: string | null;
   summary: string;
+  /**
+   * Their own file, where the presentation and the terms both live.
+   *
+   * James, 14 Sep 2026: "the after-visit email should have a link to their
+   * profile for them to view the presentation ... this will give you the
+   * presentation and the terms of business."
+   *
+   * One link rather than two attachments, because the deck and the contract
+   * are the same conversation and a landlord who has to keep two emails
+   * straight loses one of them. Null leaves the paragraph out entirely - an
+   * email promising a link it does not carry is worse than one that never
+   * mentioned it.
+   */
+  fileUrl?: string | null;
 };
 
 const pcm = (n: number | null) => (n == null ? null : `£${n.toLocaleString("en-GB")} pcm`);
@@ -176,8 +190,24 @@ export function postBodyFor(i: AppraisalInvite, f: AppraisalOutcomeFacts): strin
     lines.push(`You said you'd want it available from ${f.availableFrom}.`, "");
   }
 
+  /* The link goes ABOVE the close, not under the signature. It is the one
+     thing in this email we want opened, and a link below "Kind regards" is a
+     link nobody sees. */
+  if (f.fileUrl) {
+    lines.push(
+      "Everything from today is in one place for you:",
+      "",
+      f.fileUrl,
+      "",
+      "That is the full presentation I took you through, and the terms of business alongside it. Have a read at your own pace, and if anything raises a question just reply to this or give me a ring.",
+      ""
+    );
+  }
+
   lines.push(
-    "If you'd like to go ahead, I'll send the terms over and we can get the photos booked. If you're still weighing it up, that's completely fine - tell me what would help and I'll get it to you.",
+    f.fileUrl
+      ? "If you'd like to go ahead, the terms are in there ready to sign and we can get the photographs booked. If you're still weighing it up, that is completely fine - tell me what would help and I will get it to you."
+      : "If you'd like to go ahead, I'll send the terms over and we can get the photos booked. If you're still weighing it up, that's completely fine - tell me what would help and I'll get it to you.",
     "",
     `Either way, ring me on ${i.agentPhone} if anything's easier said than written.`,
     "",
