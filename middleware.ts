@@ -243,6 +243,13 @@ export const config = {
        `rehearsal` - a real works order id in the URL opens nothing. Its
        emails are written and kept rather than sent, so nothing anybody
        presses in there can reach a customer. See lib/rehearsal.ts. */
+    /* `email` is public/email: the artwork every email we send points at.
+       It sat behind the door, so a mail client - which is nobody, signed in
+       nowhere - got a 307 to the sign-in page instead of a picture. Every
+       image in the pilot invite was broken, including the one James sent
+       Kirstie on 14 Sep. Same reasoning as `brand` and `illustrations`: it is
+       a folder of drawings, it holds nothing else, and an email cannot
+       authenticate. */
     /* `visit` is the tenant answering whether we may come round for an
        inspection. Exempt for the same reason as `repair` and `tenant`: the
        person answering has no account and never will, and their random token
@@ -250,6 +257,6 @@ export const config = {
        not hold, and the only thing it can write is that one inspection's
        access answer - a yes is refused unless it names one of the times we
        actually offered. See lib/inspections. */
-    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|rehearsal|api/rehearsal|proof|api/tenant/passport|api/landlord|brand|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
+    "/((?!(?:sign-in|join|reset|preview|api/auth/login|api/auth/logout|api/auth/me|api/auth/verify|api/auth/reset|tenant|landlord|present|api/present|invoice|contractor|api/contractor|repair|api/repair|visit|api/visit|rehearsal|api/rehearsal|proof|api/tenant/passport|api/landlord|brand|email|rex|r|api/r|_next|icons|illustrations)(?:/|$)|favicon\\.ico$|robots\\.txt$|manifest\\.webmanifest$).*)",
   ],
 };
