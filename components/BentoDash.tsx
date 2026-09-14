@@ -31,6 +31,24 @@ type Item = { id: string; type: string; w: number; h: number };
 
 export type TrayGroup = { key: string; label: string; icon: string; types: string[] };
 const COLS = 4;
+/**
+ * How many of those columns are actually drawn.
+ *
+ * The board is a four-column bento and stays one on every real screen. On a
+ * phone it was still four, which is 78px a column: the tiles came out as
+ * slivers with "POR..." and "rea..." in them, and the numbers - the entire
+ * point of the dashboard - were cut off (James's list, item a16). Two columns
+ * at 375px is 160 a tile, which is a number and a label.
+ *
+ * The stored layout does not change. A tile saved two wide is still two wide;
+ * CSS clamps a span to the tracks that exist, so on a phone it fills the row
+ * instead of overflowing. Nobody's arrangement is rewritten by looking at it
+ * on a phone, which is the thing that would be unforgivable here.
+ */
+function drawnCols(): number {
+  if (typeof window === "undefined") return COLS;
+  return window.matchMedia("(min-width: 640px)").matches ? COLS : 2;
+}
 const ROW_PX = 150;
 const GAP_PX = 16;
 const MAX_H = 3;
@@ -322,7 +340,8 @@ export default function BentoDash({
     // Land it at the end immediately; the drag loop walks it into place.
     setLayout((cur) => [...cur, { id, type, w: def.defaultW, h: def.defaultH }]);
     const grid = gridRef.current;
-    const cellW = grid ? (grid.getBoundingClientRect().width - GAP_PX * (COLS - 1)) / COLS : 260;
+    const cols = drawnCols();
+    const cellW = grid ? (grid.getBoundingClientRect().width - GAP_PX * (cols - 1)) / cols : 260;
     beginDrag(e, id, true, cellW * def.defaultW + GAP_PX * (def.defaultW - 1), ROW_PX * def.defaultH + GAP_PX * (def.defaultH - 1));
     // Tray adds count as moved from the first touch — they're already a drag.
     if (dragRef.current) {
@@ -340,7 +359,10 @@ export default function BentoDash({
     const start: ResizeState = { id, x0: e.clientX, y0: e.clientY, w0: item.w, h0: item.h, x: e.clientX, y: e.clientY };
     setResize(start);
     const grid = gridRef.current!;
-    const cellW = (grid.getBoundingClientRect().width - GAP_PX * (COLS - 1)) / COLS;
+    /* Measured against the columns on screen, not the four in the model -
+       otherwise a drag on a phone moves at half the speed of the pointer. */
+    const cols = drawnCols();
+    const cellW = (grid.getBoundingClientRect().width - GAP_PX * (cols - 1)) / cols;
 
     const onMove = (ev: PointerEvent) => {
       setResize((cur) => (cur ? { ...cur, x: ev.clientX, y: ev.clientY } : cur));
@@ -403,7 +425,7 @@ export default function BentoDash({
 
       <div
         ref={gridRef}
-        className={`relative grid grid-cols-4 gap-4 [grid-auto-flow:dense] ${control ? "mt-5" : ""}`}
+        className={`relative grid grid-cols-2 gap-4 [grid-auto-flow:dense] sm:grid-cols-4 ${control ? "mt-5" : ""}`}
         style={{ gridAutoRows: ROW_PX }}
       >
         {layout.map((item, idx) => {
@@ -532,7 +554,7 @@ export default function BentoDash({
         })}
 
         {!layout.length && (
-          <div className="col-span-4 rounded-2xl border border-dashed border-line p-10 text-center text-[13px] text-muted">
+          <div className="col-span-2 rounded-2xl border border-dashed border-line p-10 text-center text-[13px] text-muted sm:col-span-4">
             An empty board. Drag widgets up from the tray — or Reset brings the old dashboard back.
           </div>
         )}

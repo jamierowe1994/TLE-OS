@@ -25,6 +25,9 @@ import { RIG_SCRIPTS } from "@/lib/rig-scripts";
 
 const GREEN = "bg-[#f1f4ec] text-[#56634a]";
 
+/** The practice run that covers a guide, if one does. */
+const practiceFor = (guideId: string) => RIG_SCRIPTS.find((s) => s.guide === guideId) ?? null;
+
 function Hub() {
   const router = useRouter();
   const params = useSearchParams();
@@ -192,10 +195,20 @@ function GuideModal({ g, onClose }: { g: Guide; onClose: () => void }) {
             ))}
           </ol>
 
+          {/* Reading it is half. Where a practice run covers this guide, the
+              end of the reading is the place to offer the doing - not a card
+              further down a page somebody has already left. */}
           <div className="mt-8 flex flex-wrap items-center gap-3 rounded-2xl bg-accent-soft px-5 py-4">
             <span className={`flex h-9 w-9 items-center justify-center rounded-full ${GREEN}`}>✓</span>
-            <p className="flex-1 text-[13.5px] font-semibold">That is the whole of it.</p>
-            <Link href={g.href} className="rounded-full bg-accent-dark px-4 py-2 text-[12.5px] font-semibold text-white">Open the screen</Link>
+            <p className="flex-1 text-[13.5px] font-semibold">
+              {practiceFor(g.id) ? "That is the whole of it. Now try it for real." : "That is the whole of it."}
+            </p>
+            {practiceFor(g.id) ? (
+              <Link href={practiceFor(g.id)!.href} className="rounded-full bg-accent-dark px-4 py-2 text-[12.5px] font-semibold text-white">
+                Practise it
+              </Link>
+            ) : null}
+            <Link href={g.href} className={`rounded-full px-4 py-2 text-[12.5px] font-semibold ${practiceFor(g.id) ? "border border-line/80 bg-card" : "bg-accent-dark text-white"}`}>Open the screen</Link>
             <button type="button" onClick={onClose} className="rounded-full border border-line/80 bg-card px-4 py-2 text-[12.5px] font-semibold">Close</button>
           </div>
         </div>

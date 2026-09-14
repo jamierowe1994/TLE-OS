@@ -173,9 +173,24 @@ export const DEPOSIT_SCHEMES: string[] = [
   "DPS Insured",
   "My Deposits Custodial",
   "My Deposits Insured",
-  // Scotland's scheme — it appears as an actual PayProp beneficiary
-  // ("Safe Deposits Scotland"), which is how auto-detection finds it.
+  /* ── Scotland ──
+     Kirstie, 14 Sep 2026: the list offered SafeDeposits Scotland and hers is
+     mydeposits Scotland. Both are real: Scotland has THREE approved schemes,
+     and we were carrying one of them. A rename would have deleted a scheme
+     TLE actually uses — Safe Deposits Scotland is the one that turns up as a
+     PayProp beneficiary, which is how auto-detection finds it.
+
+     These are separate entries from "My Deposits Custodial/Insured" above,
+     which are the England and Wales products. Scottish tenancy deposits are
+     governed by different regulations and a Scottish deposit is not held in
+     an English scheme, so the two must never collapse into one option.
+
+     Propoly's own configuration endpoint lists only the six English ones
+     (checked 14 Sep 2026), so everything below the line is ours. Worth
+     confirming the exact wording on the Scotland call. */
   "SafeDeposits Scotland",
+  "mydeposits Scotland",
+  "Letting Protection Service Scotland",
   "Held by landlord",
   "Flatfair (no cash deposit)",
 ];

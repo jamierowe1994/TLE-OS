@@ -106,7 +106,15 @@ export function tenancyRegisterError(): string | null {
  *  names produce NOTHING — a guessable scheme is worse than an empty one.
  *  Exported so the census probe can measure how often these actually fire. */
 export const SCHEME_PATTERNS: Array<[RegExp, string]> = [
+  /* Scotland first, and it has to be. A Scottish deposit named
+     "mydeposits Scotland" matches the generic /my\s*deposits/ below and would
+     be filed as an ENGLISH custodial deposit — the same class of mistake as
+     letting TDS Insured fall through to custodial, but across a border and a
+     different set of regulations. Added 14 Sep 2026 with the two Scottish
+     schemes the list was missing. */
   [/safe\s*deposits?\s*scotland/i, "SafeDeposits Scotland"],
+  [/my\s*deposits.{0,3}\s*scotland/i, "mydeposits Scotland"],
+  [/(letting\s*protection\s*service|\blps\b).{0,3}\s*scotland/i, "Letting Protection Service Scotland"],
   [/\btds\b.{0,12}insur/i, "TDS Insured"],
   [/\btds\b/i, "TDS Custodial"],
   [/\bdps\b.{0,12}insur/i, "DPS Insured"],
