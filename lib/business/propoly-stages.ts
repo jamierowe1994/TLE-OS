@@ -96,6 +96,23 @@ export function portalStageOf(rawStatusKey: string): string {
 
 export const PROPOLY_APP_URL = "https://prod.propoly.com";
 
+/**
+ * The deal's own page in Propoly.
+ *
+ * Link to the ROOT and Propoly answers /users/sign_in to anyone whose browser
+ * has no session with them — which is what Kirstie hit on 14 Sep and read as a
+ * broken button. We hold no user session with Propoly (our client authenticates
+ * server-side with an api key, see lib/business/propoly.ts), so the sign-in is
+ * theirs to ask for and hers to satisfy once. What we owe her is a link that
+ * lands on the deal afterwards rather than on their front door.
+ *
+ * Falls back to the root when there's no id — "+ Add deal" has no deal yet.
+ */
+export function propolyDealUrl(dealId?: string | null): string {
+  const id = String(dealId ?? "").trim();
+  return id ? `${PROPOLY_APP_URL}/deals/${encodeURIComponent(id)}` : PROPOLY_APP_URL;
+}
+
 /* --------------------------- pre-tenancy checklist --------------------------- */
 
 // The admin steps Kirstie tracked on her spreadsheet, one tick each per deal.

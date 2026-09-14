@@ -28,6 +28,7 @@ import {
   PORTAL_STAGES,
   PORTAL_STAGE_BY_KEY,
   portalStageOf,
+  propolyDealUrl,
 } from "@/lib/business/propoly-stages";
 import type {
   DealEmail,
@@ -1362,7 +1363,7 @@ function DealWorkspace({
                 </p>
               </div>
               <div className="ml-auto flex shrink-0 items-center gap-2">
-                <a href={PROPOLY_APP_URL} target="_blank" rel="noopener noreferrer" className="btn-press hidden rounded-xl border border-line bg-card px-3.5 py-2.5 text-[12.5px] font-semibold transition hover:border-black/30 sm:block">
+                <a href={propolyDealUrl(deal.app.id)} target="_blank" rel="noopener noreferrer" className="btn-press hidden rounded-xl border border-line bg-card px-3.5 py-2.5 text-[12.5px] font-semibold transition hover:border-black/30 sm:block">
                   Open in Propoly ↗
                 </a>
                 {deal.app.listingId ? (

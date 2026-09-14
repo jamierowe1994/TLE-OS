@@ -10,7 +10,7 @@ import { eventsForDeal } from "@/lib/business/deal-watch";
 import type { DealEvent } from "@/lib/business/deal-events";
 import { loadMoneyContext, moneyForDeal, type MoneyContext } from "@/lib/business/deal-money";
 import { stageEvidence } from "@/lib/business/stage-evidence";
-import { PORTAL_STAGES, PROPOLY_APP_URL } from "@/lib/business/propoly-stages";
+import { PORTAL_STAGES, propolyDealUrl } from "@/lib/business/propoly-stages";
 
 /**
  * One application's journey, start to keys - the agent's view of Kirstie's
@@ -235,7 +235,7 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
     );
     const currentIdx = Math.max(0, PORTAL_STAGES.findIndex((s) => s.key === stageKey));
     const evidenceDeal = m ? { ...moneyForDeal(m, deal.app.propertyName, deal.app.startDate), startDate: deal.app.startDate } : { startDate: deal.app.startDate };
-    dealInfo = { id: deal.app.id, stage: stageKey, url: `${PROPOLY_APP_URL}/deals/${deal.app.id}` };
+    dealInfo = { id: deal.app.id, stage: stageKey, url: propolyDealUrl(deal.app.id) };
 
     PORTAL_STAGES.forEach((s, i) => {
       const reached = i <= currentIdx;
