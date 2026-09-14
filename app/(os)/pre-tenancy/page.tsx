@@ -359,12 +359,22 @@ function Board({ user }: { user: UserProfile }) {
    * deals her dashboard leads with, so on the board it is a second telling. Not
    * deleted, because on the morning it has something urgent in it that is the
    * one thing worth reading - folded to a line instead, and which way it sits
-   * is hers to choose and stays chosen. Open until she says otherwise.
+   * is hers to choose and stays chosen.
+   *
+   * WHICH WAY IT STARTS depends on the window. On a tall screen it is open,
+   * because there is room for it and it is worth reading. On a short one -
+   * Kirstie's laptop is 768 tall - an open card puts the first deal below the
+   * fold on the screen she sits on all day, so it starts folded to its line
+   * instead. Only ever the START: the moment she opens or shuts it herself
+   * that choice is stored and the window stops having an opinion.
    */
   const [focusOpen, setFocusOpen] = useState(true);
   useEffect(() => {
     try {
-      if (window.localStorage.getItem("tle-os:pretenancy:focus") === "shut") setFocusOpen(false);
+      const stored = window.localStorage.getItem("tle-os:pretenancy:focus");
+      if (stored === "shut") setFocusOpen(false);
+      else if (stored === "open") setFocusOpen(true);
+      else if (window.innerHeight <= 820) setFocusOpen(false);
     } catch {
       /* Storage off is not a reason to lose the card. */
     }
