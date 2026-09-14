@@ -81,7 +81,16 @@ const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
  *  guessed a character at a time. */
 async function authorised(req: NextRequest): Promise<boolean> {
   const secret = process.env.CRON_SECRET ?? "";
-  const given = req.headers.get("x-cron-secret") ?? "";
+  /* EITHER header name, and the second one is the point.
+     Eighteen cron-callable routes in this app read "x-cron-key"; this one and
+     business/income-months/warm were the only two reading "x-cron-secret", and
+     every Railway cron service sends x-cron-key (see os-cron-daily's start
+     command). So adding either of these to a cron the way every other route is
+     added would have failed authorisation - and failed the way that gets
+     believed, a job that runs on schedule, answers 401 and is watched by
+     nobody. Both names are accepted; both are compared against CRON_SECRET the
+     same constant-time way, so this is a second spelling, not a second key. */
+  const given = req.headers.get("x-cron-secret") ?? req.headers.get("x-cron-key") ?? "";
   if (secret && given) {
     const a = Buffer.from(secret);
     const b = Buffer.from(given);
