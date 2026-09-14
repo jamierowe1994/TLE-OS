@@ -195,6 +195,11 @@ export default function Viewings() {
         title="Viewings"
         blurb="Your day, and the week around it. Every appointment opens into what it is, where it is, who's coming and what you need before you knock."
         illustration="/illustrations/scooter-still.webp"
+        /* Measured at 390px on 14 Sep 2026: the artwork landed on the Feedback tab and the Everything filter.
+           The masthead's phone reserve is one measured guess and it does not
+           hold here, so on a phone the drawing goes and the words keep the
+           width. Nine other pages were checked and keep theirs. */
+        hideArtOnPhone
         illustrationAspect={0.6486}
         backdrop="/illustrations/houses-row.webp"
         backdropWidth={620}

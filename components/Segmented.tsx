@@ -48,7 +48,17 @@ export default function Segmented<T extends string>({
 
   return (
     <div
-      className={`relative flex items-center rounded-full border border-line/60 bg-white p-1 ${className}`}
+      /* min-w-0 AND max-w-full, and it needs both.
+         The labels are whitespace-nowrap, so the track sizes to its text and
+         pushes the page sideways: Portfolio's three tabs measured 401px and
+         Maintenance's four measured 460px on a 390px screen.
+         max-w-full alone does nothing here, which is worth knowing - as a
+         flex item the track gets `min-width: auto`, which resolves to its
+         440px min-content, and in CSS a min-width BEATS a max-width. It sat
+         at 440 inside a 350 parent. min-w-0 is what lets the cap apply, and
+         the labels truncate below rather than overflow.
+         Nothing changes at any width where the words already fit. */
+      className={`relative flex min-w-0 max-w-full items-center rounded-full border border-line/60 bg-white p-1 ${className}`}
       role="tablist"
     >
       {/* The marker. inset-1 matches the track's padding, so it sits inside
@@ -75,8 +85,13 @@ export default function Segmented<T extends string>({
             o.id === value ? "font-semibold text-page" : "text-muted hover:text-ink"
           }`}
         >
-          {o.icon}
-          {o.label}
+          {/* Four tabs on a phone cannot afford an icon as well as a word.
+              At 390px the track has ~85px a tab; the icon and its gap take 20
+              of it, which truncated Maintenance's four to "Repa... Plann...
+              Invoi... Acco..." - present, legible as nothing. The words win:
+              the icon comes back from sm up, where there is room for both. */}
+          {o.icon && <span className={n >= 4 ? "hidden sm:inline-flex" : "inline-flex"}>{o.icon}</span>}
+          <span className="truncate">{o.label}</span>
         </button>
       ))}
     </div>

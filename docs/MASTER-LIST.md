@@ -330,6 +330,37 @@ These come from each screen's own caveats in `lib/screens.ts` - the screen tells
 | G5 | REX PM's 522 letting agreements are 477 distinct properties - anything quoted "of 522" counts 45 twice | 45 |
 | G6 | Propoly holds 643 deals, read ten to a page | 65 requests a full read |
 
+## G2b. The OS on a phone, swept 14 Sep
+
+**DONE.** After the dashboard fix, every OS page was measured at a true 390px viewport
+(emulation without shrink-to-fit, which had been hiding all of this). Two sweeps, both
+scripted and repeatable.
+
+**Sideways scroll: four pages, four different causes, all fixed. All 17 pages now measure
+exactly 390.**
+
+| Page | Was | Cause |
+|---|---|---|
+| Leads | 819px | The pager drew a button for EVERY page - 21 of them, and unbounded as the ledger grows. Now a window: first, last, and where you are. |
+| Viewings | 453px | The masthead's text column is a flex item with no `min-w-0`, so it would not shrink below its own content. One line, and it fixed Maintenance too. |
+| Maintenance | 397px | Same as above. |
+| Portfolio | 401px | The segmented control sizes to its `whitespace-nowrap` labels. |
+
+The tables were innocent: Compliance's is 721px wide and Agent compliance's 1022px, and both
+pages measured 390 throughout, because they sit in scroll containers. That is the pattern.
+
+**Worth knowing:** `max-w-full` alone did nothing to the segmented control. As a flex item it
+gets `min-width: auto`, which resolved to its 440px min-content, and **in CSS a min-width beats
+a max-width** - it sat at 440 inside a 350 parent. `min-w-0` is what lets a cap apply.
+
+**Masthead collisions: five pages, fixed.** The artwork landed on words or controls at 390px -
+Viewings (on the Feedback tab), Compliance, Inspections, Finances (on the blurb) and Maintenance
+(on the "+ Plan a job" button). Those five take `hideArtOnPhone`; the nine pages where the art
+fits keep it. CLAUDE.md: nothing may collide at any width.
+
+Also: a four-tab control on a phone now drops its icons rather than its words, which had left
+Maintenance reading "Repa... Plann... Invoi... Acco...".
+
 ## G2. Found during Round 3, 11 Sep
 
 - ~~The dashboard on a phone squeezes its four tiles into one row~~ **DONE 14 Sep, and it was not a squeeze - the tiles were sitting ON TOP OF each other.** Three causes, all measured at 390px:

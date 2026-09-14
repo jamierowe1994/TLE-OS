@@ -152,6 +152,11 @@ export default function Maintenance() {
            rule rather than near it. Wide, so the aspect is passed and the
            blurb reserves the real width. */
         illustration="/illustrations/maintenance-selfie.webp"
+        /* Measured at 390px on 14 Sep 2026: the artwork landed on the "+ Plan a job" button.
+           The masthead's phone reserve is one measured guess and it does not
+           hold here, so on a phone the drawing goes and the words keep the
+           width. Nine other pages were checked and keep theirs. */
+        hideArtOnPhone
         illustrationHeight={250}
         illustrationAspect={1.7963}
         lineBreak="none"

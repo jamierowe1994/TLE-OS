@@ -135,6 +135,11 @@ export default function Inspections() {
            for inspections - but a line drawing sitting beside four painted
            mastheads reads as a page nobody finished. */
         illustration="/illustrations/houses-row.webp"
+        /* Measured at 390px on 14 Sep 2026: the artwork landed on the blurb.
+           The masthead's phone reserve is one measured guess and it does not
+           hold here, so on a phone the drawing goes and the words keep the
+           width. Nine other pages were checked and keep theirs. */
+        hideArtOnPhone
         /* 1200x257, so 4.67 - the number has to be the picture's own, because
            PageHeader reserves the text column from height x aspect. Borrowing
            Portfolio's 3.11 reserved 435px for something that drew 654px, and

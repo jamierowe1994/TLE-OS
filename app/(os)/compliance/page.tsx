@@ -182,6 +182,11 @@ export default function Compliance() {
            passed and the text block reserves the real width instead of the
            measured steps for a tall figure. */
         illustration="/illustrations/compliance-selfie.webp"
+        /* Measured at 390px on 14 Sep 2026: the artwork landed on the blurb, 34px across it.
+           The masthead's phone reserve is one measured guess and it does not
+           hold here, so on a phone the drawing goes and the words keep the
+           width. Nine other pages were checked and keep theirs. */
+        hideArtOnPhone
         illustrationHeight={250}
         illustrationAspect={1.7998}
         illustrationNudge={-10}

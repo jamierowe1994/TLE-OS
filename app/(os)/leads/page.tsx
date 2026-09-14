@@ -46,6 +46,34 @@ interface LeadSource {
   stale?: boolean;
 }
 
+/**
+ * Which page numbers to draw: the first, the last, and where you are.
+ *
+ * Every page used to get a button. At 21 pages that is 21 buttons in a row
+ * that cannot wrap or scroll, which dragged the Leads document to 819px on a
+ * 390px screen - the whole page scrolled sideways. It is also unbounded: the
+ * ledger decides how many, so the row grows for ever as leads come in.
+ *
+ * Seven or fewer still shows them all, because a gap in place of one number
+ * helps nobody.
+ */
+function pageWindow(page: number, pages: number): (number | "gap")[] {
+  if (pages <= 7) return Array.from({ length: pages }, (_, i) => i);
+  const want = new Set<number>([0, pages - 1, page]);
+  for (const d of [-1, 1]) {
+    const p = page + d;
+    if (p > 0 && p < pages - 1) want.add(p);
+  }
+  const out: (number | "gap")[] = [];
+  let prev = -1;
+  for (const p of [...want].sort((a, b) => a - b)) {
+    if (prev >= 0 && p - prev > 1) out.push("gap");
+    out.push(p);
+    prev = p;
+  }
+  return out;
+}
+
 export default function Leads() {
   // Closed on arrival: the page is the inbox, full width. The panel is a
   // consequence of picking someone, never the state you land in.
@@ -492,7 +520,9 @@ export default function Leads() {
                 ))}
               </select>
             </p>
-            <div className="flex items-center gap-1.5">
+            {/* flex-wrap as well as the window: a pager is never allowed to
+                widen the page, whatever the count does. */}
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
               <button
                 type="button"
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
@@ -501,20 +531,26 @@ export default function Leads() {
               >
                 ‹
               </button>
-              {Array.from({ length: pages }, (_, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => setPage(i)}
-                  className={`flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[11px] transition-colors ${
-                    i === page
-                      ? "bg-accent-soft/60 font-semibold text-accent-dark"
-                      : "text-muted hover:text-ink"
-                  }`}
-                >
-                  {i + 1}
-                </button>
-              ))}
+              {pageWindow(page, pages).map((i, at) =>
+                i === "gap" ? (
+                  <span key={`gap-${at}`} aria-hidden className="px-0.5 text-[11px] text-muted">
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setPage(i)}
+                    className={`flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[11px] transition-colors ${
+                      i === page
+                        ? "bg-accent-soft/60 font-semibold text-accent-dark"
+                        : "text-muted hover:text-ink"
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                )
+              )}
               <button
                 type="button"
                 onClick={() => setPage((p) => Math.min(pages - 1, p + 1))}

@@ -25,6 +25,11 @@ export default function Finances() {
            property. Not used anywhere else in the OS (James, 11 Sep 2026:
            "it shouldn't be an image that we've already used"). */
         illustration="/brand/art/agent-desk.png"
+        /* Measured at 390px on 14 Sep 2026: the artwork landed on the blurb, 58px across it.
+           The masthead's phone reserve is one measured guess and it does not
+           hold here, so on a phone the drawing goes and the words keep the
+           width. Nine other pages were checked and keep theirs. */
+        hideArtOnPhone
         illustrationHeight={330}
         illustrationAspect={1.2604}
         /* The desk front runs into the line, so she sits in the page rather

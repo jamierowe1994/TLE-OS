@@ -539,7 +539,15 @@ export default function PageHeader({
             of its way — without this the blurb runs underneath it the moment
             the window narrows. Each step matches the scale below. */}
         <div
-          className={`flex flex-col self-stretch pb-4 pl-2 pt-[26px] ${
+          /* min-w-0, or the masthead pushes the whole page sideways on a phone.
+             A flex item defaults to min-width:auto, so this column refuses to
+             shrink below its own content and the document grows with it:
+             measured at a 390px viewport on 14 Sep 2026, Viewings scrolled to
+             453px and Maintenance to 397, and the widest thing escaping every
+             scroller on both pages was this column. It is the only in-flow
+             child of the masthead row - the artwork is absolute - so nothing
+             else was ever going to be blamed. */
+          className={`flex min-w-0 flex-col self-stretch pb-4 pl-2 pt-[26px] ${
             !hasArt
               ? ""
               : wideArt
