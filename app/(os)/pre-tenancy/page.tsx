@@ -348,6 +348,32 @@ function Board({ user }: { user: UserProfile }) {
   const [todayCount, setTodayCount] = useState<number | null>(null);
   const [moveInsOpen, setMoveInsOpen] = useState(false);
   const [checksOpen, setChecksOpen] = useState(false);
+  /**
+   * Today's focus, folded or not, and it REMEMBERS.
+   *
+   * The card is 207px of the 696 that stood between Kirstie and her first deal
+   * card (James, 14 Sep: "a little bit too condensed"). It is also the same two
+   * deals her dashboard leads with, so on the board it is a second telling. Not
+   * deleted, because on the morning it has something urgent in it that is the
+   * one thing worth reading - folded to a line instead, and which way it sits
+   * is hers to choose and stays chosen. Open until she says otherwise.
+   */
+  const [focusOpen, setFocusOpen] = useState(true);
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem("tle-os:pretenancy:focus") === "shut") setFocusOpen(false);
+    } catch {
+      /* Storage off is not a reason to lose the card. */
+    }
+  }, []);
+  const foldFocus = useCallback((open: boolean) => {
+    setFocusOpen(open);
+    try {
+      window.localStorage.setItem("tle-os:pretenancy:focus", open ? "open" : "shut");
+    } catch {
+      /* as above */
+    }
+  }, []);
 
   // "Tasks today" badge count — refreshed whenever the modal closes too,
   // so ticking things off updates the header straight away.
@@ -366,6 +392,8 @@ function Board({ user }: { user: UserProfile }) {
     void refreshTodayCount();
   }, [refreshTodayCount]);
 
+  /** So the compliance catch-up runs once a session, not once a refresh. */
+  const chased = useRef(false);
   const load = useCallback(async (): Promise<boolean> => {
     try {
       const res = await fetch("/api/pretenancy/deals", { cache: "no-store" });
@@ -374,6 +402,10 @@ function Board({ user }: { user: UserProfile }) {
         configured: boolean;
         deals: BoardDeal[] | null;
         summary: BoardSummary | null;
+        /* REX was still answering on compliance for some of these when the
+           board was served. It is cached by the time we ask again, so one
+           quiet second pass fills the certificates in. */
+        compliancePending?: boolean;
       };
       /* The local preview, with Propoly not connected: ?sample=1 draws the
          board on invented deals so the layout can be looked at. Never in
@@ -406,6 +438,12 @@ function Board({ user }: { user: UserProfile }) {
       }
       setSummary(d.summary);
       setError(null);
+      /* Once, and only when there is something to come back for. The board is
+         already on screen and usable; this just fills the compliance in. */
+      if (d.compliancePending && !chased.current) {
+        chased.current = true;
+        setTimeout(() => void load(), 6_000);
+      }
       return true;
     } catch {
       setError("Couldn't load the deal board — try a refresh in a minute.");
@@ -562,10 +600,6 @@ function Board({ user }: { user: UserProfile }) {
     () => base.filter((d) => d.statusKey !== "cancelled" && daysSince(lastActivity(d)) >= STALLED_DAYS),
     [base]
   );
-  const thisMonth = useMemo(() => {
-    const ym = today().slice(0, 7);
-    return base.filter((d) => d.statusKey !== "cancelled" && d.app.startDate?.startsWith(ym));
-  }, [base]);
   const flaggedIds = useMemo(() => new Set(flaggedDeals.map((d) => d.app.id)), [flaggedDeals]);
   const stalledIds = useMemo(() => new Set(stalled.map((d) => d.app.id)), [stalled]);
   const soonIds = useMemo(() => new Set(upcomingMoveIns.map((d) => d.app.id)), [upcomingMoveIns]);
@@ -628,13 +662,39 @@ function Board({ user }: { user: UserProfile }) {
         />
       ) : deals ? (
         <>
-          {/* ── the four numbers, and the view ── */}
-          <div className="fade-up grid gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto]">
-            <StatTile icon="home" tone="green" value={activeCount} label="In progression" onClick={() => setChip("all")} on={chip === "all"} />
-            <StatTile icon="key" tone="green" value={thisMonth.length} label="Moving this month" onClick={() => setMoveInsOpen(true)} />
-            <StatTile icon="calendar" tone="red" value={todayCount ?? 0} label="Due today" onClick={() => setTasksTodayOpen(true)} />
-            <StatTile icon="clock" tone="red" value={stalled.length} label={`Stalled (${STALLED_DAYS}+ days)`} onClick={() => setChip(chip === "stalled" ? "all" : "stalled")} on={chip === "stalled"} />
-            <div className="flex items-center gap-2 xl:justify-end">
+          {/* ── THE FOUR NUMBERS HAVE GONE. Only the view switch is left here.
+                 James, 14 Sep 2026: the board is "a little bit too condensed ...
+                 give you some more room to work with". Measured at 1440x900 the
+                 columns began 696px down the page, so Kirstie opened her working
+                 screen on no deals at all.
+
+                 This band was the cheapest thing to lose, because every one of
+                 its four tiles already had a twin ON THE SAME SCREEN. In
+                 progression is the All properties chip, same number. Stalled is
+                 the Stalled chip, same number. Due today is the Tasks button in
+                 the masthead: same count, same panel behind it. Moving this
+                 month is the Moving soon chip - a shorter window, the same panel.
+                 Three of the four were printing one number twice, forty pixels
+                 apart, above the work.
+
+                 The switch stays because it is the one thing here that was not
+                 said anywhere else. ── */}
+          {/* ONE ROW, not three. The chips, the search, the agent and the view
+              switch were a band of tiles, then a row of chips, then the
+              controls - three stacked strips of chrome doing one job between
+              them: deciding what you are looking at. They are one row now and
+              the board starts that much higher. */}
+          <div className="fade-up flex flex-wrap items-center gap-2">
+            <Chip on={chip === "all"} onClick={() => setChip("all")} count={activeCount}>All properties</Chip>
+            <Chip on={chip === "attention"} onClick={() => setChip(chip === "attention" ? "all" : "attention")} count={flaggedDeals.length} tone="red">Needs attention</Chip>
+            <Chip on={chip === "stalled"} onClick={() => setChip(chip === "stalled" ? "all" : "stalled")} count={stalled.length} tone="red">Stalled</Chip>
+            <Chip on={chip === "soon"} onClick={() => setChip(chip === "soon" ? "all" : "soon")} count={upcomingMoveIns.length} tone="green">Moving soon</Chip>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search property, tenant or agent…" className="w-56 rounded-full border border-line bg-card px-4 py-2 text-[12.5px] outline-none transition focus:border-black/30" />
+              <select value={agent} onChange={(e) => setAgent(e.target.value)} className="rounded-full border border-line bg-card px-3.5 py-2 text-[12.5px] outline-none">
+                <option value="all">All agents</option>
+                {agents.map((a) => (<option key={a} value={a}>{a}</option>))}
+              </select>
               <div className="flex items-center rounded-full border border-line bg-card p-1">
                 <button type="button" onClick={() => setView("kanban")} className={`btn-press flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[12.5px] font-semibold transition ${view === "kanban" ? "bg-accent-soft text-ink" : "text-muted hover:text-ink"}`}>
                   <DoodleIcon name="grid" size={14} /> Board
@@ -675,20 +735,35 @@ function Board({ user }: { user: UserProfile }) {
 
           {/* ── today's focus: the deals asking for a look ── */}
           {attention.length > 0 ? (
-            <section className="fade-up card p-5">
+            <section className={`fade-up card ${focusOpen ? "p-5" : "px-5 py-3"}`}>
               <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent-soft text-[#9d4340]"><DoodleIcon name="target" size={17} /></span>
-                  <div>
-                    <h2 className="text-[17px] font-bold leading-tight">Today&apos;s focus</h2>
-                    <p className="mt-0.5 text-[12px] text-muted">Deals that need your attention today.</p>
+                <button
+                  type="button"
+                  onClick={() => foldFocus(!focusOpen)}
+                  aria-expanded={focusOpen}
+                  className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                >
+                  <span className={`flex shrink-0 items-center justify-center rounded-full bg-accent-soft text-[#9d4340] ${focusOpen ? "h-10 w-10" : "h-8 w-8"}`}><DoodleIcon name="target" size={focusOpen ? 17 : 14} /></span>
+                  <div className="min-w-0">
+                    <h2 className={`font-bold leading-tight ${focusOpen ? "text-[17px]" : "text-[15px]"}`}>
+                      Today&apos;s focus
+                      {/* Folded, the count IS the card: it has to say whether
+                          there is anything in there without being opened. */}
+                      {!focusOpen ? (
+                        <span className="ml-2 text-[12.5px] font-semibold text-[#9d4340]">
+                          {attention.length} {attention.length === 1 ? "deal needs" : "deals need"} a look
+                        </span>
+                      ) : null}
+                    </h2>
+                    {focusOpen ? <p className="mt-0.5 text-[12px] text-muted">Deals that need your attention today.</p> : null}
                   </div>
-                </div>
+                  <span aria-hidden className={`shrink-0 pt-1 text-[11px] text-muted transition-transform ${focusOpen ? "rotate-180" : ""}`}>▾</span>
+                </button>
                 <button type="button" onClick={() => setChecksOpen(true)} className="flex shrink-0 items-center gap-1 pt-1 text-[12px] font-semibold text-muted transition-colors hover:text-ink">
                   View all ({attention.length}) <DoodleIcon name="trend-up" size={11} />
                 </button>
               </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <div className={`mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3 ${focusOpen ? "" : "hidden"}`}>
                 {attention.slice(0, 3).map((al) => {
                   const d = (deals ?? []).find((x) => x.app.id === al.dealId);
                   if (!d) return null;
@@ -710,21 +785,6 @@ function Board({ user }: { user: UserProfile }) {
               </div>
             </section>
           ) : null}
-
-          {/* ── the chips, the search and the agent ── */}
-          <div className="fade-up flex flex-wrap items-center gap-2">
-            <Chip on={chip === "all"} onClick={() => setChip("all")} count={activeCount}>All properties</Chip>
-            <Chip on={chip === "attention"} onClick={() => setChip(chip === "attention" ? "all" : "attention")} count={flaggedDeals.length} tone="red">Needs attention</Chip>
-            <Chip on={chip === "stalled"} onClick={() => setChip(chip === "stalled" ? "all" : "stalled")} count={stalled.length} tone="red">Stalled</Chip>
-            <Chip on={chip === "soon"} onClick={() => setChip(chip === "soon" ? "all" : "soon")} count={upcomingMoveIns.length} tone="green">Moving soon</Chip>
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search property, tenant or agent…" className="w-56 rounded-full border border-line bg-card px-4 py-2 text-[12.5px] outline-none transition focus:border-black/30" />
-              <select value={agent} onChange={(e) => setAgent(e.target.value)} className="rounded-full border border-line bg-card px-3.5 py-2 text-[12.5px] outline-none">
-                <option value="all">All agents</option>
-                {agents.map((a) => (<option key={a} value={a}>{a}</option>))}
-              </select>
-            </div>
-          </div>
 
           {view === "kanban" ? (
             /* ── the columns: one per stage ── */
@@ -932,18 +992,6 @@ function Photo({ src, className = "" }: { src: string | null; className?: string
     <img src={src} alt="" aria-hidden className={`object-cover ${className}`} />
   ) : (
     <span className={`flex items-center justify-center bg-page text-muted ${className}`}><DoodleIcon name="home-1" size={22} /></span>
-  );
-}
-
-function StatTile({ icon, tone, value, label, onClick, on = false }: { icon: string; tone: "green" | "red"; value: number | string; label: string; onClick: () => void; on?: boolean }) {
-  return (
-    <button type="button" onClick={onClick} className={`btn-press flex items-center gap-4 rounded-[18px] border bg-card px-4 py-3.5 text-left transition ${on ? "border-ink/40" : "border-line/70 hover:border-black/25"}`}>
-      <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${tone === "green" ? GREEN_PILL : RED_PILL}`}><DoodleIcon name={icon} size={18} /></span>
-      <span className="min-w-0">
-        <span className="figures block text-[24px] font-bold leading-none">{value}</span>
-        <span className={`mt-1 block text-[12px] leading-tight ${tone === "red" && typeof value === "number" && value > 0 ? "text-[#9d4340]" : "text-muted"}`}>{label}</span>
-      </span>
-    </button>
   );
 }
 
