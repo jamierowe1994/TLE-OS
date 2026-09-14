@@ -1,16 +1,11 @@
 "use client";
 
-import { use, useCallback, useState } from "react";
+import { use, useState } from "react";
 import Link from "next/link";
 import PlcWizard from "@/components/PlcWizard";
-import { ComplianceSide, Note, type Loaded } from "@/components/PlcReview";
-import { missingDocuments, PLC_CHECKS, type PlcCase } from "@/lib/plc";
-import {
-  DEMO_PREFILL,
-  DEMO_SCANNED,
-  DEMO_SUBMITTED,
-  DEMO_SUMMARY,
-} from "@/lib/plc-demo";
+import { ComplianceSide, Note } from "@/components/PlcReview";
+import { DEMO_PREFILL } from "@/lib/plc-demo";
+import { usePlcSandbox } from "@/lib/plc-sandbox";
 
 /**
  * The compliance handover, both halves, for somebody with the share link.
@@ -33,75 +28,17 @@ import {
  * catch, and it is also the thing the scan is not allowed to decide about.
  */
 
-/** The scan, as a beat rather than an API call. */
-const SCAN_MS = 1500;
-
-type Side = "agent" | "compliance";
-
 export default function PreviewPlc({
   params,
 }: {
   params: Promise<{ token: string }>;
 }) {
   const { token } = use(params);
-  const [side, setSide] = useState<Side>("agent");
-  const [kase, setKase] = useState<PlcCase>(DEMO_SUBMITTED);
-  const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  /* Bumped by "Start again". The wizard holds its own progress, so remounting
-     it is the honest way to put it back to the beginning. */
-  const [run, setRun] = useState(0);
-
-  const loaded: Loaded = {
-    case: kase,
-    checks: PLC_CHECKS,
-    missing: missingDocuments(kase).map((c) => c.id),
-    summary: kase.scannedAt ? DEMO_SUMMARY : null,
-    /* True, so the panel offers the reading rather than explaining that it is
-       switched off. The reading itself is faked below. */
-    scanConfigured: true,
-  };
-
-  /**
-   * What a button does here.
-   *
-   * Same actions the real panel sends to the API, answered locally. `decide`
-   * is the one worth noting: in the product it is terminal and recorded
-   * against a real person's name, and here it changes a variable.
-   */
-  const perform = useCallback(
-    async (action: string, extra: Record<string, unknown>) => {
-      if (action === "scan") {
-        setScanning(true);
-        await new Promise((r) => setTimeout(r, SCAN_MS));
-        setScanning(false);
-        setKase(DEMO_SCANNED);
-        return;
-      }
-      if (action === "skip-scan") {
-        setKase({ ...kase, state: "reviewing" });
-        return;
-      }
-      if (action === "decide") {
-        const decision = String(extra.decision ?? "approved");
-        setKase({
-          ...kase,
-          state: decision as PlcCase["state"],
-          decidedAt: new Date().toISOString(),
-          decidedBy: "You, in the preview",
-          decisionNote: String(extra.note ?? ""),
-        });
-      }
-    },
-    [kase]
-  );
-
-  const restart = useCallback(() => {
-    setKase(DEMO_SUBMITTED);
-    setError(null);
-    setSide("agent");
-    setRun((n) => n + 1);
-  }, []);
+  /* The invented case and the four faked actions, shared with the practice
+     runs in Knowledge so that "what Approve does when nothing is real" has
+     exactly one definition. See lib/plc-sandbox. */
+  const { side, setSide, loaded, scanning, perform, restart, run } = usePlcSandbox();
 
   return (
     /* No horizontal padding on the main element.
@@ -168,7 +105,10 @@ export default function PreviewPlc({
         ))}
         <button
           type="button"
-          onClick={restart}
+          onClick={() => {
+            setError(null);
+            restart();
+          }}
           className="ml-auto text-[11.5px] text-muted underline transition-colors hover:text-ink"
         >
           Start again
@@ -191,7 +131,10 @@ export default function PreviewPlc({
             demo={{
               prefill: DEMO_PREFILL,
               onSeeCompliance: () => setSide("compliance"),
-              onRestart: restart,
+              onRestart: () => {
+                setError(null);
+                restart();
+              },
             }}
           />
         ) : (

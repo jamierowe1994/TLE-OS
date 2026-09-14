@@ -28,8 +28,59 @@ import type { Prefill } from "@/lib/plc-prefill";
  * never calls the PLC API at all.
  */
 
-/** Far enough in the future to stay sensible for a while, and obviously round. */
-const MOVE_IN = "2026-10-01";
+/**
+ * The move-in date, and every date derived from it, ROLL.
+ *
+ * This was the literal "2026-10-01", which was far enough away when it was
+ * written and is a fortnight away now. The whole demonstration rests on a gas
+ * certificate that runs out ELEVEN DAYS AFTER the tenants move in - a date in
+ * the past turns the blocker into a tenancy that started last month, and the
+ * practice run stops teaching the thing it exists to teach. Same trap as the
+ * hardcoded month literals that bit the portal: anything a demo asserts about
+ * time has to be computed from the time it is read at.
+ *
+ * The first of the month AFTER next, so it is always three to eight weeks out,
+ * always a round date, and it changes once a month rather than once a day.
+ * Everything is UTC: this module is imported by client components that Next
+ * renders on the server first, and a date built from local time would be one
+ * value in the HTML and another after hydration.
+ */
+function firstOfMonthAfterNext(): string {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 2, 1))
+    .toISOString()
+    .slice(0, 10);
+}
+
+/** `iso` plus `days`, as a date string. */
+function plusDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+const longDate = (iso: string) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+
+const MOVE_IN = firstOfMonthAfterNext();
+
+/** The blocker: present, correct-looking, and eleven days too short. */
+const GAS_EXPIRES = plusDays(MOVE_IN, 11);
+
+/**
+ * The pack's own clock, also relative.
+ *
+ * The queue colours a pack by how long it has waited - green inside 48 hours,
+ * red past it - so a fixed submitted-at makes every practice run open on a
+ * pack that has been sitting there for weeks, and teaches the wrong urgency.
+ * This one landed at breakfast: firmly green, with the 48 hours still to run.
+ */
+const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
 
 export const DEMO_ADDRESS = "14 Sample Street, Northampton NN1 1AA";
 
@@ -66,7 +117,7 @@ const DOCS: PlcDocument[] = [
   name,
   key: `documents/sample/${name}`,
   url: "#",
-  addedAt: "2026-08-29T09:12:00.000Z",
+  addedAt: hoursAgo(3),
   addedBy: "Sam Partner",
   /* The flag that already exists for exactly this: a name standing in for a
      file, so no screen can ever imply a document is on file when it is not. */
@@ -85,10 +136,11 @@ export const DEMO_FINDINGS: Finding[] = [
   {
     checkId: "gas-safety",
     level: "blocker",
-    message:
-      "The gas safety certificate expires on 12 October 2026, eleven days after the tenants move in. A new CP12 is needed before the tenancy starts.",
+    message: `The gas safety certificate expires on ${longDate(
+      GAS_EXPIRES
+    )}, eleven days after the tenants move in. A new CP12 is needed before the tenancy starts.`,
     documentName: "Gas safety certificate CP12.pdf",
-    foundDate: "2026-10-12",
+    foundDate: GAS_EXPIRES,
   },
   {
     checkId: "epc",
@@ -96,14 +148,15 @@ export const DEMO_FINDINGS: Finding[] = [
     message:
       "The EPC is rated E. That is lettable, but it is one band off the minimum and worth flagging to the landlord now rather than at renewal.",
     documentName: "EPC certificate.pdf",
-    foundDate: "2031-04-02",
+    /* Comfortably valid, so the only date under argument is the gas one. */
+    foundDate: plusDays(MOVE_IN, 365 * 5),
   },
   {
     checkId: "eicr",
     level: "ok",
-    message: "EICR dated 3 March 2025, satisfactory, valid for five years.",
+    message: "EICR satisfactory, valid for five years.",
     documentName: "EICR report.pdf",
-    foundDate: "2030-03-03",
+    foundDate: plusDays(MOVE_IN, 365 * 3),
   },
   {
     checkId: "landlord-id-aml",
@@ -139,7 +192,7 @@ export function demoCase(over: Partial<PlcCase> = {}): PlcCase {
     decidedAt: null,
     decidedBy: null,
     decisionNote: "",
-    createdAt: "2026-08-29T09:05:00.000Z",
+    createdAt: hoursAgo(3.5),
     ...over,
   };
 }
@@ -147,14 +200,14 @@ export function demoCase(over: Partial<PlcCase> = {}): PlcCase {
 /** The pack as it reaches compliance: submitted, and not yet read. */
 export const DEMO_SUBMITTED = demoCase({
   state: "submitted",
-  submittedAt: "2026-08-29T09:20:00.000Z",
+  submittedAt: hoursAgo(2),
 });
 
 /** The same pack once the reader has been over it. */
 export const DEMO_SCANNED = demoCase({
   state: "reviewing",
-  submittedAt: "2026-08-29T09:20:00.000Z",
-  scannedAt: "2026-08-29T09:21:00.000Z",
+  submittedAt: hoursAgo(2),
+  scannedAt: hoursAgo(1.9),
   findings: DEMO_FINDINGS,
 });
 

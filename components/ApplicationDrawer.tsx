@@ -501,10 +501,20 @@ export default function ApplicationDrawer({
                             the landlord has the application: before that there is
                             no tenancy to be compliant about. */}
                         {plc && (
-                          <a href={`/plc/start?application=${encodeURIComponent(app.id)}`} className={brownButton}>
-                            <DoodleIcon name="shield" size={14} />
-                            Start the PLC check
-                          </a>
+                          <>
+                            <a href={`/plc/start?application=${encodeURIComponent(app.id)}`} className={brownButton}>
+                              <DoodleIcon name="shield" size={14} />
+                              Start the PLC check
+                            </a>
+                            {/* Deliberately quiet, and deliberately right here.
+                                The handover locks the pack when it is sent, so
+                                the moment somebody wishes they had done one
+                                before is the moment they are about to do their
+                                first. Invented paperwork, nothing saved. */}
+                            <a href="/plc/practice" className="self-center text-[12px] text-muted underline transition-colors hover:text-ink">
+                              Never done one? Practise it first
+                            </a>
+                          </>
                         )}
                         {!plc && forYou[0]?.href && (
                           <a href={forYou[0].href} className={brownButton}>
