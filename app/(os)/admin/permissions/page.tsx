@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
+import type { Capability } from "@/lib/roles";
 
 /**
  * Who can see what.
@@ -16,10 +17,13 @@ import { Pill } from "@/components/Wire";
 type RoleDef = { id: string; label: string; blurb: string; can: string[] };
 type Person = { id: string; email: string; name: string; role: string; lastSeenAt: string | null };
 
-/* `see:pretenancy` was missing here, so Kirstie's own capability rendered as a
-   raw string on the screen that exists to explain them. Every capability in
-   lib/roles.ts now has a line. */
-const CAP_LABEL: Record<string, string> = {
+/* Every capability in lib/roles.ts needs a line here, or it renders as its own
+   raw code on the screen whose whole job is to explain what it means.
+   `see:pretenancy` went missing once and came back; on 14 Sep 2026 two more
+   were showing as "edit:knowledge" and "see:agent-compliance" on every role,
+   on the screen Susan reads to audit who holds what. The type in lib/roles.ts
+   is the list: when a capability is added there, it needs a line here. */
+const CAP_LABEL: Record<Capability, string> = {
   "admin:open": "Open an admin area",
   "staff:internal": "Internal staff, not a partner agent",
   "see:people": "See people",
@@ -34,6 +38,8 @@ const CAP_LABEL: Record<string, string> = {
   "manage:roles": "Hand out roles",
   "manage:switches": "Arm live sends",
   "see:prelaunch": "Pre-launch readiness",
+  "edit:knowledge": "Write the guides and feed Steve",
+  "see:agent-compliance": "Every agent's own compliance",
 };
 
 /* `developer`'s capabilities are real but its one screen (Wiring) is still
@@ -167,7 +173,13 @@ export default function Permissions() {
                       key={c}
                       className="rounded-full border border-line/70 px-2.5 py-0.5 text-[10.5px] text-muted"
                     >
-                      {CAP_LABEL[c] ?? c}
+                      {/* The cast is the one place a capability arrives as a
+                          plain string, over the wire. Anything unlabelled
+                          still shows its own code rather than nothing, but
+                          the typed map above means a new capability cannot
+                          reach this screen unlabelled without failing the
+                          build first. */}
+                      {CAP_LABEL[c as Capability] ?? c}
                     </span>
                   ))
                 )}
