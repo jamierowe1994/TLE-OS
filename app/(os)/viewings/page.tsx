@@ -5,6 +5,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
 import PickOne from "@/components/PickOne";
 import Segmented from "@/components/Segmented";
+import FeedbackReport from "@/components/viewings/FeedbackReport";
 import ViewingDrawer, { type Outcome } from "@/components/ViewingDrawer";
 import Agenda, { ApptRow, type AgendaMode } from "@/components/viewings/Agenda";
 import AppointmentDrawer from "@/components/viewings/AppointmentDrawer";
@@ -57,7 +58,10 @@ type TileId = "upcoming" | "today" | "week" | "due" | "in";
 type Panel = AgendaMode | "week";
 
 export default function Viewings() {
-  const [view, setView] = useState<"calendar" | "diary">("calendar");
+  /* Three views, not two. "Feedback" is the landlord's question - people have
+     been round, what did they say - and it is asked per PROPERTY, which is a
+     different shape from a diary. See components/viewings/FeedbackReport. */
+  const [view, setView] = useState<"calendar" | "diary" | "feedback">("calendar");
   const [panel, setPanel] = useState<Panel>("day");
   const [selected, setSelected] = useState(0);
   const [monthShift, setMonthShift] = useState(0);
@@ -201,6 +205,7 @@ export default function Viewings() {
               options={[
                 { id: "calendar", label: "Calendar", icon: <DoodleIcon name="calendar" size={14} /> },
                 { id: "diary", label: "Diary", icon: <DoodleIcon name="list" size={14} /> },
+                { id: "feedback", label: "Feedback", icon: <DoodleIcon name="message" size={14} /> },
               ]}
               value={view}
               onChange={setView}
@@ -231,7 +236,17 @@ export default function Viewings() {
         }
       />
 
-      {view === "calendar" ? (
+      {view === "feedback" ? (
+        <div className="mt-4">
+          <FeedbackReport
+            appts={scoped}
+            loading={loading}
+            error={error}
+            onOpen={(a) => setQuickId(a.id)}
+            onPrint={() => window.print()}
+          />
+        </div>
+      ) : view === "calendar" ? (
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
           {/* ── Left: the questions, then the month. ── */}
           {/* min-w-0 on both columns: the tile row's five shrink-0 tiles would

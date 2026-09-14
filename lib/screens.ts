@@ -179,7 +179,9 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     wiring: "partial",
     caveats: [
       "Appointments added on the week calendar stay in the OS. They do not reach REX, so REX will not know about them.",
-      "The landlord feedback report is not built yet.",
+      /* Built 14 Sep - the Feedback view, grouped by property, with a
+         landlord-ready copy. What is left is not ours to build. */
+      "Most viewings have no feedback written up in REX at all - 4 of the last 30. The report shows what is there and names what is missing.",
     ],
     next: "A viewing that goes well produces an application.",
   },

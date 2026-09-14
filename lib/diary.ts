@@ -79,6 +79,17 @@ export type Appt = {
    *  screen must say so rather than imply all is well. */
   fromRex?: boolean;
   /**
+   * The REX listing and property this appointment is attached to.
+   *
+   * REX hangs these off the calendar event as linked records, beside the
+   * feedback. The diary pull used to drop them, which is why the appointment
+   * drawer matches a property by parsing the address out of the title - its
+   * own comment calls that "the only join" and warns that getting it wrong
+   * "would show somebody the wrong keys". An id is not a guess.
+   */
+  listingId?: string | null;
+  propertyId?: string | null;
+  /**
    * What was said afterwards, out of REX - see lib/rex-feedback.ts.
    *
    * Three states, and they are three different facts:

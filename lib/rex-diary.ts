@@ -43,9 +43,9 @@ interface RexEvent extends Record<string, unknown> {
   event_location?: { description?: string | null; latitude?: string | null; longitude?: string | null } | null;
   calendar?: { owner_user?: { name?: string; email_address?: string } | null } | null;
   organiser_user?: { name?: string; email_address?: string } | null;
-  /** What the event is attached to: the listing, the contacts and - the one
-   *  this file cares about - the feedback written up afterwards. */
-  records?: { id?: string | number; service?: string }[] | null;
+  /** What the event is attached to: the listing, the property, the contacts
+   *  and the feedback written up afterwards. */
+  records?: { id?: string | number; service?: string; label?: string | null }[] | null;
 }
 
 function ownerOf(e: RexEvent): { name: string; email: string } {
@@ -108,6 +108,12 @@ function feedbackIdOf(e: RexEvent): string | null {
   return r?.id != null ? String(r.id) : null;
 }
 
+/** One linked record of a given service. */
+function linked(e: RexEvent, service: string): { id: string; label: string | null } | null {
+  const r = (e.records ?? []).find((x) => x?.service === service && x.id != null);
+  return r?.id != null ? { id: String(r.id), label: r.label ?? null } : null;
+}
+
 function toAppt(e: RexEvent): Appt | null {
   const startIso = e.starts_at?.time;
   if (!startIso) return null;
@@ -164,6 +170,22 @@ function toAppt(e: RexEvent): Appt | null {
     tenant: undefined,
     comms: [],
     fromRex: true,
+    /* The record, by id rather than by parsing the address out of the title.
+       Private entries keep none of it: the point of "Busy" is that we do not
+       republish what somebody is doing. */
+    ...(priv
+      ? null
+      : (() => {
+          const listing = linked(e, "Listings");
+          const property = linked(e, "Properties");
+          return {
+            listingId: listing?.id ?? null,
+            propertyId: property?.id ?? null,
+            ...(listing
+              ? { link: { href: `/listings?open=${listing.id}`, label: listing.label ?? loc ?? "The listing" } }
+              : null),
+          };
+        })()),
   };
 }
 
