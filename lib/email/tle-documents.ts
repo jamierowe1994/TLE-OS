@@ -291,6 +291,124 @@ export const COMPLIANCE_CHASE_AGENT = {
   branding: { showSignoff: false },
 } as const;
 
+/* ─────────────── the renewed certificate, out to everyone on it ───────────────
+   Michael, 7 Sep 2026: the tenant must have it by law, within 30 days, and
+   today it is done by hand in Propoly. Three documents, because three people
+   are owed three different things:
+
+     the landlord   owns the obligation and wants the record kept
+     the tenant     is legally entitled to the document and owes nothing
+     the contractor produced it and should see where it went
+
+   NONE OF THEM MENTIONS MONEY. The certificate is the only thing attached,
+   and an invoice is never part of this - the cost of the work is between us
+   and the landlord's statement, and a gas certificate arriving with a bill
+   attached turns a legal notice into a chase. Enforced in
+   lib/certificate-share.ts, said here so nobody adds it back in the copy.
+
+   ALL THREE ARE SHORT ON PURPOSE. There is nothing to do with any of them.
+   An email that attaches a document and then asks for something is an email
+   people stop opening, and this one has to be opened for years.            */
+
+/**
+ * The landlord's copy. Their certificate, their obligation, our record.
+ *
+ * Leads on the fact that it is filed rather than on the attachment: a landlord
+ * who knows we hold it stops keeping their own parallel folder, which is the
+ * habit that produces two different expiry dates for one boiler.
+ */
+export const CERTIFICATE_SHARED_LANDLORD = {
+  subject: "The renewed {{certLabel}} for {{address}}",
+  preheader: "Attached, and on the property's file. Nothing to do.",
+  mode: "blocks",
+  blocks: [
+    H("crl1", "{{certLabel}} renewed"),
+    T(
+      "crl2",
+      "Hi {{firstName}},<br><br>The renewed {{certLabel}} for <strong>{{address}}</strong> is attached. It runs to <strong>{{expires}}</strong>."
+    ),
+    T(
+      "crl3",
+      "It is on the property's file and in your landlord portal, so you can pull it up whenever you need it without asking us for it. {{alsoLine}}"
+    ),
+    SP("crl4", 8),
+    DIV("crl5"),
+    H2("crl6", "Nothing to do"),
+    T(
+      "crl7",
+      "We hold the date and we chase the next renewal before it lapses. If anything on the certificate looks wrong, reply and we will take it up with the engineer."
+    ),
+    SP("crl8", 8),
+    T("crl9", "The Letting Experts"),
+    FOOT("crl10", "You're getting this because you let a property through The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/**
+ * The tenant's copy.
+ *
+ * SAYS WHY IT ARRIVED. A document turning up unannounced from a letting agent
+ * reads as a problem, and a tenant who thinks a gas certificate is a warning
+ * rings the office. So the second line is "you are entitled to this, nothing
+ * is wrong", which is the only sentence in the email doing real work.
+ */
+export const CERTIFICATE_SHARED_TENANT = {
+  subject: "The {{certLabel}} for your home",
+  preheader: "Your copy, attached. Nothing is wrong and nothing is needed.",
+  mode: "blocks",
+  blocks: [
+    H("crt1", "Your home's {{certLabel}}"),
+    T(
+      "crt2",
+      "Hi {{firstName}},<br><br>The {{certLabel}} for <strong>{{address}}</strong> has been renewed, and your copy is attached. It runs to <strong>{{expires}}</strong>."
+    ),
+    T(
+      "crt3",
+      "You are entitled to a copy of this, so we send it as soon as it lands rather than waiting to be asked. Nothing is wrong and there is nothing you need to do - keep it with your tenancy papers."
+    ),
+    SP("crt4", 8),
+    DIV("crt5"),
+    H2("crt6", "If you cannot open it"),
+    T(
+      "crt7",
+      "Reply to this email and we will send it another way, or print a copy for you."
+    ),
+    SP("crt8", 8),
+    T("crt9", "The Letting Experts"),
+    FOOT("crt10", "You're getting this because you rent a home managed by The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+/**
+ * The contractor's copy.
+ *
+ * Not a receipt and not about their invoice. It closes the loop on the one
+ * thing they cannot see from their own page: that the document they uploaded
+ * reached the people it was for.
+ */
+export const CERTIFICATE_SHARED_CONTRACTOR = {
+  subject: "Filed: {{certLabel}} for {{address}}",
+  preheader: "It reached the landlord and the tenant. Your copy is attached.",
+  mode: "blocks",
+  blocks: [
+    H("crc1", "{{certLabel}} is filed"),
+    T(
+      "crc2",
+      "Hi {{firstName}},<br><br>Thanks for the {{certLabel}} for <strong>{{address}}</strong>. It is on the property's compliance record, dated to <strong>{{expires}}</strong>, and it has gone to the landlord and the tenant. Your copy is attached."
+    ),
+    T(
+      "crc3",
+      "If the date or the property on it is not right, tell us now rather than later: it is the date we will chase the next renewal from."
+    ),
+    SP("crc4", 8),
+    T("crc5", "The Letting Experts"),
+    FOOT("crc6", "You're getting this because you carried out the work."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
 export const COMPLIANCE_CHASE_LANDLORD = {
   subject: "{{certLabel}} at {{address}} expires {{whenPretty}}",
   preheader: "We need the renewed certificate before it lapses.",

@@ -113,3 +113,82 @@ export function complianceJobEmail(o: WorksOrder, trigger: "done" | "document", 
     text: `${heading}. ${o.title} at ${where(o)}. Job #${o.ref}. Open: ${jobLink(o.id)}`,
   };
 }
+
+/**
+ * THE AUDIT TRAIL COPY. Michael's inbox, every time a renewed certificate
+ * goes out to the people entitled to it.
+ *
+ * ── Why an email and not just a table ────────────────────────────────────
+ *
+ * There is a table (os_certificate_sends) and it is the better record. But
+ * "we sent the tenant the gas certificate on the 14th" is a thing somebody
+ * has to prove to a third party months later, and a row in our own database
+ * is a record we could have written yesterday. A dated email sitting in the
+ * compliance mailbox is evidence that does not depend on us. James asked for
+ * exactly this: "that needs to go out to all parties via email for audit log
+ * trail purposes."
+ *
+ * ── It lists the failures as loudly as the sends ─────────────────────────
+ *
+ * A fan-out that reached the landlord and not the tenant is the case that
+ * matters, and it is invisible if the email only names who it got to. So
+ * every party is a row either way, and the ones that did not land say why.
+ *
+ * NO AMOUNT APPEARS HERE. Same rule as everywhere on this path.
+ */
+export function certificateSharedEmail(o: {
+  label: string;
+  propertyName: string;
+  expiry: string;
+  fileName: string;
+  source: string;
+  armed: boolean;
+  link: string;
+  outcomes: { role: string; name: string; address: string; sent: boolean; note: string }[];
+}): AgentEmail {
+  const went = o.outcomes.filter((x) => x.sent);
+  const missed = o.outcomes.filter((x) => !x.sent);
+  const who = (x: { role: string; name: string }) => x.name || x.role.charAt(0).toUpperCase() + x.role.slice(1);
+  const rows: ShellRow[] = [
+    {
+      title: o.propertyName || "the property",
+      detail: `${o.label} · runs to ${o.expiry} · ${o.fileName}${o.source ? ` · ${o.source}` : ""}`,
+      tone: "neutral",
+      icon: "mark-home.png",
+    },
+    ...o.outcomes.map((x) => ({
+      title: `${who(x)} - ${x.address || "no address on the record"}`,
+      detail: x.sent ? `Sent, with the certificate attached` : x.note || "not sent",
+      tone: x.sent ? ("good" as const) : ("attention" as const),
+      icon: "mark-doc.png",
+    })),
+  ];
+  const heading = o.armed
+    ? went.length
+      ? `${o.label} sent to ${went.length} ${went.length === 1 ? "person" : "people"}`
+      : `${o.label} reached nobody`
+    : `${o.label} would go to ${o.outcomes.length} ${o.outcomes.length === 1 ? "person" : "people"}`;
+  const intro = o.armed
+    ? `The renewed ${o.label} for ${o.propertyName || "the property"} has been filed and sent out. This is the copy for the audit trail.${missed.length ? ` ${missed.length} of them did not land - the reason is against each one below.` : ""}`
+    : `The renewed ${o.label} for ${o.propertyName || "the property"} has been filed. Sending it on is not armed yet, so nobody has been written to. This is who it would go to the moment it is.`;
+  return {
+    subject: o.armed
+      ? `${o.label} sent out: ${o.propertyName || "a property"}${missed.length ? ` (${missed.length} did not land)` : ""}`
+      : `Not armed: ${o.label} for ${o.propertyName || "a property"} reached nobody`,
+    html: skyListShell({
+      heading,
+      intro,
+      rows,
+      rowsLead: o.armed ? "Who has it" : "Who would have it",
+      /* Bare rows, like its twins: a list of facts about one document, in an
+         inbox that gets worked rather than read. */
+      rowStyle: "bare",
+      button: "Open the property file",
+      link: o.link,
+      hero: "hero-job.png",
+      tip: "The certificate only. No invoice and no cost is ever attached to one of these.",
+      tipQuiet: true,
+    }),
+    text: `${heading}. ${o.label} for ${o.propertyName}, runs to ${o.expiry}. ${o.outcomes.map((x) => `${who(x)} <${x.address}>: ${x.sent ? "sent" : x.note || "not sent"}`).join("; ")}. ${o.link}`,
+  };
+}

@@ -30,7 +30,7 @@ import { verifyEmailFor, resetEmailFor } from "@/lib/verify-email";
 import { pilotInviteEmail } from "@/lib/email/pilot-email";
 import { videoChaseEmail } from "@/lib/email/video-chase-email";
 import { certificateChaseEmail, ownComplianceEmail, ownComplianceRollupEmail, pretenancyDigestEmail, dealMovedEmail, radarDigestEmail } from "@/lib/email/agent-emails";
-import { accountsInvoiceEmail, complianceJobEmail } from "@/lib/email/works-internal";
+import { accountsInvoiceEmail, certificateSharedEmail, complianceJobEmail } from "@/lib/email/works-internal";
 import type { WorksOrder } from "@/lib/works-orders";
 import {
   bodyFor,
@@ -45,6 +45,9 @@ import { renderPlain } from "@/lib/campaign-mail";
 import {
   LAUNCH_ANNOUNCEMENT,
   COMPLIANCE_CHASE_LANDLORD,
+  CERTIFICATE_SHARED_LANDLORD,
+  CERTIFICATE_SHARED_TENANT,
+  CERTIFICATE_SHARED_CONTRACTOR,
   TENANT_PASSPORT_INVITE,
   LANDLORD_DECK_INVITE,
   LANDLORD_SIGN_IN,
@@ -127,6 +130,10 @@ const COMPLIANCE_SAMPLE: Record<string, string> = {
   daysLeft: "14",
   agentName: "Michael Healy",
   firstName: "Helen",
+  /* The renewed-certificate fan-out: the one line that changes per recipient,
+     so the preview has to show it rather than leave a placeholder in the
+     middle of a paragraph. */
+  alsoLine: "The tenant has been sent a copy as well.",
   /* The two doorway emails carry a link. It has to be a real destination in
      the preview: a button reading {{link}} is the one part of a template a
      reviewer cannot check by eye, and a dead one is only found by a customer. */
@@ -387,6 +394,79 @@ export const TLE_EMAILS: CatalogEntry[] = [
       "One property, one certificate, one date. States the obligation plainly and offers the two real paths — they arrange it and send it in, or we book a contractor. No urgency dressing: a certificate is a legal obligation, and making every reminder shout leaves nothing to distinguish the genuinely urgent ones.",
     doc: COMPLIANCE_CHASE_LANDLORD,
     render: (o) => blocksAs("landlord")(withSample(o ?? COMPLIANCE_CHASE_LANDLORD))(),
+  },
+  /* ── The renewed certificate, out to all three parties (14 Sep 2026) ──
+     One document per party rather than one with conditional paragraphs: a
+     landlord and a tenant are owed different things by the same piece of
+     paper, and Francesca signs off three short emails far more readily than
+     one that tries to be all of them. lib/certificate-share.ts sends them. */
+  {
+    id: "certificate-shared-landlord",
+    group: "Compliance",
+    name: "Renewed Certificate — Landlord",
+    audience: "landlord",
+    trigger:
+      "A renewed certificate is filed on a let home, by any door: attached on the OS, dropped on the contractor's page, or emailed over by the landlord and filed here",
+    fires: "lib/certificate-share.ts → shareCertificate(), behind the certificate_share switch",
+    to: "The landlord on the REX record, with the certificate attached",
+    summary:
+      "Their copy, and the fact that we hold it. Leads on it being filed rather than on the attachment, because a landlord who knows we have it stops keeping a parallel folder - which is the habit that produces two different expiry dates for one boiler. No invoice and no cost, ever.",
+    doc: CERTIFICATE_SHARED_LANDLORD,
+    render: (o) => blocksAs("landlord")(withSample(o ?? CERTIFICATE_SHARED_LANDLORD))(),
+  },
+  {
+    id: "certificate-shared-tenant",
+    group: "Compliance",
+    name: "Renewed Certificate — Tenant",
+    audience: "tenant",
+    trigger: "The same moment, when somebody is living there",
+    fires: "lib/certificate-share.ts → shareCertificate(), behind the certificate_share switch",
+    to: "The sitting tenant, with the certificate attached",
+    summary:
+      "The legal one: the tenant is entitled to a copy and by law must have it within 30 days, which Michael does by hand in Propoly today. The second line says nothing is wrong, because a document arriving unannounced from a letting agent reads as a problem and produces a phone call.",
+    doc: CERTIFICATE_SHARED_TENANT,
+    render: (o) => blocksAs("tenant")(withSample(o ?? CERTIFICATE_SHARED_TENANT))(),
+  },
+  {
+    id: "certificate-shared-contractor",
+    group: "Compliance",
+    name: "Renewed Certificate — Contractor",
+    audience: "contractor",
+    trigger: "The certificate came in from the contractor's own page",
+    fires: "lib/certificate-share.ts → shareCertificate(), behind the certificate_share switch",
+    to: "The contractor who produced it",
+    summary:
+      "Closes the loop on the one thing they cannot see from their own page: that the document reached the landlord and the tenant, and what date we will chase the next renewal from. Not a receipt, and nothing about their invoice.",
+    doc: CERTIFICATE_SHARED_CONTRACTOR,
+    render: (o) => blocksAs("contractor")(withSample(o ?? CERTIFICATE_SHARED_CONTRACTOR))(),
+  },
+  {
+    id: "certificate-shared-compliance",
+    group: "Compliance",
+    name: "Certificate Sent — Audit Trail",
+    audience: "internal",
+    trigger: "Every armed fan-out, including the ones that reached nobody. Shadow runs are recorded on the certificate rather than emailed, so the backlog cannot bury this inbox",
+    fires: "lib/certificate-share.ts → shareCertificate()",
+    to: "The compliance inbox set under Maintenance, Invoices",
+    summary:
+      "James, 14 Sep 2026: \"that needs to go out to all parties via email for audit log trail purposes.\" There is a table behind this too (os_certificate_sends), but a dated email in the compliance mailbox is evidence that does not depend on us. Lists the failures as loudly as the sends, because a fan-out that reached the landlord and not the tenant is the case that matters.",
+    render: () => {
+      const m = certificateSharedEmail({
+        label: "Gas safety (CP12)",
+        propertyName: "41 Harewood Road, Coventry CV4 8LP",
+        expiry: "12 September 2027",
+        fileName: "CP12-41-Harewood-Road.pdf",
+        source: "the contractor's page",
+        armed: true,
+        link: `${SITE}/portfolio`,
+        outcomes: [
+          { role: "landlord", name: "Helen Prior", address: "helen.prior@example.com", sent: true, note: "sent with the certificate attached" },
+          { role: "tenant", name: "Sophie Adeyemi", address: "sophie.a@example.com", sent: true, note: "sent with the certificate attached" },
+          { role: "contractor", name: "Redland Plumbing & Heating", address: "dev@redlandph.example.com", sent: true, note: "sent with the certificate attached" },
+        ],
+      });
+      return { subject: m.subject, html: m.html };
+    },
   },
   {
     id: "account-verify",

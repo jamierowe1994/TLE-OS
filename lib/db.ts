@@ -1653,6 +1653,44 @@ CREATE TABLE IF NOT EXISTS os_certificates (
 );
 CREATE INDEX IF NOT EXISTS os_certificates_property ON os_certificates (property_id, type_id);
 
+-- WHO HAS BEEN GIVEN A CERTIFICATE (14 Sep 2026). One row per person per
+-- certificate: the landlord, the tenant, the contractor who produced it, and
+-- the compliance inbox's copy.
+--
+-- This is the audit trail Michael asked for, and it is the reason the table
+-- exists rather than a boolean on os_certificates. "Did the tenant get the
+-- gas certificate, and when?" is a question that gets asked months later by
+-- somebody who is not us, and a flag saying "shared: true" answers none of
+-- it. A FAILED attempt is a row too, with the reason in "note", because
+-- "nobody could be emailed because REX holds no address for the landlord" is
+-- the finding that gets the address fixed.
+--
+-- IDEMPOTENT BY UNIQUE INDEX, on the sent rows only. A certificate that has
+-- reached somebody is never sent to them twice however many times the intake
+-- runs - the backlog retries, a cron, somebody pressing the button again. A
+-- FAILURE is not covered by the index, so it can be retried as often as it
+-- takes, and every attempt is kept.
+--
+-- NEVER MONEY. Nothing here carries an amount, because nothing shared this
+-- way is ever an invoice: the fan-out reads os_certificates and that table
+-- holds certificates only. See lib/certificate-share.ts.
+CREATE TABLE IF NOT EXISTS os_certificate_sends (
+  id             TEXT PRIMARY KEY,
+  certificate_id TEXT NOT NULL,
+  property_id    TEXT NOT NULL DEFAULT '',
+  type_id        TEXT NOT NULL DEFAULT '',
+  -- landlord | tenant | contractor | compliance
+  role           TEXT NOT NULL,
+  name           TEXT NOT NULL DEFAULT '',
+  address        TEXT NOT NULL DEFAULT '',
+  sent           BOOLEAN NOT NULL DEFAULT FALSE,
+  note           TEXT NOT NULL DEFAULT '',
+  at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS os_certificate_sends_once
+  ON os_certificate_sends (certificate_id, role, lower(address)) WHERE sent;
+CREATE INDEX IF NOT EXISTS os_certificate_sends_cert ON os_certificate_sends (certificate_id, at DESC);
+
 -- THE OS'S OWN PROPERTY RECORD (6 Sep 2026). One row per REX PM property, linked
 -- to its REX CRM property where the address matched, "not on REX" where it did
 -- not. See lib/os-properties.ts for why it exists.

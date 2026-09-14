@@ -206,6 +206,39 @@ export const SWITCHES: Switch[] = [
   },
   {
     /**
+     * A RENEWED CERTIFICATE GOES OUT TO EVERYONE WHO IS ENTITLED TO IT.
+     *
+     * Michael, 7 Sep 2026: by law the tenant must have it, within 30 days, and
+     * today somebody does it by hand in Propoly. Whichever door the document
+     * came in by - an agent attaching it on the OS, the contractor dropping it
+     * on their own page, the landlord emailing it over and somebody filing it -
+     * the other parties get a copy and the compliance inbox gets one for the
+     * audit trail.
+     *
+     * OFF IS SHADOW, NOT SILENCE. With this off the fan-out still works out
+     * who should have it and writes a row per person saying so, and sends
+     * nothing. So the run can be read on the certificate before anybody is
+     * written to, which is the only safe way to turn it on.
+     *
+     * WHY IT STAYS OFF UNTIL JAMES SAYS SO: the Propoly certificate backlog
+     * posts hundreds of historical certificates through the same intake. Armed
+     * during that, it would email landlords and tenants about documents from
+     * two years ago. Arm it when the backlog is finished, and not before.
+     *
+     * The customer-email switch still gates the landlord and tenant halves on
+     * top of this: two gates, and the outer one is per-recipient.
+     */
+    key: "certificate_share",
+    label: "Send a renewed certificate to everyone on it",
+    what: "When a renewed certificate is filed, emails a copy to the landlord, the sitting tenant and the contractor who produced it, and one to the compliance inbox for the audit trail. Certificates only - never an invoice, and never a cost.",
+    who: "LANDLORDS, TENANTS AND CONTRACTORS, with the certificate attached. Do not arm this until the Propoly certificate backlog has finished loading.",
+    confirm: "SEND CERTIFICATES",
+    /* No old variable: this never existed before. Unset means off. */
+    legacyEnv: "CERTIFICATE_SHARE",
+    legacyOn: "on",
+  },
+  {
+    /**
      * The Propoly watcher tells the AGENT when their deal moves. The feed
      * records every move whether this is on or not; this only decides whether
      * an email goes out about it. Off until Kirstie has watched the feed agree

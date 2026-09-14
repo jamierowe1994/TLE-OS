@@ -50,6 +50,24 @@ const TYPE_LABEL: Record<string, string> = {
 };
 const READER_TO_TYPE: Record<string, string> = { hmo_licence: "mandatory_hmo_license" };
 
+/**
+ * HOW IT GOT HERE, and why it is a question rather than a guess.
+ *
+ * James, 14 Sep 2026: a certificate arrives three ways - we upload it, the
+ * contractor drops it on their page, or the landlord emails it over. The
+ * contractor's door records itself. The other two both end up on this panel,
+ * and they are not the same event: "the landlord emailed it over" is the one
+ * the landlord themselves may later ask us to prove. There is no inbound
+ * mailbox, so the honest way to record it is to ask the person filing it.
+ */
+const SOURCES: { id: string; label: string }[] = [
+  { id: "we uploaded it", label: "We uploaded it" },
+  { id: "emailed by the landlord", label: "The landlord emailed it over" },
+  { id: "emailed by the contractor", label: "The contractor emailed it over" },
+  { id: "from the tenant", label: "The tenant sent it" },
+  { id: "downloaded from Propoly", label: "Out of Propoly" },
+];
+
 const STATE: Record<Row["state"], { label: string; tone: "good" | "accent" | "neutral" }> = {
   valid: { label: "In date", tone: "good" },
   expiring: { label: "Due soon", tone: "accent" },
@@ -90,7 +108,11 @@ export default function PropertyFile({
   const [error, setError] = useState<string | null>(null);
   const [pick, setPick] = useState<string | null>(null); // a candidate the person chose
   const [open, setOpen] = useState<Record<string, boolean>>({}); // rows showing every file, not just the latest
-  const [pending, setPending] = useState<{ file: File; forType: string | null; read: Read | null; type: string; expiry: string; issue: string; busy: boolean; note: string | null } | null>(null);
+  const [pending, setPending] = useState<{ file: File; forType: string | null; read: Read | null; type: string; expiry: string; issue: string; how: string; busy: boolean; note: string | null } | null>(null);
+  /* Who the certificate reached, on the same screen as the filing. Not a
+     toast: "the tenant has no email address on the record" is a finding
+     somebody has to act on, and it must not slide away after four seconds. */
+  const [went, setWent] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const forType = useRef<string | null>(null);
 
@@ -125,7 +147,8 @@ export default function PropertyFile({
   }, [load]);
 
   async function chose(file: File) {
-    setPending({ file, forType: forType.current, read: null, type: forType.current ?? "", expiry: "", issue: "", busy: true, note: null });
+    setWent(null);
+    setPending({ file, forType: forType.current, read: null, type: forType.current ?? "", expiry: "", issue: "", how: SOURCES[0].id, busy: true, note: null });
     const body = new FormData();
     body.set("file", file);
     if (forType.current) body.set("expect", forType.current);
@@ -146,13 +169,14 @@ export default function PropertyFile({
     body.set("expiry", pending.expiry);
     if (pending.issue) body.set("issue", pending.issue);
     if (address) body.set("propertyName", address);
-    body.set("source", `attached on ${screen}`);
+    body.set("source", `${pending.how}, on ${screen}`);
     const j = await fetch("/api/compliance/certificates", { method: "POST", body }).then((r) => r.json()).catch(() => ({ ok: false, error: "The upload did not land." }));
     if (!j.ok) {
       setPending((p) => (p ? { ...p, busy: false, note: j.error ?? "The upload did not land." } : p));
       return;
     }
     setPending(null);
+    setWent(j.duplicate ? "That certificate is already on this home; nothing was sent again." : (j.share?.line ?? null));
     load();
   }
 
@@ -239,6 +263,12 @@ export default function PropertyFile({
                   Issued
                   <input type="date" value={pending.issue} onChange={(e) => setPending((p) => (p ? { ...p, issue: e.target.value } : p))} className="mt-1 w-full rounded-lg border border-line/80 bg-page px-2.5 py-2 text-[12.5px] text-ink" />
                 </label>
+                <label className="text-[11px] text-muted sm:col-span-3">
+                  How it got here
+                  <select value={pending.how} onChange={(e) => setPending((p) => (p ? { ...p, how: e.target.value } : p))} className="mt-1 w-full rounded-lg border border-line/80 bg-page px-2.5 py-2 text-[12.5px] text-ink">
+                    {SOURCES.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  </select>
+                </label>
               </div>
               {pending.note && <p className="mt-2 text-[12px] text-accent-dark">{pending.note}</p>}
               <div className="mt-3 flex items-center gap-2">
@@ -249,6 +279,14 @@ export default function PropertyFile({
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* ── Who the certificate reached, once it is filed ── */}
+      {went && (
+        <div className="mb-4 flex items-start gap-2 rounded-xl border border-line/80 bg-card p-3">
+          <p className="flex-1 text-[12px] leading-relaxed text-muted">{went}</p>
+          <button type="button" onClick={() => setWent(null)} className="text-[11px] font-semibold text-muted transition-colors hover:text-ink">Hide</button>
         </div>
       )}
 

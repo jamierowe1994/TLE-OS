@@ -5,8 +5,16 @@ import { useParams } from "next/navigation";
 
 /**
  * The contractor's page for one job. No sign-in: the link in their works
- * order is the key. Three things, one at a time: the date they've agreed
- * with the tenant, marking it done, and their photos and invoice.
+ * order is the key. Four things, one at a time: the date they've agreed with
+ * the tenant, marking it done, their photos, the certificate, and the invoice.
+ *
+ * THE CERTIFICATE BOX IS NOT A SECOND UPLOAD BUTTON (14 Sep 2026). A photo is
+ * a file on a job; a certificate is a compliance record, so this one asks for
+ * the two facts the PDF cannot be trusted to give - what it is, and the date
+ * it runs out - and the OS then files it on the property, writes it into REX
+ * and sends it to the landlord and the tenant. Asking the contractor for the
+ * expiry is right: they are holding the certificate, and the alternative is
+ * somebody in the office reading it off a scan a week later.
  */
 
 type Job = {
@@ -16,6 +24,19 @@ type Job = {
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-GB", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "");
 
+/* The same vocabulary REX uses, in the words a contractor would use. Gas and
+   electrical first because they are most of what comes back this way. */
+const CERT_TYPES: { id: string; label: string }[] = [
+  { id: "gas_safety", label: "Gas safety (CP12)" },
+  { id: "eicr", label: "Electrical safety (EICR)" },
+  { id: "epc", label: "EPC" },
+  { id: "portable_appliance_testing", label: "PAT test" },
+  { id: "legionella_risk_assessment", label: "Legionella risk assessment" },
+  { id: "smoke_alarms", label: "Smoke alarms" },
+  { id: "co_alarms", label: "CO alarms" },
+  { id: "emergency_lighting_fire_exit", label: "Fire safety" },
+];
+
 export default function ContractorPage() {
   const { token } = useParams<{ token: string }>();
   const [job, setJob] = useState<Job | null>(null);
@@ -24,6 +45,8 @@ export default function ContractorPage() {
   const [note, setNote] = useState("");
   const [amount, setAmount] = useState("");
   const [ref, setRef] = useState("");
+  const [certType, setCertType] = useState("");
+  const [certExpiry, setCertExpiry] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
@@ -40,17 +63,24 @@ export default function ContractorPage() {
     setJob(r.job);
     setFlash(label === "date" ? "Thanks - the date's on the job and the tenant and landlord have been told." : "Thanks - marked done.");
   }
-  async function upload(file: File, kind: "photo" | "invoice") {
+  async function upload(file: File, kind: "photo" | "invoice" | "certificate") {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("kind", kind);
     if (kind === "invoice") { fd.append("amount", amount); fd.append("ref", ref); fd.append("note", note); }
+    if (kind === "certificate") { fd.append("type", certType); fd.append("expiry", certExpiry); }
     setBusy(kind);
     setErr(null);
     const r = await fetch(`/api/contractor/${token}`, { method: "POST", body: fd }).then((x) => x.json()).catch(() => null);
     setBusy(null);
     if (!r?.ok) return setErr(r?.error ?? "The file did not upload.");
     setJob(r.job);
+    if (kind === "certificate") {
+      setCertType(""); setCertExpiry("");
+      /* What actually happened, not "thanks": a contractor who has just
+         handed over a legal document wants to know it landed somewhere. */
+      return setFlash("Thanks - the certificate is on the property's record and the landlord and tenant are being sent a copy.");
+    }
     setFlash(kind === "invoice" ? "Thanks - your invoice is on the job and accounts have been told." : "Photo added.");
   }
 
@@ -108,6 +138,23 @@ export default function ContractorPage() {
                 <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f, "photo"); e.target.value = ""; }} disabled={busy === "photo"} />
               </label>
               {job.files.length > 0 && <p style={{ margin: "8px 0 0", fontSize: 12, color: "#6b6b70" }}>{job.files.length} file{job.files.length === 1 ? "" : "s"} on the job.</p>}
+            </div>
+
+            <div style={box}>
+              <span style={label}>A certificate from the visit</span>
+              <p style={{ margin: "0 0 10px", fontSize: 13, color: "#6b6b70" }}>Gas, electrical, PAT, anything with an expiry date. It goes on the property&apos;s record and we send a copy to the landlord and the tenant.</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <select value={certType} onChange={(e) => setCertType(e.target.value)} style={field}>
+                  <option value="">What is it?</option>
+                  {CERT_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </select>
+                <input type="date" value={certExpiry} onChange={(e) => setCertExpiry(e.target.value)} style={field} aria-label="The date it runs out" />
+              </div>
+              <label style={{ ...btn, display: "inline-block", marginTop: 10, opacity: certType && certExpiry ? 1 : 0.5 }}>
+                {busy === "certificate" ? "Filing…" : "Choose the certificate"}
+                <input type="file" accept="application/pdf,image/*" style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f, "certificate"); e.target.value = ""; }} disabled={busy === "certificate" || !certType || !certExpiry} />
+              </label>
+              {!(certType && certExpiry) && <p style={{ margin: "6px 0 0", fontSize: 12, color: "#6b6b70" }}>Say what it is and when it runs out, then choose the file.</p>}
             </div>
 
             {job.invoicePence == null ? (
