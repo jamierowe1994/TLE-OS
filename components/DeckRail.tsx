@@ -324,18 +324,28 @@ export default function DeckRail({
               <a href={pre.url} target="_blank" rel="noreferrer" className={ghost}>
                 Review the deck
               </a>
-              {/* THE HALF OF THE FLOW THAT CAN ACTUALLY SEND. The landlord's
-                  copy is blocked at the transport; this goes to a TLE address,
-                  which is the one thing lib/email-policy lets through. */}
+              {/* Was "Email the agent", which James read on 11 Sep as the
+                  landlord's pre-appraisal being sent to the agent instead of
+                  to the client (pilot list c01). It never was. But this is the
+                  only send button on the card, and the deck it sits under is
+                  the LANDLORD's, so the reading was a fair one - and an agent
+                  who makes the same one either sends nothing to the landlord
+                  or believes they have. The line underneath is the fix; the
+                  label is just the half of it that fits on a button. */}
               <button
                 type="button"
                 onClick={tellTheAgent}
                 disabled={briefingBusy}
                 className={`${ghost} disabled:opacity-60`}
               >
-                {briefingBusy ? "Sending…" : "Email the agent"}
+                {briefingBusy ? "Sending…" : "Tell the agent"}
               </button>
             </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-muted">
+              The landlord&apos;s copy goes to them the day before, from the agent, through REX, so it lands on their
+              timeline. This button does not send that. It tells the agent it is on its way, and it can only ever reach
+              a Letting Experts address.
+            </p>
             {briefing && <p className="mt-2 text-[11px] text-muted">{briefing}</p>}
             {/* THE RECORDER MOVES HERE from the lead drawer, where it only
                 appeared inside the email composer and only after a deck had
