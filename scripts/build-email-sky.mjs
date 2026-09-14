@@ -341,6 +341,14 @@ if (cutArg > -1) {
   await hero({ name: "hero-radar", art: "radar.png", H: 620, drawWidth: 1120, blob: "" });
   await hero({ name: "hero-reset", art: "reset.png", H: 730, drawWidth: 940, blob: "" });
 
+  await hero({ name: "hero-job", art: "job.png", H: 720, drawWidth: 1040, blob: "" });
+
+  /* Row marks for the maintenance inbox mails: a pale disc with an outline
+     glyph, not the solid alarm discs. "2 documents on the job" is a record,
+     not a warning, and a clay exclamation beside it would read as one. */
+  await disc({ name: "mark-home", glyph: "home", ring: "#eeeceb", ink: { r: 0x6f, g: 0x67, b: 0x63, alpha: 1 }, g: 36 });
+  await disc({ name: "mark-doc", glyph: "file-contract", ring: "#fbe3de", ink: { r: 0xa8, g: 0x5a, b: 0x51, alpha: 1 }, g: 34 });
+
   await hero({ name: "hero-video", art: "video.png", H: 700, drawWidth: 760, blob: "" });
 
   await hero({ name: "hero-digest", art: "digest.png", H: 600, drawWidth: 1130, blob: "" });

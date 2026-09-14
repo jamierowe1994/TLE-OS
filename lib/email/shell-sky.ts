@@ -256,12 +256,19 @@ export interface SkyListOpts {
    */
   rowsLead?: string | { text: string; tone?: "attention" | "good" }[];
   /**
-   * Each row on its own tinted card rather than hairlines inside one white
-   * panel. For a list where the tone IS the information: a digest of things
-   * that went wrong and things that went right is two lists, and a reader
-   * should be able to tell them apart without reading either.
+   * How the list is drawn.
+   *
+   *   panel  one white box with a hairline edge, rows divided by rules.
+   *          The default, and right when the rows are a list to work.
+   *   cards  each row on its own tinted card, for a list where the TONE is
+   *          the information - a digest of what went wrong beside what went
+   *          right is two lists, and a reader should tell them apart without
+   *          reading either.
+   *   bare   no box at all, each row held by a coloured rule down its left.
+   *          For a short record rather than a list of jobs: two lines about
+   *          one thing do not need a container drawn round them.
    */
-  rowCards?: boolean;
+  rowStyle?: "panel" | "cards" | "bare";
   /**
    * Heading above the picture, the paragraph below it. The default order -
    * picture, heading, paragraph - suits a mail whose drawing sets the scene;
@@ -301,17 +308,24 @@ export interface SkyListOpts {
 
 /** One row: marker, words, badge, chevron. Four cells, because there is no
  *  other way to put four things on a line that Outlook will agree to. */
-function listRow(r: ShellRow, href: string | undefined, last: boolean, card = false, marker = true): string {
+function listRow(r: ShellRow, href: string | undefined, last: boolean, style: "panel" | "cards" | "bare", marker = true): string {
+  const card = style === "cards";
+  const bare = style === "bare";
   const urgent = r.pillTone !== "calm";
   /* On a card the row carries its own colour; in a panel it sits on white. */
   const bg = !card ? PANEL : r.tone === "attention" ? "#fdeeea" : r.tone === "good" ? "#edf1e7" : "#f7f5f4";
+  /* The rule down the left of a bare row, which is the only thing carrying
+     its tone once the box is gone - and the reason the words beside it stay
+     grey. A bare row is a record, and clay text in a record reads as a
+     problem with it. */
+  const rule = r.tone === "attention" ? "#d79a90" : r.tone === "good" ? "#9aab86" : "#d8d3d0";
   /* The marker follows the row's own state first and its timing second:
      something already done is a tick, something gone is an exclamation, and
      only the rest get the clock. A row with no badge at all - a single
      "what happens next" - would otherwise have taken the exclamation by
      default and read as a problem. */
   const disc =
-    r.tone === "good" ? "disc-good.png" : r.tone === "attention" || urgent ? "disc-attention.png" : "disc-ok.png";
+    r.icon ?? (r.tone === "good" ? "disc-good.png" : r.tone === "attention" || urgent ? "disc-attention.png" : "disc-ok.png");
   const title = esc(r.title);
   const words = `
                     <p style="margin:0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.3;font-weight:700;color:#1c1917;background-color:${bg}">${
@@ -319,10 +333,10 @@ function listRow(r: ShellRow, href: string | undefined, last: boolean, card = fa
                     }</p>${(r.details ?? (r.detail ? [r.detail] : []))
                       .map(
                         (d) => `
-                    <p style="margin:4px 0 0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13.5px;line-height:1.45;color:${r.tone === "attention" ? "#b3655b" : "#7d736e"};background-color:${bg}">${esc(d)}</p>`
+                    <p style="margin:4px 0 0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13.5px;line-height:1.45;color:${r.tone === "attention" && !bare ? "#b3655b" : "#7d736e"};background-color:${bg}">${esc(d)}</p>`
                       )
                       .join("")}`;
-  const pad = card ? "18px 18px" : "16px 0";
+  const pad = card ? "18px 18px" : bare ? "14px 0" : "16px 0";
   return `
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%${card ? ";border-radius:16px" : ""}" bgcolor="${bg}">
                 <tr>
@@ -335,7 +349,13 @@ ${
                   </td>`
                       : ""
                   }
-                  <td valign="middle" align="left" style="padding:${pad};padding-left:${marker ? 0 : card ? 18 : 2}px;text-align:left;background-color:${bg}${!marker && card ? ";border-radius:16px 0 0 16px" : ""}">${words}
+${
+                    bare
+                      ? `
+                  <td width="3" bgcolor="${rule}" style="width:3px;background-color:${rule};font-size:0;line-height:0">&nbsp;</td>`
+                      : ""
+                  }
+                  <td valign="middle" align="left" style="padding:${pad};padding-left:${bare ? 16 : marker ? 0 : card ? 18 : 2}px;text-align:left;background-color:${bg}${!marker && card ? ";border-radius:16px 0 0 16px" : ""}">${words}
                   </td>${
                     r.pill
                       ? `
@@ -358,9 +378,9 @@ ${
               </table>${
                 last
                   ? ""
-                  : card
+                  : card || bare
                     ? `
-              <div style="height:12px;line-height:12px;font-size:0">&nbsp;</div>`
+              <div style="height:${card ? 12 : 8}px;line-height:${card ? 12 : 8}px;font-size:0">&nbsp;</div>`
                     : `
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%"><tr><td height="1" bgcolor="${HAIR}" style="background-color:${HAIR};height:1px;line-height:1px;font-size:0">&nbsp;</td></tr></table>`
               }`;
@@ -380,6 +400,7 @@ function leadLine(lead: NonNullable<SkyListOpts["rowsLead"]>, bg: string): strin
 export function skyListShell(o: SkyListOpts): string {
   const safe = esc(o.link);
   const rows = o.rows ?? [];
+  const style = o.rowStyle ?? "panel";
 
   const heroRow = o.hero
     ? `
@@ -443,11 +464,11 @@ ${
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%">
               <tr>
                 <td bgcolor="#ffffff" style="${
-                  o.rowCards
-                    ? "padding:0;background-color:#ffffff"
-                    : `padding:22px 24px 24px;background-color:${PANEL};border:1px solid ${PANEL_EDGE};border-radius:20px`
-                }">${o.rowsLead ? leadLine(o.rowsLead, o.rowCards ? "#ffffff" : PANEL) : ""}${rows
-                  .map((r, i) => listRow(r, o.rowHref, i === rows.length - 1, o.rowCards, o.rowMarkers !== false))
+                  style === "panel"
+                    ? `padding:22px 24px 24px;background-color:${PANEL};border:1px solid ${PANEL_EDGE};border-radius:20px`
+                    : "padding:0;background-color:#ffffff"
+                }">${o.rowsLead ? leadLine(o.rowsLead, style === "panel" ? PANEL : "#ffffff") : ""}${rows
+                  .map((r, i) => listRow(r, o.rowHref, i === rows.length - 1, style, o.rowMarkers !== false))
                   .join("")}
                 </td>
               </tr>

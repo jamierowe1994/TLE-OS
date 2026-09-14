@@ -1,5 +1,6 @@
 import "server-only";
 import { emailShell, type ShellRow } from "@/lib/email/shell";
+import { skyListShell } from "@/lib/email/shell-sky";
 import { pounds, type WorksOrder } from "@/lib/works-orders";
 import type { AgentEmail } from "@/lib/email/agent-emails";
 
@@ -68,7 +69,7 @@ export function complianceJobEmail(o: WorksOrder, trigger: "done" | "document", 
   const docs = o.files ?? [];
   const kindWord = o.kind === "planned" ? o.category : "Repair";
   const rows: ShellRow[] = [
-    { title: where(o), detail: `${kindWord} · job #${o.ref}${o.landlord ? ` · landlord ${o.landlord}` : ""}`, tone: "neutral" },
+    { title: where(o), detail: `${kindWord} · job #${o.ref}${o.landlord ? ` · landlord ${o.landlord}` : ""}`, tone: "neutral", icon: "mark-home.png" },
   ];
 
   let heading: string, intro: string, subject: string;
@@ -76,29 +77,33 @@ export function complianceJobEmail(o: WorksOrder, trigger: "done" | "document", 
     subject = `Document on job #${o.ref}: ${file?.name ?? "a file"} - ${where(o)}`;
     heading = `A document has landed on job #${o.ref}`;
     intro = `${file?.by || "Somebody"} added a document to a job that is already finished. It is on the job with the rest of the paperwork.`;
-    rows.push({ title: file?.name ?? "a file", detail: "Open the job to read or download it", tone: "attention" });
+    rows.push({ title: file?.name ?? "a file", detail: "Open the job to read or download it", tone: "attention", icon: "mark-doc.png" });
   } else {
     subject = `${kindWord} done at ${where(o)} - job #${o.ref}`;
     heading = `Job #${o.ref} is done`;
     intro = `${o.title}${o.contractorName ? `, done by ${o.contractorName}` : ""}${o.completedAt ? ` on ${when(o.completedAt)}` : ""}.${o.completionNote ? ` ${o.completionNote}` : ""}`;
     rows.push(
       docs.length
-        ? { title: `${docs.length} document${docs.length === 1 ? "" : "s"} on the job`, detail: docs.map((d) => d.name).join(" · "), tone: "attention" }
-        : { title: "No documents yet", detail: "Anything added from here on is sent over as it lands", tone: "neutral" }
+        ? { title: `${docs.length} document${docs.length === 1 ? "" : "s"} on the job`, detail: docs.map((d) => d.name).join(" · "), tone: "attention", icon: "mark-doc.png" }
+        : { title: "No documents yet", detail: "Anything added from here on is sent over as it lands", tone: "neutral", icon: "mark-doc.png" }
     );
   }
 
   return {
     subject,
-    html: emailShell({
+    html: skyListShell({
       heading,
       intro,
       rows,
       rowsLead: "The job",
+      /* Bare rows: this is a record of one job, not a list to work through,
+         and two lines about one thing do not need a box drawn round them. */
+      rowStyle: "bare",
       button: "Open the job",
       link: jobLink(o.id),
-      image: "illustrations/email/certificates.gif",
-      footnote: "Sent because the job finished. Nothing goes over while a job is still open.",
+      hero: "hero-job.png",
+      tip: "Sent because the job finished. Nothing goes over while a job is still open.",
+      tipQuiet: true,
     }),
     text: `${heading}. ${o.title} at ${where(o)}. Job #${o.ref}. Open: ${jobLink(o.id)}`,
   };

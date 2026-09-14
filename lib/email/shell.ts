@@ -93,6 +93,12 @@ export interface ShellRow {
    * `detail` is the single-line form and still works on its own.
    */
   details?: string[];
+  /**
+   * A file in /email/sky to use instead of the marker the tone would pick.
+   * For rows that are a RECORD rather than a warning - "2 documents on the
+   * job" wants a document, not a clay exclamation.
+   */
+  icon?: string;
 }
 
 export interface ShellOpts {

@@ -211,7 +211,7 @@ export function pretenancyDigestEmail(alerts: DealAlert[]): AgentEmail {
       /* Cards rather than one panel: this is the only list with two kinds of
          thing in it, and which kind a row is should be readable before the
          row is. */
-      rowCards: true,
+      rowStyle: "cards",
       /* Heading first here: the drawing illustrates a morning the heading has
          already named, so it reads better once you know what it is of. */
       headingFirst: true,
