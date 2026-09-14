@@ -84,6 +84,10 @@ function head(): string {
     /* Three columns become three lines. At 330px each reassurance was four
        words over four lines, which is slower to read than the paragraph it
        replaced. The dividers between them go with the columns. */
+    /* The marker and the arrow give up width on a phone so the address does
+       not wrap after two words. */
+    .sky-rowico { width:50px !important; }
+    .sky-rowchev { width:18px !important; }
     .sky-say { display:block !important; width:100% !important; padding:12px 8px !important; box-sizing:border-box !important; }
     /* The aside's glyph gives up most of its column on a phone: at 330px it
        was taking a third of the width off four-word lines. */
@@ -243,8 +247,19 @@ export interface SkyListOpts {
    *  mail that looks deliberately plain than one with a broken box at the top. */
   hero?: string;
   rows?: ShellRow[];
-  /** The small line above the list - "3 properties on your book". */
-  rowsLead?: string;
+  /**
+   * The small line above the list. An ARRAY when the list has two kinds of
+   * thing in it - "2 need a look" in clay beside "1 started paying" in sage,
+   * so the shape of the morning is readable before a single row is.
+   */
+  rowsLead?: string | { text: string; tone?: "attention" | "good" }[];
+  /**
+   * Each row on its own tinted card rather than hairlines inside one white
+   * panel. For a list where the tone IS the information: a digest of things
+   * that went wrong and things that went right is two lists, and a reader
+   * should be able to tell them apart without reading either.
+   */
+  rowCards?: boolean;
   /**
    * Where a row goes when it is pressed. One destination for all of them for
    * now: the chase routes hand these over as formatted STRINGS, so there is
@@ -270,8 +285,10 @@ export interface SkyListOpts {
 
 /** One row: marker, words, badge, chevron. Four cells, because there is no
  *  other way to put four things on a line that Outlook will agree to. */
-function listRow(r: ShellRow, href: string | undefined, last: boolean): string {
+function listRow(r: ShellRow, href: string | undefined, last: boolean, card = false): string {
   const urgent = r.pillTone !== "calm";
+  /* On a card the row carries its own colour; in a panel it sits on white. */
+  const bg = !card ? PANEL : r.tone === "attention" ? "#fdeeea" : r.tone === "good" ? "#edf1e7" : "#f7f5f4";
   /* The marker follows the row's own state first and its timing second:
      something already done is a tick, something gone is an exclamation, and
      only the rest get the clock. A row with no badge at all - a single
@@ -281,26 +298,27 @@ function listRow(r: ShellRow, href: string | undefined, last: boolean): string {
     r.tone === "good" ? "disc-good.png" : r.tone === "attention" || urgent ? "disc-attention.png" : "disc-ok.png";
   const title = esc(r.title);
   const words = `
-                    <p style="margin:0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.3;font-weight:700;color:#1c1917;background-color:${PANEL}">${
+                    <p style="margin:0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.3;font-weight:700;color:#1c1917;background-color:${bg}">${
                       href ? `<a href="${esc(href)}" style="color:#1c1917;text-decoration:none">${title}</a>` : title
-                    }</p>${
-                      r.detail
-                        ? `
-                    <p style="margin:4px 0 0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13.5px;line-height:1.45;color:${r.tone === "attention" ? "#b3655b" : "#7d736e"};background-color:${PANEL}">${esc(r.detail)}</p>`
-                        : ""
-                    }`;
+                    }</p>${(r.details ?? (r.detail ? [r.detail] : []))
+                      .map(
+                        (d) => `
+                    <p style="margin:4px 0 0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13.5px;line-height:1.45;color:${r.tone === "attention" ? "#b3655b" : "#7d736e"};background-color:${bg}">${esc(d)}</p>`
+                      )
+                      .join("")}`;
+  const pad = card ? "18px 18px" : "16px 0";
   return `
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${PANEL}" style="background-color:${PANEL};width:100%">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%${card ? ";border-radius:16px" : ""}" bgcolor="${bg}">
                 <tr>
-                  <td width="56" valign="middle" style="width:56px;padding:16px 0;background-color:${PANEL}">
+                  <td width="${card ? 74 : 56}" valign="middle" align="${card ? "center" : "left"}" class="sky-rowico" style="width:${card ? 74 : 56}px;padding:${pad};background-color:${bg}${card ? ";border-radius:16px 0 0 16px" : ""}">
                     <img src="${ORIGIN}/email/sky/${disc}?v=${ASSET_V}" width="42" height="42" alt=""
                          style="display:block;width:42px;height:42px;border:0;outline:none;text-decoration:none">
                   </td>
-                  <td valign="middle" align="left" style="padding:16px 10px 16px 0;text-align:left;background-color:${PANEL}">${words}
+                  <td valign="middle" align="left" style="padding:${pad};padding-left:0;text-align:left;background-color:${bg}">${words}
                   </td>${
                     r.pill
                       ? `
-                  <td valign="middle" align="right" class="sky-badge" style="padding:16px 0;background-color:${PANEL}">
+                  <td valign="middle" align="right" class="sky-badge" style="padding:${pad};background-color:${bg}">
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="right">
                       <tr>
                         <td bgcolor="${urgent ? "#fbe3de" : "#e7ecdf"}" style="background-color:${urgent ? "#fbe3de" : "#e7ecdf"};border-radius:20px;padding:6px 13px;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:12.5px;font-weight:700;white-space:nowrap;color:${urgent ? "#a85a51" : "#5f6b52"}">${esc(r.pill)}</td>
@@ -312,16 +330,30 @@ function listRow(r: ShellRow, href: string | undefined, last: boolean): string {
 ${
                     href
                       ? `
-                  <td width="22" valign="middle" align="right" style="width:22px;padding:16px 0;background-color:${PANEL};font-family:Inter,Helvetica,Arial,sans-serif;font-size:19px;line-height:1;color:#cbb7b0"><a href="${esc(href)}" style="color:#cbb7b0;text-decoration:none">&rsaquo;</a></td>`
+                  <td width="${card ? 34 : 22}" valign="middle" align="right" class="sky-rowchev" style="width:${card ? 34 : 22}px;padding:${pad};padding-left:0;background-color:${bg}${card ? ";border-radius:0 16px 16px 0" : ""};font-family:Inter,Helvetica,Arial,sans-serif;font-size:19px;line-height:1;color:#cbb7b0"><a href="${esc(href)}" style="color:#cbb7b0;text-decoration:none">&rsaquo;</a></td>`
                       : ""
                   }
                 </tr>
               </table>${
                 last
                   ? ""
-                  : `
+                  : card
+                    ? `
+              <div style="height:12px;line-height:12px;font-size:0">&nbsp;</div>`
+                    : `
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%"><tr><td height="1" bgcolor="${HAIR}" style="background-color:${HAIR};height:1px;line-height:1px;font-size:0">&nbsp;</td></tr></table>`
               }`;
+}
+
+/** The line above the list. One colour, or two when the morning has two
+ *  kinds of thing in it. */
+function leadLine(lead: NonNullable<SkyListOpts["rowsLead"]>, bg: string): string {
+  const parts = typeof lead === "string" ? [{ text: lead, tone: undefined }] : lead;
+  const ink = (t?: string) => (t === "attention" ? "#b3655b" : t === "good" ? "#5f7050" : "#a8a29e");
+  return `
+                  <p style="margin:0 0 12px;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.4;letter-spacing:0.09em;text-transform:uppercase;font-weight:700;color:#a8a29e;background-color:${bg}">${parts
+                    .map((p, i) => `${i ? ` <span style="color:#cfc8c5">&nbsp;·&nbsp;</span> ` : ""}<span style="color:${ink(p.tone)}">${esc(p.text)}</span>`)
+                    .join("")}</p>`;
 }
 
 export function skyListShell(o: SkyListOpts): string {
@@ -378,12 +410,13 @@ ${
                  cannot square it off from within either. -->
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%">
               <tr>
-                <td bgcolor="${PANEL}" style="padding:22px 24px 24px;background-color:${PANEL};border:1px solid ${PANEL_EDGE};border-radius:20px">${
-                  o.rowsLead
-                    ? `
-                  <p style="margin:0 0 10px;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:11px;line-height:1.4;letter-spacing:0.09em;text-transform:uppercase;font-weight:700;color:#a8a29e;background-color:${PANEL}">${esc(o.rowsLead)}</p>`
-                    : ""
-                }${rows.map((r, i) => listRow(r, o.rowHref, i === rows.length - 1)).join("")}
+                <td bgcolor="#ffffff" style="${
+                  o.rowCards
+                    ? "padding:0;background-color:#ffffff"
+                    : `padding:22px 24px 24px;background-color:${PANEL};border:1px solid ${PANEL_EDGE};border-radius:20px`
+                }">${o.rowsLead ? leadLine(o.rowsLead, o.rowCards ? "#ffffff" : PANEL) : ""}${rows
+                  .map((r, i) => listRow(r, o.rowHref, i === rows.length - 1, o.rowCards))
+                  .join("")}
                 </td>
               </tr>
             </table>

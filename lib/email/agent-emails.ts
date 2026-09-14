@@ -172,31 +172,52 @@ export function pretenancyDigestEmail(alerts: DealAlert[]): AgentEmail {
   const good = groups.filter((g) => g[0].tone !== "attention");
   const row = (g: DealAlert[]): ShellRow => ({
     title: g[0].address + (g[0].agentName ? ` · ${g[0].agentName}` : ""),
-    detail: g.map((a) => a.text).join(" · "),
+    /* One line each. A stalled deal trips two or three checks at once, and
+       joined with dots they read as one long sentence about nothing. */
+    details: g.map((a) => a.text),
     tone: g[0].tone === "attention" ? "attention" : "good",
   });
   const rows = [...attention.map(row), ...good.map(row)];
   const n = alerts.length;
   const subject = `Pre-tenancy: ${n} thing${n === 1 ? "" : "s"} to look at`;
-  const lead =
-    attention.length && good.length
-      ? `${attention.length} need${attention.length === 1 ? "s" : ""} a look · ${good.length} started paying`
-      : attention.length
-        ? `${attention.length} propert${attention.length === 1 ? "y needs" : "ies need"} a look`
-        : `${good.length} tenanc${good.length === 1 ? "y has" : "ies have"} started paying`;
+  /* Two halves, each in its own colour, so the shape of the morning reads
+     before a single row does. */
+  const lead: { text: string; tone?: "attention" | "good" }[] = [];
+  if (attention.length) {
+    lead.push({
+      text: good.length
+        ? `${attention.length} need${attention.length === 1 ? "s" : ""} a look`
+        : `${attention.length} propert${attention.length === 1 ? "y needs" : "ies need"} a look`,
+      tone: "attention",
+    });
+  }
+  if (good.length) {
+    lead.push({
+      text: attention.length
+        ? `${good.length} started paying`
+        : `${good.length} tenanc${good.length === 1 ? "y has" : "ies have"} started paying`,
+      tone: "good",
+    });
+  }
   const link = `${SITE}/pre-tenancy/dashboard`;
   return {
     subject,
-    html: emailShell({
+    html: skyListShell({
       heading: "This morning's pre-tenancy",
       intro:
         "Each of these is a disagreement between what the pipeline says and what PayProp shows. Nothing here is a tick somebody made - it is money and paperwork that did or did not arrive.",
       rows,
       rowsLead: lead,
+      /* Cards rather than one panel: this is the only list with two kinds of
+         thing in it, and which kind a row is should be readable before the
+         row is. */
+      rowCards: true,
+      rowHref: link,
       button: "Open the board",
       link,
-      image: "illustrations/email/digest.gif",
-      footnote: "A property drops off the list by itself once the record and the money agree.",
+      hero: "hero-digest.png",
+      tip: "A property drops off the list by itself once the record and the money agree.",
+      tipQuiet: true,
     }),
     text: digestText(alerts),
   };

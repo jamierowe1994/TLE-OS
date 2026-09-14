@@ -275,6 +275,11 @@ if (cutArg > -1) {
   });
 
   await disc({ name: "disc-attention", glyph: BANG, ring: "#c0736a", ink: { r: 255, g: 255, b: 255, alpha: 1 }, g: 34 });
+  /* Both of these arrive with their own watercolour ground painted in, so
+     neither gets a shape behind it - a vector blob under a painted one reads
+     as two grounds. */
+  await hero({ name: "hero-digest", art: "digest.png", H: 600, drawWidth: 1130, blob: "" });
+
   /* The set-up mail's drawing arrives with its own watercolour ground under
      it, so this one gets no shape behind - a vector blob under a painted
      one reads as two grounds. */

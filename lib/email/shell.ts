@@ -86,6 +86,13 @@ export interface ShellRow {
   pill?: string;
   /** Clay when it is close or already gone, sage when there is time. */
   pillTone?: "urgent" | "calm";
+  /**
+   * Several things wrong with the same property, one per line. The digest
+   * groups by address, and one stalled deal trips two or three checks at
+   * once - joined with dots they read as one long sentence about nothing.
+   * `detail` is the single-line form and still works on its own.
+   */
+  details?: string[];
 }
 
 export interface ShellOpts {
