@@ -265,6 +265,16 @@ export default function AppraisalTrack({
   const [deck, setDeck] = useState<{ url: string; missing: string[] } | null>(null);
   const [deckError, setDeckError] = useState<string | null>(null);
   const [minting, setMinting] = useState(false);
+  /**
+   * Their one-time way in, minted when the after-visit email is opened.
+   *
+   * James, 14 Sep: "when they get their presentation, it'll be a one-time
+   * link." Asked for at COMPOSE time rather than held on the record, because
+   * it lasts a day and is spent on first use - one kept on the appraisal would
+   * be stale by the time anybody looked at it, and a dead link in a landlord's
+   * hand is worse than a sign-in page.
+   */
+  const [landlordLink, setLandlordLink] = useState<string | null>(null);
 
   /**
    * THE FIGURE LIVES ON THE APPRAISAL, NOT IN THIS CASE.
@@ -319,6 +329,24 @@ export default function AppraisalTrack({
       live = false;
     };
   }, [appraisalId]);
+
+  /* Minted on the way into the after-visit email and nowhere else. A failure is
+     QUIET on purpose: the email still goes, without that paragraph, because an
+     agent must not be stopped from writing to their own landlord by a token
+     that could not be made. */
+  useEffect(() => {
+    if (composing !== "post" || landlordLink || !appraisalId) return;
+    let off = false;
+    void fetch(`/api/appraisals/${encodeURIComponent(appraisalId)}/landlord-link`, { method: "POST" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; url?: string }) => {
+        if (!off && j.ok && j.url) setLandlordLink(j.url);
+      })
+      .catch(() => {});
+    return () => {
+      off = true;
+    };
+  }, [composing, appraisalId, landlordLink]);
 
   /** What to SHOW: the appraisal's figure, else the legacy one on the case. */
   const shownValuation = figure ? figure.valuation : (c.valuation ?? null);
@@ -1104,7 +1132,7 @@ export default function AppraisalTrack({
                      one-time link, and the first landing is the welcome that
                      sets the account up. That is the backup path James asked
                      for on 14 Sep for landlords who never made an account. */
-                  fileUrl: typeof window !== "undefined" ? `${window.location.origin}/landlord/sign-in` : null,
+                  fileUrl: landlordLink,
                 })
           }
           attachments={c.docs}
