@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { SAGE_INK, SAGE_WASH } from "@/components/ListingTags";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import DiaryGrid from "@/components/DiaryGrid";
@@ -639,8 +640,55 @@ export default function ViewingDrawer({
                 </p>
               </Card>
 
-              {/* ── The completion machine. ── */}
-              {past && completing === "choose" && (
+              {/* ── WHAT REX ALREADY HOLDS ──────────────────────────────
+                  The team writes viewing feedback up in REX, in REX's own
+                  Feedback service, and the OS never showed a word of it - it
+                  read the linked record as a yes/no and dropped the rest. So
+                  an agent opening a viewing that HAD been written up was
+                  asked to write it up again.
+
+                  Shown in REX's words, not translated. An interest level of
+                  Hot/Warm/Cold is not the same question as the OS's
+                  Applying/Thinking/Not for them, and mapping one onto the
+                  other would put words in a viewer's mouth. */}
+              {past && appt.feedback && (
+                <Card title="What they said" icon="message">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {appt.feedback.interest && (
+                      <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: SAGE_WASH, color: SAGE_INK }}>
+                        {appt.feedback.interest}
+                      </span>
+                    )}
+                    {appt.feedback.type && (
+                      <span className="rounded-full border border-line/60 px-2.5 py-1 text-[11px] text-muted">{appt.feedback.type}</span>
+                    )}
+                    {appt.feedback.date && (
+                      <span className="text-[11px] text-muted">
+                        {new Date(`${appt.feedback.date}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                      </span>
+                    )}
+                  </div>
+                  {appt.feedback.note ? (
+                    <p className="mt-3 whitespace-pre-line border-t border-line/50 pt-2.5 text-[12.5px] leading-relaxed">{appt.feedback.note}</p>
+                  ) : (
+                    /* A feedback record with no words is common and is its own
+                       fact: somebody logged the viewing, nobody wrote it up. */
+                    <p className="mt-3 border-t border-line/50 pt-2.5 text-[12px] text-muted">
+                      Logged in REX, with nothing written down.
+                    </p>
+                  )}
+                  <p className="mt-2.5 text-[10.5px] text-muted">
+                    {[appt.feedback.who.join(", "), appt.feedback.agent ? `recorded by ${appt.feedback.agent}` : null]
+                      .filter(Boolean)
+                      .join(" · ") || "From REX"}
+                  </p>
+                </Card>
+              )}
+
+              {/* ── The completion machine. Not offered when REX already has
+                     the feedback: asking twice is how two versions of the same
+                     viewing end up on the record. ── */}
+              {past && !appt.feedback && completing === "choose" && (
                 <Card title="Complete the viewing" icon="checklist">
                   <p className="mb-3 text-[12px] text-muted">First things first — did they turn up?</p>
                   <div className="flex gap-2.5">
@@ -664,7 +712,7 @@ export default function ViewingDrawer({
                 </Card>
               )}
 
-              {past && completing === "show-form" && (
+              {past && !appt.feedback && completing === "show-form" && (
                 <Card title="How did it land?" icon="message">
                   <div className="space-y-1.5">
                     {FEEDBACK_OPTIONS.map((o) => (

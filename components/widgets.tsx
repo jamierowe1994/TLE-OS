@@ -13,7 +13,7 @@ import { FlowTag, Pill } from "@/components/Wire";
    gone on purpose: the sample book must not be reachable from the dashboard,
    or the next tile added quietly reaches for it too. SAMPLE_DIARY had already
    been dead for a while and nobody noticed. */
-import { VIEWING_OUTCOMES, minutesOf, type Appt } from "@/lib/diary";
+import { minutesOf, feedbackLabel, type Appt } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 import { dueWithin, CERT_META } from "@/lib/compliance";
 import type { Lead } from "@/lib/leads-sample";
@@ -1414,13 +1414,18 @@ function ViewingsWeekWidget({ w, h }: { w: number; h: number }) {
         list.slice(0, h >= 2 ? 4 : 2).map((v) => ({
           a: upcoming ? (v.day === 0 ? v.start : `+${v.day}d`) : `${-v.day}d ago`,
           b: v.what.replace(/^[^—]+—\s*/, ""),
-          c: upcoming ? v.who : (VIEWING_OUTCOMES[v.id] ?? "feedback due"),
+          c: upcoming ? v.who : feedbackLabel(v.feedback),
         }));
       return (
         <>
           <Head icon="key" label="Viewings" />
           {w === 1 && h === 1 ? (
-            <BigCount value={String(week.length)} hint={`${past.length} done — ${Object.values(VIEWING_OUTCOMES).filter((o) => o === "Applying").length} applying`} />
+            /* "N applying" used to count a hardcoded map of sample ids, so it
+               printed 1 for ever, on every book, whatever the week held. It
+               counts the real feedback now - and says "written up" rather
+               than "applying", because a feedback record says somebody wrote
+               the viewing up, not that the viewer is applying. */
+            <BigCount value={String(week.length)} hint={`${past.length} done — ${past.filter((v) => v.feedback).length} written up`} />
           ) : (
             <div className={w >= 2 ? "mt-4 grid grid-cols-2 gap-5" : "mt-4"}>
               <div>

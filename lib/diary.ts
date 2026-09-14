@@ -78,7 +78,31 @@ export type Appt = {
    *  appointment has no confirmation trail and no occupancy on it, and the
    *  screen must say so rather than imply all is well. */
   fromRex?: boolean;
+  /**
+   * What was said afterwards, out of REX - see lib/rex-feedback.ts.
+   *
+   * Three states, and they are three different facts:
+   *   undefined - we have not looked (an upcoming viewing, a sample row)
+   *   null      - we looked and REX holds nothing: feedback really is due
+   *   an object - REX holds a record. It may still have no words in it.
+   */
+  feedback?: ViewingFeedback | null;
 };
+
+/**
+ * The one-line label for a past viewing's feedback.
+ *
+ * Kept here rather than in each screen because three of them ask the same
+ * question and were free to answer it differently. The order matters: REX's
+ * own interest level first where somebody set one, then the fact that a
+ * write-up exists, and only then "feedback due" - which now means REX really
+ * holds nothing, rather than "we never looked".
+ */
+export function feedbackLabel(f: ViewingFeedback | null | undefined): string {
+  if (f == null) return "feedback due";
+  if (f.interest) return f.interest;
+  return f.note ? "written up" : "logged";
+}
 
 export const KIND_META: Record<ApptKind, { label: string; icon: string }> = {
   viewing: { label: "Viewing", icon: "key" },
@@ -124,6 +148,18 @@ export const DIARY: Appt[] = [
     contact: { email: "olivia.clark@btinternet.com", phone: "07700 900112" }, tenant: null,
     link: { href: "/listings", label: "2, 10 Cardiff Grove" },
     comms: [sent("Confirmation to Olivia Clark")],
+    /* The sample book's one written-up viewing, so the Feedback in tile has
+       something to show on a machine with no REX. Shaped exactly like the
+       real thing rather than a bare label - see ViewingFeedback. */
+    feedback: {
+      id: "sample-clark",
+      date: null,
+      type: "Viewing",
+      interest: "Hot",
+      note: "Loved the kitchen and the garden. Asked how quickly they could move in.",
+      who: ["Olivia Clark"],
+      agent: "Kirstie",
+    },
   },
 
   /* Today: an appraisal and two viewings — one of them tenanted with the
@@ -175,13 +211,35 @@ export function todaysAppts(): Appt[] {
  * Feedback on past viewings — the stand-in for REX outcomes, which we cannot
  * read yet.
  *
- * Keyed on SAMPLE ids only, and deliberately left that way. A live viewing's
- * id is `rex-<id>` and will never match, so against a real book every past
- * viewing reads "feedback due" — which is the honest answer, because nobody
- * has told us how it went. The two ids for viewings removed in the thinning
- * are gone; a key with no appointment behind it is just a trap for the next
- * person wondering why it never shows.
+ * GONE, 14 Sep 2026, and the reasoning it carried with it is worth keeping.
+ *
+ * This was a map of one sample id. The note above it said a live viewing's id
+ * is `rex-<id>` and will never match, so every past viewing reads "feedback
+ * due" - "which is the honest answer, because nobody has told us how it
+ * went."
+ *
+ * That was true when it was written and is not true now. REX holds over
+ * 10,000 feedback records on this account, the team is still writing them
+ * daily, and 40 of the 412 past viewings on the current rental book have one
+ * attached. So the screen was not being honest, it was being blind: "Feedback
+ * in: 0" could never have shown anything else, whatever the team did.
+ *
+ * Feedback now travels ON the appointment, out of REX - see `feedback` on
+ * Appt below and lib/rex-feedback.ts.
  */
-export const VIEWING_OUTCOMES: Record<string, "Applying" | "Thinking" | "Not for them"> = {
-  "d-past-clark": "Applying",
-};
+
+/** What was said after a viewing, in REX's own words. See lib/rex-feedback.ts. */
+export interface ViewingFeedback {
+  id: string;
+  /** ISO date REX recorded it against. */
+  date: string | null;
+  /** Viewing | Enquiry | Price Reduction. */
+  type: string | null;
+  /** REX's own Hot / Warm / Cold, where somebody set one. Usually null. */
+  interest: "Hot" | "Warm" | "Cold" | null;
+  /** What they actually said. Often null - a logged viewing with no write-up. */
+  note: string | null;
+  /** Who it came from. */
+  who: string[];
+  agent: string | null;
+}

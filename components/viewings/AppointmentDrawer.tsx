@@ -339,14 +339,35 @@ export default function AppointmentDrawer({
           )}
 
           {/* ── Feedback, once it has happened. ── */}
+          {/* WHAT THEY SAID, out of REX.
+              This read an `outcome` prop that came from a hardcoded map of
+              sample ids, so on a real book it was always empty and every past
+              viewing said "nobody has written down what was said" - including
+              the ones somebody HAD written up, in REX, that morning. The words
+              live in REX's Feedback service; see lib/rex-feedback.ts. */}
           {appt.kind === "viewing" && past && (
             <Section icon="message" title="Feedback">
-              {outcome ? (
-                <p>
-                  <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: SAGE_WASH, color: SAGE_INK }}>
-                    {outcome}
-                  </span>
-                </p>
+              {appt.feedback ? (
+                <>
+                  <p className="flex flex-wrap items-center gap-2">
+                    {appt.feedback.interest && (
+                      <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: SAGE_WASH, color: SAGE_INK }}>
+                        {appt.feedback.interest}
+                      </span>
+                    )}
+                    {appt.feedback.date && (
+                      <span className="text-[11px] text-muted">
+                        {new Date(`${appt.feedback.date}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                      </span>
+                    )}
+                  </p>
+                  {appt.feedback.note ? (
+                    <p className="mt-2 whitespace-pre-line leading-relaxed">{appt.feedback.note}</p>
+                  ) : (
+                    <p className="mt-2 text-muted">Logged in REX, with nothing written down.</p>
+                  )}
+                  {appt.feedback.agent && <p className="mt-2 text-[11px] text-muted">Recorded by {appt.feedback.agent}</p>}
+                </>
               ) : (
                 <p className="text-muted">Nobody has written down what was said. Record it from the viewing file.</p>
               )}
@@ -360,7 +381,7 @@ export default function AppointmentDrawer({
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={() => onOpenViewing(appt)} className={`${primary} flex-1`}>
                 <DoodleIcon name="folder" size={13} />
-                {past && !outcome ? "Open the viewing and record feedback" : "Open the viewing file"}
+                {past && !appt.feedback ? "Open the viewing and record feedback" : "Open the viewing file"}
               </button>
               {appt.link && (
                 <Link href={appt.link.href} className={secondary} title={appt.link.label}>

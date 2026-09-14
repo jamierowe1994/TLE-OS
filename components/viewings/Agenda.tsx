@@ -3,7 +3,6 @@
 import { useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { KIND_META, type Appt } from "@/lib/diary";
-import type { Outcome } from "@/components/ViewingDrawer";
 import {
   SAGE_INK,
   SAGE_WASH,
@@ -41,13 +40,11 @@ const PAGE = 8;
 
 export function ApptRow({
   a,
-  outcome,
   showDay,
   sentExtra,
   onOpen,
 }: {
   a: Appt;
-  outcome?: Outcome;
   /** Lead with the day rather than the time - for lists that span days. */
   showDay?: boolean;
   sentExtra?: Set<string>;
@@ -62,8 +59,12 @@ export function ApptRow({
   /* One pill, the fact that changes how the agent turns up or what is owed. */
   let pill: React.ReactNode = null;
   if (a.kind === "viewing" && past) {
-    pill = outcome ? (
-      <Pill style={{ background: SAGE_WASH, color: SAGE_INK }}>{outcome}</Pill>
+    /* REX's own word where somebody set an interest level, otherwise the
+       plain fact that it was written up. Sage for done, blush for owed. */
+    pill = a.feedback ? (
+      <Pill style={{ background: SAGE_WASH, color: SAGE_INK }}>
+        {a.feedback.interest ?? (a.feedback.note ? "Feedback in" : "Logged")}
+      </Pill>
     ) : (
       <Pill className="bg-accent-soft text-accent-dark">Feedback due</Pill>
     );
@@ -127,7 +128,6 @@ export default function Agenda({
   upcoming,
   due,
   fedBack,
-  outcomes,
   loading,
   error,
   sentExtra,
@@ -141,7 +141,6 @@ export default function Agenda({
   upcoming: Appt[];
   due: Appt[];
   fedBack: Appt[];
-  outcomes: Record<string, Outcome>;
   loading: boolean;
   error: string | null;
   sentExtra: Set<string>;
@@ -203,7 +202,7 @@ export default function Agenda({
       <>
         <ul>
           {list.slice(0, n).map((a) => (
-            <ApptRow key={a.id} a={a} outcome={outcomes[a.id]} sentExtra={sentExtra} onOpen={onOpen} />
+            <ApptRow key={a.id} a={a} sentExtra={sentExtra} onOpen={onOpen} />
           ))}
         </ul>
         {seeMore(list.length)}
@@ -246,7 +245,7 @@ export default function Agenda({
               </button>
               <ul>
                 {list.map((a) => (
-                  <ApptRow key={a.id} a={a} outcome={outcomes[a.id]} sentExtra={sentExtra} onOpen={onOpen} />
+                  <ApptRow key={a.id} a={a} sentExtra={sentExtra} onOpen={onOpen} />
                 ))}
               </ul>
             </div>
@@ -295,7 +294,7 @@ export default function Agenda({
       <>
         <ul>
           {list.slice(0, n).map((a) => (
-            <ApptRow key={a.id} a={a} outcome={outcomes[a.id]} showDay sentExtra={sentExtra} onOpen={onOpen} />
+            <ApptRow key={a.id} a={a} showDay sentExtra={sentExtra} onOpen={onOpen} />
           ))}
         </ul>
         {seeMore(list.length)}

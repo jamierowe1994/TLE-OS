@@ -13,7 +13,7 @@ import PrintSheet, { type PrintGroup } from "@/components/viewings/PrintSheet";
 import Tiles from "@/components/viewings/Tiles";
 import WeekGrid from "@/components/viewings/WeekGrid";
 import { card, dateOfOffset, fmtFull, fmtShort, groupByDay, nearLabel } from "@/components/viewings/shared";
-import { KIND_META, minutesOf, VIEWING_OUTCOMES, type Appt, type ApptKind } from "@/lib/diary";
+import { KIND_META, minutesOf, type Appt, type ApptKind } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
 
 /**
@@ -42,7 +42,15 @@ import { useDiary } from "@/lib/diary-store";
  * be the wrong answer to "what's going on".
  */
 
-const OUTCOMES: Record<string, Outcome> = VIEWING_OUTCOMES;
+/**
+ * Feedback travels on the appointment now, out of REX.
+ *
+ * This was `VIEWING_OUTCOMES` - a hardcoded map of one sample id. A live
+ * viewing's id is `rex-<id>` and never matched it, so "Feedback in" counted
+ * to zero on every real book no matter what the team wrote, and every past
+ * viewing fell into "Feedback due". See the note in lib/diary.ts.
+ */
+const hasFeedback = (a: Appt) => Boolean(a.feedback);
 
 type TileId = "upcoming" | "today" | "week" | "due" | "in";
 /** What the space beside the month is showing. `day` is a month click. */
@@ -113,8 +121,8 @@ export default function Viewings() {
     () => scoped.filter((a) => a.kind === "viewing" && a.day < 0).sort((a, b) => b.day - a.day || minutesOf(b.start) - minutesOf(a.start)),
     [scoped]
   );
-  const due = useMemo(() => been.filter((a) => !OUTCOMES[a.id]), [been]);
-  const fedBack = useMemo(() => been.filter((a) => Boolean(OUTCOMES[a.id])), [been]);
+  const due = useMemo(() => been.filter((a) => !hasFeedback(a)), [been]);
+  const fedBack = useMemo(() => been.filter(hasFeedback), [been]);
   const today = byDay.get(0) ?? [];
   const week = upcoming.filter((a) => a.day <= 6);
 
@@ -249,7 +257,6 @@ export default function Viewings() {
                   upcoming={upcoming}
                   due={due}
                   fedBack={fedBack}
-                  outcomes={OUTCOMES}
                   loading={loading}
                   error={error}
                   sentExtra={sentExtra}
@@ -288,7 +295,7 @@ export default function Viewings() {
             ) : listMode === "due" || listMode === "in" ? (
               <ul className="cascade">
                 {listRows.map((a) => (
-                  <ApptRow key={a.id} a={a} outcome={OUTCOMES[a.id]} showDay sentExtra={sentExtra} onOpen={(x) => setQuickId(x.id)} />
+                  <ApptRow key={a.id} a={a} showDay sentExtra={sentExtra} onOpen={(x) => setQuickId(x.id)} />
                 ))}
               </ul>
             ) : (
@@ -306,7 +313,7 @@ export default function Viewings() {
                     </div>
                     <ul className="cascade">
                       {list.map((a) => (
-                        <ApptRow key={a.id} a={a} outcome={OUTCOMES[a.id]} sentExtra={sentExtra} onOpen={(x) => setQuickId(x.id)} />
+                        <ApptRow key={a.id} a={a} sentExtra={sentExtra} onOpen={(x) => setQuickId(x.id)} />
                       ))}
                     </ul>
                   </div>
@@ -317,11 +324,10 @@ export default function Viewings() {
         </div>
       )}
 
-      <PrintSheet owner={owner} groups={printGroups} outcomes={OUTCOMES} />
+      <PrintSheet owner={owner} groups={printGroups} />
 
       <AppointmentDrawer
         appt={quick}
-        outcome={quick ? OUTCOMES[quick.id] : undefined}
         onClose={() => setQuickId(null)}
         onOpenViewing={(a) => {
           setQuickId(null);
@@ -333,7 +339,6 @@ export default function Viewings() {
 
       <ViewingDrawer
         appt={full}
-        outcome={full ? OUTCOMES[full.id] : undefined}
         onClose={() => setFullId(null)}
         sentExtra={sentExtra}
         onSend={(id, label) => setSentExtra((cur) => new Set(cur).add(`${id}:${label}`))}

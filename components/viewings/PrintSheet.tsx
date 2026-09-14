@@ -43,7 +43,12 @@ const CSS = `
 }
 `;
 
-function accessLine(a: Appt, outcome?: Outcome): string {
+/* `outcome` here is the printed word for how the viewing went. It used to
+   come from the sample outcomes map; it comes off the appointment's REX
+   feedback now, which is Hot / Warm / Cold or nothing - so the parameter is
+   a plain string rather than the OS's Outcome union, which means something
+   different (what happens next on the spine). */
+function accessLine(a: Appt, outcome?: string): string {
   const bits: string[] = [];
   if (a.kind === "viewing") {
     if (a.tenant) bits.push(`Tenanted: ${a.tenant}`);
@@ -63,12 +68,10 @@ function accessLine(a: Appt, outcome?: Outcome): string {
 export default function PrintSheet({
   owner,
   groups,
-  outcomes,
 }: {
   /** Whose diary this is, for the top of the page. */
   owner: string;
   groups: PrintGroup[];
-  outcomes: Record<string, Outcome>;
 }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -120,7 +123,7 @@ export default function PrintSheet({
                       {a.contact?.phone ? <div className="m">{a.contact.phone}</div> : null}
                     </td>
                     <td className="n">
-                      <div className="m">{accessLine(a, outcomes[a.id])}</div>
+                      <div className="m">{accessLine(a, a.feedback?.interest ?? (a.feedback ? "Feedback in" : undefined))}</div>
                     </td>
                   </tr>
                 ))}

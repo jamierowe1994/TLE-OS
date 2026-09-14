@@ -1,6 +1,7 @@
 import "server-only";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import type { Appt, ApptKind } from "@/lib/diary";
+import { feedbackByIds } from "@/lib/rex-feedback";
 
 /**
  * The lettings team's diary, live from REX.
@@ -42,6 +43,9 @@ interface RexEvent extends Record<string, unknown> {
   event_location?: { description?: string | null; latitude?: string | null; longitude?: string | null } | null;
   calendar?: { owner_user?: { name?: string; email_address?: string } | null } | null;
   organiser_user?: { name?: string; email_address?: string } | null;
+  /** What the event is attached to: the listing, the contacts and - the one
+   *  this file cares about - the feedback written up afterwards. */
+  records?: { id?: string | number; service?: string }[] | null;
 }
 
 function ownerOf(e: RexEvent): { name: string; email: string } {
@@ -96,6 +100,12 @@ function dayOffset(iso: string): number {
 function hhmm(iso: string): string {
   const d = new Date(iso);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** The id of the feedback record REX has hung off this event, if any. */
+function feedbackIdOf(e: RexEvent): string | null {
+  const r = (e.records ?? []).find((x) => x?.service === "Feedback" && x.id != null);
+  return r?.id != null ? String(r.id) : null;
 }
 
 function toAppt(e: RexEvent): Appt | null {
@@ -226,6 +236,32 @@ export async function fetchDiary(): Promise<DiaryBook> {
   });
   const ours = inWindow.filter((e) => isOurs(e) && !e.is_cancelled);
   const appts = ours.map(toAppt).filter((a): a is Appt => a !== null);
+
+  /* ── WHAT WAS SAID AFTERWARDS ────────────────────────────────────────────
+     REX puts feedback in its own service and hangs only an id off the event,
+     so the words cost one more call - batched, for every event in the book at
+     once, because REX takes ~15s a call and sixty separate reads would be
+     twenty minutes.
+
+     Only PAST viewings are asked about. A viewing that has not happened
+     cannot have feedback, and `undefined` on those is the right answer: the
+     screen distinguishes "not looked" from "looked, nothing there". */
+  const wants = new Map<string, string>(); // appt id -> feedback id
+  for (const e of ours) {
+    const a = toAppt(e);
+    if (!a || a.kind !== "viewing" || a.day >= 0) continue;
+    const fid = feedbackIdOf(e);
+    if (fid) wants.set(a.id, fid);
+  }
+  const found = await feedbackByIds([...wants.values()]);
+  const past = new Set(appts.filter((a) => a.kind === "viewing" && a.day < 0).map((a) => a.id));
+  for (const a of appts) {
+    if (!past.has(a.id)) continue;
+    const fid = wants.get(a.id);
+    /* null, not undefined: we looked and REX holds nothing. That is what puts
+       the viewing in "Feedback due" rather than in "we never checked". */
+    a.feedback = (fid ? found.get(fid) : null) ?? null;
+  }
 
   return {
     appts,
