@@ -25,10 +25,14 @@ import { EMPTY_PASSPORT } from "@/lib/passport-shape";
  * answered. Invented here rather than read from anybody's account.
  */
 
+/* Howard, 14 Sep 2026: the samples asked about pets, which the passport
+   already asks on the screen before, and about the notice somebody has to
+   give - a question that means nothing unless they are renting. Examples have
+   to be things no built-in question covers and that anybody can answer. */
 const SAMPLE_QUESTIONS: PassportQuestion[] = [
-  { id: "sample-pets", label: "Do you have a pet?", kind: "yesno", options: [], required: false },
+  { id: "sample-move", label: "How soon could you move in?", kind: "select", options: ["Straight away", "Within a month", "One to three months", "Just looking for now"], required: true },
   { id: "sample-parking", label: "How many parking spaces will you need?", kind: "select", options: ["None", "One", "Two or more"], required: false },
-  { id: "sample-notice", label: "How much notice do you have to give where you are now?", kind: "text", options: [], required: true },
+  { id: "sample-heard", label: "How did you hear about us?", kind: "text", options: [], required: false },
 ];
 
 /* The light palette, pinned. The tenant shell's tokens (globals.css). */
@@ -63,7 +67,10 @@ export default async function PreviewPassport({ params }: { params: Promise<{ to
         <PassportForm
           demo
           token="sample"
-          initial={{ ...EMPTY_PASSPORT, legalName: "Alex Sample", email: "alex.sample@example.com" }}
+          /* Empty, like a real one (Howard, 14 Sep 2026): "Alex Sample" sat in
+             the fields and on the card as something to clear rather than
+             something to read. */
+          initial={EMPTY_PASSPORT}
           submittedAt={null}
           questions={SAMPLE_QUESTIONS}
           agentName="Sam"

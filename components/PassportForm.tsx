@@ -237,11 +237,35 @@ function Choice({ label, hint, value, options, placeholder = "Choose", onChange 
  * plain box that saves what is typed, and says nothing: the tenant cannot
  * fix a missing key and should not be told about one.
  */
+/**
+ * Does this read as somebody's front door, or as the street it is on?
+ *
+ * Howard, 14 Sep 2026: he typed a postcode, picked the result, and got the
+ * street. Google's autocomplete answers a UK postcode with the road rather
+ * than the doors on it - only a Royal Mail PAF provider lists those, and we
+ * have no key for one. So rather than leave him with a street as his address,
+ * the field notices and asks for the number.
+ *
+ * A UK address line starts with a number ("12 Example Street") or a building
+ * word ("Flat 2, 5 Example Street", "Rose Cottage, ...").
+ */
+function looksLikeADoor(a: string): boolean {
+  const first = a.split(",")[0]?.trim() ?? "";
+  if (!first) return false;
+  /* A postcode on its own is the whole area, not a door. */
+  if (/^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i.test(first)) return false;
+  if (/\d/.test(first)) return true;
+  return /^(flat|apartment|apt|unit|room|studio|penthouse|the\s|\S+\s+(cottage|house|lodge|barn|farm|mews|court|manor|villa))/i.test(first);
+}
+
 function TenantAddress({ label, hint, value, onChange, onEnter, onPicked }: { label: string; hint?: string; value: string; onChange: (v: string) => void; onEnter?: () => void; onPicked?: () => void }) {
   const [matches, setMatches] = useState<{ id: string; label: string }[]>([]);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const picked = useRef<string | null>(null);
+  /** Set when what they chose came back as a street rather than a door. */
+  const [needsNumber, setNeedsNumber] = useState(false);
+  const [houseNumber, setHouseNumber] = useState("");
 
   useEffect(() => {
     const q = value.trim();
@@ -277,6 +301,23 @@ function TenantAddress({ label, hint, value, onChange, onEnter, onPicked }: { la
     } catch {
       /* keep what they picked */
     }
+    if (!looksLikeADoor(picked.current ?? label)) {
+      /* Stay here and ask. Moving on would file the street as their home. */
+      setHouseNumber("");
+      setNeedsNumber(true);
+      return;
+    }
+    setNeedsNumber(false);
+    onPicked?.();
+  }
+
+  function addNumber() {
+    const n = houseNumber.trim();
+    if (!n) return;
+    const full = `${n} ${value}`.replace(/\s+,/g, ",");
+    picked.current = full;
+    onChange(full);
+    setNeedsNumber(false);
     onPicked?.();
   }
 
@@ -307,6 +348,30 @@ function TenantAddress({ label, hint, value, onChange, onEnter, onPicked }: { la
             )}
           </span>
         </div>
+        {needsNumber && (
+          <div className="fade-up mt-3 rounded-[12px] border border-line/80 bg-[var(--panel)] p-3.5">
+            <span className="text-[13.5px] font-semibold">That is the street. What is the house number or name?</span>
+            <div className="mt-2 flex gap-2">
+              <input
+                className={input}
+                autoFocus
+                value={houseNumber}
+                placeholder="e.g. 12, or Flat 2"
+                onChange={(e) => setHouseNumber(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") addNumber(); }}
+              />
+              <button
+                type="button"
+                disabled={!houseNumber.trim()}
+                onClick={addNumber}
+                className="shrink-0 rounded-[12px] px-5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+                style={{ background: BROWN }}
+              >
+                Add it
+              </button>
+            </div>
+          </div>
+        )}
         <div className="grid transition-[grid-template-rows] duration-300 ease-out" style={{ gridTemplateRows: open ? "1fr" : "0fr" }}>
           <div className="min-h-0 overflow-hidden">
             <ul className="mt-2 rounded-[12px] border border-line/80 bg-white py-1.5">
@@ -1432,6 +1497,14 @@ export default function PassportForm({
     setSub(toSub);
   }
   const advance = () => {
+    /* NOT past an unanswered one (Howard, 14 Sep 2026): he reached the end,
+       was told a section was missing, and could not remember ever being asked
+       - because Continue had always walked straight past. Optional screens
+       declare done: true, so this only ever stops on a real question. */
+    if (cur && !cur.done && !cur.parts) {
+      setNudge(true);
+      return;
+    }
     /* On a flow, Continue folds the open typed part first. If that was the
        last part, carry on out of the screen; if not, stay for the next. */
     if (cur?.parts) {
@@ -1445,6 +1518,10 @@ export default function PassportForm({
         if (!others.every(complete)) return;
       } else if (open && reopened) {
         setReopened(null);
+        return;
+      }
+      if (!cur.done) {
+        setNudge(true);
         return;
       }
     }
@@ -1462,10 +1539,15 @@ export default function PassportForm({
      say) must not bounce straight off it again; changing that answer here
      must. So the screen remembers the answer it arrived with, and moves on
      when the answer differs from that and counts as done. */
+  /** Said once, under the button, when Continue is pressed with nothing in. */
+  const [nudge, setNudge] = useState(false);
   const arrived = useRef<{ key: string; value: string }>({ key: "", value: "" });
   const curKey = cur ? `${step}/${cur.key}` : "";
   const curDone = cur?.done ?? false;
   const curValue = JSON.stringify(cur?.value ?? null);
+  useEffect(() => {
+    setNudge(false);
+  }, [curKey, curDone]);
   useEffect(() => {
     arrived.current = { key: curKey, value: curValue };
     setReopened(null);
@@ -1572,20 +1654,33 @@ export default function PassportForm({
                 <Arrow />
               </Link>
             ) : (
+              /* Not a dead end (Howard, 14 Sep 2026). It used to sit there
+                 greyed out saying "1 section to go" with no way of finding
+                 out which; pressing it now takes them to the first thing
+                 that is missing. */
               <button
                 type="button"
-                onClick={finish}
-                disabled={!allDone}
-                className={`flex items-center gap-3 rounded-[12px] px-7 py-[var(--pp-field-y)] text-[15px] font-semibold text-white transition-opacity ${allDone ? "hover:opacity-90" : "cursor-not-allowed opacity-40"}`}
-                style={{ background: BROWN }}
+                onClick={() => {
+                  if (allDone) return void finish();
+                  const i = sections.findIndex((sc) => !sc.done(d));
+                  if (i >= 0) go(i, 0, i > step ? 1 : -1);
+                }}
+                className="flex items-center gap-3 rounded-[12px] px-7 py-[var(--pp-field-y)] text-[15px] font-semibold text-white transition-opacity hover:opacity-90"
+                style={{ background: BROWN, opacity: allDone ? 1 : 0.55 }}
               >
-                {finishLabel}
-                {allDone && <Arrow />}
+                {allDone ? finishLabel : `${finishLabel} - take me there`}
+                <Arrow />
               </button>
             )}
             <span className="flex items-center gap-2 text-[13px] text-muted">
               <Lock />
-              {state === "error" ? <span className="text-[#9d4340]">{saveNote}</span> : saveNote}
+              {nudge ? (
+                <span className="text-[#9d4340]">This one is needed before you carry on.</span>
+              ) : state === "error" ? (
+                <span className="text-[#9d4340]">{saveNote}</span>
+              ) : (
+                saveNote
+              )}
             </span>
           </div>
 
