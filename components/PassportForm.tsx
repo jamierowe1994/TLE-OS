@@ -401,11 +401,13 @@ function PhotoField({
   focus,
   onChange,
   onFocus,
+  onSkip,
 }: {
   value: string;
   focus: string;
   onChange: (dataUrl: string) => void;
   onFocus: (focus: string) => void;
+  onSkip: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const drag = useRef<{ x: number; y: number; fx: number; fy: number } | null>(null);
@@ -480,9 +482,14 @@ function PhotoField({
             {busy ? "One moment…" : value ? "Change" : "Choose or take one"}
             <input type="file" accept="image/*" capture="user" className="sr-only" onChange={(e) => void pick(e.target.files?.[0])} />
           </label>
-          {value && (
+          {value ? (
             <button type="button" onClick={() => { onChange(""); onFocus(""); }} className="text-[13px] text-muted underline underline-offset-4 hover:text-ink">
               Remove
+            </button>
+          ) : (
+            /* The way past, next to the way in. */
+            <button type="button" onClick={onSkip} className="text-[13px] text-muted underline underline-offset-4 hover:text-ink">
+              Not just now
             </button>
           )}
         </div>
@@ -828,6 +835,12 @@ type Screen = {
   node: React.ReactNode;
   /** The parts, when the screen is a flow. */
   parts?: Part[];
+  /** What the button says when the screen asks for something nobody has to
+      give. Susan, 13 Sep 2026: she reached the photo and stopped, because
+      the only button on the question said "Choose or take one" and the one
+      underneath said "Continue" - which reads as continue once you have
+      done it. An optional screen has to offer the way past in words. */
+  skipLabel?: string;
 };
 
 export default function PassportForm({
@@ -1073,6 +1086,7 @@ export default function PassportForm({
           {
             key: "photo",
             done: true,
+            skipLabel: d.photo ? undefined : "Carry on without one",
             node: (
               <>
                 <Note>Nice to meet you{firstName ? `, ${firstName}` : ""}.</Note>
@@ -1081,7 +1095,7 @@ export default function PassportForm({
                   <span className="ml-2 rounded-full bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-semibold" style={{ color: BROWN }}>Optional</span>
                   <span className="mt-1 block text-[13px] leading-relaxed text-muted">You can carry on without one.</span>
                   <div className="mt-3">
-                    <PhotoField value={d.photo} focus={d.photoFocus} onChange={(v) => set("photo", v)} onFocus={(f) => set("photoFocus", f)} />
+                    <PhotoField value={d.photo} focus={d.photoFocus} onChange={(v) => set("photo", v)} onFocus={(f) => set("photoFocus", f)} onSkip={() => advanceRef.current()} />
                   </div>
                 </div>
               </>
@@ -1645,7 +1659,7 @@ export default function PassportForm({
                 className="flex items-center gap-3 rounded-[12px] px-7 py-[var(--pp-field-y)] text-[15px] font-semibold text-white transition-opacity hover:opacity-90"
                 style={{ background: BROWN }}
               >
-                {lastScreen && !flowOpenTyped ? "Next step" : "Continue"}
+                {cur?.skipLabel && !flowOpenTyped ? cur.skipLabel : lastScreen && !flowOpenTyped ? "Next step" : "Continue"}
                 <Arrow />
               </button>
             ) : submitted && accountExists && phase === "form" ? (
