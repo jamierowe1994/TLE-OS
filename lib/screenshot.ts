@@ -15,7 +15,7 @@
  * ── What it deliberately does NOT capture ─────────────────────────────────
  *
  * Password fields are blanked before the canvas is drawn, and put back
- * afterwards. html2canvas renders whatever the DOM says, so a password typed
+ * afterwards. The drawing renders whatever the DOM says, so a password typed
  * into a visible input would otherwise be legible in the picture — and a
  * screenshot is exactly the kind of thing that gets forwarded.
  *
@@ -24,6 +24,16 @@
  * The picture is the nice-to-have; the words are the point. Every failure path
  * returns null and the report goes without it. An agent who has just hit a bug
  * should not then hit a second one trying to tell us about the first.
+ *
+ * That includes taking too long. html2canvas, which did this until 14 Sep
+ * 2026, re-implements layout in JavaScript: on these screens it held the one
+ * browser thread so long that it never came back at all, no picture was ever
+ * stored, and the report sat unsent behind it. modern-screenshot draws the
+ * DOM into an SVG foreignObject instead, which the browser itself renders.
+ *
+ * Belt and braces on top: the draw is raced against a clock, and the report
+ * is posted BEFORE the picture is taken (see CrashScreen), so the words never
+ * wait on it again.
  */
 
 /** Longest edge, in CSS pixels. Enough to read a screen, small enough to store. */
@@ -31,11 +41,16 @@ const MAX_EDGE = 1400;
 /** JPEG rather than PNG: a screenshot of a UI compresses to roughly a tenth. */
 const QUALITY = 0.72;
 
+/** Longer than a draw should ever take, shorter than somebody's patience. */
+const GIVE_UP_AFTER = 6000;
+
 export async function captureScreen(): Promise<string | null> {
   if (typeof window === "undefined") return null;
 
   /* Blank anything secret BEFORE drawing, and restore it after. Kept in a list
-     rather than done in place so the restore runs even if the draw throws. */
+     rather than done in place so the restore runs even if the draw throws -
+     or never finishes, which is why the restore is out here and not inside
+     the draw: an abandoned draw must not leave the panel invisible. */
   const masked: Array<[HTMLInputElement, string]> = [];
   const hidden: Array<[HTMLElement, string]> = [];
   try {
@@ -52,34 +67,10 @@ export async function captureScreen(): Promise<string | null> {
       el.style.visibility = "hidden";
     });
 
-    const { default: html2canvas } = await import("html2canvas");
-    const canvas = await html2canvas(document.body, {
-      /* Only what they can actually see. Capturing the full scroll height of a
-         long board turns a screenshot into a poster and tells you less about
-         where they were. */
-      windowWidth: document.documentElement.clientWidth,
-      windowHeight: document.documentElement.clientHeight,
-      x: window.scrollX,
-      y: window.scrollY,
-      width: document.documentElement.clientWidth,
-      height: document.documentElement.clientHeight,
-      scale: 1,
-      useCORS: true,
-      /* A missing remote image must not take the picture down with it. */
-      logging: false,
-      backgroundColor: "#ffffff",
-    });
-
-    const scale = Math.min(1, MAX_EDGE / Math.max(canvas.width, canvas.height));
-    if (scale === 1) return canvas.toDataURL("image/jpeg", QUALITY);
-
-    const out = document.createElement("canvas");
-    out.width = Math.round(canvas.width * scale);
-    out.height = Math.round(canvas.height * scale);
-    const ctx = out.getContext("2d");
-    if (!ctx) return canvas.toDataURL("image/jpeg", QUALITY);
-    ctx.drawImage(canvas, 0, 0, out.width, out.height);
-    return out.toDataURL("image/jpeg", QUALITY);
+    return await Promise.race([
+      draw(),
+      new Promise<null>((resolve) => window.setTimeout(() => resolve(null), GIVE_UP_AFTER)),
+    ]);
   } catch {
     /* The words are the report. The picture is a bonus. */
     return null;
@@ -90,5 +81,32 @@ export async function captureScreen(): Promise<string | null> {
     hidden.forEach(([el, v]) => {
       el.style.visibility = v;
     });
+  }
+}
+
+/** The draw itself. Everything it touches is put back by its caller. */
+async function draw(): Promise<string | null> {
+  try {
+    const { domToJpeg } = await import("modern-screenshot");
+    const w = document.documentElement.clientWidth;
+    const h = document.documentElement.clientHeight;
+    const scale = Math.min(1, MAX_EDGE / Math.max(w, h));
+    return await domToJpeg(document.body, {
+      /* Only what they can actually see. Capturing the full scroll height of a
+         long board turns a screenshot into a poster and tells you less about
+         where they were. */
+      width: w,
+      height: h,
+      scale,
+      quality: QUALITY,
+      backgroundColor: "#ffffff",
+      /* A font or an image that will not load must not take the picture down
+         with it, and must not hold it up either. */
+      timeout: 4000,
+      style: { transform: `translate(${-window.scrollX}px, ${-window.scrollY}px)` },
+    });
+  } catch {
+    /* The words are the report. The picture is a bonus. */
+    return null;
   }
 }

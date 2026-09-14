@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { requireOwner } from "@/lib/admin";
-import { logBug, bugs, setBugState } from "@/lib/pilot";
+import { logBug, bugs, setBugState, attachShot } from "@/lib/pilot";
 
 /**
  * Reporting something broken, and reading what's been reported.
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Tell us what happened." }, { status: 400 });
   }
 
-  await logBug({
+  const id = await logBug({
     reporterId: actor.id,
     reporterEmail: actor.email,
     body: b.body,
@@ -53,7 +53,31 @@ export async function POST(req: NextRequest) {
         ? b.shot
         : null,
   });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, id });
+}
+
+/**
+ * The picture, arriving after the words.
+ *
+ * Drawing the screen holds the browser's only thread, so a report that waited
+ * for it kept somebody looking at a frozen window and, on a heavy page, never
+ * went at all (14 Sep 2026). The words are posted first and the picture is put
+ * on afterwards, here. Same rules as the POST: signed in, their own report,
+ * a JPEG data URL and nothing else.
+ */
+export async function PUT(req: NextRequest) {
+  const { actor } = await whoIs(req);
+  if (!actor) return NextResponse.json({ ok: false, error: "Not signed in." }, { status: 401 });
+
+  const b = (await req.json().catch(() => ({}))) as { id?: string; shot?: string };
+  const fine =
+    typeof b.shot === "string" &&
+    b.shot.startsWith("data:image/jpeg;base64,") &&
+    b.shot.length < 3_000_000;
+  if (!b.id || !fine) return NextResponse.json({ ok: false, error: "Bad request." }, { status: 400 });
+
+  const done = await attachShot(b.id, actor.id, b.shot!);
+  return NextResponse.json({ ok: done });
 }
 
 export async function GET(req: NextRequest) {

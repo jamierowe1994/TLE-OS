@@ -188,8 +188,9 @@ export async function logBug(p: {
   body: string; path?: string; kind?: string; context?: Record<string, unknown>;
   /** A JPEG data URL of their screen. Optional, and never worth failing over. */
   shot?: string | null;
-}): Promise<void> {
-  if (!hasDb()) return;
+  /** Answers with the id of the report, so a picture can catch up with it. */
+}): Promise<string | null> {
+  if (!hasDb()) return null;
   const id = uid();
   await q(
     `insert into os_bugs (id, reporter_id, reporter_email, body, path, kind, context)
@@ -200,7 +201,7 @@ export async function logBug(p: {
     ]
   );
 
-  if (!p.shot) return;
+  if (!p.shot) return id;
   try {
     await q(`insert into os_bug_shots (bug_id, shot) values ($1,$2)
              on conflict (bug_id) do nothing`, [id, p.shot]);
@@ -213,6 +214,37 @@ export async function logBug(p: {
   } catch {
     /* The report is filed. A picture that would not store is not a failure
        worth telling the person about — they came to report something else. */
+  }
+  return id;
+}
+
+/**
+ * The picture, arriving after the words.
+ *
+ * Drawing a screen locks the browser's one thread for as long as it takes,
+ * and on a heavy page that is seconds - during which a report cannot be sent
+ * and the person is looking at a frozen window (14 Sep 2026). So the words go
+ * first and the picture follows on its own, through here.
+ *
+ * Only the person who filed the report may attach to it, and only once.
+ */
+export async function attachShot(bugId: string, reporterId: string | null, shot: string): Promise<boolean> {
+  if (!hasDb()) return false;
+  try {
+    const rows = await q<{ id: string }>(
+      `select id from os_bugs where id = $1 and reporter_id is not distinct from $2`,
+      [bugId, reporterId]
+    );
+    if (!rows.length) return false;
+    await q(
+      `insert into os_bug_shots (bug_id, shot) values ($1,$2)
+       on conflict (bug_id) do nothing`,
+      [bugId, shot]
+    );
+    await q(`delete from os_bug_shots where created_at < now() - interval '30 days'`);
+    return true;
+  } catch {
+    return false;
   }
 }
 
