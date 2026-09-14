@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { scopeFor } from "@/lib/scope";
 import { cacheKeyFor, heldFor, refresh, FRESH_MS, STALE_MS } from "@/lib/listings-cache";
+import { withArchiveState } from "@/lib/listings-archive-view";
 import { rexConfigured } from "@/lib/rex";
 
 /**
@@ -44,19 +45,23 @@ export async function GET(req: NextRequest) {
   const held = await heldFor(key);
   const age = held ? Date.now() - held.at : Infinity;
 
+  /* The archive state is stamped on at SERVE time, never baked into the
+     cached book. The book is cached for ten minutes; the overrides change the
+     instant somebody presses Archive, and a listing that stayed put for ten
+     minutes after being archived would read as a button that does nothing. */
   if (held && age < FRESH_MS) {
-    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...held.book, ageMs: age });
+    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await withArchiveState(held.book)), ageMs: age });
   }
   if (held && age < STALE_MS) {
     void refresh(key, scope.rexUserId);
-    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...held.book, ageMs: age, stale: true });
+    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await withArchiveState(held.book)), ageMs: age, stale: true });
   }
 
   try {
     const fresh = await refresh(key, scope.rexUserId);
-    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...fresh.book, ageMs: 0 });
+    return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await withArchiveState(fresh.book)), ageMs: 0 });
   } catch (e) {
-    if (held) return NextResponse.json({ ok: true, live: true, scope: scope.label, ...held.book, ageMs: age, stale: true });
+    if (held) return NextResponse.json({ ok: true, live: true, scope: scope.label, ...(await withArchiveState(held.book)), ageMs: age, stale: true });
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "Couldn't reach REX." },
       { status: 502 }

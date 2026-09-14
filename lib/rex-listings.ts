@@ -50,6 +50,29 @@ export interface OsListing {
   daysOnMarket: number | null;
   /** The day it went live, ISO date. Same source as daysOnMarket. */
   publishedAt: string | null;
+  /**
+   * The day the record was MADE in REX, ISO date.
+   *
+   * This is what a draft's age is measured from, and the choice matters.
+   * `system_modtime` looks like the obvious liveness signal and is not: on
+   * 14 Sep 2026, 71 of the 91 drafts "touched in the last 30 days" carried
+   * the SAME modtime - 6 Sep - which is a bulk sync, not 71 people working.
+   * One of them was created in February 2024. Ageing a draft by when it was
+   * last written to would therefore keep a two-year-old shell in the working
+   * list because a background job brushed past it.
+   *
+   * `system_ctime` is populated on all 167 current drafts (measured), never
+   * moves, and answers the question actually being asked: how long has this
+   * thing been sitting here unpublished.
+   */
+  createdAt: string | null;
+  /** REX's own state - current / leased / withdrawn. The book is `current`;
+   *  the archive also reads `withdrawn`, which is where a listing that came
+   *  off the market without a tenant ends up. */
+  listingState: string | null;
+  /** The day it entered that state, ISO. For a withdrawn listing, the day it
+   *  came off the market. */
+  stateDate: string | null;
   lastUpdated: string;
   imageCount: number;
   image: string | null;
@@ -136,6 +159,10 @@ export interface RexListing extends Record<string, unknown> {
   system_publication_status?: string | null;
   system_publication_time?: number | string | null;
   system_modtime?: number | string | null;
+  /** Unix seconds, when the record was created. See OsListing.createdAt. */
+  system_ctime?: number | string | null;
+  /** ISO date, when it entered system_listing_state. */
+  state_date?: string | null;
   price_rent?: number | string | null;
   price_rent_period?: { id?: string } | null;
   let_agreed?: unknown;
@@ -200,6 +227,11 @@ function addressOf(p: RexAddress | null | undefined): { name: string; locality: 
     "Address not recorded";
   const locality = [p.adr_suburb_or_town, p.adr_postcode].filter(Boolean).join(" ") || "—";
   return { name, locality };
+}
+
+/** Unix seconds as an ISO date, or null. */
+function isoDay(secs: number | null): string | null {
+  return secs ? new Date(secs * 1000).toISOString().slice(0, 10) : null;
 }
 
 function ago(secs: number | null): string {
@@ -272,6 +304,9 @@ export function toListing(l: RexListing): OsListing {
     epcRating: l.epc_rating ?? null,
     daysOnMarket: published ? Math.floor((Date.now() / 1000 - published) / 86400) : null,
     publishedAt: published ? new Date(published * 1000).toISOString().slice(0, 10) : null,
+    createdAt: isoDay(num(l.system_ctime)),
+    listingState: l.system_listing_state ?? null,
+    stateDate: l.state_date ?? null,
     lastUpdated: ago(num(l.system_modtime)),
     imageCount: l.related?.listing_images?.length ?? (l.listing_primary_image ? 1 : 0),
     image: https(l.listing_primary_image?.url ?? l.related?.listing_images?.[0]?.url),
@@ -283,20 +318,21 @@ export function toListing(l: RexListing): OsListing {
   };
 }
 
-export async function fetchListingBook(rexUserId?: string | null): Promise<ListingBook> {
-  if (!rexConfigured()) {
-    return {
-      listings: [],
-      counts: { currentRentals: 0, published: 0, draft: 0, letAgreed: 0, available: 0, withPhoto: 0, withRent: 0, withWriteUp: 0, draftsMissingWriteUp: 0 },
-      pulledAt: new Date().toISOString(),
-    };
-  }
-
+/**
+ * Every rental listing REX holds in one state, paged out.
+ *
+ * Split out of fetchListingBook so the archive can ask for `withdrawn` with
+ * the same criteria, the same multi-tenant filter and the same runaway guard.
+ * The state is the ONLY difference between the two reads, and a second copy
+ * of this loop is a second place for the `listing_category_id` criterion to
+ * go missing - which is how the book fills up with the sales business's stock.
+ */
+async function searchListings(state: string, rexUserId?: string | null): Promise<RexListing[]> {
   const rows: RexListing[] = [];
   for (let page = 0; page < MAX_PAGES; page++) {
     const res = await rexCall("Listings", "search", {
       criteria: [
-        { name: "system_listing_state", value: "current" },
+        { name: "system_listing_state", value: state },
         // Without this the pages come back as sales stock — see note 1.
         { name: "listing_category_id", value: "residential_rental" },
         /* MULTI-TENANT. An agent sees their own book and nobody else's. The
@@ -314,8 +350,37 @@ export async function fetchListingBook(rexUserId?: string | null): Promise<Listi
     rows.push(...batch);
     if (batch.length < PAGE_SIZE) break;
   }
+  return rows;
+}
 
-  const listings = rows.map(toListing);
+/**
+ * The listings that came OFF the market without a tenant in them.
+ *
+ * REX's `withdrawn` state - 223 residential rentals on 14 Sep 2026, of which
+ * 181 had been published and 42 never made it off draft. These have never
+ * been in the OS at all, because the book only ever asks for `current`, so a
+ * property the agency marketed for three months and then lost simply vanished.
+ * They belong in the archive beside the stale drafts: same question ("what
+ * happened to this one?"), same answer ("nothing did").
+ *
+ * REX's own `archived` state is empty on this account (measured, same day),
+ * so there is nothing to read there.
+ */
+export async function fetchRetiredListings(rexUserId?: string | null): Promise<OsListing[]> {
+  if (!rexConfigured()) return [];
+  return (await searchListings("withdrawn", rexUserId)).map(toListing);
+}
+
+export async function fetchListingBook(rexUserId?: string | null): Promise<ListingBook> {
+  if (!rexConfigured()) {
+    return {
+      listings: [],
+      counts: { currentRentals: 0, published: 0, draft: 0, letAgreed: 0, available: 0, withPhoto: 0, withRent: 0, withWriteUp: 0, draftsMissingWriteUp: 0 },
+      pulledAt: new Date().toISOString(),
+    };
+  }
+
+  const listings = (await searchListings("current", rexUserId)).map(toListing);
   return {
     listings,
     counts: {

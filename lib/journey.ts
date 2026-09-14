@@ -244,7 +244,13 @@ export const LISTING_TRACK: JourneyStep[] = [
     id: "live", label: "On market", icon: "megaphone",
     title: "Put it live",
     detail:
-      "Publish to the portals via REX. A draft earns nothing — 56% of the current book is sitting unpublished.",
+      /* The percentage that used to be in this sentence - "56% of the current
+         book is sitting unpublished" - was hardcoded, was written when the
+         book was 293 listings, and read 56% on 14 Sep 2026 when the true
+         figure was 62%. A track definition has no access to the live book, so
+         the honest fix is to stop quoting a figure here: Listings says how
+         many drafts there are, live, on the screen the agent came from. */
+      "Publish to the portals via REX. A draft earns nothing.",
     action: "none", cta: "Mark as live",
   },
   {

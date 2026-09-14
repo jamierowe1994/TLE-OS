@@ -14,6 +14,7 @@ import PropertyFile from "@/components/PropertyFile";
 import ViewingBooker, { type Person } from "@/components/ViewingBooker";
 import { CopyButton, DoneTick, PressButton } from "@/components/Bits";
 import { Tag } from "@/components/ListingTags";
+import { ARCHIVE_AFTER_DAYS, archiveLabel, archiveWhy, type ArchiveReason } from "@/lib/listing-archive";
 import AccessRequest, { AccessSettings, NO_ACCESS, type Access } from "@/components/listing/AccessRequest";
 import DropZone, { type DropKind } from "@/components/listing/DropZone";
 import PickOne from "@/components/PickOne";
@@ -68,6 +69,12 @@ export type Listing = {
   /** The portal write-up, live from REX's `related.listing_adverts`. */
   advertHeading?: string | null;
   advertBody?: string | null;
+  /** Filed away by the two-month draft cap, or by hand. See
+   *  lib/listing-archive.ts - the rule runs on the server, this is its answer. */
+  archived?: boolean;
+  archiveReason?: ArchiveReason | null;
+  archivedSince?: string | null;
+  archiveAgeDays?: number | null;
 };
 
 /** One live advert on a public portal. Mirrors lib/rex-portal-links.ts, kept
@@ -179,10 +186,17 @@ export default function ListingDrawer({
   listing,
   onClose,
   onStep,
+  onArchive,
+  archiveBusy,
 }: {
   listing: Listing | null;
   onClose: () => void;
   onStep: (delta: number) => void;
+  /** File this draft away early, or bring it back. Owned by the board, which
+   *  already holds the book this listing came out of - the drawer would
+   *  otherwise be updating a copy the board never hears about. */
+  onArchive?: (id: string, action: "archive" | "restore") => void;
+  archiveBusy?: boolean;
 }) {
   const [shown, setShown] = useState(false);
   const [tab, setTab] = useState<TabKey>("home");
@@ -946,6 +960,51 @@ export default function ListingDrawer({
                     ))
                   )}
                 </div>
+
+                {/* ── THE TWO-MONTH DRAFT CAP, on the record itself ──────
+                    Filing a draft away is a decision about THIS property, so
+                    the button is here rather than on every card on the board.
+                    It says what it does in full, because "Archive" next to a
+                    property is a word people reasonably read as "delete". */}
+                {onArchive && (listing.archived || (!listing.letAgreed && listing.publicationStatus !== "published")) && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2.5 rounded-2xl border border-white/70 bg-white/70 px-3.5 py-2.5">
+                    <span className="min-w-0 flex-1 text-[11.5px] leading-snug text-muted">
+                      {listing.archived ? (
+                        <>
+                          <span className="font-semibold text-ink">{archiveLabel(listing.archiveReason ?? null)}.</span>{" "}
+                          {archiveWhy({
+                            archived: true,
+                            reason: listing.archiveReason ?? null,
+                            since: listing.archivedSince ?? null,
+                            ageDays: listing.archiveAgeDays ?? null,
+                          })}{" "}
+                          It is out of the Draft tab, still searchable, and unchanged in REX.
+                        </>
+                      ) : (
+                        <>
+                          A draft. It files itself away {Math.round(ARCHIVE_AFTER_DAYS / 30)} months after it was
+                          created unless it goes live - or you can put it away now.
+                        </>
+                      )}
+                    </span>
+                    {/* Withdrawn is REX's state, not ours, so there is nothing
+                        here to undo — the way back is in REX. */}
+                    {listing.archiveReason !== "withdrawn" && (
+                      <button
+                        type="button"
+                        disabled={archiveBusy}
+                        onClick={() => onArchive(String(listing.id), listing.archived ? "restore" : "archive")}
+                        className={`shrink-0 rounded-full px-3.5 py-2 text-[11.5px] font-semibold transition-colors disabled:opacity-50 ${
+                          listing.archived
+                            ? "bg-accent-dark text-white hover:opacity-90"
+                            : "border border-line/60 bg-white text-muted hover:border-ink/40 hover:text-ink"
+                        }`}
+                      >
+                        {archiveBusy ? "Saving…" : listing.archived ? "Bring back to drafts" : "File it away"}
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {/* Two buttons, side by side, both in the dark chocolate (James,
                     11 Sep): getting INTO the property, and getting it OUT to

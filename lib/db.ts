@@ -1327,6 +1327,24 @@ CREATE TABLE IF NOT EXISTS os_hidden_leads (
   hidden_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- An agent overruling the two-month draft cap, either way.
+--
+-- The cap itself is a RULE, not a stored flag: 144 of the 167 drafts are
+-- archived because of their created date, and writing 144 rows to say so
+-- would be a copy of REX that goes stale the moment somebody publishes one.
+-- Only the exceptions are stored - archived early, or pulled back out - which
+-- is why this table is expected to hold tens of rows, never hundreds.
+--
+-- A "restored" row also RESETS the two months: see lib/listing-archive.ts.
+-- Nothing here is ever written to REX.
+CREATE TABLE IF NOT EXISTS os_listing_archive (
+  listing_id TEXT PRIMARY KEY,                -- REX listing id
+  state      TEXT NOT NULL,                   -- archived | restored
+  note       TEXT,
+  by_user    TEXT,
+  at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS os_leads (
   id             TEXT PRIMARY KEY,            -- rex-<lead id>
   received_at    TIMESTAMPTZ,

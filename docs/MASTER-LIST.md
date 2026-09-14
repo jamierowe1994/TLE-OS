@@ -237,7 +237,7 @@ still A1 (agent accounts), the palette (now received) and J15 (the full run).
 | D2 | **Masthead height.** Market Appraisals is 302px above the rule, every other page 250. The Listings lady is "literally perfect", which says 250, but that makes the appraisals man smaller again. | Can't be both |
 | D3 | **Portfolio's scene** at 218 rather than 240: at 240 it squeezes the blurb to four lines | Size vs. readable text |
 | D4 | **Whose name nurture emails come from.** `REX_CAMPAIGN_SEND_AS` is unset, so every due email is held. | Board item 15 |
-| D5 | **The 161 unpublished drafts** out of 268 current rentals | Any bulk publish |
+| D5 | **PART DONE 14 Sep.** The 167 unpublished drafts out of 269 current rentals no longer sit in the Draft tab: anything drafted more than **two months** ago is filed into **Listings > Archived** (137 of them), which also now carries REX's 223 withdrawn rentals - the ones that came off without a tenant. Nothing is deleted, nothing is written to REX, and one button gives a listing another two months. Draft reads 22. **Still James's call: whether the 137 get bulk published, worked through, or left filed.** | Any bulk publish |
 | D6 | **Where a compliance blocker bites** - offer accepted or move-in, and whether a manager can override | Idea H4 |
 | D7 | **Input on the pre-presentation and the PLC check designs** (= J3) - flagged in `CLAUDE.md` | Board items 2 and 4 |
 | D8 | ~~Stannp is out of test mode~~ **CONFIRMED 13 Sep: intended.** James had the test postcard and it arrived. Was: **Stannp is out of test mode.** `STANNP_TEST_MODE=false`, so a postcard sent with `live: true` is really printed and posted. That flag is the only lock left. Confirm it is intended. | Money leaves on a click |

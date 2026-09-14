@@ -12,6 +12,7 @@ import ListingDrawer from "@/components/ListingDrawer";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DIARY } from "@/lib/diary";
 import { Readiness, Tag, readiness, statusOf } from "@/components/ListingTags";
+import { ARCHIVE_AFTER_DAYS, archiveLabel, archiveWhy, type ArchiveReason } from "@/lib/listing-archive";
 import rexSample from "@/lib/rex-sample.json";
 
 /**
@@ -47,6 +48,14 @@ type SampleListing = {
    *  the date window treats "no date" as never-published rather than as a
    *  row to hide. */
   publishedAt?: string | null;
+  /** The day the record was made in REX. What a draft's age is measured from. */
+  createdAt?: string | null;
+  /** Stamped on by the server - see lib/listing-archive.ts. The rule runs
+   *  THERE, once, so the board never works out "is this archived" itself. */
+  archived?: boolean;
+  archiveReason?: ArchiveReason | null;
+  archivedSince?: string | null;
+  archiveAgeDays?: number | null;
   lastUpdated: string | null;
   imageCount: number;
   image: string | null;
@@ -57,6 +66,10 @@ type SampleListing = {
 type Counts = {
   currentRentals: number; published: number; draft: number;
   letAgreed: number; available: number;
+  /** Every unpublished listing, archived ones included. `draft` is only the
+   *  ones still being worked on, which is what the Draft tab shows. */
+  draftsAll?: number;
+  archived?: number;
 };
 
 const FALLBACK = rexSample.listings as SampleListing[];
@@ -339,7 +352,7 @@ export default function Listings() {
      the tabs now, which answers the same question and three others beside it,
      and two controls for one filter is how a screen starts to disagree with
      itself. */
-  const [stage, setStage] = useState<"all" | "Available" | "Let agreed" | "Draft" | "photos" | "compliance">("all");
+  const [stage, setStage] = useState<"all" | "Available" | "Let agreed" | "Draft" | "photos" | "compliance" | "archived">("all");
   const [period, setPeriod] = useState<PeriodId>("any");
   /* Tiles by default, like Market Appraisals (James, 11 Sep 2026). */
   const [view, setView] = useState<"list" | "tiles">("tiles");
@@ -372,7 +385,85 @@ export default function Listings() {
     return () => { gone = true; };
   }, []);
 
+  /* ── THE ARCHIVE, fetched on first open and not before ──────────────────
+     It carries REX's 223 withdrawn rentals as well as the cold drafts, and
+     that is three more REX pages at about fifteen seconds a call. Paying for
+     it on every visit to Listings, to fill a tab most agents will not open
+     that day, is the wrong trade - so it loads when somebody asks for it. */
+  const [archive, setArchive] = useState<{
+    listings: SampleListing[];
+    counts?: { total: number; staleDrafts: number; byHand: number; withdrawn: number };
+    loading: boolean;
+    asked: boolean;
+    error?: string;
+  }>({ listings: [], loading: false, asked: false });
+
+  const loadArchive = useCallback(() => {
+    setArchive((a) => {
+      if (a.asked) return a;
+      fetch("/api/listings/archive")
+        .then((r) => r.json())
+        .then((j) => {
+          if (j.ok && Array.isArray(j.listings)) {
+            setArchive({ listings: j.listings, counts: j.counts, loading: false, asked: true });
+          } else {
+            setArchive({ listings: [], loading: false, asked: true, error: j.reason ?? j.error ?? "The archive didn't answer." });
+          }
+        })
+        .catch(() => setArchive({ listings: [], loading: false, asked: true, error: "The archive didn't answer." }));
+      return { ...a, loading: true, asked: true };
+    });
+  }, []);
+
+  useEffect(() => {
+    if (stage === "archived") loadArchive();
+  }, [stage, loadArchive]);
+
+  /**
+   * Put one away, or bring it back.
+   *
+   * The screen is updated from the SERVER's answer, not from what the button
+   * was called: the rule about what is archived lives in one place and the
+   * board asking it rather than assuming is what keeps the two agreeing.
+   */
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [archiveNote, setArchiveNote] = useState<string | null>(null);
+  const move = useCallback(async (id: string, action: "archive" | "restore") => {
+    setBusyId(id);
+    setArchiveNote(null);
+    try {
+      const r = await fetch("/api/listings/archive", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, action }),
+      });
+      const j = (await r.json()) as { ok?: boolean; error?: string; state?: { archived: boolean; reason: ArchiveReason | null; since: string | null; ageDays: number | null } };
+      if (!j.ok) throw new Error(j.error ?? "That didn't save.");
+      const st = j.state;
+      const patch = (l: SampleListing): SampleListing =>
+        String(l.id) !== id || !st
+          ? l
+          : { ...l, archived: st.archived, archiveReason: st.reason, archivedSince: st.since, archiveAgeDays: st.ageDays };
+      setBook((b) => ({ ...b, listings: b.listings.map(patch) }));
+      setArchive((a) => ({
+        ...a,
+        listings: action === "restore" ? a.listings.filter((l) => String(l.id) !== id) : a.listings,
+      }));
+      /* Archived from the board: it leaves the working list, and the archive
+         is re-read next time it is opened rather than guessed at here. */
+      if (action === "archive") setArchive((a) => ({ ...a, asked: false, listings: [] }));
+    } catch (e) {
+      setArchiveNote(e instanceof Error ? e.message : "That didn't save.");
+    } finally {
+      setBusyId(null);
+    }
+  }, []);
+
   const LISTINGS = book.listings;
+  /* The working book: everything the cap has not put away. Defined once, and
+     every tab but Archived reads from it - so a cold draft cannot reappear in
+     All listings, Missing photos or Needs compliance by the back door. */
+  const WORKING = useMemo(() => LISTINGS.filter((l) => !l.archived), [LISTINGS]);
   /* ?open=<listing id> from the search bar or the bell: open that card once
      the book is here. Once, so closing it does not reopen it. */
   const openedFromUrl = useRef(false);
@@ -396,16 +487,34 @@ export default function Listings() {
      drafts" over tabs that said 58 available, 48 let agreed and 162 drafts -
      both right, counting different things, on the same screen. A let-agreed
      draft is one house, and it cannot be in two of these. */
+  /* Off the WORKING book, so Draft counts the drafts somebody is still on -
+     not the 144 that went cold. The full unpublished figure is still said out
+     loud in the blurb; it is just no longer the tab's number. */
   const byStage = useMemo(() => {
     const out = { Available: 0, "Let agreed": 0, Draft: 0 } as Record<string, number>;
-    for (const l of LISTINGS) out[statusOf(l).label] = (out[statusOf(l).label] ?? 0) + 1;
+    for (const l of WORKING) out[statusOf(l).label] = (out[statusOf(l).label] ?? 0) + 1;
     return out;
-  }, [LISTINGS]);
+  }, [WORKING]);
+
+  /* What the Archived tab says before it has been opened: the cold drafts,
+     which the book already knows about. REX's withdrawn listings are not in
+     that figure, so the tab shows a "+" until the real count arrives rather
+     than printing a number it will then contradict. */
+  const archivedKnown = archive.counts?.total ?? LISTINGS.filter((l) => l.archived).length;
+
+  /* And the archived slice OF THE CURRENT BOOK, which is a different number
+     and the only one that belongs in a sentence about current rentals.
+     Written with archivedKnown for one screenshot on 14 Sep and it read
+     "269 current rentals: 62 available, 48 let agreed and 22 drafts on the go,
+     with 360 more filed away" - a line that does not add up, because 223 of
+     that 360 are withdrawn listings and were never part of the 269. */
+  const archivedInBook = useMemo(() => LISTINGS.filter((l) => l.archived).length, [LISTINGS]);
 
   const board = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const band = RENT_BANDS.find((b) => b.id === rentBand);
-    const rows = LISTINGS.filter((l) => {
+    const source = stage === "archived" ? archive.listings : WORKING;
+    const rows = source.filter((l) => {
       if (needle && !`${l.name} ${l.locality}`.toLowerCase().includes(needle)) return false;
       const cmp = l.rentMonthly ?? l.rent;
       if (band && !(cmp != null && band.test(cmp))) return false;
@@ -417,6 +526,8 @@ export default function Listings() {
         if (l.imageCount > 0) return false;
       } else if (stage === "compliance") {
         if (l.epcExpiry != null) return false;
+      } else if (stage === "archived") {
+        /* The source IS the archive - there is no status left to test. */
       } else if (stage !== "all" && statusOf(l).label !== stage) return false;
       if (!listedIn(l.publishedAt, period)) return false;
       return true;
@@ -426,8 +537,12 @@ export default function Listings() {
     const monthly = (l: SampleListing) => l.rentMonthly ?? l.rent;
     if (sort === "rent-low") rows.sort((a, b) => (monthly(a) ?? 1e9) - (monthly(b) ?? 1e9));
     else if (sort === "rent-high") rows.sort((a, b) => (monthly(b) ?? 0) - (monthly(a) ?? 0));
+    /* The archive arrives in REX's modtime order, which on this data is a
+       bulk sync rather than anything meaningful (see lib/listing-archive.ts).
+       Most-recently-cold first is the order somebody scanning it wants. */
+    else if (stage === "archived") rows.sort((a, b) => (b.archivedSince ?? "").localeCompare(a.archivedSince ?? ""));
     return rows;
-  }, [LISTINGS, q, sort, rentBand, loc, stage, period]);
+  }, [WORKING, archive.listings, q, sort, rentBand, loc, stage, period]);
 
   return (
     <>
@@ -437,7 +552,13 @@ export default function Listings() {
           book.loading
             ? "Fetching the rental book from REX…"
             : book.live
-              ? `Live from REX — ${C.currentRentals} current rentals: ${byStage.Available} available, ${byStage["Let agreed"]} let agreed and ${byStage.Draft} still drafts.`
+              /* The full unpublished figure still gets said out loud. The Draft
+                 tab counts the live ones now, and a page that never admitted
+                 the other 144 exist would be hiding them rather than filing
+                 them. */
+              ? `Live from REX — ${C.currentRentals} current rentals: ${byStage.Available} available, ${byStage["Let agreed"]} let agreed and ${byStage.Draft} drafts on the go${
+                  archivedInBook ? `, with ${archivedInBook} older drafts filed away` : ""
+                }.`
               : (book.reason ?? "Manage your properties and their marketing.")
         }
         /* Cropped at the bottom in the artwork itself, so the frame's bottom
@@ -501,13 +622,17 @@ export default function Listings() {
         onChange={setStage}
         flow={false}
         stages={[
-          { id: "all" as const, label: "All listings", icon: "analytics", count: LISTINGS.length, blurb: "Everything on the rental book" },
+          { id: "all" as const, label: "All listings", icon: "analytics", count: WORKING.length, blurb: "Everything on the rental book that is still moving" },
           { id: "Available" as const, label: "Available", icon: "home", count: byStage.Available, blurb: "Published, and not let agreed - what you can put somebody in now" },
           { id: "Let agreed" as const, label: "Let agreed", icon: "key", count: byStage["Let agreed"], blurb: "Taken, and working through to a tenancy" },
-          { id: "Draft" as const, label: "Draft", icon: "doc", count: byStage.Draft, blurb: "Not on the portals yet" },
+          { id: "Draft" as const, label: "Draft", icon: "doc", count: byStage.Draft, blurb: `Not on the portals yet - drafted in the last ${Math.round(ARCHIVE_AFTER_DAYS / 30)} months` },
           /* Two jobs rather than two states: what is holding a listing back. */
-          { id: "photos" as const, label: "Missing photos", icon: "folder", count: LISTINGS.filter((l) => l.imageCount === 0).length, blurb: "No photographs on the listing" },
-          { id: "compliance" as const, label: "Needs compliance", icon: "shield", count: LISTINGS.filter((l) => l.epcExpiry == null).length, blurb: "No EPC filed" },
+          { id: "photos" as const, label: "Missing photos", icon: "folder", count: WORKING.filter((l) => l.imageCount === 0).length, blurb: "No photographs on the listing" },
+          { id: "compliance" as const, label: "Needs compliance", icon: "shield", count: WORKING.filter((l) => l.epcExpiry == null).length, blurb: "No EPC filed" },
+          /* Last, and deliberately: it is where things go, not where work
+             starts. The count grows once the tab is opened and REX's
+             withdrawn listings come in with it. */
+          { id: "archived" as const, label: "Archived", icon: "folder", count: archivedKnown, blurb: `${archivedInBook} cold drafts from the book, plus every listing REX holds that came off without a tenant` },
         ]}
       />
           <div className="ml-auto mt-4">
@@ -532,7 +657,7 @@ export default function Listings() {
       <div className="fade-up mt-4 rounded-[22px] border border-line/50 bg-white p-5">
         <div className="mb-4 flex items-baseline justify-between gap-3">
           <h2 className="hand text-[17px]">
-            {stage === "all" ? "All listings" : stage === "photos" ? "Missing photos" : stage === "compliance" ? "Needs compliance" : stage}
+            {stage === "all" ? "All listings" : stage === "photos" ? "Missing photos" : stage === "compliance" ? "Needs compliance" : stage === "archived" ? "Archived" : stage}
             <span className="figures ml-2 text-[14px] text-muted">{board.length}</span>
           </h2>
           {stage !== "all" && (
@@ -541,7 +666,37 @@ export default function Listings() {
             </button>
           )}
         </div>
-        {board.length === 0 && (
+        {/* What the archive IS, said once, at the top of it. An agent opening
+            a tab of 300 properties they have never seen before deserves the
+            sentence that explains why they are all here. */}
+        {stage === "archived" && (
+          <p className="mb-4 rounded-2xl border border-line/50 bg-page px-4 py-3 text-[12px] leading-relaxed text-muted">
+            Nothing is deleted and nothing is changed in REX. A draft comes here once it has sat{" "}
+            {Math.round(ARCHIVE_AFTER_DAYS / 30)} months without being published, and so does any listing
+            taken off the market without a tenant. Search still reaches everything in here, and
+            <span className="font-semibold text-ink"> Bring back to drafts</span> gives one another{" "}
+            {Math.round(ARCHIVE_AFTER_DAYS / 30)} months on the board.
+            {archive.counts && (
+              <span className="mt-1.5 block">
+                <span className="figures">{archive.counts.staleDrafts}</span> drafts gone cold ·{" "}
+                <span className="figures">{archive.counts.withdrawn}</span> taken off the market
+                {archive.counts.byHand > 0 && (
+                  <> · <span className="figures">{archive.counts.byHand}</span> filed by hand</>
+                )}
+              </span>
+            )}
+          </p>
+        )}
+        {archiveNote && (
+          <p className="mb-3 rounded-xl bg-accent-soft px-3.5 py-2.5 text-[12px] font-semibold text-accent-dark">{archiveNote}</p>
+        )}
+        {stage === "archived" && archive.loading && (
+          <p className="py-6 text-[12.5px] text-muted">Reading the archive - REX holds the withdrawn listings separately, so this one takes a moment…</p>
+        )}
+        {stage === "archived" && archive.error && !archive.loading && (
+          <p className="py-6 text-[12.5px] text-accent-dark">{archive.error}</p>
+        )}
+        {board.length === 0 && !(stage === "archived" && (archive.loading || archive.error)) && (
           <p className="py-6 text-[12.5px] text-muted">
             Nothing matches{period === "any" ? "" : " in that window"} — widen the rent band or clear the filters.
           </p>
@@ -550,9 +705,23 @@ export default function Listings() {
         {board.map((l) => {
           const st = statusOf(l);
           const views = viewingsFor(l.name);
+          /* Withdrawn is REX's own state and cannot be undone from the OS, so
+             the only listings offered a way back are the ones the OS filed:
+             a cold draft, or one put away by hand. */
+          const canRestore = l.archived === true && l.archiveReason !== "withdrawn";
+          /* Filing a draft away EARLY is a decision about one property, so it
+             lives inside the record (the drawer) rather than as a button on
+             every card. Put here it would either sit permanently over the
+             readiness box - which CLAUDE.md forbids and which looks it - or
+             hide behind a hover, which is no button at all on a phone. */
+          const busy = busyId === String(l.id);
           return (
+            /* The card is a button, so the archive action cannot live INSIDE
+               it - a button in a button is invalid and the inner click never
+               reaches the right handler. It sits on top instead, which also
+               keeps the whole card clickable through to the record. */
+            <div key={l.id} className="fade-up relative">
             <button
-              key={l.id}
               type="button"
               onClick={() => setOpenId(String(l.id))}
               // Thinner rule and less padding, so the photograph can grow
@@ -560,7 +729,9 @@ export default function Listings() {
               // inner radius of 14 against the card's 16 keeps the two curves
               // concentric — the giveaway that a nested corner is wrong is
               // when the gap between the arcs is uneven.
-              className="fade-up block w-full rounded-[22px] border border-line/50 bg-white p-2.5 text-left transition-colors hover:border-ink/40"
+              className={`block w-full rounded-[22px] border bg-white p-2.5 text-left transition-colors hover:border-ink/40 ${
+                l.archived ? "border-line/40" : "border-line/50"
+              } ${canRestore ? "pb-[52px]" : ""}`}
             >
               {/* The list card STACKS on a phone.
 
@@ -612,10 +783,18 @@ export default function Listings() {
                     {/* The chips — only what changes decisions. No 'For sale',
                         no 'Sponsored': everything here is a rental, ours. */}
                     <span className="flex flex-wrap items-center gap-1.5">
-                      <Tag tone={st.tone}>{st.label}</Tag>
+                      {/* In the archive the state pill says why it is HERE.
+                          "Draft" on a listing drafted in February 2024 is
+                          true and useless; "Draft, gone cold" is the fact
+                          that put it on this screen. */}
+                      <Tag tone={l.archived ? "neutral" : st.tone}>
+                        {l.archived ? archiveLabel(l.archiveReason ?? null) : st.label}
+                      </Tag>
                       {l.tenant && <Tag tone="neutral">Tenanted</Tag>}
-                      {l.imageCount === 0 && <Tag tone="accent">No photos</Tag>}
-                      {l.epcExpiry == null && <Tag tone="neutral">EPC not filed</Tag>}
+                      {/* The jobs-to-do chips are about getting a listing OUT.
+                          On something already filed away they are noise. */}
+                      {!l.archived && l.imageCount === 0 && <Tag tone="accent">No photos</Tag>}
+                      {!l.archived && l.epcExpiry == null && <Tag tone="neutral">EPC not filed</Tag>}
                     </span>
                     <span className="hand mt-1.5 line-clamp-2 text-[17px] leading-tight">{l.name}</span>
                     <span className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-muted">
@@ -646,13 +825,37 @@ export default function Listings() {
                   <Fact icon="key" label="Viewings" value={String(views)} />
                   <Fact icon="folder" label="Photos" value={String(l.imageCount)} />
 
-                  {/* Where it is, and the one move - see readiness(). */}
+                  {/* Where it is, and the one move - see readiness(). On an
+                      archived row there IS no next move, so the space says
+                      why it is here and leaves room for the button that sits
+                      over the card. */}
                   <span className={view === "tiles" ? "order-3 col-span-3 block" : "flex justify-end"}>
-                    <Readiness r={readiness(l)} compact={view === "tiles"} buttonOnly={view !== "tiles"} />
+                    {l.archived ? (
+                      <span className={`block text-[11.5px] leading-snug text-muted ${view === "tiles" ? "" : "text-right"}`}>
+                        {archiveWhy({ archived: true, reason: l.archiveReason ?? null, since: l.archivedSince ?? null, ageDays: l.archiveAgeDays ?? null })}
+                      </span>
+                    ) : (
+                      <Readiness r={readiness(l)} compact={view === "tiles"} buttonOnly={view !== "tiles"} />
+                    )}
                   </span>
                 </div>
               </div>
             </button>
+
+            {/* The one move on an archived row, and the quiet way to file a
+                draft early. Over the card rather than in it - see above. */}
+            {canRestore && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void move(String(l.id), "restore")}
+                title={`Put it back on the board for another ${Math.round(ARCHIVE_AFTER_DAYS / 30)} months`}
+                className="absolute bottom-3.5 right-3.5 z-10 rounded-full bg-accent-dark px-3.5 py-2 text-[11.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              >
+                {busy ? "Bringing it back…" : "Bring back to drafts"}
+              </button>
+            )}
+            </div>
           );
         })}
 
@@ -660,14 +863,36 @@ export default function Listings() {
       </div>
 
       <p className="mt-4 text-[11px] leading-relaxed text-muted">
-        Showing {board.length} of {C.currentRentals} current rentals ·{" "}
-        <span className="font-semibold">Days on market</span> is only
-        known for the published half: a draft has never been on a portal, so it has no
-        clock to read.
+        {stage === "archived" ? (
+          <>
+            Showing {board.length} of {archivedKnown} filed away · Nothing here has been deleted, and
+            nothing has been written to REX. The archive is the same book, read a different way.
+          </>
+        ) : (
+          <>
+            Showing {board.length} of {WORKING.length} listings still moving
+            {C.draftsAll != null && C.draftsAll !== byStage.Draft && (
+              <> ({C.draftsAll} of the {C.currentRentals} current rentals have never been published; {archivedInBook} are filed away)</>
+            )}{" "}
+            · <span className="font-semibold">Days on market</span> is only known for the published
+            half: a draft has never been on a portal, so it has no clock to read.
+          </>
+        )}
       </p>
 
       <ListingDrawer
-        listing={openId == null ? null : LISTINGS.find((l) => String(l.id) === openId) ?? null}
+        /* Looked up across the archive as well as the book: on the Archived
+           tab the row that was clicked is not in LISTINGS at all (a withdrawn
+           listing was never in the book), and the drawer opened empty. */
+        listing={
+          openId == null
+            ? null
+            : LISTINGS.find((l) => String(l.id) === openId) ??
+              archive.listings.find((l) => String(l.id) === openId) ??
+              null
+        }
+        onArchive={(id, action) => void move(id, action)}
+        archiveBusy={busyId != null && busyId === openId}
         onClose={() => setOpenId(null)}
         onStep={(d) =>
           setOpenId((id) => {

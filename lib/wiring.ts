@@ -155,9 +155,9 @@ export const WIRING: WiringRow[] = [
   {
     system: "rex",
     area: "Listings & publishing",
-    item: "56% of the current rental book is unpublished drafts",
+    item: "Most of the current rental book is unpublished drafts",
     state: "manual",
-    note: "165 of 293 current rentals sit in draft, invisible on every portal. A business decision, not a technical one — worth a review before any bulk publish.",
+    note: "167 of 269 current rentals sit in draft, invisible on every portal (measured 14 Sep 2026). The OS now files the ones older than two months into Listings > Archived rather than showing them as live work - see lib/listing-archive.ts. Publishing them is still a business decision, not a technical one.",
   },
   {
     system: "rex",

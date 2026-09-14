@@ -1,4 +1,4 @@
-import { fetchListingBook, type ListingBook } from "./rex-listings";
+import { fetchListingBook, fetchRetiredListings, type ListingBook, type OsListing } from "./rex-listings";
 import { hasDb, q } from "./db";
 
 /**
@@ -23,7 +23,14 @@ import { hasDb, q } from "./db";
 /* v3, and the version bump is load-bearing: the book is now SCOPED, so a
    cached v2 object holds one agent's book under a key that says "everyone".
    Serving that to the next person is a cross-tenant leak, not a stale figure. */
-const CACHE_KEY_BASE = "listings:v3";
+/* v4: the book gained `createdAt`, which is what the two-month draft cap ages
+   from. This bump is the whole reason the archive works. Without it a warm v3
+   object comes back with no created dates at all, `archiveOf` finds no age to
+   judge - and, correctly, archives NOTHING. The tab reads zero, the rule looks
+   broken, and the cause is three files away. Caught exactly that way on
+   14 Sep 2026, which is the third time this comment's own warning has been
+   proved right. */
+const CACHE_KEY_BASE = "listings:v4";
 
 export const cacheKeyFor = (rexUserId: string | null) =>
   rexUserId ? `${CACHE_KEY_BASE}:agent:${rexUserId}` : `${CACHE_KEY_BASE}:all`;
@@ -129,4 +136,59 @@ export async function invalidateListingBook(): Promise<void> {
   } catch {
     /* a cache that won't clear is a stale read, not a failed save */
   }
+}
+
+/* ── The retired half of the book ─────────────────────────────────────────
+ *
+ * REX's `withdrawn` listings - 223 residential rentals, the ones that came
+ * off the market without a tenant. They are only ever wanted by the archive,
+ * so they are fetched SEPARATELY and lazily rather than being folded into the
+ * main book: three more REX pages on a page that already waits ~15s a call,
+ * paid for by every agent opening Listings, to fill a tab most of them will
+ * not open that day.
+ *
+ * They hold far longer than the live book, too. A withdrawn listing is
+ * finished - nothing about it changes - so a day-old read of it is as good as
+ * a fresh one.
+ */
+
+const RETIRED_KEY_BASE = "listings:retired:v1";
+const RETIRED_FRESH_MS = 12 * 60 * 60 * 1000;
+
+const retiredMemory = new Map<string, { listings: OsListing[]; at: number }>();
+
+export async function retiredFor(rexUserId: string | null): Promise<OsListing[]> {
+  const key = rexUserId ? `${RETIRED_KEY_BASE}:agent:${rexUserId}` : `${RETIRED_KEY_BASE}:all`;
+  const mem = retiredMemory.get(key);
+  if (mem && Date.now() - mem.at < RETIRED_FRESH_MS) return mem.listings;
+
+  if (hasDb()) {
+    try {
+      const rows = await q<{ payload: { listings: OsListing[] }; computed_at: Date }>(
+        "SELECT payload, computed_at FROM os_cache WHERE key = $1",
+        [key]
+      );
+      if (rows[0] && Date.now() - new Date(rows[0].computed_at).getTime() < RETIRED_FRESH_MS) {
+        retiredMemory.set(key, { listings: rows[0].payload.listings, at: new Date(rows[0].computed_at).getTime() });
+        return rows[0].payload.listings;
+      }
+    } catch {
+      /* fall through to a live fetch */
+    }
+  }
+
+  const listings = await fetchRetiredListings(rexUserId);
+  retiredMemory.set(key, { listings, at: Date.now() });
+  if (hasDb()) {
+    try {
+      await q(
+        `INSERT INTO os_cache (key, payload, computed_at) VALUES ($1, $2, NOW())
+         ON CONFLICT (key) DO UPDATE SET payload = EXCLUDED.payload, computed_at = NOW()`,
+        [key, JSON.stringify({ listings })]
+      );
+    } catch {
+      /* a cache that will not write is a slow tab, not a broken one */
+    }
+  }
+  return listings;
 }
