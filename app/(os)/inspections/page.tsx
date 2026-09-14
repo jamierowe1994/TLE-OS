@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import DoodleIcon from "@/components/DoodleIcon";
 import { Pill } from "@/components/Wire";
+import Segmented from "@/components/Segmented";
 import { PressButton } from "@/components/Bits";
 import { STEPS, stepOf, type StepId } from "@/lib/inspection-steps";
 import type { DueVisit, Finding, Inspection, InspectionEvent, InspectionRules } from "@/lib/inspections";
@@ -128,8 +129,19 @@ export default function Inspections() {
     <>
       <PageHeader
         title="Inspections"
-        blurb="Every visit we owe the managed book, and the permission that lets us in. A home appears as due because the cadence says so, not because somebody remembered - and nobody is recorded as agreeing to a visit unless they said so themselves, on their own link."
-        illustration="/illustrations/notioly/looking-out-the-window.svg"
+        blurb="Every visit we owe the managed book, and the permission that lets us in. A home is due because the cadence says so, not because somebody remembered, and nobody has agreed to a visit unless they said so on their own link."
+        /* The last black-and-white sketch in the Portfolio group. The row of
+           homes is a stand-in, borrowed from Viewings, until James paints one
+           for inspections - but a line drawing sitting beside four painted
+           mastheads reads as a page nobody finished. */
+        illustration="/illustrations/houses-row.webp"
+        /* 1200x257, so 4.67 - the number has to be the picture's own, because
+           PageHeader reserves the text column from height x aspect. Borrowing
+           Portfolio's 3.11 reserved 435px for something that drew 654px, and
+           the extra 219 landed on top of the blurb below 1200px wide. */
+        illustrationHeight={130}
+        illustrationAspect={4.67}
+        illustrationCrop
         lineBreak="none"
         searchValue={q}
         onSearch={setQ}
@@ -157,17 +169,19 @@ export default function Inspections() {
       </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
-        {([["due", "Due", due.length], ["hand", "In hand", inHand.length], ["done", "Done", done.length]] as const).map(([key, label, n]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setTab(key)}
-            className={`rounded-full px-4 py-2 text-[12.5px] font-semibold transition-colors ${tab === key ? "bg-ink text-page" : "border border-line/80 text-muted hover:border-ink/40 hover:text-ink"}`}
-          >
-            {label}
-            <span className="ml-1.5 opacity-70">{n}</span>
-          </button>
-        ))}
+        {/* The same sliding, brown-marked control as Properties, Listings,
+            Leads and Viewings. This screen was drawing its own black pills,
+            which is the one place in the OS that colour appears. */}
+        <Segmented
+          className="w-full sm:w-auto sm:min-w-[340px]"
+          value={tab}
+          onChange={setTab}
+          options={[
+            { id: "due" as const, label: `Due ${due.length}`, icon: <DoodleIcon name="calendar" size={14} /> },
+            { id: "hand" as const, label: `In hand ${inHand.length}`, icon: <DoodleIcon name="clock" size={14} /> },
+            { id: "done" as const, label: `Done ${done.length}`, icon: <DoodleIcon name="checklist" size={14} /> },
+          ]}
+        />
         {data?.rules && (
           <span className="ml-auto text-[11px] text-muted">
             First visit {data.rules.firstAfterMonths} months in, then every {data.rules.thenEveryMonths}. HMOs every {data.rules.hmoEveryMonths}.

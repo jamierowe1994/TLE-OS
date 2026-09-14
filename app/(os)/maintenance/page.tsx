@@ -6,6 +6,7 @@ import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import DoodleIcon from "@/components/DoodleIcon";
 import { Pill } from "@/components/Wire";
+import Segmented from "@/components/Segmented";
 import { PressButton } from "@/components/Bits";
 import { openDocument } from "@/lib/doc-sheet";
 import type { Contractor, WorksOrder, WorksEvent, WorksSummary, Kind, Move, Status, Urgency, PaidHow } from "@/lib/works-orders";
@@ -212,17 +213,22 @@ export default function Maintenance() {
             ["invoices", "Invoices", undefined],
             ["accounts", "Accounts", orders.filter((o) => o.status === "invoiced").length || undefined],
           ] as const
-        ).filter(() => rail === "jobs").map(([key, label, n]) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setSection(key)}
-            className={`rounded-full px-4 py-2 text-[12.5px] font-semibold transition-colors ${section === key ? "bg-ink text-page" : "border border-line/80 text-muted hover:border-ink/40 hover:text-ink"}`}
-          >
-            {label}
-            {n != null && <span className="ml-1.5 opacity-70">{n}</span>}
-          </button>
-        ))}
+        ).filter(() => rail === "jobs").length > 0 && (
+          /* The same sliding, brown-marked control as Properties and the rest
+             of the OS. This screen drew its own black pills, which is the one
+             place that colour appears anywhere in the product. */
+          <Segmented
+            className="w-full sm:w-auto md:min-w-[440px]"
+            value={section === "contractors" ? "repair" : section}
+            onChange={(v) => setSection(v)}
+            options={[
+              { id: "repair" as const, label: s?.byKind.repair != null ? `Repairs ${s.byKind.repair}` : "Repairs", icon: <DoodleIcon name="magic-wand" size={14} /> },
+              { id: "planned" as const, label: s?.byKind.planned != null ? `Planned ${s.byKind.planned}` : "Planned", icon: <DoodleIcon name="calendar" size={14} /> },
+              { id: "invoices" as const, label: "Invoices", icon: <DoodleIcon name="doc" size={14} /> },
+              { id: "accounts" as const, label: "Accounts", icon: <DoodleIcon name="wallet" size={14} /> },
+            ]}
+          />
+        )}
         {section !== "contractors" && section !== "invoices" && section !== "accounts" && (
           <button type="button" onClick={() => setShowClosed((v) => !v)} className="ml-auto text-[11.5px] text-muted underline transition-colors hover:text-ink">
             {showClosed ? "Hide finished jobs" : "Show finished jobs"}
