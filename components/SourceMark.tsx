@@ -18,6 +18,12 @@ import DoodleIcon from "@/components/DoodleIcon";
 const LOGO: Record<string, string> = {
   rightmove: "/brand/rightmove.png",
   zoopla: "/brand/zoopla.png",
+  /* Both supplied by James, 14 Sep 2026. OnTheMarket's arrived as a coral pin
+     on transparent, which is what the hand-drawn path below was standing in
+     for, so the real file takes over and the drawing goes. GetAgent's is a
+     white house on their blue, which retires the "GA" letters. */
+  onthemarket: "/brand/onthemarket.png",
+  getagent: "/brand/getagent.png",
 };
 
 /** Ours, in the app's own hand. */
@@ -30,10 +36,9 @@ const DOODLE: Record<string, string> = {
   walkin: "home",
 };
 
-/** Portals we have no icon file for yet: their initials, in their colour. */
-const LETTERS: Record<string, { text: string; bg: string; fg: string }> = {
-  getagent: { text: "GA", bg: "#0a2540", fg: "#ffffff" },
-};
+/* There is no initials map any more: every portal we see has its own file.
+   The next one will arrive before its logo does, and until it does it falls
+   through to the unknown case below, which draws its first letter. */
 
 const SIZE = 20;
 
@@ -50,8 +55,8 @@ function classify(source: string) {
   if (k.includes("zoopla") || k.includes("zpg")) return { kind: "logo", id: "zoopla" } as const;
   if (k.includes("instagram")) return { kind: "instagram" } as const;
   if (k.includes("facebook") || k.includes("meta")) return { kind: "facebook" } as const;
-  if (k.includes("onthemarket")) return { kind: "onthemarket" } as const;
-  if (k.includes("getagent")) return { kind: "letters", id: "getagent" } as const;
+  if (k.includes("onthemarket") || k.includes("otm")) return { kind: "logo", id: "onthemarket" } as const;
+  if (k.includes("getagent")) return { kind: "logo", id: "getagent" } as const;
   for (const id of Object.keys(DOODLE)) if (k.includes(id)) return { kind: "doodle", id } as const;
   return { kind: "unknown" } as const;
 }
@@ -87,26 +92,6 @@ function Facebook() {
       <path
         d="M16 7.4h-2c-2.2 0-3.7 1.5-3.7 3.7v1.5H8.2v2.9h2.1V22h3.1v-6.5h2.2l.4-2.9h-2.6v-1.2c0-.8.2-1.1 1-1.1H16V7.4Z"
         fill="#fff"
-      />
-    </svg>
-  );
-}
-
-/**
- * OnTheMarket's pin, redrawn from the supplied logo as a path rather than
- * shipped as the file: theirs is a JPEG on a white square, and a white tile is
- * a hole in this page's warm paper — worse on the dark theme. The coral is
- * their own, sampled off that file (#EB5C5E).
- */
-function OnTheMarket() {
-  return (
-    <svg width={SIZE} height={SIZE} viewBox="0 0 24 24" aria-hidden>
-      <path
-        d="M12 22c0 0 8.2-8.1 8.2-13A8.2 8.2 0 1 0 3.8 9c0 4.9 8.2 13 8.2 13Z"
-        fill="none"
-        stroke="#EB5C5E"
-        strokeWidth="2.7"
-        strokeLinejoin="round"
       />
     </svg>
   );
@@ -155,10 +140,6 @@ export default function SourceMark({ source, className = "" }: { source: string;
         return <Instagram />;
       case "facebook":
         return <Facebook />;
-      case "onthemarket":
-        return <OnTheMarket />;
-      case "letters":
-        return <Letters {...LETTERS[c.id]} />;
       case "doodle":
         return (
           <span className="inline-flex items-center justify-center rounded-[6px] bg-accent-soft/60 text-ink" style={{ width: SIZE, height: SIZE }}>
