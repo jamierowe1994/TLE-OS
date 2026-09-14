@@ -334,6 +334,11 @@ if (cutArg > -1) {
      neither gets a shape behind it - a vector blob under a painted one reads
      as two grounds. */
   await resetArt();
+  /* A lighter touch than the password drawing: the map and the binoculars
+     are MEANT to be green, it was only running warm-free across the whole
+     picture. */
+  fs.writeFileSync(`${ART}/radar.png`, await lessGreen(`${ART}/radar-raw.png`, 0.8));
+  await hero({ name: "hero-radar", art: "radar.png", H: 620, drawWidth: 1120, blob: "" });
   await hero({ name: "hero-reset", art: "reset.png", H: 730, drawWidth: 940, blob: "" });
 
   await hero({ name: "hero-digest", art: "digest.png", H: 600, drawWidth: 1130, blob: "" });

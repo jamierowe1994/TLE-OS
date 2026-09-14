@@ -238,6 +238,8 @@ const BROWN = "#56423e";
 
 export interface SkyListOpts {
   heading: string;
+  /** A second line under the heading - the date on a morning note. */
+  subheading?: string;
   /** The paragraph under the heading. */
   intro?: string;
   button: string;
@@ -269,6 +271,12 @@ export interface SkyListOpts {
    */
   headingFirst?: boolean;
   /**
+   * Off for a list where every row means the same thing. A marker that is
+   * the same on all ten says nothing and reads as ten warnings; the markers
+   * exist to tell rows APART.
+   */
+  rowMarkers?: boolean;
+  /**
    * Where a row goes when it is pressed. One destination for all of them for
    * now: the chase routes hand these over as formatted STRINGS, so there is
    * no property id here to link to. Worth fixing at the source rather than
@@ -293,7 +301,7 @@ export interface SkyListOpts {
 
 /** One row: marker, words, badge, chevron. Four cells, because there is no
  *  other way to put four things on a line that Outlook will agree to. */
-function listRow(r: ShellRow, href: string | undefined, last: boolean, card = false): string {
+function listRow(r: ShellRow, href: string | undefined, last: boolean, card = false, marker = true): string {
   const urgent = r.pillTone !== "calm";
   /* On a card the row carries its own colour; in a panel it sits on white. */
   const bg = !card ? PANEL : r.tone === "attention" ? "#fdeeea" : r.tone === "good" ? "#edf1e7" : "#f7f5f4";
@@ -318,11 +326,16 @@ function listRow(r: ShellRow, href: string | undefined, last: boolean, card = fa
   return `
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%${card ? ";border-radius:16px" : ""}" bgcolor="${bg}">
                 <tr>
+${
+                    marker
+                      ? `
                   <td width="${card ? 74 : 56}" valign="middle" align="${card ? "center" : "left"}" class="sky-rowico" style="width:${card ? 74 : 56}px;padding:${pad};background-color:${bg}${card ? ";border-radius:16px 0 0 16px" : ""}">
                     <img src="${ORIGIN}/email/sky/${disc}?v=${ASSET_V}" width="42" height="42" alt=""
                          style="display:block;width:42px;height:42px;border:0;outline:none;text-decoration:none">
-                  </td>
-                  <td valign="middle" align="left" style="padding:${pad};padding-left:0;text-align:left;background-color:${bg}">${words}
+                  </td>`
+                      : ""
+                  }
+                  <td valign="middle" align="left" style="padding:${pad};padding-left:${marker ? 0 : card ? 18 : 2}px;text-align:left;background-color:${bg}${!marker && card ? ";border-radius:16px 0 0 16px" : ""}">${words}
                   </td>${
                     r.pill
                       ? `
@@ -383,7 +396,12 @@ export function skyListShell(o: SkyListOpts): string {
   const headingRow = `
         <tr>
           <td align="center" class="sky-pad" style="padding:${o.headingFirst ? "26px" : "28px"} 46px 0;text-align:center;background-color:#ffffff">
-            <p class="sky-head" style="margin:0;font-family:Manrope,Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:31px;line-height:1.22;font-weight:800;letter-spacing:-0.02em;color:#1c1917;background-color:#ffffff">${esc(o.heading)}</p>
+            <p class="sky-head" style="margin:0;font-family:Manrope,Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:31px;line-height:1.22;font-weight:800;letter-spacing:-0.02em;color:#1c1917;background-color:#ffffff">${esc(o.heading)}</p>${
+              o.subheading
+                ? `
+            <p style="margin:8px 0 0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:17px;line-height:1.35;color:#78716c;background-color:#ffffff">${esc(o.subheading)}</p>`
+                : ""
+            }
           </td>
         </tr>`;
 
@@ -429,7 +447,7 @@ ${
                     ? "padding:0;background-color:#ffffff"
                     : `padding:22px 24px 24px;background-color:${PANEL};border:1px solid ${PANEL_EDGE};border-radius:20px`
                 }">${o.rowsLead ? leadLine(o.rowsLead, o.rowCards ? "#ffffff" : PANEL) : ""}${rows
-                  .map((r, i) => listRow(r, o.rowHref, i === rows.length - 1, o.rowCards))
+                  .map((r, i) => listRow(r, o.rowHref, i === rows.length - 1, o.rowCards, o.rowMarkers !== false))
                   .join("")}
                 </td>
               </tr>

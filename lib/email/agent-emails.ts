@@ -290,21 +290,30 @@ export function radarDigestEmail(input: {
     input.signals.length ? ` ${input.signals.map((s) => `${s.label} ${s.count}`).join(" · ")}.` : ""
   }`;
   const rows: ShellRow[] = input.top.map((p) => ({
-    title: `${p.score} · ${p.address}${p.rent ? ` · ${p.rent}` : ""}${p.agent ? ` (${p.agent})` : ""}`,
+    title: `${p.address}${p.rent ? ` · ${p.rent}` : ""}${p.agent ? ` (${p.agent})` : ""}`,
     detail: p.why,
     tone: "neutral",
+    /* The score is the reason the row is near the top, so it goes where the
+       eye already looks for a number rather than in front of the address. */
+    pill: String(p.score),
+    pillTone: "calm",
   }));
   const link = `${SITE}/tools/radar`;
   return {
     subject,
-    html: emailShell({
-      heading: `Landlord Radar, ${input.dateLabel}`,
+    html: skyListShell({
+      heading: "Landlord Radar",
+      subheading: input.dateLabel,
       intro,
       rows,
       rowsLead: "Top ten not yet worked",
+      /* No markers: every row here means the same thing - a door worth
+         knocking on - and the same disc ten times reads as ten warnings. */
+      rowMarkers: false,
+      rowHref: link,
       button: "Open Radar",
       link,
-      image: "illustrations/email/radar.gif",
+      hero: "hero-radar.png",
     }),
     text: [`Landlord Radar - ${input.dateLabel}`, "", intro, "", "Top ten not yet worked:", textRows(rows), "", `Open Radar: ${link}`].join("\n"),
   };
