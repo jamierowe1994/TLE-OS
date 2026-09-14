@@ -181,6 +181,10 @@ async function hero({ name, art, blob, H = 760, drawWidth = 1130 }) {
    SVG does not render in Outlook at all, so every one of these is baked to
    PNG at twice its size on the page. The glyphs are solid black on clear,
    which is what lets a flat colour be poured through them. */
+const TICK = `<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+  <path d="M7 21 L16 30 L33 11" fill="none" stroke="#000" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
 const BANG = `<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
   <rect x="17" y="7" width="6" height="18" rx="3" fill="#000"/>
   <circle cx="20" cy="32" r="3.4" fill="#000"/>
@@ -250,7 +254,20 @@ if (cutArg > -1) {
     blob: `<path d="M150,392 C158,222 286,88 462,42 C556,16 632,8 700,12 C822,20 986,50 1052,178 C1100,272 1076,436 948,528 C866,588 772,546 680,560 C600,572 548,640 424,644 C320,648 186,598 160,498 C140,444 146,424 150,392 Z" fill="#fbe6e0"/>`,
   });
 
+  await hero({
+    name: "hero-deal-moved",
+    art: "door.png",
+    H: 720,
+    drawWidth: 618,
+    /* Two shapes rather than one: a big pink behind the door and a smaller
+       one swinging out to the right, so the open door has something to open
+       INTO. One blob around a doorway just reads as a stamp behind it. */
+    blob: `<path d="M232,96 C400,58 560,72 636,168 C716,268 690,430 606,522 C520,616 358,660 244,620 C132,580 74,452 88,326 C102,204 132,118 232,96 Z" fill="#fbe6e0"/>
+           <path d="M846,238 C956,214 1076,252 1112,348 C1150,448 1118,576 1026,624 C934,672 812,648 762,568 C712,488 724,346 780,286 C806,258 818,244 846,238 Z" fill="#f7ece7"/>`,
+  });
+
   await disc({ name: "disc-attention", glyph: BANG, ring: "#c0736a", ink: { r: 255, g: 255, b: 255, alpha: 1 }, g: 34 });
+  await disc({ name: "disc-good", glyph: TICK, ring: "#8a9a76", ink: { r: 255, g: 255, b: 255, alpha: 1 }, g: 34 });
   await disc({ name: "disc-ok", glyph: "clock", ring: "#8a9a76", ink: { r: 255, g: 255, b: 255, alpha: 1 }, g: 38 });
   await disc({ name: "disc-tip", glyph: "info", ring: "#ffffff", ink: { r: 0xa8, g: 0x5a, b: 0x51, alpha: 1 }, d: 76, g: 34 });
 }

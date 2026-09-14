@@ -81,6 +81,8 @@ function head(): string {
        the address - "12 days", "expires in 12 days" - and at 320px it costs
        half the width to repeat it. */
     .sky-badge { display:none !important; }
+    /* The aside's glyph gives up most of its column on a phone: at 330px it
+       was taking a third of the width off four-word lines. */
   }
 </style>
 </head>`;
@@ -223,7 +225,8 @@ const BROWN = "#56423e";
 
 export interface SkyListOpts {
   heading: string;
-  intro: string;
+  /** The paragraph under the heading. */
+  intro?: string;
   button: string;
   link: string;
   /** A file in /email/sky - the drawing and its pink shape, already one
@@ -254,7 +257,13 @@ export interface SkyListOpts {
  *  other way to put four things on a line that Outlook will agree to. */
 function listRow(r: ShellRow, href: string | undefined, last: boolean): string {
   const urgent = r.pillTone !== "calm";
-  const disc = urgent ? "disc-attention.png" : "disc-ok.png";
+  /* The marker follows the row's own state first and its timing second:
+     something already done is a tick, something gone is an exclamation, and
+     only the rest get the clock. A row with no badge at all - a single
+     "what happens next" - would otherwise have taken the exclamation by
+     default and read as a problem. */
+  const disc =
+    r.tone === "good" ? "disc-good.png" : r.tone === "attention" || urgent ? "disc-attention.png" : "disc-ok.png";
   const title = esc(r.title);
   const words = `
                     <p style="margin:0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.3;font-weight:700;color:#1c1917;background-color:${PANEL}">${
@@ -285,9 +294,12 @@ function listRow(r: ShellRow, href: string | undefined, last: boolean): string {
                   </td>`
                       : ""
                   }
-                  <td width="22" valign="middle" align="right" style="width:22px;padding:16px 0;background-color:${PANEL};font-family:Inter,Helvetica,Arial,sans-serif;font-size:19px;line-height:1;color:#cbb7b0">${
-                    href ? `<a href="${esc(href)}" style="color:#cbb7b0;text-decoration:none">&rsaquo;</a>` : "&rsaquo;"
-                  }</td>
+${
+                    href
+                      ? `
+                  <td width="22" valign="middle" align="right" style="width:22px;padding:16px 0;background-color:${PANEL};font-family:Inter,Helvetica,Arial,sans-serif;font-size:19px;line-height:1;color:#cbb7b0"><a href="${esc(href)}" style="color:#cbb7b0;text-decoration:none">&rsaquo;</a></td>`
+                      : ""
+                  }
                 </tr>
               </table>${
                 last
@@ -330,8 +342,12 @@ ${
 
         <tr>
           <td align="center" class="sky-pad" style="padding:28px 46px 0;text-align:center;background-color:#ffffff">
-            <p class="sky-head" style="margin:0;font-family:Manrope,Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:31px;line-height:1.22;font-weight:800;letter-spacing:-0.02em;color:#1c1917;background-color:#ffffff">${esc(o.heading)}</p>
-            <p style="margin:18px 0 0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.62;color:#57534e;background-color:#ffffff">${esc(o.intro)}</p>
+            <p class="sky-head" style="margin:0;font-family:Manrope,Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:31px;line-height:1.22;font-weight:800;letter-spacing:-0.02em;color:#1c1917;background-color:#ffffff">${esc(o.heading)}</p>${
+              o.intro
+                ? `
+            <p style="margin:18px 0 0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.62;color:#57534e;background-color:#ffffff">${esc(o.intro)}</p>`
+                : ""
+            }
           </td>
         </tr>
 ${

@@ -230,13 +230,22 @@ export function dealMovedEmail(e: DealEvent, origin: string): AgentEmail {
   const link = `${origin.replace(/\/+$/, "")}/applications`;
   return {
     subject,
-    html: emailShell({
+    html: skyListShell({
+      /* The ADDRESS is the heading and the event is the line under it. An
+         agent with six deals on knows which one this is by the address long
+         before they know which of the six events it was. */
       heading: e.property,
       intro: `${sentence}.`,
-      rows: [{ title: "What happens next", detail: next, tone: e.event === "cancelled" ? "attention" : "good" }],
+      rows: [
+        {
+          title: "What happens next",
+          detail: next.replace(/^Next:\s*/, "").replace(/^./, (c) => c.toUpperCase()),
+          tone: e.event === "cancelled" ? "attention" : "good",
+        },
+      ],
       button: "Open my applications",
       link,
-      image: "illustrations/email/deal-moved.gif",
+      hero: "hero-deal-moved.png",
     }),
     text: `${e.property}\n${sentence}.\n\n${next}\n\nOpen your applications: ${link}\n`,
   };
