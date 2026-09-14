@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
+import SignModal from "@/components/landlord/SignModal";
 
 /**
- * "Sign your contract", live. Asks the OS for a DocuSeal session for this
- * landlord and this appraisal, and opens it in a new tab. When they finish,
+ * "Sign your contract", live. Asks the OS for a signing session for this
+ * landlord and this appraisal, and opens it IN A MODAL ON THIS PAGE - never
+ * in a new tab. James, 14 Sep 2026: "it will look a bit shocking for them to
+ * get sent to some random site. No one's heard of DocuSeal." When they finish,
  * the signed PDF comes back through the webhook and the next load of this
  * page has the step gone and the file at compliance. If signing is not
  * switched on, or the terms are not ready, the tile says so in place.
@@ -26,6 +29,7 @@ export default function SignTile({
 }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [signing, setSigning] = useState<string | null>(null);
 
   async function open() {
     if (busy) return;
@@ -39,8 +43,7 @@ export default function SignTile({
       });
       const j = (await r.json()) as { ok?: boolean; url?: string; error?: string };
       if (j.ok && j.url) {
-        window.open(j.url, "_blank", "noopener");
-        setNote("Opened in a new tab. Refresh this page once you have signed.");
+        setSigning(j.url);
       } else {
         setNote(j.error ?? "Couldn't open the terms just now.");
       }
@@ -51,8 +54,21 @@ export default function SignTile({
     }
   }
 
+  const modal = signing ? (
+    <SignModal
+      url={signing}
+      onClose={() => setSigning(null)}
+      onDone={() => {
+        setSigning(null);
+        /* The webhook files it; this only makes the page behind agree. */
+        window.location.reload();
+      }}
+    />
+  ) : null;
+
   if (variant === "row") {
     return (
+      <>
       <button type="button" onClick={open} disabled={busy} className="flex w-full items-center gap-4 py-3.5 text-left transition-opacity hover:opacity-80 disabled:opacity-60">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line/60 text-muted">
           <DoodleIcon name={icon} size={16} />
@@ -63,6 +79,8 @@ export default function SignTile({
         </span>
         <span aria-hidden className="text-[15px] text-muted">›</span>
       </button>
+      {modal}
+      </>
     );
   }
 
@@ -79,11 +97,16 @@ export default function SignTile({
           <span aria-hidden>→</span>
         </button>
         {note && <p className="mt-2.5 text-[12px] text-muted">{note}</p>}
+        {modal}
       </div>
     );
   }
 
+  /* The modal is a SIBLING of the button, never a child: a dialog inside a
+     <button> is invalid, and every click inside it would press the button
+     underneath and open a second session. */
   return (
+    <>
     <button
       type="button"
       onClick={open}
@@ -97,5 +120,7 @@ export default function SignTile({
       <span className="mt-1 text-[11.5px] leading-snug text-muted">{note ?? sub}</span>
       <span className="mt-2.5 text-[13px] text-muted">›</span>
     </button>
+    {modal}
+    </>
   );
 }
