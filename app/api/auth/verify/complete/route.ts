@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { consumeVerification, VerificationError } from "@/lib/verification";
-import { createSessionToken, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
+import { createSessionToken, hashPassword, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
 import { createUser, findUserByEmail } from "@/lib/users";
 import { isFoundingOwner } from "@/lib/email-policy";
 import { isInvited, invitedRole, markInviteAccepted } from "@/lib/pilot";
-import { hasDb } from "@/lib/db";
+import { hasDb, q } from "@/lib/db";
 
 /**
  * "Here's my link and the password I've chosen."
@@ -78,13 +78,31 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  /* The token is already spent by here, so a race that got two requests
-     through lands on this and the second one is told plainly. */
-  if (await findUserByEmail(email)) {
-    return NextResponse.json(
-      { ok: false, error: "There's already an account on that address — sign in instead." },
-      { status: 409 }
-    );
+  /* ── An account that already exists is the NORMAL case for the pilot ─────
+     
+     Found 14 Sep 2026, testing the way in: an invite to somebody James had
+     already created ended here, at "sign in instead" - and they had never had
+     a password to sign in WITH. Worse, the token is spent by this line, so the
+     link was dead and the only way through was the forgotten-password form.
+     Kirstie's two invites both landed in exactly that hole.
+     
+     An invite means "here is your account, choose a password", so that is what
+     it now does. It is the same act as a reset, with the same proof: a
+     single-use link, minted only by an owner, sent to the address it names.
+     
+     The ROLE is not touched. Whatever they already are, they stay - a password
+     being set must never be the thing that quietly changes what somebody can
+     see. And their name is only filled in if the account has none. */
+  const existing = await findUserByEmail(email);
+  if (existing) {
+    await q(`update os_users set password_hash = $1 where id = $2`, [hashPassword(password), existing.id]);
+    if (!existing.name?.trim() && name.trim()) {
+      await q(`update os_users set name = $1 where id = $2`, [name.trim(), existing.id]);
+    }
+    await markInviteAccepted(email);
+    const res = NextResponse.json({ ok: true, user: existing, existed: true });
+    res.cookies.set(SESSION_COOKIE, createSessionToken(existing.id), sessionCookieOptions(true));
+    return res;
   }
 
   /* The role comes off the INVITE, which only an owner can write, and never
