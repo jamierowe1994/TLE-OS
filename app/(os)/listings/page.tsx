@@ -130,7 +130,17 @@ type PeriodId = (typeof PERIODS)[number]["id"];
 
 function listedIn(iso: string | null | undefined, period: PeriodId): boolean {
   if (period === "any") return true;
-  if (!iso) return period !== "older";
+  /* NEVER PUBLISHED means it is in no window at all.
+     The rule above says a listing with no go-live date "survives every window
+     except the ones about when something happened" - but the code read
+     `period !== "older"`, which excluded it from only ONE of the three. So
+     "Date listed: This month" answered with 33 listings that have no date
+     listed. Measured 14 Sep 2026 while checking that month scoping rolls over:
+     with the clock moved to January 2027 the filter still returned 33, all of
+     them drafts, which is how it was noticed.
+     An UNREADABLE date is a different thing and still passes below: we know it
+     was published, we just cannot tell when, and hiding it would be a guess. */
+  if (!iso) return false;
   const at = new Date(iso).getTime();
   if (Number.isNaN(at)) return true;
   const now = Date.now();

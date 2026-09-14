@@ -317,7 +317,7 @@ These come from each screen's own caveats in `lib/screens.ts` - the screen tells
 | # | What |
 |---|---|
 | F3.1 | The one written guide under Admin is still a static page |
-| F3.2 | **Steve's knowledge base is empty - 0 entries** (= J26). The questions he could not answer are the writing order on /knowledge. |
+| F3.2 | **Steve's knowledge base is empty - 0 entries** (= J26). The questions he could not answer are the writing order on /knowledge. **RE-SCOPED 14 Sep: the platform half is already done, and doing it by hand would make it worse.** `systemMap()` composes `screensSection()` into Steve's prompt, generated from the code on every boot and read BEFORE the knowledge base - so every screen, what it does and what is not wired are already properly in his head, live. His empty-knowledge block says so explicitly and tells him never to refuse a tour. Copying those descriptions into the knowledge base would duplicate them AND freeze them, which is the stale-snapshot failure the code is designed against. **What is actually missing is only what Susan and Francesca have to write: fees, policies, how this office does a thing.** Order item 17 should be read as that, not as a job for Claude. |
 
 ## G. Found this week, and it needs a person rather than code
 
@@ -329,6 +329,37 @@ These come from each screen's own caveats in `lib/screens.ts` - the screen tells
 | G4 | Let-only homes inside REX PM's managed book - off compliance by decision, but nothing tells Bond to ring them when a certificate falls due | 73 |
 | G5 | REX PM's 522 letting agreements are 477 distinct properties - anything quoted "of 522" counts 45 twice | 45 |
 | G6 | Propoly holds 643 deals, read ten to a page | 65 requests a full read |
+
+## G2d. The hardcoded-month risk, tested rather than assumed, 14 Sep
+
+`~/.claude/CLAUDE.md` names this first: "the live-figures rule bit TLE-portal 44 times over 23
+days. Same stack, same seam, same risk here. Month scoping must roll over on its own - verify
+against a date past the current month, not just today."
+
+**Verdict: clean.** Every month scope in the OS is computed from `now.getFullYear()` /
+`now.getMonth()` - all nine call sites read and checked. The only hardcoded month series in the
+codebase is in `SAMPLE_DECK`, and a real deck gates that slide on real points (`present.ts:898`),
+so no invented history can reach a landlord. `MONEY_FLOOR = "2025-08"` is measured, not
+aspirational, and matches the Finances caveat.
+
+**Tested, not just read.** The OS was driven with the browser clock moved to **3 January 2027** -
+past the month AND past the year - against a control run at today's date. Pages rendered
+identically, no NaN and no Invalid Date, and the Listings "This month" window moved with the
+clock.
+
+**One real bug found by doing it.** With the clock in January 2027, "Date listed: This month"
+still returned 33 listings. `listedIn()`'s own rule says a listing with no go-live date "survives
+every window except the ones about when something happened" - but the code read
+`period !== "older"`, which excluded it from only one of the three windows. So the filter was
+answering with 33 listings that have **no date listed at all**. Fixed: never-published means in
+no window. Now 17 this month, 0 in January 2027. An unreadable date still passes, deliberately -
+we know it was published, we just cannot read when.
+
+**Left alone, for James.** `/market-appraisals` has the same shape (`inPeriod`, undated survives
+everything but "past"). The stakes differ: there the date is an appointment, and its comment
+defends showing undated ones as "a defect worth seeing". Changing it could hide an unbooked
+appraisal from a board about work to do. **Worth one decision: should "This month" on Market
+Appraisals include appraisals with no date booked?**
 
 ## G2c. The screen docs audited against the code, 14 Sep
 
