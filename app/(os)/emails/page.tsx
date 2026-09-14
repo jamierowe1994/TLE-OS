@@ -138,6 +138,23 @@ export default function Emails() {
         blurb="Everything sent under the company's name, from REX's own send log — the automation and the agents, kept apart."
       />
 
+      {/* WHERE THE WORDS ARE CHANGED, said on the page people come to looking
+          for them. Danielle, 11 Sep, asked for "a section for custom email
+          templates in Settings" - the editor already existed, on the Marketing
+          hub and in Admin, and Settings has been a redirect to the profile
+          since the two rooms merged. So nothing needed building; what was
+          missing was a sign. This page is the one somebody opens when they
+          want to change an email, and it is an AUDIT: it says what went out,
+          and could not tell you where to go and edit it. */}
+      <p className="fade-up mt-4 rounded-2xl border border-line/80 bg-box px-4 py-3 text-[12px] leading-relaxed text-muted">
+        <span className="font-semibold text-ink">Changing the wording?</span> This page is the record of what
+        went out. The words themselves are edited on the{" "}
+        <a href="/marketing" className="font-semibold text-ink underline underline-offset-2">Marketing hub</a>{" "}
+        (Francesca&apos;s screen) and in{" "}
+        <a href="/admin/emails" className="font-semibold text-ink underline underline-offset-2">Admin, Emails</a>.
+        An edit there is an overlay on what the code says, so any email can be put back to the original in one press.
+      </p>
+
       {error && (
         <p className="fade-up mt-4 rounded-2xl border border-line/80 bg-panel p-5 text-[12.5px] text-muted">
           {error}
