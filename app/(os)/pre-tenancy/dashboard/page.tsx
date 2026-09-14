@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
-import DealFeed from "@/components/DealFeed";
+import DealFeed, { popOutFeed } from "@/components/DealFeed";
 import DesktopInstall from "@/components/DesktopInstall";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
 import PreTenancyHero from "@/components/pretenancy/Hero";
@@ -76,7 +76,7 @@ function prettyDay(ymd: string): string {
   return new Date(`${ymd}T00:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
 
-function Head({ icon, title, sub, href, tone = "neutral" }: { icon: string; title: string; sub?: string; href?: string; tone?: "neutral" | "pink" }) {
+function Head({ icon, title, sub, href, popOut, tone = "neutral" }: { icon: string; title: string; sub?: string; href?: string; popOut?: boolean; tone?: "neutral" | "pink" }) {
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="flex items-start gap-3">
@@ -88,11 +88,36 @@ function Head({ icon, title, sub, href, tone = "neutral" }: { icon: string; titl
           {sub && <p className="mt-0.5 text-[12px] text-muted">{sub}</p>}
         </div>
       </div>
-      {href && (
-        <Link href={href} className="flex shrink-0 items-center gap-1 pt-1 text-[12px] font-semibold text-muted transition-colors hover:text-ink">
-          View all <DoodleIcon name="trend-up" size={11} />
-        </Link>
-      )}
+      <div className="flex shrink-0 items-center gap-3 pt-1">
+        {/* The pop-out was BUILT and nobody could find it: it lived on the
+            feed page, one click past the card that is about it, so James went
+            looking on the dashboard and the board on 14 Sep and concluded he
+            had deleted it by accident. Kirstie's ask was "so you don't have to
+            constantly open it", and a control she has to open the OS to reach
+            is not that. It is the same window as the button on the feed page -
+            one definition, in DealFeed. */}
+        {/* The mark alone, not the words. This card is the narrowest of the
+            three and a second text control pushed "What moved" onto two lines
+            and squeezed its subtitle into a column - so the affordance stays
+            and the width goes back to the title. The words live in the
+            tooltip and in the label a screen reader reads. */}
+        {popOut && (
+          <button
+            type="button"
+            onClick={popOutFeed}
+            title="Pop this out into a small window you can leave to one side of your screen"
+            aria-label="Pop the feed out into its own window"
+            className="flex h-6 w-6 items-center justify-center rounded-full text-muted transition-colors hover:bg-page hover:text-ink"
+          >
+            <DoodleIcon name="link" size={12} />
+          </button>
+        )}
+        {href && (
+          <Link href={href} className="flex items-center gap-1 text-[12px] font-semibold text-muted transition-colors hover:text-ink">
+            View all <DoodleIcon name="trend-up" size={11} />
+          </Link>
+        )}
+      </div>
     </div>
   );
 }
@@ -225,7 +250,7 @@ export default function PreTenancyDashboard() {
         </section>
 
         <section className={`${card} fade-up p-5`} data-search>
-          <Head icon="bell" title="What moved" sub="Every deal Propoly moved, as it happens." href="/pre-tenancy/feed" />
+          <Head icon="bell" title="What moved" sub="Every deal Propoly moved, as it happens." href="/pre-tenancy/feed" popOut />
           <div className="mt-3">
             <DealFeed compact limit={6} />
           </div>
