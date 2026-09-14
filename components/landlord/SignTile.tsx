@@ -15,17 +15,30 @@ import SignModal from "@/components/landlord/SignModal";
  */
 export default function SignTile({
   appraisalId,
+  url,
   label,
   sub,
   icon,
   variant = "tile",
 }: {
-  appraisalId: string;
+  appraisalId: string | null;
+  /**
+   * A contract that already exists, opened straight in the modal without
+   * asking the OS for one.
+   *
+   * The harness needs this. Its sign tile was a plain external link, so the
+   * demo kept opening a new tab to DocuSeal while the real portal opened the
+   * modal - James refreshed it, saw no change, and was right: the modal had
+   * never applied there. The screen built to show people what this looks like
+   * has to be the screen that looks like it.
+   */
+  url?: string | null;
   label: string;
   sub: string;
   icon: string;
-  /** "button": the big call to action on the "Your next step" card (11 Sep 2026). */
-  variant?: "tile" | "button" | "row";
+  /** "button": the big call to action on the "Your next step" card (11 Sep 2026).
+   *  "link": the quiet one on the "Also:" line. */
+  variant?: "tile" | "button" | "row" | "link";
 }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -33,6 +46,15 @@ export default function SignTile({
 
   async function open() {
     if (busy) return;
+    /* Already have one: straight into the modal, no session to mint. */
+    if (url) {
+      setSigning(url);
+      return;
+    }
+    if (!appraisalId) {
+      setNote("There is no contract on this file yet.");
+      return;
+    }
     setBusy(true);
     setNote(null);
     try {
@@ -78,6 +100,17 @@ export default function SignTile({
           <span className="block text-[12px] text-muted">{note ?? sub}</span>
         </span>
         <span aria-hidden className="text-[15px] text-muted">›</span>
+      </button>
+      {modal}
+      </>
+    );
+  }
+
+  if (variant === "link") {
+    return (
+      <>
+      <button type="button" onClick={open} disabled={busy} className="font-semibold text-ink underline decoration-line underline-offset-4 transition hover:decoration-ink disabled:opacity-60">
+        {busy ? "Opening…" : label}
       </button>
       {modal}
       </>

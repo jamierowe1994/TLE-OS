@@ -98,7 +98,7 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
      * document in whatever state it reached, which is still a truer answer
      * than a hash.
      */
-    sign: { id: "sign", label: "Sign your contract", sub: "Review and sign your management terms", href: DEMO_CONTRACT, icon: "pencil", external: true, done: done("instruction") },
+    sign: { id: "sign", label: "Sign your contract", sub: "Review and sign your management terms", href: DEMO_CONTRACT, icon: "pencil", action: "sign", done: done("instruction") },
     compliance: {
       id: "compliance",
       label: "Upload compliance documents",

@@ -28,8 +28,10 @@ export function pickHero(v: LandlordView): ViewStep | null {
 /** The big button on the next-step and current-stage cards. */
 export function HeroAction({ s, v, anchorBase = "", label }: { s: ViewStep; v: LandlordView; anchorBase?: string; label?: string }) {
   const text = label ?? s.label;
-  if (s.action === "sign" && v.appraisalId) {
-    return <SignTile variant="button" appraisalId={v.appraisalId} label={text} sub={s.sub} icon={s.icon} />;
+  /* The modal, whether the contract is minted on demand (the real portal) or
+     already drafted (the harness). Either way it opens on our page. */
+  if (s.action === "sign" && (v.appraisalId || s.href)) {
+    return <SignTile variant="button" appraisalId={v.appraisalId ?? null} url={v.appraisalId ? null : s.href} label={text} sub={s.sub} icon={s.icon} />;
   }
   if (s.action === "message") {
     return (
@@ -54,8 +56,8 @@ export function HeroAction({ s, v, anchorBase = "", label }: { s: ViewStep; v: L
 
 /** One row of "What you can do now". */
 export function StepRow({ s, v, anchorBase = "" }: { s: ViewStep; v: LandlordView; anchorBase?: string }) {
-  if (s.action === "sign" && v.appraisalId) {
-    return <SignTile variant="row" appraisalId={v.appraisalId} label={s.label} sub={s.sub} icon={s.icon} />;
+  if (s.action === "sign" && (v.appraisalId || s.href)) {
+    return <SignTile variant="row" appraisalId={v.appraisalId ?? null} url={v.appraisalId ? null : s.href} label={s.label} sub={s.sub} icon={s.icon} />;
   }
   if (s.action === "message") {
     return (
