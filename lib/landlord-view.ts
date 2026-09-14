@@ -227,7 +227,31 @@ export interface LandlordView {
  * live, the listing and viewings take over. Steps without a link still show,
  * greyed, so the shape of the page holds from one stage to the next.
  */
-export function stepsForStage(stage: Stage, all: Record<ViewStep["id"], ViewStep>): ViewStep[] {
+export function stepsForStage(
+  stage: Stage,
+  all: Record<ViewStep["id"], ViewStep>,
+  opts: {
+    /**
+     * Has the landlord actually opened their presentation?
+     *
+     * James, 14 Sep 2026: "when we send over the presentation, the next step
+     * should be View your presentation, rather than it being Sign your
+     * contract. Once I've viewed it once ... it should then change to the view
+     * we've got now."
+     *
+     * Which is the right way round. Asking somebody to sign a management
+     * agreement before they have read what they are agreeing to is the wrong
+     * first thing to put in front of them, and it is the one tile a landlord
+     * cannot undo. So until the deck is opened there is one next step, and it
+     * is the deck.
+     *
+     * Undefined means nobody knows - a stage with no presentation in it, or a
+     * caller that does not track opens - and the tile behaves as it always
+     * did. Only a definite FALSE holds the contract back.
+     */
+    presentationOpened?: boolean;
+  } = {}
+): ViewStep[] {
   const order: Record<Stage, ViewStep["id"][]> = {
     valuation: ["presentation", "message", "compliance", "sign"],
     instruction: ["presentation", "sign", "compliance", "message"],
@@ -237,8 +261,13 @@ export function stepsForStage(stage: Stage, all: Record<ViewStep["id"], ViewStep
     let: ["tenancy", "viewings", "message", "compliance"],
     managed: ["maintenance", "renewal", "certificates", "message"],
   };
+  /* Held back only where signing is the thing being offered. Once they are
+     past instruction the contract is history and the order says so anyway. */
+  const holdSign =
+    opts.presentationOpened === false && (stage === "valuation" || stage === "instruction");
+
   return order[stage]
     .map((id) => all[id])
-    .filter((s): s is ViewStep => Boolean(s) && !s.done)
+    .filter((s): s is ViewStep => Boolean(s) && !s.done && !(holdSign && s.id === "sign"))
     .slice(0, 4);
 }

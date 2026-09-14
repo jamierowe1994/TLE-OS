@@ -275,6 +275,12 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
       maintenance: { id: "maintenance", label: "Maintenance", sub: "Opens once your tenant moves in", href: null, icon: "setting" },
       renewal: { id: "renewal", label: "Tenancy renewal", sub: "After the let", href: null, icon: "calendar" },
       certificates: { id: "certificates", label: "Certificates", sub: "After the let", href: null, icon: "shield" },
+    }, {
+      /* Counted by the viewer itself when the deck is genuinely on screen -
+         see /api/present/opened - so this is "they read it", not "we sent it".
+         Undefined while there is no presentation at all, which leaves the
+         tiles exactly as they were. */
+      presentationOpened: latest ? latest.opens > 0 : undefined,
     }),
     documents,
     marketing,

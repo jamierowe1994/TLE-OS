@@ -53,6 +53,14 @@ const DONE_ON: Record<Stage, string> = {
   managed: "",
 };
 
+/**
+ * The drafted contract behind the demo's Sign tile. A standing DocuSeal draft
+ * on the live template, filled with Raj's figures, that emails nobody. Rebuild
+ * it with scripts/build-tob-template.mjs and a submission if the template is
+ * ever replaced; a dead link here shows the document, not an error.
+ */
+const DEMO_CONTRACT = "https://docuseal.eu/s/a92ZBR5FYrAwCK";
+
 /** Everything the portal can show for Raj at one stop. */
 export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maintenance: MaintView } {
   const at = rank(stage);
@@ -72,7 +80,25 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
   /* ── the steps, every one a real place to go ── */
   const all: Record<ViewStep["id"], ViewStep> = {
     presentation: { id: "presentation", label: "View presentation", sub: "See how we'll let your property for you", href: "#", icon: "analytics", action: "presentation" },
-    sign: { id: "sign", label: "Sign your contract", sub: "Review and sign your management terms", href: "#", icon: "pencil", external: true, done: done("instruction") },
+    /**
+     * THE REAL CONTRACT, filled in, so it can actually be looked at.
+     *
+     * James, 14 Sep 2026: "at the moment it's not showing any contract getting
+     * drafted, which means I can't view what it looks like, if the positions
+     * are right, all of that kind of stuff." The tile went to "#" - a step
+     * that demonstrated nothing.
+     *
+     * It opens a standing DocuSeal draft of the September England terms with
+     * Raj's figures in it, so what is on screen is the document as a landlord
+     * meets it: the ten boxes on page 2, both signature blocks, the waiver.
+     * Nobody is emailed - it was minted with send_email false, against
+     * @sandbox.invalid, which by lib/sandbox's rule can never resolve.
+     *
+     * If it is ever completed or archived the link still opens, showing the
+     * document in whatever state it reached, which is still a truer answer
+     * than a hash.
+     */
+    sign: { id: "sign", label: "Sign your contract", sub: "Review and sign your management terms", href: DEMO_CONTRACT, icon: "pencil", external: true, done: done("instruction") },
     compliance: {
       id: "compliance",
       label: "Upload compliance documents",
@@ -153,7 +179,14 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
       lat: 52.9548,
       lng: -1.1581,
     },
-    steps: stepsForStage(stage, all),
+    steps: stepsForStage(stage, all, {
+      /* The harness has a deck on every stop from the valuation on, and the
+         point of the sample is to show what a landlord meets - so it shows the
+         BEFORE state at the valuation, where the presentation has landed and
+         has not been read, and the after state from instruction on. That is
+         the change James asked to be able to see. */
+      presentationOpened: stage !== "valuation",
+    }),
     documents,
     /* The listing matters from marketing to let agreed; once the tenant is in it is history. */
     marketing: marketing && !managed
