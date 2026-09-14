@@ -261,6 +261,14 @@ export interface SkyListOpts {
    */
   rowCards?: boolean;
   /**
+   * Heading above the picture, the paragraph below it. The default order -
+   * picture, heading, paragraph - suits a mail whose drawing sets the scene;
+   * this one suits a mail whose drawing illustrates a subject the heading has
+   * already named, and it stops the picture being the first thing a reader
+   * has to interpret with nothing to hang it on.
+   */
+  headingFirst?: boolean;
+  /**
    * Where a row goes when it is pressed. One destination for all of them for
    * now: the chase routes hand these over as formatted STRINGS, so there is
    * no property id here to link to. Worth fixing at the source rather than
@@ -359,6 +367,35 @@ function leadLine(lead: NonNullable<SkyListOpts["rowsLead"]>, bg: string): strin
 export function skyListShell(o: SkyListOpts): string {
   const safe = esc(o.link);
   const rows = o.rows ?? [];
+
+  const heroRow = o.hero
+    ? `
+        <tr>
+          <!-- The drawing and any shape behind it are one flat picture:
+               there is no layering in an inbox. -->
+          <td style="padding:${o.headingFirst ? "20px" : "22px"} 0 0;font-size:0;line-height:0;background-color:#ffffff">
+            <img src="${ORIGIN}/email/sky/${o.hero}?v=${ASSET_V}" width="600" alt=""
+                 style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none">
+          </td>
+        </tr>`
+    : "";
+
+  const headingRow = `
+        <tr>
+          <td align="center" class="sky-pad" style="padding:${o.headingFirst ? "26px" : "28px"} 46px 0;text-align:center;background-color:#ffffff">
+            <p class="sky-head" style="margin:0;font-family:Manrope,Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:31px;line-height:1.22;font-weight:800;letter-spacing:-0.02em;color:#1c1917;background-color:#ffffff">${esc(o.heading)}</p>
+          </td>
+        </tr>`;
+
+  const introRow = o.intro
+    ? `
+        <tr>
+          <td align="center" class="sky-pad" style="padding:${o.headingFirst ? "20px" : "18px"} 46px 0;text-align:center;background-color:#ffffff">
+            <p style="margin:0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.62;color:#57534e;background-color:#ffffff">${esc(o.intro)}</p>
+          </td>
+        </tr>`
+    : "";
+
   return `${head()}
 <body style="margin:0;padding:0;background-color:#ffffff">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="background-color:#ffffff;margin:0;padding:0">
@@ -373,30 +410,7 @@ export function skyListShell(o: SkyListOpts): string {
           </td>
         </tr>
 
-${
-  o.hero
-    ? `
-        <tr>
-          <!-- The drawing and the pink shape behind it are one flat picture:
-               there is no layering in an inbox. -->
-          <td style="padding:22px 0 0;font-size:0;line-height:0;background-color:#ffffff">
-            <img src="${ORIGIN}/email/sky/${o.hero}?v=${ASSET_V}" width="600" alt=""
-                 style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none">
-          </td>
-        </tr>`
-    : ""
-}
-
-        <tr>
-          <td align="center" class="sky-pad" style="padding:28px 46px 0;text-align:center;background-color:#ffffff">
-            <p class="sky-head" style="margin:0;font-family:Manrope,Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:31px;line-height:1.22;font-weight:800;letter-spacing:-0.02em;color:#1c1917;background-color:#ffffff">${esc(o.heading)}</p>${
-              o.intro
-                ? `
-            <p style="margin:18px 0 0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.62;color:#57534e;background-color:#ffffff">${esc(o.intro)}</p>`
-                : ""
-            }
-          </td>
-        </tr>
+${o.headingFirst ? `${headingRow}${heroRow}${introRow}` : `${heroRow}${headingRow}${introRow}`}
 ${
   rows.length
     ? `

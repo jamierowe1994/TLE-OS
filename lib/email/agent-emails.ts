@@ -212,6 +212,9 @@ export function pretenancyDigestEmail(alerts: DealAlert[]): AgentEmail {
          thing in it, and which kind a row is should be readable before the
          row is. */
       rowCards: true,
+      /* Heading first here: the drawing illustrates a morning the heading has
+         already named, so it reads better once you know what it is of. */
+      headingFirst: true,
       rowHref: link,
       button: "Open the board",
       link,
