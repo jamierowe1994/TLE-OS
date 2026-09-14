@@ -203,11 +203,38 @@ export default function NextUp({
       ),
     };
   } else if (stage === "takeon") {
-    card = {
-      icon: "pack/photo",
-      title: "Book the take-on visit",
-      sub: "Terms are signed. The photographs and the description come from this visit - a diary entry, so nothing to press here yet.",
-    };
+    /**
+     * THE DESCRIPTION GETS A STEP HERE (c06, Danielle 11 Sep).
+     *
+     * The stage has always SAID the description comes from this visit, and
+     * then offered nothing to press - "a diary entry, so nothing to press here
+     * yet". So the one piece of writing that stands between a property and
+     * going live had no place in the flow at all, and turned up later as a
+     * blank box on a listing somebody had to notice.
+     *
+     * It is not duplicated here. Portal copy belongs on the listing, because
+     * that is what REX publishes and there must be one of it - so the step is
+     * a door to the listing's own Marketing tab, where the draft button
+     * already lives. Before a listing exists there is nothing to write
+     * against, and the card says that rather than offering a button that
+     * cannot work.
+     */
+    card = ma.rexPropertyId
+      ? {
+          icon: "pack/photo",
+          title: "Photographs, and the description",
+          sub: "Terms are signed and the visit is the one that produces them. The description is written on the listing, and Claude will draft it from the record and the photographs.",
+          body: (
+            <Link href={`/listings?open=${encodeURIComponent(ma.rexPropertyId)}`} className={primary}>
+              Write the description <span aria-hidden>→</span>
+            </Link>
+          ),
+        }
+      : {
+          icon: "pack/photo",
+          title: "Book the take-on visit",
+          sub: "Terms are signed. The photographs and the description come from this visit. The description is written on the listing, so it waits until there is one.",
+        };
   } else if (missingFigure || (visitPassed && ma.valuation == null)) {
     card = { icon: "pencil", title: "Record the figure", body: <ValuationSteps appraisal={ma} onSaved={onSaved} /> };
   } else if (ma.valuation != null && !post) {
