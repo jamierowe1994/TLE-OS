@@ -386,7 +386,40 @@ export function shapeApplication(r: Row): Application {
  * Aug against 27 Aug) and was the one screen on the rail still showing every
  * agent everybody's book.
  */
+/**
+ * The pull, kept for a minute.
+ *
+ * REX caps a page at 100, so asking for 300 is three round trips - measured
+ * 14 Sep 2026 at four to six seconds. The journey behind an application does
+ * exactly that to find ONE application by its id, which is why opening a file
+ * left an agent looking at "Checking where this is up to" for seven seconds
+ * with the answer itself taking 1.7 of them.
+ *
+ * A minute: short enough that the screen is still live (an application that
+ * changed in REX is on the board within the minute, and every figure on it
+ * is REX's own), long enough that the list and the file opened from it share
+ * one pull instead of paying for two.
+ *
+ * Keyed by what was asked for, because the business pull and one agent's pull
+ * are different books and must never be served to each other.
+ */
+const APPS_TTL_MS = 60_000;
+const appsCache = new Map<string, { at: number; apps: Application[] }>();
+
 export async function getApplications(limit = 100, rexUserId?: string | null): Promise<Application[]> {
+  const key = `${limit}:${rexUserId ?? ""}`;
+  const hit = appsCache.get(key);
+  if (hit && Date.now() - hit.at < APPS_TTL_MS) return hit.apps;
+
+  /* A bigger pull already in hand answers a smaller one: the list asks for
+     100 and the journey for 300, and the second is a superset of the first. */
+  for (const [k, v] of appsCache) {
+    const [n, who] = k.split(":");
+    if (who === (rexUserId ?? "") && Number(n) >= limit && Date.now() - v.at < APPS_TTL_MS) {
+      return v.apps.slice(0, limit);
+    }
+  }
+
   const out: Application[] = [];
   for (let offset = 0; out.length < limit; offset += 100) {
     const page = Math.min(100, limit - out.length);
@@ -402,7 +435,40 @@ export async function getApplications(limit = 100, rexUserId?: string | null): P
     out.push(...rows.map(shapeApplication));
     if (rows.length < page) break;
   }
+  appsCache.set(key, { at: Date.now(), apps: out });
   return out;
+}
+
+/**
+ * One application, by its id.
+ *
+ * The journey behind a file needs exactly one, and it was finding it by
+ * pulling three hundred - three round trips and four to six seconds, to throw
+ * 299 away (14 Sep 2026). REX will filter on the id, so this asks for the one.
+ *
+ * If REX will not answer that way it falls back to the walk, which is what
+ * the caller did before, so the worst case is today's behaviour rather than
+ * an empty screen.
+ */
+export async function getApplicationById(id: string): Promise<Application | null> {
+  const fresh = Date.now() - APPS_TTL_MS;
+  for (const [, v] of appsCache) {
+    if (v.at > fresh) {
+      const hit = v.apps.find((a) => a.id === id);
+      if (hit) return hit;
+    }
+  }
+
+  const res = await rexCall("TenancyApplications", "search", {
+    criteria: [{ name: "id", type: "=", value: id }],
+    limit: 1,
+  }).catch(() => null);
+  const rows = res?.ok ? rexRows(res.result) : [];
+  if (rows.length) return shapeApplication(rows[0]);
+
+  /* REX would not filter on the id. Do it the long way rather than tell an
+     agent the file does not exist. */
+  return (await getApplications(300)).find((a) => a.id === id) ?? null;
 }
 
 /* ── making one ───────────────────────────────────────────────────────────── */
@@ -569,5 +635,8 @@ export async function createApplication(a: NewApplication, actorToken: string | 
     actorToken
   );
   if (!res.ok) throw new Error(res.error ?? "REX refused the application.");
+  /* The book has changed, so the minute's grace is over: an agent who has
+     just filed one must see it on the list they land back on. */
+  appsCache.clear();
   return res.result;
 }

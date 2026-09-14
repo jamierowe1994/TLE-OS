@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
-import { getApplications } from "@/lib/applications";
+import { getApplicationById } from "@/lib/applications";
 import { rexConfigured } from "@/lib/rex";
 import { journeyFor } from "@/lib/application-journey";
 
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
 
   /* The book, then the one. TenancyApplications has no id criterion that
      behaves, which is why every reader here pulls and matches. */
-  const app = (await getApplications(300)).find((a) => a.id === id);
+  const app = await getApplicationById(id);
   if (!app) return NextResponse.json({ ok: false, error: `No application ${id}.` }, { status: 404 });
 
   try {
