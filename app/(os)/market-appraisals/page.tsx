@@ -100,6 +100,8 @@ export default function MarketAppraisals() {
      asking, so the screen can say "loading" rather than flashing "none yet" at
      somebody who has just booked one. */
   const [live, setLive] = useState<MarketAppraisal[] | null>(null);
+  /* Booking one from here, for an appraisal that never was a lead. */
+  const [booking, setBooking] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -174,6 +176,14 @@ export default function MarketAppraisals() {
 
   return (
     <>
+      {booking ? (
+        <BookPanel
+          onClose={() => setBooking(false)}
+          /* Straight onto the file, the same landing as booking from a lead -
+             the next thing to do is the research, and it lives there. */
+          onBooked={(id) => router.push(`/market-appraisals/${id}`)}
+        />
+      ) : null}
       <PageHeader
         title="Market Appraisals"
         blurb="Booked, prepared, appraised, won. Everything between a landlord saying yes to a visit and signing terms."
@@ -224,6 +234,17 @@ export default function MarketAppraisals() {
              on a 390px screen would not fit beside the reserved artwork and
              took the page 32px sideways (10 Sep 2026). */
           <div className="flex flex-wrap items-center gap-2.5">
+            {/* First, and the only filled button on the row: it is the one
+                thing on this screen that MAKES something rather than sorting
+                what is already here. */}
+            <button
+              type="button"
+              onClick={() => setBooking(true)}
+              className="btn-press flex items-center gap-2 rounded-full bg-accent-dark px-4 py-2 text-[12px] font-semibold text-page"
+            >
+              <DoodleIcon name="calendar" size={13} />
+              Book an appraisal
+            </button>
             {/* List or tiles, with the words on - the same switch, in the
                 same place, as Leads (James, 11 Sep). The marker SLIDES
                 between them - see components/Segmented. */}
@@ -452,5 +473,170 @@ function AppraisalCard({ m, tile }: { m: MarketAppraisal & { live: MaStage }; ti
       </div>
       <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">{badges}</div>
     </Link>
+  );
+}
+
+/* ─────────────────────── booking one from this screen ────────────────────── */
+
+/**
+ * Book an appraisal without a lead behind it.
+ *
+ * Every appraisal until now had to start life as a landlord lead, because the
+ * only Book button in the OS was on a lead's file. That is not how the work
+ * arrives: a landlord rings the office, or catches an agent at a viewing, and
+ * there is no lead and no time to make one. The screen that lists appraisals
+ * could not create one, which is item c12 on the pilot list and one of the
+ * three "buttons that do nothing" found in the 11 Sep sweep.
+ *
+ * Nothing new behind it. `POST /api/appraisals` has always accepted a null
+ * leadId and `createAppraisal` has always minted its own id in that case; what
+ * was missing was a door. So this is a form over the route that Leads already
+ * uses, and a booking made here is the same record, at the same stage, on the
+ * same screen.
+ *
+ * ── The confirmation ──────────────────────────────────────────────────────
+ *
+ * A dated booking made FROM A LEAD emails the landlord their confirmation and
+ * the calendar file. One made here cannot: the landlord's email is read off
+ * the lead's contact record, and there is no contact. The route already
+ * handles that and says so rather than failing, and so does this panel - the
+ * agent is told plainly that nothing went out, because the alternative is an
+ * agent who believes the landlord has been confirmed when they have not.
+ */
+function BookPanel({ onClose, onBooked }: { onClose: () => void; onBooked: (id: string) => void }) {
+  const [landlord, setLandlord] = useState("");
+  const [address, setAddress] = useState("");
+  const [postcode, setPostcode] = useState("");
+  const [agent, setAgent] = useState("");
+  const [at, setAt] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  /* Whoever is signed in, as the agent on the booking. Prefilled rather than
+     asked: the agent booking it is the agent going, nine times in ten. */
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { user?: { name?: string } } | null) => setAgent((j?.user?.name ?? "").trim()))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const ready = landlord.trim().length > 0 && address.trim().length > 0;
+
+  async function save() {
+    if (!ready || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/appraisals", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          leadId: null,
+          landlord: landlord.trim(),
+          address: address.trim(),
+          postcode: postcode.trim() || undefined,
+          agent: agent.trim() || null,
+          /* datetime-local has no zone. Sent as an ISO instant in the
+             browser's own zone, which is the agent's, which is the one the
+             appointment is in. */
+          appointmentAt: at ? new Date(at).toISOString() : null,
+        }),
+      });
+      const j = (await res.json().catch(() => ({}))) as { appraisal?: { id?: string }; error?: string };
+      if (j.error || !j.appraisal?.id) throw new Error(j.error ?? "That didn't save.");
+      onBooked(j.appraisal.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "That didn't save.");
+      setBusy(false);
+    }
+  }
+
+  const field = "w-full rounded-xl border border-line bg-white px-3 py-2 text-[13px] outline-none transition focus:border-black/30";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2b201d]/45 p-3 sm:p-6" onClick={onClose}>
+      <div
+        className="drawer-in w-full max-w-[520px] overflow-hidden rounded-[26px] bg-page shadow-[0_30px_80px_-30px_rgba(40,25,20,0.6)]"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Book an appraisal"
+      >
+        <div className="flex items-start gap-3 border-b border-line/60 px-6 py-5">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+            <DoodleIcon name="calendar" size={18} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-dark">Market appraisals</p>
+            <h2 className="text-[22px] font-bold leading-tight">Book an appraisal</h2>
+            <p className="mt-1 text-[12.5px] leading-relaxed text-muted">
+              For one that never came through as a lead. It lands on this screen at Booked, the same as any other.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-muted transition hover:bg-card hover:text-ink">
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </div>
+
+        <div className="space-y-3.5 px-6 py-5">
+          <label className="block">
+            <span className="text-[12px] font-semibold">The landlord</span>
+            <input value={landlord} onChange={(e) => setLandlord(e.target.value)} placeholder="Their name" className={`mt-1.5 ${field}`} autoFocus />
+          </label>
+          <label className="block">
+            <span className="text-[12px] font-semibold">The property</span>
+            <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="The address you are going to" className={`mt-1.5 ${field}`} />
+          </label>
+          <div className="grid gap-3.5 sm:grid-cols-2">
+            <label className="block">
+              <span className="text-[12px] font-semibold">Postcode</span>
+              <input value={postcode} onChange={(e) => setPostcode(e.target.value)} placeholder="Read from the address if left blank" className={`mt-1.5 ${field}`} />
+            </label>
+            <label className="block">
+              <span className="text-[12px] font-semibold">Who is going</span>
+              <input value={agent} onChange={(e) => setAgent(e.target.value)} className={`mt-1.5 ${field}`} />
+            </label>
+          </div>
+          <label className="block">
+            <span className="text-[12px] font-semibold">When</span>
+            <input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} className={`mt-1.5 ${field}`} />
+            <span className="mt-1.5 block text-[11.5px] leading-relaxed text-muted">
+              A date can wait. One booked without it shows on this screen as needing a time, which is the chase.
+            </span>
+          </label>
+
+          {/* Said before they press it, not after. */}
+          <p className="rounded-xl border border-line/80 bg-box px-3.5 py-2.5 text-[11.5px] leading-relaxed">
+            Booked here, <span className="font-semibold">nothing is emailed to the landlord.</span> The confirmation and
+            the calendar invite go out when the appraisal comes from a lead, because that is where their email address
+            is. Send it yourself, or add them as a lead first.
+          </p>
+
+          {error ? <p className="rounded-xl bg-[#fdefec] px-3.5 py-2.5 text-[12.5px] text-[#9d4340]">{error}</p> : null}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 border-t border-line/60 px-6 py-4">
+          <button
+            type="button"
+            onClick={save}
+            disabled={!ready || busy}
+            className="btn-press rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white disabled:opacity-50"
+          >
+            {busy ? "Booking…" : "Book it"}
+          </button>
+          <button type="button" onClick={onClose} className="rounded-full border border-line/80 bg-card px-4 py-2.5 text-[12.5px] font-semibold">
+            Cancel
+          </button>
+          {!ready ? <span className="text-[11.5px] text-muted">A landlord and an address, and it can go in.</span> : null}
+        </div>
+      </div>
+    </div>
   );
 }
