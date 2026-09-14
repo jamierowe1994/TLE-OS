@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
@@ -30,6 +31,15 @@ import DoodleIcon from "@/components/DoodleIcon";
  * below md the rail becomes a scrolling row of pills. That behaviour lived in
  * admin and was simply missing from marketing — which is how a workspace ends
  * up with no navigation at all on a phone.
+ *
+ * ── It folds, like the agent's own ────────────────────────────────────────
+ *
+ * James, 14 Sep 2026, on Kirstie's screens: the same arrow as the home rail,
+ * folding this one down to its icons. She works on a 14in laptop and the board
+ * beside this is the screen she sits on all day, so 168px of it back is real
+ * room. Folded or not is remembered in the browser, per workspace - the agent
+ * rail keeps its own flag, and somebody who folds pre-tenancy has not asked
+ * for marketing to fold too.
  */
 
 /** `icon` is a DoodleIcon name. Optional: the admin rail has none, and a
@@ -59,18 +69,72 @@ export default function WorkspaceRail({
   const path = usePathname();
   const isOn = (t: RailItem) => (t.exact ? path === t.href : path.startsWith(t.href));
 
+  /* Per workspace, so folding Kirstie's does not fold Francesca's. Read after
+     mount rather than during: the server has no localStorage, and a rail that
+     renders wide and then jumps narrow is worse than one that starts wide. */
+  const key = `os-workspace-collapsed:${label.toLowerCase()}`;
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      setCollapsed(window.localStorage.getItem(key) === "1");
+    } catch {
+      /* Storage off is not a reason to lose the rail. */
+    }
+  }, [key]);
+  const fold = () =>
+    setCollapsed((c) => {
+      try {
+        window.localStorage.setItem(key, c ? "0" : "1");
+      } catch {
+        /* as above */
+      }
+      return !c;
+    });
+
   return (
     <>
       <aside
         data-admin-rail
-        className="sticky top-3 mb-3 hidden h-[calc(100vh-24px)] w-60 shrink-0 flex-col overflow-hidden rounded-3xl border border-line/80 bg-panel px-4 py-5 md:flex"
+        /* The width is a style, not a class. Next splits the stylesheet by
+           route group, and an arbitrary utility only reaches the bundles whose
+           routes already used it - `w-[72px]` lives in the agent shell's sheet
+           and is simply absent from this workspace's, so the class applied and
+           did nothing (14 Sep 2026). A number cannot go missing. */
+        style={{ width: collapsed ? 72 : 240 }}
+        className={`sticky top-3 mb-3 hidden h-[calc(100vh-24px)] shrink-0 flex-col overflow-hidden rounded-3xl border border-line/80 bg-panel py-5 transition-[width,padding] duration-200 md:flex ${
+          collapsed ? "px-2.5" : "px-4"
+        }`}
       >
-        <div className="flex items-center px-1">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/brand/tle-os-logo.png" alt="TLE OS" className="art-light h-auto w-[78%] object-contain" />
-          <img src="/brand/tle-os-logo-dark.png" alt="" aria-hidden className="art-dark h-auto w-[78%] object-contain" />
+        <div className={`relative flex items-center px-1 ${collapsed ? "flex-col gap-2" : "justify-between"}`}>
+          {collapsed ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src="/brand/tle-os-house.png" alt="TLE OS" className="h-12 w-auto shrink-0 object-contain" />
+          ) : (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/tle-os-logo.png" alt="TLE OS" className="art-light h-auto w-[78%] object-contain" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/tle-os-logo-dark.png" alt="" aria-hidden className="art-dark h-auto w-[78%] object-contain" />
+            </>
+          )}
+          {/* The same arrow, in the same place, as the agent rail's. */}
+          <button
+            type="button"
+            onClick={fold}
+            title={collapsed ? "Expand" : "Collapse"}
+            aria-label={collapsed ? "Expand the menu" : "Collapse the menu"}
+            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-line/80 text-[11px] text-muted transition-colors hover:text-ink ${
+              collapsed ? "" : "absolute right-1 top-[64.5%] -translate-y-1/2"
+            }`}
+          >
+            {collapsed ? "»" : "«"}
+          </button>
         </div>
-        <p className="mt-1 px-1 text-[9px] font-bold uppercase tracking-[0.16em] text-accent-dark">
+        <p
+          className={`mt-1 px-1 text-[9px] font-bold uppercase tracking-[0.16em] text-accent-dark transition-[max-height,opacity] duration-200 ${
+            collapsed ? "max-h-0 overflow-hidden opacity-0" : "max-h-5 opacity-100"
+          }`}
+        >
           {label}
         </p>
 
@@ -84,7 +148,7 @@ export default function WorkspaceRail({
               key={g.title ?? `group-${i}`}
               className={g.rule ? "mt-5 border-t border-line/70 pt-4" : g.title ? "mt-3" : ""}
             >
-              {g.title && (
+              {g.title && !collapsed && (
                 <p className="mb-1.5 px-3 text-[9px] font-bold uppercase tracking-[0.14em] text-muted/70">
                   {g.title}
                 </p>
@@ -94,14 +158,26 @@ export default function WorkspaceRail({
                   <li key={t.href}>
                     <Link
                       href={t.href}
-                      className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[12.5px] transition-colors ${
+                      title={collapsed ? t.label : undefined}
+                      className={`flex items-center rounded-lg py-2 text-[12.5px] transition-colors ${
+                        collapsed ? "justify-center px-0" : "gap-3 px-3"
+                      } ${
                         isOn(t)
                           ? "bg-accent-soft font-semibold text-accent-dark"
                           : "text-muted hover:text-ink"
                       }`}
                     >
                       {t.icon && <DoodleIcon name={t.icon} size={16} className={isOn(t) ? "text-accent-dark" : ""} />}
-                      {t.label}
+                      {/* The word itself goes to nothing rather than being
+                          dropped, so the fold is one movement and the icons
+                          do not jump into place afterwards. */}
+                      <span
+                        className={`overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 ${
+                          collapsed ? "max-w-0 opacity-0" : "max-w-[150px] opacity-100"
+                        }`}
+                      >
+                        {t.label}
+                      </span>
                     </Link>
                   </li>
                 ))}
@@ -110,7 +186,7 @@ export default function WorkspaceRail({
           ))}
         </nav>
 
-        {footer ? <div className="mt-auto pt-3">{footer}</div> : null}
+        {footer && !collapsed ? <div className="mt-auto pt-3">{footer}</div> : null}
       </aside>
 
       {/* On a phone the rail becomes a scrolling strip — a 240px column beside

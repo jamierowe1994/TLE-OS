@@ -810,7 +810,20 @@ function Board({ user }: { user: UserProfile }) {
                   const col = tabs.find((t) => t.key === key);
                   const dealsIn = (col?.deals ?? []).filter(passesChip);
                   return (
-                    <div key={key} className={`flex w-[218px] shrink-0 flex-col rounded-[18px] p-2 ${COLUMN_TINT[key] ?? "bg-panel"}`}>
+                    /* The column scales with the window rather than sitting at
+                       one width. James, 14 Sep 2026: it has to scale really
+                       well, and it is drawn for a 14in screen. 14.4vw puts a
+                       1512-wide laptop at 218px - the width this board was
+                       designed at - and lets a 13in squeeze to 190 and a large
+                       desktop open out to 260 rather than simply fitting more
+                       of the same narrow columns. An inline width because Next
+                       splits the stylesheet by route group and an arbitrary
+                       Tailwind width does not always reach this one. */
+                    <div
+                      key={key}
+                      style={{ width: "clamp(190px, 14.4vw, 260px)" }}
+                      className={`flex shrink-0 flex-col rounded-[18px] p-2 ${COLUMN_TINT[key] ?? "bg-panel"}`}
+                    >
                       <div className="flex items-center gap-2 px-1.5 pb-2 pt-1">
                         <span className="truncate text-[13px] font-semibold text-ink">{stageLabel(key)}</span>
                         <span className="ml-auto flex items-center gap-1.5">
