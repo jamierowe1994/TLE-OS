@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import EmailCard from "@/components/admin/EmailCard";
-import type { ProcessEdge, ProcessKind, ProcessLane, ProcessMap, ProcessNode, ProcessStatus } from "@/lib/process/types";
+import { STAGE_UPDATE, type TenantStageKey } from "@/lib/tenant-journey";
+import { PROCESS_STAGES, stageOf, type ProcessEdge, type ProcessKind, type ProcessLane, type ProcessMap, type ProcessNode, type ProcessStatus } from "@/lib/process/types";
 
 /**
  * The process map, drawn and edited.
@@ -29,11 +30,36 @@ const KIND: Record<ProcessKind, { icon: string; label: string }> = {
   decision: { icon: "target", label: "Decision" },
   note: { icon: "note", label: "Note" },
 };
-const STATUS: Record<ProcessStatus, { label: string; className: string }> = {
-  live: { label: "Live", className: "bg-[#f1f4ec] text-[#56634a]" },
-  draft: { label: "Written, not sent", className: "bg-accent-soft text-accent-dark" },
-  planned: { label: "Planned", className: "bg-box text-muted border border-line/70" },
+/**
+ * The nine rungs, dressed. Grey is nothing yet, clay is work in progress,
+ * INK IS JAMES - the two rungs where it is his turn are the only solid dark
+ * ones, so "what is waiting on me" is answerable from across the room - and
+ * green is out in the world, solid only once it has been tested.
+ */
+const STATUS: Record<ProcessStatus, string> = {
+  planned: "bg-box text-muted border border-line/70",
+  written: "bg-white text-ink/70 border border-line/70",
+  built: "bg-accent-soft/60 text-accent-dark",
+  designed: "bg-accent-soft text-accent-dark",
+  "with-james": "bg-ink text-page",
+  notes: "border-[1.5px] border-ink bg-white text-ink",
+  reworked: "bg-[#eef3e6] text-[#56634a]",
+  live: "bg-[#f1f4ec] text-[#56634a] border border-[#b3bea5]",
+  tested: "bg-[#56634a] text-white",
 };
+/** The same nine on the one-bar summary, where there is no text to carry them. */
+const BAR: Record<ProcessStatus, string> = {
+  planned: "bg-line/70",
+  written: "bg-line",
+  built: "bg-accent-soft",
+  designed: "bg-accent",
+  "with-james": "bg-ink",
+  notes: "bg-ink/60",
+  reworked: "bg-[#b3bea5]",
+  live: "bg-[#8a9a78]",
+  tested: "bg-[#56634a]",
+};
+
 const LANE: Record<ProcessLane, string> = {
   spine: "border-accent-dark/40 bg-white",
   nurture: "border-[#b3bea5] bg-[#f6f8f2]",
@@ -48,13 +74,26 @@ export default function ProcessMapView({ initial, emails, token }: { initial: Pr
   const [dirty, setDirty] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const [pan, setPan] = useState({ x: 0, y: -140 });
+  /** A rung picked out of the summary: every step not on it goes quiet. */
+  const [only, setOnly] = useState<ProcessStatus | null>(null);
+  const [pan, setPan] = useState({ x: 16, y: 24 });
   const [zoom, setZoom] = useState(0.9);
   const drag = useRef<{ kind: "pan" | "node"; id?: string; x: number; y: number; ox: number; oy: number; moved: boolean } | null>(null);
   const box = useRef<HTMLDivElement>(null);
 
   const byId = useMemo(() => Object.fromEntries(map.nodes.map((n) => [n.id, n])), [map.nodes]);
+  /* How far along the whole process is: one count per rung, plus the three
+     numbers James actually asks for - done, waiting on him, not built. */
+  const tally = useMemo(() => {
+    const by = Object.fromEntries(PROCESS_STAGES.map((st) => [st.key, 0])) as Record<ProcessStatus, number>;
+    for (const n of map.nodes) by[n.status] = (by[n.status] ?? 0) + 1;
+    const yours = PROCESS_STAGES.filter((st) => st.yours).reduce((t, st) => t + by[st.key], 0);
+    return { by, yours, tested: by.tested, todo: by.planned + by.written };
+  }, [map.nodes]);
   const sel = selected ? byId[selected] : null;
+  /* The tenant's own words at this step's stage, so the map and the portal
+     are read together rather than kept in step by memory. */
+  const portalWords = sel?.stage && map.audience === "tenant" ? STAGE_UPDATE[sel.stage as TenantStageKey] ?? null : null;
   const update = (fn: (m: ProcessMap) => ProcessMap) => {
     setMap((m) => fn(m));
     setDirty(true);
@@ -131,10 +170,25 @@ export default function ProcessMapView({ initial, emails, token }: { initial: Pr
   };
   const patch = (id: string, p: Partial<ProcessNode>) => update((m) => ({ ...m, nodes: m.nodes.map((n) => (n.id === id ? { ...n, ...p } : n)) }));
 
-  const save = async () => {
+  /**
+   * Ticking a step along, without going into Edit mode first.
+   *
+   * The whole point of the ladder is that it gets updated constantly - after
+   * a design goes over, after James sends notes back, after something is
+   * tested. Making that a four-step job (Edit → open → select → Save) meant
+   * it would be a board that goes stale by Wednesday. One click, saved.
+   */
+  const setStage = async (id: string, status: ProcessStatus) => {
+    const next = { ...map, nodes: map.nodes.map((n) => (n.id === id ? { ...n, status } : n)) };
+    setMap(next);
+    await save(next);
+  };
+
+  const save = async (what?: ProcessMap) => {
+    const body = what ?? map;
     setNote("Saving…");
     try {
-      const r = await fetch(`/api/admin/process/${map.audience}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ map }) });
+      const r = await fetch(`/api/admin/process/${body.audience}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ map: body }) });
       const j = (await r.json()) as { ok?: boolean; map?: ProcessMap; error?: string };
       if (!j.ok || !j.map) throw new Error(j.error ?? "Could not save.");
       setMap(j.map);
@@ -154,6 +208,24 @@ export default function ProcessMapView({ initial, emails, token }: { initial: Pr
       setNote("Back to the map in code.");
     }
   };
+
+  /* ── Fit ──
+     The map is long and short: twenty-five columns across, four rows down.
+     Fitting the WIDTH would shrink it to nothing, so fit the height - every
+     lane on screen at once - and start at the left, where the enquiry is. */
+  const fit = useCallback(() => {
+    const el = box.current;
+    if (!el || map.nodes.length === 0) return;
+    const minX = Math.min(...map.nodes.map((n) => n.x));
+    const minY = Math.min(...map.nodes.map((n) => n.y));
+    const maxY = Math.max(...map.nodes.map((n) => n.y + NODE_H));
+    const z = Math.min(1, Math.max(0.4, (el.clientHeight - 56) / Math.max(1, maxY - minY)));
+    setZoom(z);
+    setPan({ x: 16 - minX * z, y: 24 - minY * z });
+  }, [map.nodes]);
+
+  /* Fit once, when the canvas has a size to fit to. */
+  useEffect(() => { fit(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
   /* Escape closes; the note fades. */
   useEffect(() => {
@@ -176,7 +248,7 @@ export default function ProcessMapView({ initial, emails, token }: { initial: Pr
       <div className="flex flex-wrap items-center gap-2 text-[12px]">
         <button type="button" onClick={() => setZoom((z) => Math.min(1.6, z + 0.1))} className="rounded-full border border-line/70 px-3 py-1.5 hover:border-ink/40">Zoom in</button>
         <button type="button" onClick={() => setZoom((z) => Math.max(0.4, z - 0.1))} className="rounded-full border border-line/70 px-3 py-1.5 hover:border-ink/40">Zoom out</button>
-        <button type="button" onClick={() => { setZoom(0.9); setPan({ x: 0, y: -140 }); }} className="rounded-full border border-line/70 px-3 py-1.5 hover:border-ink/40">Fit</button>
+        <button type="button" onClick={fit} className="rounded-full border border-line/70 px-3 py-1.5 hover:border-ink/40">Fit</button>
         <span className="text-muted">Drag the background to move around. Click a step to open it.</span>
         <span className="ml-auto flex flex-wrap items-center gap-2">
           {note && <span className="text-accent-dark">{note}</span>}
@@ -184,7 +256,7 @@ export default function ProcessMapView({ initial, emails, token }: { initial: Pr
           {editing ? (
             <>
               <button type="button" onClick={reset} className="rounded-full border border-line/70 px-3 py-1.5 hover:border-ink/40">Reset to code</button>
-              <button type="button" disabled={!dirty} onClick={save} className="rounded-full bg-accent-dark px-4 py-1.5 font-semibold text-white disabled:opacity-40">Save the process</button>
+              <button type="button" disabled={!dirty} onClick={() => save()} className="rounded-full bg-accent-dark px-4 py-1.5 font-semibold text-white disabled:opacity-40">Save the process</button>
               <button type="button" onClick={() => setEditing(false)} className="rounded-full border border-line/70 px-3 py-1.5 hover:border-ink/40">Done</button>
             </>
           ) : (
@@ -193,20 +265,52 @@ export default function ProcessMapView({ initial, emails, token }: { initial: Pr
         </span>
       </div>
 
+      {/* ── where everything is ── */}
+      <div className="mt-4 rounded-2xl border border-line/60 bg-white p-4">
+        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <h2 className="text-[15px]">Where everything is</h2>
+          <p className="text-[12.5px] text-muted">
+            <strong className="text-ink">{tally.tested} of {map.nodes.length}</strong> live and tested
+            {tally.yours > 0 && <> · <strong className="text-ink">{tally.yours}</strong> waiting on you</>}
+            {tally.todo > 0 && <> · {tally.todo} still to build</>}
+          </p>
+        </div>
+        {/* One bar, the nine rungs in order, each as wide as its share. */}
+        <div className="mt-3 flex h-2.5 w-full overflow-hidden rounded-full bg-box">
+          {PROCESS_STAGES.map((st) => {
+            const n = tally.by[st.key];
+            if (!n) return null;
+            return <span key={st.key} title={`${n} ${st.label.toLowerCase()}`} className={`${BAR[st.key]} h-full`} style={{ width: `${(n / map.nodes.length) * 100}%` }} />;
+          })}
+        </div>
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {PROCESS_STAGES.map((st) => (
+            <button
+              key={st.key}
+              type="button"
+              onClick={() => setOnly((o) => (o === st.key ? null : st.key))}
+              title={st.blurb}
+              className={`rounded-full px-2 py-0.5 text-[11px] font-semibold transition-opacity ${STATUS[st.key]} ${only && only !== st.key ? "opacity-35" : ""}`}
+            >
+              {st.label} <span className="font-normal opacity-70">{tally.by[st.key]}</span>
+            </button>
+          ))}
+          {only && <button type="button" onClick={() => setOnly(null)} className="rounded-full border border-line/70 px-2.5 py-0.5 text-[11px] hover:border-ink/40">Show all</button>}
+        </div>
+      </div>
+
       {/* ── the legend ── */}
       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[11.5px] text-muted">
         <span className="flex items-center gap-1.5"><span className="h-3 w-5 rounded border border-accent-dark/40 bg-white" /> Main path</span>
         <span className="flex items-center gap-1.5"><span className="h-3 w-5 rounded border border-[#b3bea5] bg-[#f6f8f2]" /> Nurture, when they stall</span>
         <span className="flex items-center gap-1.5"><span className="h-3 w-5 rounded border border-line/80 bg-panel" /> Alongside</span>
-        {(Object.keys(STATUS) as ProcessStatus[]).map((s) => (
-          <span key={s} className={`rounded-full px-2 py-0.5 ${STATUS[s].className}`}>{STATUS[s].label}</span>
-        ))}
+        <span>Click a rung above to pick out every step sitting on it.</span>
       </div>
 
       {/* ── the canvas ── */}
       <div
         ref={box}
-        className="relative mt-4 h-[calc(100vh-300px)] min-h-[520px] cursor-grab select-none overflow-hidden rounded-2xl border border-line/70 active:cursor-grabbing"
+        className="relative mt-4 h-[calc(100vh-420px)] min-h-[460px] cursor-grab select-none overflow-hidden rounded-2xl border border-line/70 active:cursor-grabbing"
         style={{ background: "radial-gradient(circle, rgba(16,16,20,0.10) 1px, transparent 1.2px) 0 0 / 22px 22px, var(--panel)" }}
         onPointerDown={(e) => onDown(e)}
         onPointerMove={onMove}
@@ -250,7 +354,7 @@ export default function ProcessMapView({ initial, emails, token }: { initial: Pr
           {map.nodes.map((n) => (
             <div
               key={n.id}
-              className={`absolute flex cursor-pointer flex-col rounded-2xl border-[1.5px] px-4 py-3 shadow-[0_8px_20px_-14px_rgba(16,16,20,0.35)] transition-shadow hover:shadow-[0_12px_28px_-12px_rgba(16,16,20,0.4)] ${LANE[n.lane]} ${selected === n.id ? "ring-2 ring-accent-dark" : ""}`}
+              className={`absolute flex cursor-pointer flex-col rounded-2xl border-[1.5px] px-4 py-3 shadow-[0_8px_20px_-14px_rgba(16,16,20,0.35)] transition-shadow hover:shadow-[0_12px_28px_-12px_rgba(16,16,20,0.4)] ${LANE[n.lane]} ${selected === n.id ? "ring-2 ring-accent-dark" : ""} ${only && n.status !== only ? "opacity-25" : ""}`}
               style={{ left: n.x, top: n.y, width: NODE_W, height: NODE_H, cursor: editing ? "move" : "pointer" }}
               onPointerDown={(e) => { e.stopPropagation(); onDown(e, n.id); }}
               onPointerMove={onMove}
@@ -260,7 +364,7 @@ export default function ProcessMapView({ initial, emails, token }: { initial: Pr
               <div className="flex items-center gap-2">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/80 text-accent-dark ring-1 ring-line/60"><DoodleIcon name={KIND[n.kind].icon} size={12} /></span>
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-muted">{KIND[n.kind].label}</span>
-                <span className={`ml-auto rounded-full px-1.5 py-0.5 text-[9.5px] font-semibold ${STATUS[n.status].className}`}>{STATUS[n.status].label}</span>
+                <span className={`ml-auto rounded-full px-1.5 py-0.5 text-[9.5px] font-semibold ${STATUS[n.status]}`}>{stageOf(n.status).badge}</span>
               </div>
               <p className="mt-1.5 truncate text-[13.5px] font-semibold leading-tight">{n.title}</p>
               <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted">{n.trigger?.after ? `${n.trigger.after} · ` : ""}{n.blurb}</p>
@@ -283,7 +387,7 @@ export default function ProcessMapView({ initial, emails, token }: { initial: Pr
                   <h2 className="mt-0.5 text-[20px] leading-tight">{sel.title}</h2>
                 )}
               </div>
-              <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${STATUS[sel.status].className}`}>{STATUS[sel.status].label}</span>
+              <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-semibold ${STATUS[sel.status]}`}>{stageOf(sel.status).label}</span>
               <button type="button" onClick={() => setSelected(null)} className="ml-1 rounded-full border border-line/70 px-2.5 py-1 text-[11.5px] hover:border-ink/40">Close</button>
             </div>
 
@@ -302,7 +406,7 @@ export default function ProcessMapView({ initial, emails, token }: { initial: Pr
                 <label className="block text-[12px]">
                   <span className="font-semibold">Status</span>
                   <select className="mt-1 w-full rounded-lg border border-line/70 bg-transparent px-2.5 py-2 text-[13px]" value={sel.status} onChange={(e) => patch(sel.id, { status: e.target.value as ProcessStatus })}>
-                    {(Object.keys(STATUS) as ProcessStatus[]).map((k) => <option key={k} value={k}>{STATUS[k].label}</option>)}
+                    {PROCESS_STAGES.map((st) => <option key={st.key} value={st.key}>{st.label}</option>)}
                   </select>
                 </label>
                 <label className="block text-[12px]">
@@ -316,6 +420,13 @@ export default function ProcessMapView({ initial, emails, token }: { initial: Pr
                   <select className="mt-1 w-full rounded-lg border border-line/70 bg-transparent px-2.5 py-2 text-[13px]" value={sel.emailId ?? ""} onChange={(e) => patch(sel.id, { emailId: e.target.value || undefined })}>
                     <option value="">None yet - to write</option>
                     {emails.map((em) => <option key={em.id} value={em.id}>{em.name}{em.draft ? " (draft)" : ""}</option>)}
+                  </select>
+                </label>
+                <label className="block text-[12px]">
+                  <span className="font-semibold">Portal stage</span>
+                  <select className="mt-1 w-full rounded-lg border border-line/70 bg-transparent px-2.5 py-2 text-[13px]" value={sel.stage ?? ""} onChange={(e) => patch(sel.id, { stage: e.target.value || undefined })}>
+                    <option value="">Nothing changes for them here</option>
+                    {Object.entries(STAGE_UPDATE).map(([k, u]) => <option key={k} value={k}>{u.label}</option>)}
                   </select>
                 </label>
                 <label className="block text-[12px] sm:col-span-2">
@@ -339,6 +450,38 @@ export default function ProcessMapView({ initial, emails, token }: { initial: Pr
             ) : (
               <>
                 {sel.blurb && <p className="mt-3 text-[13.5px] leading-relaxed">{sel.blurb}</p>}
+
+                {/* ── how far along it is ── */}
+                <div className="mt-4 rounded-xl border border-line/60 bg-panel p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">How far along <span className="font-normal normal-case tracking-normal">· one click moves it, and saves</span></p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {PROCESS_STAGES.map((st) => (
+                      <button
+                        key={st.key}
+                        type="button"
+                        title={st.blurb}
+                        onClick={() => setStage(sel.id, st.key)}
+                        className={`rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${sel.status === st.key ? `${STATUS[st.key]} ring-[1.5px] ring-ink/60` : "border border-line/60 bg-white/60 text-muted/80 hover:border-ink/40 hover:text-ink"}`}
+                      >
+                        {st.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="mt-2 text-[11.5px] leading-relaxed text-muted">{stageOf(sel.status).blurb}</p>
+                </div>
+
+                {/* ── what the tenant's own portal says at this point ── */}
+                {portalWords && (
+                  <div className="mt-3 rounded-xl border border-line/60 bg-white p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">In their portal · {portalWords.label}</p>
+                    <p className="mt-1.5 text-[13px] font-semibold">{portalWords.title}</p>
+                    <p className="mt-0.5 text-[12.5px] leading-relaxed text-muted">{portalWords.blurb}</p>
+                    <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted"><span className="font-semibold text-ink">Next:</span> {portalWords.next}</p>
+                    {/* Through the harness route, not ?stage=, so the strip at the foot of the
+                        sample agrees with the page and stays there as you walk around it. */}
+                    <a href={`/tenant/demo/stage?to=${sel.stage}&back=${encodeURIComponent("/tenant/demo?from=admin")}`} target="_blank" rel="noreferrer" className="mt-2 inline-block rounded-full border border-line/70 px-3 py-1 text-[11.5px] hover:border-ink/40">See the portal at this stage</a>
+                  </div>
+                )}
                 {sel.trigger && (
                   <p className="mt-3 flex items-center gap-2 text-[12.5px] text-muted">
                     <DoodleIcon name="clock" size={13} />

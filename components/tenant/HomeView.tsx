@@ -114,7 +114,7 @@ export default function HomeView({ v, welcome, base, q = "", sample = false }: {
           <div className="min-w-0 flex-1 py-1">
             {home ? (
               <>
-                <p className={eyebrow}>{phase === "living" ? "Your home" : phase === "tenancy" ? "Your tenancy" : v.offer ? "Your offer is in" : v.viewing ? (v.viewing.status === "done" ? "You viewed it" : "Your viewing") : "You asked about"}</p>
+                <p className={eyebrow}>{phase === "living" ? "Your home" : phase === "tenancy" ? "Your tenancy" : v.stage === "declined" ? "Not this one" : v.offer ? "Your offer is in" : v.viewing ? (v.viewing.status === "done" ? "You viewed it" : "Your viewing") : "You asked about"}</p>
                 <h2 className="mt-1 text-[24px] font-bold leading-tight">{home.property}</h2>
                 <p className="mt-1 text-[13px] text-muted">{home.locality}</p>
                 <p className="mt-4 text-[15px]">

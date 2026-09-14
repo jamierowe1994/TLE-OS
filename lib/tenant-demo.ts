@@ -8,7 +8,11 @@ import { DEMO_STAGE_COOKIE, isStage, type TenantStageKey } from "@/lib/tenant-jo
  * fresh passport to living in the home and see every page change. Nothing
  * outside /tenant/demo reads it.
  */
-export async function demoStage(): Promise<TenantStageKey> {
+export async function demoStage(override?: string | null): Promise<TenantStageKey> {
+  /* ?stage= wins over the cookie, so a link can open the sample at one stage
+     without moving the harness on for whoever else is looking. The process
+     map links this way from every step that changes something for them. */
+  if (isStage(override)) return override;
   const c = (await cookies()).get(DEMO_STAGE_COOKIE)?.value;
   return isStage(c) ? c : "referencing";
 }

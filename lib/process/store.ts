@@ -1,7 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { TENANT_PROCESS } from "@/lib/process/tenant";
-import type { ProcessMap } from "@/lib/process/types";
+import { normaliseStatus, type ProcessMap } from "@/lib/process/types";
 
 /**
  * Process maps live in os_process_maps, one row per audience, as the map
@@ -28,7 +28,11 @@ export async function loadProcess(audience: string): Promise<ProcessMap | null> 
   ).catch(() => []);
   const r = rows[0];
   if (!r) return base;
-  return { ...base, ...r.definition, audience, updatedAt: new Date(r.updated_at).toISOString() };
+  const saved = r.definition;
+  /* A map saved before 14 Sep carries the old three statuses. Normalising on
+     the way out means one saved row never shows a blank badge. */
+  const nodes = (saved.nodes ?? base.nodes).map((n) => ({ ...n, status: normaliseStatus(n.status) }));
+  return { ...base, ...saved, nodes, audience, updatedAt: new Date(r.updated_at).toISOString() };
 }
 
 export async function saveProcess(audience: string, map: ProcessMap, by: string): Promise<ProcessMap> {
@@ -46,9 +50,10 @@ export async function saveProcess(audience: string, map: ProcessMap, by: string)
       lane: n.lane,
       x: Number(n.x) || 0,
       y: Number(n.y) || 0,
-      status: n.status,
+      status: normaliseStatus(n.status),
       href: n.href ? String(n.href).slice(0, 300) : undefined,
       emailId: n.emailId ? String(n.emailId).slice(0, 80) : undefined,
+      stage: n.stage ? String(n.stage).slice(0, 40) : undefined,
       trigger: n.trigger ? { on: String(n.trigger.on).slice(0, 80), after: n.trigger.after ? String(n.trigger.after).slice(0, 60) : undefined } : undefined,
     })),
     edges: (map.edges ?? []).slice(0, 400).map((e) => ({ from: String(e.from), to: String(e.to), label: e.label ? String(e.label).slice(0, 80) : undefined, kind: e.kind })),

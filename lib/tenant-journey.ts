@@ -27,9 +27,11 @@
 export type TenantStageKey =
   | "passport"
   | "enquired"
+  | "matched"
   | "viewing"
   | "viewed"
   | "offer"
+  | "declined"
   | "deal_started"
   | "holding_fee"
   | "referencing"
@@ -42,7 +44,21 @@ export type TenantStageKey =
 
 export type TenantPhase = "finding" | "tenancy" | "living";
 
-export const FINDING: TenantStageKey[] = ["passport", "enquired", "viewing", "viewed", "offer"];
+/**
+ * The finding phase, 14 Sep 2026: two stages added so the portal matches the
+ * process map (lib/process/tenant).
+ *
+ *   matched    we have sent them homes that fit and are waiting to hear which
+ *              they want to see. It was invisible before, which meant the
+ *              busiest week of a tenant's search showed "Enquired" and nothing
+ *              else.
+ *   declined   the landlord went with somebody else. It sits at the END of the
+ *              finding list rather than where it happens, because a declined
+ *              tenant has not gone backwards - they are back at matching with
+ *              everything they told us still true. The portal says so, and the
+ *              process map loops them to "homes that fit".
+ */
+export const FINDING: TenantStageKey[] = ["passport", "enquired", "matched", "viewing", "viewed", "offer", "declined"];
 export const DEAL: TenantStageKey[] = ["deal_started", "holding_fee", "referencing", "plc", "deposit", "tenancy_agreement", "rent_payment", "move_day"];
 
 export const ORDER: TenantStageKey[] = [...FINDING, ...DEAL, "living"];
@@ -56,6 +72,168 @@ export const isStage = (s: string | undefined | null): s is TenantStageKey => Bo
 
 export const after = (stage: TenantStageKey, than: TenantStageKey) => ORDER.indexOf(stage) > ORDER.indexOf(than);
 export const atLeast = (stage: TenantStageKey, than: TenantStageKey) => ORDER.indexOf(stage) >= ORDER.indexOf(than);
+
+/* ── What the portal says at each stage ────────────────────────────────── */
+
+/**
+ * THE UPDATE FIELD FOR EVERY STAGE - James, 14 Sep 2026: "the tenant portal
+ * will obviously need an update field for each stage that is applicable."
+ *
+ * Before this, the words a tenant reads were in three places: the eight deal
+ * stages in lib/tenant-account, the finding stages in a switch inside
+ * lib/tenant-sample, and nothing at all for the two new ones. Same tenant,
+ * same journey, three files - so the sample could say one thing and the live
+ * portal another, and a new stage arrived silently blank.
+ *
+ * One table, every stage, no exceptions. A stage with no entry is a type
+ * error rather than an empty card.
+ *
+ *   title/blurb   what is happening, in their words, on the home card
+ *   next          what happens next - the line the deal view shows under it
+ *   cta/href      the one thing to do about it
+ *
+ * Placeholders are filled by whoever renders it: {property}, {when},
+ * {amount}, {agent}. A renderer with nothing to put in drops the sentence
+ * rather than printing the braces (fill(), below).
+ */
+export type StageUpdate = {
+  /** The stop's name on the road at the top of the portal. */
+  label: string;
+  title: string;
+  blurb: string;
+  next: string;
+  cta: string;
+  href: string;
+};
+
+export const STAGE_UPDATE: Record<TenantStageKey, StageUpdate> = {
+  passport: {
+    label: "Passport",
+    title: "Find your next home",
+    blurb: "Your passport is ready, so applying is one tap when you find the one. Have a look at what we have on now.",
+    next: "Tell us what you are after and we will send you the homes that fit.",
+    cta: "See what's on the market", href: "#market",
+  },
+  enquired: {
+    label: "Enquire",
+    title: "We have your enquiry",
+    blurb: "{agent} has your enquiry about {property} and will come back to you today with times to see it.",
+    next: "Pick a viewing time, or tell us it is not the one and we will send others.",
+    cta: "Choose a time", href: "/tenant/next",
+  },
+  matched: {
+    label: "Homes for you",
+    title: "Homes that fit what you are after",
+    blurb: "We have picked out the ones that match your budget, your area and when you want to move.",
+    next: "Tell us which you would like to see and we will book it in.",
+    cta: "See the homes", href: "/tenant/next",
+  },
+  viewing: {
+    label: "View it",
+    title: "Your viewing is booked",
+    blurb: "{when}, with {agent}. Bring some ID and any questions - we will have the answers on the property and the landlord.",
+    next: "We will remind you on the morning, and you can move it any time from here.",
+    cta: "Add to my calendar", href: "/tenant/next",
+  },
+  viewed: {
+    label: "Viewed",
+    title: "How was it?",
+    blurb: "Tell us what you thought of {property}. If it is the one, you can apply from here and your passport does the rest.",
+    next: "Apply for it, or tell us what was wrong and we will send others.",
+    cta: "Apply for this home", href: "/tenant/apply",
+  },
+  offer: {
+    label: "Offer",
+    title: "Your application is with the landlord",
+    blurb: "{amount} a month on {property}. We usually hear back within a day, and you will know the moment we do.",
+    next: "The landlord answers. If it is yes, we take a holding fee and referencing starts.",
+    cta: "See my application", href: "/tenant/next",
+  },
+  declined: {
+    label: "Not this one",
+    title: "That one did not go your way",
+    blurb: "The landlord has gone with another application on {property}. It happens, and it is not a reflection on you.",
+    next: "We have picked out others that fit. Tell us which to book and you keep your place in the queue.",
+    cta: "See the other homes", href: "/tenant/next",
+  },
+  deal_started: {
+    label: "Offer accepted",
+    title: "Your offer has been accepted",
+    blurb: "Your offer has been accepted and the paperwork is being set up.",
+    next: "We will ask you for a holding fee to take the property off the market.",
+    cta: "See my tenancy", href: "/tenant/tenancy",
+  },
+  holding_fee: {
+    label: "Holding fee",
+    title: "Holding fee",
+    blurb: "We are collecting the holding fee.",
+    next: "Once it is in, your referencing starts.",
+    cta: "See my tenancy", href: "/tenant/tenancy",
+  },
+  referencing: {
+    label: "Referencing",
+    title: "Referencing",
+    blurb: "Your references are being checked: employer, previous landlord and credit.",
+    next: "Reply quickly to anything the referencing team asks for. It is the one thing that speeds this up.",
+    cta: "See what is needed", href: "/tenant/tenancy",
+  },
+  plc: {
+    label: "Compliance checks",
+    title: "Compliance checks",
+    blurb: "Your references are back. We are checking the property's certificates and the landlord's documents.",
+    next: "Nothing for you here. This is on us and the landlord.",
+    cta: "See my tenancy", href: "/tenant/tenancy",
+  },
+  deposit: {
+    label: "Deposit",
+    title: "Deposit",
+    blurb: "The compliance checks have passed. Your deposit or deposit alternative is being arranged.",
+    next: "You will hear from us, or from Flatfair if you chose the deposit alternative.",
+    cta: "See my tenancy", href: "/tenant/tenancy",
+  },
+  tenancy_agreement: {
+    label: "Tenancy agreement",
+    title: "Tenancy agreement",
+    blurb: "Your tenancy agreement is being drawn up and sent for signing.",
+    next: "Read it carefully and sign when it arrives. Both you and the landlord sign before anything else happens.",
+    cta: "Read and sign", href: "/tenant/documents",
+  },
+  rent_payment: {
+    label: "First rent",
+    title: "First rent",
+    blurb: "The agreement is signed. Your first month's rent and the standing order are being set up.",
+    next: "Pay the first month when the request arrives, and set up the standing order for the rest.",
+    cta: "See what is due", href: "/tenant/payments",
+  },
+  move_day: {
+    label: "Move-in day",
+    title: "Move-in day",
+    blurb: "Everything is in place. It is move-in day, or nearly.",
+    next: "Keys, inventory and check-in. Your agent will confirm the time.",
+    cta: "See my tenancy", href: "/tenant/tenancy",
+  },
+  living: {
+    label: "Moved in",
+    title: "Nothing needed from you",
+    blurb: "Your rent is set up and your certificates are in date. If anything needs fixing, report it and we will take care of it.",
+    next: "Nothing. We will tell you when anything is due.",
+    cta: "Report a maintenance issue", href: "/tenant/maintenance",
+  },
+};
+
+/**
+ * Fill the placeholders. A sentence whose value we do not hold is dropped
+ * whole rather than printed with braces in it - a tenant should never read
+ * "your viewing on {when}".
+ */
+export function fillUpdate(text: string, vars: Partial<Record<"property" | "when" | "amount" | "agent", string | null>>): string {
+  return text
+    .split(/(?<=\.)\s+/)
+    .filter((sentence) => !/\{(\w+)\}/.test(sentence) || [...sentence.matchAll(/\{(\w+)\}/g)].every((m) => vars[m[1] as keyof typeof vars]))
+    .map((sentence) => sentence.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k as keyof typeof vars] ?? "")))
+    .join(" ")
+    .trim();
+}
 
 /* ── The nav ───────────────────────────────────────────────────────────── */
 
@@ -88,9 +266,11 @@ export function locksFor(stage: TenantStageKey): Partial<Record<NavKey, string>>
 export const HARNESS: { key: TenantStageKey; label: string }[] = [
   { key: "passport", label: "Signed in" },
   { key: "enquired", label: "Enquired" },
+  { key: "matched", label: "Homes sent" },
   { key: "viewing", label: "Viewing booked" },
   { key: "viewed", label: "Viewed" },
   { key: "offer", label: "Offer made" },
+  { key: "declined", label: "Offer declined" },
   { key: "deal_started", label: "Offer accepted" },
   { key: "referencing", label: "Referencing" },
   { key: "tenancy_agreement", label: "Agreement" },

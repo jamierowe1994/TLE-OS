@@ -8,6 +8,7 @@ import { getMeta } from "@/lib/business/deal-store";
 import { derivedStageFor } from "@/lib/business/deal-stage";
 import { PORTAL_STAGES } from "@/lib/business/propoly-stages";
 import { findPassportByEmail, getPassport, type PassportRecord } from "@/lib/passport";
+import { STAGE_UPDATE } from "@/lib/tenant-journey";
 
 /**
  * The tenant's account: who they are, and which deals are theirs.
@@ -196,17 +197,12 @@ export interface TenantDealView {
   flatfair: boolean;
 }
 
-/* The eight stages in a tenant's words. Kirstie's labels are for Kirstie. */
-const TENANT_WORDS: Record<string, { label: string; now: string; next: string }> = {
-  deal_started: { label: "Offer accepted", now: "Your offer has been accepted and the paperwork is being set up.", next: "We will ask you for a holding fee to take the property off the market." },
-  holding_fee: { label: "Holding fee", now: "We are collecting the holding fee.", next: "Once it is in, your referencing starts." },
-  referencing: { label: "Referencing", now: "Your references are being checked: employer, previous landlord and credit.", next: "Reply quickly to anything the referencing team asks for. It is the one thing that speeds this up." },
-  plc: { label: "Compliance checks", now: "Your references are back. We are checking the property's certificates and the landlord's documents.", next: "Nothing for you here. This is on us and the landlord." },
-  deposit: { label: "Deposit", now: "The compliance checks have passed. Your deposit or deposit alternative is being arranged.", next: "You will hear from us, or from Flatfair if you chose the deposit alternative." },
-  tenancy_agreement: { label: "Tenancy agreement", now: "Your tenancy agreement is being drawn up and sent for signing.", next: "Read it carefully and sign when it arrives. Both you and the landlord sign before anything else happens." },
-  rent_payment: { label: "First rent", now: "The agreement is signed. Your first month's rent and the standing order are being set up.", next: "Pay the first month when the request arrives, and set up the standing order for the rest." },
-  move_day: { label: "Move-in day", now: "Everything is in place. It is move-in day, or nearly.", next: "Keys, inventory and check-in. Your agent will confirm the time." },
-};
+/* The eight stages in a tenant's words. Kirstie's labels are for Kirstie.
+   The words themselves live in lib/tenant-journey STAGE_UPDATE, with every
+   other stage of the journey, so the portal and the sample cannot drift. */
+const TENANT_WORDS: Record<string, { label: string; now: string; next: string }> = Object.fromEntries(
+  Object.entries(STAGE_UPDATE).map(([key, u]) => [key, { label: u.label, now: u.blurb, next: u.next }])
+);
 
 export async function tenantDealViews(account: TenantAccount): Promise<TenantDealView[]> {
   const all = (await getAllPropolyDeals().catch(() => null)) ?? [];

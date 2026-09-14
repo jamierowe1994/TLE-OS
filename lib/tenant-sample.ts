@@ -1,7 +1,7 @@
 import type { Stop } from "@/lib/landlord-journey";
 import type { TenantHome, TenantProperty } from "@/lib/tenant-home-view";
 import { EMPTY_PASSPORT, type PassportData } from "@/lib/passport-shape";
-import { DEAL, atLeast, phaseOf, type TenantStageKey } from "@/lib/tenant-journey";
+import { DEAL, STAGE_UPDATE, atLeast, fillUpdate, phaseOf, type TenantStageKey } from "@/lib/tenant-journey";
 
 /**
  * The sample tenant, for the portal at /tenant/demo: Sophie, at whichever
@@ -71,25 +71,21 @@ const STAGES = [
   ["move_day", "Move-in day"],
 ] as const;
 
-const DEAL_WORDS: Record<string, { now: string; next: string }> = {
-  deal_started: { now: "Your offer has been accepted and the paperwork is being set up.", next: "We will ask you for a holding fee to take the property off the market." },
-  holding_fee: { now: "We are collecting the holding fee.", next: "Once it is in, your referencing starts." },
-  referencing: { now: "Your references are being checked: employer, previous landlord and credit.", next: "Reply quickly to anything the referencing team asks for. It is the one thing that speeds this up." },
-  plc: { now: "Your references are back. We are checking the property's certificates and the landlord's documents.", next: "Nothing for you here. This is on us and the landlord." },
-  deposit: { now: "The compliance checks have passed. Your deposit is being arranged.", next: "You will hear from us, or from Flatfair if you chose the deposit alternative." },
-  tenancy_agreement: { now: "Your tenancy agreement is drawn up and ready to sign.", next: "Read it carefully and sign. Both you and the landlord sign before anything else happens." },
-  rent_payment: { now: "The agreement is signed. Your first month's rent and the standing order are being set up.", next: "Pay the first month when the request arrives, and set up the standing order for the rest." },
-  move_day: { now: "Everything is in place. It is move-in day.", next: "Keys, inventory and check-in. Emily will meet you at the door at 11am." },
-  living: { now: "You are in. We look after the property from here.", next: "Rent goes out on the 1st. Anything that needs fixing, report it from Maintenance." },
-};
+/* The deal's words, from the one table every stage now uses. Kept as a name
+   of its own because the sample reads it three times. */
+const DEAL_WORDS: Record<string, { now: string; next: string }> = Object.fromEntries(
+  Object.entries(STAGE_UPDATE).map(([key, u]) => [key, { now: u.blurb, next: u.next }])
+);
 
 const ACTIVITY: { at: TenantStageKey; label: string; sub: string; when: string; tone: "done" | "live" | "quiet" }[] = [
   { at: "passport", label: "Passport finished", sub: "6 of 6 sections", when: "6 Sep 2026", tone: "done" },
   { at: "passport", label: "Your tenant area opened", sub: "Welcome in", when: "6 Sep 2026", tone: "quiet" },
   { at: "enquired", label: "You enquired about 8 Recreation Terrace", sub: "Emily has it", when: "8 Sep 2026", tone: "done" },
+  { at: "matched", label: "Four homes sent to you", sub: "Matched to your budget and area", when: "8 Sep 2026", tone: "done" },
   { at: "viewing", label: "Viewing booked", sub: "Tue 15 Sep, 2:30pm with Emily", when: "9 Sep 2026", tone: "done" },
   { at: "viewed", label: "You viewed 8 Recreation Terrace", sub: "How was it?", when: "15 Sep 2026", tone: "done" },
   { at: "offer", label: "Offer made: £850 a month", sub: "With the landlord", when: "15 Sep 2026", tone: "done" },
+  { at: "declined", label: "The landlord went with another application", sub: "Others sent the same day", when: "16 Sep 2026", tone: "done" },
   { at: "deal_started", label: "Offer accepted", sub: "8 Recreation Terrace", when: "16 Sep 2026", tone: "done" },
   { at: "holding_fee", label: "Holding fee received", sub: "£196", when: "17 Sep 2026", tone: "done" },
   { at: "referencing", label: "Referencing started", sub: "Employer, landlord and credit", when: "17 Sep 2026", tone: "done" },
@@ -129,27 +125,21 @@ export function sampleFor(stage: TenantStageKey): TenantHome {
       }
     : null;
 
-  /* The one next step. */
-  const next: TenantHome["next"] = (() => {
-    switch (stage) {
-      case "passport":
-        return { title: "Find your next home", blurb: "Your passport is ready, so applying is one tap when you find the one. Have a look at what Emily has on now.", cta: "See what's on the market", href: "#market" };
-      case "enquired":
-        return { title: "Book a viewing", blurb: "Emily has your enquiry about 8 Recreation Terrace. Pick a time that suits you and she will meet you there.", cta: "Choose a time", href: "/tenant/next" };
-      case "viewing":
-        return { title: "Your viewing is booked", blurb: "Tuesday 15 September at 2:30pm, with Emily. Bring some ID and any questions - she will have the answers on the property and the landlord.", cta: "Add to my calendar", href: "/tenant/next" };
-      case "viewed":
-        return { title: "How was it?", blurb: "Tell us what you thought of 8 Recreation Terrace. If it is the one, you can make your offer from here and your passport does the rest.", cta: "Make an offer", href: "/tenant/next" };
-      case "offer":
-        return { title: "Your offer is with the landlord", blurb: "£850 a month on 8 Recreation Terrace, sent on 15 September. We usually hear back within a day, and you will know the moment we do.", cta: "See my offer", href: "/tenant/next" };
-      case "living":
-        return { title: "Nothing needed from you", blurb: "Your rent is set up and your certificates are in date. If anything needs fixing, report it and we will take care of it.", cta: "Report a maintenance issue", href: "/tenant/maintenance" };
-      default: {
-        const label = STAGES.find(([k]) => k === stage)?.[1] ?? "Your tenancy";
-        return { title: label, blurb: DEAL_WORDS[stage].next, cta: stage === "tenancy_agreement" ? "Read and sign" : "See your tenancy", href: "/tenant/tenancy" };
-      }
-    }
-  })();
+  /* The one next step, in the words every stage now carries (STAGE_UPDATE).
+     The sample fills the placeholders from this one property; the live
+     portal fills them from the tenant's own. */
+  const u = STAGE_UPDATE[stage];
+  const next: TenantHome["next"] = {
+    title: u.title,
+    blurb: fillUpdate(u.blurb, {
+      property: HOME.property,
+      agent: AGENT.name,
+      when: viewing ? "Tuesday 15 September at 2:30pm" : null,
+      amount: offer ? `£${offer.amount}` : null,
+    }),
+    cta: u.cta,
+    href: u.href,
+  };
 
   /* The spine. Before a deal, the road to one; with a deal, its eight. */
   const road: [TenantStageKey, string, string][] = [
@@ -159,7 +149,13 @@ export function sampleFor(stage: TenantStageKey): TenantHome {
     ["offer", "Offer", offer ? "£850 a month" : ""],
     ["deal_started", "Move in", ""],
   ];
-  const roadIdx = ["passport", "enquired", "viewing", "offer"].indexOf(stage === "viewed" ? "viewing" : stage);
+  /* Where they are on the road. Three stages share a stop with another:
+     viewed sits on the viewing stop (done), matched on the enquire stop, and
+     a declined offer puts them back on it - they are looking again, not
+     further forward. */
+  const onRoad: TenantStageKey =
+    stage === "viewed" ? "viewing" : stage === "matched" || stage === "declined" ? "enquired" : stage;
+  const roadIdx = ["passport", "enquired", "viewing", "offer"].indexOf(onRoad);
   /* "Passport" is done from the start; each later stop is current until the
      one after it has happened. Viewed sits on the viewing stop, done. */
   const stops: Stop[] = inDeal
