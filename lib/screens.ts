@@ -253,7 +253,9 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "The cadence - three months then every six - is a sensible guess and has not been signed off by Michael yet. It is a settings document, so it changes without a deploy.",
       "A finding marked for a works order does not raise one yet. Raise it on Maintenance and it carries from there.",
       "The Due list needs REX for the managed book. Where REX is not connected the screen says so rather than showing an empty board.",
-      "No photographs on a finding yet, and no printable report - the landlord gets the findings in the email.",
+      /* The printable report landed 14 Sep - Print the report on a written-up
+         visit. Photographs on a finding are still open. */
+      "No photographs on a finding yet. The report prints from the visit once it is written up, and the landlord also gets it by email.",
     ],
   },
 

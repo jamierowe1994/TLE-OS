@@ -8,6 +8,7 @@ import Segmented from "@/components/Segmented";
 import { PressButton } from "@/components/Bits";
 import { STEPS, stepOf, type StepId } from "@/lib/inspection-steps";
 import type { DueVisit, Finding, Inspection, InspectionEvent, InspectionRules } from "@/lib/inspections";
+import ReportSheet from "@/components/inspections/ReportSheet";
 
 /**
  * Inspections: the visits we owe the book, and the permission that lets us in.
@@ -315,8 +316,32 @@ function Sheet({ id, onClose, onChanged }: { id: string; onClose: () => void; on
                 <h2 className="hand mt-1 truncate text-[22px]">{i.propertyName}</h2>
                 <p className="text-[11.5px] text-muted">{i.locality}{i.tenant ? ` · ${i.tenant}` : ""}{i.landlord ? ` · landlord ${i.landlord}` : ""}</p>
               </div>
-              <button type="button" onClick={onClose} className="text-[12px] text-muted underline">Close</button>
+              <div className="flex shrink-0 items-center gap-3">
+                {/* Only once it has been written up. Printing a visit that has
+                    not happened produces a sheet saying "Not recorded" under
+                    every heading, which looks like a broken report rather than
+                    an early one. */}
+                {i.reportedAt && (
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    title="Print this visit report for the landlord, or save it as a PDF"
+                    className="rounded-full border border-line/80 px-3.5 py-1.5 text-[11.5px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
+                  >
+                    Print the report
+                  </button>
+                )}
+                <button type="button" onClick={onClose} className="text-[12px] text-muted underline">Close</button>
+              </div>
             </div>
+
+            {/* On paper, hidden on screen - see components/inspections/ReportSheet. */}
+            <ReportSheet
+              inspection={i}
+              findings={held?.findings ?? []}
+              kindText={kindLabel(i.kind)}
+              actionLabel={(id) => ACTIONS.find((a) => a.id === id)?.label ?? ""}
+            />
 
             {err && <p className="mt-4 rounded-xl border border-accent-dark/40 bg-accent-soft/40 p-3 text-[12px]">{err}</p>}
 
