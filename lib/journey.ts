@@ -253,12 +253,25 @@ export const LISTING_TRACK: JourneyStep[] = [
       "Publish to the portals via REX. A draft earns nothing.",
     action: "none", cta: "Mark as live",
   },
+  /* SPLIT IN TWO, 14 Sep 2026 (Danielle, 11 Sep). This was one step called
+     "Viewings & offers", which made a stage out of two different jobs: filling
+     a diary, and handling what comes back from it. An agent with six viewings
+     booked and no offers yet, and an agent with three offers to weigh up, were
+     on the same square - so the track could not say which of them was stuck,
+     and neither could the landlord looking at the same spine. */
   {
-    id: "viewings", label: "Viewings & offers", icon: "calendar",
+    id: "viewings", label: "Viewings", icon: "calendar",
     title: "Get people through the door",
     detail:
-      "Book viewings in and log each offer as it lands. The record stays HERE until the viewings stop — offers accumulate, nothing moves on by itself.",
+      "Book them in and keep them coming. The record stays HERE while the diary is filling; nothing moves on by itself.",
     action: "viewing", cta: "Book a viewing",
+  },
+  {
+    id: "offers-in", label: "Offers in", icon: "doc",
+    title: "Log every offer as it lands",
+    detail:
+      "One record per offer: who, how much, from when, and their situation. They accumulate here while the viewings finish, so the landlord sees the whole field at once rather than the first one in.",
+    action: "none", cta: "Log an offer",
   },
   {
     id: "offers", label: "Landlord review", icon: "coin",
@@ -326,9 +339,15 @@ export function listingStartingStep(l: {
   letAgreed: boolean;
   publicationStatus: string | null;
 }): number {
-  if (l.letAgreed) return 3; // offer accepted, handover pending
-  if (l.publicationStatus === "published") return 1; // live — get viewings
-  return 0; // draft — first job is going live
+  /* BY ID, NOT BY NUMBER. These were the literals 3, 1 and 0, and splitting
+     "Viewings & offers" in two on 14 Sep moved Offer accepted from 3 to 4 -
+     which would have put every let-agreed listing on the wrong square, quietly,
+     with nothing on screen looking broken. The track is a list somebody will
+     edit again; a lookup survives that and a number does not. */
+  const at = (id: string) => Math.max(0, LISTING_TRACK.findIndex((s) => s.id === id));
+  if (l.letAgreed) return at("accepted"); // offer accepted, handover pending
+  if (l.publicationStatus === "published") return at("viewings"); // live — get viewings
+  return at("live"); // draft — first job is going live
 }
 
 /** A lead that has stopped. The rail says so rather than pretending. */
