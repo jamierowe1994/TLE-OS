@@ -341,6 +341,8 @@ if (cutArg > -1) {
   await hero({ name: "hero-radar", art: "radar.png", H: 620, drawWidth: 1120, blob: "" });
   await hero({ name: "hero-reset", art: "reset.png", H: 730, drawWidth: 940, blob: "" });
 
+  await hero({ name: "hero-video", art: "video.png", H: 700, drawWidth: 760, blob: "" });
+
   await hero({ name: "hero-digest", art: "digest.png", H: 600, drawWidth: 1130, blob: "" });
 
   /* The set-up mail's drawing arrives with its own watercolour ground under

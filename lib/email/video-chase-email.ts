@@ -1,4 +1,4 @@
-import { emailShell } from "@/lib/email/shell";
+import { skyListShell } from "@/lib/email/shell-sky";
 import type { VerifyEmail } from "@/lib/verify-email";
 
 /**
@@ -76,15 +76,15 @@ export function videoChaseEmail(opts: {
   return {
     subject: `Record a quick video for ${opts.address}?`,
     text,
-    html: emailShell({
+    html: skyListShell({
       heading,
       intro,
       button: "Record a video",
       link: opts.link,
-      image: "illustrations/record-video.gif",
+      hero: "hero-video.png",
       /* The out. A nudge that cannot be declined is a demand. */
-      footnote:
-        "Entirely optional. Ignore this and the appraisal goes ahead exactly the same, deck and all.",
+      tip: "Entirely optional. Ignore this and the appraisal goes ahead exactly the same, deck and all.",
+      tipQuiet: true,
     }),
   };
 }
