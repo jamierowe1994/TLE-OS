@@ -41,9 +41,28 @@ const COLS = 4;
  * at 375px is 160 a tile, which is a number and a label.
  *
  * The stored layout does not change. A tile saved two wide is still two wide;
- * CSS clamps a span to the tracks that exist, so on a phone it fills the row
- * instead of overflowing. Nobody's arrangement is rewritten by looking at it
- * on a phone, which is the thing that would be unforgivable here.
+ * the SPAN is clamped at render time to the tracks that exist, so on a phone
+ * it fills the row instead of overflowing. Nobody's arrangement is rewritten
+ * by looking at it on a phone, which is the thing that would be unforgivable
+ * here.
+ *
+ * ── The clamp has to be ours; CSS will not do it (14 Sep 2026) ────────────
+ *
+ * This comment used to say "CSS clamps a span to the tracks that exist". It
+ * does not, and that one wrong assumption was the whole phone dashboard bug.
+ *
+ * An item with `grid-column: span 4` in a two-column grid does not shrink to
+ * two - it GROWS THE GRID, adding implicit columns to make room. The pipeline
+ * widget is four wide, so on a phone it quietly turned the two-column board
+ * back into a four-column one, and the two `1fr` tracks collapsed:
+ * `grid-template-columns` measured `0px 0px 151px 151px` at 390px. Tiles in
+ * the dead tracks came out 42px wide and sat on top of each other - three
+ * widgets stacked in one place, their numbers cut to "90,..." in a 30px box.
+ *
+ * So the span is clamped here, in the style, against the columns actually
+ * drawn. `cols` is state rather than a function call because the render has
+ * to re-run when the viewport crosses 640px; the first paint uses COLS so the
+ * server and the client agree, and the effect corrects it immediately after.
  */
 function drawnCols(): number {
   if (typeof window === "undefined") return COLS;
@@ -113,6 +132,18 @@ export default function BentoDash({
   const [sizeMenu, setSizeMenu] = useState<string | null>(null);
   const [offBoard, setOffBoard] = useState(false);
   const [trayGroup, setTrayGroup] = useState<string | null>(null);
+
+  /* The columns actually drawn - see drawnCols() above for why the span has
+     to be clamped against this by hand. COLS on the first paint so the server
+     and the client render the same markup; the effect corrects it on mount. */
+  const [cols, setCols] = useState(COLS);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 640px)");
+    const read = () => setCols(mq.matches ? COLS : 2);
+    read();
+    mq.addEventListener("change", read);
+    return () => mq.removeEventListener("change", read);
+  }, []);
 
   const gridRef = useRef<HTMLDivElement | null>(null);
   // The dwell: a reorder happens only after the pointer has SETTLED on a
@@ -465,7 +496,9 @@ export default function BentoDash({
                   : `block-pop overflow-hidden ${tint ? "border-transparent" : "border-line/80"} hover:border-ink`
               }`}
               style={{
-                gridColumn: `span ${item.w} / span ${item.w}`,
+                /* Clamped, not raw: a span wider than the board grows the
+                   grid rather than shrinking to fit it. See drawnCols(). */
+                gridColumn: `span ${Math.min(item.w, cols)} / span ${Math.min(item.w, cols)}`,
                 gridRow: `span ${item.h} / span ${item.h}`,
                 animationDelay: customise ? `${(idx % 5) * 0.11}s` : undefined,
                 touchAction: customise ? "none" : undefined,
@@ -473,7 +506,13 @@ export default function BentoDash({
               }}
             >
               <div className={customise ? "pointer-events-none h-full select-none" : "h-full"}>
-                {def.render(item.w, item.h)}
+                {/* The DRAWN width, not the stored one. A widget decides its
+                    own inside from `w` - the pipeline goes to seven columns at
+                    four wide - and on a phone a four-wide tile is drawn two
+                    wide, so passing the stored 4 asked it for seven columns in
+                    308px: 30px a column, every figure clipped to "90,...".
+                    One clamp here fixes every widget that adapts on width. */}
+                {def.render(Math.min(item.w, cols), item.h)}
               </div>
 
               {customise && (

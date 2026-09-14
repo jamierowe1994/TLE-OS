@@ -332,7 +332,11 @@ These come from each screen's own caveats in `lib/screens.ts` - the screen tells
 
 ## G2. Found during Round 3, 11 Sep
 
-- **The dashboard on a phone squeezes its four tiles into one row** - the numbers are cut off ("140", "699") and the illustration sits over the subtitle. **Not caused by the new fonts:** the live site on the old fonts does exactly the same. The OS is desktop-first; agents on phones will see this. Half a day to give the bento a phone layout.
+- ~~The dashboard on a phone squeezes its four tiles into one row~~ **DONE 14 Sep, and it was not a squeeze - the tiles were sitting ON TOP OF each other.** Three causes, all measured at 390px:
+  1. **The board silently had four columns, not two.** The pipeline widget is four wide, and `grid-column: span 4` in a two-column grid does not shrink to fit - it GROWS the grid with implicit columns. `grid-template-columns` measured `0px 0px 151px 151px`, so three widgets were drawn 42px wide and overlapped by 26px. The comment in `BentoDash` claiming "CSS clamps a span to the tracks that exist" was the whole bug; the span is clamped by hand now.
+  2. **Widgets were told their stored width, not their drawn width.** A four-wide tile drawn two wide still asked the pipeline for seven columns inside 308px - 30px each, every figure cut to "90,...". `def.render()` gets the clamped width now, which fixes any widget that adapts.
+  3. **The armchair really did sit across the subtitle**, by 58px. The masthead reserves a measured 46% for art on a phone, which holds for the narrow figures elsewhere and not for the largest drawing in the OS. Below 640px the art now goes and the words take the width (`hideArtOnPhone`, opt-in, dashboard only), and the height it was standing in goes with it.
+  Verified at 390px: zero overlapping tiles, zero clipped figures, no sideways scroll, and desktop measured unchanged (armchair 484x400, tiles 254, pipeline 1064).
 
 ## G3. Added by James, 11 Sep (evening)
 

@@ -87,6 +87,10 @@ export default function Dashboard() {
            and now the lowest thing in the drawing is the front shoe on its own.
            0.88 would have taken the whole foot. */
         illustrationAspect={1.2113}
+        /* The biggest drawing in the OS, on the smallest screen it has to
+           share with a three-line greeting. Below 640px it goes and the words
+           take the width - see hideArtOnPhone. */
+        hideArtOnPhone
         /* The rug was what tied the furniture to the ground, and it has gone
            with it, so the line has to do that job instead: at 0.92 the side
            table's ring base lands ON the rule, the chair legs come down to it

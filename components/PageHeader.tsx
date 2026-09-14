@@ -146,6 +146,7 @@ export default function PageHeader({
    * exactly as they were.
    */
   illustrationAspect,
+  hideArtOnPhone = false,
   /**
    * Slide the artwork sideways, in pixels. Positive is right.
    *
@@ -265,6 +266,24 @@ export default function PageHeader({
   backdropWidth?: number;
   illustrationAspect?: number;
   illustrationNudge?: number;
+  /**
+   * Drop the artwork below 640px, and give the words the whole width.
+   *
+   * Opt-in, and only the dashboard takes it. The base reserve is a single
+   * measured guess - "46% is what the art actually takes at this size" - and
+   * that holds for the narrow figures on Listings and Viewings. It does not
+   * hold for the armchair scene, which is the largest drawing in the OS at
+   * 400 tall: measured at 390px on 14 Sep 2026 it ran from x=151 while the
+   * reserve only pushed the blurb to x=217, so the man sat across "Here's
+   * what's happening with your lettings business today" by 58px. CLAUDE.md is
+   * explicit that nothing may collide at any width.
+   *
+   * Reserving the full 62% it really needs was the other option and it is
+   * worse: it leaves the greeting 131px, which wraps "Good afternoon, James"
+   * into four lines to make room for a 165px ornament. On a phone the words
+   * are the page and the drawing is decoration, so the decoration goes.
+   */
+  hideArtOnPhone?: boolean;
   lineBreak?: LineBreak;
   seat?: number;
   seatCut?: { left: number; right: number };
@@ -295,6 +314,12 @@ export default function PageHeader({
   /* Told the aspect, work the room out from it - narrow art as much as wide.
      The fixed steps were measured against roughly 0.7, and the seated lady at
      0.73 is wider than that: at the fixed 315 the blurb ran 78px under her. */
+  /* With the art gone on a phone, the height it was standing in should go
+     with it - otherwise the masthead keeps reserving 300px for a drawing that
+     is not drawn, and the greeting floats above an empty third of the screen.
+     A class rather than the inline style, because this has to be a media
+     query and a style attribute cannot be one. */
+  const mastClass = hideArtOnPhone ? `os-mast-min-${Math.round(minHeight)}` : "";
   const wideArt = typeof illustrationAspect === "number";
   const artClass = wideArt ? `art-room-${Math.round(illustrationHeight)}-${Math.round(illustrationAspect * 1000)}` : "";
   /* flushRight pins the art to the very corner, so there is no inset to
@@ -391,7 +416,7 @@ export default function PageHeader({
              so no larger screen can be changed by it - and the clamp is left
              off every other breakpoint, where the art really is drawn at the
              size the formula assumes. */
-          .${artClass} { padding-right: min(${reserve[0]}px, 46%) }
+          .${artClass} { padding-right: ${hideArtOnPhone ? "0" : `min(${reserve[0]}px, 46%)`} }
           @media (min-width: 640px) { .${artClass} { padding-right: ${reserve[1]}px } }
           @media (min-width: 1024px) { .${artClass} { padding-right: ${reserve[2]}px } }
           @media (min-width: 1280px) { .${artClass} { padding-right: ${reserve[3]}px } }
@@ -460,19 +485,24 @@ export default function PageHeader({
           The clip is animated rather than applied: at rest it has to be open,
           because a seated figure's legs hang BELOW the rule on purpose and a
           standing clip would cut her feet off. */}
+      {mastClass && (
+        <style>{`
+          @media (min-width: 640px) { .${mastClass} { min-height: ${minHeight}px } }
+        `}</style>
+      )}
       <div
-        className={`os-mast-frame relative border-b border-line/80 ${seated ? seatClass : "mb-5"}`}
-        style={{ minHeight }}
+        className={`os-mast-frame relative border-b border-line/80 ${seated ? seatClass : "mb-5"} ${mastClass}`}
+        style={mastClass ? undefined : { minHeight }}
       >
       <div
-        className="os-mast flex h-full items-end justify-between gap-6 pt-8"
+        className={`os-mast flex h-full items-end justify-between gap-6 pt-8 ${mastClass}`}
         /* --mast-drop: how far the block has to travel for the artwork to go
            fully behind the rule - the art's height above the line plus a
            margin. The keyframes take the larger of this and 112% of the
            masthead, so a tall figure is never left with his head showing. */
         style={
           {
-            minHeight,
+            ...(mastClass ? null : { minHeight }),
             "--mast-drop": hasArt ? `${Math.ceil(illustrationHeight * cross) + 56}px` : undefined,
           } as React.CSSProperties
         }
@@ -567,6 +597,8 @@ export default function PageHeader({
         {hasArt && (
           <div
             className={`pointer-events-none absolute bottom-0 origin-bottom-right scale-[0.5] sm:scale-[0.68] lg:scale-[0.88] xl:scale-100 ${
+              hideArtOnPhone ? "hidden sm:block " : ""
+            }${
               flushRight
                 ? "right-0"
                 : seated

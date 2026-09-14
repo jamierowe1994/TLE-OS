@@ -776,7 +776,11 @@ function PipelineWidget({ w, h }: { w: number; h: number }) {
               else&apos;s numbers. Ask James to link your account.
             </p>
           )}
-          <div className={`grid gap-4 ${w >= 4 ? "grid-cols-7" : w >= 2 ? "grid-cols-4" : "grid-cols-2"}`}>
+          {/* Four columns needs ~65px each inside a phone-width tile, and the
+              lead count is five digits - "90,330" wants 79px at 24px and came
+              out clipped. Two wide now means two columns, which wraps four
+              stages into 2x2 and gives every figure room to be read. */}
+          <div className={`grid gap-4 ${w >= 4 ? "grid-cols-7" : w >= 3 ? "grid-cols-4" : "grid-cols-2"}`}>
             {STAGES.map((p, i) => {
               const inner = (
                 <>
