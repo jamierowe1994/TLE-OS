@@ -85,19 +85,23 @@ export function resetEmailFor(link: string): VerifyEmail {
     /* Same shell, different words. A reset arriving unrequested is the one
        that makes somebody think they have been hacked, so the quiet line says
        plainly that nothing has changed yet and that ignoring it is enough. */
-    html: emailShell({
-      heading: "Set a new password",
+    html: skyListShell({
+      /* What happened, rather than what to do about it. The button says what
+         to do; the heading is for the person working out why this arrived. */
+      heading: "Forgot your password?",
       intro:
-        "Click the button below to choose a new password. The link works once and lasts an hour.",
+        "No problem. Click the button below to choose a new password. The link works once and lasts an hour.",
       button: "Choose a new password",
       link,
       /* Its own picture since 6 Sep 2026 - it shared the sign-in squiggle
          with the set-up email, and two different emails with the same
          picture read as the same email sent twice. */
-      image: "illustrations/email/reset.gif",
-      imageWidth: 150,
-      footnote:
-        "If you didn't ask for this, you can safely ignore it. Your password has not changed, and nothing happens until the link is opened.",
+      hero: "hero-reset.png",
+      /* No strip of reassurances here, unlike the set-up mail. That one has
+         three worries to answer before somebody will press the button; this
+         one has a single line to say, and it matters more than any of them. */
+      tip: "If you didn't ask for this, you can safely ignore it. Your password has not changed, and nothing happens until the link is opened.",
+      tipQuiet: true,
     }),
   };
 }

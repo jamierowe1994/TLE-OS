@@ -158,6 +158,61 @@ async function cloudGif({ name, src, width, side, bleed, ampY, ampX, frames, del
   console.log(name + ".gif", W + "x" + H, frames + " frames", size(out));
 }
 
+/* ── Calming a drawing down ──────────────────────────────────────────────
+   James, 14 Sep 2026, on the password drawing: "it is a little bit too
+   green, so we might just want to level that out." Blanket desaturation
+   takes the skin and the hair with it, so this only touches pixels whose HUE
+   is green - the washes, the shirt, the padlock - and leaves everything else
+   exactly as drawn. */
+async function lessGreen(file, amount = 0.62) {
+  const { data, info } = await sharp(file).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] < 8) continue;
+    const r = data[i] / 255, g = data[i + 1] / 255, b = data[i + 2] / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+    if (d < 0.02) continue;
+    let h;
+    if (max === r) h = ((g - b) / d + 6) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 70 || h > 175) continue;
+    /* Pull it towards its own grey, which keeps the paper warm rather than
+       turning the washes to ash. */
+    const grey = 0.299 * r + 0.587 * g + 0.114 * b;
+    data[i] = Math.round((r * amount + grey * (1 - amount)) * 255);
+    data[i + 1] = Math.round((g * amount + grey * (1 - amount)) * 255);
+    data[i + 2] = Math.round((b * amount + grey * (1 - amount)) * 255);
+  }
+  return sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer();
+}
+
+/* ── The password drawing, corrected ─────────────────────────────────────
+   The drawing carries a hand-lettered "TLE OS" on the tablet, sparks and
+   all. James: "crop out the TLE OS - it should be the logo TLE OS." So the
+   lettering is papered over in the screen's own off-white and the real
+   wordmark goes in its place, tilted to sit on the same line the tablet is
+   drawn on. */
+async function resetArt() {
+  const word = await sharp("public/brand/tle-os-logo.png")
+    .extract({ left: 410, top: 132, width: 566, height: 127 })
+    .resize({ width: 240 })
+    .rotate(-3.5, { background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toBuffer();
+  const wm = await sharp(word).metadata();
+  const paper = Buffer.from('<svg width="300" height="108"><rect width="300" height="108" rx="6" fill="#faf8f3"/></svg>');
+  const fixed = await sharp(`${ART}/reset-raw.png`)
+    .composite([
+      { input: paper, left: 424, top: 84 },
+      { input: word, left: Math.round(552 - wm.width / 2), top: Math.round(146 - wm.height / 2) },
+    ])
+    .png()
+    .toBuffer();
+  fs.writeFileSync(`${ART}/reset.png`, await lessGreen(fixed));
+  console.log("reset.png rebuilt from reset-raw.png");
+}
+
 /* ── The hero picture for a list email ──────────────────────────────────
    The drawing and the pink shape behind it are ONE flat picture. They have
    to be: there is no layering in an inbox, and a shape that has to sit
@@ -278,6 +333,9 @@ if (cutArg > -1) {
   /* Both of these arrive with their own watercolour ground painted in, so
      neither gets a shape behind it - a vector blob under a painted one reads
      as two grounds. */
+  await resetArt();
+  await hero({ name: "hero-reset", art: "reset.png", H: 730, drawWidth: 940, blob: "" });
+
   await hero({ name: "hero-digest", art: "digest.png", H: 600, drawWidth: 1130, blob: "" });
 
   /* The set-up mail's drawing arrives with its own watercolour ground under
