@@ -106,7 +106,13 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     wiring: "partial",
     caveats: [
       "Bond names properties, not people. Find the owner and Send a postcard exist on screen but say 'not connected' until the Land Registry route and the print house are set up; nothing is ordered or sent.",
-      "Bond is only as fresh as the morning sweep. A property that let this afternoon still shows until tomorrow.",
+      /* Was "as fresh as the morning sweep", which describes a schedule that
+         does not exist. Checked against Railway and against os_radar_runs on
+         14 Sep 2026: no cron service calls /api/radar/run, and the 16 runs on
+         record are at 08:29, 11:14, 13:00, 16:48, 20:25 - scattered by up to
+         nine hours, twice on some days. A cron is exact to the minute. Those
+         are somebody remembering. Reword again the day a cron lands. */
+      "Bond is only as fresh as its last sweep, and nothing schedules that sweep yet - it is run by hand. A property that let this afternoon shows until somebody runs it again.",
       "Launch Pad here is the list only. Working a lead - logging a call, booking, marking it lost - still happens in Launch Pad itself.",
       "The Paid badge describes the tool, not you. Nothing here knows what you have bought, so it will not tell you whether a tool is yours.",
     ],

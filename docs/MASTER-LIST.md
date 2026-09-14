@@ -330,6 +330,39 @@ These come from each screen's own caveats in `lib/screens.ts` - the screen tells
 | G5 | REX PM's 522 letting agreements are 477 distinct properties - anything quoted "of 522" counts 45 twice | 45 |
 | G6 | Propoly holds 643 deals, read ten to a page | 65 requests a full read |
 
+## G2e. Which scheduled jobs are actually scheduled, 14 Sep
+
+The month-close gap turned out not to be one gap. Nothing had ever checked the app's
+cron-callable routes against the cron services that call them, so it was checked: **22 routes
+accept a cron key. 12 are wired to a cron. 10 are not.**
+
+**Not scheduled, and the first three look like they should be:**
+
+| Route | State |
+|---|---|
+| `radar/run` | **Bond's sweep, and it is run BY HAND.** 16 runs on record at 08:29, 11:14, 13:00, 16:48, 20:25 - scattered by up to nine hours, twice on some days. A cron is exact to the minute. It has been kept alive by somebody remembering, and the Tools screen told agents it was "the morning sweep". Caveat corrected. |
+| `business/backfill` | The month close. See G2d - nothing calls it. |
+| `business/income-months/warm` | Warms the income months; nothing calls it. |
+| `bond/company-sync`, `bond/epc-sync`, `bond/hmo-sync`, `bond/planning-sync`, `bond/sales-sync` | Bond's enrichment feeds. Sales is a Land Registry file and is fine by hand; the other four are a decision. |
+| `lettings-capture/run`, `teg/sync` | Not scheduled. Whether they should be is a decision. |
+
+**Also found:** `compliance/warm` is called **twice a day** - once at 06:00 inside `os-cron-daily`
+and again at 11:00 by `os-cron-compliance-warm`. Harmless, but it is the slow one, and one of
+the two is doing nothing but costing a REX sweep.
+
+**James, in Railway.** Three lines for `os-cron-daily`'s start command, same shape as the eight
+already there:
+
+```
+echo month-close;   wget -qO- -T 180 --post-data= --header="x-cron-key: $CRON_SECRET" "$OS_URL/api/business/backfill"; echo
+echo radar;         wget -qO- -T 280 --post-data= --header="x-cron-key: $CRON_SECRET" "$OS_URL/api/radar/run"; echo
+echo income-warm;   wget -qO- -T 180 --post-data= --header="x-cron-key: $CRON_SECRET" "$OS_URL/api/business/income-months/warm"; echo
+```
+
+Radar takes about 90 seconds across NN and MK, so it fits inside `os-cron-daily`. If it grows,
+give it its own service like the viewings sweep, which had to move off the Cloudflare domain
+because tle-os.co.uk returns 524 at 100 seconds.
+
 ## G2d. The hardcoded-month risk, tested rather than assumed, 14 Sep
 
 `~/.claude/CLAUDE.md` names this first: "the live-figures rule bit TLE-portal 44 times over 23
