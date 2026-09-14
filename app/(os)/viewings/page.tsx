@@ -207,6 +207,12 @@ export default function Viewings() {
         actions={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2.5">
             <Segmented
+              /* A floor, above the phone. Sharing this row with the agent
+                 picker on a 1366-wide laptop squeezed the track until the
+                 labels read "Calen..." and "Feedb..." - the three words that
+                 say what the screen is (14 Sep 2026). Fluid below sm so a
+                 phone still gets the full width of the row. */
+              className="w-full sm:w-auto sm:min-w-[392px]"
               options={[
                 { id: "calendar", label: "Calendar", icon: <DoodleIcon name="calendar" size={14} /> },
                 { id: "diary", label: "Diary", icon: <DoodleIcon name="list" size={14} /> },
