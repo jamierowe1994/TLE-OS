@@ -308,9 +308,9 @@ These come from each screen's own caveats in `lib/screens.ts` - the screen tells
 | F2.7 | Compliance | A renewed certificate overwrites the old one in REX, so past overdue positions cannot be recovered |
 | F2.8 | Compliance | The tile grid is five wide for four tiles |
 | F2.9 | Inspections | A finding marked for a works order does not raise one; no photos; no printable report (= J1) |
-| F2.10 | Portfolio | **Settled 11 Sep: PayProp E&W is connected** - James connected it on 5 Sep and the token is held. So the screen's caveat "PayProp's UK agency has no API key" is **stale and should be corrected**. The real gap: the rent roll still reads REX's agreed rent, not the money PayProp says arrived. The connection's scopes are empty, which fits the income report not being in the client's permissions (C9). |
+| F2.10 | Portfolio | **CAVEAT CORRECTED 14 Sep** - the screen now reads "PayProp is connected, but the rent roll does not read from it yet", so this row's ask is done. **Settled 11 Sep: PayProp E&W is connected** - James connected it on 5 Sep and the token is held. So the screen's caveat "PayProp's UK agency has no API key" is **stale and should be corrected**. The real gap: the rent roll still reads REX's agreed rent, not the money PayProp says arrived. The connection's scopes are empty, which fits the income report not being in the client's permissions (C9). |
 | F2.11 | Tools | Launch Pad is the list only (= J18) |
-| F2.12 | Dashboard | Marked partial with no caveat written - write what is missing or mark it live |
+| F2.12 | Dashboard | ~~Marked partial with no caveat written~~ **ALREADY DONE in the code, checked 14 Sep.** It carries one - "the board layout is saved in your own browser, so it does not follow you to another device" - and that is true: the layout lives in localStorage under `tle-dash-layout-v1`. `partial` is the right word for it. The LIST was the stale one here. |
 
 ### F3. Help and knowledge
 
@@ -329,6 +329,23 @@ These come from each screen's own caveats in `lib/screens.ts` - the screen tells
 | G4 | Let-only homes inside REX PM's managed book - off compliance by decision, but nothing tells Bond to ring them when a certificate falls due | 73 |
 | G5 | REX PM's 522 letting agreements are 477 distinct properties - anything quoted "of 522" counts 45 twice | 45 |
 | G6 | Propoly holds 643 deals, read ten to a page | 65 requests a full read |
+
+## G2c. The screen docs audited against the code, 14 Sep
+
+`lib/screens.ts` says what each screen does and what does not work, and it feeds **Steve's system
+prompt**, so a stale line there misleads the assistant as well as the agent. Its own header sets
+the standard: "A stale caveat here is the failure this whole file exists to prevent, just wearing
+the opposite sign: telling somebody to go and do it by hand when the OS has quietly started doing
+it for them." Every claim was checked against the code. Four were wrong.
+
+| Screen | Said | Truth |
+|---|---|---|
+| **Market Appraisals** | "You cannot start an appraisal on this screen... There is no New appraisal button here and that is deliberate." | **Exactly the failure the header warns about.** The Book an appraisal button shipped in `b919ce0`. Reworded to say when to use it and when to book from the lead instead. |
+| **Listings** | "Toggle Available only, and sort by Most recent, Rent or Location." | Neither exists. The Available switch became a stage tab and Location is a filter, not a sort. Replaced with the real tabs, the real sorts, and the Archived tab, which was undocumented. |
+| **Viewings** | "Switch between the Diary and Feedback tabs." | Three tabs, not two. Feedback added and described. |
+| **Compliance** | "Tell the landlord only ticks the row on your screen." | There is no such control on that screen, which makes the warning look wrong and the file with it. The substance holds and is kept: nothing there emails the landlord. The reminders that DO send go to the agent, behind the `compliance_chases` switch. |
+
+**F2.10 and F2.12 needed nothing** - both were already right in the code and stale on this list.
 
 ## G2b. The OS on a phone, swept 14 Sep
 

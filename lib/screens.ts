@@ -138,7 +138,12 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     ],
     wiring: "partial",
     caveats: [
-      "You cannot start an appraisal on this screen. One is created by booking it from a landlord lead on Leads, which then brings you straight to its file. There is no New appraisal button here and that is deliberate.",
+      /* Was: "You cannot start an appraisal on this screen ... There is no New
+         appraisal button here and that is deliberate." Untrue since the Book
+         an appraisal button shipped, and the exact failure this file's header
+         warns about - a caveat sending somebody away to do by hand what the
+         screen had quietly started doing. Corrected 14 Sep 2026. */
+      "Book an appraisal here only when there is no landlord lead behind it. Where there is one, book it from the lead on Leads instead - that keeps the lead and the appraisal as one record rather than two.",
       "Stages move on their own, read from the record: the deck sent, the visit passed, the figure recorded, the terms signed, the landlord's documents, the REX listing. Won and Lost are the only moves made by hand.",
       "Booking sends the landlord their confirmation with a calendar file attached, from the public sender with you as reply-to, as long as their record has an email address and Email to customers is on. The file says whether it went.",
       "The appointment does not reach REX's diary yet. Put it in REX yourself until that write is unlocked.",
@@ -149,8 +154,11 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
   "/listings": {
     purpose: "The properties on the market, as a card board — rent, beds, days on market, and what is missing.",
     does: [
-      "Toggle Available only, and sort by Most recent, Rent or Location.",
-      "Search the board.",
+      /* The Available-only switch became a stage tab, and Location is a
+         filter rather than a sort - this line described neither by 14 Sep. */
+      "Filter by stage on the tabs: All listings, Available, Let agreed, Draft, Missing photos, Needs compliance, Archived.",
+      "Open Filters for the sort (Most recent, or rent low to high and high to low), the rent band, the location and the date listed.",
+      "Search the board, and switch it between List and Tiles.",
       "Click a card for the file: Applications & viewings, Property, Marketing, Photos and Documents.",
       "In Marketing, edit the portal write-up and press Save. That goes straight to REX and out to Rightmove, Zoopla and OnTheMarket — live on the portals in about five to ten minutes. There is nothing else to press afterwards.",
       "Open the live advert on Rightmove, Zoopla or OnTheMarket from the Live advert links at the top of the file.",
@@ -159,6 +167,7 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     wiring: "partial",
     caveats: [
       "+ Add new listing opens REX in a new tab. Properties are still created in REX, and appear here once they are.",
+      "Archived is not a REX state and nothing is deleted: a draft goes there once it has sat two months without being published, along with every listing REX holds that came off the market without a tenant. Bring back to drafts returns one for another two months.",
       "Pills like No photos and EPC not filed are telling you what REX is missing, not what this screen failed to load.",
       "Every other field on the file is read-only — the Marketing write-up is the only thing here that saves back to REX. Rent, availability, beds and the rest have to be changed in REX itself.",
       "Live advert links only appear for a property that is actually feeding a portal. No links means the feed is not running, not that the screen failed.",
@@ -170,7 +179,8 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     purpose:
       "Every viewing and its whole story — the property, who is coming, whether anyone lives there, and whether the confirmations actually went.",
     does: [
-      "Switch between the Diary and Feedback tabs.",
+      "Switch between Calendar, Diary and Feedback.",
+      "Feedback groups every viewing that has been by property, with what was said and REX's Hot / Warm / Cold, and Copy for the landlord puts it on the clipboard with no names in it.",
       "Click a viewing for access details, keys, and the comms checklist showing which confirmations were sent.",
       "Record the outcome, starting with whether they turned up, including a No-show.",
       "Push an offer to the landlord, and couple or uncouple applicants.",
@@ -212,7 +222,12 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
     ],
     wiring: "partial",
     caveats: [
-      "Tell the landlord only ticks the row on your screen. No email is sent, so ring or email them yourself.",
+      /* Reworded 14 Sep: the old line named a "Tell the landlord" control that
+         is not on this screen, which makes the warning look wrong and the rest
+         of the file with it. The substance holds - the certificate reminders
+         that DO send (app/api/compliance/reminders/run) go to the agent, and
+         are off until the compliance_chases switch is armed. */
+      "Nothing on this screen emails the landlord. Ring or email them yourself, and note it on the property.",
       "Gas and EICR recording only began in November, so the book is thinner than the real position. EPC looks complete because it was bulk imported.",
       "A renewed certificate overwrites the old one in REX, so this screen cannot tell you what was overdue in the past.",
     ],
