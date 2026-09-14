@@ -185,6 +185,14 @@ const TICK = `<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.
   <path d="M7 21 L16 30 L33 11" fill="none" stroke="#000" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>`;
 
+/* "Nobody here can see the one you choose" wants an eye with a line through
+   it, and the doodle set has no eye. Drawn in the same weight as the rest. */
+const EYE_OFF = `<svg width="44" height="44" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+  <path d="M4 22 C10 13 16 9 22 9 C28 9 34 13 40 22 C34 31 28 35 22 35 C16 35 10 31 4 22 Z" fill="none" stroke="#000" stroke-width="3.2" stroke-linejoin="round"/>
+  <circle cx="22" cy="22" r="5" fill="none" stroke="#000" stroke-width="3.2"/>
+  <path d="M8.5 36.5 L35.5 7.5" stroke="#000" stroke-width="3.4" stroke-linecap="round"/>
+</svg>`;
+
 const BANG = `<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
   <rect x="17" y="7" width="6" height="18" rx="3" fill="#000"/>
   <circle cx="20" cy="32" r="3.4" fill="#000"/>
@@ -267,6 +275,16 @@ if (cutArg > -1) {
   });
 
   await disc({ name: "disc-attention", glyph: BANG, ring: "#c0736a", ink: { r: 255, g: 255, b: 255, alpha: 1 }, g: 34 });
+  /* The set-up mail's drawing arrives with its own watercolour ground under
+     it, so this one gets no shape behind - a vector blob under a painted
+     one reads as two grounds. */
+  await hero({ name: "hero-account", art: "laptop.png", H: 660, drawWidth: 940, blob: "" });
+
+  /* The three reassurances under the button: pale discs, clay glyphs. */
+  await disc({ name: "say-once", glyph: "mail", ring: "#fbe3de", ink: { r: 0xa8, g: 0x5a, b: 0x51, alpha: 1 }, d: 84, g: 36 });
+  await disc({ name: "say-never", glyph: "lock", ring: "#fbe3de", ink: { r: 0xa8, g: 0x5a, b: 0x51, alpha: 1 }, d: 84, g: 36 });
+  await disc({ name: "say-private", glyph: EYE_OFF, ring: "#fbe3de", ink: { r: 0xa8, g: 0x5a, b: 0x51, alpha: 1 }, d: 84, g: 40 });
+
   await disc({ name: "disc-good", glyph: TICK, ring: "#8a9a76", ink: { r: 255, g: 255, b: 255, alpha: 1 }, g: 34 });
   await disc({ name: "disc-ok", glyph: "clock", ring: "#8a9a76", ink: { r: 255, g: 255, b: 255, alpha: 1 }, g: 38 });
   await disc({ name: "disc-tip", glyph: "info", ring: "#ffffff", ink: { r: 0xa8, g: 0x5a, b: 0x51, alpha: 1 }, d: 76, g: 34 });

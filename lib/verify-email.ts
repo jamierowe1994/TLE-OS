@@ -23,6 +23,7 @@ export interface VerifyEmail {
 }
 
 import { emailShell } from "@/lib/email/shell";
+import { skyListShell } from "@/lib/email/shell-sky";
 
 export function verifyEmailFor(link: string): VerifyEmail {
   const text = [
@@ -41,15 +42,25 @@ export function verifyEmailFor(link: string): VerifyEmail {
   return {
     subject: "Confirm your TLE OS account",
     text,
-    html: emailShell({
+    html: skyListShell({
       heading: "Set up your account",
-      intro:
-        "Click the button below to confirm this address and choose your password. The link works once and lasts 24 hours.",
+      intro: "Click the button below to confirm your email address and choose your password.",
       button: "Set your password",
       link,
-      image: "illustrations/sign-in.gif",
-      footnote:
-        "We'll never email you a password, and nobody here can see the one you choose. If you weren't expecting this, you can safely ignore it - nothing happens until the link is opened.",
+      hero: "hero-account.png",
+      /* The three worries that stop somebody pressing the button, answered
+         beside it rather than buried in a paragraph underneath. The 24 hours
+         moved up here out of the intro for the same reason: it is a fact
+         about the link, not part of the instruction. */
+      assurances: [
+        { icon: "say-once.png", text: "The link works once and lasts 24 hours." },
+        { icon: "say-never.png", text: "We'll never email you a password." },
+        { icon: "say-private.png", text: "Nobody here can see the one you choose." },
+      ],
+      /* Kept from the old shell, and not negotiable: somebody who did not ask
+         for this has to be able to read one line and get on with their day. */
+      tip: "If you weren't expecting this, you can safely ignore it - nothing happens until the link is opened. Any questions, just hit reply.",
+      tipQuiet: true,
     }),
   };
 }

@@ -81,6 +81,10 @@ function head(): string {
        the address - "12 days", "expires in 12 days" - and at 320px it costs
        half the width to repeat it. */
     .sky-badge { display:none !important; }
+    /* Three columns become three lines. At 330px each reassurance was four
+       words over four lines, which is slower to read than the paragraph it
+       replaced. The dividers between them go with the columns. */
+    .sky-say { display:block !important; width:100% !important; padding:12px 8px !important; box-sizing:border-box !important; }
     /* The aside's glyph gives up most of its column on a phone: at 330px it
        was taking a third of the width off four-word lines. */
   }
@@ -99,11 +103,15 @@ function footer(): string {
   return `
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px">
         <tr>
-          <td align="center" style="padding:26px 34px 0">
+          <!-- The last thing in the mail, so the name carries a little more
+               than the links above it. James, 14 Sep 2026: the mail should
+               finish here and fit in one column, without the spacing being
+               squeezed to do it. -->
+          <td align="center" style="padding:22px 34px 0">
             <p style="margin:0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:11.5px;letter-spacing:0.04em;color:#a8a29e">
               Instagram &nbsp;·&nbsp; Facebook &nbsp;·&nbsp; LinkedIn
             </p>
-            <p style="margin:11px 0 0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:12px;color:#78716c">The Letting Experts</p>
+            <p style="margin:10px 0 0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;letter-spacing:0.01em;color:#57534e">The Letting Experts</p>
           </td>
         </tr>
       </table>`;
@@ -218,6 +226,7 @@ ${footer()}
    like a table, and a tint behind a table is decoration on top of work. */
 const PANEL = "#ffffff";
 const PANEL_EDGE = "#e8e3e1";
+const SAY_RULE = "#efe6e3";
 const HAIR = "#efeae8";
 const TIP_BG = "#edf1e7";
 /* The chocolate brown from the palette (--pal-brown), not the clay. */
@@ -243,6 +252,12 @@ export interface SkyListOpts {
    * guessing one from an address.
    */
   rowHref?: string;
+  /**
+   * Three short reassurances in a row under the button, each with a disc.
+   * `icon` is a file in /email/sky. For the doorway mails, where what stops
+   * somebody pressing the button is a worry rather than a question.
+   */
+  assurances?: { icon: string; text: string }[];
   /** The aside at the foot. */
   tip?: string;
   /**
@@ -382,6 +397,45 @@ ${
 ${pressable(o.button, safe, BROWN)}
           </td>
         </tr>
+${
+  o.assurances && o.assurances.length
+    ? `
+        <tr>
+          <td class="sky-pad" style="padding:34px 30px 0;background-color:#ffffff">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%">
+              <tr>
+                <!-- No panel behind them, James 14 Sep 2026. The discs and
+                     the dividers carry it, and a tint here put a second box
+                     directly under the white one the lists use. -->
+                <td bgcolor="#ffffff" style="padding:10px 10px 4px;background-color:#ffffff">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%">
+                    <tr>${o.assurances
+                      .map(
+                        (a, i) => `${
+                          i
+                            ? `
+                      <!-- The divider between them is a one-pixel CELL, not a
+                           border: Outlook draws a border on a div as a whole
+                           box or not at all. -->
+                      <td width="1" bgcolor="${SAY_RULE}" class="sky-badge" style="width:1px;background-color:${SAY_RULE};font-size:0;line-height:0">&nbsp;</td>`
+                            : ""
+                        }
+                      <td width="33%" valign="top" align="center" class="sky-say" style="width:33%;padding:0 14px;text-align:center;background-color:#ffffff">
+                        <img src="${ORIGIN}/email/sky/${a.icon}?v=${ASSET_V}" width="40" height="40" alt=""
+                             style="display:block;margin:0 auto;width:40px;height:40px;border:0;outline:none;text-decoration:none">
+                        <p style="margin:12px 0 0;font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;color:#6b625e;background-color:#ffffff">${esc(a.text)}</p>
+                      </td>`
+                      )
+                      .join("")}
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>`
+    : ""
+}
 ${
   o.tip && o.tipQuiet
     ? `
