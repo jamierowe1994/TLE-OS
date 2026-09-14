@@ -1,6 +1,7 @@
 import "server-only";
 import { hasDb, q } from "@/lib/db";
 import { LANDLORD_PROCESS } from "@/lib/process/landlord";
+import { MAINTENANCE_PROCESS } from "@/lib/process/maintenance";
 import { TENANT_PROCESS } from "@/lib/process/tenant";
 import { normaliseStatus, type ProcessMap } from "@/lib/process/types";
 
@@ -13,7 +14,7 @@ import { normaliseStatus, type ProcessMap } from "@/lib/process/types";
  * editing the process rather than a picture of it.
  */
 
-const DEFAULTS: Record<string, ProcessMap> = { tenant: TENANT_PROCESS, landlord: LANDLORD_PROCESS };
+const DEFAULTS: Record<string, ProcessMap> = { tenant: TENANT_PROCESS, landlord: LANDLORD_PROCESS, maintenance: MAINTENANCE_PROCESS };
 
 export function defaultProcess(audience: string): ProcessMap | null {
   return DEFAULTS[audience] ?? null;
