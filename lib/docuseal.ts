@@ -433,6 +433,35 @@ export interface TermsSigningPair {
  * Null when the agent has not sent the terms yet, which is a real answer and
  * not an error: the landlord is told their agent is still preparing them.
  */
+/**
+ * Has EVERYBODY signed, or only the person who just did?
+ *
+ * DocuSeal fires `form.completed` per submitter. With one signer that was the
+ * same question; with two it is not, and the difference matters more than it
+ * looks: the agent signs first, and storing their completion would file a
+ * contract carrying one signature, tick "Terms signed" on the spine and move
+ * the appraisal on to the take-on visit - before the landlord had seen it,
+ * let alone agreed to it.
+ *
+ * Asked of DocuSeal rather than inferred from the payload, because the payload
+ * does not carry the other submitters and a webhook is not a place to guess.
+ * Unreachable counts as NOT complete: a contract filed late is a nuisance and
+ * one filed early is a lie.
+ */
+export async function everybodySigned(submissionId: number | null): Promise<boolean> {
+  if (!submissionId) return false;
+  try {
+    const sub = await ds<{ submitters?: Array<{ completed_at?: string | null }>; completed_at?: string | null }>(
+      `/submissions/${submissionId}`
+    );
+    if (sub?.completed_at) return true;
+    const all = sub?.submitters ?? [];
+    return all.length > 0 && all.every((s) => Boolean(s.completed_at));
+  } catch {
+    return false;
+  }
+}
+
 export async function findLandlordSigning(externalId: string): Promise<SigningSession | null> {
   const raw = await ds<{ data?: Array<{ id?: number; slug?: string; embed_src?: string; status?: string; role?: string; external_id?: string }> }>(
     `/submitters?external_id=${encodeURIComponent(externalId)}&limit=20`

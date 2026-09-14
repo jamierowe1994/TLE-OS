@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { fetchSigned, store, pushToRex } from "@/lib/signed-documents";
+import { everybodySigned } from "@/lib/docuseal";
 
 /**
  * A signed contract coming back from DocuSeal.
@@ -100,6 +101,19 @@ export async function POST(req: NextRequest) {
   }
 
   const d = body.data ?? {};
+
+  /* ONE SIGNATURE IS NOT A SIGNED CONTRACT (14 Sep 2026).
+     The terms went to two submitters - the agent signs, then the landlord -
+     and DocuSeal fires this once per submitter. Storing the agent's completion
+     would file a contract with one signature on it, tick "Terms signed" on the
+     spine (lib/appraisal-stage) and walk the appraisal on to the take-on visit
+     before the landlord had seen it. Acknowledged so DocuSeal stops retrying,
+     and nothing else. */
+  const submissionId = d.submission?.id != null ? Number(d.submission.id) : null;
+  if (!(await everybodySigned(submissionId))) {
+    return NextResponse.json({ ok: true, waiting: "the other signer" });
+  }
+
   const doc = (d.documents ?? [])[0];
   if (!doc?.url || !d.id) {
     return NextResponse.json(
@@ -114,7 +128,7 @@ export async function POST(req: NextRequest) {
 
     const result = await store({
       submitterId: Number(d.id),
-      submissionId: d.submission?.id != null ? Number(d.submission.id) : null,
+      submissionId,
       /* Ours, set when the signing session was opened, so a document can find
          its way back to the appraisal it belongs to. */
       appraisalId: (d.external_id ?? "").trim(),
