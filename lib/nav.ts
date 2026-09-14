@@ -191,6 +191,29 @@ const WORKSPACES: Workspace[] = [
     href: "/agent-compliance", label: "Agent compliance", icon: "shield",
     needs: "see:agent-compliance", primaryFor: ["compliance", "super_admin"],
   },
+  /**
+   * The other half of Michael's job, and it was in no navigation at all.
+   *
+   * James, 14 Sep 2026: "Michael does all of the compliance, so we would need
+   * to set him up to check all of the compliance for all properties that have
+   * lapses in compliance, as well as the actual agent compliance."
+   *
+   * The screen for the first half already existed - /compliance/tracker, built
+   * as "the back-office view: across the whole book, what needs a person today,
+   * and who do I chase". Nothing linked to it. Not from the rail, not from
+   * Compliance, not from anywhere: it could only be reached by typing the
+   * address, so in practice it did not exist.
+   *
+   * Two doors, deliberately, because they answer different questions. Portfolio
+   * > Compliance (on every agent's sidebar, and unscoped - it reads the whole
+   * managed book) answers "is THIS property compliant". This answers "what has
+   * lapsed across all of them, and who do I chase today", which is the one
+   * Michael opens in the morning.
+   */
+  {
+    href: "/compliance/tracker", label: "Compliance chases", icon: "clock",
+    needs: "see:agent-compliance", primaryFor: ["compliance", "super_admin"],
+  },
 ];
 
 /**
