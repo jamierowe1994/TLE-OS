@@ -38,7 +38,7 @@ export default function TenantWelcome() {
       <h1 className="mt-2 text-[26px] font-bold leading-tight">
         Let&apos;s set up your account, Sophie
       </h1>
-      <p className="mt-2 text-[13.5px] leading-relaxed text-black/60">
+      <p className="mt-2 text-[13.5px] leading-relaxed text-muted">
         We&apos;ve registered you with The Letting Experts. Choose a password and
         you&apos;ll be able to see the homes we have, your viewings, and manage
         everything in one place.
@@ -49,7 +49,7 @@ export default function TenantWelcome() {
           <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-black/50">
             Your email
           </span>
-          <span className="flex items-center gap-2 rounded-lg border border-black/15 bg-[#fafafa] px-3.5 py-3 text-[13.5px] text-black/60">
+          <span className="flex items-center gap-2 rounded-lg border border-black/15 bg-panel px-3.5 py-3 text-[13.5px] text-muted">
             🔒 sophie.turner@gmail.com
           </span>
           <span className="mt-1 block text-[10.5px] text-black/40">
@@ -93,7 +93,7 @@ export default function TenantWelcome() {
       </div>
 
       {/* The GDPR notice, present and honest — the email's other half. */}
-      <div className="mt-8 rounded-xl border border-black/10 bg-[#fafafa] p-4">
+      <div className="mt-8 rounded-xl border border-black/10 bg-panel p-4">
         <button
           type="button"
           onClick={() => setGdprOpen((o) => !o)}
@@ -103,7 +103,7 @@ export default function TenantWelcome() {
           <span className="text-black/40">{gdprOpen ? "−" : "+"}</span>
         </button>
         {gdprOpen && (
-          <div className="mt-3 space-y-2 text-[12px] leading-relaxed text-black/60">
+          <div className="mt-3 space-y-2 text-[12px] leading-relaxed text-muted">
             <p>
               We hold your name, contact details and what you&apos;re looking for so we
               can find you a home. That&apos;s the only reason we hold them.

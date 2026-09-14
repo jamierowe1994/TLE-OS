@@ -59,7 +59,7 @@ export default async function TenantPublicLayout({ children }: { children: React
 
       <main className="w-full pb-16">{children}</main>
 
-      <footer className="border-t border-black/10 bg-[#fafafa]">
+      <footer className="border-t border-black/10 bg-panel">
         <div className="flex w-full flex-wrap items-center justify-between gap-3 px-5 py-6 text-[11px] text-black/50 sm:px-8 lg:px-12">
           <span>© The Letting Experts · thelettingexperts.co.uk</span>
           {/* The real pages on thelettingexperts.co.uk, checked live 13 Sep 2026.

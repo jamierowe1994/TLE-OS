@@ -82,7 +82,7 @@ export default function TenantProfilePage() {
 
       {/* Photo. */}
       <div className="mt-8 flex items-center gap-5">
-        <label className="group relative block h-24 w-24 shrink-0 cursor-pointer overflow-hidden rounded-full border border-black/10 bg-[#fafafa]">
+        <label className="group relative block h-24 w-24 shrink-0 cursor-pointer overflow-hidden rounded-full border border-black/10 bg-panel">
           {p.photo ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={p.photo} alt="" className="h-full w-full object-cover" />
