@@ -2,7 +2,7 @@ import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import AgentCard from "@/components/landlord/AgentCard";
-import AgentTab from "@/components/landlord/AgentTab";
+import AgentSheet from "@/components/landlord/AgentSheet";
 import Spine from "@/components/landlord/Spine";
 import SpinePhone from "@/components/landlord/SpinePhone";
 import { HeroAction, pickHero, signSource } from "@/components/landlord/StepAction";
@@ -75,7 +75,7 @@ export default function LandlordDashboard({
           <AgentCard v={v} />
         </div>
       </div>
-      <AgentTab v={v} />
+      <AgentSheet v={v} />
 
       {/* ── the property, and the next step ── */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">

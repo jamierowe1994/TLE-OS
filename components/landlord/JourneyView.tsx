@@ -1,7 +1,7 @@
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import AgentCard from "@/components/landlord/AgentCard";
-import AgentTab from "@/components/landlord/AgentTab";
+import AgentSheet from "@/components/landlord/AgentSheet";
 import Spine from "@/components/landlord/Spine";
 import SpinePhone from "@/components/landlord/SpinePhone";
 import { HeroAction, StepRow, pickHero } from "@/components/landlord/StepAction";
@@ -73,7 +73,7 @@ export default function JourneyView({ view: v, homeHref }: { view: LandlordView;
           <AgentCard v={v} />
         </div>
       </div>
-      <AgentTab v={v} />
+      <AgentSheet v={v} />
 
       {/* ── where they are, and what they can do ── */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
