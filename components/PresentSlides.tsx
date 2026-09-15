@@ -1802,9 +1802,9 @@ export function RentLegal({ show }: { show: boolean }) {
       <div className="mx-auto w-full max-w-[1180px]">
         <div className="max-w-[760px]">
           <HandHead eyebrow={RENT_LEGAL.eyebrow} show={show} lines={2}>
-            Extra reassurance,
+            More than management.
             <br />
-            <Emphasis show={show}>included</Emphasis>
+            Real <Emphasis show={show}>protection</Emphasis>
           </HandHead>
           <Rise show={show} i={2}>
             <p className="mt-5 max-w-[680px] text-[14.5px] font-light leading-[1.6] text-black/55">
@@ -2132,7 +2132,7 @@ export function Fees({ deck, show }: { deck: Deck; show: boolean }) {
                       Deferring in one line is honest; a net figure computed on
                       the wrong side of it would be out by a fifth. */}
                   <p className="mt-4 text-[11px] font-light leading-relaxed text-black/40">
-                    VAT and any applicable set-up fee are shown clearly in the terms of business.
+                    Fees shown include VAT. Any set-up fee is set out in the terms of business.
                   </p>
                 </div>
               </Rise>

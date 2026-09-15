@@ -91,7 +91,7 @@ export const APPROACH = {
       body: "Behind your local expert sits the systems, training, compliance framework and operational support of The Letting Experts.",
     },
     {
-      title: "Keeping you up to date",
+      title: "Ahead of the law, not behind it",
       body: "Lettings legislation continues to evolve. We'll keep you informed, explain what applies to your property and help make sure the right steps are taken at the right time.",
     },
     {
@@ -328,7 +328,7 @@ export const RENT_COLLECTION = {
   heading: "Rent collection, made simple",
   body: "We use PayProp to reconcile rent as payments land, giving you a clear, up-to-date view of your rental income.",
   points: [
-    "Rent paid out when it clears",
+    "Rent released to you as soon as it has cleared and been reconciled",
     "Payment follow-up from the first day anything becomes overdue",
     "Every payment and statement visible as it happens",
     "A landlord portal you can check at any time",
@@ -348,9 +348,9 @@ export const PROTECTION = {
 
 export const RENT_LEGAL = {
   eyebrow: "Experts Management Service",
-  heading: "Extra reassurance, included",
+  heading: "More than management - real protection for your income",
   standfirst:
-    "Rent & Legal Protection is included as standard with the Experts Management Service, subject to the policy terms, giving you additional support around rental income and eligible legal costs.",
+    "Rent & Legal Protection is included as standard on the Experts Management Service, at no extra cost. It covers the two things landlords actually lose sleep over: a tenant who stops paying, and the cost of getting the property back.",
   points: [
     {
       title: "Rent protection",
@@ -432,15 +432,15 @@ export const NETWORK = {
  */
 export const NEXT_STEPS: { title: string; body: string }[] = [
   {
-    title: "Confirm the details",
-    body: "The service, recommended rent and fees are set out clearly in writing.",
+    title: "Sign the terms",
+    body: "Everything above, in writing, with the rent and the fee on it. It takes a couple of minutes and can be done on your phone.",
   },
   {
     title: "We get it ready",
-    body: "Photography, video, floor plan and the relevant compliance requirements are prepared for launch.",
+    body: "Photography, video, floor plan and the compliance paperwork. We tell you if anything needs doing before it goes live.",
   },
   {
     title: "It goes live",
-    body: "Your property launches across the portals, with enquiries and viewings managed from day one.",
+    body: "Across every portal on the same day, with viewings booked as the enquiries land.",
   },
 ];

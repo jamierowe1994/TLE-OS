@@ -1267,9 +1267,9 @@ export function BookRentLegal({ deck }: { deck: Deck }) {
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>{RENT_LEGAL.eyebrow}</EyebrowRule>
         <h1 className="mt-6 text-[52px] leading-[1.1]" style={SERIF}>
-          Extra reassurance,
+          More than management.
           <br />
-          <Ital width={190}>included</Ital>
+          Real protection for your <Ital width={190}>income</Ital>
         </h1>
         <p className="mt-6 max-w-[900px] text-[14.5px] leading-[1.6] text-black/65">{RENT_LEGAL.standfirst}</p>
         <div className="mt-6 grid grid-cols-2 gap-x-12" style={{ width: 1200 }}>
@@ -1542,9 +1542,9 @@ export function BookTerms({ deck }: { deck: Deck }) {
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>Getting started</EyebrowRule>
         <h1 className="mt-6 text-[64px] leading-[1.1]" style={SERIF}>
-          Ready when
+          Three steps,
           <br />
-          <Ital width={190}>you are</Ital>
+          and we&rsquo;re <Ital width={140}>away</Ital>
         </h1>
         <ol className="mt-10" style={{ width: 1000 }}>
           {NEXT_STEPS.map((st, i) => (

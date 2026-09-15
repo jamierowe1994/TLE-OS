@@ -1087,7 +1087,7 @@ export const SAMPLE_DECK: PresentDeck = {
     serviceLevel: "Fully managed",
     feePct: 10,
     setupFee: 600,
-    note: "Subject to the EPC being redone before it goes live - the current one expired in August.",
+    note: "Subject to all compliance being up to date before it goes live.",
   },
   terms: { signUrl: null, summary: null },
   /* The office schedule, same as a real deck gets. See STANDARD_FEES. */

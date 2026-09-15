@@ -1597,7 +1597,7 @@ function Terms({ deck, show }: { deck: Deck; show: boolean }) {
           <Rise show={show} i={2}>
             <p className="mt-6 max-w-[560px] text-[15px] font-light leading-[1.65] text-black/60">
               {t.summary ??
-                "The terms of business confirm the service, fees and responsibilities clearly, so you know exactly how everything works before we begin."}
+                "The terms of business set out what we do, what it costs and how either of us can bring it to an end. Nothing starts until they are signed."}
             </p>
           </Rise>
         </div>
@@ -1614,8 +1614,9 @@ function Terms({ deck, show }: { deck: Deck; show: boolean }) {
           ) : (
             /* No dead button. The sentence does the job the link would. */
             <p className="mt-7 max-w-[560px] text-[14px] font-light leading-relaxed text-black/65">
-              {first} will send everything electronically. It only takes a couple of minutes and
-              can all be completed on your phone.
+              {first} will send the terms of business across to sign electronically - it takes a
+              couple of minutes and nothing needs printing. Reply to this and we&rsquo;ll get them
+              straight over.
             </p>
           )}
         </Rise>
@@ -1755,33 +1756,16 @@ function WhyHouse({ deck, show }: { deck: Deck; show: boolean }) {
         </div>
       </div>
 
-      {/* THE FOOT: one white band across the stage, under the photograph.
-          NOT on the appraisal deck - James, 13 Sep 2026: "they can't sign at
-          this stage because we haven't generated the full deck". The
-          pre-appraisal and the post-appraisal keep it. */}
-      {deckKind(deck) !== "appraisal" && (
-      <Rise show={show} i={5} className={fx ? "absolute inset-x-16 bottom-8 z-[3]" : "px-6 pb-10 sm:px-12"}>
-        <div className="flex flex-col gap-5 rounded-[20px] border bg-white px-7 py-4 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.25)] sm:flex-row sm:items-center" style={{ borderColor: "rgba(59,59,60,0.1)" }}>
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full" style={{ background: TINTS[0], color: "var(--p-accent)" }}>
-            <Line name="check" size={20} />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="block text-[17px]" style={HEAD}>If you&rsquo;d like to go ahead</span>
-            <span className="mt-0.5 block max-w-[640px] text-[13px] leading-relaxed text-black/55">
-              Once you&rsquo;re happy with everything we&rsquo;ve covered, we&rsquo;ll confirm the details, agree the next steps and get things moving.
-            </span>
-          </span>
-          <span className="flex shrink-0 flex-col items-center gap-2.5 sm:border-l sm:pl-7" style={{ borderColor: "rgba(59,59,60,0.12)" }}>
-            {a.email ? (
-              <a href={`mailto:${a.email}`} className="flex items-center gap-3 rounded-[12px] px-9 py-3.5 text-[14px] font-semibold text-white transition-opacity hover:opacity-90" style={{ background: "var(--p-accent)" }}>
-                Get in touch{first ? ` with ${first}` : ""} <span aria-hidden>&rarr;</span>
-              </a>
-            ) : null}
-            <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-black/40">Your property. Our priority.</span>
-          </span>
-        </div>
+      {/* THE FOOT: the strapline, and nothing else.
+          The white band that used to sit here carried "If you'd like to go
+          ahead" and a Get in touch button. James, 15 Sep 2026: get rid of it -
+          a landlord reading this slide is either about to have the valuation
+          or has just had it, so being invited to make contact mid-deck reads
+          as though we have lost track of where they are. The last slide is
+          where the deck asks for something. The strapline stays. */}
+      <Rise show={show} i={5} className={fx ? "absolute inset-x-16 bottom-10 z-[3] text-center" : "px-6 pb-10 text-center sm:px-12"}>
+        <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-black/40">Your property. Our priority.</span>
       </Rise>
-      )}
 
       {fx && (
         /* THE PHOTOGRAPH, cut into a large rounded shape off the right of
@@ -1853,9 +1837,9 @@ function QuestionsHouse({ deck, show }: { deck: Deck; show: boolean }) {
           <h2 className={`mt-4 leading-[1.04] ${fx ? "text-[62px]" : "text-[36px] sm:text-[50px]"}`} style={HEAD}>
             {post ? (
               <>
-                Ready to get
+                Shall we get it on
                 <br />
-                <Emphasis show={show}>started</Emphasis>?
+                the <Emphasis show={show}>market</Emphasis>?
               </>
             ) : kind === "appraisal" ? (
               <>
@@ -1876,10 +1860,9 @@ function QuestionsHouse({ deck, show }: { deck: Deck; show: boolean }) {
           <p className="mt-6 max-w-[540px] text-[15.5px] leading-[1.65] text-black/65">
             {post ? (
               <>
-                You now have the recommended rent, your service options and the costs. If
-                you&rsquo;re ready, {first || "your agent"} can send everything across and start
-                arranging the next steps. If you&rsquo;d like to talk anything through first,
-                we&rsquo;re here.
+                You have the figure, what it costs and what we do for it. Sign the terms and{" "}
+                {first || "your agent"} will get the photographs booked this week - or ring
+                first if there is anything you want to go over again.
               </>
             ) : kind === "appraisal" ? (
               <>
