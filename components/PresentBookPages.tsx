@@ -698,7 +698,7 @@ export function BookOffer() {
       {/* THE SAGE, off the bottom-left corner, and the keys on the marble
           over it - the agenda's marble, mirrored into this corner - with
           the handwritten line on the slab. */}
-      <div className="pointer-events-none absolute" style={{ left: -360, bottom: -330, width: 760, height: 620, borderRadius: "50%", background: SAGE_WASH }} />
+      <div className="pointer-events-none absolute" style={{ left: -470, bottom: -350, width: 760, height: 620, borderRadius: "50%", background: SAGE_WASH }} />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {/* James's picture carries its own handwritten note, so nothing is
           written over it here. */}
@@ -848,7 +848,7 @@ export function BookPortals() {
             ))}
           </div>
         </div>
-        <ul className="mt-8 flex items-center gap-x-14 border-t pt-7" style={{ width: 1160, borderColor: "rgba(0,0,0,0.12)" }}>
+        <ul className="ml-auto mt-8 flex items-center justify-end gap-x-9 border-t pt-7" style={{ width: 593, borderColor: "rgba(0,0,0,0.12)" }}>
           {PORTALS_COPY.portals.map((name) =>
             LOGOS[name] ? (
               <li key={name} className="flex items-center">
@@ -859,20 +859,29 @@ export function BookPortals() {
                     512x512 and 306x381 - so they are set larger than our own
                     wordmark or they read as four anonymous shapes in a row. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={LOGOS[name]}
-                  alt={name}
-                  className={`w-auto shrink-0 opacity-90 ${name === "thelettingexperts.co.uk" ? "h-9" : "h-[52px]"}`}
-                />
+                {name === "thelettingexperts.co.uk" ? (
+                  /* The mark alone. The file is the full wordmark, 869x465,
+                     and its only empty columns are 272-306 - so the drop is
+                     the first 272px and the words start at 306. At 52px tall
+                     that puts the mark's edge at 272 x (52/465) = 30.4, hence
+                     a 31px window. A square one clipped the words mid-letter. */
+                  <span className="block h-[52px] w-[31px] shrink-0 overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={LOGOS[name]} alt={name} className="h-full w-auto max-w-none object-left opacity-90" />
+                  </span>
+                ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={LOGOS[name]} alt={name} className="h-[52px] w-auto shrink-0 opacity-90" />
+                )}
               </li>
             ) : (
               <li key={name} className="text-[21px] font-semibold leading-none text-black/75">{name}</li>
             )
           )}
         </ul>
-        {/* Out of the mug. It sat at the left margin, over the books and the
-            plant, where it could not be read at all. */}
-        <div className="ml-[700px] mt-5 max-w-[460px] text-[11px] leading-[1.45] text-black/40">
+        {/* Under the figures, in their column. It sat at the left margin, over
+            the books and the plant, where it could not be read at all. */}
+        <div className="ml-auto mt-5 text-right text-[11px] leading-[1.45] text-black/40" style={{ width: 593 }}>
           <p>{statClaim(PORTAL_STATS).who}</p>
           <p className="mt-0.5">{statClaim(PORTAL_STATS).when}</p>
         </div>
@@ -918,7 +927,7 @@ export function BookSocial() {
             </div>
           ))}
         </div>
-        <div className="mt-6 max-w-[900px] text-[11px] leading-[1.45] text-black/40">
+        <div className="mt-10 max-w-[900px] text-[11px] leading-[1.45] text-black/40">
           <p>{statClaim(DEMAND_STATS).who}</p>
           <p className="mt-0.5">{statClaim(DEMAND_STATS).when}</p>
         </div>
@@ -946,11 +955,14 @@ export function BookCompliance({ deck }: { deck: Deck }) {
         <p className="mt-7 max-w-[720px] text-[17px] leading-[1.6] text-black/65">
           Lettings comes with a growing number of responsibilities. Our role is to help you understand what applies, what needs doing and when.
         </p>
-        <div className="mt-9 grid grid-cols-2 gap-x-14 gap-y-9" style={{ width: 1160 }}>
+        {/* The bodies take the whole column. max-w-[480px] in a 538px column
+            broke "Ongoing compliance guidance" a word or two early on every
+            line, and the four blocks then sat at four different heights. */}
+        <div className="mt-9 grid grid-cols-2 items-start gap-x-14 gap-y-7" style={{ width: 1160 }}>
           {COMPLIANCE.map((c) => (
-            <div key={c.title} className="border-t pt-6" style={{ borderColor: "rgba(0,0,0,0.1)" }}>
+            <div key={c.title} className="border-t pt-5" style={{ borderColor: "rgba(0,0,0,0.1)" }}>
               <p className="text-[19px] font-semibold leading-snug">{c.title}</p>
-              <p className="mt-3 max-w-[480px] text-[15px] leading-[1.6] text-black/60">{c.body}</p>
+              <p className="mt-3 text-[15px] leading-[1.6] text-black/60">{c.body}</p>
             </div>
           ))}
         </div>
@@ -986,7 +998,7 @@ export function BookLegal() {
             <ol key={c}>
               {items.map((it, i) => (
                 <li key={it.title} className={`flex items-start gap-4 py-[12px] ${i > 0 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
-                  <span className="flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-full text-[12px] font-semibold" style={{ background: "var(--p-tint)", color: "var(--p-accent)" }}>0{c * half + i + 1}</span>
+                  <span className="w-[30px] shrink-0 pt-[1px] text-[13px] font-semibold" style={{ color: "var(--p-accent)" }}>0{c * half + i + 1}</span>
                   <span className="min-w-0">
                     <span className="block text-[15.5px] font-semibold leading-snug">{it.title}</span>
                   </span>
@@ -1100,8 +1112,14 @@ export function BookLevels({ deck }: { deck: Deck }) {
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="absolute left-[96px] top-[76px] w-[1250px]">
         <EyebrowRule>Service levels</EyebrowRule>
-        <h1 className="mt-4 text-[46px] leading-[1.1]" style={TITLE}>
-          Three levels. Choose the support that <Ital width={190}>suits you.</Ital>
+        {/* Two lines. On one it ran the full 1250px of the block and finished
+            hard against the page's right margin with no air at all, which is
+            what reads as running off the page - measured, the page itself has
+            164px to spare at the foot. */}
+        <h1 className="mt-4 max-w-[900px] text-[46px] leading-[1.1]" style={TITLE}>
+          Three levels. Choose the
+          <br />
+          support that <Ital width={190}>suits you.</Ital>
         </h1>
         <p className="mt-3 max-w-[760px] text-[13.5px] leading-[1.55] text-black/60">{SERVICE_LEVELS_INTRO}</p>
         <table className="mt-4 w-full border-collapse text-left" style={{ width: 1240 }}>
