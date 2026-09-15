@@ -144,13 +144,6 @@ export default function NewLeadPanel({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [rexNote, setRexNote] = useState<{ ok: boolean; detail: string } | null>(null);
   const [emailPreview, setEmailPreview] = useState(false);
-  /* The privacy notice a tenant is sent on save (15 Sep 2026), as the server
-     reports it: sent, skipped with a reason, or failed with one. Its own fact,
-     like REX - the contact can be saved and the notice still not have gone. */
-  const [welcome, setWelcome] = useState<{ state: "sent" | "skipped" | "failed"; detail: string } | null>(null);
-  const [welcomeBusy, setWelcomeBusy] = useState(false);
-  /** The real rendered email for the preview, fetched when it is opened. */
-  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   /** REX's own id for the contact we just pushed, so "Open in REX" can go somewhere. */
   const [rexId, setRexId] = useState<string | null>(null);
   /** Our own id for the row we just wrote, so the record can be opened. */
@@ -195,8 +188,6 @@ export default function NewLeadPanel({
     setSaving(false);
     setSaveError(null);
     setRexNote(null);
-    setWelcome(null);
-    setPreviewHtml(null);
     setPicked([]);
     setPicking(false);
     setKind(initialKind ?? null);
@@ -320,7 +311,6 @@ export default function NewLeadPanel({
     setSaving(true);
     setSaveError(null);
     setRexNote(null);
-    setWelcome(null);
     try {
       const r = await fetch("/api/contacts", {
         method: "POST",
@@ -343,7 +333,6 @@ export default function NewLeadPanel({
         return;
       }
       setRexNote(j.rex ? { ok: Boolean(j.rex.ok), detail: String(j.rex.detail ?? "") } : null);
-      setWelcome(j.welcome ? { state: j.welcome.state, detail: String(j.welcome.detail ?? "") } : null);
       setRexId(j.contact?.rexId ? String(j.contact.rexId) : null);
       setSavedId(j.contact?.id ? String(j.contact.id) : null);
       onCreated?.(d);
@@ -352,39 +341,6 @@ export default function NewLeadPanel({
       setSaveError("That didn't save — the connection dropped. Nothing has been lost from this form.");
     } finally {
       setSaving(false);
-    }
-  }
-
-  /** Send the notice again, for a contact whose first try did not go. */
-  async function sendWelcomeAgain() {
-    if (!savedId || welcomeBusy) return;
-    setWelcomeBusy(true);
-    try {
-      const r = await fetch("/api/contacts/welcome", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: savedId }),
-      });
-      const j = await r.json();
-      if (j.welcome) setWelcome({ state: j.welcome.state, detail: String(j.welcome.detail ?? "") });
-      else setWelcome({ state: "failed", detail: j.error ?? "Not sent." });
-    } catch {
-      setWelcome({ state: "failed", detail: "Not sent: the connection dropped." });
-    } finally {
-      setWelcomeBusy(false);
-    }
-  }
-
-  /** The email as it goes out, rendered by the server from the catalogue. */
-  async function openPreview() {
-    setEmailPreview(true);
-    if (previewHtml) return;
-    try {
-      const r = await fetch(`/api/contacts/welcome?name=${encodeURIComponent(d.name.split(" ")[0] ?? "")}`, { cache: "no-store" });
-      const j = await r.json();
-      setPreviewHtml(j.ok ? String(j.html) : `<p style="font:13px sans-serif;padding:24px">${String(j.error ?? "The email could not be shown.")}</p>`);
-    } catch {
-      setPreviewHtml(`<p style="font:13px sans-serif;padding:24px">The email could not be shown - the connection dropped.</p>`);
     }
   }
 
@@ -529,48 +485,43 @@ export default function NewLeadPanel({
                 </p>
               )}
 
-              {/* The privacy notice and their passport, one email, sent by the
-                  save itself (15 Sep 2026). This box used to say "has NOT gone"
-                  with a wireframe underneath, because nothing sent it; now it
-                  says what the server reports - sent, not sent and why, or
-                  failed - the same way the REX note above does. */}
-              {kind === "tenant" && welcome && (
-                <div
-                  className={`mt-5 w-full rounded-2xl border p-4 text-left ${
-                    welcome.state === "failed" ? "border-accent-dark/40 bg-accent-soft/40" : "border-line/70"
-                  }`}
-                >
+              {/* The bundle: GDPR notice + their portal, one email. Sent on
+                  registration by default, because the notice is a legal duty
+                  and the portal is the welcome — one envelope, two jobs. */}
+              {kind === "tenant" && (
+                <div className="mt-5 w-full rounded-2xl border border-line/70 p-4 text-left">
+                  {/* It said "queued" and nothing was queued (James found it,
+                      13 Sep 2026): saving a contact writes to the OS and pushes
+                      to REX, and sends nothing at all. Until customer email is
+                      sending from the Letting Experts domain this says so, and
+                      the preview below is a draft rather than a receipt. */}
                   <p className="flex items-center gap-2 text-[12.5px] font-semibold">
                     <DoodleIcon name="mail" size={15} className="text-accent-dark" />
-                    {welcome.state === "sent"
-                      ? "Privacy notice sent"
-                      : welcome.state === "failed"
-                        ? "Privacy notice NOT sent"
-                        : "Privacy notice not sent"}
+                    The welcome email has NOT gone
                   </p>
                   <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
-                    {welcome.detail}{" "}
-                    {welcome.state === "sent" &&
-                      `${d.name.split(" ")[0] || "They"} got how we hold their details and a link to start their tenant passport. Replies come to you.`}
+                    {d.name.split(" ")[0] || "They"} should get one email: how we look after
+                    their details (the legal bit), and a button to set a password and open
+                    their own Letting Experts account. It is written and not yet wired -
+                    customer email waits on the Letting Experts sending domain. Send it from
+                    Outlook for now.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {welcome.state === "failed" && (
-                      <button
-                        type="button"
-                        onClick={() => void sendWelcomeAgain()}
-                        disabled={welcomeBusy}
-                        className="rounded-full bg-ink px-4 py-2 text-[11.5px] font-semibold text-page transition-opacity disabled:opacity-50"
-                      >
-                        {welcomeBusy ? "Sending…" : "Send it again"}
-                      </button>
-                    )}
                     <button
                       type="button"
-                      onClick={() => void openPreview()}
+                      onClick={() => setEmailPreview(true)}
                       className="rounded-full border border-ink/25 px-4 py-2 text-[11.5px] font-semibold transition-colors hover:border-ink"
                     >
-                      {welcome.state === "sent" ? "See the email they got" : "See the email"}
+                      See the email they&apos;ll get
                     </button>
+                    <a
+                      href="/tenant/welcome"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full border border-line/80 px-4 py-2 text-[11.5px] font-semibold text-muted transition-colors hover:border-ink hover:text-ink"
+                    >
+                      Preview their portal →
+                    </a>
                   </div>
                 </div>
               )}
@@ -632,7 +583,7 @@ export default function NewLeadPanel({
                     onClick={() => {
                       setD({ ...EMPTY, ...(initial ?? {}) });
                       setGeo(null); setSaved(false); setRexId(null); setSavedId(null);
-                      setSaveError(null); setRexNote(null); setWelcome(null); setPreviewHtml(null);
+                      setSaveError(null); setRexNote(null);
                       setPicked([]); setPicking(false); setKind(initialKind ?? null);
                       setDossier(null); setBeds(0); setBaths(0);
                     }}
@@ -1214,10 +1165,7 @@ export default function NewLeadPanel({
           )}
         </div>
 
-      {/* ── The email itself, as the server renders it from the catalogue.
-             It was a hand-drawn copy until 15 Sep 2026, and a copy of an
-             email drifts from the email: it linked to a privacy page that
-             404s and a demo account. An iframe of the real HTML cannot. ── */}
+      {/* ── The email itself: a GDPR notice wearing its best clothes. ── */}
       {emailPreview && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
           <button
@@ -1225,12 +1173,12 @@ export default function NewLeadPanel({
             onClick={() => setEmailPreview(false)}
             className="absolute inset-0 cursor-default bg-ink/45"
           />
-          <div className="fade-up relative flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
+          <div className="fade-up relative flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-3xl border border-line/80 bg-page shadow-[0_30px_70px_-20px_rgba(0,0,0,0.5)]">
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line/70 px-6 py-4">
-              <div className="min-w-0">
+              <div>
                 <h2 className="text-[17px] leading-tight">The email they receive</h2>
-                <p className="mt-0.5 truncate text-[11.5px] text-muted">
-                  To: {d.email || "their email"} · From: The Letting Experts · Replies come to you
+                <p className="mt-0.5 text-[11.5px] text-muted">
+                  To: {d.email || "their email"} · From: hello@thelettingexperts.co.uk
                 </p>
               </div>
               <button
@@ -1241,12 +1189,54 @@ export default function NewLeadPanel({
                 ✕
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-hidden bg-white">
-              {previewHtml ? (
-                <iframe title="The email they receive" srcDoc={previewHtml} sandbox="" className="h-[70vh] w-full border-0" />
-              ) : (
-                <p className="p-6 text-[12px] text-muted">Writing the email…</p>
-              )}
+            <div className="min-h-0 flex-1 overflow-y-auto p-6">
+              {/* Rendered in the CUSTOMER brand — red, plain type — because
+                  that is what actually lands in their inbox. */}
+              <div className="overflow-hidden rounded-xl border border-line/60 bg-white text-[#16181d]">
+                <div className="px-6 pt-6">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-[#e31f36] text-[12px] font-extrabold text-white">
+                    TLE
+                  </span>
+                  <p className="mt-4 text-[15px] font-bold">
+                    Welcome, {d.name.split(" ")[0] || "there"} — your account with The Letting Experts
+                  </p>
+                  <div className="mt-3 space-y-2.5 text-[12.5px] leading-relaxed text-black/70">
+                    <p>
+                      We&apos;ve registered you with The Letting Experts, which means we
+                      now hold your name and contact details so we can help you find a
+                      home. We look after them carefully, never sell them, and you can
+                      see, correct or delete them at any time — the details are at the
+                      foot of this email.
+                    </p>
+                    <p>
+                      Your account is ready. Set a password and you can see every home
+                      we have, your viewings, and manage everything in one place:
+                    </p>
+                  </div>
+                  <a
+                    href="/tenant/welcome"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-4 inline-block rounded-lg bg-[#e31f36] px-6 py-3 text-[13px] font-bold text-white"
+                  >
+                    Set up my account
+                  </a>
+                  <p className="mt-3 text-[10.5px] text-black/40">
+                    This link is just for you and expires in 7 days.
+                  </p>
+                </div>
+                <div className="mt-5 border-t border-black/10 bg-[#fafafa] px-6 py-4 text-[10px] leading-relaxed text-black/45">
+                  Your data: we hold your name, contact details and search preferences to
+                  provide our lettings service (legitimate interest / contract). We share
+                  them only where a tenancy requires it. Ask for a copy, correction or
+                  deletion any time: hello@thelettingexperts.co.uk. Full policy:
+                  thelettingexperts.co.uk/privacy.
+                </div>
+              </div>
+              <p className="mt-3 text-[10.5px] text-muted">
+                Wireframe — the send goes live with the email layer; the magic-link
+                button already opens the real portal flow.
+              </p>
             </div>
           </div>
         </div>
