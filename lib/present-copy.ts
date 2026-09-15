@@ -105,20 +105,20 @@ export const APPROACH = {
 
 export const COMPLIANCE: { title: string; body: string }[] = [
   {
-    title: "Clear service levels",
-    body: "What we do, what you do, and where the line sits. In writing, before anything starts.",
+    title: "Clear responsibilities",
+    body: "You'll know what we handle, what you handle and what needs to happen at each stage of the tenancy.",
   },
   {
-    title: "Compliance guidance",
-    body: "Help understanding and meeting your legal obligations in the private rented sector - not a leaflet, a person who knows your property.",
+    title: "Ongoing compliance guidance",
+    body: "Practical guidance around the legal requirements that apply to your property, with someone there to explain changes as they happen.",
   },
   {
     title: "Structured tenant referencing",
-    body: "Affordability, credit history and employment verification on every applicant, to the same standard every time.",
+    body: "A consistent process covering affordability, credit history, employment, income and the required applicant checks.",
   },
   {
-    title: "Legally compliant documentation",
-    body: "Tenancy agreements and paperwork prepared in line with current legislation, and kept current as it changes.",
+    title: "Current documentation",
+    body: "Tenancy agreements and supporting documents prepared in line with current requirements and updated as legislation changes.",
   },
 ];
 
@@ -132,35 +132,35 @@ export const COMPLIANCE: { title: string; body: string }[] = [
 export const LEGAL_ITEMS: { title: string; body: string }[] = [
   {
     title: "Gas Safety Certificate (CP12)",
-    body: "Required annually. We track the renewal date and book it before it lapses.",
+    body: "Required annually. We can keep the renewal date visible and coordinate the next certificate where included in your service.",
   },
   {
     title: "Electrical safety (EICR)",
-    body: "A valid report at least every five years in England. We hold the dates and arrange the re-test.",
+    body: "A valid report is required at least every five years in England. We'll help keep the relevant dates and requirements clear.",
   },
   {
     title: "EPC",
-    body: "Minimum E rating to let. We flag where you sit and what the coming MEES changes would ask of you.",
+    body: "We'll confirm the property's current rating and explain any requirements that apply before it is marketed.",
   },
   {
     title: "Smoke and carbon monoxide alarms",
-    body: "Checked at the start of every tenancy, and recorded that they were.",
+    body: "The required alarms need to be in place and checked at the start of the tenancy.",
   },
   {
     title: "Deposit protection",
-    body: "Protected in a government-approved scheme with the prescribed information served inside the deadline.",
+    body: "Where applicable, deposits must be protected correctly and the required information provided within the relevant timeframe.",
   },
   {
     title: "Right to Rent checks",
-    body: "Verified and documented for every tenant, with the evidence kept where it can be produced.",
+    body: "The required checks are completed and documented for each tenant.",
   },
   {
     title: "How to Rent guide",
-    body: "The current version issued to every new tenant - and re-issued when it is updated mid-tenancy.",
+    body: "The current guide is issued where required as part of the tenancy documentation.",
   },
   {
     title: "Client money protection and redress",
-    body: "Your money held under a protection scheme, with an independent route to complain about us.",
+    body: "Relevant protection and redress arrangements sit behind the service.",
   },
 ];
 
@@ -172,19 +172,33 @@ export const LEGAL_ITEMS: { title: string; body: string }[] = [
  * the detail will differ, and needs to have said so at the time.
  */
 export const LEGAL_CAVEAT =
-  "Requirements vary across the UK. This reflects the position in England - Scotland and Wales operate under separate legislation, and we will confirm exactly what applies to your property.";
+  "Requirements vary across the UK. This reflects the position in England. Scotland and Wales operate under separate legislation, and we'll confirm what applies to your property.";
 
 /* ───────────────────────── marketing ───────────────────────── */
+
+/**
+ * The three points on the Marketing divider.
+ *
+ * HERE rather than in the slide, because the slide exists twice - the deck's
+ * MarketingDivider and the booklet's BookMarketing - and both were carrying
+ * their own copy of this list. Two copies of a paragraph is two paragraphs
+ * that drift, and this one already had.
+ */
+export const MARKETING_POINTS: { icon: "camera" | "people" | "chart"; title: string; body: string }[] = [
+  { icon: "camera", title: "Professional presentation", body: "Photography and listings designed to make the property stand out." },
+  { icon: "people", title: "Targeted reach", body: "Local and social marketing built around your property and its likely tenant." },
+  { icon: "chart", title: "Major portals", body: "Your property everywhere serious renters are already looking." },
+];
 
 export const WHAT_WE_OFFER: string[] = [
   "Professional photography and videography",
   "Virtual tours and 3D floor plans",
   "Premium listings on Rightmove, Zoopla and OnTheMarket",
   "Targeted social advertising built around your property",
-  "Accompanied viewings, by someone who has stood in the property",
-  "Tenancy matching, to let it to the right person rather than the first one",
-  "Tenancy agreements and compliance paperwork prepared correctly",
-  "Regular rental market updates and performance reports",
+  "Accompanied viewings with someone who knows the property",
+  "Tenant matching focused on suitability",
+  "Tenancy agreements and compliance documentation prepared correctly",
+  "Support making sure the property is ready to meet current letting requirements",
 ];
 
 /**
@@ -200,27 +214,27 @@ export const WHAT_WE_OFFER: string[] = [
  */
 export const MAX_PRICE = {
   eyebrow: "Getting the best rent",
-  heading: "Marketing finds a tenant. This is what sets the rent.",
+  heading: "Marketing finds the tenant. Strategy gets the best result.",
   points: [
     {
-      title: "Priced to start a queue, not to sit",
-      body: "The first fortnight is when a property gets the most attention it will ever get. Priced right it draws several applicants at once and the rent holds; priced high it burns that fortnight and then reduces anyway, from a weaker position.",
+      title: "Priced to create interest from day one",
+      body: "We use the local evidence to set a figure that gives the property the strongest possible start.",
     },
     {
-      title: "Presented before it is listed",
-      body: "We tell you what is worth doing first and what is not worth touching. Sometimes nothing. Sometimes one afternoon's work puts fifty pounds a month on it for the life of the tenancy.",
+      title: "Presented before it goes live",
+      body: "We'll tell you what's worth doing, what isn't and where small improvements could make a meaningful difference.",
     },
     {
-      title: "Launched when tenants are looking",
-      body: "We pick the day it goes live around when your kind of tenant actually searches, rather than whenever the photographs happen to come back.",
+      title: "Launched with purpose",
+      body: "We plan the launch around the property, the local market and tenant demand.",
     },
     {
-      title: "Viewings together, not one by one",
-      body: "Qualified applicants view at the same time. It is not a bidding process and we will not run one - but a tenant who can see genuine interest in the room moves quickly, and quick is what protects the asking rent.",
+      title: "Viewings managed with momentum",
+      body: "We organise suitable applicants carefully so interest remains active and the process keeps moving.",
     },
     {
-      title: "Reviewed on evidence, not on nerves",
-      body: "If the enquiries are not coming we tell you why, with the numbers, in the first two weeks. A reduction decided early is a small one.",
+      title: "Reviewed using the evidence",
+      body: "We monitor enquiries, viewings and feedback closely and keep you informed as the market responds.",
     },
   ],
 };
@@ -237,25 +251,25 @@ export const BROCHURE_COPY = {
 
 export const PORTALS_COPY = {
   heading: "Everywhere a tenant is looking",
-  body: "Rightmove, Zoopla, OnTheMarket, thelettingexperts.co.uk and your own Letting Expert's local site. Professional photography and written-not-generated descriptions on all of them, so the listing that a tenant finds is the same quality wherever they find it.",
+  body: "Rightmove, Zoopla, OnTheMarket, thelettingexperts.co.uk and your Letting Expert's local site. The same professional photography and carefully written listing appear throughout, so your property is presented consistently wherever it is found.",
   portals: ["Rightmove", "Zoopla", "OnTheMarket", "thelettingexperts.co.uk"],
 };
 
 export const SOCIAL_COPY = {
-  heading: "Reaching the tenants who are not looking yet",
-  body: "Portal search catches people who are already hunting. Paid social reaches the ones who would move for the right property but have not started looking - targeted by area, age and circumstance, so your property appears in front of them rather than waiting to be found.",
+  heading: "Reaching tenants beyond the portals",
+  body: "Portal search reaches people already actively looking. Paid social helps us extend that reach locally and introduce your property to potential tenants beyond the traditional property portals.",
 };
 
 /* ───────────────────────── tenants ───────────────────────── */
 
 export const SCREENING = {
   eyebrow: "How we find and screen every tenant",
-  heading: "Checked before they are through your door",
+  heading: "A thorough process from the start",
   paragraphs: [
-    "Before a viewing is booked, applicants complete our Rental Passport - affordability, credit history, employment and income, previous landlord references and right to rent, with a guarantor route where the criteria are not fully met. Only applicants who clear every stage are put in front of your property.",
-    "Those who pass are invited to view together. It is not a bidding process and we will not run one; it is about cutting the time your property sits empty. Tenants who are ready to move act quickly when they can see genuine interest in the room.",
-    "Every document is checked for tampering and for AI-generated forgery as standard. It is a category of fraud that barely existed two years ago and it is now the most common way a referencing pack gets past an agent.",
-    "You see bookings, feedback and offers as they happen, from launch through to let.",
+    "Before a viewing is booked, applicants complete our Rental Passport, covering affordability, employment and income, previous landlord references and Right to Rent, with a guarantor route where appropriate.",
+    "Suitable applicants are then invited to view, helping us keep the process organised and focused on the right match for the property.",
+    "Supporting documents are checked carefully as part of the referencing process.",
+    "You can see bookings, feedback and offers as they happen, from launch through to let.",
   ],
 };
 
@@ -264,19 +278,19 @@ export const SCREENING = {
 export const MANAGEMENT: { title: string; body: string }[] = [
   {
     title: "Flexible service options",
-    body: "Tenant Find, Rent Collection, or the full Experts Management Service. You pick the level of involvement you want.",
+    body: "Tenant Find, Rent Collection or the full Experts Management Service. You choose the level of support that suits you.",
   },
   {
     title: "Professional tenancy management",
-    body: "The tenancy handled in line with current legislation, so a notice served late or a document missed never becomes your problem.",
+    body: "Ongoing management with legislation, documentation and key tenancy requirements kept in view throughout.",
   },
   {
     title: "Rent collection and financial administration",
-    body: "Rent collected, statements issued, and a clear record you can hand straight to an accountant.",
+    body: "Rent collected, statements issued and a clear record ready for you or your accountant.",
   },
   {
     title: "Maintenance and property care",
-    body: "Repairs coordinated through contractors we already use and already trust, so the property is looked after through the tenancy rather than at the end of it.",
+    body: "Repairs coordinated through trusted contractors, helping keep the property well looked after throughout the tenancy.",
   },
 ];
 
@@ -308,7 +322,7 @@ export const SERVICE_ROWS: { service: string; included: [boolean, boolean, boole
 ];
 
 export const SERVICE_LEVELS_INTRO =
-  "Three levels, and the difference between them is how much of the tenancy you want to run yourself. Everything above the line is on all three.";
+  "Three levels, and the difference between them is how much of the tenancy you want to run yourself. Whichever you choose, you get all of the above.";
 
 export const RENT_COLLECTION = {
   heading: "Rent collection, without the chasing",

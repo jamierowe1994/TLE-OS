@@ -8,6 +8,7 @@ import {
   LEGAL_CAVEAT,
   LEGAL_ITEMS,
   MANAGEMENT,
+  MARKETING_POINTS,
   MAX_PRICE,
   NETWORK,
   PORTALS_COPY,
@@ -862,11 +863,7 @@ export function MarketingDivider({ deck, show }: { deck: Deck; show: boolean }) 
   const HEAD = { fontFamily: HAND, fontWeight: 800, letterSpacing: "-0.02em" } as const;
   const SCRIPT = { fontFamily: "var(--font-shantell), cursive" } as const;
   const SAGE_WASH = "#f1f4ec", SAGE_INK = "#56634a";
-  const POINTS: { icon: "camera" | "people" | "chart"; title: string; body: string }[] = [
-    { icon: "camera", title: "Standout presentation", body: "Beautiful photography and compelling listings that get results." },
-    { icon: "people", title: "Targeted reach", body: "Social and local marketing to attract the right audience." },
-    { icon: "chart", title: "Major portals", body: "Your property in front of serious renters, everywhere it matters." },
-  ];
+  const POINTS = MARKETING_POINTS;
   const review = deck.testimonials?.[1] ?? deck.testimonials?.[0] ?? deck.testimonial ?? null;
 
   const points = (
@@ -913,15 +910,15 @@ export function MarketingDivider({ deck, show }: { deck: Deck; show: boolean }) 
         </Rise>
         <Rise show={show} i={1}>
           <h2 className={`mt-6 leading-[1.02] ${fx ? "text-[68px]" : "text-[36px] sm:text-[50px]"}`} style={HEAD}>
-            Now, how we
+            Now, let&rsquo;s find
             <br />
-            find <Emphasis show={show}>the one.</Emphasis>
+            the <Emphasis show={show}>right tenant.</Emphasis>
           </h2>
         </Rise>
         <Rise show={show} i={2}>
           <p className="mt-5 max-w-[560px] text-[17px] leading-[1.55] text-black/60">
-            We combine local knowledge, standout presentation and targeted marketing to put your
-            property in front of the right people - not just more people.
+            We combine local knowledge, strong presentation and targeted marketing to put your
+            property in front of the right tenants.
           </p>
         </Rise>
         {!fx && (
@@ -1005,7 +1002,7 @@ export function Offer({ show }: { show: boolean }) {
           <HandHead eyebrow="What we do" show={show} lines={2}>
             Everything that happens
             <br />
-            before a tenant <Emphasis show={show}>arrives</Emphasis>
+            before a tenant <Emphasis show={show}>moves in</Emphasis>
           </HandHead>
         </div>
 
@@ -1049,11 +1046,11 @@ export function MaxPrice({ show }: { show: boolean }) {
   return (
     <CreamSlide id="maxprice">
       <div className="mx-auto w-full max-w-[1180px]">
-        <div className="max-w-[720px]">
+        <div className="max-w-[880px]">
           <HandHead eyebrow={MAX_PRICE.eyebrow} show={show} lines={2}>
-            Marketing finds a tenant.
+            Marketing finds the tenant.
             <br />
-            This is what sets the <Emphasis show={show}>rent</Emphasis>
+            Strategy gets the best <Emphasis show={show}>result.</Emphasis>
           </HandHead>
         </div>
 
@@ -1314,9 +1311,9 @@ export function Social({ show }: { show: boolean }) {
       <div className="mx-auto w-full max-w-[1080px]">
         <div className="max-w-[720px]">
           <HandHead eyebrow="Social advertising" show={show} lines={2}>
-            The tenants who are
+            Reaching tenants
             <br />
-            not looking <Emphasis show={show}>yet</Emphasis>
+            beyond the <Emphasis show={show}>portals</Emphasis>
           </HandHead>
           <Rise show={show} i={2}>
             <p className="mt-7 max-w-[640px] text-[15px] font-light leading-[1.8] text-black/65">
@@ -1334,7 +1331,7 @@ export function Social({ show }: { show: boolean }) {
         <div className="mt-11 border-t pt-9" style={{ borderColor: "rgba(0,0,0,0.09)" }}>
           <Rise show={show} i={3}>
             <p className="mb-7 text-[12.5px] font-light text-black/45">
-              Why it matters more than it used to
+              Why wider reach matters
             </p>
           </Rise>
           <Stats stats={DEMAND_STATS} show={show} from={4} />
@@ -1359,17 +1356,23 @@ export function Compliance({ show }: { show: boolean }) {
   return (
     <CreamSlide id="compliance">
       <div className="mx-auto w-full max-w-[1120px]">
-        <div className="max-w-[680px]">
-          <HandHead eyebrow="Compliance and guidance" show={show} lines={2}>
-            The part that catches
+        <div className="max-w-[840px]">
+          <HandHead eyebrow="Compliance & legislation" show={show} lines={2}>
+            Keeping your property ready,
             <br />
-            landlords <Emphasis show={show}>out</Emphasis>
+            compliant and <Emphasis show={show}>up to date</Emphasis>
           </HandHead>
+          <Rise show={show} i={2}>
+            <p className="mt-6 max-w-[560px] text-[15px] font-light leading-[1.6] text-black/55">
+              Lettings comes with a growing number of responsibilities. Our role is to help you
+              understand what applies, what needs doing and when.
+            </p>
+          </Rise>
         </div>
 
         <div className="mt-9 grid gap-x-14 gap-y-7 sm:grid-cols-2 lg:mt-10">
           {COMPLIANCE.map((c, n) => (
-            <Rise key={c.title} show={show} i={2 + Math.floor(n / 2)}>
+            <Rise key={c.title} show={show} i={3 + Math.floor(n / 2)}>
               <div className="border-t border-black/10 pt-4">
                 <h3
                   className="text-[15.5px] leading-snug sm:text-[16px]"
@@ -1404,16 +1407,22 @@ export function Legal({ show }: { show: boolean }) {
     <CreamSlide id="legal">
       <div className="mx-auto w-full max-w-[1180px]">
         <div className="max-w-[700px]">
-          <HandHead eyebrow="What the law asks of you" show={show} lines={2}>
-            Eight things, and who
+          <HandHead eyebrow="Your landlord responsibilities" show={show} lines={2}>
+            The essentials we help
             <br />
-            keeps <Emphasis show={show}>track</Emphasis> of each
+            you stay <Emphasis show={show}>on top of</Emphasis>
           </HandHead>
+          <Rise show={show} i={2}>
+            <p className="mt-5 max-w-[620px] text-[14.5px] font-light leading-[1.6] text-black/55">
+              From safety certificates to tenant documentation, we&rsquo;ll help you understand
+              what&rsquo;s required and keep the important dates visible.
+            </p>
+          </Rise>
         </div>
 
         <div className="mt-7 grid gap-x-14 gap-y-3 sm:grid-cols-2 lg:mt-8">
           {LEGAL_ITEMS.map((l, n) => (
-            <Rise key={l.title} show={show} i={2 + Math.floor(n / 4)}>
+            <Rise key={l.title} show={show} i={3 + Math.floor(n / 4)}>
               <div
                 className="flex gap-3"
                 style={{
@@ -1464,9 +1473,9 @@ export function Screening({ show }: { show: boolean }) {
       <div className="mx-auto w-full max-w-[1120px]">
         <div className="max-w-[700px]">
           <HandHead eyebrow={SCREENING.eyebrow} show={show} lines={2}>
-            Checked before they are
+            A thorough process
             <br />
-            through your <Emphasis show={show}>door</Emphasis>
+            from the <Emphasis show={show}>start</Emphasis>
           </HandHead>
         </div>
 
@@ -1498,9 +1507,9 @@ export function Management({ show }: { show: boolean }) {
       <div className="mx-auto w-full max-w-[1120px]">
         <div className="max-w-[680px]">
           <HandHead eyebrow="Management and support" show={show} lines={2}>
-            How much of it you
+            Choose how involved
             <br />
-            want to run <Emphasis show={show}>yourself</Emphasis>
+            you want to <Emphasis show={show}>be</Emphasis>
           </HandHead>
         </div>
 
@@ -1564,9 +1573,9 @@ export function Levels({ show }: { show: boolean }) {
       <div className="mx-auto w-full max-w-[1180px]">
         <div className="max-w-[700px]">
           <HandHead eyebrow="Service levels" show={show} lines={2}>
-            Three levels. This is
+            Three levels. Choose the
             <br />
-            what <Emphasis show={show}>separates</Emphasis> them
+            support that <Emphasis show={show}>suits you.</Emphasis>
           </HandHead>
         </div>
 
@@ -1585,9 +1594,9 @@ export function Levels({ show }: { show: boolean }) {
             <Rise show={show} i={2} className="flex">
               <div className="flex w-full flex-col rounded-2xl px-6 py-6" style={{ background: TINTS[0] }}>
                 <p className="text-[19px] leading-snug" style={{ fontFamily: HAND, fontWeight: 700 }}>
-                  On all three levels
+                  Included in every service
                 </p>
-                <p className="mt-1 text-[12.5px] font-light text-black/50">Whichever you choose, you get every one of these.</p>
+                <p className="mt-1 text-[12.5px] font-light text-black/50">Whichever you choose, you get all of these.</p>
                 <ul className="mt-5 grid flex-1 content-around gap-x-8 gap-y-2 sm:grid-cols-2 lg:grid-cols-1">
                   {every.map((r) => (
                     <li key={r.service} className="flex items-start gap-2.5">
@@ -1610,7 +1619,7 @@ export function Levels({ show }: { show: boolean }) {
               <thead>
                 <tr className="border-b border-black/12">
                   <th className="py-2 pr-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-black/40">
-                    What more buys you
+                    What each level includes
                   </th>
                   {SERVICE_LEVELS.map((s, n) => (
                     <th
@@ -1657,7 +1666,7 @@ export function Levels({ show }: { show: boolean }) {
                   </h3>
                   {adds.length === 0 ? (
                     <p className="mt-1 text-[12px] font-light text-black/50">
-                      The seven above, and nothing further.
+                      Everything above, with the ongoing tenancy remaining with you.
                     </p>
                   ) : (
                     <ul className="mt-2 space-y-1.5">

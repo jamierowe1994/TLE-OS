@@ -2,7 +2,7 @@
 
 import { INK, Line } from "@/components/present-kit";
 import { APPRAISAL_PROMISES, defaultBio, type PresentDeck as Deck } from "@/lib/present";
-import { AGENDA, APPROACH, COMPLIANCE, LEGAL_CAVEAT, LEGAL_ITEMS, MANAGEMENT, MAX_PRICE, NEXT_STEPS, PORTALS_COPY, PROTECTION, REGULATED, RENT_COLLECTION, RENT_LEGAL, SCREENING, SERVICE_LEVELS, SERVICE_LEVELS_INTRO, SERVICE_ROWS, WHAT_WE_OFFER } from "@/lib/present-copy";
+import { AGENDA, APPROACH, COMPLIANCE, LEGAL_CAVEAT, LEGAL_ITEMS, MANAGEMENT, MARKETING_POINTS, MAX_PRICE, NEXT_STEPS, PORTALS_COPY, PROTECTION, REGULATED, RENT_COLLECTION, RENT_LEGAL, SCREENING, SERVICE_LEVELS, SERVICE_LEVELS_INTRO, SERVICE_ROWS, WHAT_WE_OFFER } from "@/lib/present-copy";
 import { FROM_US, FROM_YOU } from "@/components/PresentDeck";
 import { createContext, useContext } from "react";
 
@@ -674,16 +674,12 @@ export function BookMarket({ deck }: { deck: Deck }) {
 }
 
 /**
- * Page: MARKETING. "Now, how we find the one." with the three points and
+ * Page: MARKETING. "Now, let's find the right tenant." with the three points and
  * the real review on the left; the flat in its soft shape on the right,
  * the handwritten line above it with an arrow, and the mark below.
  */
 export function BookMarketing() {
-  const POINTS: { icon: "camera" | "people" | "chart"; title: string; body: string }[] = [
-    { icon: "camera", title: "Standout presentation", body: "Beautiful photography and compelling listings that get results." },
-    { icon: "people", title: "Targeted reach", body: "Social and local marketing to attract the right audience." },
-    { icon: "chart", title: "Major portals", body: "Your property in front of serious renters, everywhere it matters." },
-  ];
+  const POINTS = MARKETING_POINTS;
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       {/* THE FLAT in its soft shape, off the right. */}
@@ -705,12 +701,12 @@ export function BookMarketing() {
       <div className="absolute left-[96px] top-[84px] w-[600px]">
         <Eyebrow>Marketing</Eyebrow>
         <h1 className="mt-6 text-[64px] leading-[1.08]" style={SERIF}>
-          Now, how we
+          Now, let&rsquo;s find
           <br />
-          find <span style={{ color: SAGE_INK, fontStyle: "italic", fontWeight: 400 }}>the one.</span>
+          the <span style={{ color: SAGE_INK, fontStyle: "italic", fontWeight: 400 }}>right tenant.</span>
         </h1>
         <p className="mt-6 max-w-[540px] text-[17px] leading-[1.55] text-black/65">
-          We combine local knowledge, standout presentation and targeted marketing to put your property in front of the right people - not just more people.
+          We combine local knowledge, strong presentation and targeted marketing to put your property in front of the right tenants.
         </p>
         {/* Three boxes, one height, the same air in each. The review that
             sat under them and the mark in the corner both went (James, 13
@@ -755,7 +751,7 @@ export function BookOffer() {
         <h1 className="mt-6 text-[64px] leading-[1.1]" style={SERIF}>
           Everything that happens
           <br />
-          before a tenant <Ital width={200}>arrives</Ital>
+          before a tenant <Ital width={200}>moves in</Ital>
         </h1>
         <div className="mt-10 grid grid-cols-2 gap-x-14" style={{ width: 1160 }}>
           {cols.map((items, c) => (
@@ -814,9 +810,9 @@ export function BookMaxPrice() {
       <div className="absolute left-[96px] top-[84px] w-[1100px]">
         <EyebrowRule>{MAX_PRICE.eyebrow}</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
-          Marketing finds a tenant.
+          Marketing finds the tenant.
           <br />
-          This is what sets the <Ital width={150}>rent</Ital>
+          Strategy gets the best <Ital width={190}>result.</Ital>
         </h1>
         <div className="mt-9 grid grid-cols-2 gap-x-12" style={{ width: 1120 }}>
           {cols.map((items, c) => (
@@ -919,7 +915,7 @@ export function BookPortals() {
               tenant is <Ital width={210}>looking</Ital>
             </h1>
             <p className="mt-8 max-w-[480px] text-[17px] leading-[1.6] text-black/65">
-              We market your property across the UK&rsquo;s biggest platforms, targeted social campaigns and our own network, so it reaches the right people at the right time.
+              {PORTALS_COPY.body}
             </p>
           </div>
           <div className="grid grid-cols-2 gap-x-12 gap-y-10 pt-4">
@@ -979,14 +975,14 @@ export function BookSocial() {
       <div className="absolute left-[96px] top-[100px]" style={{ width: 1100 }}>
         <Eyebrow>Social advertising</Eyebrow>
         <h1 className="mt-6 text-[60px] leading-[1.08]" style={SERIF}>
-          The tenants who are
+          Reaching tenants
           <br />
-          not looking <Ital width={110}>yet</Ital>
+          beyond the <Ital width={175}>portals</Ital>
         </h1>
         <p className="mt-8 max-w-[560px] text-[17px] leading-[1.6] text-black/65">
-          It&rsquo;s not just about those actively searching. We use targeted social advertising to reach people who aren&rsquo;t on property portals, putting your property in front of the right audience before it even reaches their shortlist.
+          Portal search reaches people already actively looking. Paid social helps us extend that reach locally and introduce your property to potential tenants beyond the traditional property portals.
         </p>
-        <p className="mt-14 text-[11px] uppercase tracking-[0.32em] text-black/55">Why it matters more than it used to</p>
+        <p className="mt-14 text-[11px] uppercase tracking-[0.32em] text-black/55">Why wider reach matters</p>
         <div className="mt-8 grid grid-cols-3 gap-x-14" style={{ width: 1060 }}>
           {DEMAND_STATS.map((st, n) => (
             <div key={st.value} className={n > 0 ? "border-l pl-12" : ""} style={{ borderColor: "rgba(0,0,0,0.12)" }}>
@@ -1011,13 +1007,16 @@ export function BookCompliance({ deck }: { deck: Deck }) {
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="absolute left-[96px] top-[150px] w-[1180px]">
-        <EyebrowRule>Compliance and guidance</EyebrowRule>
-        <h1 className="mt-6 text-[64px] leading-[1.1]" style={SERIF}>
-          The part that catches
+        <EyebrowRule>Compliance &amp; legislation</EyebrowRule>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+          Keeping your property ready,
           <br />
-          landlords <Ital width={110}>out</Ital>
+          compliant and <Ital width={240}>up to date</Ital>
         </h1>
-        <div className="mt-12 grid grid-cols-2 gap-x-14 gap-y-10" style={{ width: 1160 }}>
+        <p className="mt-7 max-w-[720px] text-[17px] leading-[1.6] text-black/65">
+          Lettings comes with a growing number of responsibilities. Our role is to help you understand what applies, what needs doing and when.
+        </p>
+        <div className="mt-9 grid grid-cols-2 gap-x-14 gap-y-9" style={{ width: 1160 }}>
           {COMPLIANCE.map((c) => (
             <div key={c.title} className="border-t pt-6" style={{ borderColor: "rgba(0,0,0,0.1)" }}>
               <p className="text-[19px] font-semibold leading-snug">{c.title}</p>
@@ -1032,7 +1031,7 @@ export function BookCompliance({ deck }: { deck: Deck }) {
 }
 
 /**
- * Page: WHAT THE LAW ASKS OF YOU. The mock-up's "Eight things, and who
+ * Page: YOUR LANDLORD RESPONSIBILITIES. The mock-up's "Eight things, and who
  * keeps track of each": the eight numbered in the pink discs, two columns
  * with hairlines, and the closing line under a rule. The obligations are
  * the deck's, each with our half attached; the caveat that half the book
@@ -1044,13 +1043,16 @@ export function BookLegal() {
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
-        <EyebrowRule>What the law asks of you</EyebrowRule>
+        <EyebrowRule>Your landlord responsibilities</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
-          Eight things, and who
+          The essentials we help
           <br />
-          keeps <Ital width={150}>track</Ital> of each
+          you stay <Ital width={210}>on top of</Ital>
         </h1>
-        <div className="mt-8 grid grid-cols-2 gap-x-14" style={{ width: 1240 }}>
+        <p className="mt-6 max-w-[780px] text-[16px] leading-[1.55] text-black/65">
+          From safety certificates to tenant documentation, we&rsquo;ll help you understand what&rsquo;s required and keep the important dates visible.
+        </p>
+        <div className="mt-6 grid grid-cols-2 gap-x-14" style={{ width: 1240 }}>
           {cols.map((items, c) => (
             <ol key={c}>
               {items.map((it, i) => (
@@ -1120,9 +1122,9 @@ export function BookScreening() {
       <div className="absolute left-[96px] top-[84px] w-[1200px]">
         <EyebrowRule>{SCREENING.eyebrow}</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
-          Checked before they are
+          A thorough process
           <br />
-          through your <Ital width={130}>door</Ital>
+          from the <Ital width={130}>start</Ital>
         </h1>
         <div className="mt-10 grid grid-cols-2 gap-x-12" style={{ width: 1140 }}>
           {[a, b].map((col, c) => (
@@ -1153,9 +1155,9 @@ export function BookManagement() {
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>Management and support</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
-          How much of it you
+          Choose how involved
           <br />
-          want to run <Ital width={220}>yourself</Ital>
+          you want to <Ital width={70}>be</Ital>
         </h1>
         <div className="mt-10 grid grid-cols-2 gap-x-14" style={{ width: 1200 }}>
           {MANAGEMENT.map((m, i) => (
@@ -1183,13 +1185,13 @@ export function BookLevels({ deck }: { deck: Deck }) {
       <div className="absolute left-[96px] top-[76px] w-[1250px]">
         <EyebrowRule>Service levels</EyebrowRule>
         <h1 className="mt-4 text-[46px] leading-[1.1]" style={SERIF}>
-          Three levels. This is what <Ital width={200}>separates</Ital> them
+          Three levels. Choose the support that <Ital width={190}>suits you.</Ital>
         </h1>
         <p className="mt-3 max-w-[760px] text-[13.5px] leading-[1.55] text-black/60">{SERVICE_LEVELS_INTRO}</p>
         <table className="mt-4 w-full border-collapse text-left" style={{ width: 1240 }}>
           <thead>
             <tr className="border-b" style={{ borderColor: "rgba(0,0,0,0.14)" }}>
-              <th className="pb-3 pr-4 text-[10.5px] font-normal uppercase tracking-[0.22em] text-black/50">What you get</th>
+              <th className="pb-3 pr-4 text-[10.5px] font-normal uppercase tracking-[0.22em] text-black/50">What each level includes</th>
               {SERVICE_LEVELS.map((l, n) => (
                 <th key={l} className="w-[150px] pb-3 text-center text-[12.5px] font-semibold" style={{ color: n === 0 ? "var(--p-accent)" : "rgba(0,0,0,0.6)" }}>{l}</th>
               ))}

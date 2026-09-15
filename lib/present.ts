@@ -658,8 +658,8 @@ export const SLIDES: { id: SlideId; title: string; removable: boolean; section: 
 
   /* Compliance. Screening moved up from slide 21 of the source deck: it is
      the strongest argument in the whole thing and nobody reached it there. */
-  { id: "compliance", title: "Compliance and guidance", removable: true, section: "next" },
-  { id: "legal", title: "What the law asks of you", removable: true, section: "next" },
+  { id: "compliance", title: "Compliance and legislation", removable: true, section: "next" },
+  { id: "legal", title: "Your landlord responsibilities", removable: true, section: "next" },
   { id: "screening", title: "How we screen tenants", removable: true, section: "next" },
 
   /* Service and management. */
