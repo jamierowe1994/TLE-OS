@@ -5,7 +5,8 @@ import SignSheet from "@/components/landlord/SignSheet";
 import { useSigning } from "@/lib/use-signing";
 import PresentBook, { PAGE_H, PAGE_W } from "@/components/PresentBook";
 import PresentPages from "@/components/PresentPages";
-import SwipeHint from "@/components/SwipeHint";
+import SwipeToRead from "@/components/SwipeToRead";
+import AgentSheet from "@/components/AgentSheet";
 import { CREAM, DeckStyleCtx, themeVars, INK } from "@/components/present-kit";
 import { asStyle, slidesFor, type PresentDeck as Deck, type SlideId } from "@/lib/present";
 import { BookActionsCtx } from "@/components/PresentBookPages";
@@ -140,15 +141,17 @@ export default function PresentModal({
    * nothing rather than something vague - a button that reveals no more than
    * the slide already says is the thing being removed.
    */
-  const asks: Partial<Record<SlideId, string>> = {
-    terms: "Sign your contract",
-    questions: "Sign your contract",
-  };
-  const askHere = phone && open ? asks[pages[page.at]] : undefined;
   const agent = deck.agent;
   const tel = agent.phone.replace(/\s+/g, "");
   const wa = tel.replace(/^0/, "44");
   const first = agent.firstName || "us";
+
+  const asks: Partial<Record<SlideId, { label: string; run: () => void }>> = {
+    agent: { label: `View ${first === "us" ? "their" : first + "\u2019s"} profile`, run: () => setContactOpen(true) },
+    terms: { label: "Sign your contract", run: openSign },
+    questions: { label: "Sign your contract", run: openSign },
+  };
+  const askHere = phone && open ? asks[pages[page.at]] : undefined;
 
   return (
     <DeckStyleCtx.Provider value={asStyle(deck.style)}>
@@ -219,7 +222,7 @@ export default function PresentModal({
           >
             <BookActionsCtx.Provider value={{ sign: openSign }}>
               {phone ? (
-                <PresentPages deck={deck} pages={pages} onPage={onPage} onApi={setApi} />
+                <PresentPages deck={deck} pages={pages} onPage={onPage} onApi={setApi} lockFirst />
               ) : (
                 <PresentBook deck={deck} pages={pages} fit={fit} onSpread={onSpread} onApi={setApi} />
               )}
@@ -232,18 +235,22 @@ export default function PresentModal({
               count. */}
           {phone ? (
             <div className="relative z-[86] mt-4 w-full px-4 pb-1">
-              {/* Slide one has no action, so the slot carries the hint
-                  instead: on a phone nothing else says the deck swipes. */}
-              {phone && open && page.at === 0 && !askHere && <SwipeHint />}
+              {/* Slide one has no action, so the slot carries the swipe
+                  instead: on a phone nothing else says the deck moves, and a
+                  control that DOES the thing teaches it better than a hint
+                  that describes it. */}
+              {phone && open && page.at === 0 && !askHere && (
+                <SwipeToRead onDone={() => api?.go(1)} />
+              )}
               {askHere && (
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={openSign}
+                  onClick={askHere.run}
                   className="mb-3 inline-flex h-[50px] w-full items-center justify-center gap-2.5 rounded-full text-[14.5px] font-semibold text-white shadow-[0_18px_40px_-18px_rgba(0,0,0,0.6)]"
                   style={{ background: "#cfa096" }}
                 >
-                  {busy ? "Opening…" : askHere}
+                  {busy ? "Opening…" : askHere.label}
                   <svg viewBox="0 0 24 24" aria-hidden className="h-[16px] w-[16px]">
                     <path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
@@ -333,7 +340,7 @@ export default function PresentModal({
 
         {/* CONTACT, above the booklet, only while the agent's page is showing.
             It goes with the booklet when the contract takes the screen. */}
-        {onAgent && !signOpen && (
+        {onAgent && !signOpen && !phone && (
           <div className="absolute left-1/2 top-6 z-[87] flex -translate-x-1/2 flex-col items-center gap-3" style={{ animation: "present-dim 360ms ease-out both" }}>
             <button
               type="button"
@@ -360,6 +367,17 @@ export default function PresentModal({
               </div>
             )}
           </div>
+        )}
+
+        {/* THE AGENT'S CARD on a phone: photograph, patch, stars and every way
+            to reach them, pulled up from the foot by the slide's own button. */}
+        {phone && contactOpen && (
+          <AgentSheet
+            agent={agent}
+            district={deck.property.postcode?.split(" ")[0] ?? null}
+            rating={deck.testimonial?.rating ?? null}
+            onClose={() => setContactOpen(false)}
+          />
         )}
 
         {/* THE CONTRACT, rising over the booklet. The same sheet the landlord

@@ -277,7 +277,10 @@ function WelcomeAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
   const HANDWRITING = { fontFamily: "var(--font-shantell), cursive" } as const;
   const body = (
     <>
-      <header className={fx ? "h-[60px]" : "h-[16px] sm:h-[60px]"} />
+      {/* 49px on a phone rather than 16: this slide has no eyebrow above its
+          heading, so without the extra band its h1 started 33px higher than
+          every other slide’s. */}
+      <header className={fx ? "h-[60px]" : "h-[49px] sm:h-[60px]"} />
       {fx && (
         <>
           {/* THE PINK, under the photograph and out past the bottom-left corner. */}
@@ -321,7 +324,7 @@ function WelcomeAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
           </Rise>
         </>
       )}
-      <div className={`relative z-[2] flex flex-1 flex-col ${fx ? "justify-center pb-10 pl-[712px] pr-[44px]" : "justify-start px-6 pb-10 pt-6 sm:justify-center sm:pt-4 sm:px-12"}`}>
+      <div className={`relative z-[2] flex flex-1 flex-col ${fx ? "justify-center pb-10 pl-[712px] pr-[44px]" : "justify-start px-6 pb-8 pt-10 sm:justify-center sm:pb-10 sm:pt-4 sm:px-12"}`}>
         <div className={`relative ${fx ? "pr-[210px]" : ""}`}>
           <Rise show={show} i={1}>
             <h1 className={`leading-[1.04] ${fx ? "text-[64px]" : "text-[40px] sm:text-[56px]"}`} style={HEAD}>
@@ -351,19 +354,25 @@ function WelcomeAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
                   their own name; the address is the thing worth checking, and
                   it is the line that tells them this deck is about their
                   house rather than a brochure. Wider screens keep both. */}
-              <p className={`mt-4 ${fx ? "text-[13px] text-black/45" : "text-[16px] font-semibold text-black/70 sm:text-[13px] sm:font-normal sm:text-black/45"}`}>
-                <span className={fx ? "" : "hidden sm:inline"}>
+              {/* STACKED ON A PHONE: their name, and the address under it in
+                  the bigger, bolder line. One line of "name · address" at
+                  16px wrapped mid-address on a 375px screen and read as one
+                  run-on string. Side by side from sm up, as it was. */}
+              <p className={`mt-4 ${fx ? "text-[13px] text-black/45" : "text-[13px] text-black/45 sm:text-[13px]"}`}>
+                <span className={fx ? "" : "block sm:inline"}>
                   {recipientName || "Your property"}
-                  {property.address ? " \u00b7 " : ""}
+                  <span className={fx ? "" : "hidden sm:inline"}>{property.address ? " \u00b7 " : ""}</span>
                 </span>
                 {property.address && (
-                  <span className={fx ? "text-black/70" : "sm:text-black/70"}>{property.address}</span>
+                  <span className={fx ? "text-black/70" : "mt-1 block text-[16px] font-semibold text-black/75 sm:mt-0 sm:inline sm:text-[13px] sm:font-normal sm:text-black/70"}>
+                    {property.address}
+                  </span>
                 )}
               </p>
             </Rise>
           )}
         </div>
-        <Rise show={show} i={4} className={fx ? "" : "mt-auto sm:mt-0"}>
+        <Rise show={show} i={4}>
           {/* Three white cards on the stage and from sm up. ON A PHONE they
               are a centred row at the foot: no card, a 44px disc, the title
               and nothing else. Stacked they took 690px of an 812px screen for
@@ -863,22 +872,20 @@ function AgentAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
   const district = deck.property.postcode?.split(" ")[0];
   const body = (
     <>
-      <header className={fx ? "h-[124px]" : "h-[60px]"} />
-      <div className={`relative z-[2] flex flex-1 flex-col ${fx ? "justify-start px-[100px] pb-10 pr-[900px]" : "justify-center px-6 pb-10 pt-4 sm:px-12"}`}>
+      <header className={fx ? "h-[124px]" : "h-[16px] sm:h-[60px]"} />
+      <div className={`relative z-[2] flex flex-1 flex-col ${fx ? "justify-start px-[100px] pb-10 pr-[900px]" : "justify-start px-6 pb-8 pt-10 sm:justify-center sm:px-12 sm:pb-10 sm:pt-4"}`}>
         <Rise show={show} i={0}>
           <Eyebrow>{sent ? "Your letting expert" : "Who you\u2019ll be meeting"}</Eyebrow>
-          <span aria-hidden className="mt-4 block h-[3px] w-[120px] rounded-full" style={{ background: TINTS[0] }} />
+          <span aria-hidden className="mt-4 hidden h-[3px] w-[120px] rounded-full sm:block" style={{ background: TINTS[0] }} />
         </Rise>
         <Rise show={show} i={1}>
-          <h2 className={`mt-9 leading-[1.02] ${fx ? "text-[68px]" : "text-[36px] sm:text-[50px]"}`} style={HEAD}>
+          <h2 className={`leading-[1.02] ${fx ? "mt-9 text-[68px]" : "mt-4 text-[36px] sm:mt-9 sm:text-[50px]"}`} style={HEAD}>
             {sent ? (
               <>
                 <span style={{ color: CLAY }}>{first || "We"}</span>
                 {first ? " is looking" : " are looking"}
                 <br />
-                after your
-                <br />
-                property.
+                after you.
               </>
             ) : (
               <>
@@ -903,7 +910,7 @@ function AgentAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
           )}
         </Rise>
         <Rise show={show} i={2}>
-          <div className="mt-6 max-w-[500px] space-y-4">
+          <div className={`mt-6 max-w-[500px] space-y-4 ${fx ? "" : "hidden sm:block"}`}>
             {paragraphs.map((para, i) => (
               <p key={i} className="text-[15.5px] leading-[1.65] text-black/65">{para}</p>
             ))}
@@ -913,8 +920,11 @@ function AgentAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
           <p className="mt-8 text-[11px] uppercase tracking-[0.3em] text-black/50">Same person. Every step of the way.</p>
           <span aria-hidden className="mt-4 block h-[3px] w-[120px] rounded-full" style={{ background: TINTS[0] }} />
         </Rise>
+        {/* The reviews are on the sheet behind the foot button on a phone -
+            name, patch, stars and every way to reach them in one place. From
+            sm up they stay on the slide, where there is room for both. */}
         {!fx && reviews.length > 0 && (
-          <Rise show={show} i={4}>
+          <Rise show={show} i={4} className="hidden sm:block">
             <div className="mt-8">
               <Reviews reviews={reviews} />
             </div>
@@ -970,7 +980,10 @@ function AgentAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
     <section
       ref={host}
       data-slide="agent"
-      className="relative flex min-h-full w-full shrink-0 items-center justify-center overflow-hidden"
+      /* items-STRETCH on a phone so the body can start at the top and the
+         heading lines up with every other slide. Centred, it began 273px down
+         while the rest began at 89. Wider screens are centred as they were. */
+      className={`relative flex min-h-full w-full shrink-0 justify-center overflow-hidden ${fx ? "items-center" : "items-stretch sm:items-center"}`}
       style={{ background: CREAM, color: INK }}
     >
       <Stage fit={fit}>{body}</Stage>

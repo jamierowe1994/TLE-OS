@@ -34,12 +34,24 @@ export default function PresentPages({
   pages,
   onPage,
   onApi,
+  lockFirst,
 }: {
   deck: Deck;
   pages: SlideId[];
   /** Which slide they are on, 0-based, and how many there are. */
   onPage?: (at: number, of: number) => void;
   onApi?: (api: { go: (dir: 1 | -1) => void }) => void;
+  /**
+   * Hold the first screen until they use the control.
+   *
+   * James, 15 Sep 2026: "we shouldn't allow them to swipe across the front
+   * screen ... otherwise they could accidentally swipe across and miss the
+   * animation." So on slide one the browser is told it may pan this strip
+   * vertically only. It is a touch-action rule rather than an overflow one on
+   * purpose: scrollTo still works, so the swipe control and the arrows move
+   * the deck exactly as before - the only thing that stops is the finger.
+   */
+  lockFirst?: boolean;
 }) {
   const strip = useRef<HTMLDivElement | null>(null);
   const [w, setW] = useState(0);
@@ -81,7 +93,11 @@ export default function PresentPages({
       ref={strip}
       onScroll={onScroll}
       className="w-full overflow-x-auto overflow-y-hidden overscroll-x-contain"
-      style={{ scrollSnapType: "x mandatory", scrollbarWidth: "none" }}
+      style={{
+        scrollSnapType: "x mandatory",
+        scrollbarWidth: "none",
+        touchAction: lockFirst && at === 0 ? "pan-y" : undefined,
+      }}
       aria-label="Your presentation, one page at a time"
     >
       <div className="flex" style={{ width: w ? w * pages.length : "100%" }}>

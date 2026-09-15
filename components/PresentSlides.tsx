@@ -220,13 +220,15 @@ export function Agenda({ deck, show }: { deck: Deck; show: boolean }) {
           </HandHead>
 
           <Rise show={show} i={2}>
-            <p className="mt-7 max-w-[420px] text-[15.5px] font-light leading-[1.6] text-black/60">
+            <p className="mt-4 max-w-[420px] text-[14.5px] font-light leading-[1.55] text-black/60 sm:mt-7 sm:text-[15.5px] sm:leading-[1.6]">
               {sent ? AGENDA_INTRO.sent : AGENDA_INTRO.live}
             </p>
           </Rise>
 
+          {/* Not on a phone: the address is on the screen before this one,
+              and dropping it is what lets all four parts fit. */}
           {deck.property.address && (
-            <Rise show={show} i={3}>
+            <Rise show={show} i={3} className="hidden sm:block">
               <p className="mt-5 text-[13px] font-light text-black/45">
                 For <span className="font-normal text-black/70">{deck.property.address}</span>
               </p>
@@ -252,23 +254,23 @@ export function Agenda({ deck, show }: { deck: Deck; show: boolean }) {
           {AGENDA.map((a, n) => (
             <Rise key={a.title} show={show} i={2 + Math.floor(n / 2)}>
               <li
-                className="flex gap-5 py-5 sm:gap-7 sm:py-8"
+                className="flex gap-4 py-2.5 sm:gap-7 sm:py-8"
                 style={{ borderTop: n === 0 ? "none" : "1px solid rgba(0,0,0,0.08)" }}
               >
                 <span
-                  className="mt-[6px] shrink-0 text-[19px] leading-none tabular-nums sm:text-[22px]"
+                  className="mt-[5px] shrink-0 text-[17px] leading-none tabular-nums sm:text-[22px]"
                   style={{ fontFamily: HAND, fontWeight: 700, color: CORAL }}
                 >
                   {String(n + 1).padStart(2, "0")}
                 </span>
                 <span className="min-w-0">
                   <span
-                    className="block text-[19px] leading-snug sm:text-[24px]"
+                    className="block text-[17.5px] leading-snug sm:text-[24px]"
                     style={{ fontFamily: HAND, fontWeight: 700 }}
                   >
                     {a.title}
                   </span>
-                  <span className="mt-2 block text-[14px] font-light leading-[1.55] text-black/50 sm:text-[15px]">
+                  <span className="mt-1.5 block text-[13px] font-light leading-[1.45] text-black/50 sm:mt-2 sm:text-[15px] sm:leading-[1.55]">
                     {a.body}
                   </span>
                 </span>
@@ -307,14 +309,17 @@ export function Approach({ show }: { show: boolean }) {
             <br />
             way to <Emphasis show={show}>let</Emphasis>
           </HandHead>
-          <Rise show={show} i={2}>
+          <Rise show={show} i={2} className="hidden sm:block">
             <p className="mt-6 max-w-[560px] text-[15px] font-light leading-[1.6] text-black/55">
               {APPROACH.standfirst}
             </p>
           </Rise>
         </div>
 
-        <div className="mt-10 grid gap-x-14 gap-y-8 sm:grid-cols-2 lg:mt-12">
+        {/* Titles only on a phone - James, 15 Sep 2026: "we've already been
+            through all of this, this is mostly just a recap". The gap goes up
+            as the bodies come out, or four short lines read as a list. */}
+        <div className="mt-10 grid gap-x-14 gap-y-9 sm:gap-y-8 sm:grid-cols-2 lg:mt-12">
           {APPROACH.points.map((p, n) => (
             <Rise key={p.title} show={show} i={3 + Math.floor(n / 2)}>
               <div className="flex gap-5">
@@ -335,7 +340,7 @@ export function Approach({ show }: { show: boolean }) {
                   >
                     {p.title}
                   </h3>
-                  <p className="mt-2 text-[13.5px] font-light leading-[1.65] text-black/60">
+                  <p className="mt-2 hidden text-[13.5px] font-light leading-[1.65] text-black/60 sm:block">
                     {p.body}
                   </p>
                 </div>

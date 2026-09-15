@@ -592,13 +592,14 @@ export function CreamSlide({
   return (
     <section
       data-slide={id}
-      /* justify-START from lg, with one top padding for all of them, so the
-         eyebrow and the heading begin at the same height on every standard
-         slide - James, 13 Sep 2026: "they should all start in the same
-         place". Centred, they wandered between 204px and 323px down with
-         the length of what was under them. A slide taller than the window
-         still scrolls inside its own cell. */
-      className="relative flex min-h-full w-full shrink-0 flex-col justify-center px-6 pb-20 pt-20 sm:px-10 lg:justify-start lg:px-14 lg:pt-[150px]"
+      /* justify-START, with one top padding per width, so the eyebrow and
+         the heading begin at the same height on every standard slide -
+         James, 13 Sep 2026 for the desktop and 15 Sep for the phone: "all of
+         the headings should start in the same place". Centred, they wandered
+         with the length of whatever was under them: 204px to 323px down on a
+         desktop, and worse on a phone where the slides differ most in
+         height. A slide taller than the window still scrolls in its cell. */
+      className="relative flex min-h-full w-full shrink-0 flex-col justify-start px-6 pb-8 pt-14 sm:px-10 sm:pb-20 sm:pt-20 lg:px-14 lg:pt-[150px]"
       style={{ background: CREAM, color: INK }}
     >
       {children}
