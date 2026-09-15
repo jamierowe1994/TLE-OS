@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import { Pill } from "@/components/Wire";
 import { openDocument } from "@/lib/doc-sheet";
+import PropertyAnswers from "@/components/PropertyAnswers";
 
 /**
  * The property file: one panel, the same wherever a home is opened.
@@ -352,6 +353,16 @@ export default function PropertyFile({
       {data && !data.checked && effectiveId && data.rows.length > 0 && (
         <p className="mt-2 text-[11px] text-muted">REX did not give a complete answer for this home; what is shown may be short.</p>
       )}
+
+      {/* WHAT THE LANDLORD TOLD US, on the same panel as the certificates
+          because it answers the same kind of question: where is the stopcock,
+          who has the keys, how far can we go on a repair without ringing them.
+          Keyed the way this panel already is - the property where REX has one,
+          the address where it does not - and it draws nothing at all until
+          there are answers. */}
+      <div className="mt-5">
+        <PropertyAnswers propertyId={effectiveId ?? null} address={address ?? null} />
+      </div>
     </section>
   );
 }

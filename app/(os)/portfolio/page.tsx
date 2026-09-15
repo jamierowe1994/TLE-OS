@@ -7,6 +7,7 @@ import PropertyPhoto from "@/components/PropertyPhoto";
 import PortfolioMap from "@/components/PortfolioMap";
 import FindingData from "@/components/business/FindingData";
 import PropertyFile from "@/components/PropertyFile";
+import PropertyAnswers from "@/components/PropertyAnswers";
 import { Pill } from "@/components/Wire";
 import { rexContactUrl, rexListingUrl } from "@/lib/business/rex-links";
 import { housesIn, houseByListing, roomLabel, tabLabel, tenantsInOrder, pickerOption, MANAGED_READERS as R, type House } from "@/lib/houses";
@@ -918,6 +919,21 @@ export default function Portfolio() {
                               );
                             })}
                           </ul>
+                        )}
+                        {/* WHAT THIS LANDLORD TOLD US, across every home of
+                            theirs at once. On their file rather than only on
+                            each property because the useful questions here are
+                            about the person - how to reach them, how far we can
+                            go on a repair without ringing - and those are the
+                            same answer on all of their properties. */}
+                        {isOpen && (
+                          <div className="mt-3">
+                            <PropertyAnswers
+                              propertyIds={mine.map((p) => p.propertyId).filter((x): x is string => Boolean(x))}
+                              title={`What ${l.name.split(" ")[0]} told us`}
+                              showAddress={mine.length > 1}
+                            />
+                          </div>
                         )}
                       </li>
                     );

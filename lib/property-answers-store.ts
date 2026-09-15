@@ -44,3 +44,68 @@ export async function saveAnswers(appraisalId: string, patch: Answers, by: strin
   ).catch(() => null);
   return readAnswers(appraisalId);
 }
+
+/** One property's answers, with enough around them to show on any file. */
+export interface AnsweredProperty {
+  appraisalId: string;
+  landlord: string;
+  address: string;
+  propertyId: string | null;
+  answers: Answers;
+  updatedAt: string | null;
+}
+
+/* Only appraisals that HAVE answers: an inner join, so a file with nothing to
+   show gets an empty list rather than a panel full of blanks. */
+const JOINED = `
+  SELECT m.id, m.landlord, m.address, m.rex_property_id, c.payload, c.updated_at
+    FROM os_market_appraisals m
+    JOIN os_case_state c
+      ON c.kind = 'property-answers' AND c.record_id = m.id`;
+
+type JoinRow = {
+  id: string;
+  landlord: string;
+  address: string;
+  rex_property_id: string | null;
+  payload: Answers | null;
+  updated_at: Date | string | null;
+};
+
+const shape = (r: JoinRow): AnsweredProperty => ({
+  appraisalId: r.id,
+  landlord: r.landlord,
+  address: r.address,
+  propertyId: r.rex_property_id ?? null,
+  answers: r.payload ?? {},
+  updatedAt: r.updated_at ? new Date(r.updated_at).toISOString() : null,
+});
+
+/** By REX property - what the portfolio and the compliance drawer hold. */
+export async function answersForProperties(propertyIds: string[]): Promise<AnsweredProperty[]> {
+  const ids = propertyIds.map((s) => s.trim()).filter(Boolean);
+  if (!hasDb() || !ids.length) return [];
+  const rows = await q<JoinRow>(`${JOINED} WHERE m.rex_property_id = ANY($1)`, [ids]).catch(() => []);
+  return rows.map(shape);
+}
+
+/**
+ * By address, for a home REX has no property for yet - an appraisal that has
+ * not become a listing. Matched both ways round because the callers spell it
+ * differently: some pass the address alone, some with the postcode appended.
+ */
+export async function answersForAddress(address: string): Promise<AnsweredProperty[]> {
+  const a = address.trim();
+  if (!hasDb() || !a) return [];
+  const rows = await q<JoinRow>(
+    `${JOINED} WHERE lower(m.address) = lower($1) OR lower($1) LIKE lower(m.address) || '%'`,
+    [a]
+  ).catch(() => []);
+  return rows.map(shape);
+}
+
+export async function answersForAppraisal(id: string): Promise<AnsweredProperty | null> {
+  if (!hasDb() || !id) return null;
+  const rows = await q<JoinRow>(`${JOINED} WHERE m.id = $1`, [id]).catch(() => []);
+  return rows[0] ? shape(rows[0]) : null;
+}
