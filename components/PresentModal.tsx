@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import DocusealEmbed from "@/components/landlord/DocusealEmbed";
 import PresentBook, { PAGE_H, PAGE_W } from "@/components/PresentBook";
 import { DeckStyleCtx, themeVars, INK } from "@/components/present-kit";
 import { asStyle, slidesFor, type PresentDeck as Deck } from "@/lib/present";
@@ -205,7 +206,13 @@ export default function PresentModal({
             </button>
           </div>
           {signUrl ? (
-            <iframe title="Sign your agreement" src={signUrl} className="h-full w-full flex-1 border-0" />
+            /* WAS AN IFRAME, and it was blank every time: docuseal.eu answers
+               x-frame-options SAMEORIGIN, so the button under the presentation
+               opened a panel with nothing in it while the one on the file
+               worked. James, 14 Sep: "that one doesn't currently work. Can you
+               make sure that they're both linked?" Same embed as the file's
+               modal now, so there is one of it. */
+            <DocusealEmbed url={signUrl} className="min-h-0 flex-1 overflow-y-auto" />
           ) : (
             <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
               <p className="max-w-[520px] text-[17px] leading-[1.6] text-black/65">
