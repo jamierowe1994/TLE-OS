@@ -37,7 +37,7 @@ export default async function LandlordLayout({ children }: { children: React.Rea
     <div data-surface="landlord" id="top" className="min-h-screen bg-white text-ink lg:flex">
       {/* ── the sidebar, from lg up ── */}
       <aside className="sticky top-0 hidden h-screen w-[212px] shrink-0 flex-col border-r border-line/50 px-4 py-7 lg:flex">
-        <Link href="/landlord" className="px-2" aria-label="The Letting Experts, home">
+        <Link href="/landlord" className="px-2" aria-label="The Letting Experts, home" data-tle-logo>
           <Logo className="h-11" />
         </Link>
         {/* Suspense: the nav reads the address to light the page it is on. */}
@@ -59,7 +59,7 @@ export default async function LandlordLayout({ children }: { children: React.Rea
       <div className="min-w-0 flex-1">
         {/* ── the top bar ── */}
         <header className="flex items-center gap-4 px-5 pt-5 sm:px-10">
-          <Link href="/landlord" className="shrink-0 lg:hidden" aria-label="The Letting Experts, home">
+          <Link href="/landlord" className="shrink-0 lg:hidden" aria-label="The Letting Experts, home" data-tle-logo>
             <Logo className="h-9" />
           </Link>
           <div className="min-w-0 max-w-xl flex-1">
