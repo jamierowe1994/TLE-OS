@@ -106,8 +106,15 @@ export default function SignSheet({
   const list = useRef<HTMLDivElement | null>(null);
   /* The empty marker under the card that says where their panel belongs. */
   const slot = useRef<HTMLDivElement | null>(null);
-  /* False once the column has been tried and could not be made to work. */
-  const [splitOk, setSplitOk] = useState(true);
+  /**
+   * Whether their panel is actually sitting in the column.
+   *
+   * It starts false and only becomes true once the panel has been measured
+   * INTO place and seen to paint there. Everything else - the sheet's width,
+   * the shift, the checklist - depends on the viewport alone, so the layout
+   * never jumps around while this settles.
+   */
+  const [placed, setPlaced] = useState(false);
 
   /* Mounted shut, opened a frame later, so the rise has somewhere to come
      from. Rendered straight at rest there is no arrival. */
@@ -123,7 +130,7 @@ export default function SignSheet({
     return () => window.removeEventListener("resize", measure);
   }, []);
 
-  const split = vw >= SPLIT_MIN && splitOk;
+  const split = vw >= SPLIT_MIN;
   /* With a column beside it the contract gives up the room the column needs,
      rather than the pair running off the edge of the screen. On a phone it
      takes the whole width - 24px of dark either side of a contract is 24px
@@ -185,15 +192,24 @@ export default function SignSheet({
       "  border-radius: 0 !important;",
       "  border-color: rgba(86, 66, 62, 0.14) !important;",
       /* Pink, taken from the page's own token: custom properties cross the
-         shadow boundary, class names do not. */
+         shadow boundary, class names do not. The checklist above it stays
+         white - James, 15 Sep: "change the What you need to sign box back to
+         its original colour, and keep the bottom box in pink". */
       "  background-color: var(--accent-soft, #ffe4df) !important;",
       "  box-shadow: 0 30px 70px -34px rgba(30, 20, 16, 0.6) !important;",
       "}",
     ].join("\n");
-    /* No room for a column: their panel stays where they put it, lifted clear
-       of our own bar so the Next button is never half behind it. */
+    /**
+     * THE LIFT IS ALWAYS ON, and that is the safety net.
+     *
+     * Their panel is sticky to the foot of the scroller. If our placing never
+     * happens - the element renamed, the effect never reached, anything at all
+     * - this is where it stays, and it stays somewhere a landlord can see and
+     * use: over the foot of the contract, clear of our own bar. The column is
+     * an improvement on that, never a precondition for signing.
+     */
     const lift = ".form-container { bottom: 60px !important; }";
-    el.textContent = (split ? column : lift) + (started ? "" : hide);
+    el.textContent = lift + (split ? column : "") + (started ? "" : hide);
   }, [root, split, started, paperW]);
 
   /**
@@ -217,10 +233,17 @@ export default function SignSheet({
    * landlord who cannot sign.
    */
   useEffect(() => {
-    if (!root || !started || vw < SPLIT_MIN || !splitOk) return;
+    if (!root || !started || vw < SPLIT_MIN) return;
     let stop = false;
     let raf = 0;
     let last = "";
+    /* Frames since the target last moved, and consecutive frames the panel has
+       failed to paint. The check below only counts once the layout has stopped
+       moving: during the slide-left, and while their own form re-renders
+       between steps, a miss means nothing. Reading it as a failure is what
+       turned the column off on a screen where it was working. */
+    let settled = 0;
+    let misses = 0;
     const clear = (st: CSSStyleDeclaration) =>
       ["position", "right", "bottom", "width", "top", "left"].forEach((k) => st.removeProperty(k));
     const tick = () => {
@@ -237,6 +260,8 @@ export default function SignSheet({
         const key = Math.round(to.left) + ":" + Math.round(to.top);
         if (key !== last) {
           last = key;
+          settled = 0;
+          misses = 0;
           const st = fc.style;
           st.setProperty("position", "fixed", "important");
           st.setProperty("right", "auto", "important");
@@ -247,10 +272,37 @@ export default function SignSheet({
           const origin = fc.getBoundingClientRect();
           st.setProperty("top", to.top - origin.top + "px", "important");
           st.setProperty("left", to.left - origin.left + "px", "important");
+        } else if (settled++ > 12) {
+          /**
+           * IS IT ACTUALLY ON THE SCREEN - not "does it have a rectangle".
+           *
+           * The check this replaces read getBoundingClientRect and was
+           * satisfied, twice, while James was looking at nothing: a CLIPPED
+           * element still reports its rectangle exactly where you put it. So
+           * this asks the document what is painted at the panel's own centre.
+           * If that is not the form, something is covering or clipping it and
+           * the column is not worth having.
+           *
+           * Only once the layout has held still, and only after a run of
+           * misses - a single frame proves nothing and turning the column off
+           * by mistake is its own bug.
+           */
           const now = fc.getBoundingClientRect();
-          if (!(now.width > 8 && now.height > 8 && now.right > 8 && now.bottom > 8 && now.left < vw - 8)) {
-            clear(st);
-            setSplitOk(false);
+          /* root.elementFromPoint, not document's: document's retargets to the
+             host and answers DOCUSEAL-FORM whether the panel is painted there
+             or not, which is a check that cannot fail and therefore is not a
+             check. This one names the element actually on top. */
+          const at =
+            typeof root.elementFromPoint === "function"
+              ? root.elementFromPoint(now.left + now.width / 2, now.top + now.height / 2)
+              : null;
+          const painted = at != null && at.closest(".form-container") != null;
+          const ok = now.width > 8 && now.height > 8 && painted;
+          misses = ok ? 0 : misses + 1;
+          if (ok) setPlaced(true);
+          if (misses > 20) {
+            clear(fc.style);
+            setPlaced(false);
             return;
           }
         }
@@ -264,7 +316,7 @@ export default function SignSheet({
       const fc = root.querySelector(".form-container");
       if (fc instanceof HTMLElement) clear(fc.style);
     };
-  }, [root, started, vw, splitOk]);
+  }, [root, started, vw]);
 
   useEffect(() => {
     if (!list.current) return;
@@ -339,8 +391,24 @@ export default function SignSheet({
           email={email}
           onCompleted={completed}
           onRoot={setRoot}
-          className="absolute inset-y-0 left-0 overflow-y-auto"
-          style={{ width: paperW }}
+          /**
+           * FULL WIDTH OF THE SHEET, not just the paper - and this is the fix
+           * for the panel James could not see.
+           *
+           * An overflow scroller clips its descendants UNLESS the descendant's
+           * containing block is an ancestor of the scroller. Their panel is
+           * position: fixed, so which ancestor that is depends on what carries
+           * a transform, a filter or a backdrop-filter - our sheet here, but
+           * something inside their own shadow root on his machine, in which
+           * case a scroller only as wide as the PAPER clips the panel away
+           * completely while getBoundingClientRect still reports it sitting
+           * politely in the column.
+           *
+           * With the scroller spanning the whole sheet the panel is inside its
+           * box either way, so the question stops mattering. The pages stay on
+           * the paper because .scrollbox is width-clamped instead.
+           */
+          className="absolute inset-0 overflow-y-auto"
         />
 
         {/* Close floats over the paper - nothing takes a strip off the top of
@@ -413,7 +481,7 @@ export default function SignSheet({
             }}
             aria-hidden={!started}
           >
-            <div ref={list} className="bg-accent-soft px-5 py-4">
+            <div ref={list} className="bg-white px-5 py-4">
               <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">What you need to sign</p>
               {rows.length === 0 ? (
                 <p className="mt-3 text-[12.5px] leading-relaxed text-muted">
@@ -471,6 +539,15 @@ export default function SignSheet({
             {/* Where their panel goes. It is measured, never computed - the one
                 thing that says where the column's second box belongs. */}
             <div ref={slot} className="mt-3 h-px w-full" aria-hidden />
+            {/* And if it could not be put there, SAY SO rather than leaving
+                them looking at a list with no box under it. This is the state
+                James was stuck in twice, with nothing on the screen to explain
+                where the signing had gone. */}
+            {started && !placed && (
+              <p className="mt-3 bg-white px-5 py-3 text-[12px] leading-relaxed text-muted">
+                Your signing box is at the foot of the contract, on the left.
+              </p>
+            )}
           </div>
         )}
       </div>
