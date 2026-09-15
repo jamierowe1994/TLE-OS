@@ -72,10 +72,23 @@ const CUSTOM_CSS = `
     border-color: ${BROWN} !important;
     background-color: transparent !important;
   }
-  /* The one that was unreadable: a field sitting over the contract's own
-     words with nothing behind it. */
-  [data-field], .field-area, .signature-step {
-    background-color: rgba(255,255,255,0.97) !important;
+  /* THE SEE-THROUGH BOX. `.field-area` is the real class - read off the live
+     element in the shadow root, not guessed, after a guess at [data-field]
+     and .signature-step matched nothing.
+
+     Fully opaque, not 0.97: at 0.97 the contract's own words still ghosted
+     through the box a landlord was reading, which is what James meant by "it
+     looks ridiculous". The hairline is what makes it read as a box sitting ON
+     the paper rather than a pale patch of it. */
+  .field-area {
+    background-color: #ffffff !important;
+    box-shadow: 0 0 0 1px rgba(86, 66, 62, 0.20);
+    border-radius: 4px;
+  }
+  /* Their focus ring is blue-500, which is the last of their colour to reach
+     a landlord's screen. */
+  .field-area:focus, .field-area:focus-visible {
+    outline-color: ${BROWN} !important;
   }
 `;
 
