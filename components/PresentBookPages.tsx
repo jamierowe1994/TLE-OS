@@ -27,7 +27,17 @@ import { DEMAND_STATS, PORTAL_STATS, statFooter } from "@/lib/present-stats";
 
 export const PAGE_W = 1440;
 export const PAGE_H = 900;
-const SERIF = { fontFamily: "var(--font-display), Georgia, serif", fontWeight: 500, letterSpacing: "-0.01em" } as const;
+/**
+ * The title face: the grotesque, the same one the deck sets on its house
+ * theme. It was `--font-display`, which is Lora - a serif - and made the
+ * booklet the one surface in the product setting its headings in something
+ * nothing else uses.
+ */
+const TITLE = {
+  fontFamily: "var(--font-bricolage), var(--font-manrope), system-ui, sans-serif",
+  fontWeight: 800,
+  letterSpacing: "-0.02em",
+} as const;
 const SAGE = "#b3bea5", SAGE_WASH = "#f1f4ec", SAGE_INK = "#56634a";
 /* The dusky pink of the mock-up. NOT the kit's CLAY, which is the brown
    accent by another name - the first pass had "your property" in brown. */
@@ -75,7 +85,7 @@ export function BookWelcome({ deck }: { deck: Deck }) {
 
       <div className="absolute left-[96px] top-[84px] w-[880px]">
         <Eyebrow>Welcome</Eyebrow>
-        <h1 className="mt-8 text-[72px] leading-[1.04]" style={SERIF}>
+        <h1 className="mt-8 text-[72px] leading-[1.04]" style={TITLE}>
           Let&rsquo;s make
           <br />
           a plan for
@@ -127,7 +137,7 @@ export function BookAgenda() {
 
       <div className="absolute left-[96px] top-[84px] w-[1040px]">
         <Eyebrow>What we covered</Eyebrow>
-        <h1 className="mt-8 text-[72px] leading-[1.04]" style={SERIF}>
+        <h1 className="mt-8 text-[72px] leading-[1.04]" style={TITLE}>
           Here&rsquo;s what
           <br />
           we <span style={{ color: CLAY }}>went through.</span>
@@ -143,7 +153,7 @@ export function BookAgenda() {
             <ol key={c} className={`${c === 1 ? "border-l pl-10" : "pr-10"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
               {items.map((a, i) => (
                 <li key={a.title} className={`flex gap-6 py-6 ${i === 0 ? "border-b" : ""}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
-                  <span className="w-[44px] shrink-0 text-[24px] leading-none" style={{ ...SERIF, color: CLAY }}>0{c * 2 + i + 1}</span>
+                  <span className="w-[44px] shrink-0 text-[24px] leading-none" style={{ ...TITLE, color: CLAY }}>0{c * 2 + i + 1}</span>
                   <span className="min-w-0">
                     <span className="block text-[18px] font-semibold leading-snug">{a.title}</span>
                     <span className="mt-2 block max-w-[300px] text-[14px] leading-[1.6] text-black/55">{a.body}</span>
@@ -192,7 +202,7 @@ export function BookAgent({ deck }: { deck: Deck }) {
           <img src={a.photo} alt={a.name} className="w-full rounded-[6px] object-cover object-[center_15%]" style={{ aspectRatio: "420 / 480" }} />
         ) : (
           <div className="flex w-full items-center justify-center rounded-[6px]" style={{ aspectRatio: "420 / 480", background: SAGE_WASH }}>
-            <span className="text-[110px] leading-none" style={{ ...SERIF, color: SAGE_INK }}>{a.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2)}</span>
+            <span className="text-[110px] leading-none" style={{ ...TITLE, color: SAGE_INK }}>{a.name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2)}</span>
           </div>
         )}
       </div>
@@ -200,7 +210,7 @@ export function BookAgent({ deck }: { deck: Deck }) {
           down to the bottom right-hand corner of the Polaroid". */}
       {t?.quote && (
         <div className="absolute left-[1010px] top-[560px] w-[300px] rounded-[16px] px-6 py-5" style={{ background: "var(--p-tint)" }}>
-          <span aria-hidden className="block text-[44px] leading-[0.6]" style={{ ...SERIF, color: CLAY }}>&ldquo;</span>
+          <span aria-hidden className="block text-[44px] leading-[0.6]" style={{ ...TITLE, color: CLAY }}>&ldquo;</span>
           <p className="mt-3 text-[13.5px] italic leading-[1.55] text-black/75">&ldquo;{t.quote}&rdquo;</p>
           <p className="mt-3 text-[10.5px] uppercase tracking-[0.2em] text-black/45">{t.author}</p>
         </div>
@@ -208,7 +218,7 @@ export function BookAgent({ deck }: { deck: Deck }) {
 
       <div className="absolute left-[96px] top-[84px] w-[520px]">
         <Eyebrow>Your letting expert</Eyebrow>
-        <h1 className="mt-8 text-[72px] leading-[1.04]" style={SERIF}>
+        <h1 className="mt-8 text-[72px] leading-[1.04]" style={TITLE}>
           <span style={{ color: CLAY }}>{first || "We"}</span>
           {first ? " is looking" : " are looking"}
           <br />
@@ -234,7 +244,7 @@ export function BookApproach() {
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="absolute left-[96px] top-[84px] w-[1100px]">
         <Eyebrow>A different approach to lettings</Eyebrow>
-        <h1 className="mt-8 text-[72px] leading-[1.04]" style={SERIF}>
+        <h1 className="mt-8 text-[72px] leading-[1.04]" style={TITLE}>
           A more personal
           <br />
           way to <span style={{ color: CLAY }}>let.</span>
@@ -245,7 +255,7 @@ export function BookApproach() {
             <ol key={c} className={c === 1 ? "border-l pl-10" : "pr-10"} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
               {items.map((a, i) => (
                 <li key={a.title} className={`flex gap-6 py-6 ${i === 0 ? "border-b" : ""}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
-                  <span className="w-[44px] shrink-0 text-[24px] leading-none" style={{ ...SERIF, color: CLAY }}>0{c * 2 + i + 1}</span>
+                  <span className="w-[44px] shrink-0 text-[24px] leading-none" style={{ ...TITLE, color: CLAY }}>0{c * 2 + i + 1}</span>
                   <span className="min-w-0">
                     <span className="block text-[18px] font-semibold leading-snug">{a.title}</span>
                     <span className="mt-2 block max-w-[380px] text-[13.5px] leading-[1.6] text-black/55">{a.body}</span>
@@ -313,11 +323,11 @@ export function BookProperty({ deck }: { deck: Deck }) {
 
       <div className="absolute left-[96px] top-[84px] w-[1200px]">
         <EyebrowRule>Your property</EyebrowRule>
-        <h1 className="mt-6 text-[64px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-6 text-[64px] leading-[1.1]" style={TITLE}>
           Right then. Let&rsquo;s talk about <Ital width={190}>yours</Ital>.
         </h1>
         {(p.address || p.postcode) && (
-          <p className="mt-6 text-[24px] leading-[1.3]" style={SERIF}>{[p.address, p.postcode].filter(Boolean).join(", ")}</p>
+          <p className="mt-6 text-[24px] leading-[1.3]" style={TITLE}>{[p.address, p.postcode].filter(Boolean).join(", ")}</p>
         )}
         {facts.length > 0 && <p className="mt-2 text-[15px] tracking-[0.02em] text-black/50">{facts.join("  ·  ")}</p>}
       </div>
@@ -342,7 +352,7 @@ export function BookMaterial({ deck }: { deck: Deck }) {
       <div className="pointer-events-none absolute -right-[260px] -top-[240px] h-[560px] w-[560px] rounded-full" style={{ background: "var(--p-tint)", opacity: 0.9 }} />
       <div className="absolute left-[96px] top-[84px] w-[1040px]">
         <EyebrowRule>Your property details</EyebrowRule>
-        <h1 className="mt-6 text-[64px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-6 text-[64px] leading-[1.1]" style={TITLE}>
           Let&rsquo;s make sure everything
           <br />
           is <Ital width={230}>up to date</Ital>
@@ -424,7 +434,7 @@ export function BookListings({ deck }: { deck: Deck }) {
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>What&rsquo;s on the market</EyebrowRule>
-        <h1 className="mt-6 text-[64px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-6 text-[64px] leading-[1.1]" style={TITLE}>
           What&rsquo;s on the market
           <br />
           near you <Ital width={190}>today</Ital>
@@ -442,13 +452,13 @@ export function BookListings({ deck }: { deck: Deck }) {
               <Thumb src={r.image} tint={r.ours} />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-3">
-                  <span className="truncate text-[22px] leading-tight" style={SERIF}>{r.address}</span>
+                  <span className="truncate text-[22px] leading-tight" style={TITLE}>{r.address}</span>
                   {r.ours && <span className="rounded-full px-3 py-[3px] text-[10px] font-semibold uppercase tracking-[0.16em] text-white" style={{ background: "var(--p-accent)" }}>Ours</span>}
                   {r.status === "let agreed" && <span className="text-[12px] text-black/45">let agreed</span>}
                 </span>
                 <span className="mt-1 block text-[14px] text-black/50">{[r.locality, r.beds != null ? `${r.beds} bed` : null, r.type].filter(Boolean).join("  \u00b7  ")}</span>
               </span>
-              <span className="text-[22px]" style={SERIF}>{r.rent}</span>
+              <span className="text-[22px]" style={TITLE}>{r.rent}</span>
               <span aria-hidden className="text-[18px] text-black/30">&rsaquo;</span>
             </li>
           ))}
@@ -480,8 +490,8 @@ export function BookComparables({ deck }: { deck: Deck }) {
       <div className="absolute left-[96px] top-[84px] w-[1100px]">
         <EyebrowRule>What&rsquo;s letting nearby</EyebrowRule>
         <p className="mt-6 leading-none">
-          <span className="text-[84px]" style={{ ...SERIF, color: "var(--p-accent)" }}>{gbp(c.guideLow)}&ndash;{gbp(c.guideHigh)}</span>
-          <span className="ml-4 text-[28px] text-black/60" style={SERIF}>pcm</span>
+          <span className="text-[84px]" style={{ ...TITLE, color: "var(--p-accent)" }}>{gbp(c.guideLow)}&ndash;{gbp(c.guideHigh)}</span>
+          <span className="ml-4 text-[28px] text-black/60" style={TITLE}>pcm</span>
         </p>
         <p className="mt-6 max-w-[760px] text-[17px] leading-[1.6] text-black/65">
           Based on {c.basedOn} comparable {c.basedOn === 1 ? "property" : "properties"} letting nearby. We&rsquo;ll use the evidence to agree the right figure together.
@@ -495,7 +505,7 @@ export function BookComparables({ deck }: { deck: Deck }) {
                 <span className="mt-1 block text-[13.5px] text-black/50">{[r.locality, r.beds != null ? `${r.beds} bed` : null, r.type].filter(Boolean).join("  \u00b7  ")}</span>
               </span>
               {r.days != null && <span className="shrink-0 text-[13.5px] text-black/45">{r.letAgreed ? "let" : "advertised"} in {r.days} days</span>}
-              <span className="w-[130px] shrink-0 text-right text-[20px]" style={SERIF}>{r.rent}</span>
+              <span className="w-[130px] shrink-0 text-right text-[20px]" style={TITLE}>{r.rent}</span>
               <span aria-hidden className="text-[18px] text-black/30">&rsaquo;</span>
             </li>
           ))}
@@ -581,11 +591,11 @@ export function BookMarket({ deck }: { deck: Deck }) {
         <div className="flex items-end justify-between gap-8">
           <div>
             <Eyebrow>Your local market</Eyebrow>
-            <h1 className="mt-4 text-[56px] leading-[1.05]" style={SERIF}>
+            <h1 className="mt-4 text-[56px] leading-[1.05]" style={TITLE}>
               {m.advertised} to let in {m.area}
             </h1>
             {m.medianRent != null && (
-              <p className="mt-3 text-[22px] text-black/70" style={SERIF}>The middle asking rent here is {gbp(m.medianRent)} pcm.</p>
+              <p className="mt-3 text-[22px] text-black/70" style={TITLE}>The middle asking rent here is {gbp(m.medianRent)} pcm.</p>
             )}
           </div>
           {m.marketDays != null && (
@@ -594,7 +604,7 @@ export function BookMarket({ deck }: { deck: Deck }) {
                 <Line name="calendar" size={22} />
               </span>
               <div>
-                <p className="text-[34px] leading-none" style={SERIF}>{m.marketDays} days</p>
+                <p className="text-[34px] leading-none" style={TITLE}>{m.marketDays} days</p>
                 <p className="mt-1.5 text-[10.5px] uppercase tracking-[0.22em] text-black/60">Average time on the market in {m.area}</p>
               </div>
             </div>
@@ -636,7 +646,6 @@ export function BookMarket({ deck }: { deck: Deck }) {
         <span style={{ color: SAGE_INK }}><Line name="chart" size={18} /></span>
         <p className="text-[12.5px] text-black/55">Figures for {m.area} taken on {when}, from the live record of what is advertised.</p>
         <span aria-hidden className="block h-px flex-1" style={{ background: "rgba(0,0,0,0.12)" }} />
-        <p className="text-[10.5px] uppercase tracking-[0.3em] text-black/55">The Letting Experts</p>
       </div>
     </div>
   );
@@ -657,7 +666,7 @@ export function BookMarketing() {
 
       <div className="absolute left-[96px] top-[84px] w-[600px]">
         <Eyebrow>Marketing</Eyebrow>
-        <h1 className="mt-6 text-[64px] leading-[1.08]" style={SERIF}>
+        <h1 className="mt-6 text-[64px] leading-[1.08]" style={TITLE}>
           Now, let&rsquo;s find
           <br />
           the <span style={{ color: SAGE_INK, fontStyle: "italic", fontWeight: 400 }}>right tenant.</span>
@@ -668,14 +677,17 @@ export function BookMarketing() {
         {/* Three boxes, one height, the same air in each. The review that
             sat under them and the mark in the corner both went (James, 13
             Sep 2026). */}
+        {/* The titles alone. James, 15 Sep 2026: the three bodies were "all
+            really long, so we need to spread them out as much as we can get
+            away with ... just have the titles". Which is also what lets the
+            disc stay a full 60px in a box only 600px wide between three. */}
         <ul className="mt-9 grid grid-cols-3 gap-4" style={{ width: 600 }}>
           {POINTS.map((b, n) => (
-            <li key={b.title} className="flex flex-col items-center rounded-[20px] border px-4 pb-6 pt-7 text-center" style={{ height: 236, borderColor: "rgba(0,0,0,0.07)", background: "rgba(255,255,255,0.6)" }}>
-              <span className="flex h-[60px] w-[60px] items-center justify-center rounded-full" style={n === 1 ? { background: "var(--p-tint)", color: INK } : { background: SAGE_WASH, color: SAGE_INK }}>
+            <li key={b.title} className="flex flex-col items-center rounded-[20px] border px-3 pb-6 pt-7 text-center" style={{ height: 176, borderColor: "rgba(0,0,0,0.07)", background: "rgba(255,255,255,0.6)" }}>
+              <span className="flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full" style={n === 1 ? { background: "var(--p-tint)", color: INK } : { background: SAGE_WASH, color: SAGE_INK }}>
                 <Line name={b.icon} size={22} />
               </span>
               <span className="mt-5 block text-[15px] font-semibold leading-snug">{b.title}</span>
-              <span className="mt-2 block text-[12.5px] leading-[1.55] text-black/55">{b.body}</span>
             </li>
           ))}
         </ul>
@@ -697,20 +709,24 @@ export function BookOffer() {
       {/* THE SAGE, off the bottom-left corner, and the keys on the marble
           over it - the agenda's marble, mirrored into this corner - with
           the handwritten line on the slab. */}
-      <div className="pointer-events-none absolute" style={{ left: -260, bottom: -300, width: 760, height: 620, borderRadius: "50%", background: SAGE_WASH }} />
+      <div className="pointer-events-none absolute" style={{ left: -360, bottom: -330, width: 760, height: 620, borderRadius: "50%", background: SAGE_WASH }} />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {/* James's picture carries its own handwritten note, so nothing is
           written over it here. */}
-      <img src="/brand/photo/book-keys.webp" alt="" aria-hidden className="pointer-events-none absolute max-w-none" style={{ width: 520, left: -60, bottom: -80 }} />
+      <img src="/brand/photo/book-keys.webp" alt="" aria-hidden className="pointer-events-none absolute max-w-none" style={{ width: 520, left: -150, bottom: -80 }} />
 
-      <div className="absolute left-[96px] top-[84px] w-[1200px]">
+      {/* Out to 168 rather than 96: the ticked list ran down the left edge
+          straight through the sage disc behind the keys. James, 15 Sep 2026:
+          "move the photo a little bit to the left, just a touch ... move the
+          actual wording to the right slightly to get it out of the way." */}
+      <div className="absolute left-[168px] top-[84px] w-[1150px]">
         <EyebrowRule>What we do</EyebrowRule>
-        <h1 className="mt-6 text-[64px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-6 text-[64px] leading-[1.1]" style={TITLE}>
           Everything that happens
           <br />
           before a tenant <Ital width={200}>moves in</Ital>
         </h1>
-        <div className="mt-10 grid grid-cols-2 gap-x-14" style={{ width: 1160 }}>
+        <div className="mt-10 grid grid-cols-2 gap-x-14" style={{ width: 1100 }}>
           {cols.map((items, c) => (
             <ul key={c}>
               {items.map((t) => (
@@ -724,10 +740,6 @@ export function BookOffer() {
             </ul>
           ))}
         </div>
-      </div>
-      <div className="absolute bottom-[56px] right-[120px] flex items-center gap-4">
-        <p className="text-[10.5px] uppercase tracking-[0.3em] text-black/55">The Letting Experts</p>
-        <span aria-hidden className="block h-px w-[60px]" style={{ background: CLAY }} />
       </div>
     </div>
   );
@@ -755,18 +767,10 @@ export function BookMaxPrice() {
       {/* THE DOOR: James's "10", already cut to its shape, off the top-right. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/brand/photo/book-door.webp" alt="" aria-hidden className="pointer-events-none absolute max-w-none" style={{ width: 500, right: -30, top: -30 }} />
-      {/* The caption on its own cream card over the door's corner, as the
-          mock-up has it, or it is lost against the photograph. */}
-      <div className="pointer-events-none absolute right-[36px] top-[96px] w-[176px] px-4 py-4" style={{ background: PAPER }}>
-        <p className="text-right text-[17px] italic leading-[1.45] text-black/70" style={{ ...SERIF, fontWeight: 400 }}>
-          The right tenant changes everything
-        </p>
-        <span aria-hidden className="ml-auto mt-3 block h-px w-[40px]" style={{ background: CLAY }} />
-      </div>
 
       <div className="absolute left-[96px] top-[84px] w-[1100px]">
         <EyebrowRule>{MAX_PRICE.eyebrow}</EyebrowRule>
-        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={TITLE}>
           Marketing finds the tenant.
           <br />
           Strategy gets the best <Ital width={190}>result.</Ital>
@@ -778,9 +782,9 @@ export function BookMaxPrice() {
                 const n = c === 0 ? i * 2 : i * 2 + 1;
                 return (
                   <li key={pt.title} className={`flex gap-5 py-5 ${i > 0 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
-                    <span className="flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-full text-[15px]" style={{ ...SERIF, background: "var(--p-tint)", color: "var(--p-accent)" }}>{num(n)}</span>
+                    <span className="flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-full text-[15px]" style={{ ...TITLE, background: "var(--p-tint)", color: "var(--p-accent)" }}>{num(n)}</span>
                     <span className="min-w-0">
-                      <span className="block text-[18px] leading-snug" style={SERIF}>{pt.title}</span>
+                      <span className="block text-[18px] leading-snug" style={TITLE}>{pt.title}</span>
                       <span className="mt-2 block max-w-[440px] text-[13.5px] leading-[1.6] text-black/60">{pt.body}</span>
                     </span>
                   </li>
@@ -789,9 +793,6 @@ export function BookMaxPrice() {
             </ol>
           ))}
         </div>
-      </div>
-      <div className="absolute bottom-[56px] right-[120px] text-right">
-        <p className="text-[10.5px] uppercase tracking-[0.3em] text-black/60">The Letting Experts</p>
       </div>
     </div>
   );
@@ -818,7 +819,7 @@ function Swoosh({ side }: { side: "left" | "right" }) {
          runs straight through it: the left rises going left, so the right
          falls going right. */
       ? "M1440 780 C 1320 750, 1250 860, 1120 830 C 1060 815, 1040 760, 1090 750 C 1140 740, 1130 820, 1080 810 C 980 790, 880 860, 760 850 C 660 840, 600 860, 520 860"
-      : "M0 780 C 120 810, 380 830, 560 780 C 660 750, 700 690, 760 720 C 820 750, 740 830, 700 780 C 660 730, 800 680, 940 730 C 1080 790, 1150 870, 1250 840 C 1330 810, 1360 700, 1350 620 C 1340 560, 1360 500, 1380 470";
+      : "M0 780 C 120 812, 380 846, 560 806 C 660 782, 700 740, 760 768 C 820 796, 740 862, 700 818 C 660 774, 800 730, 940 772 C 1080 820, 1150 886, 1250 858 C 1330 832, 1360 724, 1350 646 C 1340 588, 1360 528, 1380 498";
   return (
     <svg viewBox={`0 0 ${PAGE_W} ${PAGE_H}`} aria-hidden className="pointer-events-none absolute left-0 top-0 z-0" style={{ width: PAGE_W, height: PAGE_H }}>
       <path d={d} fill="none" stroke="var(--p-accent)" strokeWidth="2" strokeLinecap="round" opacity="0.8" />
@@ -829,9 +830,9 @@ function Swoosh({ side }: { side: "left" | "right" }) {
 /** A national figure: the number big, what it counts under it. */
 function Stat({ value, label }: { value: string; label: string }) {
   return (
-    <div className="border-t pt-5" style={{ borderColor: "rgba(0,0,0,0.12)" }}>
-      <p className="text-[48px] leading-none" style={{ ...SERIF, color: "var(--p-accent)" }}>{value}</p>
-      <p className="mt-3.5 text-[14px] leading-[1.55] text-black/60">{label}</p>
+    <div className="border-t pt-4" style={{ borderColor: "rgba(0,0,0,0.12)" }}>
+      <p className="text-[46px] leading-none" style={{ ...TITLE, color: "var(--p-accent)" }}>{value}</p>
+      <p className="mt-2.5 text-[13.5px] leading-[1.5] text-black/60">{label}</p>
     </div>
   );
 }
@@ -866,7 +867,7 @@ export function BookPortals() {
         <div className="grid grid-cols-[1fr_1fr] gap-x-16">
           <div>
             <Eyebrow>Where it appears</Eyebrow>
-            <h1 className="mt-6 text-[60px] leading-[1.08]" style={SERIF}>
+            <h1 className="mt-6 text-[60px] leading-[1.08]" style={TITLE}>
               Everywhere a
               <br />
               tenant is <Ital width={210}>looking</Ital>
@@ -875,13 +876,13 @@ export function BookPortals() {
               {PORTALS_COPY.body}
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-x-12 gap-y-10 pt-4">
+          <div className="grid grid-cols-2 gap-x-10 gap-y-7">
             {PORTAL_STATS.map((st) => (
               <Stat key={st.value + st.label} value={st.value} label={st.label} />
             ))}
           </div>
         </div>
-        <ul className="mt-10 flex items-center justify-between border-t pt-8" style={{ width: 1160, borderColor: "rgba(0,0,0,0.12)" }}>
+        <ul className="mt-8 flex items-center justify-between border-t pt-7" style={{ width: 1160, borderColor: "rgba(0,0,0,0.12)" }}>
           {PORTALS_COPY.portals.map((name) => (
             <li key={name} className="flex items-center">
               {LOGOS[name] && (
@@ -919,7 +920,7 @@ export function BookSocial() {
 
       <div className="absolute left-[96px] top-[100px]" style={{ width: 1100 }}>
         <Eyebrow>Social advertising</Eyebrow>
-        <h1 className="mt-6 text-[60px] leading-[1.08]" style={SERIF}>
+        <h1 className="mt-6 text-[60px] leading-[1.08]" style={TITLE}>
           Reaching tenants
           <br />
           beyond the <Ital width={175}>portals</Ital>
@@ -927,16 +928,16 @@ export function BookSocial() {
         <p className="mt-8 max-w-[560px] text-[17px] leading-[1.6] text-black/65">
           Portal search reaches people already actively looking. Paid social helps us extend that reach locally and introduce your property to potential tenants beyond the traditional property portals.
         </p>
-        <p className="mt-14 text-[11px] uppercase tracking-[0.32em] text-black/55">Why wider reach matters</p>
+        <p className="mt-10 text-[11px] uppercase tracking-[0.32em] text-black/55">Why wider reach matters</p>
         <div className="mt-8 grid grid-cols-3 gap-x-14" style={{ width: 1060 }}>
           {DEMAND_STATS.map((st, n) => (
             <div key={st.value} className={n > 0 ? "border-l pl-12" : ""} style={{ borderColor: "rgba(0,0,0,0.12)" }}>
-              <p className="text-[56px] leading-none" style={{ ...SERIF, color: "var(--p-accent)" }}>{st.value}</p>
+              <p className="text-[56px] leading-none" style={{ ...TITLE, color: "var(--p-accent)" }}>{st.value}</p>
               <p className="mt-4 max-w-[250px] text-[14.5px] leading-[1.55] text-black/60">{st.label}</p>
             </div>
           ))}
         </div>
-        <p className="mt-8 text-[11px] text-black/40">{statFooter(DEMAND_STATS)}</p>
+        <p className="mt-6 max-w-[900px] text-[11px] leading-[1.5] text-black/40">{statFooter(DEMAND_STATS)}</p>
       </div>
     </div>
   );
@@ -953,7 +954,7 @@ export function BookCompliance({ deck }: { deck: Deck }) {
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="absolute left-[96px] top-[150px] w-[1180px]">
         <EyebrowRule>Compliance &amp; legislation</EyebrowRule>
-        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={TITLE}>
           Keeping your property ready,
           <br />
           compliant and <Ital width={240}>up to date</Ital>
@@ -989,7 +990,7 @@ export function BookLegal() {
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>Your landlord responsibilities</EyebrowRule>
-        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={TITLE}>
           The essentials we help
           <br />
           you stay <Ital width={210}>on top of</Ital>
@@ -1058,7 +1059,7 @@ export function BookScreening() {
       <Blob d="M-20 520 C 40 620, 90 720, 200 700 C 290 684, 320 600, 400 630 C 470 656, 500 740, 620 780 C 700 806, 760 860, 780 920 L-20 920 Z" />
       <div className="absolute left-[96px] top-[84px] w-[1200px]">
         <EyebrowRule>{SCREENING.eyebrow}</EyebrowRule>
-        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={TITLE}>
           A thorough process
           <br />
           from the <Ital width={130}>start</Ital>
@@ -1085,7 +1086,7 @@ export function BookManagement() {
       <Blob d="M1460 600 C 1400 560, 1340 660, 1260 650 C 1180 640, 1150 580, 1070 610 C 990 640, 980 740, 900 780 C 840 810, 800 860, 780 920 L1460 920 Z" />
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>Management and support</EyebrowRule>
-        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={TITLE}>
           Choose how involved
           <br />
           you want to <Ital width={70}>be</Ital>
@@ -1115,7 +1116,7 @@ export function BookLevels({ deck }: { deck: Deck }) {
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="absolute left-[96px] top-[76px] w-[1250px]">
         <EyebrowRule>Service levels</EyebrowRule>
-        <h1 className="mt-4 text-[46px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-4 text-[46px] leading-[1.1]" style={TITLE}>
           Three levels. Choose the support that <Ital width={190}>suits you.</Ital>
         </h1>
         <p className="mt-3 max-w-[760px] text-[13.5px] leading-[1.55] text-black/60">{SERVICE_LEVELS_INTRO}</p>
@@ -1167,7 +1168,7 @@ export function BookCollection() {
       <img src="/brand/art/entrance-right.webp" alt="" aria-hidden className="pointer-events-none absolute max-w-none" style={{ height: 740, right: -70, bottom: 0 }} />
       <div className="absolute left-[96px] top-[84px] w-[760px]">
         <EyebrowRule>Rent collection</EyebrowRule>
-        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={TITLE}>
           Rent collection,
           <br />
           made <Ital width={140}>simple</Ital>
@@ -1197,7 +1198,7 @@ export function BookRentLegal({ deck }: { deck: Deck }) {
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>{RENT_LEGAL.eyebrow}</EyebrowRule>
-        <h1 className="mt-6 text-[52px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-6 text-[52px] leading-[1.1]" style={TITLE}>
           More than management.
           <br />
           Real protection for your <Ital width={190}>income</Ital>
@@ -1235,7 +1236,7 @@ export function BookRegulated() {
       <img src="/brand/photo/book-plant-corner.webp" alt="" aria-hidden className="pointer-events-none absolute max-w-none" style={{ width: 360, right: -50, top: -60 }} />
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>Professional standards</EyebrowRule>
-        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={TITLE}>
           Professional standards
           <br />
           you can <Ital width={210}>rely on</Ital>
@@ -1250,7 +1251,6 @@ export function BookRegulated() {
           ))}
         </div>
       </div>
-      <p className="absolute bottom-[56px] left-[96px] text-[10.5px] uppercase tracking-[0.3em] text-black/55">The Letting Experts</p>
     </div>
   );
 }
@@ -1263,7 +1263,7 @@ export function BookWhy() {
       <ol className="mt-4">
         {items.map((it, i) => (
           <li key={it.title} className={`flex gap-4 py-3 ${i > 0 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
-            <span className="w-[30px] shrink-0 text-[18px] leading-none" style={{ ...SERIF, color: "var(--p-accent)" }}>0{i + 1}</span>
+            <span className="w-[30px] shrink-0 text-[18px] leading-none" style={{ ...TITLE, color: "var(--p-accent)" }}>0{i + 1}</span>
             <span className="min-w-0">
               <span className="block text-[15px] font-semibold leading-snug">{it.title}</span>
               <span className="mt-1 block text-[12.5px] leading-[1.5] text-black/55">{it.body}</span>
@@ -1277,7 +1277,7 @@ export function BookWhy() {
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="absolute inset-x-0 top-[84px] flex flex-col items-center text-center">
         <Eyebrow>Our commitment</Eyebrow>
-        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={TITLE}>
           Four things you can
           <br />
           <Ital width={280}>expect from us</Ital>
@@ -1301,8 +1301,8 @@ export function BookTestimonial({ deck }: { deck: Deck }) {
         <Eyebrow>What landlords say</Eyebrow>
         {t?.quote ? (
           <div className="relative mt-6 w-[1060px]">
-            <span aria-hidden className="block text-[150px] leading-[0.55]" style={{ ...SERIF, color: CLAY }}>&ldquo;</span>
-            <p className="mt-6 text-[36px] italic leading-[1.4] text-black/85" style={{ ...SERIF, fontWeight: 400 }}>{t.quote}</p>
+            <span aria-hidden className="block text-[150px] leading-[0.55]" style={{ ...TITLE, color: CLAY }}>&ldquo;</span>
+            <p className="mt-6 text-[36px] italic leading-[1.4] text-black/85" style={{ ...TITLE, fontWeight: 400 }}>{t.quote}</p>
             {t.rating != null && <p className="mt-8 text-[26px] tracking-[0.25em]" style={{ color: CLAY }}>{"\u2605".repeat(Math.max(0, Math.min(5, Math.round(t.rating))))}</p>}
             <p className="mt-4 text-[14px] uppercase tracking-[0.3em] text-black/60">{t.author}</p>
             <div className="mx-auto mt-8 h-[150px] w-[150px] overflow-hidden rounded-full shadow-[0_20px_40px_-20px_rgba(0,0,0,0.35)]">
@@ -1343,7 +1343,7 @@ export function BookValuation({ deck }: { deck: Deck }) {
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>What we&rsquo;d put it on at</EyebrowRule>
-        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={TITLE}>
           The figure, and
           <br />
           what comes <Ital width={180}>with it</Ital>
@@ -1352,18 +1352,18 @@ export function BookValuation({ deck }: { deck: Deck }) {
           <div className="mt-8 grid grid-cols-[520px_1fr] gap-x-16">
             <div>
               <p className="leading-none">
-                <span className="text-[104px]" style={{ ...SERIF, color: "var(--p-accent)" }}>{gbp(v.rent)}</span>
-                <span className="ml-3 text-[26px] text-black/60" style={SERIF}>pcm</span>
+                <span className="text-[104px]" style={{ ...TITLE, color: "var(--p-accent)" }}>{gbp(v.rent)}</span>
+                <span className="ml-3 text-[26px] text-black/60" style={TITLE}>pcm</span>
               </p>
               <dl className="mt-8">
                 {lines.map(([k, val]) => (
                   <div key={k} className="flex items-baseline gap-6 border-t py-4" style={{ borderColor: "rgba(0,0,0,0.12)" }}>
                     <dt className="w-[90px] shrink-0 text-[10.5px] uppercase tracking-[0.22em] text-black/50">{k}</dt>
-                    <dd className="text-[20px]" style={SERIF}>{val}</dd>
+                    <dd className="text-[20px]" style={TITLE}>{val}</dd>
                   </div>
                 ))}
               </dl>
-              {v.note && <p className="mt-6 max-w-[500px] text-[14px] italic leading-[1.6] text-black/60" style={{ ...SERIF, fontWeight: 400 }}>{v.note}</p>}
+              {v.note && <p className="mt-6 max-w-[500px] text-[14px] italic leading-[1.6] text-black/60" style={{ ...TITLE, fontWeight: 400 }}>{v.note}</p>}
             </div>
             {included.length > 0 && (
               <div className="rounded-[22px] px-8 py-7" style={{ background: SAGE_WASH }}>
@@ -1400,7 +1400,7 @@ export function BookFees({ deck }: { deck: Deck }) {
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>What it costs</EyebrowRule>
-        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={TITLE}>
           One fee.
           <br />
           Here&rsquo;s what it <Ital width={180}>covers</Ital>
@@ -1411,7 +1411,7 @@ export function BookFees({ deck }: { deck: Deck }) {
               <div>
                 {f.headline && (
                   <p className="leading-none">
-                    <span className="text-[56px]" style={{ ...SERIF, color: "var(--p-accent)" }}>{f.headline}</span>
+                    <span className="text-[56px]" style={{ ...TITLE, color: "var(--p-accent)" }}>{f.headline}</span>
                     {f.headlineFor && <span className="ml-4 text-[18px] text-black/55">{f.headlineFor}</span>}
                   </p>
                 )}
@@ -1419,7 +1419,7 @@ export function BookFees({ deck }: { deck: Deck }) {
                   {f.rows.map((r) => (
                     <div key={r.label} className="grid grid-cols-[1fr_auto] items-baseline gap-x-8 border-t py-4" style={{ borderColor: "rgba(0,0,0,0.1)" }}>
                       <dt>
-                        <span className="text-[22px]" style={SERIF}>{r.label}</span>
+                        <span className="text-[22px]" style={TITLE}>{r.label}</span>
                         {r.note && <span className="ml-3 text-[13px] text-black/50">{r.note}</span>}
                       </dt>
                       <dd className="text-right">
@@ -1437,7 +1437,7 @@ export function BookFees({ deck }: { deck: Deck }) {
             {rent != null && (
               <div className="mt-8 rounded-[22px] px-8 py-6" style={{ background: "var(--p-tint)", width: 1200 }}>
                 <p className="text-[11px] uppercase tracking-[0.3em] text-black/55">At {gbp(rent)} a month, that is</p>
-                <p className="mt-3 text-[19px] leading-[1.6] text-black/80" style={SERIF}>
+                <p className="mt-3 text-[19px] leading-[1.6] text-black/80" style={TITLE}>
                   {f.rows
                     .map((r) => {
                       const m = monthly(r);
@@ -1471,7 +1471,7 @@ export function BookTerms({ deck }: { deck: Deck }) {
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>Getting started</EyebrowRule>
-        <h1 className="mt-6 text-[64px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-6 text-[64px] leading-[1.1]" style={TITLE}>
           Three steps,
           <br />
           and we&rsquo;re <Ital width={140}>away</Ital>
@@ -1479,9 +1479,9 @@ export function BookTerms({ deck }: { deck: Deck }) {
         <ol className="mt-10" style={{ width: 1000 }}>
           {NEXT_STEPS.map((st, i) => (
             <li key={st.title} className={`flex items-start gap-7 py-7 ${i > 0 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.1)" }}>
-              <span className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full text-[17px]" style={{ ...SERIF, background: "var(--p-tint)", color: "var(--p-accent)" }}>0{i + 1}</span>
+              <span className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full text-[17px]" style={{ ...TITLE, background: "var(--p-tint)", color: "var(--p-accent)" }}>0{i + 1}</span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[24px] leading-snug" style={SERIF}>{st.title}</span>
+                <span className="block text-[24px] leading-snug" style={TITLE}>{st.title}</span>
                 <span className="mt-2 block max-w-[640px] text-[16px] leading-[1.6] text-black/60">{st.body}</span>
               </span>
               {i === 0 && (
@@ -1527,7 +1527,7 @@ export function BookQuestions({ deck }: { deck: Deck }) {
       {/* The words, centred on the page's height. */}
       <div className="absolute left-[96px] top-0 flex h-full w-[760px] flex-col justify-center">
         <EyebrowRule>Any questions</EyebrowRule>
-        <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
+        <h1 className="mt-6 text-[60px] leading-[1.1]" style={TITLE}>
           Anything we
           <br />
           didn&rsquo;t <Ital width={150}>cover</Ital>?
@@ -1536,7 +1536,7 @@ export function BookQuestions({ deck }: { deck: Deck }) {
           If anything came to mind after we left - about the rent, the paperwork, or what the market&rsquo;s doing - ask {first}. There is no such thing as a small question at this stage.
         </p>
         <div className="mt-10 border-t pt-6" style={{ width: 520, borderColor: "rgba(0,0,0,0.1)" }}>
-          <p className="text-[19px]" style={SERIF}>{a.name}</p>
+          <p className="text-[19px]" style={TITLE}>{a.name}</p>
           {a.title && <p className="mt-1 text-[12.5px] text-black/55">{a.title}</p>}
           {a.phone && <p className="mt-4 text-[15px] text-black/75">{a.phone}</p>}
           {a.email && <p className="mt-1 text-[15px] text-black/75">{a.email}</p>}

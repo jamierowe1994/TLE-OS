@@ -132,5 +132,21 @@ export const DEMAND_STATS: NationalStat[] = [
 export function statFooter(stats: NationalStat[]): string {
   const sources = [...new Set(stats.map((s) => s.source))];
   const periods = [...new Set(stats.map((s) => s.asAt))];
-  return `${sources.join("; ")} · ${periods.join(", ")}. National figures, not ours.`;
+  /**
+   * WHO SAID IT, ONCE. "Street, via Rightmove's audited claims; Comscore MMX,
+   * via Rightmove's audited claims" spends six words saying the same thing
+   * twice, and it is the longest line on the page. Where every figure shares
+   * an attribution the sources are named together and attributed once.
+   *
+   * The attribution itself never goes. It is the reason these numbers are
+   * allowed on the page at all - see the sourcing rule at the top of
+   * lib/present-copy.
+   */
+  const split = sources.map((s) => s.split(", via "));
+  const via = split[0]?.[1];
+  const shared = Boolean(via) && split.length > 1 && split.every((p) => p[1] === via);
+  const who = shared
+    ? `${split.map((p) => p[0]).join(" and ")}, via ${via}`
+    : sources.join("; ");
+  return `${who} · ${periods.join(", ")}. National figures, not ours.`;
 }
