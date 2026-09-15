@@ -159,6 +159,10 @@ const withSample = (doc: EmailDoc, extra?: Record<string, string>): EmailDoc => 
   return {
     ...doc,
     subject: fill(doc.subject),
+    /* The preheader too (15 Sep 2026): it is the grey line an inbox shows
+       under the subject, and it was never filled - so four emails would have
+       arrived reading "Due {{dueDate}}" before anybody opened them. */
+    ...(typeof doc.preheader === "string" ? { preheader: fill(doc.preheader) } : {}),
     blocks: doc.blocks.map((b) => {
       const anyB = b as unknown as Record<string, unknown>;
       const next: Record<string, unknown> = { ...anyB };
@@ -191,6 +195,8 @@ export function renderTleEmail(id: string, vars: Record<string, string>): { subj
   const filled: EmailDoc = {
     ...doc,
     subject: fill(doc.subject),
+    /* The inbox preview line, filled like everything else (see withSample). */
+    ...(typeof doc.preheader === "string" ? { preheader: fill(doc.preheader) } : {}),
     blocks: doc.blocks.map((b) => {
       const anyB = b as unknown as Record<string, unknown>;
       const next: Record<string, unknown> = { ...anyB };
@@ -230,6 +236,7 @@ export async function renderTleEmailLive(id: string, vars: Record<string, string
   const filled: EmailDoc = {
     ...doc,
     subject: fill(doc.subject),
+    ...(typeof doc.preheader === "string" ? { preheader: fill(doc.preheader) } : {}),
     blocks: doc.blocks.map((b) => {
       const anyB = b as unknown as Record<string, unknown>;
       const next: Record<string, unknown> = { ...anyB };
