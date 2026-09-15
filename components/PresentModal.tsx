@@ -6,7 +6,7 @@ import { useSigning } from "@/lib/use-signing";
 import PresentBook, { PAGE_H, PAGE_W } from "@/components/PresentBook";
 import PresentPages from "@/components/PresentPages";
 import { CREAM, DeckStyleCtx, themeVars, INK } from "@/components/present-kit";
-import { asStyle, slidesFor, type PresentDeck as Deck } from "@/lib/present";
+import { asStyle, slidesFor, type PresentDeck as Deck, type SlideId } from "@/lib/present";
 import { BookActionsCtx } from "@/components/PresentBookPages";
 
 /**
@@ -124,6 +124,26 @@ export default function PresentModal({
      it is showing - James, 13 Sep 2026: "the most call-to-action ... not
      affecting the page scroll or anything like that". */
   const onAgent = open && [pages[2 * page.at], pages[2 * page.at + 1]].includes("agent");
+
+  /**
+   * WHAT THIS SCREEN ASKS OF THEM, if anything.
+   *
+   * On a phone `page.at` is the slide, so the foot can offer the action that
+   * belongs to the slide in view instead of one standing button. James, 15
+   * Sep 2026: "rather than having a sign button that's always in your face
+   * ... if there is no additional information required on that screen, then
+   * we just won't show the button", because otherwise it is either noise or
+   * a button that does nothing.
+   *
+   * Only the two closing slides carry an action today. Everything else shows
+   * nothing rather than something vague - a button that reveals no more than
+   * the slide already says is the thing being removed.
+   */
+  const asks: Partial<Record<SlideId, string>> = {
+    terms: "Sign your contract",
+    questions: "Sign your contract",
+  };
+  const askHere = phone && open ? asks[pages[page.at]] : undefined;
   const agent = deck.agent;
   const tel = agent.phone.replace(/\s+/g, "");
   const wa = tel.replace(/^0/, "44");
@@ -211,7 +231,7 @@ export default function PresentModal({
               count. */}
           {phone ? (
             <div className="relative z-[86] mt-4 w-full px-4 pb-1">
-              {open && (
+              {askHere && (
                 <button
                   type="button"
                   disabled={busy}
@@ -219,7 +239,7 @@ export default function PresentModal({
                   className="mb-3 inline-flex h-[50px] w-full items-center justify-center gap-2.5 rounded-full text-[14.5px] font-semibold text-white shadow-[0_18px_40px_-18px_rgba(0,0,0,0.6)]"
                   style={{ background: "#cfa096" }}
                 >
-                  {busy ? "Opening…" : "Sign your contract"}
+                  {busy ? "Opening…" : askHere}
                   <svg viewBox="0 0 24 24" aria-hidden className="h-[16px] w-[16px]">
                     <path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>

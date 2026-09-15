@@ -271,7 +271,8 @@ function WelcomeAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
   const { property, recipientName } = deck;
   const { host, fit } = useStage();
   const fx = fit.staged;
-  const SAGE = "#b3bea5", SAGE_WASH = "#f1f4ec", SAGE_INK = "#56634a";
+  const SAGE_WASH = "#f1f4ec", SAGE_INK = "#56634a";
+  const CLAY = "#cfa096";
   const HEAD = { fontFamily: HAND, fontWeight: 800, letterSpacing: "-0.02em" } as const;
   const HANDWRITING = { fontFamily: "var(--font-shantell), cursive" } as const;
   const body = (
@@ -330,9 +331,12 @@ function WelcomeAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
               <br />
               <span className="whitespace-nowrap" style={{ color: CORAL }}>your property.</span>
             </h1>
-            {/* The sage stroke under the last line. */}
+            {/* The ONE rule James is keeping, and it is the brand pink. It was
+                the sage, which on a phone reads as a dull olive - 15 Sep 2026:
+                "for some reason you've done it in purple on mobile, but I
+                think it should be the pink." */}
             <svg viewBox="0 0 420 14" aria-hidden className={`mt-1 h-[14px] ${fx ? "w-[400px]" : "w-[80%]"}`}>
-              <path d="M4 10C90 3 200 2 300 5C350 6 390 7 416 9" fill="none" stroke={SAGE} strokeWidth="3.5" strokeLinecap="round" opacity="0.9" />
+              <path d="M4 10C90 3 200 2 300 5C350 6 390 7 416 9" fill="none" stroke={CLAY} strokeWidth="3.5" strokeLinecap="round" opacity="0.95" />
             </svg>
           </Rise>
           <Rise show={show} i={2}>
@@ -344,7 +348,9 @@ function WelcomeAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
           {(property.address || recipientName) && (
             <Rise show={show} i={3}>
               <p className="mt-4 text-[13px] text-black/45">
-                Prepared for{recipientName ? ` ${recipientName}` : " you"}
+                {/* Their name, not "Prepared for" and then their name: they
+                    know it was prepared for them, they are holding it. */}
+                {recipientName || "Your property"}
                 {property.address && (
                   <>
                     {" · "}
@@ -356,21 +362,35 @@ function WelcomeAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
           )}
         </div>
         <Rise show={show} i={4}>
-          {/* Three white cards. Three across on the stage; one under another
-              on a phone, where three columns of 100px turned every promise
-              into a ladder of single words. */}
-          <ul className={`mt-9 grid gap-[14px] ${fx ? "grid-cols-3" : "grid-cols-1 sm:grid-cols-3"}`}>
+          {/* Three white cards on the stage and from sm up. ON A PHONE they
+              are a centred row at the foot: no card, a 44px disc, the title
+              and nothing else. Stacked they took 690px of an 812px screen for
+              three short promises - and three columns of 100px cannot hold
+              the bodies, which is why they were stacked in the first place.
+              So on a phone the bodies go and the row fits. */}
+          <ul className={`mt-9 grid ${fx ? "grid-cols-3 gap-[14px]" : "grid-cols-3 gap-2 sm:gap-[14px]"}`}>
             {APPRAISAL_PROMISES.map((b, n) => (
-              <li key={b.title} className="rounded-[22px] bg-white p-[22px] shadow-[0_10px_30px_-18px_rgba(0,0,0,0.25)]">
+              <li
+                key={b.title}
+                className={
+                  fx
+                    ? "rounded-[22px] bg-white p-[22px] shadow-[0_10px_30px_-18px_rgba(0,0,0,0.25)]"
+                    : "flex flex-col items-center text-center sm:block sm:rounded-[22px] sm:bg-white sm:p-[22px] sm:text-left sm:shadow-[0_10px_30px_-18px_rgba(0,0,0,0.25)]"
+                }
+              >
                 {/* Sage, pink, sage: the pink sits in the middle of the row. */}
                 <span
-                  className="flex h-[76px] w-[76px] items-center justify-center rounded-full"
+                  className={`flex items-center justify-center rounded-full ${fx ? "h-[76px] w-[76px]" : "h-[44px] w-[44px] sm:h-[76px] sm:w-[76px]"}`}
                   style={n === 1 ? { background: TINTS[0], color: INK } : { background: SAGE_WASH, color: SAGE_INK }}
                 >
-                  <Line name={b.icon} size={26} />
+                  <Line name={b.icon} size={fx ? 26 : 18} />
                 </span>
-                <span className="mt-5 block text-[18px] font-semibold leading-snug">{b.title}</span>
-                <span className="mt-1.5 block text-[13.5px] leading-[1.5] text-black/55">{b.body}</span>
+                <span className={`block font-semibold leading-snug ${fx ? "mt-5 text-[18px]" : "mt-2.5 text-[12.5px] sm:mt-5 sm:text-[18px]"}`}>
+                  {b.title}
+                </span>
+                <span className={`mt-1.5 text-[13.5px] leading-[1.5] text-black/55 ${fx ? "block" : "hidden sm:block"}`}>
+                  {b.body}
+                </span>
               </li>
             ))}
           </ul>
