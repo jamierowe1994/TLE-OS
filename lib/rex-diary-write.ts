@@ -157,3 +157,129 @@ export async function putAppraisalInRexDiary(p: {
   ).catch(() => null);
   return { ok: true, eventId, moved: Boolean(before) };
 }
+
+/* ── Viewings (15 Sep 2026) ────────────────────────────────────────────────
+ *
+ * James: a viewing booked in the OS goes straight into REX's diary, and REX
+ * confirms it to the applicant AND the landlord exactly as it does when an
+ * agent books in REX - the OS's own viewing emails are off for the pilot, so
+ * this is how people hear, and nobody hears twice.
+ *
+ * Measured on James's calendar before any of it was written:
+ *   · type 953 "TLE Accompanied Viewing" sends SMS and email to guests and
+ *     vendors - but only when asked. CREATING the event sends nothing.
+ *   · records [{service:"Contacts"}, {service:"Listings"}] attach correctly;
+ *     REX works the landlord out from the listing.
+ *   · sendConfirmationMessages {id, guest_confirmations, vendor_confirmations}
+ *     is the send. REX refuses the SMS half unless the AGENT has a mobile on
+ *     their REX user settings, and says so; the email half still goes.
+ *
+ * One booking, one event: the same lead, listing and start is recognised
+ * (os_case_state 'rex-viewing') and never written twice.
+ */
+
+export const TLE_VIEWING_TYPE_ID = 953;
+
+export type ViewingOutcome =
+  | { ok: true; eventId: string; duplicate: boolean; confirmed: "sent" | "not_sent"; confirmDetail: string }
+  | { ok: false; reason: "write_locked" | "no_rex_session" | "no_calendar" | "refused" | "no_listing"; detail: string };
+
+export async function putViewingInRexDiary(p: {
+  userId: string;
+  leadId: string;
+  listingId: string | null;
+  contactId: string | null;
+  applicantName: string;
+  address: string;
+  startsAt: string;
+  minutes: number;
+}): Promise<ViewingOutcome> {
+  if (!p.listingId) return { ok: false, reason: "no_listing", detail: "No listing on the booking, so REX would not know which home it is." };
+  const key = `${p.leadId}|${p.listingId}|${new Date(p.startsAt).toISOString()}`;
+  if (hasDb()) {
+    const seen = await q<{ payload: { eventId?: string } }>(
+      `SELECT payload FROM os_case_state WHERE kind = 'rex-viewing' AND record_id = $1`,
+      [key]
+    ).catch(() => []);
+    if (seen[0]?.payload?.eventId) {
+      return { ok: true, eventId: seen[0].payload.eventId, duplicate: true, confirmed: "not_sent", confirmDetail: "Already in REX from the first time this was booked." };
+    }
+  }
+  if (rexWritesLocked("CalendarEvents", "create")) {
+    return { ok: false, reason: "write_locked", detail: "Putting viewings in REX's diary is not switched on yet. Add it to REX by hand for now." };
+  }
+  const token = await rexTokenFor(p.userId).catch(() => null);
+  if (!token) return { ok: false, reason: "no_rex_session", detail: "You are not signed in to REX here, so it could not go in your diary. Link REX on your Profile." };
+  const emailRow = hasDb()
+    ? await q<{ rex_email: string }>(`SELECT rex_email FROM os_rex_tokens WHERE user_id = $1`, [p.userId]).catch(() => [])
+    : [];
+  const calendarId = await calendarFor(emailRow[0]?.rex_email ?? "", token);
+  if (!calendarId) return { ok: false, reason: "no_calendar", detail: "REX has no calendar for your login, so it could not go in your diary." };
+
+  const end = new Date(new Date(p.startsAt).getTime() + Math.max(15, p.minutes || 30) * 60000).toISOString();
+  const records: { service: string; id: string }[] = [{ service: "Listings", id: String(p.listingId) }];
+  if (p.contactId) records.push({ service: "Contacts", id: String(p.contactId) });
+  const res = await rexCall(
+    "CalendarEvents",
+    "create",
+    {
+      data: {
+        calendar_id: calendarId,
+        appointment_type_id: TLE_VIEWING_TYPE_ID,
+        /* In REX's own form, the one agents already read. REX only makes a
+           title up in its own screen; the API refuses an empty one ("The title
+           field is required", measured 15 Sep 2026). */
+        title: `TLE Accompanied Viewing at ${p.address || "the property"} with ${p.applicantName}`,
+        description: `Booked in TLE OS.${p.contactId ? "" : ` Applicant: ${p.applicantName} (not yet a REX contact).`}`,
+        starts_at: rexTime(p.startsAt),
+        ends_at: rexTime(end),
+        event_location: { description: p.address },
+        records,
+      },
+      return_id: true,
+    },
+    token
+  );
+  if (!res.ok) return { ok: false, reason: "refused", detail: `REX refused the diary entry: ${res.error ?? res.status}` };
+  const raw = res.result as unknown;
+  const eventId = typeof raw === "string" || typeof raw === "number" ? String(raw) : String((raw as { id?: string } | null)?.id ?? "");
+  if (!eventId) return { ok: false, reason: "refused", detail: "REX said yes but did not say which entry it made." };
+
+  await q(
+    `INSERT INTO os_case_state (kind, record_id, payload, updated_at, updated_by)
+     VALUES ('rex-viewing', $1, $2::jsonb, NOW(), $3)
+     ON CONFLICT (kind, record_id) DO UPDATE SET payload = EXCLUDED.payload, updated_at = NOW()`,
+    [key, JSON.stringify({ eventId, calendarId, listingId: p.listingId, contactId: p.contactId }), p.userId]
+  ).catch(() => null);
+
+  /* REX's own confirmations, to the applicant and the landlord. */
+  let confirmed: "sent" | "not_sent" = "not_sent";
+  let confirmDetail = "";
+  if (!p.contactId) {
+    confirmDetail = `${p.applicantName} is not a REX contact yet, so REX had nobody to confirm to. Tell them yourself.`;
+  } else if (rexWritesLocked("CalendarEvents", "sendConfirmationMessages")) {
+    confirmDetail = "REX's confirmations are not switched on from the OS yet, so nobody was told. Send the confirmation from the event in REX.";
+  } else {
+    const sent = await rexCall(
+      "CalendarEvents",
+      "sendConfirmationMessages",
+      { id: eventId, guest_confirmations: true, vendor_confirmations: true },
+      token
+    );
+    /* "OK" is not "sent". REX answers 200 with sent_totals of nought when it
+       refuses the batch - measured 15 Sep 2026: an SMS-and-email type with no
+       mobile on the sending REX user sends NEITHER, and still says OK. */
+    const totals = (sent.result as { guests?: { sent_totals?: { email?: number; sms?: number } }; vendors?: { sent_totals?: { email?: number; sms?: number } } } | null) ?? null;
+    const count = (t?: { email?: number; sms?: number }) => Number(t?.email ?? 0) + Number(t?.sms ?? 0);
+    const out = count(totals?.guests?.sent_totals) + count(totals?.vendors?.sent_totals);
+    if (sent.ok && out > 0) {
+      confirmed = "sent";
+      confirmDetail = "REX sent its confirmation to the applicant and the landlord.";
+    } else if (sent.ok) {
+      confirmDetail = "In your diary, but REX sent no confirmation - usually because your REX user has no mobile number in its settings. Add one in REX, then send the confirmation from the event.";
+    } else {
+      confirmDetail = `In the diary, but REX did not send the confirmations: ${sent.error ?? sent.status}`;
+    }
+  }
+  return { ok: true, eventId, duplicate: false, confirmed, confirmDetail };
+}

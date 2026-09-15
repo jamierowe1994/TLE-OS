@@ -293,6 +293,8 @@ export type LeadViewing = {
   property: string;
   locality: string;
   outcome: "Booked" | "Attended" | "Applying" | "Thinking" | "Not for them" | "No show";
+  /** What REX did with a viewing booked in the OS (15 Sep 2026), in words. */
+  rex?: string;
 };
 
 export const DOC_TAGS: DocTag[] = [

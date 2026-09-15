@@ -150,12 +150,17 @@ function refresh(): Promise<Cached> {
  * view rather than shown: showing somebody else's appointment is the failure
  * that matters, and an agent noticing a gap will ask.
  */
-function forScope(book: DiaryBook, who: { email: string | null; name: string | null }): DiaryBook {
+function forScope(book: DiaryBook, who: { email: string | null; name: string | null; rexEmail?: string | null }): DiaryBook {
   if (!who.email && !who.name) return book;
   const email = who.email?.toLowerCase() ?? null;
+  /* The address they sign in to REX with, when it is not the OS one (15 Sep
+     2026). A REX calendar is owned by the REX login, and an agent whose REX
+     account sits on another address saw an empty diary here. */
+  const rexEmail = who.rexEmail?.toLowerCase() ?? null;
   const name = who.name?.trim().toLowerCase() ?? null;
   const appts = book.appts.filter((a) => {
     const owner = (a.agentEmail ?? "").toLowerCase();
+    if (rexEmail && owner === rexEmail) return true;
     if (email) return owner === email;
     /* Only reachable when an owner is previewing somebody who has no OS
        account - there is no mailbox to match, so the REX name is all there
@@ -189,8 +194,11 @@ export async function GET(req: NextRequest) {
   }
   const mineOnly = !scope.everything;
   const person = viewingAs && subject ? subject : actor;
+  const rexLogin = mineOnly && hasDb()
+    ? await q<{ rex_email: string }>(`SELECT rex_email FROM os_rex_tokens WHERE user_id = $1`, [person.id]).catch(() => [])
+    : [];
   const who = mineOnly
-    ? { email: (person.email ?? "").toLowerCase() || null, name: scope.label || null }
+    ? { email: (person.email ?? "").toLowerCase() || null, name: scope.label || null, rexEmail: rexLogin[0]?.rex_email ?? null }
     : { email: null, name: null };
 
   /* Ours are read OUTSIDE the cache, every time. The two-minute hold exists

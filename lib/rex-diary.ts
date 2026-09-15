@@ -27,10 +27,14 @@ import { feedbackByIds } from "@/lib/rex-feedback";
 /** Whose calendars count as ours. */
 const OUR_DOMAIN = "thelettingexperts.co.uk";
 const PAGE_SIZE = 100;
-const MAX_PAGES = 15;
+const MAX_PAGES = 30;
 /** How far either side of today to read. */
 const DAYS_BACK = 14;
-const DAYS_FORWARD = 21;
+/* Three months ahead, not three weeks (15 Sep 2026): James, "otherwise
+   they're going to have to restart their whole diary and flick between the two
+   systems". A viewing booked in REX for five weeks' time has to be in the OS
+   diary too. MAX_PAGES still bounds the read. */
+const DAYS_FORWARD = 90;
 
 interface RexEvent extends Record<string, unknown> {
   id?: string;

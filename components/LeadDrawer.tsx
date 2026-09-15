@@ -1740,6 +1740,7 @@ export default function LeadDrawer({
                               Viewing — {v.property}, {v.locality}
                             </span>
                             <span className="block text-[10.5px] text-muted">{v.when}</span>
+                            {v.rex && <span className="mt-0.5 block text-[10.5px] leading-snug text-muted">{v.rex}</span>}
                           </span>
                           <Pill tone={v.outcome === "Applying" ? "good" : "neutral"}>{v.outcome}</Pill>
                         </li>
@@ -2848,16 +2849,46 @@ export default function LeadDrawer({
               })
               .catch(() => { /* no prompt is better than a wrong one */ });
           }
+          const bookedId = `vw${Date.now()}`;
           setBooked((cur) => [
             {
-              id: `vw${cur.length + 1}${v.when}`,
+              id: bookedId,
               when: v.when,
               property: v.property,
               locality: v.locality,
               outcome: "Booked",
+              ...(bookMode === "viewing" && v.listingId ? { rex: "Putting it in your REX diary…" } : {}),
             },
             ...cur,
           ]);
+          /* INTO REX'S DIARY (15 Sep 2026). A viewing booked here used to live
+             only on this screen - two were booked and neither reached REX. It
+             goes into the agent's REX diary now, and REX confirms it to the
+             applicant and the landlord (lib/rex-diary-write). The row says
+             what actually happened, not what we hoped. */
+          if (bookMode === "viewing" && v.listingId && v.startsAt) {
+            fetch("/api/viewings/book", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                leadId: lead.id,
+                listingId: v.listingId,
+                contactId: lead.contactId ?? null,
+                applicantName: lead.name,
+                address: v.property,
+                startsAt: v.startsAt,
+                minutes: v.minutes,
+              }),
+            })
+              .then((r) => r.json())
+              .then((j: { ok?: boolean; detail?: string; confirmDetail?: string }) => {
+                const rex = j.ok ? `In your REX diary. ${j.confirmDetail ?? ""}`.trim() : `Not in REX: ${j.detail ?? "REX did not take it."}`;
+                setBooked((cur) => cur.map((b) => (b.id === bookedId ? { ...b, rex } : b)));
+              })
+              .catch(() => {
+                setBooked((cur) => cur.map((b) => (b.id === bookedId ? { ...b, rex: "Not in REX: couldn't reach it. Add it in REX." } : b)));
+              });
+          }
           /* The appraisal remembers its own appointment. Without this the
              landlord's confirmation had no date to state and no calendar file
              to attach — `bookedFor` was declared on the case and never once
