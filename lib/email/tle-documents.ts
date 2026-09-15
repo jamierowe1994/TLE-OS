@@ -1002,3 +1002,48 @@ export const LANDLORD_QUESTIONS_CHASE = {
   ],
   branding: { showSignoff: false },
 } as const;
+
+/**
+ * Tenant: a viewing is cancelled, or moved (15 Sep 2026).
+ *
+ * James: the confirmations are ours, not REX's - and a viewing that is booked
+ * by email and cancelled by silence is a person standing on a doorstep. Sent
+ * from the Viewings drawer the moment the agent cancels or moves it, on the
+ * public sender, reply-to the agent. The landlord sees it on their portal.
+ */
+export const VIEWING_CANCELLED = {
+  subject: "Your viewing at {{address}} is cancelled",
+  preheader: "We're sorry for the change. Reply and we'll find another time.",
+  mode: "blocks",
+  blocks: [
+    H("vc1", "Your viewing is cancelled"),
+    T(
+      "vc2",
+      "Hi {{firstName}},<br><br>I'm sorry, but your viewing at <strong>{{address}}</strong> on <strong>{{whenPretty}}</strong> can no longer go ahead."
+    ),
+    T("vc3", "{{reasonLine}}"),
+    T("vc4", "If you'd still like to see it, or something similar, just reply to this email and I'll find you another time."),
+    SP("vc5", 8),
+    T("vc6", "{{agentName}}<br>The Letting Experts"),
+    FOOT("vc7", "You're getting this because you booked a viewing with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+export const VIEWING_MOVED = {
+  subject: "New time for your viewing at {{address}}",
+  preheader: "Your viewing is now {{whenPretty}}.",
+  mode: "blocks",
+  blocks: [
+    H("vm1", "Your viewing has a new time"),
+    T(
+      "vm2",
+      "Hi {{firstName}},<br><br>Your viewing at <strong>{{address}}</strong> has moved from {{oldWhen}} to <strong>{{whenPretty}}</strong>. {{agentName}} will meet you there."
+    ),
+    T("vm3", "The new time is attached as a calendar file, so you can add it in one tap. If it doesn't suit, just reply and we'll sort another."),
+    SP("vm4", 8),
+    T("vm5", "{{agentName}}<br>The Letting Experts"),
+    FOOT("vm6", "You're getting this because you booked a viewing with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;

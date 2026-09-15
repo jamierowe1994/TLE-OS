@@ -71,6 +71,8 @@ import {
   INVOICE_SENT,
   LANDLORD_CONTRACT_PACK,
   LANDLORD_QUESTIONS_CHASE,
+  VIEWING_CANCELLED,
+  VIEWING_MOVED,
   SITE,
   type EmailDoc } from "@/lib/email/tle-documents";
 
@@ -655,6 +657,48 @@ The Letting Experts`
      sent to a colleague from Admin -> Emails. That is exactly what they are
      for today: reading the words, and deciding what the screens behind them
      have to deliver. ── */
+  {
+    id: "viewing-cancelled",
+    group: "Doorways",
+    name: "Viewing Cancelled",
+    audience: "tenant",
+    trigger: "The agent cancels a booked viewing on the Viewings drawer",
+    fires: "Wired 15 Sep 2026. components/ViewingDrawer.tsx → POST /api/viewings/change → lib/viewing-change.ts, on the public sender, reply-to the agent.",
+    to: "The applicant who was booked",
+    summary: "Says it is off, says sorry once, gives the reason in plain words when there is one, and offers another time by reply. The landlord sees the cancellation on their portal, not by email.",
+    doc: VIEWING_CANCELLED,
+    render: (o) =>
+      blocksAs("tenant")(
+        withSample(o ?? VIEWING_CANCELLED, {
+          firstName: "Sophie",
+          address: "Flat 2, Mercer Street, Manchester M4 1SL",
+          whenPretty: "Thursday 4 September at 5:30pm",
+          reasonLine: "The landlord needs the property that afternoon.",
+          agentName: "Rhiannon Dodge",
+        })
+      )(),
+  },
+  {
+    id: "viewing-moved",
+    group: "Doorways",
+    name: "Viewing Moved",
+    audience: "tenant",
+    trigger: "The agent reschedules a booked viewing on the Viewings drawer",
+    fires: "Wired 15 Sep 2026. components/ViewingDrawer.tsx → POST /api/viewings/change → lib/viewing-change.ts, on the public sender, reply-to the agent, with the new time as a calendar file.",
+    to: "The applicant who was booked",
+    summary: "Old time, new time, who is meeting them, and the new time attached so it goes straight into their calendar.",
+    doc: VIEWING_MOVED,
+    render: (o) =>
+      blocksAs("tenant")(
+        withSample(o ?? VIEWING_MOVED, {
+          firstName: "Sophie",
+          address: "Flat 2, Mercer Street, Manchester M4 1SL",
+          oldWhen: "Thursday 4 September at 5:30pm",
+          whenPretty: "Friday 5 September at 12:30pm",
+          agentName: "Rhiannon Dodge",
+        })
+      )(),
+  },
   {
     id: "tenant-passport-invite",
     group: "Doorways",

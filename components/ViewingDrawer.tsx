@@ -142,6 +142,10 @@ export default function ViewingDrawer({
   const [fbChoice, setFbChoice] = useState<string>("");
   const [fbNotes, setFbNotes] = useState("");
   const [fbSaving, setFbSaving] = useState(false);
+  const [changeBusy, setChangeBusy] = useState(false);
+  const [changeError, setChangeError] = useState<string | null>(null);
+  const [cancelReason, setCancelReason] = useState<"organiser" | "applicant">("organiser");
+  const [cancelNote, setCancelNote] = useState("");
   const [fbError, setFbError] = useState<string | null>(null);
   const [localOutcome, setLocalOutcome] = useState<Outcome | "No-show" | null>(null);
   const [noShowTold, setNoShowTold] = useState(false);
@@ -161,6 +165,8 @@ export default function ViewingDrawer({
     setCancelled(false);
     setCancelFlow(false);
     setRescheduling(false);
+    setChangeError(null);
+    setCancelNote("");
     setReWeek(0);
     setRePick(null);
     setMoved(null);
@@ -229,6 +235,51 @@ export default function ViewingDrawer({
 
   const log = (what: string) =>
     setExtraActivity((cur) => [...cur, { when: "Just now", what, by: "You" }]);
+
+  /* The appointment's moment as an instant: the diary gives a day offset from
+     today and a local "HH:MM". */
+  const isoAt = (day: number, slot: string) => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + day);
+    const [h, m] = slot.split(":").map(Number);
+    d.setHours(h || 0, m || 0, 0, 0);
+    return d.toISOString();
+  };
+
+  /* Cancel or move, for real (lib/viewing-change). Answers with what happened
+     in words, or null when it did not go - and then says why. */
+  const changeIt = async (c: { action: "cancel" | "move"; newStartsAt?: string; reason?: "organiser" | "applicant"; reasonText?: string }): Promise<string | null> => {
+    setChangeBusy(true);
+    setChangeError(null);
+    try {
+      const r = await fetch("/api/viewings/change", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          viewingId: appt.id,
+          ...c,
+          oldStartsAt: isoAt(appt.day, appt.start),
+          minutes: appt.mins,
+          applicantName: appt.who ?? "",
+          applicantEmail: appt.contact?.email ?? null,
+          address: appt.where ?? "",
+        }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; said?: string };
+      if (!j.ok) {
+        setChangeError(j.said ?? "That did not go through. Try again.");
+        return null;
+      }
+      void refreshDiary();
+      return j.said ?? "";
+    } catch {
+      setChangeError("That did not go through - the connection dropped. Try again.");
+      return null;
+    } finally {
+      setChangeBusy(false);
+    }
+  };
 
   /* SAVED, not just said (15 Sep 2026). Both answers used to live on this
      screen only, so a written-up viewing stayed "Feedback due" for ever. Now
@@ -388,12 +439,10 @@ export default function ViewingDrawer({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {!VIEWING_SENDS_LIVE && !past && !cancelled && (
-              <p className="max-w-[190px] text-right text-[11px] leading-snug text-muted">
-                To move or cancel it, do it in REX and tell them from Outlook for now
-              </p>
-            )}
-            {VIEWING_SENDS_LIVE && !past && !cancelled && (
+            {/* Live again (15 Sep 2026): cancelling and moving now really tell
+                the applicant, move the agent's Outlook and REX's copy
+                (lib/viewing-change). They were hidden while they sent nothing. */}
+            {!past && !cancelled && (
               <>
                 <PressButton
                   onClick={() => setRescheduling(true)}
@@ -966,18 +1015,23 @@ export default function ViewingDrawer({
             </p>
             <PressButton
               onClick={() => {
-                if (!rePick) return;
-                setMoved(rePick);
-                setRescheduling(false);
-                log(`Rescheduled to ${dayLabel(rePick.day)}, ${rePick.slot} — confirmations will re-send`);
+                if (!rePick || changeBusy) return;
+                const pick = rePick;
+                void changeIt({ action: "move", newStartsAt: isoAt(pick.day, pick.slot) }).then((said) => {
+                  if (said === null) return;
+                  setMoved(pick);
+                  setRescheduling(false);
+                  log(`Moved to ${dayLabel(pick.day)}, ${pick.slot}. ${said}`);
+                });
               }}
               className={`press-ring rounded-full px-6 py-2.5 text-[13px] font-semibold ${
                 rePick ? "bg-accent-dark text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
               }`}
             >
-              Move it
+              {changeBusy ? "Moving it…" : "Move it"}
             </PressButton>
           </div>
+          {changeError && <p className="mt-2 text-right text-[11.5px] text-accent-dark">{changeError}</p>}
         </Modal>
       )}
 
@@ -985,18 +1039,52 @@ export default function ViewingDrawer({
       {cancelFlow && (
         <Modal
           title="Cancel the viewing"
-          subtitle="Everyone who knew it was on hears that it's off — email or WhatsApp, each their own"
+          subtitle={`${property} · ${dayLabel(appt.day)} at ${appt.start}`}
           onClose={() => setCancelFlow(false)}
         >
-          <SendFlow
-            messages={cancelMessages}
-            sendLabel="Cancel & tell them"
-            onSend={(sent) => {
-              setCancelled(true);
-              setCancelFlow(false);
-              log(`Viewing cancelled — ${sent.length} message${sent.length === 1 ? "" : "s"} sent`);
-            }}
+          {/* Who gets told, decided 15 Sep 2026: the applicant by email from
+              us, the landlord on their portal. REX's diary copy and the
+              agent's Outlook follow on their own. */}
+          <p className="text-[12px] leading-relaxed text-muted">
+            {appt.who || "The applicant"} is emailed that it is off. It comes out of your Outlook calendar and REX, and the landlord sees it on their portal.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {([
+              ["organiser", "We need to cancel"],
+              ["applicant", "They can't make it"],
+            ] as const).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setCancelReason(id)}
+                className={`rounded-full border px-3.5 py-1.5 text-[12px] ${cancelReason === id ? "border-accent-dark bg-accent-soft/40" : "border-line/70 hover:border-ink/30"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <textarea
+            value={cancelNote}
+            onChange={(e) => setCancelNote(e.target.value)}
+            rows={2}
+            placeholder="A line for them, if you'd like - e.g. the landlord needs the property that afternoon"
+            className="mt-3 w-full resize-none rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12px] leading-relaxed outline-none focus:border-ink"
           />
+          <PressButton
+            onClick={() => {
+              if (changeBusy) return;
+              void changeIt({ action: "cancel", reason: cancelReason, reasonText: cancelNote }).then((said) => {
+                if (said === null) return;
+                setCancelled(true);
+                setCancelFlow(false);
+                log(`Viewing cancelled. ${said}`);
+              });
+            }}
+            className="press-ring mt-3 w-full rounded-full bg-accent-dark px-4 py-2.5 text-[12.5px] font-semibold text-page"
+          >
+            {changeBusy ? "Cancelling…" : `Cancel and tell ${(appt.who || "them").split(" ")[0]}`}
+          </PressButton>
+          {changeError && <p className="mt-2 text-[11.5px] text-accent-dark">{changeError}</p>}
         </Modal>
       )}
 

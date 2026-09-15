@@ -161,3 +161,28 @@ export function icsFile(p: { uid: string; summary: string; description: string; 
     "END:VCALENDAR",
   ].join("\r\n");
 }
+
+/** Take an OS-made event back out of the agent's Outlook (a cancelled viewing). */
+export async function removeFromOutlook(userId: string, key: string): Promise<{ ok: boolean; detail: string }> {
+  if (!hasDb()) return { ok: false, detail: "No database here." };
+  const rows = await q<{ payload: { eventId?: string } }>(
+    `SELECT payload FROM os_case_state WHERE kind = $1 AND record_id = $2`,
+    [KIND, key]
+  ).catch(() => []);
+  const eventId = rows[0]?.payload?.eventId;
+  if (!eventId) return { ok: false, detail: "It was not in your Outlook from the OS, so there was nothing to take out." };
+  let token: string;
+  try {
+    token = await msAccessTokenFor(userId);
+  } catch {
+    return { ok: false, detail: "Your Outlook is not connected, so take it out of your calendar yourself." };
+  }
+  const res = await fetch(`${GRAPH}/me/events/${encodeURIComponent(eventId)}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  }).catch(() => null);
+  if (!res || (!res.ok && res.status !== 404)) return { ok: false, detail: "Outlook would not take it out - remove it from your calendar yourself." };
+  await q(`DELETE FROM os_case_state WHERE kind = $1 AND record_id = $2`, [KIND, key]).catch(() => null);
+  return { ok: true, detail: "Taken out of your Outlook calendar." };
+}

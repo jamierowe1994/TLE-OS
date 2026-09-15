@@ -254,3 +254,50 @@ export async function putViewingInRexDiary(p: {
 
   return { ok: true, eventId, duplicate: false };
 }
+
+/* ── Cancelling and moving (15 Sep 2026) ───────────────────────────────────
+ *
+ * Measured on James's calendar: an update needs the WHOLE event back (a bare
+ * {id, is_cancelled} is refused "Calendar Id is required"), and a cancellation
+ * needs a reason from REX's calendar_event_cancellation_reason list. Links to
+ * the listing and contacts are left out of the update, which keeps them.
+ */
+export const REX_CANCEL_REASON = { organiser: "26601", applicant: "26602", noShow: "26603", other: "26604" } as const;
+
+export async function changeRexEvent(p: {
+  userId: string;
+  eventId: string;
+  cancel?: { reason: keyof typeof REX_CANCEL_REASON };
+  moveTo?: { startsAt: string; minutes: number };
+}): Promise<{ ok: boolean; detail: string }> {
+  if (rexWritesLocked("CalendarEvents", "update")) return { ok: false, detail: "changing REX's diary is not switched on" };
+  const token = await rexTokenFor(p.userId).catch(() => null);
+  const read = await rexCall("CalendarEvents", "read", { id: p.eventId }, token);
+  if (!read.ok || !read.result) return { ok: false, detail: `REX could not find the entry (${read.error ?? read.status})` };
+  const e = read.result as {
+    title?: string; description?: string; starts_at?: { time?: string; tzid?: string }; ends_at?: { time?: string; tzid?: string };
+    event_location?: { description?: string } | null; calendar?: { id?: string } | null; appointment_type?: { id?: string | number } | null;
+    is_private?: boolean;
+  };
+  const data: Record<string, unknown> = {
+    id: p.eventId,
+    update_recurring_events: false,
+    calendar_id: e.calendar?.id,
+    ...(e.appointment_type?.id != null ? { appointment_type_id: e.appointment_type.id } : {}),
+    title: e.title || "Viewing",
+    description: e.description ?? "",
+    starts_at: e.starts_at,
+    ends_at: e.ends_at,
+    event_location: { description: e.event_location?.description ?? "" },
+  };
+  if (p.moveTo) {
+    data.starts_at = rexTime(p.moveTo.startsAt);
+    data.ends_at = rexTime(new Date(new Date(p.moveTo.startsAt).getTime() + Math.max(15, p.moveTo.minutes) * 60000).toISOString());
+  }
+  if (p.cancel) {
+    data.is_cancelled = true;
+    data.cancellation_reason_id = REX_CANCEL_REASON[p.cancel.reason];
+  }
+  const res = await rexCall("CalendarEvents", "update", { data }, token);
+  return res.ok ? { ok: true, detail: p.cancel ? "cancelled in REX" : "moved in REX" } : { ok: false, detail: `REX refused: ${res.error ?? res.status}` };
+}
