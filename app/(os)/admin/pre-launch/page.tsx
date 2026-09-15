@@ -176,6 +176,15 @@ export default function PreLaunch() {
   }, []);
   useEffect(load, [load]);
 
+  /* The role that goes with a send is the one the dropdown is SHOWING - the
+     person's pick if they touched it, otherwise the role already on the
+     invite. It used to fall straight back to "agent", so the dropdown read
+     Compliance while Send invite posted Agent and overwrote the invite: a
+     re-send demoted anybody who was not an agent, which is how Susan once
+     joined unable to see a thing. Caught re-sending Michael Healy's invite,
+     15 Sep 2026, and put right before he could redeem it. */
+  const roleFor = (c: Candidate) => roles[c.email] ?? c.role ?? "agent";
+
   async function invite(c: Candidate, send: boolean) {
     setBusy(c.email);
     const r = await fetch("/api/admin/pilot", {
@@ -183,7 +192,7 @@ export default function PreLaunch() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         email: c.email, name: c.name, rexUserId: c.rexId,
-        role: roles[c.email] ?? "agent", send,
+        role: roleFor(c), send,
       }),
     });
     const j = (await r.json()) as { ok?: boolean; message?: string; error?: string };
@@ -225,7 +234,7 @@ export default function PreLaunch() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         email: c.email, name: c.name, rexUserId: c.rexId,
-        role: roles[c.email] ?? "agent", link: true,
+        role: roleFor(c), link: true,
       }),
     });
     const j = (await r.json()) as { ok?: boolean; url?: string; error?: string };
@@ -436,7 +445,7 @@ export default function PreLaunch() {
                      has to remember, and the person who forgets finds out when
                      the MD opens the OS and can see nothing. */
                   <select
-                    value={roles[c.email] ?? c.role ?? "agent"}
+                    value={roleFor(c)}
                     onChange={(e) => setRoles((r) => ({ ...r, [c.email]: e.target.value }))}
                     disabled={busy !== null}
                     title="What they can see once they join"
