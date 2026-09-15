@@ -2490,6 +2490,36 @@ CREATE TABLE IF NOT EXISTS os_landlord_documents (
 CREATE INDEX IF NOT EXISTS os_landlord_documents_account
   ON os_landlord_documents (account_id, uploaded_at DESC);
 
+-- ── AND THE TENANT'S, added 15 Sep 2026 ──────────────────────────────────
+--
+-- The same shape as the landlord's above and for the same reason: keyed on
+-- os_portal_accounts, never on os_users, so a customer's file is never one
+-- join away from an office login. A tenant IS a portal account - kind
+-- 'tenant' in that same table - so this could have reused the landlord table
+-- rather than adding one. It does not, because the name would then be a lie,
+-- and the next person reading os_landlord_documents would have no way to know
+-- half its rows were tenants'.
+--
+-- deal_id, not appraisal_id: a tenant's file hangs off their Propoly deal the
+-- way a landlord's hangs off an appraisal. It is nullable, because somebody
+-- can send us a reference before the deal exists and the document is still
+-- worth keeping.
+--
+-- The bytes live in R2 under documents/tenant/<account>/; the row is the index.
+CREATE TABLE IF NOT EXISTS os_tenant_documents (
+  id             TEXT PRIMARY KEY,
+  account_id     TEXT NOT NULL,
+  deal_id        TEXT,
+  kind           TEXT NOT NULL DEFAULT 'other',
+  name           TEXT NOT NULL DEFAULT '',
+  r2_key         TEXT NOT NULL,
+  bytes          INTEGER,
+  content_type   TEXT NOT NULL DEFAULT '',
+  uploaded_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_tenant_documents_account
+  ON os_tenant_documents (account_id, uploaded_at DESC);
+
 -- A message is stored first and emailed second, so a refused or failed email
 -- never loses what the landlord wrote. emailed_at / email_error say which.
 CREATE TABLE IF NOT EXISTS os_landlord_messages (

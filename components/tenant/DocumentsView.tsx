@@ -1,12 +1,13 @@
 import Spine from "@/components/landlord/Spine";
 import type { TenantHome } from "@/lib/tenant-home-view";
+import SendDocuments from "@/components/tenant/SendDocuments";
 
 /** Documents: one section of the tenant portal, drawn from the home view. Shared with the sample. */
 
 const card = "rounded-[22px] border border-line/60 bg-white";
 const eyebrow = "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted";
 
-export default function DocumentsView({ v }: { v: TenantHome }) {
+export default function DocumentsView({ v, sample = false }: { v: TenantHome; sample?: boolean }) {
   return (
     <div className="space-y-5">
       <div className="pt-2">
@@ -19,6 +20,19 @@ export default function DocumentsView({ v }: { v: TenantHome }) {
           <Row label="How to rent: the checklist for renting in England" sub="The government's guide, which every tenant is given" href="https://www.gov.uk/government/publications/how-to-rent" />
         </ul>
       </div>
+      {/* The only thing on this page that goes the other way. It sits above
+          "With your tenancy" because sending something in is a job a tenant
+          arrives here to do, and reading a list of what will arrive later is
+          not. */}
+      <div className={`${card} p-6`} data-search>
+        <h2 className="text-[19px] font-bold">Send us something</h2>
+        <p className="mt-2 max-w-xl text-[13.5px] leading-relaxed text-muted">
+          A reference, your ID, proof of address - whatever we have asked you for. It reaches your agent and goes on
+          your file.
+        </p>
+        <SendDocuments sample={sample} />
+      </div>
+
       <div className={`${card} p-6`} data-search>
         <h2 className="text-[19px] font-bold">With your tenancy</h2>
         <p className="mt-2 text-[13.5px] leading-relaxed text-muted">

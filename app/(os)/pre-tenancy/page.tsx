@@ -18,6 +18,7 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import PasswordInput from "@/components/business/PasswordInput";
 import { NotesThread } from "@/components/business/DealNotes";
+import TenantDocuments from "@/components/pretenancy/TenantDocuments";
 import DoodleIcon from "@/components/business/DoodleIcon";
 import { BRAND } from "@/lib/business/brand";
 import { formatGBP } from "@/lib/business/format";
@@ -2068,6 +2069,13 @@ function WorkTabs({
       <div className="flex min-h-0 flex-1 flex-col p-4">
         {tab === "activity" ? (
           <>
+            {/* What the tenant has sent in from their portal. Above the thread
+                because a document arriving is a thing to act on, and below it
+                it would be scrolled past. shrink-0 so it cannot squeeze the
+                thread's own scroll area. */}
+            <div className="shrink-0 pb-3">
+              <TenantDocuments dealId={deal.app.id} />
+            </div>
             <div className="min-h-0 flex-1">
               <NotesThread notes={notes} maxHeightClass="max-h-full lg:h-[calc(100%-8px)]" />
             </div>

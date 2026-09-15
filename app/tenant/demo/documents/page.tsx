@@ -11,5 +11,5 @@ export const dynamic = "force-dynamic";
    such link quietly showed whatever the cookie happened to hold. */
 export default async function Page({ searchParams }: { searchParams: Promise<{ stage?: string }> }) {
   const sp = await searchParams;
-  return <DocumentsView v={sampleFor(await demoStage(sp.stage))} />;
+  return <DocumentsView v={sampleFor(await demoStage(sp.stage))} sample />;
 }
