@@ -8,7 +8,7 @@ import { createContext, useContext } from "react";
 
 /** What a page can ask the pop-out to do. The modal provides it. */
 export const BookActionsCtx = createContext<{ sign: () => void } | null>(null);
-import { DEMAND_STATS, PORTAL_STATS, statFooter } from "@/lib/present-stats";
+import { DEMAND_STATS, PORTAL_STATS, statClaim } from "@/lib/present-stats";
 
 /**
  * THE BOOKLET'S OWN PAGES. James, 13 Sep 2026, from his mock-up of the
@@ -58,16 +58,6 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 }
 
 /** The foot of a left-hand page: a short rule and the address. */
-function FootLeft({ deck }: { deck: Deck }) {
-  const line = [deck.property.address, deck.property.postcode].filter(Boolean).join(", ");
-  return (
-    <div className="absolute bottom-[56px] left-[96px]">
-      <span aria-hidden className="mb-3 block h-px w-[40px]" style={{ background: CLAY }} />
-      <p className="text-[10.5px] uppercase tracking-[0.3em] text-black/55">{line}</p>
-    </div>
-  );
-}
-
 /** The foot of a right-hand page: the line. */
 /** Page: WELCOME. The plan, the three promises, the vase on the sideboard. */
 export function BookWelcome({ deck }: { deck: Deck }) {
@@ -118,7 +108,6 @@ export function BookWelcome({ deck }: { deck: Deck }) {
           ))}
         </ul>
       </div>
-      <FootLeft deck={deck} />
     </div>
   );
 }
@@ -798,35 +787,6 @@ export function BookMaxPrice() {
   );
 }
 
-/** The clay line that runs along the foot of the portals spread, page to page. */
-function Swoosh({ side }: { side: "left" | "right" }) {
-  /* Drawn in the page's own units. Left: in from the outer edge low down,
-     a loop in the middle, out through the spine. Right: in from the spine,
-     a loop, then up and out through the top of the outer edge - James, 13
-     Sep 2026: "loopsy loops and more curves, and flows up the side". */
-  /* Drawn FIRST, so the shapes and the pictures sit over it: it runs
-     behind the sage on the left, behind the pink on the right, and ends
-     under the phone - James, 13 Sep 2026: "dip down, go underneath, hit
-     the red box, disappear under the red box, come back through, and
-     finish at the phone." Nowhere does it cross a word. */
-  const d =
-    side === "left"
-      /* Left: low, under the handwriting (which sits at 640-735), looping
-         at the right and running out under the picture. Right: in below
-         the source line (about 610), looping under the figures, under the
-         pink, up the gap left of the "20 days" column to the phone. */
-      /* The two halves meet at the spine at the same height and the curve
-         runs straight through it: the left rises going left, so the right
-         falls going right. */
-      ? "M1440 780 C 1320 750, 1250 860, 1120 830 C 1060 815, 1040 760, 1090 750 C 1140 740, 1130 820, 1080 810 C 980 790, 880 860, 760 850 C 660 840, 600 860, 520 860"
-      : "M0 780 C 120 812, 380 846, 560 806 C 660 782, 700 740, 760 768 C 820 796, 740 862, 700 818 C 660 774, 800 730, 940 772 C 1080 820, 1150 886, 1250 858 C 1330 832, 1360 724, 1350 646 C 1340 588, 1360 528, 1380 498";
-  return (
-    <svg viewBox={`0 0 ${PAGE_W} ${PAGE_H}`} aria-hidden className="pointer-events-none absolute left-0 top-0 z-0" style={{ width: PAGE_W, height: PAGE_H }}>
-      <path d={d} fill="none" stroke="var(--p-accent)" strokeWidth="2" strokeLinecap="round" opacity="0.8" />
-    </svg>
-  );
-}
-
 /** A national figure: the number big, what it counts under it. */
 function Stat({ value, label }: { value: string; label: string }) {
   return (
@@ -845,10 +805,16 @@ function Stat({ value, label }: { value: string; label: string }) {
  * lines under the numbers were not ours and are not here.
  */
 export function BookPortals() {
-  const LOGOS: Record<string, string> = { Rightmove: "/brand/rightmove.png", Zoopla: "/brand/zoopla.png", OnTheMarket: "/brand/onthemarket.png" };
+  /* Every name in the row is a mark now, ours included. The logo carries the
+     name, so printing it again beside it said everything twice. */
+  const LOGOS: Record<string, string> = {
+    Rightmove: "/brand/rightmove.png",
+    Zoopla: "/brand/zoopla.png",
+    OnTheMarket: "/brand/onthemarket.png",
+    "thelettingexperts.co.uk": "/brand/tle-logo-coral.png",
+  };
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
-      <Swoosh side="left" />
       {/* THE SAGE: the bottom-left corner only, its edge a ski-slope - steep
           off the left side, concave, easing out along the foot - James, 13
           Sep 2026: "a steeper, ski-slope kind of bump ... a concave kind of
@@ -882,18 +848,34 @@ export function BookPortals() {
             ))}
           </div>
         </div>
-        <ul className="mt-8 flex items-center justify-between border-t pt-7" style={{ width: 1160, borderColor: "rgba(0,0,0,0.12)" }}>
-          {PORTALS_COPY.portals.map((name) => (
-            <li key={name} className="flex items-center">
-              {LOGOS[name] && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={LOGOS[name]} alt="" aria-hidden className="mr-3 h-7 w-auto shrink-0 opacity-90" />
-              )}
-              <span className="text-[21px] font-semibold leading-none text-black/75">{name}</span>
-            </li>
-          ))}
+        <ul className="mt-8 flex items-center gap-x-14 border-t pt-7" style={{ width: 1160, borderColor: "rgba(0,0,0,0.12)" }}>
+          {PORTALS_COPY.portals.map((name) =>
+            LOGOS[name] ? (
+              <li key={name} className="flex items-center">
+                {/* NOT aria-hidden: with the words gone the mark is the only
+                    thing naming the portal.
+
+                    THE THREE PORTAL FILES ARE ICON MARKS, not wordmarks -
+                    512x512 and 306x381 - so they are set larger than our own
+                    wordmark or they read as four anonymous shapes in a row. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={LOGOS[name]}
+                  alt={name}
+                  className={`w-auto shrink-0 opacity-90 ${name === "thelettingexperts.co.uk" ? "h-9" : "h-[52px]"}`}
+                />
+              </li>
+            ) : (
+              <li key={name} className="text-[21px] font-semibold leading-none text-black/75">{name}</li>
+            )
+          )}
         </ul>
-        <p className="mt-5 text-[11px] text-black/40">{statFooter(PORTAL_STATS)}</p>
+        {/* Out of the mug. It sat at the left margin, over the books and the
+            plant, where it could not be read at all. */}
+        <div className="ml-[700px] mt-5 max-w-[460px] text-[11px] leading-[1.45] text-black/40">
+          <p>{statClaim(PORTAL_STATS).who}</p>
+          <p className="mt-0.5">{statClaim(PORTAL_STATS).when}</p>
+        </div>
       </div>
     </div>
   );
@@ -909,7 +891,6 @@ export function BookPortals() {
 export function BookSocial() {
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
-      <Swoosh side="right" />
       <div className="pointer-events-none absolute" style={{ right: -220, bottom: -280, width: 720, height: 520, borderRadius: "50%", background: "var(--p-tint)" }} />
       {/* THE PHONE on the sofa, in a circle off the top-right - James's
           cut-out, cropped to a disc so its blank ground never shows. */}
@@ -937,7 +918,10 @@ export function BookSocial() {
             </div>
           ))}
         </div>
-        <p className="mt-6 max-w-[900px] text-[11px] leading-[1.5] text-black/40">{statFooter(DEMAND_STATS)}</p>
+        <div className="mt-6 max-w-[900px] text-[11px] leading-[1.45] text-black/40">
+          <p>{statClaim(DEMAND_STATS).who}</p>
+          <p className="mt-0.5">{statClaim(DEMAND_STATS).when}</p>
+        </div>
       </div>
     </div>
   );
@@ -952,7 +936,7 @@ export function BookSocial() {
 export function BookCompliance({ deck }: { deck: Deck }) {
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
-      <div className="absolute left-[96px] top-[150px] w-[1180px]">
+      <div className="absolute left-[96px] top-[84px] w-[1180px]">
         <EyebrowRule>Compliance &amp; legislation</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={TITLE}>
           Keeping your property ready,
@@ -971,7 +955,6 @@ export function BookCompliance({ deck }: { deck: Deck }) {
           ))}
         </div>
       </div>
-      <FootLeft deck={deck} />
     </div>
   );
 }
@@ -1006,7 +989,6 @@ export function BookLegal() {
                   <span className="flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-full text-[12px] font-semibold" style={{ background: "var(--p-tint)", color: "var(--p-accent)" }}>0{c * half + i + 1}</span>
                   <span className="min-w-0">
                     <span className="block text-[15.5px] font-semibold leading-snug">{it.title}</span>
-                    <span className="mt-1 block text-[12.5px] leading-[1.55] text-black/55">{it.body}</span>
                   </span>
                 </li>
               ))}
@@ -1056,7 +1038,7 @@ export function BookScreening() {
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       {/* The sage as a wave along the foot: down off the left, back up, and
           down again to finish over the strap - James, 13 Sep 2026. */}
-      <Blob d="M-20 520 C 40 620, 90 720, 200 700 C 290 684, 320 600, 400 630 C 470 656, 500 740, 620 780 C 700 806, 760 860, 780 920 L-20 920 Z" />
+      <Blob d="M-20 520 C 40 620, 90 720, 200 700 C 290 690, 320 676, 400 700 C 470 722, 500 772, 620 802 C 700 822, 760 868, 780 920 L-20 920 Z" />
       <div className="absolute left-[96px] top-[84px] w-[1200px]">
         <EyebrowRule>{SCREENING.eyebrow}</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={TITLE}>
@@ -1083,8 +1065,10 @@ export function BookManagement() {
   const icons: ("check" | "shield" | "chart" | "home")[] = ["check", "shield", "chart", "home"];
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
-      <Blob d="M1460 600 C 1400 560, 1340 660, 1260 650 C 1180 640, 1150 580, 1070 610 C 990 640, 980 740, 900 780 C 840 810, 800 860, 780 920 L1460 920 Z" />
-      <div className="absolute left-[96px] top-[84px] w-[1250px]">
+      {/* Pink in the top corner instead of sage along the foot, and the words
+          sit in the middle of the page rather than hanging from the top. */}
+      <div className="pointer-events-none absolute -right-[170px] -top-[190px] h-[580px] w-[580px] rounded-full" style={{ background: "var(--p-tint)" }} />
+      <div className="absolute left-[96px] top-0 flex h-full w-[1250px] flex-col justify-center">
         <EyebrowRule>Management and support</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={TITLE}>
           Choose how involved
@@ -1149,7 +1133,6 @@ export function BookLevels({ deck }: { deck: Deck }) {
           </tbody>
         </table>
       </div>
-      <FootLeft deck={deck} />
     </div>
   );
 }
@@ -1223,7 +1206,6 @@ export function BookRentLegal({ deck }: { deck: Deck }) {
         </div>
         <p className="mt-5 max-w-[1000px] text-[10.5px] leading-[1.6] text-black/40">{RENT_LEGAL.disclaimer}</p>
       </div>
-      <FootLeft deck={deck} />
     </div>
   );
 }
@@ -1385,7 +1367,6 @@ export function BookValuation({ deck }: { deck: Deck }) {
           <p className="mt-10 text-[17px] text-black/55">The figure we agreed at the visit will sit here.</p>
         )}
       </div>
-      <FootLeft deck={deck} />
     </div>
   );
 }
@@ -1505,7 +1486,6 @@ export function BookTerms({ deck }: { deck: Deck }) {
           {deck.terms?.summary ?? (deck.terms?.signUrl ? "Your terms are ready - press Sign the terms whenever you are." : `Your terms are being prepared. ${deck.agent.firstName || "Your agent"} will send them across, and Sign the terms will take you straight to them.`)}
         </p>
       </div>
-      <FootLeft deck={deck} />
     </div>
   );
 }

@@ -129,6 +129,30 @@ export const DEMAND_STATS: NationalStat[] = [
 
 /** One line under a row of these, so the page says whose numbers they are
  *  without repeating a source three times. */
+/**
+ * The claim in two lines: who audited it, then over what.
+ *
+ * James, 15 Sep 2026: "you could literally just put Rightmove audited claims
+ * and just put the dates after that ... just give the dates underneath." The
+ * ATTRIBUTION still has to be there - it is the reason these numbers are
+ * allowed on a page at all - but "Street, via Rightmove's audited claims;
+ * Comscore MMX, via Rightmove's audited claims" is the longest line on the
+ * page and says one thing twice.
+ */
+export function statClaim(stats: NationalStat[]): { who: string; when: string } {
+  const sources = [...new Set(stats.map((s) => s.source))];
+  const periods = [...new Set(stats.map((s) => s.asAt))];
+  const split = sources.map((s) => s.split(", via "));
+  const via = split[0]?.[1];
+  const shared = Boolean(via) && split.every((p) => p[1] === via);
+  return {
+    who: shared ? `Figures from ${via}` : `Figures from ${sources.join("; ")}`,
+    /* The periods stay separate. They belong to different figures, and one
+       merged span would be a period none of the sources actually claims. */
+    when: `${periods.join(" · ")}. National figures, not ours.`,
+  };
+}
+
 export function statFooter(stats: NationalStat[]): string {
   const sources = [...new Set(stats.map((s) => s.source))];
   const periods = [...new Set(stats.map((s) => s.asAt))];
