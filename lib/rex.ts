@@ -164,11 +164,41 @@ async function login(accountId: string | null): Promise<string> {
   return token;
 }
 
+/**
+ * One login at a time, per account.
+ *
+ * Without this, two REX calls that start together on a cold or expired token
+ * both log in - and REX hands the second login a new token while retiring the
+ * first, so whichever call was holding the older one fails with "the token you
+ * have provided was not found". It is intermittent by nature: it needs two
+ * calls to overlap AND the cache to be cold, which is exactly the state a
+ * screen is in after a deploy or a quiet hour.
+ *
+ * Found 15 Sep 2026, when the search box started asking REX for properties and
+ * people at the same time and both came back empty. It was never specific to
+ * that feature: any two overlapping REX reads could have hit it, which may be
+ * the explanation for odd one-off REX failures elsewhere.
+ *
+ * So the login is memoised while it is in flight and everyone waiting gets the
+ * same token.
+ */
+const loggingIn = new Map<string, Promise<string>>();
+
 async function getToken(accountId: string | null, force = false): Promise<string> {
   const key = accountKey(accountId);
   const cached = tokenCache.get(key);
   if (!force && cached && cached.expiresAt > Date.now()) return cached.token;
-  return login(accountId);
+
+  const already = loggingIn.get(key);
+  /* A forced re-login means the caller KNOWS the token is dead, so it must not
+     be handed the in-flight promise that is about to resolve to it. */
+  if (already && !force) return already;
+
+  const work = login(accountId).finally(() => {
+    if (loggingIn.get(key) === work) loggingIn.delete(key);
+  });
+  loggingIn.set(key, work);
+  return work;
 }
 
 

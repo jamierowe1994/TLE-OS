@@ -3,6 +3,7 @@ import { whoIs } from "@/lib/admin";
 import { scopeFor } from "@/lib/scope";
 import { bookFor } from "@/lib/listings-cache";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
+import { rexContactUrl } from "@/lib/business/rex-links";
 
 /**
  * GET /api/search/rex?q=… → properties REX has and the OS does not.
@@ -18,12 +19,23 @@ import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
  * it, and pull a record in when they click one. The data then arrives a
  * record at a time, driven by what people actually look for.
  *
- * ── Why property and not people ───────────────────────────────────────────
+ * ── Property is quick, people are slow, and that is a screen problem ──────
  *
  * Measured against the live account, 15 Sep 2026: REX answers a listing
  * search in 221-426ms and a contact search in 2.8s for "rowe" and 6.0s for
- * "smith" - slower the commoner the name. Property is quick enough to put
- * behind a button; people are not, and need a different answer.
+ * "smith" - slower the commoner the name.
+ *
+ * James, 15 Sep, on what to do about it: "it's not necessarily the length,
+ * it's the information, so it feels like it's stuck. If we say checking,
+ * pulling records from REX, and then give a spinning icon, people will be
+ * more than happy to wait." So both are asked for together and the screen
+ * says what it is waiting on. The two run in parallel: the listings answer
+ * first and are not held up by the contacts.
+ *
+ * A person is returned to be READ, with a link into REX. What a pulled person
+ * should BECOME in the OS - a lead, a tenant, a landlord - is a decision
+ * nobody has made, and inventing one here would put half-formed records on
+ * the leads board. A property has an obvious answer and does get a button.
  *
  * ── The scoping trap, and why there are two calls ─────────────────────────
  *
@@ -50,6 +62,15 @@ export interface RexHit {
   state: string;
   /** Why it is not in the OS already, in words an agent can read. */
   why: string;
+}
+
+export interface RexPerson {
+  id: string;
+  name: string;
+  /** Whatever REX holds to reach them by - email, then phone. */
+  reach: string;
+  /** Where to open them in REX itself. */
+  href: string;
 }
 
 /** Enough to be worth a round trip, few enough to verify in one second call. */
@@ -81,6 +102,11 @@ export async function GET(req: NextRequest) {
   if (!scope.everything && !mine) {
     return NextResponse.json({ ok: true, hits: [], note: "Link your REX account on Profile to search REX." });
   }
+
+  /* People, started FIRST and read last: it is the slow one (2.8s for a
+     common surname, 6.0s for a very common one), so it runs while the
+     listings are being found and verified rather than after them. */
+  const peopleWork = rexCall("Contacts", "autocomplete", { search_string: needle, limit: 8 }).catch(() => null);
 
   /* 1. REX's own quick search.
 
@@ -114,11 +140,13 @@ export async function GET(req: NextRequest) {
       state: String(row.status ?? "").trim(),
     });
   }
-  if (found.size === 0) return NextResponse.json({ ok: true, hits: [] });
+  /* No early return when nothing matched: the people are still coming, and
+     returning here skipped them entirely - which is how a search for a
+     surname answered "nothing in REX" while REX had ten of them (15 Sep). */
 
   /* 2. The same ids back to REX, this time scoped. An owner skips it. */
   let allowed = new Set(found.keys());
-  if (!scope.everything && mine) {
+  if (found.size > 0 && !scope.everything && mine) {
     const check = await rexCall("Listings", "search", {
       criteria: [
         { name: "id", type: "in", value: [...found.keys()] },
@@ -135,7 +163,7 @@ export async function GET(req: NextRequest) {
   /* 3. Drop anything the OS already holds - this section is for what is
         MISSING, and a result that just opens a screen they already have is
         noise. The book is the cache the Listings board reads. */
-  const book = await bookFor(scope.everything ? null : mine).catch(() => null);
+  const book = found.size > 0 ? await bookFor(scope.everything ? null : mine).catch(() => null) : null;
   const held = new Set((book?.listings ?? []).map((l) => String(l.id)));
 
   const hits: RexHit[] = [];
@@ -144,5 +172,22 @@ export async function GET(req: NextRequest) {
     hits.push({ id, address: r.address, state: r.state, why: why(r.state) });
   }
 
-  return NextResponse.json({ ok: true, hits });
+  /* Now the people. No dedupe against our own contacts: the OS holds a
+     handful and REX holds the book, so almost every name would survive it and
+     the check would cost more than it saved. */
+  const people: RexPerson[] = [];
+  const pres = await peopleWork;
+  if (pres?.ok) {
+    for (const r of rexRows(pres.result)) {
+      const row = r as Record<string, unknown>;
+      const id = String(row.id ?? "");
+      const name = String(row.name ?? "").trim();
+      if (!id || !name) continue;
+      const email = String(row.email_address ?? "").trim();
+      const phone = String(row.phone_number ?? "").trim();
+      people.push({ id, name, reach: email || phone || "No email or phone on the record", href: rexContactUrl(id) });
+    }
+  }
+
+  return NextResponse.json({ ok: true, hits, people });
 }
