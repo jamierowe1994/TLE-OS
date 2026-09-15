@@ -294,6 +294,23 @@ export async function journeyFor(app: Application): Promise<ApplicationJourney> 
         actions.push({ id: "flatfair", label: "Set the deal up in Flatfair", detail: "PLC passed. Key it into Flatfair, then tick it done so Kirstie can generate the agreement.", href: `/applications/flatfair?deal=${encodeURIComponent(deal.app.id)}`, who: "you" });
       }
     }
+    /* PLC passed: the rest of the deal is finished IN PROPOLY, by the agent
+       (Howard, 15 Sep 2026). Propoly exposes no write for moving a deal on,
+       so the OS cannot do it - and a screen that goes quiet after "approved"
+       leaves the agent guessing whether anything else is theirs. Said
+       plainly, with the deal one click away, until Propoly shows the deal
+       past the PLC stop. */
+    const plcStop = PORTAL_STAGES.findIndex((x) => x.key === "plc");
+    const dealAt = dealInfo ? PORTAL_STAGES.findIndex((x) => x.key === dealInfo!.stage) : -1;
+    if (plcCase.state === "approved" && dealInfo && dealAt <= plcStop) {
+      actions.push({
+        id: "propoly-finish",
+        label: "Finish the deal in Propoly",
+        detail: "The PLC passed. The OS can't move the deal on in Propoly - Propoly doesn't allow it - so open the deal there and carry on. This goes away once Propoly shows it past the PLC.",
+        href: dealInfo.url,
+        who: "you",
+      });
+    }
   } else if (accepted) {
     actions.push({ id: "plc-start", label: "Start the PLC check", detail: "The pre-let compliance pack has not been started for this let.", href: `/plc/start?application=${encodeURIComponent(app.id)}`, who: "you" });
   }

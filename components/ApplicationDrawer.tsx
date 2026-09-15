@@ -570,7 +570,12 @@ export default function ApplicationDrawer({
                               </Pill>
                               <span className="min-w-0 flex-1">
                                 {a.href ? (
-                                  <a href={a.href} className="block text-[13px] font-semibold leading-tight underline-offset-2 hover:underline">
+                                  <a
+                                    href={a.href}
+                                    /* Propoly opens in its own tab, so the application stays where the agent left it. */
+                                    {...(/^https?:/.test(a.href) ? { target: "_blank", rel: "noreferrer" } : {})}
+                                    className="block text-[13px] font-semibold leading-tight underline-offset-2 hover:underline"
+                                  >
                                     {a.label}
                                   </a>
                                 ) : (

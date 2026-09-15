@@ -174,6 +174,11 @@ function AgentSide({
           <p className="mt-2 text-xs text-emerald-700">
             {prettyWhen(c.decidedAt)}
           </p>
+          {/* What happens now is the agent's, and it is not in the OS
+              (Howard, 15 Sep 2026): Propoly allows no write to move a deal on. */}
+          <p className="mt-3 border-t border-emerald-200 pt-3 text-sm text-emerald-900">
+            Next: finish the deal in Propoly. The OS can&apos;t move it on there, so open the application and use its link to the deal.
+          </p>
         </div>
       )}
 
