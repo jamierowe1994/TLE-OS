@@ -205,7 +205,7 @@ export function BookAgent({ deck }: { deck: Deck }) {
         </div>
       )}
 
-      <div className="absolute left-[96px] top-[84px] w-[520px]">
+      <div className="absolute left-[96px] top-0 flex h-full w-[520px] flex-col justify-center">
         <Eyebrow>Your letting expert</Eyebrow>
         <h1 className="mt-8 text-[72px] leading-[1.04]" style={TITLE}>
           <span style={{ color: CLAY }}>{first || "We"}</span>
@@ -594,7 +594,7 @@ export function BookMarket({ deck }: { deck: Deck }) {
         </div>
         <span aria-hidden className="mt-3 block h-[3px] w-[48px] rounded-full" style={{ background: CLAY }} />
 
-        <div className="mt-4 grid grid-cols-2 gap-4" data-market-panels>
+        <div className="mt-8 grid grid-cols-2 gap-4" data-market-panels>
           {m.bands && m.bands.length > 0 && (
             <Panel title="How long it has been on the market">
               {m.bands.map((b) => (
@@ -708,7 +708,7 @@ export function BookOffer() {
           <br />
           before a tenant <Ital width={200}>moves in</Ital>
         </h1>
-        <div className="mt-10 grid grid-cols-2 gap-x-14" style={{ width: 1100 }}>
+        <div className="mt-14 grid grid-cols-2 gap-x-14" style={{ width: 1100 }}>
           {cols.map((items, c) => (
             <ul key={c}>
               {items.map((t) => (
@@ -835,13 +835,13 @@ export function BookPortals() {
               {PORTALS_COPY.body}
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-x-10 gap-y-7">
+          <div className="grid grid-cols-2 items-start gap-x-10 gap-y-7">
             {PORTAL_STATS.map((st) => (
               <Stat key={st.value + st.label} value={st.value} label={st.label} />
             ))}
           </div>
         </div>
-        <ul className="ml-auto mt-8 flex items-center justify-end gap-x-9 border-t pt-7" style={{ width: 593, borderColor: "rgba(0,0,0,0.12)" }}>
+        <ul className="ml-auto mt-8 flex items-center justify-between border-t pt-7" style={{ width: 593, borderColor: "rgba(0,0,0,0.12)" }}>
           {PORTALS_COPY.portals.map((name) =>
             LOGOS[name] ? (
               <li key={name} className="flex items-center">
@@ -1426,7 +1426,11 @@ export function BookFees({ deck }: { deck: Deck }) {
                   ))}
                 </dl>
               </div>
-              <p className="text-[16px] leading-[1.65] text-black/65">
+              {/* 22px is where "Fully managed" sits: the 46px headline is
+                  leading-none, so its baseline is ~37px down and an 18px
+                  label baseline-aligned to it starts at ~22. Top-aligned the
+                  paragraph floated above the rate. */}
+              <p className="pt-[22px] text-[16px] leading-[1.65] text-black/65">
                 One percentage of the rent we collect, and it covers the tenancy from start to finish. Nothing is added later that is not on this page, and what is not included is written here too.
               </p>
             </div>
@@ -1485,7 +1489,9 @@ export function BookTerms({ deck }: { deck: Deck }) {
                 <button
                   type="button"
                   onClick={() => actions?.sign()}
-                  className="relative z-[8] mt-1 inline-flex h-[54px] shrink-0 items-center gap-3 rounded-full px-7 text-[15px] font-semibold text-white shadow-[0_18px_40px_-18px_rgba(0,0,0,0.5)] transition-transform hover:scale-[1.03]"
+                  /* mt-[38px] puts it on the body rather than the title: the
+                     24px title is ~33px tall and the body starts 8px under it. */
+                  className="relative z-[8] mt-[38px] inline-flex h-[54px] shrink-0 items-center gap-3 rounded-full px-7 text-[15px] font-semibold text-white shadow-[0_18px_40px_-18px_rgba(0,0,0,0.5)] transition-transform hover:scale-[1.03]"
                   style={{ background: "#cfa096", pointerEvents: "auto" }}
                 >
                   Sign the terms

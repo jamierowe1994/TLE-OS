@@ -210,8 +210,8 @@ export const WHAT_WE_OFFER: string[] = [
   "Targeted social advertising built around your property",
   "Accompanied viewings with someone who knows the property",
   "Tenant matching focused on suitability",
-  "Tenancy agreements and compliance documentation prepared correctly",
-  "Support making sure the property is ready to meet current letting requirements",
+  "Tenancy agreements and paperwork prepared correctly",
+  "Support getting the property ready to let",
 ];
 
 /**
