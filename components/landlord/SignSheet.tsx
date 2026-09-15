@@ -104,6 +104,10 @@ export default function SignSheet({
   const [live, setLive] = useState<Live>(NO_LIVE);
   const [listH, setListH] = useState(0);
   const list = useRef<HTMLDivElement | null>(null);
+  /* The empty marker under the card that says where their panel belongs. */
+  const slot = useRef<HTMLDivElement | null>(null);
+  /* False once the column has been tried and could not be made to work. */
+  const [splitOk, setSplitOk] = useState(true);
 
   /* Mounted shut, opened a frame later, so the rise has somewhere to come
      from. Rendered straight at rest there is no arrival. */
@@ -119,7 +123,7 @@ export default function SignSheet({
     return () => window.removeEventListener("resize", measure);
   }, []);
 
-  const split = vw >= SPLIT_MIN;
+  const split = vw >= SPLIT_MIN && splitOk;
   /* With a column beside it the contract gives up the room the column needs,
      rather than the pair running off the edge of the screen. On a phone it
      takes the whole width - 24px of dark either side of a contract is 24px
@@ -130,10 +134,9 @@ export default function SignSheet({
   /* Half the column, so the CONTRACT is centred before signing starts and
      slides off centre by exactly the room the column needs. */
   const shift = split ? (GAP + COL_W) / 2 : 0;
-  /* The column starts level with the top of the paper. James, 15 Sep: the top
-     box "should be aligned with the top of the popout because it's currently
-     slightly below". */
-  const colTop = listH + 12;
+  /* The card's height is measured only so the layout settles; the panel's own
+     place comes from the slot beneath it. */
+  void listH;
 
   /* ── what they have done, read off their form ── */
   useEffect(() => {
@@ -166,7 +169,7 @@ export default function SignSheet({
     return () => root.removeEventListener("click", on, true);
   }, [root, started]);
 
-  /* ── where their panel sits ── */
+  /* ── how their panel LOOKS. Where it sits is done in the effect below. ── */
   useEffect(() => {
     if (!root) return;
     let el = root.querySelector("style#tle-sheet") as HTMLStyleElement | null;
@@ -179,22 +182,89 @@ export default function SignSheet({
     const column = [
       ".scrollbox { width: " + paperW + "px !important; }",
       ".form-container {",
-      "  position: fixed !important;",
-      "  top: " + colTop + "px !important;",
-      "  bottom: auto !important;",
-      "  left: auto !important;",
-      "  right: 0 !important;",
-      "  width: " + COL_W + "px !important;",
       "  border-radius: 0 !important;",
-      "  border-color: rgba(86, 66, 62, 0.16) !important;",
-      "  box-shadow: 0 30px 70px -34px rgba(30, 20, 16, 0.75) !important;",
+      "  border-color: rgba(86, 66, 62, 0.14) !important;",
+      /* Pink, taken from the page's own token: custom properties cross the
+         shadow boundary, class names do not. */
+      "  background-color: var(--accent-soft, #ffe4df) !important;",
+      "  box-shadow: 0 30px 70px -34px rgba(30, 20, 16, 0.6) !important;",
       "}",
     ].join("\n");
     /* No room for a column: their panel stays where they put it, lifted clear
        of our own bar so the Next button is never half behind it. */
     const lift = ".form-container { bottom: 60px !important; }";
     el.textContent = (split ? column : lift) + (started ? "" : hide);
-  }, [root, split, started, paperW, colTop]);
+  }, [root, split, started, paperW]);
+
+  /**
+   * WHERE THEIR PANEL SITS, MEASURED RATHER THAN ASSUMED.
+   *
+   * This was a CSS rule - position: fixed, top, right - which relies on the
+   * panel resolving against THIS sheet because the sheet carries a transform.
+   * That held on my machine and did not on James's: "it's still not showing
+   * the landlord box underneath", on a build that was otherwise his. Which
+   * containing block a fixed element inside a shadow root picks up, with a
+   * transform on one ancestor and a backdrop-filter on another, is not
+   * something to bet a landlord's signature on.
+   *
+   * So it is calibrated. Put it at 0,0, read where 0,0 actually landed, and
+   * offset by the difference to the slot under our card - which lands it in
+   * the right place whatever the browser decided the containing block was.
+   *
+   * AND IT CHECKS ITSELF. If the panel ends up with no size or off the screen,
+   * the column is abandoned and their own layout comes back. A signing panel
+   * over the contract is a compromise; a signing panel nobody can see is a
+   * landlord who cannot sign.
+   */
+  useEffect(() => {
+    if (!root || !started || vw < SPLIT_MIN || !splitOk) return;
+    let stop = false;
+    let raf = 0;
+    let last = "";
+    const clear = (st: CSSStyleDeclaration) =>
+      ["position", "right", "bottom", "width", "top", "left"].forEach((k) => st.removeProperty(k));
+    const tick = () => {
+      if (stop) return;
+      const fc = root.querySelector(".form-container");
+      const to = slot.current?.getBoundingClientRect();
+      if (fc instanceof HTMLElement && to) {
+        /* Collapsed - their minimise button is hidden but still reachable by
+           keyboard. Press it again rather than leaving a 0x0 box behind. */
+        if (fc.offsetWidth === 0 || fc.offsetHeight === 0) {
+          const mini = root.querySelector(".minimize-form-button");
+          if (mini instanceof HTMLElement) mini.click();
+        }
+        const key = Math.round(to.left) + ":" + Math.round(to.top);
+        if (key !== last) {
+          last = key;
+          const st = fc.style;
+          st.setProperty("position", "fixed", "important");
+          st.setProperty("right", "auto", "important");
+          st.setProperty("bottom", "auto", "important");
+          st.setProperty("width", COL_W + "px", "important");
+          st.setProperty("top", "0px", "important");
+          st.setProperty("left", "0px", "important");
+          const origin = fc.getBoundingClientRect();
+          st.setProperty("top", to.top - origin.top + "px", "important");
+          st.setProperty("left", to.left - origin.left + "px", "important");
+          const now = fc.getBoundingClientRect();
+          if (!(now.width > 8 && now.height > 8 && now.right > 8 && now.bottom > 8 && now.left < vw - 8)) {
+            clear(st);
+            setSplitOk(false);
+            return;
+          }
+        }
+      }
+      raf = window.requestAnimationFrame(tick);
+    };
+    raf = window.requestAnimationFrame(tick);
+    return () => {
+      stop = true;
+      window.cancelAnimationFrame(raf);
+      const fc = root.querySelector(".form-container");
+      if (fc instanceof HTMLElement) clear(fc.style);
+    };
+  }, [root, started, vw, splitOk]);
 
   useEffect(() => {
     if (!list.current) return;
@@ -343,7 +413,7 @@ export default function SignSheet({
             }}
             aria-hidden={!started}
           >
-            <div ref={list} className="bg-white px-5 py-4">
+            <div ref={list} className="bg-accent-soft px-5 py-4">
               <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">What you need to sign</p>
               {rows.length === 0 ? (
                 <p className="mt-3 text-[12.5px] leading-relaxed text-muted">
@@ -398,6 +468,9 @@ export default function SignSheet({
                 </ol>
               )}
             </div>
+            {/* Where their panel goes. It is measured, never computed - the one
+                thing that says where the column's second box belongs. */}
+            <div ref={slot} className="mt-3 h-px w-full" aria-hidden />
           </div>
         )}
       </div>
