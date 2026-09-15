@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import LandlordSignOut from "@/components/LandlordSignOut";
 
 /** The landlord's own details — light, honest, and no payment fields:
  *  bank changes happen by phone with verification, never a web form. */
@@ -132,6 +133,19 @@ export default function LandlordProfile() {
           <p className="mt-1.5 text-[10.5px] text-muted">
             Small fixes move faster when we don&apos;t have to catch you on the phone.
           </p>
+        </div>
+
+        {/* SIGNING OUT LIVES HERE, and on a phone this is the only place it
+            is. It used to be a chip in the nav row, which on a 375px screen
+            was the fourth of four and pushed the sections off the edge - and
+            "My details" is where a person looks for it anyway. The desktop
+            sidebar keeps its own. */}
+        <div className="rounded-2xl border border-line/70 p-4 sm:hidden">
+          <p className="text-[12.5px] font-semibold">Signing out</p>
+          <p className="mb-3 mt-1 text-[12px] leading-relaxed text-muted">
+            You can come back any time with the link your agent sent you.
+          </p>
+          <LandlordSignOut />
         </div>
 
         <div className="rounded-2xl border border-line/70 bg-box p-4">

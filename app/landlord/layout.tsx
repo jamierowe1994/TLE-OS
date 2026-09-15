@@ -5,7 +5,7 @@ import LandlordSignOut from "@/components/LandlordSignOut";
 import DoodleIcon from "@/components/DoodleIcon";
 import FileSearch from "@/components/landlord/FileSearch";
 import SideNav from "@/components/landlord/SideNav";
-import { currentLandlord } from "@/lib/landlord-account";
+import { currentLandlord, landlordProperties } from "@/lib/landlord-account";
 
 /**
  * The landlord portal's shell (James's mock, 11 Sep 2026): light, airy and
@@ -33,6 +33,17 @@ function Logo({ className = "" }: { className?: string }) {
 export default async function LandlordLayout({ children }: { children: React.ReactNode }) {
   const me = await currentLandlord();
   const initial = (me?.name ?? "").trim()[0]?.toUpperCase() ?? "";
+  /**
+   * Whether they have a property let, so the phone's nav can offer Maintenance
+   * instead of Journey (SideNav).
+   *
+   * Read HERE rather than handed down by each page: a page that forgets to
+   * pass it gets the wrong nav and nothing says so. It is one read of the
+   * managed book, which is cached with its own freshness window and is the
+   * same call the portal's own pages make - so on any page that needs the book
+   * anyway this costs nothing, and on the others it is a cache hit.
+   */
+  const letHere = me ? await landlordProperties(me).then((p) => p.length > 0).catch(() => false) : false;
   return (
     <div data-surface="landlord" id="top" className="min-h-screen bg-white text-ink lg:flex">
       {/* ── the sidebar, from lg up ── */}
@@ -42,7 +53,7 @@ export default async function LandlordLayout({ children }: { children: React.Rea
         </Link>
         {/* Suspense: the nav reads the address to light the page it is on. */}
         <Suspense fallback={<div className="mt-10" />}>
-          <SideNav variant="side" />
+          <SideNav variant="side" letHere={letHere} />
         </Suspense>
         <div className="mt-auto border-t border-line/50 pt-4">
           {me ? (
@@ -84,10 +95,13 @@ export default async function LandlordLayout({ children }: { children: React.Rea
         {/* ── the sections as pills, on a phone or tablet ── */}
         <nav className="flex gap-2 overflow-x-auto px-5 pt-4 sm:px-10 lg:hidden">
           <Suspense fallback={null}>
-            <SideNav variant="pills" />
+            <SideNav variant="pills" letHere={letHere} />
           </Suspense>
+          {/* Not on a phone: three sections have to fit on one screen, and a
+              fourth chip put them over the edge. Signing out is on My details,
+              which the avatar in the header opens. */}
           {me && (
-            <span className="shrink-0">
+            <span className="hidden shrink-0 sm:inline">
               <LandlordSignOut />
             </span>
           )}
