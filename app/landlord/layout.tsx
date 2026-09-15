@@ -5,6 +5,7 @@ import LandlordSignOut from "@/components/LandlordSignOut";
 import DoodleIcon from "@/components/DoodleIcon";
 import FileSearch from "@/components/landlord/FileSearch";
 import SideNav from "@/components/landlord/SideNav";
+import PhoneShell, { PhoneNavButton } from "@/components/landlord/PhoneShell";
 import { currentLandlord, landlordProperties } from "@/lib/landlord-account";
 
 /**
@@ -45,6 +46,7 @@ export default async function LandlordLayout({ children }: { children: React.Rea
    */
   const letHere = me ? await landlordProperties(me).then((p) => p.length > 0).catch(() => false) : false;
   return (
+    <PhoneShell signedIn={Boolean(me)} letHere={letHere} signOut={<LandlordSignOut variant="drawer" />}>
     <div data-surface="landlord" id="top" className="min-h-screen bg-white text-ink lg:flex">
       {/* ── the sidebar, from lg up ── */}
       <aside className="sticky top-0 hidden h-screen w-[212px] shrink-0 flex-col border-r border-line/50 px-4 py-7 lg:flex">
@@ -69,14 +71,22 @@ export default async function LandlordLayout({ children }: { children: React.Rea
 
       <div className="min-w-0 flex-1">
         {/* ── the top bar ── */}
+        {/* On a phone: the logo and the three lines, and that is the whole bar.
+            James, 15 Sep 2026 - "the Letting Experts in the top left and a
+            navigation button in the top right ... allowing us to bring
+            everything up a little bit further." Search and the avatar are on
+            from sm up; My details is reachable from the drawer. */}
         <header className="flex items-center gap-4 px-5 pt-5 sm:px-10">
           <Link href="/landlord" className="shrink-0 lg:hidden" aria-label="The Letting Experts, home" data-tle-logo>
             <Logo className="h-9" />
           </Link>
-          <div className="min-w-0 max-w-xl flex-1">
+          <div className="ml-auto sm:hidden">
+            <PhoneNavButton />
+          </div>
+          <div className="hidden min-w-0 max-w-xl flex-1 sm:block">
             <FileSearch />
           </div>
-          <div className="ml-auto flex shrink-0 items-center gap-3">
+          <div className="ml-auto hidden shrink-0 items-center gap-3 sm:flex">
             {me ? (
               <Link href="/landlord/profile" className="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-3 transition-colors hover:bg-accent-soft/50" title="My details">
                 <span className="flex h-10 w-10 items-center justify-center rounded-full bg-accent-soft text-[15px] font-semibold text-accent-dark">
@@ -93,7 +103,8 @@ export default async function LandlordLayout({ children }: { children: React.Rea
         </header>
 
         {/* ── the sections as pills, on a phone or tablet ── */}
-        <nav className="flex gap-2 overflow-x-auto px-5 pt-4 sm:px-10 lg:hidden">
+        {/* The pills are a tablet thing now - a phone has the drawer. */}
+        <nav className="hidden gap-2 overflow-x-auto px-5 pt-4 sm:flex sm:px-10 lg:hidden">
           <Suspense fallback={null}>
             <SideNav variant="pills" letHere={letHere} />
           </Suspense>
@@ -129,5 +140,6 @@ export default async function LandlordLayout({ children }: { children: React.Rea
       {/* Only ever renders with ?from=admin — a real customer never sees it. */}
       <PreviewReturnBar />
     </div>
+    </PhoneShell>
   );
 }

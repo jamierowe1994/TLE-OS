@@ -8,7 +8,7 @@ import DoodleIcon from "@/components/DoodleIcon";
  * Clears the landlord cookie and lands on the sign-in page. "nav" is the
  * "Log out" row at the foot of the portal's sidebar (11 Sep 2026).
  */
-export default function LandlordSignOut({ variant = "pill" }: { variant?: "pill" | "nav" }) {
+export default function LandlordSignOut({ variant = "pill" }: { variant?: "pill" | "nav" | "drawer" }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const out = async () => {
@@ -17,6 +17,20 @@ export default function LandlordSignOut({ variant = "pill" }: { variant?: "pill"
     router.push("/landlord/sign-in");
     router.refresh();
   };
+  /* The phone drawer: the same size and weight as the links above it, so the
+     way out reads as part of the list rather than a control bolted under it. */
+  if (variant === "drawer") {
+    return (
+      <button
+        type="button"
+        disabled={busy}
+        onClick={out}
+        className="block w-full py-2.5 text-right text-[24px] font-bold leading-tight text-muted disabled:opacity-50"
+      >
+        {busy ? "Signing out…" : "Sign out"}
+      </button>
+    );
+  }
   if (variant === "nav") {
     return (
       <button
