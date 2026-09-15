@@ -27,7 +27,7 @@ export default async function PresentPage({
   searchParams,
 }: {
   params: Promise<{ token: string }>;
-  searchParams: Promise<{ kind?: string; style?: string }>;
+  searchParams: Promise<{ kind?: string; style?: string; at?: string; embed?: string }>;
 }) {
   const { token } = await params;
 
@@ -42,7 +42,7 @@ export default async function PresentPage({
      when reviewing the comparables and market slides — the pre-appraisal deck
      deliberately carries neither. */
   if (token === "sample") {
-    const { kind, style } = await searchParams;
+    const { kind, style, at, embed } = await searchParams;
     /* A BARE /present/sample IS THE FULL DECK. It used to be the pre-appraisal
        one, which is five slides on purpose, and that is how a link to "the
        presentation" went out to people who then saw a fifth of it and had no
@@ -56,6 +56,12 @@ export default async function PresentPage({
        agent sent, with no controls on it. */
     const chosen = asStyle(style);
     const deck = { ...SAMPLE_DECK, kind: asked, style: chosen };
+    /* ?embed=1&at=N - for the before-and-after harness at /present/compare,
+       which loads two whole decks in two frames and steps both by reloading
+       them on a slide. SAMPLE ONLY: a real landlord's deck must not be
+       frameable, and must not be deep-linkable past its own first screen. */
+    const frame = embed === "1";
+    const startAt = Number.parseInt(at ?? "", 10);
     /* The three decks with what each one actually renders. Counted by running
        the same filter the viewer runs, not by counting the slide list: the
        filter drops a slide whose data is missing, and a picker that promised
@@ -67,8 +73,14 @@ export default async function PresentPage({
     }));
     return (
       <>
-        <PresentDeck token="sample" deck={deck} slides={slidesFor(deck)} />
-        <StylePicker kind={asked} style={chosen} kinds={kinds} />
+        <PresentDeck
+          token="sample"
+          deck={deck}
+          slides={slidesFor(deck)}
+          framed={frame}
+          startAt={Number.isFinite(startAt) ? startAt : undefined}
+        />
+        {!frame && <StylePicker kind={asked} style={chosen} kinds={kinds} />}
       </>
     );
   }

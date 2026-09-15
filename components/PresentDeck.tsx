@@ -2096,6 +2096,8 @@ export default function PresentDeck({
   deck,
   slides,
   embedded = false,
+  framed = false,
+  startAt,
 }: {
   token: string;
   deck: Deck;
@@ -2103,6 +2105,26 @@ export default function PresentDeck({
   /** Inside the builder's preview box (11 Sep 2026): fills its parent
    *  rather than the viewport, and never counts itself as an open. */
   embedded?: boolean;
+  /**
+   * In an IFRAME - the before-and-after harness.
+   *
+   * Not `embedded`: that one shrinks the deck to its parent, which is right
+   * inside the builder's preview box and wrong in a frame, where the frame IS
+   * the viewport and 100dvh is exactly the height wanted. What it shares with
+   * embedded is the other two things: no entrance to press through, and the
+   * view is not a landlord opening their deck, so it is not counted as one.
+   */
+  framed?: boolean;
+  /**
+   * Open ON a slide rather than at the start.
+   *
+   * For the sample only, and for one reason: the before-and-after harness
+   * shows two whole decks in two frames and has no way to talk to either of
+   * them across origins, so each frame is simply loaded at the slide being
+   * compared. Jumps without animation - a harness that slid twenty-six slides
+   * past you on every step would be unusable.
+   */
+  startAt?: number;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const [at, setAt] = useState(0);
@@ -2129,7 +2151,7 @@ export default function PresentDeck({
    * `entered` is the gate: the chrome and the first slide's rise both wait
    * on it. `landed` is the deck's own half of the fly-in - see the scroller.
    */
-  const gated = !embedded && deckKind(deck) !== "pre-appraisal";
+  const gated = !embedded && !framed && deckKind(deck) !== "pre-appraisal";
   const [entered, setEntered] = useState(!gated);
   const [landed, setLanded] = useState(!gated);
   const still = useRef(false);
@@ -2149,7 +2171,7 @@ export default function PresentDeck({
   /* Count the open, once. See app/api/present/opened for why it isn't done
      in the page render. */
   useEffect(() => {
-    if (embedded) return;
+    if (embedded || framed) return;
     const t = setTimeout(() => {
       fetch("/api/present/opened", {
         method: "POST",
@@ -2159,7 +2181,7 @@ export default function PresentDeck({
       }).catch(() => {});
     }, 1500);
     return () => clearTimeout(t);
-  }, [token, embedded]);
+  }, [token, embedded, framed]);
 
   /**
    * Two observers, because two different questions are being asked and one
@@ -2260,6 +2282,15 @@ export default function PresentDeck({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [at, go, slides.length]);
+
+  /* Land on `startAt` before the first paint the user sees. `at` follows from
+     the scroll observer as usual, so nothing else has to know this happened. */
+  useEffect(() => {
+    if (startAt == null || startAt <= 0) return;
+    const root = scroller.current;
+    const el = root?.querySelector<HTMLElement>(`[data-index="${Math.min(startAt, slides.length - 1)}"]`);
+    if (el) el.scrollIntoView({ behavior: "auto", block: "nearest", inline: "start" });
+  }, [startAt, slides.length]);
 
   const body = (id: SlideId, i: number) => <SlideBody id={id} deck={deck} show={show(i)} />;
 
