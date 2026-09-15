@@ -362,6 +362,24 @@ export default function PageHeader({
    */
   const gap = SCALES.map((sc) => (seated ? Math.round(legs * sc) + 14 : 20));
 
+  /*
+   * ── A short window gets a shorter masthead ─────────────────────────────
+   *
+   * On a small laptop (1366 by 768, which leaves about 650px inside the
+   * browser) this masthead spent 350 to 420px on the page's name and its
+   * drawing, and the work started two-thirds of the way down every core
+   * screen (15 Sep 2026, the same finding as Kirstie's board the day before).
+   * Under 820px of height, from laptop width up, the title steps down, the
+   * gaps tighten and the drawing is scaled so what stands above the rule fits
+   * in 180px. Nothing is removed and nothing moves. The rules are in
+   * globals.css (the short masthead rules); the numbers they need are worked out here
+   * because they depend on the artwork.
+   */
+  const aboveRule = Math.max(1, illustrationHeight * cross);
+  const shortScale = Math.min(0.7, 180 / aboveRule);
+  const shortReserve = hasArt ? Math.round(illustrationHeight * (illustrationAspect ?? 0.7) * shortScale) + inset[3] + 14 : 0;
+  const shortGap = seated ? Math.round(legs * shortScale) + 14 : 20;
+
   /* The strip is scaled to the element's width, so each frame ends up exactly
      illustrationHeight tall and the run is that times the frame count. Stepping
      to the full run rather than one frame short is deliberate: steps() never
@@ -428,6 +446,7 @@ export default function PageHeader({
           @media (min-width: 640px) { .${seatClass} { margin-bottom: ${gap[1]}px } }
           @media (min-width: 1024px) { .${seatClass} { margin-bottom: ${gap[2]}px } }
           @media (min-width: 1280px) { .${seatClass} { margin-bottom: ${gap[3]}px } }
+          @media (min-width: 1024px) and (max-height: 820px) { .${seatClass} { margin-bottom: ${shortGap}px } }
         `}</style>
       )}
       {/* ── The top bar ──────────────────────────────────────────────────
@@ -504,6 +523,8 @@ export default function PageHeader({
           {
             ...(mastClass ? null : { minHeight }),
             "--mast-drop": hasArt ? `${Math.ceil(illustrationHeight * cross) + 56}px` : undefined,
+            "--mast-short-scale": shortScale,
+            "--mast-short-reserve": `${shortReserve}px`,
           } as React.CSSProperties
         }
       >
@@ -547,7 +568,7 @@ export default function PageHeader({
              scroller on both pages was this column. It is the only in-flow
              child of the masthead row - the artwork is absolute - so nothing
              else was ever going to be blamed. */
-          className={`flex min-w-0 flex-col self-stretch pb-4 pl-2 pt-[26px] ${
+          className={`os-mast-text flex min-w-0 flex-col self-stretch pb-4 pl-2 pt-[26px] ${
             !hasArt
               ? ""
               : wideArt
@@ -582,12 +603,12 @@ export default function PageHeader({
              lets the number fall away only on the screens that cannot hold it.
              The pages still all match each other, which is what the one number
              was for. */}
-          <h1 className="text-balance leading-tight" style={{ fontSize: `min(${titleSize}px, 8.5vw)` }}>{title}</h1>
+          <h1 className="os-mast-title text-balance leading-tight" style={{ fontSize: `min(${titleSize}px, 8.5vw)` }}>{title}</h1>
           <p className="mt-2.5 max-w-md text-[13px] text-muted">{blurb}</p>
           {/* The page's own controls, in the gap between the blurb and the
               rule - pushed down to sit just above the line rather than
               floating in the middle of it. Same place on every screen. */}
-          {actions && <div className="mt-auto flex flex-wrap items-center gap-2.5 pt-6">{actions}</div>}
+          {actions && <div className="os-mast-actions mt-auto flex flex-wrap items-center gap-2.5 pt-6">{actions}</div>}
         </div>
 
         {/* The figure, hard right, standing on the rule.
@@ -604,7 +625,7 @@ export default function PageHeader({
             drawn for a figure that is no longer that size. */}
         {hasArt && (
           <div
-            className={`pointer-events-none absolute bottom-0 origin-bottom-right scale-[0.5] sm:scale-[0.68] lg:scale-[0.88] xl:scale-100 ${
+            className={`os-mast-art pointer-events-none absolute bottom-0 origin-bottom-right scale-[0.5] sm:scale-[0.68] lg:scale-[0.88] xl:scale-100 ${
               hideArtOnPhone ? "hidden sm:block " : ""
             }${
               flushRight

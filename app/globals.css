@@ -328,6 +328,26 @@ body {
 .page-leaving .page-flow > *:not(.os-mast-frame),
 .page-leaving > *:not(.os-mast-frame) { animation: body-fall 0.3s cubic-bezier(0.6, 0, 0.95, 0.35) both; }
 
+/* The short masthead (15 Sep 2026). A small laptop leaves
+   about 650px inside the browser, and the full masthead spent up to 420 of it
+   before the work began. From laptop width up and under 820px tall: a smaller
+   title, tighter gaps, and the drawing scaled by PageHeader's own numbers so it
+   still stands on the rule. !important because the full sizes are inline
+   styles and breakpoint utilities, and this has to win over both only here. */
+@media (min-width: 1024px) and (max-height: 820px) {
+  .os-mast-frame,
+  .os-mast { min-height: 196px !important; }
+  .os-mast { padding-top: 0.75rem !important; }
+  .os-mast-text {
+    padding-top: 8px !important;
+    padding-bottom: 0.75rem !important;
+    padding-right: var(--mast-short-reserve, 0px) !important;
+  }
+  .os-mast-title { font-size: min(32px, 8.5vw) !important; }
+  .os-mast-actions { padding-top: 0.875rem !important; }
+  .os-mast-art { scale: var(--mast-short-scale, 0.7) !important; }
+}
+
 /* A tile that is still waiting on its figures is not drawn at all - not faded,
    not skeletal. It rises when it has something to say. */
 .reveal-held { opacity: 0; }

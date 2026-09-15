@@ -58,7 +58,14 @@ export default function Segmented<T extends string>({
          at 440 inside a 350 parent. min-w-0 is what lets the cap apply, and
          the labels truncate below rather than overflow.
          Nothing changes at any width where the words already fit. */
-      className={`relative flex min-w-0 max-w-full items-center rounded-full border border-line/60 bg-white p-1 ${className}`}
+      /* A grid of equal columns, not a row of flex-1 buttons (15 Sep 2026).
+         basis-0 made every option half of the track, and the track was only
+         as wide as the words added up - so the longer word, set bold when
+         chosen, never had its half and read "Gr..." on Leads and "Ti..." on
+         Listings and Market Appraisals at every width. Equal fr columns in a
+         shrink-wrapped grid are each as wide as the WIDEST option, which is
+         the same equal widths the sliding marker needs, with nothing cut. */
+      className={`relative grid min-w-0 max-w-full auto-cols-fr grid-flow-col items-center rounded-full border border-line/60 bg-white p-1 ${className}`}
       role="tablist"
     >
       {/* The marker. inset-1 matches the track's padding, so it sits inside
@@ -79,7 +86,7 @@ export default function Segmented<T extends string>({
           aria-selected={o.id === value}
           title={o.title}
           onClick={() => onChange(o.id)}
-          className={`relative z-[1] flex min-w-0 flex-1 basis-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full ${
+          className={`relative z-[1] flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full ${
             n >= 4 ? "px-2.5" : "px-4"
           } py-1.5 text-[12.5px] transition-colors duration-200 ${
             o.id === value ? "font-semibold text-page" : "text-muted hover:text-ink"
