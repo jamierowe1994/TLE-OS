@@ -2,13 +2,14 @@ import Spine from "@/components/landlord/Spine";
 import type { TenantHome } from "@/lib/tenant-home-view";
 import LockedView from "@/components/tenant/LockedView";
 import { locksFor } from "@/lib/tenant-journey";
+import ReportRepair from "@/components/tenant/ReportRepair";
 
 /** Maintenance: one section of the tenant portal, drawn from the home view. Shared with the sample. */
 
 const card = "rounded-[22px] border border-line/60 bg-white";
 const eyebrow = "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted";
 
-export default function MaintenanceView({ v, base = "/tenant" }: { v: TenantHome; base?: string }) {
+export default function MaintenanceView({ v, base = "/tenant", sample = false }: { v: TenantHome; base?: string; sample?: boolean }) {
   const locked = locksFor(v.stage).maintenance;
   if (locked) return <LockedView title="Maintenance" opens={locked} what="A boiler, a leak, a lock: report it here and we take care of it. There is nothing to report until you have the keys." base={base} />;
   return (
@@ -20,19 +21,22 @@ export default function MaintenanceView({ v, base = "/tenant" }: { v: TenantHome
         <h2 className="text-[22px] font-bold leading-tight">Need something fixed?</h2>
         <p className="mt-2 max-w-xl text-[14px] leading-relaxed text-muted">
           {v.deal
-            ? "Tell us what is wrong and we will take care of it. For now, message your agent and it is logged the same day; reporting from this page comes with your move-in."
+            ? "Tell us what is wrong and we will take care of it. It reaches your agent straight away and you can see where it has got to below."
             : "Once you have moved in, report anything here - a boiler, a leak, a lock - and we will take care of it. Until then there is nothing to report."}
         </p>
+        {/* The form only once there is a tenancy to report against. Without a
+            deal the route has no property to raise the job on and would refuse
+            it, so the page does not offer it. */}
+        {v.deal && <ReportRepair agentPhone={v.agent?.phone ?? null} agentName={v.agent?.name ?? null} sample={sample} />}
         {v.agent?.email && (
           <a href={`mailto:${v.agent.email}?subject=Maintenance`} className="mt-5 inline-flex items-center gap-2 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-white">
             Message {v.agent.name.split(/\s+/)[0]}
           </a>
         )}
       </div>
-      <div className={`${card} p-6`} data-search>
-        <h2 className="text-[19px] font-bold">Your requests</h2>
-        <p className="mt-2 text-[13.5px] text-muted">None yet.</p>
-      </div>
+      {/* "Your requests - None yet." was a hardcoded empty state that could
+          never fill in. What they have reported is live, inside the card
+          above, beside the thing that reports it. */}
     </div>
   );
 }

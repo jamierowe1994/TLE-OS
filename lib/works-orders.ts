@@ -413,7 +413,7 @@ export async function getOrder(id: string): Promise<{ order: WorksOrder; events:
   return { order: toOrder(r), events };
 }
 
-export async function listOrders(filter: { kind?: Kind | null; open?: boolean; propertyId?: string | null; limit?: number; rehearsal?: boolean } = {}): Promise<WorksOrder[]> {
+export async function listOrders(filter: { kind?: Kind | null; open?: boolean; propertyId?: string | null; tenantEmail?: string | null; limit?: number; rehearsal?: boolean } = {}): Promise<WorksOrder[]> {
   if (!hasDb()) return [];
   /* A rehearsal is never on the real list, and a real job is never on the
      rehearsal's. Asked for explicitly, never inferred. */
@@ -422,6 +422,11 @@ export async function listOrders(filter: { kind?: Kind | null; open?: boolean; p
   if (filter.kind) { vals.push(filter.kind); where.push(`kind = $${vals.length}`); }
   if (filter.open) where.push(`status IN ('reported', 'approval', 'approved', 'scheduled')`);
   if (filter.propertyId) { vals.push(filter.propertyId); where.push(`property_id = $${vals.length}`); }
+  /* The tenant's own jobs, for their portal. Matched on the address they were
+     raised against rather than an id, because a tenant's record carries the
+     address and not a REX property id - and compared lowercased, because the
+     same mailbox arrives capitalised differently depending on who typed it. */
+  if (filter.tenantEmail) { vals.push(filter.tenantEmail.toLowerCase()); where.push(`LOWER(tenant_email) = $${vals.length}`); }
   vals.push(filter.limit ?? 300);
   const rows = await q<Row>(
     `SELECT ${COLS} FROM os_works_orders ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
