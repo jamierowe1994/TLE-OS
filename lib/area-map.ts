@@ -48,6 +48,12 @@ export interface AreaDef {
   apis: string[];
   /** The dashboard is where a hidden area sends people, so it cannot hide. */
   canHide: boolean;
+  /**
+   * Set on a single BUTTON with its own switch, inside an area (15 Sep 2026).
+   * It can never be further on than the area it sits in: Listings on look
+   * only means nobody pushes to the portals, whatever this one says.
+   */
+  parent?: string;
 }
 
 export const AREA_DEFS: AreaDef[] = [
@@ -59,6 +65,13 @@ export const AREA_DEFS: AreaDef[] = [
     canHide: true,
   },
   { id: "listings", label: "Listings", phase: 1, pages: ["/listings"], apis: ["/api/listings"], canHide: true },
+  /* James, 15 Sep 2026: going live on Rightmove, OnTheMarket and Zoopla is
+     the one button in Listings that reaches the public, so it gets its own
+     switch - off, look, testers, everyone - separate from the screen. */
+  {
+    id: "listing-publish", label: "Push to the portals", phase: 1, parent: "listings",
+    pages: [], apis: ["/api/listings/publish"], canHide: true,
+  },
   { id: "viewings", label: "Viewings", phase: 1, pages: ["/viewings"], apis: ["/api/viewings", "/api/appointments"], canHide: true },
   {
     id: "applications", label: "Applications", phase: 1, pages: ["/applications", "/plc"],
@@ -98,12 +111,27 @@ export function areaForPage(pathname: string): AreaDef | null {
   return AREA_DEFS.find((a) => a.pages.some((p) => owns(pathname, p))) ?? null;
 }
 
-/** The area a WRITE to this API belongs to, or null when it is not gated. */
+/**
+ * The area a WRITE to this API belongs to, or null when it is not gated.
+ *
+ * The longest match wins, so /api/listings/publish answers to its own switch
+ * and not to Listings, which owns everything under /api/listings.
+ */
 export function areaForWrite(pathname: string, method: string): AreaDef | null {
   const m = method.toUpperCase();
   if (m === "GET" || m === "HEAD" || m === "OPTIONS") return null;
   if (READ_ONLY_POSTS.some((p) => owns(pathname, p))) return null;
-  return AREA_DEFS.find((a) => a.apis.some((p) => owns(pathname, p))) ?? null;
+  let best: AreaDef | null = null;
+  let bestLen = -1;
+  for (const a of AREA_DEFS) {
+    for (const p of a.apis) {
+      if (owns(pathname, p) && p.length > bestLen) {
+        best = a;
+        bestLen = p.length;
+      }
+    }
+  }
+  return best;
 }
 
 /** What a person's access looks like, as the server works it out. */
@@ -114,8 +142,17 @@ export interface AreaAccess {
   levels: Record<string, AreaLevel>;
 }
 
-export const levelOf = (access: AreaAccess | null, areaId: string): AreaLevel =>
-  !access || !access.gated ? "everyone" : access.levels[areaId] ?? "everyone";
+const RANK: Record<AreaLevel, number> = { hidden: 0, look: 1, testers: 2, everyone: 3 };
+
+/** A button inside an area is never further on than the area itself. */
+export function levelOf(access: AreaAccess | null, areaId: string): AreaLevel {
+  if (!access || !access.gated) return "everyone";
+  const own = access.levels[areaId] ?? "everyone";
+  const parentId = AREA_DEFS.find((a) => a.id === areaId)?.parent;
+  if (!parentId) return own;
+  const parent = levelOf(access, parentId);
+  return RANK[parent] < RANK[own] ? parent : own;
+}
 
 /** Can this person see the screen at all? */
 export function canSee(access: AreaAccess | null, area: AreaDef): boolean {
@@ -132,6 +169,11 @@ export function canAct(access: AreaAccess | null, area: AreaDef): boolean {
 
 /** Said on the screen and in a refused write, the same words in both places. */
 export function lockedSentence(area: AreaDef, level: AreaLevel): string {
+  if (area.parent) {
+    return level === "testers"
+      ? `${area.label} is with the testers for now - do it in REX until it is switched on for you.`
+      : `${area.label} is not switched on for you yet - do it in REX for now.`;
+  }
   return level === "hidden"
     ? `${area.label} is not switched on for you yet.`
     : `${area.label} is look only for now: you can open everything, and nothing you do here saves yet. It is switched on as testing finishes.`;

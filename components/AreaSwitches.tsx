@@ -17,10 +17,19 @@ type Area = {
   label: string;
   phase: 1 | 2;
   canHide: boolean;
+  parent: string | null;
   level: AreaLevel;
   changedBy: string | null;
   changedAt: string | null;
 };
+/* What each position means for a single button rather than a whole screen. */
+const BUTTON_SAYS: Record<AreaLevel, string> = {
+  hidden: "The button is not there for agents.",
+  look: "Agents see the button, and it will not press.",
+  testers: "Testers can press it. Every other agent sees it and cannot.",
+  everyone: "Live for every agent.",
+};
+
 type Tester = { email: string; addedBy: string; addedAt: string };
 
 export default function AreaSwitches() {
@@ -76,18 +85,23 @@ export default function AreaSwitches() {
 
       <ul className="mt-3 space-y-2">
         {areas.map((a) => (
-          <li key={a.id} className="rounded-[18px] border border-line/50 bg-white p-3.5">
+          <li key={a.id} className={`rounded-[18px] border border-line/50 bg-white p-3.5 ${a.parent ? "ml-6 border-dashed" : ""}`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
                 <span className="text-[13.5px]">{a.label}</span>
                 <span className="ml-2 text-[10.5px] uppercase tracking-wider text-muted">
-                  {a.phase === 1 ? "Core" : "Secondary"}
+                  {a.parent ? `Button in ${areas.find((x) => x.id === a.parent)?.label ?? a.parent}` : a.phase === 1 ? "Core" : "Secondary"}
                 </span>
                 <p className="mt-0.5 text-[11px] text-muted">
                   {a.changedAt
                     ? `${AREA_LEVELS.find((l) => l.id === a.level)?.label} since ${new Date(a.changedAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}, by ${a.changedBy || "somebody"}`
                     : "Never set, so on for everyone"}
                 </p>
+                {a.parent && (
+                  <p className="mt-0.5 text-[11px] text-muted">
+                    {BUTTON_SAYS[a.level]} Never further on than {areas.find((x) => x.id === a.parent)?.label ?? "its screen"}.
+                  </p>
+                )}
               </div>
               {/* A segmented control rather than a dropdown: the position is the
                   one thing worth reading at a glance down the list. */}
@@ -101,7 +115,7 @@ export default function AreaSwitches() {
                       type="button"
                       role="radio"
                       aria-checked={on}
-                      title={l.id === "hidden" && !a.canHide ? "The dashboard is where everybody lands, so it cannot be hidden." : l.says}
+                      title={l.id === "hidden" && !a.canHide ? "The dashboard is where everybody lands, so it cannot be hidden." : a.parent ? BUTTON_SAYS[l.id] : l.says}
                       disabled={disabled}
                       onClick={() => !on && call("PATCH", { area: a.id, level: l.id }, a.id)}
                       className={`border-l border-line/80 px-3 py-1.5 text-[11.5px] first:border-l-0 disabled:opacity-35 ${

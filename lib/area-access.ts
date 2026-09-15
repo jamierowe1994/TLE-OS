@@ -21,6 +21,8 @@ export interface AreaRow {
   label: string;
   phase: 1 | 2;
   canHide: boolean;
+  /** The area a single button sits in, when this row is a button. */
+  parent: string | null;
   level: AreaLevel;
   changedBy: string | null;
   changedAt: string | null;
@@ -42,6 +44,7 @@ export async function areaRows(): Promise<AreaRow[]> {
       label: a.label,
       phase: a.phase,
       canHide: a.canHide,
+      parent: a.parent ?? null,
       /* A stored "hidden" on an area that cannot hide reads as look only. */
       level: level === "hidden" && !a.canHide ? "look" : level,
       changedBy: s?.changed_by ?? null,

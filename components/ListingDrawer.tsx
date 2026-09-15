@@ -28,6 +28,7 @@ import { useDiary } from "@/lib/diary-store";
 import { setOpenListing } from "@/lib/open-record";
 import type { TenancyLink } from "@/lib/tenancy-link";
 import { saveLabel, useCaseState } from "@/lib/case-state";
+import { AREA_DEFS, canAct, levelOf, lockedSentence, type AreaAccess } from "@/lib/area-map";
 import { useListingTerms } from "@/lib/use-listing-terms";
 
 /**
@@ -233,11 +234,92 @@ export default function ListingDrawer({
   /* The push to the portals, as a moment: null when not running, then the
      portal it is on (0..2), then 3 for the tick and the confetti. */
   const [pushing, setPushing] = useState<number | null>(null);
+  /* The real push (15 Sep 2026). The ceremony walks the portals while REX
+     answers, and holds on the last one until it has: the tick and the
+     confetti only ever follow a publish REX has confirmed. */
+  const [pushOk, setPushOk] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
   useEffect(() => {
-    if (pushing == null || pushing < 0 || pushing >= 3) return;
+    if (pushing == null || pushing < 0 || pushing >= 3 || pushError) return;
+    if (pushing === 2 && !pushOk) return;
     const t = setTimeout(() => setPushing((p) => (p == null ? null : p + 1)), 1250);
     return () => clearTimeout(t);
-  }, [pushing]);
+  }, [pushing, pushOk, pushError]);
+
+  /* Where it really is, live from REX. The book is cached for minutes, and
+     straight after a push it would still say draft. */
+  const [pub, setPub] = useState<{ status: string | null; onPortals: boolean; blockers: string[] } | null>(null);
+  useEffect(() => {
+    setPub(null);
+    if (!listing?.id) return;
+    let live = true;
+    fetch(`/api/listings/publish?id=${encodeURIComponent(String(listing.id))}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; status?: string | null; onPortals?: boolean; blockers?: string[] }) => {
+        if (live && j.ok) setPub({ status: j.status ?? null, onPortals: Boolean(j.onPortals), blockers: j.blockers ?? [] });
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [listing?.id]);
+
+  /* Its own switch on Admin, Switches: hidden, look only, testers, everyone. */
+  const [areaAccess, setAreaAccess] = useState<AreaAccess | null>(null);
+  useEffect(() => {
+    fetch("/api/area-access", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: AreaAccess | null) => j && typeof j.gated === "boolean" && setAreaAccess(j))
+      .catch(() => {});
+  }, []);
+  const publishArea = AREA_DEFS.find((a) => a.id === "listing-publish")!;
+  const publishLevel = levelOf(areaAccess, publishArea.id);
+  const publishHidden = Boolean(areaAccess?.gated) && publishLevel === "hidden";
+  const publishCanPress = canAct(areaAccess, publishArea);
+  const [portalBusy, setPortalBusy] = useState(false);
+  const [portalConfirm, setPortalConfirm] = useState(false);
+  const [portalNote, setPortalNote] = useState<string | null>(null);
+
+  async function portalCall(action: "publish" | "off" | "on"): Promise<{ ok: boolean; error?: string }> {
+    if (!listing) return { ok: false, error: "No listing open." };
+    try {
+      const r = await fetch("/api/listings/publish", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: listing.id, action }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; status?: string | null; onPortals?: boolean };
+      if (!j.ok) return { ok: false, error: j.error ?? "REX did not take it." };
+      setPub((cur) => ({ status: j.status ?? null, onPortals: Boolean(j.onPortals), blockers: cur?.blockers ?? [] }));
+      return { ok: true };
+    } catch {
+      return { ok: false, error: "The connection dropped. Check REX before trying again." };
+    }
+  }
+
+  async function startPush() {
+    setPushOk(false);
+    setPushError(null);
+    setPushing(0);
+    const res = await portalCall("publish");
+    if (res.ok) setPushOk(true);
+    else setPushError(res.error ?? "REX did not take it.");
+  }
+
+  async function flipPortals(action: "off" | "on") {
+    setPortalBusy(true);
+    setPortalNote(null);
+    const res = await portalCall(action);
+    setPortalBusy(false);
+    setPortalConfirm(false);
+    setPortalNote(
+      res.ok
+        ? action === "off"
+          ? "Taken off. It leaves Rightmove, OnTheMarket and Zoopla within about 10 minutes."
+          : "Back on. It shows on Rightmove, OnTheMarket and Zoopla within about 10 minutes."
+        : res.error ?? "REX did not take it."
+    );
+  }
   /* The certificates on the property, for the legal minimum before the
      listing can go to the portals: EPC, gas safety and EICR. */
   const [certs, setCerts] = useState<Record<string, string> | null>(null);
@@ -604,12 +686,15 @@ export default function ListingDrawer({
   const requirements: { id: string; label: string; done: boolean; fix: () => void }[] = [
     { id: "photos", label: "Photographs on", done: photos.length > 0, fix: () => setDrop("photos") },
     { id: "description", label: "Description written", done: Boolean(shownBody), fix: () => setTab("marketing") },
-    { id: "epc", label: "EPC filed", done: certOk("epc"), fix: () => setDrop("epc") },
+    /* Or on the listing itself, which is where REX keeps an EPC entered with
+       the advert and what its own pre-publish check reads (15 Sep 2026: 4
+       Williams Court had rating C on the listing and no compliance entry). */
+    { id: "epc", label: "EPC filed", done: certOk("epc") || Boolean(listing.epcExpiry && listing.epcExpiry >= new Date().toISOString().slice(0, 10)), fix: () => setDrop("epc") },
     { id: "gas", label: "Gas safety on file", done: certOk("gas_safety"), fix: () => setTab("compliance") },
     { id: "eicr", label: "Electrical certificate (EICR) on file", done: certOk("eicr"), fix: () => setTab("compliance") },
   ];
-  const readyToGoLive = certs != null && requirements.every((r) => r.done);
-  const isLive = listing.publicationStatus === "published";
+  const readyToGoLive = certs != null && requirements.every((r) => r.done) && !(pub?.blockers.length);
+  const isLive = pub ? pub.status === "published" : listing.publicationStatus === "published";
 
   /* The upcoming viewings, for an access request to hang off. */
   const upcomingOptions = (viewings?.upcoming ?? [])
@@ -942,6 +1027,34 @@ export default function ListingDrawer({
                       Live since {new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                     </span>
                   )}
+                  {/* On and off the portals, once it is published. Its own
+                      switch decides who may press it (lib/area-map). */}
+                  {isLive && pub && !publishHidden && (
+                    portalConfirm ? (
+                      <span className="inline-flex flex-wrap items-center gap-1.5 rounded-full border border-line/60 bg-white py-1 pl-3 pr-1 text-[11px]">
+                        {pub.onPortals ? "Take it off Rightmove, OnTheMarket and Zoopla?" : "Put it back on Rightmove, OnTheMarket and Zoopla?"}
+                        <button type="button" disabled={portalBusy} onClick={() => setPortalConfirm(false)} className="rounded-full px-2 py-0.5 text-muted hover:text-ink disabled:opacity-50">
+                          Not yet
+                        </button>
+                        <button
+                          type="button"
+                          disabled={portalBusy}
+                          onClick={() => void flipPortals(pub.onPortals ? "off" : "on")}
+                          className="rounded-full bg-[var(--brown)] px-2.5 py-0.5 font-semibold text-white disabled:opacity-60"
+                        >
+                          {portalBusy ? "Telling REX…" : pub.onPortals ? "Yes, take it off" : "Yes, put it back"}
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => (publishCanPress ? setPortalConfirm(true) : setPortalNote(lockedSentence(publishArea, publishLevel)))}
+                        className="press-ring rounded-full border border-line/60 bg-white px-2.5 py-1 text-[11px] font-semibold transition-colors hover:border-ink/40"
+                      >
+                        {pub.onPortals ? "Take off the portals" : "Put back on the portals"}
+                      </button>
+                    )
+                  )}
                   {/* The portals this property is actually feeding, from REX. */}
                   {portalsLoading && portals.length === 0 ? (
                     <span className="rounded-full border border-line/60 bg-white px-2.5 py-1 text-[11px] text-muted">Checking the portals…</span>
@@ -960,6 +1073,7 @@ export default function ListingDrawer({
                     ))
                   )}
                 </div>
+                {portalNote && <p className="mt-2 text-[11.5px] leading-snug text-muted">{portalNote}</p>}
 
                 {/* ── THE TWO-MONTH DRAFT CAP, on the record itself ──────
                     Filing a draft away is a decision about THIS property, so
@@ -1189,15 +1303,24 @@ export default function ListingDrawer({
                 {here.id === "live" ? (
                   isLive ? (
                     <p className="text-[12px] leading-relaxed" style={{ color: SAGE_INK }}>
-                      On the portals{listing.publishedAt ? ` since ${new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}.
+                      {pub && !pub.onPortals
+                        ? "Published, and off the portals for now."
+                        : `On the portals${listing.publishedAt ? ` since ${new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}.`}
                     </p>
+                  ) : publishHidden ? (
+                    <p className="text-[11.5px] leading-snug text-muted">Push it live from REX for now.</p>
                   ) : (
                     <>
                       {/* Full colour, never greyed. Hover it and it says what
                           is still missing (James, 11 Sep). */}
                       <span className="group relative">
                         <PressButton
-                          onClick={() => readyToGoLive && setPushing(-1)}
+                          onClick={() => {
+                            if (!readyToGoLive) return;
+                            if (!publishCanPress) return setPortalNote(lockedSentence(publishArea, publishLevel));
+                            setPushError(null);
+                            setPushing(-1);
+                          }}
                           className={`press-ring flex items-center gap-2 rounded-full bg-[var(--brown)] px-5 py-2.5 text-[12.5px] font-semibold text-white ${readyToGoLive ? "" : "cursor-not-allowed"}`}
                         >
                           <DoodleIcon name="megaphone" size={14} />
@@ -1211,15 +1334,18 @@ export default function ListingDrawer({
                             Can&apos;t push it live until{" "}
                             {(() => {
                               const words: Record<string, string> = { photos: "the photographs are on", description: "the description is written", epc: "the EPC is filed", gas: "the gas safety is on file", eicr: "the EICR is on file" };
-                              const m = requirements.filter((r) => !r.done).map((r) => words[r.id] ?? r.label);
+                              const m = [...requirements.filter((r) => !r.done).map((r) => words[r.id] ?? r.label), ...(pub?.blockers ?? []).map((b) => `REX's "${b}" is sorted`)];
                               return m.length > 1 ? `${m.slice(0, -1).join(", ")} and ${m[m.length - 1]}` : m[0] ?? "the certificates are read";
                             })()}.
                             <span aria-hidden className="absolute left-5 top-full h-0 w-0 border-x-[6px] border-t-[6px] border-x-transparent border-t-ink" />
                           </span>
                         )}
                       </span>
-                      {readyToGoLive && (
-                        <span className="text-[11px] leading-snug text-muted">Moves the record on. The push into REX waits on the REX write allowlist.</span>
+                      {readyToGoLive && publishCanPress && (
+                        <span className="text-[11px] leading-snug text-muted">Goes to Rightmove, OnTheMarket and Zoopla through REX.</span>
+                      )}
+                      {!publishCanPress && portalNote && (
+                        <span className="text-[11px] leading-snug text-muted">{portalNote}</span>
                       )}
                     </>
                   )
@@ -2151,8 +2277,12 @@ export default function ListingDrawer({
         <PushCeremony
           at={pushing}
           address={listing.name}
-          onStart={() => setPushing(0)}
-          onCancel={() => setPushing(null)}
+          error={pushError}
+          onStart={() => void startPush()}
+          onCancel={() => {
+            setPushing(null);
+            setPushError(null);
+          }}
           onDone={() => {
             setPushing(null);
             advance();
@@ -2220,26 +2350,27 @@ const PORTALS = ["Rightmove", "OnTheMarket", "Zoopla"];
  * Sep 2026), so it gets a moment: each portal in turn, then a big sage
  * tick, "Your property listing is now live", and confetti.
  *
- * Honest about what it is: the record in the OS moves to On market. The
- * push into REX itself waits on the REX write allowlist, and the line at
- * the foot says so until it is wired.
+ * Real since 15 Sep 2026: "Yes, push it live" publishes in REX, the portal
+ * steps run while it answers, and the last one holds until REX has said
+ * yes. If REX says no, the card says why instead of celebrating.
  */
-function PushCeremony({ at, address, onStart, onCancel, onDone }: { at: number; address: string; onStart: () => void; onCancel: () => void; onDone: () => void }) {
+function PushCeremony({ at, address, error, onStart, onCancel, onDone }: { at: number; address: string; error: string | null; onStart: () => void; onCancel: () => void; onDone: () => void }) {
   const [shown, setShown] = useState(false);
   useEffect(() => {
     const t = requestAnimationFrame(() => setShown(true));
     return () => cancelAnimationFrame(t);
   }, []);
   const asking = at < 0;
-  const done = at >= 3;
+  const failed = !asking && Boolean(error);
+  const done = at >= 3 && !failed;
   /* Escape leaves the question or the finished card; never mid-push, where
      half the portals would have been told and the screen would say nothing. */
   useEffect(() => {
-    if (!asking && !done) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") (asking ? onCancel : onDone)(); };
+    if (!asking && !done && !failed) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") (asking || failed ? onCancel : onDone)(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [asking, done, onCancel, onDone]);
+  }, [asking, done, failed, onCancel, onDone]);
   /* The confetti, made once: sixty pieces in the palette's colours, each
      with its own start, delay, drift and spin. */
   const [pieces] = useState(() =>
@@ -2263,11 +2394,11 @@ function PushCeremony({ at, address, onStart, onCancel, onDone }: { at: number; 
         @keyframes tle-pop { 0% { transform: scale(0.4); opacity: 0 } 60% { transform: scale(1.12); opacity: 1 } 100% { transform: scale(1) } }
         @keyframes tle-draw { to { stroke-dashoffset: 0 } }
       `}</style>
-      {asking || done ? (
+      {asking || done || failed ? (
         <button
           type="button"
           aria-label="Close"
-          onClick={asking ? onCancel : onDone}
+          onClick={asking || failed ? onCancel : onDone}
           className={`absolute inset-0 cursor-default bg-ink/50 transition-opacity duration-500 ${shown ? "opacity-100" : "opacity-0"}`}
         />
       ) : (
@@ -2327,6 +2458,22 @@ function PushCeremony({ at, address, onStart, onCancel, onDone }: { at: number; 
               </PressButton>
             </div>
           </>
+        ) : failed ? (
+          <>
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
+              <DoodleIcon name="megaphone" size={24} />
+            </span>
+            <h2 className="hand mt-4 text-[23px] leading-tight">It hasn&apos;t gone live</h2>
+            <p className="mt-2 text-[13.5px] leading-relaxed text-muted">{error}</p>
+            <p className="mt-2 text-[12px] leading-relaxed text-muted">Nothing was posted. {address} is still a draft.</p>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="mt-7 rounded-full border border-line/80 px-6 py-2.5 text-[13px] font-medium transition-colors hover:border-ink/40"
+            >
+              Close
+            </button>
+          </>
         ) : !done ? (
           <>
             <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-accent-dark">Going live</p>
@@ -2372,7 +2519,7 @@ function PushCeremony({ at, address, onStart, onCancel, onDone }: { at: number; 
               Brilliant
             </button>
             <p className="mt-5 text-[10.5px] leading-relaxed text-muted">
-              The record has moved to On market. The push into REX itself waits on the REX write allowlist.
+              Changed your mind? Take it off the portals from the top of this listing.
             </p>
           </>
         )}
