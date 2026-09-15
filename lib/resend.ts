@@ -32,8 +32,8 @@
 import { SANDBOX_EMAIL_DOMAIN } from "@/lib/sandbox";
 import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
-import { assertInternalRecipient } from "@/lib/email-policy";
-import { switchOn } from "@/lib/switches";
+import { assertInternalRecipient, isInternalAddress } from "@/lib/email-policy";
+import { sendingLocked, switchOn } from "@/lib/switches";
 import { noteFailure } from "@/lib/auto-bugs";
 
 const API = "https://api.resend.com/emails";
@@ -140,7 +140,14 @@ export async function sendEmail(msg: {
      sender and the variable so that when it is off, "switched off" is the
      sentence that comes back rather than a note about configuration. See the
      customer_email switch for why staff mail is not behind it. */
-  if (audience === "customer" && !(await switchOn("customer_email"))) {
+  /* One exception (15 Sep 2026): a customer email addressed to one of OUR
+     OWN people goes regardless. That is what Admin → Testing's Create a test
+     does - the tester is the landlord or tenant - and the pilot runs with
+     customer email off, so without this every test email would be refused.
+     It cannot reach a customer: the address is ours. SENDING_LOCKED still
+     stops it, because that brake means nothing leaves. */
+  const toStaff = isInternalAddress(msg.to) && !sendingLocked();
+  if (audience === "customer" && !toStaff && !(await switchOn("customer_email"))) {
     throw new ResendBlocked(
       "Email to landlords and tenants is switched off on Admin → Switches. Turn it on there to send this."
     );

@@ -65,6 +65,21 @@ export const JOURNEYS: Journey[] = [
     blurb: "A lead becomes a booked appraisal, a deck, a visit, a video, a signed set of terms and a landlord who can sign in.",
     steps: [
       {
+        id: "add-by-hand",
+        title: "Add a tenant and a landlord by hand",
+        what: "New lead takes a name, an email and a mobile, shows anybody we already hold who looks the same, and the person appears once on the board and opens.",
+        how: [
+          "Open Leads and press New lead. Type a tenant with a made-up name and your own email.",
+          "Before saving, the match list beside the form should show any close match with its percentage.",
+          "Save. The tenant appears once under New today, and opens when pressed.",
+          "Do the same for a landlord on the Landlord side.",
+        ],
+        where: "/leads?new=1",
+        state: "built",
+        since: "2026-09-15",
+        notes: ["A lead added by hand tries to reach REX as whoever saved it. With Create contacts in REX off it waits under Not backed up yet, which is the right answer during the pilot."],
+      },
+      {
         id: "spine",
         title: "Work a landlord lead along the spine",
         what: "Every call, text, visit and email is logged in five seconds, the rail ticks itself from the log, and a lead that goes quiet is parked on the Nurture branch rather than forgotten.",
@@ -319,6 +334,23 @@ export const JOURNEYS: Journey[] = [
     title: "The tenant journey",
     blurb: "A viewing becomes an application, an accepted offer, a deal in Propoly, a checked pack, a signed agreement and a move-in.",
     steps: [
+      {
+        id: "enquiry",
+        title: "Work a tenant enquiry to a booked viewing",
+        what: "A tenant enquiry is logged, contacted and booked onto a viewing from the lead, and the tenant is invited to their passport from there.",
+        how: [
+          "Press Create a tenant enquiry, then Open the lead. The tenant is you, under a test name.",
+          "Log first contact: Call, Spoke. The rail ticks Contacted.",
+          "Book a viewing from the lead: pick a property and a slot.",
+          "Press Invite to the passport. The Viewing Booked email should land in your inbox with the viewing in it.",
+          "Reply to that email: it should go to the agent (you), not to a no-reply address.",
+        ],
+        where: "/leads?side=tenant",
+        state: "built",
+        since: "2026-09-15",
+        switchKey: "customer_email",
+        notes: ["The viewing is not written to REX's diary yet - that waits on the diary method being allowed."],
+      },
       {
         id: "application",
         title: "Application in from REX, with its spine",
@@ -953,3 +985,188 @@ export const LIGHT_WORDS: Record<Light, string> = {
   red: "Can't do this yet",
   grey: "Not built yet",
 };
+
+/* ── The list, by area, with a test to create ─────────────────────────────
+ *
+ * Howard, 15 Sep 2026: he works in checklists. The journeys above stay the
+ * source of what each step is; this says where each one sits on the plain
+ * list (the same areas as the area switches, plus the two portals), who is
+ * on the other end of it, and which Create a test button starts it.
+ *
+ * A step not placed here falls into Later, so a new step can never quietly
+ * disappear from the list - it turns up at the bottom, asking to be placed.
+ */
+
+export type TestWho = "agent" | "landlord" | "tenant" | "compliance" | "office";
+
+export const WHO_WORDS: Record<TestWho, string> = {
+  agent: "Agent",
+  landlord: "Landlord",
+  tenant: "Tenant",
+  compliance: "Pre-tenancy",
+  office: "Office",
+};
+
+export type KitId = "tenant-enquiry" | "landlord-lead" | "booked-appraisal" | "tenant-passport" | "plc-pack";
+
+export interface KitDef {
+  id: KitId;
+  /** The button. */
+  label: string;
+  /** What pressing it makes, in a sentence, said before it is pressed. */
+  makes: string;
+  /** Whether it sends the tester an email the moment it is made. */
+  emails: boolean;
+}
+
+export const KITS: Record<KitId, KitDef> = {
+  "tenant-enquiry": {
+    id: "tenant-enquiry",
+    label: "Create a tenant enquiry",
+    makes: "A tenant lead with your email on it, kept out of REX. Every email the flow sends comes to you.",
+    emails: false,
+  },
+  "landlord-lead": {
+    id: "landlord-lead",
+    label: "Create a landlord lead",
+    makes: "A landlord lead at 14 Test Street with your email on it, kept out of REX.",
+    emails: false,
+  },
+  "booked-appraisal": {
+    id: "booked-appraisal",
+    label: "Create a booked appraisal",
+    makes: "A landlord lead with your email, an appraisal booked three days from now at 11am, the booking confirmation sent to you, and a way into the landlord portal as that landlord.",
+    emails: true,
+  },
+  "tenant-passport": {
+    id: "tenant-passport",
+    label: "Create a tenant passport",
+    makes: "A tenant lead with your email, a fresh passport, and the Viewing Booked invite sent to you with the link in it.",
+    emails: true,
+  },
+  "plc-pack": {
+    id: "plc-pack",
+    label: "Create a PLC pack",
+    makes: "An empty pre-let compliance pack for a test application, moving in three weeks from now, ready for you to attach documents to.",
+    emails: false,
+  },
+};
+
+export type TestAreaId =
+  | "getting-in"
+  | "dashboard"
+  | "leads"
+  | "appraisals"
+  | "listings"
+  | "viewings"
+  | "applications"
+  | "pre-tenancy"
+  | "landlord-portal"
+  | "tenant-portal"
+  | "later";
+
+export const TEST_AREAS: { id: TestAreaId; label: string; core: boolean }[] = [
+  { id: "getting-in", label: "Getting In", core: true },
+  { id: "dashboard", label: "Dashboard", core: true },
+  { id: "leads", label: "Leads", core: true },
+  { id: "appraisals", label: "Market Appraisals", core: true },
+  { id: "listings", label: "Listings", core: true },
+  { id: "viewings", label: "Viewings", core: true },
+  { id: "applications", label: "Applications and the PLC", core: true },
+  { id: "pre-tenancy", label: "Pre-tenancy Board", core: true },
+  { id: "landlord-portal", label: "Landlord Portal", core: true },
+  { id: "tenant-portal", label: "Tenant Portal", core: true },
+  { id: "later", label: "After Launch", core: false },
+];
+
+export interface StepPlace {
+  area: TestAreaId;
+  who: TestWho[];
+  kit?: KitId;
+}
+
+const PLACES: Record<string, StepPlace> = {
+  "agent/invite": { area: "getting-in", who: ["office", "agent"] },
+  "agent/join": { area: "getting-in", who: ["agent"] },
+  "agent/setup": { area: "getting-in", who: ["agent"] },
+  "agent/rex": { area: "getting-in", who: ["agent"] },
+  "agent/mailbox": { area: "getting-in", who: ["agent"] },
+  "agent/scope": { area: "getting-in", who: ["agent"] },
+  "agent/feedback": { area: "getting-in", who: ["agent"] },
+
+  "landlord/kirstie-dashboard": { area: "dashboard", who: ["compliance"] },
+  "landlord/knowledge": { area: "dashboard", who: ["office", "agent"] },
+  "landlord/bell": { area: "dashboard", who: ["agent"] },
+
+  "landlord/add-by-hand": { area: "leads", who: ["agent"] },
+  "tenant/enquiry": { area: "leads", who: ["agent", "tenant"], kit: "tenant-enquiry" },
+  "landlord/spine": { area: "leads", who: ["agent"], kit: "landlord-lead" },
+  "landlord/nurture-campaign": { area: "leads", who: ["agent", "office"], kit: "landlord-lead" },
+
+  "landlord/book": { area: "appraisals", who: ["agent", "landlord"], kit: "landlord-lead" },
+  "landlord/pre-deck": { area: "appraisals", who: ["agent", "landlord"], kit: "booked-appraisal" },
+  "landlord/video": { area: "appraisals", who: ["agent"], kit: "booked-appraisal" },
+  "landlord/present": { area: "appraisals", who: ["agent", "landlord"], kit: "booked-appraisal" },
+  "landlord/terms": { area: "appraisals", who: ["agent", "landlord"], kit: "booked-appraisal" },
+  "landlord/stage-moves": { area: "appraisals", who: ["agent"], kit: "booked-appraisal" },
+
+  "listing/capture": { area: "listings", who: ["agent"] },
+  "listing/adverts": { area: "listings", who: ["agent"] },
+  "listing/golive": { area: "listings", who: ["agent"] },
+  "listing/certs": { area: "listings", who: ["agent"] },
+
+  "tenant/passport": { area: "viewings", who: ["agent", "tenant"], kit: "tenant-enquiry" },
+
+  "tenant/application": { area: "applications", who: ["agent"] },
+  "tenant/comments": { area: "applications", who: ["agent"] },
+  "tenant/handover": { area: "applications", who: ["agent", "landlord", "tenant"] },
+  "tenant/referencing": { area: "applications", who: ["agent"] },
+  "tenant/plc-agent": { area: "applications", who: ["agent"], kit: "plc-pack" },
+  "tenant/flatfair": { area: "applications", who: ["agent"] },
+  "tenant/flatfair-api": { area: "applications", who: ["agent"] },
+  "plc-agent/opens": { area: "applications", who: ["agent"] },
+  "plc-agent/start": { area: "applications", who: ["agent"], kit: "plc-pack" },
+  "plc-agent/checks": { area: "applications", who: ["agent"], kit: "plc-pack" },
+  "plc-agent/submit": { area: "applications", who: ["agent", "compliance"], kit: "plc-pack" },
+  "plc-agent/back": { area: "applications", who: ["compliance", "agent"], kit: "plc-pack" },
+  "plc-agent/approved": { area: "applications", who: ["compliance", "agent"], kit: "plc-pack" },
+  "compliance/shadow": { area: "applications", who: ["office"] },
+
+  "compliance/queue": { area: "pre-tenancy", who: ["compliance"], kit: "plc-pack" },
+  "compliance/push": { area: "pre-tenancy", who: ["compliance"] },
+  "compliance/rex-write": { area: "pre-tenancy", who: ["compliance"] },
+  "compliance/watcher": { area: "pre-tenancy", who: ["compliance"] },
+  "compliance/feed": { area: "pre-tenancy", who: ["compliance", "agent"] },
+  "compliance/feed-app": { area: "pre-tenancy", who: ["compliance"] },
+  "compliance/agent-emails": { area: "pre-tenancy", who: ["agent"] },
+  "compliance/stages": { area: "pre-tenancy", who: ["compliance"] },
+  "compliance/signoff": { area: "pre-tenancy", who: ["compliance"] },
+  "compliance/digest": { area: "pre-tenancy", who: ["compliance", "office"] },
+  "compliance/webhooks": { area: "pre-tenancy", who: ["compliance"] },
+  "compliance/flatfair-hook": { area: "pre-tenancy", who: ["compliance"] },
+  "tenant/agreement": { area: "pre-tenancy", who: ["compliance", "tenant", "landlord"] },
+  "tenant/rent": { area: "pre-tenancy", who: ["compliance"] },
+  "tenant/moveday": { area: "pre-tenancy", who: ["compliance"] },
+
+  "landlord/landlord-signin": { area: "landlord-portal", who: ["landlord"], kit: "booked-appraisal" },
+  "landlord-portal/link": { area: "landlord-portal", who: ["landlord"], kit: "booked-appraisal" },
+  "landlord-portal/home": { area: "landlord-portal", who: ["landlord"], kit: "booked-appraisal" },
+  "landlord-portal/pages": { area: "landlord-portal", who: ["landlord"], kit: "booked-appraisal" },
+  "landlord-portal/journey": { area: "landlord-portal", who: ["landlord"], kit: "booked-appraisal" },
+  "landlord-portal/marketing": { area: "landlord-portal", who: ["office"] },
+  "landlord/landlord-certs": { area: "landlord-portal", who: ["landlord"] },
+  "landlord/landlord-offers": { area: "landlord-portal", who: ["landlord"] },
+  "landlord/landlord-upkeep": { area: "landlord-portal", who: ["landlord"] },
+  "compliance/portals-progress": { area: "landlord-portal", who: ["landlord", "tenant"] },
+
+  "tenant-portal/passport": { area: "tenant-portal", who: ["tenant"], kit: "tenant-passport" },
+  "tenant-portal/account": { area: "tenant-portal", who: ["tenant"], kit: "tenant-passport" },
+  "tenant-portal/area": { area: "tenant-portal", who: ["tenant"] },
+  "tenant-portal/repair": { area: "tenant-portal", who: ["tenant"] },
+  "tenant-portal/documents": { area: "tenant-portal", who: ["tenant"] },
+  "tenant/tenant-portal": { area: "tenant-portal", who: ["tenant"] },
+};
+
+export function placeOf(journeyId: string, stepId: string): StepPlace {
+  return PLACES[`${journeyId}/${stepId}`] ?? { area: "later", who: [] };
+}

@@ -2599,6 +2599,29 @@ CREATE TABLE IF NOT EXISTS os_test_marks (
   note     TEXT NOT NULL DEFAULT '',
   PRIMARY KEY (journey, step)
 );
+
+-- Create a test (15 Sep 2026, Howard). A tester presses one button and gets a
+-- marked record to work from - a tenant enquiry, a booked appraisal, a PLC
+-- pack - with THEIR OWN email as the customer's, so every email the flow sends
+-- lands in their inbox and a real customer is never touched. One row per
+-- press: what was made (refs, to clear it again) and where to start (links).
+-- See lib/test-kits.ts.
+CREATE TABLE IF NOT EXISTS os_test_kits (
+  id          TEXT PRIMARY KEY,
+  kit         TEXT NOT NULL,
+  created_by  TEXT NOT NULL,
+  by_name     TEXT NOT NULL DEFAULT '',
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  refs        JSONB NOT NULL DEFAULT '{}'::jsonb,
+  links       JSONB NOT NULL DEFAULT '[]'::jsonb,
+  said        TEXT NOT NULL DEFAULT '',
+  cleared_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS os_test_kits_by ON os_test_kits (created_by, created_at DESC);
+
+-- A contact made by Create a test. Never pushed to REX, never on the list of
+-- people waiting to be pushed, and cleared with the rest of the test.
+ALTER TABLE os_contacts ADD COLUMN IF NOT EXISTS is_test BOOLEAN NOT NULL DEFAULT false;
 CREATE INDEX IF NOT EXISTS os_deal_events_deal ON os_deal_events (deal_id, at DESC);
 CREATE INDEX IF NOT EXISTS os_deal_events_agent ON os_deal_events (agent_email, at DESC);
 `;

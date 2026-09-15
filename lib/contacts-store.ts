@@ -49,6 +49,8 @@ export interface OsContact {
   rexDetail: string;
   rexAt: string | null;
   rexBy: string;
+  /** Made by Admin → Testing's Create a test. Never goes to REX. */
+  isTest: boolean;
 }
 
 export interface NewContact {
@@ -84,7 +86,7 @@ type Row = {
   email: string; mobile: string; address: string; postcode: string; source: string;
   enquiry: string; notes: string; created_by: string; created_at: string;
   rex_id: string | null; rex_state: string; rex_detail: string;
-  rex_at: string | null; rex_by: string;
+  rex_at: string | null; rex_by: string; is_test: boolean | null;
 };
 
 function toContact(r: Row): OsContact {
@@ -110,30 +112,31 @@ function toContact(r: Row): OsContact {
     rexDetail: r.rex_detail,
     rexAt: r.rex_at,
     rexBy: r.rex_by,
+    isTest: r.is_test === true,
   };
 }
 
 const COLUMNS = `id, kind, name, name_first, name_last, email, mobile, address, postcode,
   source, enquiry, notes, created_by, created_at::text AS created_at,
-  rex_id, rex_state, rex_detail, rex_at::text AS rex_at, rex_by`;
+  rex_id, rex_state, rex_detail, rex_at::text AS rex_at, rex_by, is_test`;
 
 /** Write the record. Throws if there is no database — a Save that cannot save
  *  must say so rather than return a cheerful object nobody stored. */
-export async function saveContact(c: NewContact, createdBy: string): Promise<OsContact> {
+export async function saveContact(c: NewContact, createdBy: string, opts: { isTest?: boolean } = {}): Promise<OsContact> {
   if (!hasDb()) throw new Error("No database is connected, so this cannot be saved.");
   const { first, last } = splitName(c.name);
   const id = randomUUID();
   const rows = await q<Row>(
     `INSERT INTO os_contacts
        (id, kind, name, name_first, name_last, email, mobile, address, postcode,
-        source, enquiry, notes, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        source, enquiry, notes, created_by, is_test)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
      RETURNING ${COLUMNS}`,
     [
       id, c.kind, c.name.trim(), first, last,
       (c.email ?? "").trim(), (c.mobile ?? "").trim(), (c.address ?? "").trim(),
       (c.postcode ?? "").trim(), (c.source ?? "").trim(), (c.enquiry ?? "").trim(),
-      (c.notes ?? "").trim(), createdBy,
+      (c.notes ?? "").trim(), createdBy, opts.isTest === true,
     ]
   );
   return toContact(rows[0]);
@@ -220,11 +223,14 @@ export async function getContact(id: string): Promise<OsContact | null> {
 export async function listContacts(opts?: { state?: RexState; limit?: number }): Promise<OsContact[]> {
   if (!hasDb()) return [];
   const limit = Math.min(Math.max(opts?.limit ?? 100, 1), 500);
+  /* Test contacts never reach REX, so they are never on the list of people
+     waiting to - a Push to REX button beside one would be a way to put a
+     tester's own address into the live system. */
   const rows = opts?.state
     ? await q<Row>(
-        `SELECT ${COLUMNS} FROM os_contacts WHERE rex_state = $1 ORDER BY created_at DESC LIMIT $2`,
+        `SELECT ${COLUMNS} FROM os_contacts WHERE rex_state = $1 AND NOT is_test ORDER BY created_at DESC LIMIT $2`,
         [opts.state, limit]
       )
-    : await q<Row>(`SELECT ${COLUMNS} FROM os_contacts ORDER BY created_at DESC LIMIT $1`, [limit]);
+    : await q<Row>(`SELECT ${COLUMNS} FROM os_contacts WHERE NOT is_test ORDER BY created_at DESC LIMIT $1`, [limit]);
   return rows.map(toContact);
 }

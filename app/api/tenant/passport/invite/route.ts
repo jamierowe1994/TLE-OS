@@ -7,6 +7,7 @@ import { householdIncome } from "@/lib/passport-shape";
 import { renderTleEmail } from "@/lib/email/tle-emails";
 import { sendEmail } from "@/lib/resend";
 import { switchOn } from "@/lib/switches";
+import { isInternalAddress } from "@/lib/email-policy";
 
 /**
  * POST /api/tenant/passport/invite
@@ -97,7 +98,9 @@ export async function POST(req: NextRequest) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return NextResponse.json({ ok: false, error: "The viewing has no usable email for the tenant." }, { status: 400 });
   }
-  if (!(await switchOn("customer_email"))) {
+  /* Our own address is a test (Admin → Testing): lib/resend lets it through
+     the customer switch, so this early answer must not refuse it first. */
+  if (!isInternalAddress(email) && !(await switchOn("customer_email"))) {
     return NextResponse.json(
       { ok: false, error: "Email to customers is off. Admin, Switches, then try again." },
       { status: 409 }

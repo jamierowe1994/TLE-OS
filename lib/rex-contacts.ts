@@ -136,6 +136,10 @@ export async function pushContactToRex(
   contact: OsContact,
   userId: string | null
 ): Promise<PushOutcome> {
+  /* Made by Create a test, with a tester's own address on it. Never REX. */
+  if (contact.isTest) {
+    return { ok: false, reason: "write_locked", detail: "This is a test contact from Admin → Testing, so it stays in the OS and never goes to REX." };
+  }
   const blocked = await pushBlockedBecause();
   if (blocked) return { ok: false, ...blocked };
 
