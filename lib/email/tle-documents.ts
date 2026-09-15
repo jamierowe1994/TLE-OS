@@ -918,3 +918,53 @@ export const INSPECTION_LANDLORD_REPORT = {
   ],
   branding: { showSignoff: false },
 } as const;
+
+/**
+ * Landlord: the presentation and the contract, in one email (Susan, 14 Sep 2026).
+ *
+ * Sent from Prepare and send once the agent has read the deck through, checked
+ * the figures and signed their half. It used to be DocuSeal's own invite - their
+ * name, their layout, and only the contract - with the presentation going
+ * separately through REX. Susan asked for one send, so this is it: the deck to
+ * read, and their property file to sign in, from the agent, on our sender.
+ *
+ * The contract is signed IN their file, never from a link to DocuSeal: the file
+ * shows the deck first and then the signature, which is the order James wants
+ * (read what you are agreeing to, then agree to it).
+ */
+export const LANDLORD_CONTRACT_PACK = {
+  subject: "Your presentation and your contract for {{address}}",
+  preheader: "Everything from your appraisal in one place, ready when you are.",
+  mode: "blocks",
+  blocks: [
+    H("lcp1", "Thank you for having us round"),
+    T(
+      "lcp2",
+      "Hi {{firstName}},<br><br>Thank you for showing {{agentName}} round <strong>{{address}}</strong>. As promised, here is everything from the visit in one place."
+    ),
+    SP("lcp3", 8),
+    H2("lcp4", "Your presentation"),
+    T(
+      "lcp5",
+      "Our figure of <strong>{{rent}} a month</strong>, the homes nearby we based it on, and how we would let and look after yours on <strong>{{serviceLevel}}</strong>."
+    ),
+    BTN("lcp6", "View your presentation", "{{deckLink}}"),
+    SP("lcp7", 8),
+    DIV("lcp8"),
+    H2("lcp9", "Your contract"),
+    T(
+      "lcp10",
+      "Your terms of business are filled in with the figures we talked through, and {{agentName}} has already signed their half. When you have read the presentation and you are happy, sign yours from your property file. It takes about two minutes."
+    ),
+    BTN("lcp11", "Open your property file", "{{link}}"),
+    T(
+      "lcp12",
+      "That button signs you straight in. It works once and lasts 24 hours; after that, ask for a fresh link from the sign-in page and it brings you back to the same place."
+    ),
+    SP("lcp13", 8),
+    T("lcp14", "Any questions at all, just reply to this email and it comes straight to {{agentName}}."),
+    T("lcp15", "The Letting Experts"),
+    FOOT("lcp16", "You're getting this because you had a market appraisal with The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;

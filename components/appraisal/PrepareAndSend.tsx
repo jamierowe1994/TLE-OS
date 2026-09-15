@@ -102,7 +102,12 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
 
   const agent = parties?.find((p) => p.role === "agent") ?? null;
   const landlord = parties?.find((p) => p.role === "landlord") ?? null;
-  const signed = Boolean(agent?.completedAt);
+  /* A signature older than the figures is a signature on different figures
+     (Susan, 14 Sep 2026: the fees must be right before it reaches the
+     landlord). Recording a new rent or fee after signing puts step 3 back, and
+     drawing it up again makes a fresh contract that carries them. */
+  const staleSignature = Boolean(agent?.completedAt && ma.valuedAt && agent.completedAt < ma.valuedAt);
+  const signed = Boolean(agent?.completedAt) && !staleSignature;
   const gone = Boolean(landlord?.sentAt);
 
   /* Read means READ: the last spread has been reached, not the deck opened.
@@ -281,7 +286,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
                   disabled={busy === "sign"}
                   className="rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white disabled:opacity-60"
                 >
-                  {busy === "sign" ? "Drawing it up…" : agent ? "Open the contract" : "Draw up the contract"}
+                  {busy === "sign" ? "Drawing it up…" : staleSignature ? "Draw it up with the new figures" : agent ? "Open the contract" : "Draw up the contract"}
                 </button>
                 <p className="mt-2 text-[11.5px] leading-relaxed text-muted">
                   Your name, the date and your signature. The landlord cannot open theirs until this is done.
@@ -313,7 +318,7 @@ export default function PrepareAndSend({ ma, deck }: { ma: SendSubject; deck: Pr
                     {blocking ??
                       (sendUnlocked === false
                         ? "Sending is switched off on this environment, so the button is inert."
-                        : `This emails the contract to ${ma.landlordEmail ?? "them"} to sign.`)}
+                        : `One email from you to ${ma.landlordEmail ?? "them"}: the presentation, and a link into their file to sign.`)}
                   </p>
                 </>
               )}

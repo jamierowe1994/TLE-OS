@@ -69,6 +69,7 @@ import {
   INSPECTION_TENANT_BOOKED,
   INSPECTION_LANDLORD_REPORT,
   INVOICE_SENT,
+  LANDLORD_CONTRACT_PACK,
   SITE,
   type EmailDoc } from "@/lib/email/tle-documents";
 
@@ -572,6 +573,30 @@ export const TLE_EMAILS: CatalogEntry[] = [
       })),
   },
 
+  {
+    id: "landlord-contract-pack",
+    group: "Market appraisals",
+    name: "Your Presentation and Your Contract",
+    audience: "landlord",
+    trigger: "The agent presses Send on Prepare and send, after reading the deck, checking the figures and signing their half. Send a reminder on the file sends it again",
+    fires: "Wired 15 Sep 2026. components/appraisal/PrepareAndSend.tsx and TermsCard.tsx → POST /api/appraisals/[id]/terms → lib/contract-send.ts, on the public sender, reply-to the agent.",
+    to: "The landlord on the appraisal",
+    summary:
+      "Susan's one send (14 Sep): the post-appraisal presentation and the contract together, from the agent, instead of DocuSeal's own invite with the deck going separately. The deck opens without signing in; the contract is signed inside their property file, which the second button signs them straight into.",
+    doc: LANDLORD_CONTRACT_PACK,
+    render: (o) =>
+      blocksAs("landlord")(
+        withSample(o ?? LANDLORD_CONTRACT_PACK, {
+          firstName: "Helen",
+          address: "12 Chorlton Road, Manchester M15 4AZ",
+          rent: "£1,300",
+          serviceLevel: "Fully Managed",
+          agentName: "Rhiannon Dodge",
+          deckLink: `${SITE}/present/example`,
+          link: `${SITE}/landlord/enter?token=example`,
+        })
+      )(),
+  },
   {
     id: "terms-chase",
     group: "Terms of business",

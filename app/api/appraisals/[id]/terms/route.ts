@@ -2,14 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
 import { getAppraisal } from "@/lib/appraisal-store";
-import { docusealConfigured, docusealSendUnlocked, termsParties, emailTerms, DocusealBlocked } from "@/lib/docuseal";
+import { docusealConfigured, termsParties, DocusealBlocked } from "@/lib/docuseal";
+import { contractSendReady, contractSendRecord, sendContractPack, ContractSendRefused } from "@/lib/contract-send";
+import { ResendBlocked } from "@/lib/resend";
+import { publicOrigin } from "@/lib/origin";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
 
 /**
  * One appraisal's contract: where it has got to, and the way to chase it.
  *
  *   GET  → who has signed, who has been emailed, who has opened it
- *   POST → put the landlord's copy in their inbox, first time or again
+ *   POST → the one send: presentation and contract in one email from the
+ *          agent (lib/contract-send), first time or again
+ *
+ * Signatures and opens are DocuSeal's; WHEN it was emailed is ours now, since
+ * DocuSeal no longer sends it (15 Sep 2026).
  *
  * ── Why the state is read rather than stored ──────────────────────────────
  *
@@ -47,12 +54,15 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     return NextResponse.json({ ok: true, connected: false, sendUnlocked: false, parties: [] });
   }
   try {
-    const parties = await termsParties(id);
+    const [parties, sent] = await Promise.all([termsParties(id), contractSendRecord(id)]);
     return NextResponse.json({
       ok: true,
       connected: true,
-      sendUnlocked: docusealSendUnlocked(),
-      parties,
+      sendUnlocked: await contractSendReady(got.ma.landlordEmail),
+      /* The file reads "sent to them" off the landlord party, so our record is
+         laid over DocuSeal's, which no longer moves. */
+      parties: parties.map((p) => (p.role === "landlord" && sent ? { ...p, sentAt: sent.lastSentAt } : p)),
+      sent,
     });
   } catch (e) {
     const why = e instanceof DocusealBlocked ? e.message : "Couldn't read the contract just now.";
@@ -100,19 +110,30 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       );
     }
 
-    /* First time or fifth: the same call. What changes is what we tell them. */
-    const again = Boolean(landlord.sentAt);
-    await emailTerms(landlord);
+    /* The figures moved after the agent signed: the contract they signed says
+       something else. Sign again first, which draws up a fresh one. */
+    if (got.ma.valuedAt && agent.completedAt < got.ma.valuedAt) {
+      return NextResponse.json(
+        { ok: false, error: "The rent or the fees changed after you signed, so the contract no longer matches. Draw it up again and sign it, then send." },
+        { status: 409 }
+      );
+    }
+
+    /* First time or fifth: the same email, with a fresh way in. */
+    const { again, to } = await sendContractPack({ ma: got.ma, me: got.me, origin: publicOrigin(req) });
     return NextResponse.json({
       ok: true,
       again,
-      to: landlord.email,
+      to,
       message: again
-        ? `Reminder sent to ${landlord.email}.`
-        : `Sent to ${landlord.email}. They can sign it from their own file too.`,
+        ? `Reminder sent to ${to}, with a fresh link into their file.`
+        : `Sent to ${to}: the presentation and the contract, in one email from you.`,
     });
   } catch (e) {
-    const why = e instanceof DocusealBlocked ? e.message : "Couldn't send it just now.";
+    const why =
+      e instanceof DocusealBlocked || e instanceof ContractSendRefused || e instanceof ResendBlocked
+        ? e.message
+        : "Couldn't send it just now.";
     console.error("[appraisals/terms] send failed", why);
     return NextResponse.json({ ok: false, error: why }, { status: 502 });
   }
