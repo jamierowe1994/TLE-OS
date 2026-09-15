@@ -88,13 +88,20 @@ export default function PresentPages({
         {pages.map((id, i) => (
           <section
             key={`${id}-${i}`}
-            className="shrink-0 overflow-y-auto"
+            className="shrink-0 overflow-y-auto pb-5"
             style={{
               width: w || "100%",
-              /* Tall enough to read, short enough that the foot and the close
-                 button are never covered. A slide longer than this scrolls
-                 inside its own page rather than pushing the controls away. */
-              height: "min(74vh, 620px)",
+              /**
+               * ALL THE HEIGHT THERE IS, less the foot.
+               *
+               * It was min(74vh, 620px), which on an 812px phone left 41px of
+               * dead screen above the slide and 41px below it, and squeezed
+               * the slide into three quarters of a screen it could have had.
+               * dvh rather than vh so the browser's own chrome is counted -
+               * vh on iOS is the height WITHOUT the address bar, which is the
+               * one measurement that is never on screen.
+               */
+              height: "calc(100dvh - 140px)",
               scrollSnapAlign: "start",
               background: CREAM,
             }}

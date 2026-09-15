@@ -5,7 +5,7 @@ import SignSheet from "@/components/landlord/SignSheet";
 import { useSigning } from "@/lib/use-signing";
 import PresentBook, { PAGE_H, PAGE_W } from "@/components/PresentBook";
 import PresentPages from "@/components/PresentPages";
-import { DeckStyleCtx, themeVars, INK } from "@/components/present-kit";
+import { CREAM, DeckStyleCtx, themeVars, INK } from "@/components/present-kit";
 import { asStyle, slidesFor, type PresentDeck as Deck } from "@/lib/present";
 import { BookActionsCtx } from "@/components/PresentBookPages";
 
@@ -136,9 +136,19 @@ export default function PresentModal({
         style={{
           ...themeVars(asStyle(deck.style)),
           color: INK,
-          background: "rgba(28, 22, 20, 0.6)",
-          backdropFilter: "blur(10px)",
-          WebkitBackdropFilter: "blur(10px)",
+          /**
+           * A PHONE GETS THE PAPER, NOT A FRAME AROUND IT.
+           *
+           * The dim and the blur are what make a pop-out read as a pop-out on
+           * a desktop, where the booklet sits on a table with the portal
+           * visible around it. On a phone the slide fills the screen, so all
+           * the dark did was put a band of somebody else's page along the
+           * bottom, under the controls. James, 15 Sep 2026: the presentation
+           * "doesn't look great".
+           */
+          background: phone ? CREAM : "rgba(28, 22, 20, 0.6)",
+          backdropFilter: phone ? undefined : "blur(10px)",
+          WebkitBackdropFilter: phone ? undefined : "blur(10px)",
           animation: "present-dim 520ms ease-out both",
         }}
         data-present-style={asStyle(deck.style)}
@@ -228,7 +238,7 @@ export default function PresentModal({
                         disabled={!can}
                         onClick={() => api?.go(dir)}
                         className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border"
-                        style={{ opacity: can ? 1 : 0.3, background: "rgba(255,255,255,0.92)", borderColor: "rgba(0,0,0,0.14)", color: INK }}
+                        style={{ opacity: can ? 1 : 0.3, background: "#fff", borderColor: "rgba(0,0,0,0.12)", color: INK }}
                       >
                         <svg viewBox="0 0 24 24" aria-hidden className="h-[18px] w-[18px]" style={{ transform: dir < 0 ? "scaleX(-1)" : undefined }}>
                           <path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -239,7 +249,7 @@ export default function PresentModal({
                   return (
                     <>
                       {arrow("Back", -1)}
-                      <p className="flex-1 text-center text-[12.5px] text-white/70">
+                      <p className="flex-1 text-center text-[12.5px]" style={{ color: "rgba(59,59,60,0.55)" }}>
                         {page.at + 1} of {page.of}
                       </p>
                       {arrow("Next", 1)}

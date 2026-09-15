@@ -576,11 +576,9 @@ function DocsSummary({ v }: { v: LandlordView }) {
       {left > 0 && (
         <Link
           href={href}
-          className="shrink-0 rounded-full bg-accent-dark px-4 py-2.5 text-center text-[12.5px] font-semibold leading-tight text-white"
+          className="shrink-0 self-center rounded-full bg-accent-dark px-6 py-3 text-center text-[13px] font-semibold text-white"
         >
           Upload
-          <br />
-          the rest
         </Link>
       )}
     </div>
