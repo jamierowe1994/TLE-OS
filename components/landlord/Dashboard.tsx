@@ -2,7 +2,9 @@ import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import AgentCard from "@/components/landlord/AgentCard";
+import AgentTab from "@/components/landlord/AgentTab";
 import Spine from "@/components/landlord/Spine";
+import SpinePhone from "@/components/landlord/SpinePhone";
 import { HeroAction, pickHero, signSource } from "@/components/landlord/StepAction";
 import PresentTile from "@/components/landlord/PresentTile";
 import SignTile from "@/components/landlord/SignTile";
@@ -56,15 +58,24 @@ export default function LandlordDashboard({
 
   return (
     <div className="space-y-6">
-      {/* ── greeting and the agent ── */}
+      {/* ── greeting and the agent ──
+          ON A PHONE the greeting is the whole of it: no strapline and no agent
+          card, so their PROPERTY is the first thing on the screen. James, 15
+          Sep 2026: "the first thing that they should be able to see is their
+          property ... Hello first name, and then get rid of the subtext, and
+          then the agent details" - the agent moves to the tab down the side.
+          Everything from lg up is exactly as it was. */}
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_auto]">
         {/* Just "Hello, Raj" - the "Good afternoon" above it read oddly (James, 11 Sep). */}
-        <div className="pt-2">
-          <h1 className="text-[44px] leading-[1.05]">{v.greeting}</h1>
-          <p className="mt-3 max-w-xl text-[14.5px] text-muted">{v.intro}</p>
+        <div className="lg:pt-2">
+          <h1 className="text-[32px] leading-[1.05] sm:text-[44px]">{v.greeting}</h1>
+          <p className="mt-3 hidden max-w-xl text-[14.5px] text-muted lg:block">{v.intro}</p>
         </div>
-        <AgentCard v={v} />
+        <div className="hidden lg:block">
+          <AgentCard v={v} />
+        </div>
       </div>
+      <AgentTab v={v} />
 
       {/* ── the property, and the next step ── */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
@@ -123,23 +134,27 @@ export default function LandlordDashboard({
           </div>
         </section>
 
-        <section className="relative overflow-hidden rounded-[22px] bg-accent-soft/80 p-7" data-search>
+        {/* ON A PHONE this is tightened right down. James, 15 Sep 2026: "a very
+            large box for a very small thing" - 30px of heading, a 64px icon and
+            28px of padding for one sentence and one button. Same card from lg. */}
+        <section className="relative overflow-hidden rounded-[22px] bg-accent-soft/80 p-5 lg:p-7" data-search>
           {/* The soft curves bottom right: the palette's clay and pink, low. */}
           <span aria-hidden className="pointer-events-none absolute -bottom-24 -right-16 h-72 w-72 rounded-full bg-accent/15" />
           <span aria-hidden className="pointer-events-none absolute -bottom-36 right-24 h-72 w-72 rounded-full bg-white/40" />
           <p className={`${eyebrow} relative`}>Your next step</p>
           {hero ? (
-            <div className="relative mt-5">
-              <div className="flex items-start gap-5">
-                <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/70 text-accent-dark">
-                  <DoodleIcon name={hero.icon} size={24} />
+            <div className="relative mt-4 lg:mt-5">
+              <div className="flex items-start gap-4 lg:gap-5">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/70 text-accent-dark lg:h-16 lg:w-16">
+                  <DoodleIcon name={hero.icon} size={18} className="lg:hidden" />
+                  <DoodleIcon name={hero.icon} size={24} className="hidden lg:block" />
                 </span>
                 <div className="min-w-0">
-                  <h2 className="text-[30px] leading-tight">{hero.label}</h2>
-                  <p className="mt-2 max-w-md text-[14px] leading-relaxed text-muted">{hero.sub}</p>
+                  <h2 className="text-[21px] leading-tight lg:text-[30px]">{hero.label}</h2>
+                  <p className="mt-1.5 max-w-md text-[13px] leading-relaxed text-muted lg:mt-2 lg:text-[14px]">{hero.sub}</p>
                 </div>
               </div>
-              <div className="mt-7">
+              <div className="mt-5 lg:mt-7">
                 <HeroAction s={hero} v={v} />
               </div>
               {others.length > 0 && (
@@ -172,8 +187,15 @@ export default function LandlordDashboard({
         </section>
       </div>
 
-      {/* ── the spine ── */}
-      <section id="journey" className={`${card} p-6`} data-search>
+      {/* ── the spine ──
+          A phone gets the wheel, and no box around it: seven equal dots in a
+          scrolling row is a diagram of our process at the size of a diagram.
+          See SpinePhone. */}
+      <section id="journey" className="lg:hidden" data-search>
+        <h2 className="mb-3 text-[16px]">Your letting journey</h2>
+        <SpinePhone stops={fullJourney(v)} />
+      </section>
+      <section className={`hidden ${card} p-6 lg:block`} data-search>
         <h2 className="text-[18px]">Your letting journey</h2>
         <div className="mt-7">
           <Spine stops={fullJourney(v)} />

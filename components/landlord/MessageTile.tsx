@@ -20,6 +20,7 @@ export default function MessageTile({
   sub,
   icon,
   variant = "tile",
+  className,
 }: {
   appraisalId: string | null;
   agentName: string | null;
@@ -29,6 +30,9 @@ export default function MessageTile({
   icon: string;
   /** "button": the dark pill on the agent card and the next-step card (11 Sep 2026). Same sheet. */
   variant?: "tile" | "button" | "row";
+  /** Overrides the button's own classes, for the agent tab's three matching
+   *  full-width actions. The sheet it opens is unchanged. */
+  className?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -91,9 +95,12 @@ export default function MessageTile({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="inline-flex shrink-0 items-center gap-2.5 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+          className={
+            className ??
+            "inline-flex shrink-0 items-center gap-2.5 rounded-full bg-accent-dark px-5 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+          }
         >
-          <DoodleIcon name={icon} size={15} className="text-white" />
+          <DoodleIcon name={icon} size={15} className={className ? undefined : "text-white"} />
           {label}
         </button>
       ) : (
