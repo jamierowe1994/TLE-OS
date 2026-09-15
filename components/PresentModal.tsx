@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import SignSheet from "@/components/landlord/SignSheet";
 import { useSigning } from "@/lib/use-signing";
 import PresentBook, { PAGE_H, PAGE_W } from "@/components/PresentBook";
+import PresentPages from "@/components/PresentPages";
 import { DeckStyleCtx, themeVars, INK } from "@/components/present-kit";
 import { asStyle, slidesFor, type PresentDeck as Deck } from "@/lib/present";
 import { BookActionsCtx } from "@/components/PresentBookPages";
@@ -107,7 +108,17 @@ export default function PresentModal({
 
   /* The open spread fits the room with air round it. */
   const fit = room.w ? Math.min((room.w - 140) / (PAGE_W * 2), (room.h - 230) / PAGE_H) : 0.4;
+  /**
+   * A PHONE GETS SINGLE PAGES. A 2880-wide spread fitted into a 375px screen
+   * is a 160px postcard with six-point type on it - which is what a landlord
+   * opening their presentation on the bus was actually handed, and most of
+   * them open it on a phone. See PresentPages.
+   */
+  const phone = room.w > 0 && room.w < 760;
   const onSpread = useCallback((at: number, of: number) => setPage({ at, of }), []);
+  /* The phone has no cover to open, so page one is page one - where the
+     booklet reports -1 until the cover is turned. */
+  const onPage = useCallback((at: number, of: number) => setPage({ at, of }), []);
   const open = page.at >= 0;
   /* The agent's spread: a "Contact" button appears above the booklet while
      it is showing - James, 13 Sep 2026: "the most call-to-action ... not
@@ -159,7 +170,11 @@ export default function PresentModal({
             share an element. */}
         {room.w > 0 && (
           <div
-            className="flex flex-col items-center"
+            /* w-full on a phone: the strip inside measures its own width, and
+               a column flex with items-center sizes to CONTENT - so without
+               this the strip asks how wide it is, gets nothing, and draws
+               nothing. */
+            className={phone ? "flex w-full flex-col items-center" : "flex flex-col items-center"}
             style={{
               transform: signOpen ? "translateX(-118vw)" : "translateX(0)",
               transition: "transform 620ms cubic-bezier(0.5, 0, 0.18, 1)",
@@ -167,23 +182,84 @@ export default function PresentModal({
             }}
             aria-hidden={signOpen}
           >
-          <div className="relative z-[84]" style={{ transformOrigin: "50% 100%", animation: "present-fold 820ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both" }}>
+          <div
+            className={phone ? "relative z-[84] w-full" : "relative z-[84]"}
+            style={phone ? undefined : { transformOrigin: "50% 100%", animation: "present-fold 820ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both" }}
+          >
             <BookActionsCtx.Provider value={{ sign: openSign }}>
-              <PresentBook deck={deck} pages={pages} fit={fit} onSpread={onSpread} onApi={setApi} />
+              {phone ? (
+                <PresentPages deck={deck} pages={pages} onPage={onPage} onApi={setApi} />
+              ) : (
+                <PresentBook deck={deck} pages={pages} fit={fit} onSpread={onSpread} onApi={setApi} />
+              )}
             </BookActionsCtx.Provider>
           </div>
 
-          {/* THE FOOT, hung under the booklet itself: the way to sign centred
-              under the left-hand page, the arrows centred under the right, both
-              a small gap below the pages - James, 13 Sep 2026. */}
-          <div className="relative z-[86] mt-6 grid grid-cols-2" style={{ width: PAGE_W * 2 * fit }}>
+          {/* THE FOOT. On a phone it stacks: the way to sign across the full
+              width, the page count and the arrows under it. Side by side at
+              375px the button wrapped onto two lines and sat on top of the
+              count. */}
+          {phone ? (
+            <div className="relative z-[86] mt-4 w-full px-4 pb-1">
+              {open && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={openSign}
+                  className="mb-3 inline-flex h-[50px] w-full items-center justify-center gap-2.5 rounded-full text-[14.5px] font-semibold text-white shadow-[0_18px_40px_-18px_rgba(0,0,0,0.6)]"
+                  style={{ background: "#cfa096" }}
+                >
+                  {busy ? "Opening…" : "Sign your contract"}
+                  <svg viewBox="0 0 24 24" aria-hidden className="h-[16px] w-[16px]">
+                    <path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              )}
+              {/* Back on the left, Next on the right, the count between them -
+                  where a thumb expects each of them to be. */}
+              <div className="flex items-center gap-3">
+                {(() => {
+                  const arrow = (label: "Back" | "Next", dir: 1 | -1) => {
+                    const can = dir < 0 ? page.at > 0 : page.at < page.of - 1;
+                    return (
+                      <button
+                        type="button"
+                        aria-label={label}
+                        disabled={!can}
+                        onClick={() => api?.go(dir)}
+                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border"
+                        style={{ opacity: can ? 1 : 0.3, background: "rgba(255,255,255,0.92)", borderColor: "rgba(0,0,0,0.14)", color: INK }}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden className="h-[18px] w-[18px]" style={{ transform: dir < 0 ? "scaleX(-1)" : undefined }}>
+                          <path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      </button>
+                    );
+                  };
+                  return (
+                    <>
+                      {arrow("Back", -1)}
+                      <p className="flex-1 text-center text-[12.5px] text-white/70">
+                        {page.at + 1} of {page.of}
+                      </p>
+                      {arrow("Next", 1)}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          ) : (
+            /* Hung under the booklet itself: the way to sign centred under the
+               left-hand page, the arrows centred under the right, both a small
+               gap below the pages - James, 13 Sep 2026. */
+            <div className="relative z-[86] mt-6 grid grid-cols-2" style={{ width: PAGE_W * 2 * fit }}>
             <div className="flex items-center justify-center">
               {open && (
                 <button
                   type="button"
                   disabled={busy}
                   onClick={openSign}
-                  className="inline-flex h-[48px] items-center gap-3 rounded-full px-7 text-[14px] font-semibold text-white shadow-[0_18px_40px_-18px_rgba(0,0,0,0.6)] transition-transform hover:scale-[1.03]"
+                  className={`inline-flex h-[48px] items-center gap-2.5 rounded-full text-[13.5px] font-semibold text-white shadow-[0_18px_40px_-18px_rgba(0,0,0,0.6)] transition-transform hover:scale-[1.03] ${phone ? "px-4" : "gap-3 px-7"}`}
                   style={{ background: "#cfa096" }}
                 >
                   {busy ? "Opening…" : "Sign your contract"}
@@ -195,10 +271,10 @@ export default function PresentModal({
             </div>
             <div className="flex items-center justify-center gap-4">
               <p className="mr-2 text-[12.5px] text-white/70">
-                {open ? `${page.at + 1} of ${page.of}` : page.of ? "Open the cover" : ""}
+                {phone ? `${page.at + 1} of ${page.of}` : open ? `${page.at + 1} of ${page.of}` : page.of ? "Open the cover" : ""}
               </p>
               {([["Back", -1], ["Next", 1]] as const).map(([label, dir]) => {
-                const can = dir < 0 ? page.at > -1 : page.at < page.of - 1;
+                const can = dir < 0 ? page.at > (phone ? 0 : -1) : page.at < page.of - 1;
                 return (
                   <button
                     key={label}
@@ -217,6 +293,7 @@ export default function PresentModal({
               })}
             </div>
           </div>
+          )}
           </div>
         )}
 
