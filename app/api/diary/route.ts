@@ -5,6 +5,7 @@ import { rexConfigured } from "@/lib/rex";
 import type { Appt, ApptKind } from "@/lib/diary";
 import { scopeFor } from "@/lib/scope";
 import { whoIs } from "@/lib/admin";
+import { osFeedbackFor } from "@/lib/viewing-feedback-store";
 
 /**
  * The team's diary, cached — same manners as leads and listings.
@@ -109,6 +110,21 @@ async function ours(authorId: string | null): Promise<Appt[]> {
 }
 
 /** The REX book with our own entries merged in, sorted as one day reads. */
+/**
+ * Feedback written in the OS drawer, laid onto the viewing (15 Sep 2026).
+ * Read fresh every time, outside the REX cache, for the same reason as our own
+ * appointments: an agent who has just saved a write-up must not see the
+ * viewing still sitting in "Feedback due". REX's own record wins where both
+ * exist - the drawer never offers the form over one.
+ */
+async function withOsFeedback(book: DiaryBook): Promise<DiaryBook> {
+  const want = book.appts.filter((a) => a.kind === "viewing" && a.day <= 0 && !a.feedback).map((a) => a.id);
+  if (!want.length) return book;
+  const found = await osFeedbackFor(want).catch(() => new Map());
+  if (!found.size) return book;
+  return { ...book, appts: book.appts.map((a) => (!a.feedback && found.has(a.id) ? { ...a, feedback: found.get(a.id)! } : a)) };
+}
+
 function merged(book: DiaryBook, mine: Appt[]): DiaryBook {
   if (!mine.length) return book;
   const appts = [...book.appts, ...mine].sort(
@@ -224,18 +240,18 @@ export async function GET(req: NextRequest) {
   const held = memory ?? (await readStored());
   const age = held ? Date.now() - held.at : Infinity;
   if (held && age < FRESH_MS) {
-    return NextResponse.json({ ok: true, live: true, ...merged(forScope(held.book, who), mine), everything: scope.everything, ageMs: age });
+    return NextResponse.json({ ok: true, live: true, ...(await withOsFeedback(merged(forScope(held.book, who), mine))), everything: scope.everything, ageMs: age });
   }
   if (held && age < STALE_MS) {
     void refresh();
-    return NextResponse.json({ ok: true, live: true, ...merged(forScope(held.book, who), mine), everything: scope.everything, ageMs: age, stale: true });
+    return NextResponse.json({ ok: true, live: true, ...(await withOsFeedback(merged(forScope(held.book, who), mine))), everything: scope.everything, ageMs: age, stale: true });
   }
   try {
     const fresh = await refresh();
-    return NextResponse.json({ ok: true, live: true, ...merged(forScope(fresh.book, who), mine), everything: scope.everything, ageMs: 0 });
+    return NextResponse.json({ ok: true, live: true, ...(await withOsFeedback(merged(forScope(fresh.book, who), mine))), everything: scope.everything, ageMs: 0 });
   } catch (e) {
     if (held) {
-      return NextResponse.json({ ok: true, live: true, ...merged(forScope(held.book, who), mine), everything: scope.everything, ageMs: age, stale: true });
+      return NextResponse.json({ ok: true, live: true, ...(await withOsFeedback(merged(forScope(held.book, who), mine))), everything: scope.everything, ageMs: age, stale: true });
     }
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Couldn't reach REX." }, { status: 502 });
   }

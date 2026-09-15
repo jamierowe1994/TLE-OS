@@ -111,6 +111,7 @@ export type Appt = {
  */
 export function feedbackLabel(f: ViewingFeedback | null | undefined): string {
   if (f == null) return "feedback due";
+  if (f.outcome) return f.outcome;
   if (f.interest) return f.interest;
   return f.note ? "written up" : "logged";
 }
@@ -253,4 +254,8 @@ export interface ViewingFeedback {
   /** Who it came from. */
   who: string[];
   agent: string | null;
+  /** Where it was written: REX's Feedback service, or the OS drawer (15 Sep 2026). */
+  source?: "rex" | "os";
+  /** The OS's own answer, in the words the agent chose ("Thinking about it", "No-show"). */
+  outcome?: string | null;
 }

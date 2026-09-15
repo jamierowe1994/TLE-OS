@@ -8,6 +8,7 @@ import DiaryGrid from "@/components/DiaryGrid";
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { VIEWING_SENDS_LIVE } from "@/lib/viewing-sends";
+import { refreshDiary } from "@/lib/diary-store";
 import type { KeySet } from "@/lib/rex-keys";
 import ProcessTimeline from "@/components/ProcessTimeline";
 import SendFlow, { type Outgoing } from "@/components/SendFlow";
@@ -140,6 +141,8 @@ export default function ViewingDrawer({
   const [completing, setCompleting] = useState<"idle" | "choose" | "show-form" | "done">("idle");
   const [fbChoice, setFbChoice] = useState<string>("");
   const [fbNotes, setFbNotes] = useState("");
+  const [fbSaving, setFbSaving] = useState(false);
+  const [fbError, setFbError] = useState<string | null>(null);
   const [localOutcome, setLocalOutcome] = useState<Outcome | "No-show" | null>(null);
   const [noShowTold, setNoShowTold] = useState(false);
   const [pushingOffer, setPushingOffer] = useState(false);
@@ -226,6 +229,41 @@ export default function ViewingDrawer({
 
   const log = (what: string) =>
     setExtraActivity((cur) => [...cur, { when: "Just now", what, by: "You" }]);
+
+  /* SAVED, not just said (15 Sep 2026). Both answers used to live on this
+     screen only, so a written-up viewing stayed "Feedback due" for ever. Now
+     they go to /api/viewings/feedback and the diary is reread, so the tile and
+     the list move the moment it is saved. A save that fails says so and keeps
+     the form, rather than pretending. */
+  const saveFeedback = async (f: { attended: boolean; choice: string; label: string; note: string }): Promise<boolean> => {
+    setFbSaving(true);
+    setFbError(null);
+    try {
+      const r = await fetch("/api/viewings/feedback", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          viewingId: appt.id,
+          ...f,
+          applicant: appt.who ?? "",
+          address: appt.where ?? "",
+          listingId: appt.listingId ?? null,
+        }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!j.ok) {
+        setFbError(j.error ?? "That did not save. Try again.");
+        return false;
+      }
+      void refreshDiary();
+      return true;
+    } catch {
+      setFbError("That did not save - the connection dropped. Try again.");
+      return false;
+    } finally {
+      setFbSaving(false);
+    }
+  };
 
   const sendPassportInvite = async (again = false) => {
     if (!appt.contact?.email) return;
@@ -654,6 +692,11 @@ export default function ViewingDrawer({
               {past && appt.feedback && (
                 <Card title="What they said" icon="message">
                   <div className="flex flex-wrap items-center gap-2">
+                    {appt.feedback.outcome && (
+                      <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: SAGE_WASH, color: SAGE_INK }}>
+                        {appt.feedback.outcome}
+                      </span>
+                    )}
                     {appt.feedback.interest && (
                       <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: SAGE_WASH, color: SAGE_INK }}>
                         {appt.feedback.interest}
@@ -680,7 +723,7 @@ export default function ViewingDrawer({
                   <p className="mt-2.5 text-[10.5px] text-muted">
                     {[appt.feedback.who.join(", "), appt.feedback.agent ? `recorded by ${appt.feedback.agent}` : null]
                       .filter(Boolean)
-                      .join(" · ") || "From REX"}
+                      .join(" · ") || (appt.feedback.source === "os" ? "Written in TLE OS" : "From REX")}
                   </p>
                 </Card>
               )}
@@ -700,9 +743,12 @@ export default function ViewingDrawer({
                     </PressButton>
                     <PressButton
                       onClick={() => {
-                        setLocalOutcome("No-show");
-                        setCompleting("done");
-                        log("Marked as NO-SHOW");
+                        void saveFeedback({ attended: false, choice: "", label: "No-show", note: "" }).then((ok) => {
+                          if (!ok) return;
+                          setLocalOutcome("No-show");
+                          setCompleting("done");
+                          log("Marked as NO-SHOW");
+                        });
                       }}
                       className="press-ring flex-1 rounded-full border border-ink/25 px-4 py-2.5 text-[12.5px] font-semibold"
                     >
@@ -745,18 +791,22 @@ export default function ViewingDrawer({
                   <PressButton
                     onClick={() => {
                       const opt = FEEDBACK_OPTIONS.find((o) => o.id === fbChoice);
-                      if (!opt) return;
-                      setLocalOutcome(opt.outcome);
-                      setCompleting("done");
-                      log(`Feedback recorded: ${opt.label}${fbNotes.trim() ? ` — "${fbNotes.trim()}"` : ""}`);
-                      if (opt.outcome === "Applying") log(`${appt.who} moved to Application on the spine`);
+                      if (!opt || fbSaving) return;
+                      void saveFeedback({ attended: true, choice: opt.id, label: opt.label, note: fbNotes.trim() }).then((ok) => {
+                        if (!ok) return;
+                        setLocalOutcome(opt.outcome);
+                        setCompleting("done");
+                        log(`Feedback recorded: ${opt.label}${fbNotes.trim() ? ` — "${fbNotes.trim()}"` : ""}`);
+                        if (opt.outcome === "Applying") log(`${appt.who} moved to Application on the spine`);
+                      });
                     }}
                     className={`press-ring mt-3 w-full rounded-full px-4 py-2.5 text-[12.5px] font-semibold ${
                       fbChoice ? "bg-accent-dark text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
                     }`}
                   >
-                    Save feedback
+                    {fbSaving ? "Saving…" : "Save feedback"}
                   </PressButton>
+                  {fbError && <p className="mt-2 text-[11.5px] leading-relaxed text-accent-dark">{fbError}</p>}
                 </Card>
               )}
 

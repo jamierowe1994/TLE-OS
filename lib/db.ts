@@ -1328,6 +1328,27 @@ CREATE TABLE IF NOT EXISTS os_tasks (
 CREATE INDEX IF NOT EXISTS os_tasks_user ON os_tasks (user_id, done_at, due_at);
 CREATE INDEX IF NOT EXISTS os_tasks_lead ON os_tasks (lead_id, created_at DESC);
 
+-- What was said after a viewing, written in the OS (15 Sep 2026). The drawer
+-- asked "did they turn up?" and "how did it land?" and kept the answer on the
+-- screen only, so every viewing stayed "Feedback due" however many times it was
+-- written up. One row per viewing (the diary id: rex-<event id> or os-<id>).
+-- REX's own Feedback records still show where they exist; this never replaces
+-- one. attended false is a no-show.
+CREATE TABLE IF NOT EXISTS os_viewing_feedback (
+  viewing_id  TEXT PRIMARY KEY,
+  attended    BOOLEAN NOT NULL,
+  choice      TEXT NOT NULL DEFAULT '',
+  label       TEXT NOT NULL DEFAULT '',
+  note        TEXT NOT NULL DEFAULT '',
+  applicant   TEXT NOT NULL DEFAULT '',
+  address     TEXT NOT NULL DEFAULT '',
+  listing_id  TEXT,
+  starts_at   TIMESTAMPTZ,
+  by_email    TEXT NOT NULL DEFAULT '',
+  by_name     TEXT NOT NULL DEFAULT '',
+  saved_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- The viewings ledger: every diary event REX holds against a listing that
 -- the OS has read, kept (lib/rex-viewings.ts). Who came, when, who took it.
 CREATE TABLE IF NOT EXISTS os_viewings (

@@ -63,7 +63,7 @@ export function ApptRow({
        plain fact that it was written up. Sage for done, blush for owed. */
     pill = a.feedback ? (
       <Pill style={{ background: SAGE_WASH, color: SAGE_INK }}>
-        {a.feedback.interest ?? (a.feedback.note ? "Feedback in" : "Logged")}
+        {a.feedback.outcome ?? a.feedback.interest ?? (a.feedback.note ? "Feedback in" : "Logged")}
       </Pill>
     ) : (
       <Pill className="bg-accent-soft text-accent-dark">Feedback due</Pill>

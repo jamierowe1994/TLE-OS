@@ -123,7 +123,7 @@ export default function PrintSheet({
                       {a.contact?.phone ? <div className="m">{a.contact.phone}</div> : null}
                     </td>
                     <td className="n">
-                      <div className="m">{accessLine(a, a.feedback?.interest ?? (a.feedback ? "Feedback in" : undefined))}</div>
+                      <div className="m">{accessLine(a, a.feedback?.outcome ?? a.feedback?.interest ?? (a.feedback ? "Feedback in" : undefined))}</div>
                     </td>
                   </tr>
                 ))}
