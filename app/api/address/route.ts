@@ -7,11 +7,42 @@ import { geocode } from "@/lib/geocode";
  * The key never reaches the browser — a Places key in client JS is a key
  * anyone can lift and bill you for. Everything goes through here.
  *
- * Two providers, chosen by whichever key is present, because the right answer
- * depends on the bill rather than the code:
+ * ── Homesearch first, Google behind it (15 Sep 2026) ──────────────────────
  *
- *   IDEAL_POSTCODES_API_KEY — UK-only, Royal Mail PAF, exact and cheap
- *                             (~£0.05/lookup). Best for a lettings book.
+ * Howard, 14 Sep: he typed a postcode and got the street. Google answers a UK
+ * postcode with the road, never the doors on it. Howard's own answer was
+ * Homesearch, which the OS already pays for and already uses inside Bond, and
+ * James chose it the next day after a side-by-side on 40 homes off TLE's own
+ * book (houses, flats, HMO rooms, a quarter of them Scottish):
+ *
+ *                               Homesearch      Google
+ *     postcode lists the door   35 of 39        0 of 40
+ *     typed address finds it    28 of 39        31 of 40
+ *
+ * Homesearch carries the Royal Mail UDPRN and the UPRN on every door, so it is
+ * the same PAF file Ideal Postcodes sells, at no extra cost. That is why
+ * Ideal Postcodes was not bought.
+ *
+ * So, in order:
+ *
+ *   1. HOMESEARCH_TOKEN — a postcode lists every door in it, narrowed to the
+ *      house number when one is typed; anything else is its type-ahead.
+ *   2. Google, when Homesearch has nothing. Two of the 39 were genuinely not
+ *      on the register (a flat split it lists as one door, and a converted
+ *      HMO in a postcode it only knows a shop in). And for typed text, when
+ *      none of Homesearch's answers carries the number that was typed,
+ *      Google's go underneath them rather than instead of them.
+ *   3. Typing it by hand, which every field already falls back to.
+ *
+ * A Homesearch suggestion's id is "hs:<hs_id>", so ?resolve= knows which
+ * provider to ask without guessing from the shape of the value. The resolved
+ * door comes back with its hs_id, UPRN and UDPRN as well, which are the keys
+ * Bond, the dossier and the material info already use for the same home.
+ *
+ * The older providers, still honoured when their keys are present:
+ *
+ *   IDEAL_POSTCODES_API_KEY — UK-only, Royal Mail PAF, ~£0.05/lookup. Not set,
+ *                             and not needed while Homesearch answers.
  *   GOOGLE_MAPS_API_KEY     — worldwide, needs Places API (New) enabled in
  *                             the Google Cloud console, billing attached.
  *
@@ -53,6 +84,97 @@ type Suggestion = { id: string; label: string };
  *  server booted, which is how a variable added in Railway looks ignored. */
 const ideal = () => (process.env.IDEAL_POSTCODES_API_KEY ?? "").trim();
 const google = () => (process.env.GOOGLE_MAPS_API_KEY ?? "").trim();
+const homesearch = () => (process.env.HOMESEARCH_TOKEN ?? "").trim();
+
+/* ── Homesearch ─────────────────────────────────────────────────────────── */
+
+const HS = "https://data.homesearch.co.uk/avi/api/v1";
+const HS_PREFIX = "hs:";
+const POSTCODE = /\b([A-Z]{1,2}\d[A-Z\d]?)\s*(\d[A-Z]{2})\b/i;
+const numbersIn = (s: string) => new Set(s.toUpperCase().match(/\b\d+[A-Z]?\b/g) ?? []);
+
+/**
+ * One Homesearch call, sized for somebody typing.
+ *
+ * Not lib/bond's hs(): that retries three times on a fifteen-second timeout,
+ * which is right for a background sweep and wrong for a dropdown, where a
+ * slow answer is worse than Google's answer. Here it is three seconds and one
+ * retry on a rate limit, and anything else is null - which means "ask Google".
+ */
+async function hsGet(path: string, token: string): Promise<unknown | null> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await fetch(`${HS}/${path}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        cache: "no-store",
+        signal: AbortSignal.timeout(3_000),
+      });
+      if (r.ok) return await r.json();
+      /* 422 is Homesearch saying the query is too short to search, and 404 a
+         postcode it has never heard of. Both are "no doors", not a fault. */
+      if (r.status === 422 || r.status === 404) return [];
+      if (r.status !== 429 || attempt > 0) return null;
+      await new Promise((res) => setTimeout(res, 400));
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+const rowsOf = (raw: unknown): { hs_id?: string | number; address_label?: string }[] =>
+  Array.isArray(raw) ? raw : Array.isArray((raw as { data?: unknown })?.data) ? (raw as { data: [] }).data : [];
+
+/**
+ * Homesearch's suggestions for what was typed, or null when it could not be
+ * asked at all.
+ *
+ * A full postcode lists every door in it. If a house number was typed as well
+ * ("12 AL7 3HU"), the list narrows to the doors carrying it - and widens back
+ * to the whole postcode if none do, because a wrong number is likelier than an
+ * empty postcode. Anything that is not a postcode goes to the type-ahead.
+ */
+async function hsSuggest(q: string, token: string): Promise<{ suggestions: Suggestion[]; weak: boolean; byPostcode: boolean } | null> {
+  const pc = q.match(POSTCODE);
+  const typedNumbers = numbersIn(pc ? q.replace(POSTCODE, "") : q);
+  const raw = pc
+    ? await hsGet(`find_addresses/${encodeURIComponent(`${pc[1]} ${pc[2]}`.toUpperCase())}`, token)
+    : await hsGet(`find_addresses?query=${encodeURIComponent(q)}`, token);
+  if (raw === null) return null;
+  const all = rowsOf(raw)
+    .filter((a) => a.hs_id != null && a.address_label)
+    .map((a) => ({ id: `${HS_PREFIX}${a.hs_id}`, label: String(a.address_label) }));
+  const carrying = typedNumbers.size
+    ? all.filter((a) => [...numbersIn(a.label)].some((n) => typedNumbers.has(n)))
+    : all;
+  const suggestions = (carrying.length ? carrying : all).slice(0, pc ? 100 : 12);
+  /* Weak = a number was typed and no door here carries it. For typed text the
+     type-ahead guessed. For a postcode the doors are still worth showing, but
+     the one they want may not be among them - "166 Gloucester Road North,
+     BS34 7QA" lists only the Toolstation at 164, because the HMO at 166 is not
+     on the register - so Google is asked as well. Caught on the first live
+     test, 15 Sep 2026. */
+  const weak = typedNumbers.size > 0 && carrying.length === 0;
+  return { suggestions, weak, byPostcode: Boolean(pc) };
+}
+
+/** A picked Homesearch door, as the rest of the OS wants it. */
+async function hsResolve(id: string, token: string) {
+  const raw = (await hsGet(`return_address_details/${encodeURIComponent(id)}`, token)) as Record<string, unknown> | null;
+  const d = (raw && typeof raw === "object" && !Array.isArray(raw) && raw.data && typeof raw.data === "object" ? raw.data : raw) as Record<string, unknown> | null;
+  const label = String(d?.hs_label ?? d?.address_label ?? "").trim();
+  if (!d || !label) return null;
+  const num = (v: unknown) => (v == null || v === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+  return {
+    address: label,
+    postcode: d.postcode ? String(d.postcode) : label.match(POSTCODE)?.[0]?.toUpperCase() ?? null,
+    lat: num(d.lat),
+    lng: num(d.lon),
+    hsId: String(d.hs_id ?? id),
+    uprn: d.uprn == null ? null : String(d.uprn),
+    udprn: d.udprn == null ? null : String(d.udprn),
+  };
+}
 
 /** What went wrong, in words the person typing can act on. */
 type Problem = { code: string; says: string } | null;
@@ -135,7 +257,47 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  const HSK = homesearch();
+
+  /* A Homesearch door being picked. Its own provider, whatever keys are set:
+     the id says where it came from. */
+  if (resolve?.startsWith(HS_PREFIX)) {
+    const door = HSK ? await hsResolve(resolve.slice(HS_PREFIX.length), HSK) : null;
+    if (!door) {
+      return NextResponse.json({
+        configured: Boolean(HSK),
+        provider: "homesearch",
+        problem: HSK
+          ? { code: "not_found", says: "That address could not be resolved. Type it in full instead." }
+          : { code: "no_key", says: "HOMESEARCH_TOKEN is not set on this environment, so a Homesearch address cannot be resolved." },
+      });
+    }
+    return NextResponse.json({ configured: true, provider: "homesearch", ...door });
+  }
+
+  /* Homesearch first. A confident answer goes straight back; a weak one (typed
+     text where nothing carries the typed number) is held and shown alongside
+     Google's, below; no answer, or Homesearch unreachable, falls through to
+     the providers below as though it were not there. */
+  let hsHeld: Suggestion[] = [];
+  let hsHeldFirst = false;
+  if (!resolve && HSK && q.length >= 3) {
+    const found = await hsSuggest(q, HSK);
+    if (found && found.suggestions.length && !found.weak) {
+      return NextResponse.json({ configured: true, provider: "homesearch", suggestions: found.suggestions });
+    }
+    if (found?.weak) {
+      /* A postcode's doors stay whole and stay on top: the list IS the answer
+         a postcode is typed for. Typed text keeps its five best guesses, under
+         Google's. */
+      hsHeldFirst = found.byPostcode;
+      hsHeld = found.byPostcode ? found.suggestions : found.suggestions.slice(0, 5);
+    }
+  }
+
   if (!IDEAL && !GOOGLE) {
+    /* Homesearch is the only provider here. Its answer, or an honest empty. */
+    if (HSK) return NextResponse.json({ configured: true, provider: "homesearch", suggestions: hsHeld });
     return NextResponse.json({
       configured: false,
       provider: null,
@@ -282,6 +444,9 @@ export async function GET(req: NextRequest) {
     });
     const j = await r.json().catch(() => null);
     if (!r.ok) {
+      /* Google down with Homesearch's guesses in hand: show the guesses. A
+         maybe beats a red note, and the field still saves what is typed. */
+      if (hsHeld.length) return NextResponse.json({ configured: true, provider: "homesearch", suggestions: hsHeld });
       return NextResponse.json({
         configured: true,
         provider,
@@ -289,12 +454,15 @@ export async function GET(req: NextRequest) {
         problem: googleProblem(r.status, j),
       });
     }
-    const suggestions: Suggestion[] = ((j as { suggestions?: unknown[] })?.suggestions ?? [])
+    const fromGoogle: Suggestion[] = ((j as { suggestions?: unknown[] })?.suggestions ?? [])
       .filter((s): s is { placePrediction: { placeId: string; text: { text: string } } } =>
         Boolean((s as { placePrediction?: unknown })?.placePrediction)
       )
       .map((s) => ({ id: s.placePrediction.placeId, label: s.placePrediction.text.text }));
-    return NextResponse.json({ configured: true, provider, suggestions });
+    /* Typed text: Google's first, because none of the held doors carries the
+       number that was typed. A postcode: its doors first, Google underneath. */
+    const suggestions = hsHeldFirst ? [...hsHeld, ...fromGoogle] : [...fromGoogle, ...hsHeld];
+    return NextResponse.json({ configured: true, provider: hsHeld.length ? "mixed" : provider, suggestions });
   } catch (e) {
     // A lookup outage must never block adding a lead — the form falls back to
     // plain text. It does now say so, rather than looking like no matches.

@@ -232,8 +232,8 @@ function Choice({ label, hint, value, options, placeholder = "Choose", onChange 
 
 /**
  * An address that finishes itself. Typing asks the server-side lookup
- * (Google Places or Ideal Postcodes, whichever key Railway holds - see
- * app/api/address); matches fold open under the box. With no key it is a
+ * (Homesearch first, Google behind it - see app/api/address); matches fold
+ * open under the box. With no key it is a
  * plain box that saves what is typed, and says nothing: the tenant cannot
  * fix a missing key and should not be told about one.
  */
@@ -242,9 +242,10 @@ function Choice({ label, hint, value, options, placeholder = "Choose", onChange 
  *
  * Howard, 14 Sep 2026: he typed a postcode, picked the result, and got the
  * street. Google's autocomplete answers a UK postcode with the road rather
- * than the doors on it - only a Royal Mail PAF provider lists those, and we
- * have no key for one. So rather than leave him with a street as his address,
- * the field notices and asks for the number.
+ * than the doors on it. Since 15 Sep 2026 Homesearch answers a postcode first
+ * and lists the doors, so this rarely fires - but Google is still the backup
+ * for the homes Homesearch does not know, and when that backup hands back a
+ * street, the field still notices and asks for the number.
  *
  * A UK address line starts with a number ("12 Example Street") or a building
  * word ("Flat 2, 5 Example Street", "Rose Cottage, ...").
