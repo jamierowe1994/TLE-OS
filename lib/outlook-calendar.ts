@@ -56,6 +56,8 @@ export async function putInOutlook(p: {
   location: string;
   startsAt: string;
   minutes: number;
+  /** "free" for something in their diary that does not take their time (an unaccompanied viewing). */
+  showAs?: "busy" | "free";
 }): Promise<OutlookOutcome> {
   let token: string;
   try {
@@ -88,7 +90,7 @@ export async function putInOutlook(p: {
     start: { dateTime: londonWall(p.startsAt), timeZone: "Europe/London" },
     end: { dateTime: londonWall(end), timeZone: "Europe/London" },
     location: { displayName: p.location.slice(0, 250) },
-    showAs: "busy",
+    showAs: p.showAs ?? "busy",
     isReminderOn: true,
     reminderMinutesBeforeStart: 30,
     categories: ["TLE OS"],

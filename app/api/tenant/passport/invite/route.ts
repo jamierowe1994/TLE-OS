@@ -125,6 +125,7 @@ export async function POST(req: NextRequest) {
     address: (body.address ?? "").trim() || "the property",
     whenPretty: (body.whenPretty ?? "").trim() || "the time we agreed",
     agentName: me.name || "Your agent",
+    meetLine: `${me.name || "Your agent"} will meet you there.`,
     link,
   });
 

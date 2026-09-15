@@ -174,7 +174,7 @@ export default function WeekGrid({
                     const isTravel = a.kind === "travel";
                     /* Gone by, on today's column: quiet. */
                     const past = isToday && minutesOf(a.start) + a.mins < nowMins;
-                    const b = block(toneOf(a.kind), past);
+                    const b = block(toneOf(a.kind, a.unaccompanied), past);
                     return (
                       <button
                         key={a.id}
@@ -184,6 +184,7 @@ export default function WeekGrid({
                           a.what,
                           a.where,
                           a.who && `With ${a.who}`,
+                          a.unaccompanied && "Unaccompanied - nobody from us is going",
                         ]
                           .filter(Boolean)
                           .join("\n")}

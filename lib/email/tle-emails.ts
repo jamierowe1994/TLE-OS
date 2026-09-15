@@ -718,6 +718,7 @@ The Letting Experts`
           address: "Flat 2, Mercer Street, Manchester M4 1SL",
           whenPretty: "Thursday 4 September at 5:30pm",
           agentName: "Rhiannon Dodge",
+          meetLine: "Rhiannon Dodge will meet you there.",
           link: `${SITE}/tenant/welcome`,
         })
       )(),

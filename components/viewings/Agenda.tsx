@@ -51,7 +51,7 @@ export function ApptRow({
   onOpen: (a: Appt) => void;
 }) {
   const meta = KIND_META[a.kind];
-  const tone = toneOf(a.kind);
+  const tone = toneOf(a.kind, a.unaccompanied);
   const b = bubble(tone);
   const missing = a.comms.filter((c) => !c.done && !sentExtra?.has(`${a.id}:${c.label}`)).length;
   const past = a.day < 0;

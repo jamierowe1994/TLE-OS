@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
   const b = (await req.json().catch(() => ({}))) as {
     leadId?: string; listingId?: string | number | null; contactId?: string | number | null;
     applicantName?: string; applicantEmail?: string | null; address?: string; startsAt?: string; minutes?: number;
+    unaccompanied?: boolean;
   };
   if (!b.leadId || !b.startsAt || Number.isNaN(new Date(b.startsAt).getTime())) {
     return NextResponse.json({ ok: false, said: "Which lead, and when?" }, { status: 400 });
@@ -44,12 +45,16 @@ export async function POST(req: NextRequest) {
   const address = (b.address ?? "").trim() || "the property";
   const minutes = Number(b.minutes) || 30;
   const listingId = b.listingId != null && b.listingId !== "" ? String(b.listingId) : null;
+  const unaccompanied = b.unaccompanied === true;
 
   const outlook = await putInOutlook({
     userId: actor.id,
     key: `viewing|${b.leadId}|${listingId ?? "-"}|${new Date(b.startsAt).toISOString()}`,
-    subject: `Viewing - ${address} with ${applicantName}`,
-    body: `Booked in TLE OS.\nApplicant: ${applicantName}${b.applicantEmail ? ` (${b.applicantEmail})` : ""}`,
+    subject: `${unaccompanied ? "Unaccompanied viewing" : "Viewing"} - ${address} with ${applicantName}`,
+    body: `Booked in TLE OS.${unaccompanied ? " Unaccompanied - nobody from us is going." : ""}\nApplicant: ${applicantName}${b.applicantEmail ? ` (${b.applicantEmail})` : ""}`,
+    /* An unaccompanied viewing is in the agent's diary so they know it is
+       happening, but it does not take their time. */
+    showAs: unaccompanied ? "free" : "busy",
     location: address,
     startsAt: b.startsAt,
     minutes,
@@ -64,6 +69,7 @@ export async function POST(req: NextRequest) {
     address,
     startsAt: b.startsAt,
     minutes,
+    unaccompanied,
   }).catch(() => ({ ok: false as const, reason: "refused" as const, detail: "Could not reach REX." }));
 
   const confirm = await sendViewingConfirmations({
@@ -74,6 +80,7 @@ export async function POST(req: NextRequest) {
     minutes,
     origin: publicOrigin(req),
     inAgentsCalendar: outlook.ok,
+    unaccompanied,
   });
 
   const said = [

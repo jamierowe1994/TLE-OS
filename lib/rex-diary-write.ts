@@ -179,6 +179,8 @@ export async function putAppraisalInRexDiary(p: {
  */
 
 export const TLE_VIEWING_TYPE_ID = 953;
+/** "TLE Unaccompanied Viewing" - REX's own type for a viewing nobody from us attends. */
+export const TLE_UNACCOMPANIED_TYPE_ID = 956;
 
 export type ViewingOutcome =
   | { ok: true; eventId: string; duplicate: boolean }
@@ -193,6 +195,7 @@ export async function putViewingInRexDiary(p: {
   address: string;
   startsAt: string;
   minutes: number;
+  unaccompanied?: boolean;
 }): Promise<ViewingOutcome> {
   if (!p.listingId) return { ok: false, reason: "no_listing", detail: "No listing on the booking, so REX would not know which home it is." };
   const key = `${p.leadId}|${p.listingId}|${new Date(p.startsAt).toISOString()}`;
@@ -225,11 +228,11 @@ export async function putViewingInRexDiary(p: {
     {
       data: {
         calendar_id: calendarId,
-        appointment_type_id: TLE_VIEWING_TYPE_ID,
+        appointment_type_id: p.unaccompanied ? TLE_UNACCOMPANIED_TYPE_ID : TLE_VIEWING_TYPE_ID,
         /* In REX's own form, the one agents already read. REX only makes a
            title up in its own screen; the API refuses an empty one ("The title
            field is required", measured 15 Sep 2026). */
-        title: `TLE Accompanied Viewing at ${p.address || "the property"} with ${p.applicantName}`,
+        title: `TLE ${p.unaccompanied ? "Unaccompanied" : "Accompanied"} Viewing at ${p.address || "the property"} with ${p.applicantName}`,
         description: `Booked in TLE OS.${p.contactId ? "" : ` Applicant: ${p.applicantName} (not yet a REX contact).`}`,
         starts_at: rexTime(p.startsAt),
         ends_at: rexTime(end),

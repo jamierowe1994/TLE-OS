@@ -138,6 +138,8 @@ export default function ViewingBooker({
      *  where the address is the landlord's own. */
     propertyId: string | null;
     listingId: string | null;
+    /** Nobody from us is going: the applicant lets themselves in (15 Sep 2026). */
+    unaccompanied?: boolean;
   }) => void;
 }) {
   const today = useMemo(() => startOfDay(new Date()), []);
@@ -153,6 +155,11 @@ export default function ViewingBooker({
      a viewing and wrong for almost every appraisal — a four-bed with a
      landlord who wants to talk is an hour and a half. */
   const [mins, setMins] = useState(mode === "appraisal" || mode === "takeon" ? 60 : 30);
+  /* A company viewing - one of us is there - unless the agent says otherwise
+     (James, 15 Sep 2026). Unticked, it goes in as unaccompanied: its own
+     colour on the diary, REX's Unaccompanied type, and nobody told an agent
+     will meet them. */
+  const [accompanied, setAccompanied] = useState(true);
   const [propertyId, setPropertyId] = useState<string>(properties[0]?.id ?? "");
   const [sentCount, setSentCount] = useState(0);
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
@@ -600,6 +607,7 @@ export default function ViewingBooker({
         whenPretty,
         startsAt,
         minutes: mins,
+        ...(mode === "viewing" && !accompanied ? { unaccompanied: true } : {}),
       });
     }
   }
@@ -1064,6 +1072,23 @@ export default function ViewingBooker({
                 drawn in, so a clash is visible before it happens.
                 {slot && " Drag the bar at the bottom of your booking to make it longer."}
               </p>
+              {mode === "viewing" && (
+                <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-xl border border-line/60 px-3 py-2.5 text-[12px]">
+                  <input
+                    id="booker-accompanied"
+                    type="checkbox"
+                    checked={accompanied}
+                    onChange={(e) => setAccompanied(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    <span className="block font-semibold">One of us will be there</span>
+                    <span className="block text-[11px] leading-snug text-muted">
+                      Untick for an unaccompanied viewing - the applicant lets themselves in. It shows in its own colour on the diary.
+                    </span>
+                  </span>
+                </label>
+              )}
 
               {/* ══ TRAVEL TIME ══
                   Offered, never imposed. The buffer is the thing everybody

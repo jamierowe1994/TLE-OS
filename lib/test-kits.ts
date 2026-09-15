@@ -195,6 +195,7 @@ export async function runKit(kit: KitId, me: OsUser, origin: string): Promise<Ki
         address: "Flat 2, 30 Test Road, Didsbury",
         whenPretty,
         agentName: me.name || "Your agent",
+        meetLine: `${me.name || "Your agent"} will meet you there.`,
         link: `${origin}${path}`,
       });
       await sendEmail({ to: email, subject, html, audience: "customer", replyTo: email });

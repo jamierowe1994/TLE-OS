@@ -477,7 +477,7 @@ export const TENANT_PASSPORT_INVITE = {
     H("tp1", "You're booked in"),
     T(
       "tp2",
-      "Hi {{firstName}},<br><br>Your viewing at <strong>{{address}}</strong> is confirmed for <strong>{{whenPretty}}</strong>. {{agentName}} will meet you there."
+      "Hi {{firstName}},<br><br>Your viewing at <strong>{{address}}</strong> is confirmed for <strong>{{whenPretty}}</strong>. {{meetLine}}"
     ),
     SP("tp3", 8),
     DIV("tp4"),

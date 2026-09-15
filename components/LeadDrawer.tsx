@@ -2879,6 +2879,7 @@ export default function LeadDrawer({
                 address: v.property,
                 startsAt: v.startsAt,
                 minutes: v.minutes,
+                unaccompanied: Boolean(v.unaccompanied),
               }),
             })
               .then((r) => r.json())

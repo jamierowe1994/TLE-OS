@@ -39,6 +39,8 @@ export async function sendViewingConfirmations(p: {
   origin: string;
   /** True when the agent's own Outlook already has it, so their note needs no file. */
   inAgentsCalendar: boolean;
+  /** Nobody from us is going: the email must not promise them an agent. */
+  unaccompanied?: boolean;
 }): Promise<ConfirmOutcome> {
   const whenPretty = new Date(p.startsAt).toLocaleString("en-GB", {
     timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", hour: "numeric", minute: "2-digit",
@@ -71,6 +73,9 @@ export async function sendViewingConfirmations(p: {
         address: p.address || "the property",
         whenPretty,
         agentName,
+        meetLine: p.unaccompanied
+          ? `This is an unaccompanied viewing, so nobody from us will be there - ${agentName} will send you how to get in.`
+          : `${agentName} will meet you there.`,
         link: `${p.origin}/tenant/passport/${token}`,
       });
       await sendEmail({ to, subject, html, audience: "customer", replyTo: p.me.email || undefined, attachments: [attachment] });
@@ -89,6 +94,7 @@ export async function sendViewingConfirmations(p: {
       `Where: ${p.address}`,
       `When: ${whenPretty}`,
       `Who: ${p.applicant.name}${to ? ` (${to})` : ""}`,
+      ...(p.unaccompanied ? ["Unaccompanied - nobody from us is going. Send them how to get in."] : []),
       ``,
       p.inAgentsCalendar ? "It is in your Outlook calendar." : "It is NOT in your Outlook calendar - the file attached adds it.",
       out.applicant.sent ? "They have been sent a confirmation." : "They have NOT been sent a confirmation.",

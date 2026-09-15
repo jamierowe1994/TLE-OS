@@ -98,6 +98,13 @@ export type Appt = {
    *   an object - REX holds a record. It may still have no words in it.
    */
   feedback?: ViewingFeedback | null;
+  /**
+   * Nobody from us is going (15 Sep 2026). James: a viewing that is not a
+   * company viewing - the applicant lets themselves in - is drawn in its own
+   * colour so nobody expects an agent to be standing there. From REX's
+   * "Unaccompanied Viewing" appointment type, or the booker's tick box.
+   */
+  unaccompanied?: boolean;
 };
 
 /**

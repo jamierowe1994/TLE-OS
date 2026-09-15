@@ -133,7 +133,7 @@ export default function AppointmentDrawer({
   if (!appt) return null;
 
   const meta = KIND_META[appt.kind];
-  const tone = toneOf(appt.kind);
+  const tone = toneOf(appt.kind, appt.unaccompanied);
   const b = bubble(tone);
   const past = appt.day < 0;
   const near = nearLabel(appt.day);

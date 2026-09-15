@@ -38,6 +38,7 @@ const DAYS_FORWARD = 90;
 
 interface RexEvent extends Record<string, unknown> {
   id?: string;
+  appointment_type?: { name?: string | null } | null;
   title?: string | null;
   description?: string | null;
   is_private?: boolean | null;
@@ -161,6 +162,9 @@ function toAppt(e: RexEvent): Appt | null {
     mins: Math.min(mins, 8 * 60), // a long block shouldn't paint over the grid
     ...(allDay ? { allDay: true } : {}),
     kind: priv ? "other" : kindOf(title),
+    ...(!priv && kindOf(title) === "viewing" && /unaccompanied/i.test(`${e.appointment_type?.name ?? ""} ${title}`)
+      ? { unaccompanied: true }
+      : {}),
     what: priv ? "Busy" : what || "(untitled)",
     where: priv ? "" : loc,
     who: priv ? "" : who,
