@@ -50,7 +50,10 @@ export type AuditKind =
   /* A listing put on the portals, taken off them, or put back (15 Sep 2026).
      It is the one button in Listings that reaches the public, and REX's own
      log will only say the OS did it. */
-  | "listing_publication";
+  | "listing_publication"
+  /* The advert edited from the OS into REX: which fields, and any photo or
+     floor plan uploaded (15 Sep 2026). */
+  | "listing_edited";
 
 export interface AuditRow {
   id: string;

@@ -58,6 +58,13 @@ function whereFrom(result: unknown): Where {
   return { status, channels, onPortals: status === "published" && channels.includes("portals") };
 }
 
+/** getErrorsPreventingUpload answers a list, or messages keyed by portal. */
+function portalMessages(v: unknown): string[] {
+  if (Array.isArray(v)) return v.map(String);
+  if (v && typeof v === "object") return Object.values(v as Record<string, unknown>).flatMap((x) => (Array.isArray(x) ? x.map(String) : [String(x)]));
+  return [];
+}
+
 function listingId(v: unknown): number | null {
   const n = Number(v);
   return Number.isInteger(n) && n > 0 ? n : null;
@@ -70,9 +77,14 @@ export async function GET(req: NextRequest) {
   const id = listingId(req.nextUrl.searchParams.get("id"));
   if (!id) return NextResponse.json({ ok: false, error: "A numeric listing id is required." }, { status: 400 });
   try {
-    const [status, issues] = await Promise.all([
+    /* Two of REX's own checks, because they are not the same list: a
+       listing REX will publish can still be refused by every portal feed
+       for want of bedrooms, bathrooms or an available date (measured on 100
+       rentals, 15 Sep 2026). */
+    const [status, issues, upload] = await Promise.all([
       rexCall("ListingPublication", "getPublicationStatus", { listing_id: id }),
       rexCall("ListingPublication", "getPublicationIssues", { listing_id: id }),
+      rexCall("ListingPortalUploads", "getErrorsPreventingUpload", { listing_id: id }),
     ]);
     if (!status.ok) return NextResponse.json({ ok: false, error: status.error ?? "REX did not say." }, { status: 502 });
     const iss = (issues.result ?? {}) as { errors?: unknown; warnings?: unknown };
@@ -81,7 +93,7 @@ export async function GET(req: NextRequest) {
       ok: true,
       id,
       ...whereFrom(status.result),
-      blockers: list(iss.errors),
+      blockers: [...new Set([...list(iss.errors), ...(upload.ok ? portalMessages(upload.result) : [])])],
       warnings: list(iss.warnings),
     });
   } catch (e) {
@@ -126,8 +138,11 @@ export async function POST(req: NextRequest) {
       }
       /* REX's own list of what stops it, asked first, so the agent reads
          "needs a photo" rather than a refusal from deep in REX. */
-      const errs = await rexCall("ListingPublication", "getErrorsPreventingPublication", { listing_id: id });
-      const blockers = Array.isArray(errs.result) ? errs.result.map(String) : [];
+      const [errs, upload] = await Promise.all([
+        rexCall("ListingPublication", "getErrorsPreventingPublication", { listing_id: id }),
+        rexCall("ListingPortalUploads", "getErrorsPreventingUpload", { listing_id: id }),
+      ]);
+      const blockers = [...new Set([...(Array.isArray(errs.result) ? errs.result.map(String) : []), ...(upload.ok ? portalMessages(upload.result) : [])])];
       if (blockers.length) {
         return NextResponse.json({ ok: false, error: `REX will not publish it yet: ${blockers.join("; ")}`, blockers }, { status: 422 });
       }

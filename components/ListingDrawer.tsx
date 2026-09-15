@@ -17,7 +17,6 @@ import { Tag } from "@/components/ListingTags";
 import { ARCHIVE_AFTER_DAYS, archiveLabel, archiveWhy, type ArchiveReason } from "@/lib/listing-archive";
 import AccessRequest, { AccessSettings, NO_ACCESS, type Access } from "@/components/listing/AccessRequest";
 import DropZone, { type DropKind } from "@/components/listing/DropZone";
-import PickOne from "@/components/PickOne";
 import Doodles from "@/components/Doodles";
 import { LISTING_BOOKER_LIVE } from "@/lib/viewing-sends";
 import { LISTING_TRACK, listingStartingStep } from "@/lib/journey";
@@ -29,6 +28,8 @@ import { setOpenListing } from "@/lib/open-record";
 import type { TenancyLink } from "@/lib/tenancy-link";
 import { saveLabel, useCaseState } from "@/lib/case-state";
 import { AREA_DEFS, canAct, levelOf, lockedSentence, type AreaAccess } from "@/lib/area-map";
+import ListingMarketing, { type Locks } from "@/components/listing/ListingMarketing";
+import type { ListingDetails } from "@/lib/listing-details";
 import { useListingTerms } from "@/lib/use-listing-terms";
 
 /**
@@ -123,8 +124,6 @@ const BLANK_TENANT: TenantIn = { name: "", number: "", mobile: "", situation: ""
 
 type Offer = { rent: string; tenants: TenantIn[] };
 
-const TYPES = ["Flat", "Terraced", "Semi-detached", "Detached", "Bungalow", "Maisonette", "HMO", "Room"];
-
 function Card({
   title,
   icon,
@@ -147,31 +146,6 @@ function Card({
       </div>
       {children}
     </section>
-  );
-}
-
-function Stepper({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) {
-  return (
-    <div className="flex items-center justify-between gap-3 py-1.5">
-      <span className="text-[12.5px]">{label}</span>
-      <span className="flex items-center gap-1">
-        <button
-          type="button"
-          onClick={() => onChange(Math.max(0, value - 1))}
-          className="flex h-6 w-6 items-center justify-center rounded-full border border-line/80 text-[13px] leading-none text-muted transition-colors hover:border-ink/40 hover:text-ink"
-        >
-          −
-        </button>
-        <span className="figures w-6 text-center text-[13px]">{value}</span>
-        <button
-          type="button"
-          onClick={() => onChange(value + 1)}
-          className="flex h-6 w-6 items-center justify-center rounded-full border border-line/80 text-[13px] leading-none text-muted transition-colors hover:border-ink/40 hover:text-ink"
-        >
-          +
-        </button>
-      </span>
-    </div>
   );
 }
 
@@ -230,7 +204,6 @@ export default function ListingDrawer({
   /* Photographs added here, out of R2, shown beside REX's. */
   const [uploaded, setUploaded] = useState<{ key: string; url: string }[]>([]);
   const [drop, setDrop] = useState<DropKind | null>(null);
-  const [writing, setWriting] = useState(false);
   /* The push to the portals, as a moment: null when not running, then the
      portal it is on (0..2), then 3 for the tick and the confetti. */
   const [pushing, setPushing] = useState<number | null>(null);
@@ -264,6 +237,33 @@ export default function ListingDrawer({
     };
   }, [listing?.id]);
 
+  /* The listing as REX holds it now - rooms, type, deposit, dates - read once
+     per listing and shared with the Marketing tab. The book never carried
+     bedrooms, which is why Property details said "Not set" on every home. */
+  const [live, setLive] = useState<ListingDetails | null>(null);
+  const [liveLocks, setLiveLocks] = useState<Locks | null>(null);
+  const [liveFailed, setLiveFailed] = useState(false);
+  useEffect(() => {
+    setLive(null);
+    setLiveFailed(false);
+    if (!listing?.id) return;
+    let off = false;
+    fetch(`/api/listings/details?id=${encodeURIComponent(String(listing.id))}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j: { ok?: boolean; details?: ListingDetails; locks?: Locks }) => {
+        if (off) return;
+        if (j.ok && j.details) {
+          setLive(j.details);
+          setLiveLocks(j.locks ?? { listing: true, rooms: true, media: true });
+        }
+        else setLiveFailed(true);
+      })
+      .catch(() => !off && setLiveFailed(true));
+    return () => {
+      off = true;
+    };
+  }, [listing?.id]);
+
   /* Its own switch on Admin, Switches: hidden, look only, testers, everyone. */
   const [areaAccess, setAreaAccess] = useState<AreaAccess | null>(null);
   useEffect(() => {
@@ -276,6 +276,9 @@ export default function ListingDrawer({
   const publishLevel = levelOf(areaAccess, publishArea.id);
   const publishHidden = Boolean(areaAccess?.gated) && publishLevel === "hidden";
   const publishCanPress = canAct(areaAccess, publishArea);
+  const editArea = AREA_DEFS.find((a) => a.id === "listing-edit")!;
+  const editLevel = levelOf(areaAccess, editArea.id);
+  const editCanPress = canAct(areaAccess, editArea);
   const [portalBusy, setPortalBusy] = useState(false);
   const [portalConfirm, setPortalConfirm] = useState(false);
   const [portalNote, setPortalNote] = useState<string | null>(null);
@@ -422,11 +425,6 @@ export default function ListingDrawer({
     };
   }, [listing]);
 
-  const [type, setType] = useState("");
-  const [beds, setBeds] = useState(0);
-  const [baths, setBaths] = useState(0);
-  const [receptions, setReceptions] = useState(0);
-  const [furnished, setFurnished] = useState("");
   const [booked, setBooked] = useState<{ when: string; who: string }[]>([]);
   const [step, setStep] = useState(0);
   const [handingOver, setHandingOver] = useState(false);
@@ -562,15 +560,9 @@ export default function ListingDrawer({
     [draftTenants, candidates]
   );
 
-  /* The portal write-up, and the only thing on this screen that writes to REX.
-     `saved` holds what REX confirmed on the way back, so the panel shows the
-     stored value rather than what was typed — the book's cache can be up to
-     two minutes behind a save. */
-  const [editingCopy, setEditingCopy] = useState(false);
-  const [copyHeading, setCopyHeading] = useState("");
-  const [copyBody, setCopyBody] = useState("");
-  const [savingCopy, setSavingCopy] = useState(false);
-  const [copyError, setCopyError] = useState<string | null>(null);
+  /* What REX confirmed after a save on the Marketing tab, so the readiness
+     ticks read the stored advert rather than the book, which can be minutes
+     behind. */
   const [saved, setSaved] = useState<{ heading: string | null; body: string | null } | null>(null);
 
   const shownHeading = saved ? saved.heading : (listing?.advertHeading ?? null);
@@ -578,9 +570,7 @@ export default function ListingDrawer({
 
   // A different listing is a different write-up: never carry one over.
   useEffect(() => {
-    setEditingCopy(false);
     setSaved(null);
-    setCopyError(null);
   }, [listing?.id]);
 
   /* Tell Steve what they're looking at, so "how many bedrooms is this one"
@@ -618,31 +608,9 @@ export default function ListingDrawer({
     };
   }, [listing?.id]);
 
-  async function saveCopy() {
-    if (!listing) return;
-    setSavingCopy(true);
-    setCopyError(null);
-    try {
-      const res = await fetch("/api/listings/write-up", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ id: listing.id, heading: copyHeading, body: copyBody }),
-      });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error ?? "REX refused the save.");
-      setSaved({ heading: j.heading ?? null, body: j.body ?? null });
-      setEditingCopy(false);
-    } catch (e) {
-      setCopyError(e instanceof Error ? e.message : "Save failed.");
-    } finally {
-      setSavingCopy(false);
-    }
-  }
-
   useEffect(() => {
     if (!listing) return;
     setTab("home");
-    setType(""); setBeds(0); setBaths(0); setReceptions(0); setFurnished("");
     setBooked([]);
     setStep(listingStartingStep(listing));
     setHandingOver(false);
@@ -701,36 +669,6 @@ export default function ListingDrawer({
     .filter((v) => !v.cancelled)
     .map((v) => ({ id: v.id, startsAt: v.startsAt, who: v.contacts.map((c) => c.name).join(", ") || v.title }));
 
-  /** The advert, drafted by Claude from the record and the photographs. */
-  async function writeForMe() {
-    if (!listing) return;
-    setWriting(true);
-    setCopyError(null);
-    try {
-      const r = await fetch("/api/listings/describe", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          name: listing.name,
-          locality: listing.locality,
-          rent: listing.rent,
-          availableFrom: listing.availableFrom,
-          type, beds, baths, receptions, furnished,
-          photos: photos.slice(0, 4),
-          current: shownBody,
-        }),
-      });
-      const j = (await r.json()) as { ok?: boolean; heading?: string; body?: string; error?: string };
-      if (!j.ok) throw new Error(j.error ?? "The writer did not answer.");
-      setCopyHeading(j.heading ?? "");
-      setCopyBody(j.body ?? "");
-      setEditingCopy(true);
-    } catch (e) {
-      setCopyError(e instanceof Error ? e.message : "The writer did not answer.");
-    } finally {
-      setWriting(false);
-    }
-  }
   const here = LISTING_TRACK[Math.min(step, LISTING_TRACK.length - 1)];
   const advance = () => setStep((s) => Math.min(s + 1, LISTING_TRACK.length - 1));
 
@@ -860,9 +798,11 @@ export default function ListingDrawer({
     setDraftTenants([]);
   }
 
+  /* Live from REX once it has answered: the book is cached and said Draft
+     for minutes after 4 Williams Court went live (15 Sep 2026). */
   const status = listing.letAgreed
     ? { label: "Let agreed", tone: "neutral" as const }
-    : listing.publicationStatus === "published"
+    : isLive
       ? { label: "Available", tone: "good" as const }
       : { label: "Draft", tone: "accent" as const };
 
@@ -1155,26 +1095,30 @@ export default function ListingDrawer({
                 </div>
               </div>
 
-              {/* Property details: the facts, small, in a white box. The
-                  ones an agent sets (type, beds, baths, furnishing) come
-                  from the Marketing tab and show here the moment they do. */}
+              {/* Property details: the facts, small, in a white box, live
+                  from REX and changed on the Marketing tab. */}
               <aside className="rounded-2xl border border-line/40 bg-white p-4 md:col-span-2 xl:col-span-1">
                 <p className="hand flex items-center gap-2 text-[14px]">
                   <DoodleIcon name="home" size={14} className="text-accent-dark" />
                   Property details
                 </p>
                 <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[12px] md:grid-cols-4 xl:grid-cols-2">
-                  {[
-                    ["Type", type || "Not set"],
-                    ["Bedrooms", beds ? String(beds) : "Not set"],
-                    ["Bathrooms", baths ? String(baths) : "Not set"],
-                    ["Furnishing", furnished || "Not set"],
-                    ["Available from", listing.availableFrom ? new Date(`${listing.availableFrom}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Now"],
-                    ["EPC expires", listing.epcExpiry ? new Date(`${listing.epcExpiry}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Not recorded"],
-                  ].map(([k, v]) => (
+                  {(() => {
+                    const wait = live ? null : liveFailed ? "REX did not answer" : "Reading…";
+                    const set = (v: string | number | null | undefined) => wait ?? (v == null || v === "" ? "Not set" : String(v));
+                    const availableFrom = live ? live.availableFrom : listing.availableFrom;
+                    return [
+                    ["Type", set(live?.propertyType)],
+                    ["Bedrooms", set(live?.beds)],
+                    ["Bathrooms", set(live?.baths)],
+                    ["Deposit", set(live?.deposit != null ? `£${live.deposit.toLocaleString("en-GB")}` : null)],
+                    ["Available from", availableFrom ? new Date(`${availableFrom}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Now"],
+                    ["EPC expires", (live?.epc.expiry ?? listing.epcExpiry) ? new Date(`${live?.epc.expiry ?? listing.epcExpiry}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Not recorded"],
+                    ];
+                  })().map(([k, v]) => (
                     <div key={k} className="min-w-0">
                       <dt className="text-[10.5px] text-muted">{k}</dt>
-                      <dd className={`truncate font-semibold ${v === "Not set" || v === "Not recorded" ? "font-normal text-muted" : ""}`}>{v}</dd>
+                      <dd className={`truncate font-semibold ${v === "Not set" || v === "Not recorded" || v === "Reading…" || v === "REX did not answer" ? "font-normal text-muted" : ""}`}>{v}</dd>
                     </div>
                   ))}
                 </dl>
@@ -1679,222 +1623,25 @@ export default function ListingDrawer({
             )}
 
             {tab === "marketing" && (
-              <div className="space-y-5">
-                <div className="grid gap-5 lg:grid-cols-2">
-                  {/* The property's facts, in the OS's own pickers rather than
-                      the browser's. Everything here shows in the property
-                      details the moment it is set. */}
-                  <section className="rounded-[22px] border border-line/50 bg-white p-5">
-                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">The property</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <PickOne
-                        label="Property type"
-                        icon="home"
-                        options={TYPES.map((t) => ({ id: t, label: t }))}
-                        value={type || null}
-                        onChange={(v) => setType(v ?? "")}
-                      />
-                      <PickOne
-                        label="Furnishing"
-                        icon="sofa.png"
-                        options={["Furnished", "Part furnished", "Unfurnished"].map((t) => ({ id: t, label: t }))}
-                        value={furnished || null}
-                        onChange={(v) => setFurnished(v ?? "")}
-                      />
-                    </div>
-                    <div className="mt-3 divide-y divide-line/40">
-                      <Stepper label="Bedrooms" value={beds} onChange={setBeds} />
-                      <Stepper label="Bathrooms" value={baths} onChange={setBaths} />
-                      <Stepper label="Receptions" value={receptions} onChange={setReceptions} />
-                    </div>
-                    <p className="mt-3 border-t border-line/50 pt-2.5 text-[10.5px] leading-relaxed text-muted">
-                      Bedroom counts aren&apos;t in REX&apos;s listing projection; captured here, they can be written back.
-                    </p>
-                  </section>
-
-                  {/* The listing itself, read from REX. */}
-                  <section className="rounded-[22px] border border-line/50 bg-white p-5">
-                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">The listing</p>
-                    <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-[12.5px]">
-                      {[
-                        ["Status", status.label],
-                        ["Rent", listing.rent == null ? "Not set" : `£${listing.rent.toLocaleString("en-GB")} pcm`],
-                        ["Available from", listing.availableFrom ? new Date(`${listing.availableFrom}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Now"],
-                        ["Photos on file", String(photos.length)],
-                        ["EPC expires", listing.epcExpiry ? new Date(`${listing.epcExpiry}T00:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Not recorded"],
-                        ["Days on market", listing.daysOnMarket != null ? String(listing.daysOnMarket) : "Not published"],
-                        ["Live since", listing.publishedAt ? new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "Not yet"],
-                        ["Updated in REX", listing.lastUpdated ? (Number.isFinite(new Date(listing.lastUpdated).getTime()) ? new Date(listing.lastUpdated).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : listing.lastUpdated) : "—"],
-                      ].map(([k, v]) => (
-                        <div key={k}>
-                          <dt className="text-[10.5px] text-muted">{k}</dt>
-                          <dd className={`font-semibold ${v === "Not set" || v === "Not recorded" ? "font-normal text-accent-dark" : ""}`}>{v}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                    {photos.length === 0 && (
-                      <p className="mt-4 rounded-xl bg-accent-soft/60 px-3 py-2 text-[11.5px] leading-relaxed text-accent-dark">
-                        No photos. A listing without photos gets almost no portal traffic - the single highest-value thing to fix on this record.
-                      </p>
-                    )}
-                    <p className="mt-3 border-t border-line/50 pt-2.5 text-[10.5px] leading-relaxed text-muted">
-                      Read-only facts until the write path to REX is wired.
-                    </p>
-                  </section>
-                </div>
-
-                {/* The advert: REX's "internet" write-up, which IS the copy
-                    Rightmove shows. Claude drafts it from the record and the
-                    photographs; the agent edits; saving writes it to REX. */}
-                <section className="rounded-[22px] border border-line/50 bg-white p-5">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">The advert</p>
-                      <p className="mt-1 text-[11.5px] text-muted">
-                        {shownBody ? `${shownBody.length.toLocaleString("en-GB")} characters · goes to Rightmove and Zoopla` : "Nothing written yet - it cannot go to the portals without one"}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => void writeForMe()}
-                        disabled={writing}
-                        className="flex items-center gap-2 rounded-full bg-[var(--brown)] px-4 py-2.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                      >
-                        <DoodleIcon name="magic-wand" size={14} />
-                        {writing ? "Writing it…" : shownBody ? "Rewrite it for me" : "Write it for me"}
-                      </button>
-                      {!editingCopy && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCopyHeading(shownHeading ?? "");
-                            setCopyBody(shownBody ?? "");
-                            setEditingCopy(true);
-                          }}
-                          className="rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold transition-colors hover:border-ink/40"
-                        >
-                          {shownBody ? "Edit" : "Write one by hand"}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-4">
-                    {editingCopy ? (
-                      <div className="space-y-2.5">
-                        <input
-                          type="text"
-                          value={copyHeading}
-                          onChange={(e) => setCopyHeading(e.target.value)}
-                          placeholder="Headline - the line the portals show first"
-                          className="w-full rounded-xl border border-line/70 px-3.5 py-2.5 text-[13.5px] font-semibold outline-none focus:border-ink"
-                        />
-                        <textarea
-                          value={copyBody}
-                          onChange={(e) => setCopyBody(e.target.value)}
-                          rows={12}
-                          placeholder="Where it is, what it's like, what's nearby…"
-                          className="w-full resize-y rounded-xl border border-line/70 px-3.5 py-2.5 text-[13px] leading-relaxed outline-none focus:border-ink"
-                        />
-                        <div className="flex flex-wrap items-center gap-2.5">
-                          <button
-                            type="button"
-                            onClick={saveCopy}
-                            disabled={savingCopy}
-                            className="rounded-full bg-[var(--brown)] px-5 py-2.5 text-[12.5px] font-semibold text-white transition-opacity disabled:opacity-50"
-                          >
-                            {savingCopy ? "Saving to REX…" : "Save to REX"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setEditingCopy(false); setCopyError(null); }}
-                            className="rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold"
-                          >
-                            Cancel
-                          </button>
-                          <span className="text-[11px] text-muted">{copyBody.length.toLocaleString("en-GB")} characters</span>
-                        </div>
-                      </div>
-                    ) : shownBody ? (
-                      <div className="rounded-2xl bg-page p-5">
-                        {shownHeading && <p className="hand mb-2 text-[17px] leading-snug">{shownHeading}</p>}
-                        <p className="max-h-72 overflow-y-auto whitespace-pre-wrap text-[13px] leading-relaxed text-muted">{shownBody}</p>
-                      </div>
-                    ) : (
-                      <div className="rounded-2xl border border-dashed border-line/70 bg-page px-6 py-10 text-center">
-                        <p className="hand text-[18px]">No description on this listing</p>
-                        <p className="mx-auto mt-1.5 max-w-md text-[12.5px] leading-relaxed text-muted">
-                          Every published rental in the book has one, and this is what stands between a draft and going live. Let Claude draft it from the record and the photographs, then make it yours.
-                        </p>
-                      </div>
-                    )}
-                    {copyError && (
-                      <p className="mt-3 rounded-xl bg-accent-soft/60 px-3.5 py-2.5 text-[12px] leading-relaxed text-accent-dark">{copyError}</p>
-                    )}
-                    {saved && !editingCopy && (
-                      <p className="mt-2.5 text-[11px] text-muted">Saved to REX - read back from the record, not from the box.</p>
-                    )}
-                  </div>
-
-                  {/* Only where there IS an advert: a draft has no campaign. */}
-                  {listing.publicationStatus === "published" && (
-                    <div className="mt-5 border-t border-line/50 pt-5">
-                      <PortalStatsPanel listingId={listing.id} embedded />
-                    </div>
-                  )}
-                </section>
-
-                {/* The photographs, all of them, across the bottom. Add more
-                    through the drop zone; they land in R2 under this listing. */}
-                <section className="rounded-[22px] border border-line/50 bg-white p-5">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">
-                      Photos{photos.length ? ` · ${photos.length}` : ""}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {photos.length > 0 && (
-                        <button type="button" onClick={() => setLightbox(0)} className="rounded-full border border-line/60 bg-white px-4 py-2.5 text-[12.5px] font-semibold transition-colors hover:border-ink/40">
-                          Open the showcase
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setDrop("photos")}
-                        className="flex items-center gap-2 rounded-full bg-[var(--brown)] px-4 py-2.5 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90"
-                      >
-                        <DoodleIcon name="upload" size={14} />
-                        Add photos
-                      </button>
-                    </div>
-                  </div>
-                  {photos.length ? (
-                    <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4 xl:grid-cols-6">
-                      {photos.map((p, i) => (
-                        <button
-                          key={p + i}
-                          type="button"
-                          onClick={() => setLightbox(i)}
-                          aria-label={`Photo ${i + 1}`}
-                          className="group overflow-hidden rounded-xl border border-line/50 transition-colors hover:border-ink/40"
-                        >
-                          <PropertyPhoto src={p} className="aspect-[4/3] w-full transition-transform duration-300 group-hover:scale-[1.03]" />
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setDrop("photos")}
-                      className="mt-4 flex w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed border-line/70 bg-page px-6 py-10 text-center transition-colors hover:border-accent-dark/60 hover:bg-accent-soft/30"
-                    >
-                      <span className="flex h-12 w-12 items-center justify-center rounded-full bg-accent-soft text-accent-dark"><DoodleIcon name="folder" size={20} /></span>
-                      <span className="hand mt-3 text-[17px]">No photographs yet</span>
-                      <span className="mt-1 text-[12.5px] text-muted">Drop them here, or click to choose them.</span>
-                    </button>
-                  )}
-                </section>
-              </div>
+              <ListingMarketing
+                listingId={String(listing.id)}
+                initial={live && liveLocks ? { details: live, locks: liveLocks } : null}
+                name={listing.name}
+                locality={listing.locality ?? null}
+                canEdit={editCanPress}
+                lockedNote={editCanPress ? null : lockedSentence(editArea, editLevel)}
+                onSaved={(d) => {
+                  setLive(d);
+                  setSaved({ heading: d.heading || null, body: d.body || null });
+                  setPub((cur) => (cur ? { ...cur, status: d.status, blockers: [...new Set([...d.blockers.publish, ...d.blockers.portals])] } : cur));
+                }}
+              />
+            )}
+            {/* How the advert is doing, only where there IS an advert. */}
+            {tab === "marketing" && isLive && (
+              <section className="mt-5 rounded-[22px] border border-line/50 bg-white p-5">
+                <PortalStatsPanel listingId={listing.id} embedded />
+              </section>
             )}
 
             {tab === "compliance" && (

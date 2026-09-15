@@ -17,17 +17,22 @@ import DoodleIcon from "@/components/DoodleIcon";
  *             uses, so REX gets it too
  */
 
-export type DropKind = "photos" | "epc";
+export type DropKind = "photos" | "floorplan" | "epc";
 
 export interface Landed {
   name: string;
   /** A preview, where there is one (photographs). */
   url?: string;
+  /** Where it sits in R2, for anything that sends it on (the REX listing). */
+  key?: string;
   note?: string;
 }
 
 const ACCEPT: Record<DropKind, string> = {
   photos: "image/jpeg,image/png,image/webp,image/avif,image/heic",
+  /* An image, not a PDF: REX shows floor plans as pictures and the portals
+     take them as the floor plan tab. */
+  floorplan: "image/jpeg,image/png,image/webp",
   epc: "application/pdf,image/*",
 };
 
@@ -38,6 +43,7 @@ export default function DropZone({
   address,
   onClose,
   onLanded,
+  afterUpload,
 }: {
   kind: DropKind;
   /** The listing, for the photo prefix: "listing-<id>". */
@@ -49,6 +55,9 @@ export default function DropZone({
   onClose: () => void;
   /** Every file that landed, as it lands. */
   onLanded?: (f: Landed) => void;
+  /** Sends each landed image on (to REX, 15 Sep 2026); what it answers is
+   *  written under the file, so a refusal is seen where it happened. */
+  afterUpload?: (f: Landed) => Promise<string | undefined>;
 }) {
   const [shown, setShown] = useState(false);
   const [over, setOver] = useState(false);
@@ -74,10 +83,13 @@ export default function DropZone({
     };
   }, [onClose]);
 
+  const pictures = kind === "photos" || kind === "floorplan";
   const words =
     kind === "photos"
       ? { title: "Add the photographs", drop: "Drop the photos here", sub: "JPEG, PNG or HEIC. As many as you like, in one go.", icon: "folder" }
-      : { title: "File the EPC", drop: "Drop your EPC here", sub: "The certificate as a PDF or a photograph of it. We read the rating and the dates off it.", icon: "shield" };
+      : kind === "floorplan"
+        ? { title: "Add the floor plan", drop: "Drop the floor plan here", sub: "An image - JPEG or PNG. REX takes up to five on a listing.", icon: "home" }
+        : { title: "File the EPC", drop: "Drop your EPC here", sub: "The certificate as a PDF or a photograph of it. We read the rating and the dates off it.", icon: "shield" };
 
   /** One file up, with a progress bar the whole way. */
   function upload(url: string, body: FormData, onPct: (p: number) => void): Promise<{ ok: boolean; [k: string]: unknown }> {
@@ -100,7 +112,7 @@ export default function DropZone({
   async function take(files: FileList | File[] | null) {
     const list = Array.from(files ?? []);
     if (!list.length) return;
-    if (kind === "photos") {
+    if (pictures) {
       for (const f of list) {
         const i = queue.length;
         setQueue((q) => [...q, { name: f.name, pct: 0, done: false }]);
@@ -113,12 +125,19 @@ export default function DropZone({
           q.map((r, k) =>
             k === i
               ? j.ok
-                ? { ...r, pct: 100, done: true, url: String(j.url) }
+                ? { ...r, pct: 100, done: true, url: String(j.url), note: afterUpload ? "Sending it to REX…" : undefined }
                 : { ...r, pct: 100, done: true, error: String(j.error ?? "The upload did not land.") }
               : r
           )
         );
-        if (j.ok) onLanded?.({ name: f.name, url: String(j.url) });
+        if (j.ok) {
+          const landed = { name: f.name, url: String(j.url), key: typeof j.key === "string" ? j.key : undefined };
+          onLanded?.(landed);
+          if (afterUpload) {
+            const note = await afterUpload(landed).catch(() => "It is saved here, and did not reach REX.");
+            setQueue((q) => q.map((r, k) => (k === i ? { ...r, note } : r)));
+          }
+        }
       }
       return;
     }
@@ -182,7 +201,7 @@ export default function DropZone({
       >
         <div className="flex items-start justify-between gap-4 px-7 pt-6">
           <div>
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-accent-dark">{kind === "photos" ? "Marketing" : "Compliance"}</p>
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-accent-dark">{pictures ? "Marketing" : "Compliance"}</p>
             <h2 className="hand mt-1 text-[24px] leading-tight">{words.title}</h2>
           </div>
           <button type="button" onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/60 text-[13px] text-muted transition-colors hover:border-ink/40 hover:text-ink" title="Close (Esc)">
@@ -191,7 +210,7 @@ export default function DropZone({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-7 pb-7 pt-5">
-          <input ref={input} type="file" accept={ACCEPT[kind]} multiple={kind === "photos"} className="hidden" onChange={(e) => { void take(e.target.files); e.target.value = ""; }} />
+          <input ref={input} type="file" accept={ACCEPT[kind]} multiple={pictures} className="hidden" onChange={(e) => { void take(e.target.files); e.target.value = ""; }} />
           <div
             onDragOver={(e) => { e.preventDefault(); setOver(true); }}
             onDragLeave={() => setOver(false)}
@@ -206,7 +225,7 @@ export default function DropZone({
             </span>
             <p className="hand mt-5 text-[22px]">{over ? "Let go" : words.drop}</p>
             <p className="mt-1.5 max-w-sm text-[12.5px] leading-relaxed text-muted">{words.sub}</p>
-            <span className="mt-5 rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white">Or choose {kind === "photos" ? "the files" : "the file"}</span>
+            <span className="mt-5 rounded-full bg-accent-dark px-5 py-2.5 text-[12.5px] font-semibold text-white">Or choose {pictures ? "the files" : "the file"}</span>
           </div>
 
           {/* The EPC with no date on it: one field, one button. */}
@@ -237,10 +256,10 @@ export default function DropZone({
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-line/40">
                 <div className="h-full rounded-full bg-accent-dark transition-[width] duration-300" style={{ width: `${queue.reduce((s, q) => s + q.pct, 0) / queue.length}%` }} />
               </div>
-              <ul className={`mt-4 ${kind === "photos" ? "grid grid-cols-3 gap-2.5 sm:grid-cols-4" : "space-y-2"}`}>
+              <ul className={`mt-4 ${pictures ? "grid grid-cols-3 gap-2.5 sm:grid-cols-4" : "space-y-2"}`}>
                 {queue.map((q, i) => (
-                  <li key={q.name + i} className={kind === "photos" ? "fade-up overflow-hidden rounded-xl border border-line/50 bg-page" : "fade-up flex items-center gap-3 rounded-xl border border-line/50 px-3.5 py-2.5 text-[12.5px]"}>
-                    {kind === "photos" ? (
+                  <li key={q.name + i} className={pictures ? "fade-up overflow-hidden rounded-xl border border-line/50 bg-page" : "fade-up flex items-center gap-3 rounded-xl border border-line/50 px-3.5 py-2.5 text-[12.5px]"}>
+                    {pictures ? (
                       <div className="relative aspect-[4/3]">
                         {q.url ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -249,6 +268,9 @@ export default function DropZone({
                           <div className="flex h-full items-center justify-center">
                             {q.error ? <span className="px-2 text-center text-[10.5px] text-accent-dark">{q.error}</span> : <span className="h-5 w-5 animate-spin rounded-full border-2 border-line border-t-accent-dark" />}
                           </div>
+                        )}
+                        {q.note && q.url && (
+                          <span className="absolute inset-x-0 bottom-0 bg-ink/70 px-2 py-1 text-[10px] leading-snug text-white">{q.note}</span>
                         )}
                       </div>
                     ) : (
