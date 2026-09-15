@@ -1,4 +1,5 @@
 import "server-only";
+import { noteFailure } from "@/lib/auto-bugs";
 
 // REX CRM client for TLE OS — ported from the portal's lib/rex.ts.
 //
@@ -303,22 +304,52 @@ export async function rexCall(
   const accountId = rexAccountId();
   const path = `${service}/${method}`;
 
-  if (actorToken) {
-    const res = await rexPost(path, body, actorToken);
-    // NO fallback to the office account. A person's token expiring must
-    // surface as "sign in again", never as the office quietly doing it for
-    // them — that would put the wrong name on the record, which is the one
-    // outcome this whole mechanism exists to prevent.
-    return res;
+  let res: RexResponse;
+  try {
+    if (actorToken) {
+      res = await rexPost(path, body, actorToken);
+      // NO fallback to the office account. A person's token expiring must
+      // surface as "sign in again", never as the office quietly doing it for
+      // them — that would put the wrong name on the record, which is the one
+      // outcome this whole mechanism exists to prevent.
+    } else {
+      let token = await getToken(accountId);
+      res = await rexPost(path, body, token);
+      if (isTokenError(res)) {
+        token = await getToken(accountId, true);
+        res = await rexPost(path, body, token);
+      }
+    }
+  } catch (e) {
+    const name = (e as Error)?.name ?? "";
+    noteFailure({
+      source: "REX",
+      what: path,
+      status: null,
+      message: name === "AbortError" ? `no answer after ${Math.round(CALL_TIMEOUT_MS / 1000)}s` : (e as Error)?.message || "did not answer",
+    });
+    throw e;
   }
-
-  let token = await getToken(accountId);
-  let res = await rexPost(path, body, token);
-  if (isTokenError(res)) {
-    token = await getToken(accountId, true);
-    res = await rexPost(path, body, token);
+  if (!res.ok && worthReporting(res, method, Boolean(actorToken))) {
+    noteFailure({ source: "REX", what: path, status: res.status, message: res.error ?? `answered ${res.status}` });
   }
   return res;
+}
+
+/**
+ * Which REX failures raise a bug by themselves (15 Sep 2026, lib/auto-bugs).
+ *
+ * Every refused WRITE, every rate limit, every server error. A READ that finds
+ * nothing is not a fault - plenty of code asks "is this id still there?" - so
+ * RecordNotFound on a read is left out. So is a person's own sign-in lapsing:
+ * that is "connect REX again" on their screen, not a bug in ours.
+ */
+function worthReporting(res: RexResponse, method: string, asPerson: boolean): boolean {
+  if (asPerson && isTokenError(res)) return false;
+  if (res.status === 429 || res.status >= 500) return true;
+  const readOnly = isReadOnlyMethod(method);
+  if (readOnly && /recordnotfound|not found/i.test(res.error ?? "")) return false;
+  return true;
 }
 
 /** Did REX reject the token we sent? Exported so callers acting AS a person

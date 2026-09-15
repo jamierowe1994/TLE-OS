@@ -63,6 +63,8 @@ type Bug = {
   kind: string;
   state: string;
   createdAt: string;
+  occurrences?: number;
+  lastSeenAt?: string | null;
 };
 
 const when = (iso: string | null) =>
@@ -590,12 +592,20 @@ export default function PreLaunch() {
                     {/* Questions do NOT appear here — they go to the assistant
                         log, which is a different thing from a defect and has
                         its own screen. This list is what is broken. */}
-                    <Pill tone={b.kind === "bug" ? "accent" : "neutral"}>{b.kind}</Pill>
+                    <Pill tone={b.kind === "bug" || b.kind === "auto" ? "accent" : "neutral"}>
+                      {b.kind === "auto" ? "Logged itself" : b.kind}
+                    </Pill>
                     <span className="ml-2 text-muted">
-                      {b.reporterEmail} on {b.path || "—"}
+                      {/* An automatic bug may have nobody behind it (a cron's
+                          REX call) - say where, not a blank name. */}
+                      {b.kind === "auto"
+                        ? `${b.reporterEmail ? `${b.reporterEmail} · ` : ""}${b.path || "on the server"}${(b.occurrences ?? 1) > 1 ? ` · seen ${b.occurrences} times` : ""}`
+                        : `${b.reporterEmail} on ${b.path || "—"}`}
                     </span>
                   </span>
-                  <span className="shrink-0 text-[11px] text-muted">{when(b.createdAt)}</span>
+                  <span className="shrink-0 text-[11px] text-muted">
+                    {b.kind === "auto" && b.lastSeenAt && b.lastSeenAt !== b.createdAt ? `last ${when(b.lastSeenAt)}` : when(b.createdAt)}
+                  </span>
                 </div>
                 <p className="mt-1.5 whitespace-pre-wrap text-[12.5px] leading-relaxed">{b.body}</p>
                 {/* What they were looking at. Not every report has one — it

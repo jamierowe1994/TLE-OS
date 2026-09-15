@@ -1,4 +1,5 @@
 import "server-only";
+import { noteFailure } from "@/lib/auto-bugs";
 
 // Propoly (tenancy progression) client — the third live integration, after
 // REX and Meta. Auth flow per their Swagger (prod.propoly.com/api-docs):
@@ -94,9 +95,11 @@ async function getToken(force = false): Promise<string> {
   });
   if (res.status === 429) {
     tokenBackoffUntil = Date.now() + 60_000;
+    noteFailure({ source: "Propoly", what: "token", status: 429, message: "rate limited - backing off for a minute" });
     throw new Error("Propoly token request failed: 429 (rate limited)");
   }
   if (!res.ok) {
+    noteFailure({ source: "Propoly", what: "token", status: res.status, message: "would not give us a token" });
     throw new Error(`Propoly token request failed: ${res.status}`);
   }
   const data = (await res.json()) as TokenResponse;
@@ -163,6 +166,24 @@ export async function propolyOptions(
   }
 }
 
+/**
+ * Which Propoly answers raise a bug by themselves (15 Sep 2026, lib/auto-bugs):
+ * any refused write, any rate limit or server error, and a read that was
+ * refused rather than merely empty. A 404 on a read is an answer, not a fault.
+ * The path is kept with its ids taken out, so one broken endpoint is one bug.
+ */
+function reportPropoly(method: string, path: string, status: number): void {
+  const write = method !== "GET";
+  if (status < 400) return;
+  if (!write && status === 404) return;
+  noteFailure({
+    source: "Propoly",
+    what: `${method} ${path.split("?")[0].replace(/[0-9a-f]{8}-[0-9a-f-]{27,}|\d+/gi, ":id")}`,
+    status,
+    message: status === 429 ? "rate limited" : write ? "refused the write" : "refused the read",
+  });
+}
+
 export async function propolyGet(path: string): Promise<PropolyResult> {
   const keyHeaders = { "x-api-key": apiKey(), "agent-name": agentName() };
   let token = await getToken();
@@ -183,6 +204,7 @@ export async function propolyGet(path: string): Promise<PropolyResult> {
   } catch {
     body = null;
   }
+  reportPropoly("GET", path, res.status);
   return { status: res.status, body };
 }
 
@@ -226,6 +248,7 @@ async function propolyWrite(method: "POST" | "PATCH", path: string, payload: unk
   } catch {
     body = null;
   }
+  reportPropoly(method, path, res.status);
   return { status: res.status, body };
 }
 
@@ -258,6 +281,7 @@ export async function propolyUpload(path: string, form: FormData): Promise<Propo
   } catch {
     body = null;
   }
+  reportPropoly("POST", path, res.status);
   return { status: res.status, body };
 }
 export const propolyPatch = (path: string, payload: unknown) => propolyWrite("PATCH", path, payload);

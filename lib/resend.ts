@@ -34,6 +34,7 @@ import { hasDb, q } from "@/lib/db";
 import { uid } from "@/lib/auth";
 import { assertInternalRecipient } from "@/lib/email-policy";
 import { switchOn } from "@/lib/switches";
+import { noteFailure } from "@/lib/auto-bugs";
 
 const API = "https://api.resend.com/emails";
 
@@ -206,6 +207,15 @@ export async function sendEmail(msg: {
     } catch {
       /* not JSON — raw body is still the most useful thing we have */
     }
+    /* Resend turning an email down is a fault worth a bug by itself (15 Sep
+       2026, lib/auto-bugs) - unlike our own switches and locks above, which
+       are decisions. The recipient's domain only: an address is a person. */
+    noteFailure({
+      source: "Resend",
+      what: `send to @${to.split("@")[1] ?? "?"}`,
+      status: res.status,
+      message: String(detail).slice(0, 300),
+    });
     throw new ResendBlocked(`Resend said ${res.status}: ${detail}`);
   }
 

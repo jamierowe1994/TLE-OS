@@ -7,6 +7,7 @@ import NotificationBell from "@/components/NotificationBell";
 import DoodleIcon from "@/components/DoodleIcon";
 import { readTheme, type ThemeChoice } from "@/lib/theme";
 import { FRONT, BACK, railFor, type NavItem } from "@/lib/nav";
+import { AREA_DEFS, areaForPage, canAct, canSee, levelOf, lockedSentence, type AreaAccess } from "@/lib/area-map";
 
 /**
  * The OS chrome. The rail is its own encapsulated card — a thin outline the
@@ -166,6 +167,27 @@ export default function Shell({ children }: { children: React.ReactNode }) {
    */
   const [leaving, setLeaving] = useState<string | null>(null);
   useEffect(() => { setLeaving(null); }, [currentHref]);
+
+  /* How far each area is switched on for this person (lib/area-map, 15 Sep
+     2026). Null until it answers, and null reads as everything on - the rail
+     must not flash empty at a pilot agent while it asks. Asked again when the
+     screen changes, so a switch James moves shows up on the next click. */
+  const [areaAccess, setAreaAccess] = useState<AreaAccess | null>(null);
+  useEffect(() => {
+    let gone = false;
+    fetch("/api/area-access", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (!gone && j && typeof j.gated === "boolean") setAreaAccess({ gated: j.gated, tester: Boolean(j.tester), levels: j.levels ?? {} }); })
+      .catch(() => {});
+    return () => { gone = true; };
+  }, [pathname]);
+  const visible = (item: NavItem) => {
+    const area = areaForPage(item.href);
+    return !area || canSee(areaAccess, area);
+  };
+  const hereArea = areaForPage(pathname);
+  const hereLocked = hereArea && areaAccess?.gated && canSee(areaAccess, hereArea) && !canAct(areaAccess, hereArea) ? hereArea : null;
+  const closedArea = pathname === "/dashboard" ? AREA_DEFS.find((a) => a.id === search.get("closed")) ?? null : null;
   /* Matches .page-leaving .os-mast in globals.css: the fall is 400ms, and
      navigating before it lands cut the old screen off mid-drop. */
   const EXIT_MS = 400;
@@ -356,7 +378,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         {/* The break bar, then the nav sits a touch lower. */}
         <div className="mt-4 border-t border-line/70" />
         <nav className="os-rail mt-4 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden pb-2">
-          {FRONT.map((item) => (
+          {FRONT.filter(visible).map((item) => (
             <NavLink
               key={item.href}
               item={item}
@@ -380,7 +402,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
               Back office
             </p>
           </div>
-          {BACK.map((item) => (
+          {BACK.filter(visible).map((item) => (
             <NavLink
               key={item.href}
               item={item}
@@ -537,6 +559,16 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <main data-os-content className="w-full flex-1 px-5 pb-28 pt-8 lg:px-10 xl:pr-[84px] 2xl:pl-14">
           {/* Keyed on the path so the screen replays when you actually change
               screen, and not when a filter changes the query string. */}
+          {/* Said once, above the screen, in the same words a refused save
+              uses - so an agent who presses something on a look-only screen
+              has already been told why nothing will happen. */}
+          {(hereLocked || closedArea) && (
+            <p role="status" className="mb-5 rounded-xl border border-line/80 bg-card px-4 py-2.5 text-[12.5px] leading-relaxed text-muted">
+              {hereLocked
+                ? lockedSentence(hereLocked, levelOf(areaAccess, hereLocked.id))
+                : `${closedArea!.label} is not switched on for you yet. It opens as testing finishes.`}
+            </p>
+          )}
           <div key={pathname} ref={flowRef} className={`page-flow ${leaving ? "page-leaving" : ""}`}>
             {children}
           </div>

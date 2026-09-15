@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
 import CrashScreen from "@/components/CrashScreen";
+import { autoReport } from "@/lib/auto-report";
 
 /**
  * A screen inside the OS threw while rendering.
@@ -18,5 +20,10 @@ import CrashScreen from "@/components/CrashScreen";
  * layout itself lands on app/global-error.tsx instead.
  */
 export default function OsError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  /* Filed the moment it happens (15 Sep 2026), whether or not they press the
+     button - most people who hit a crash reload and say nothing. */
+  useEffect(() => {
+    autoReport({ what: "screen crashed", message: `${error.message || "unknown"}${error.digest ? ` (digest ${error.digest})` : ""}` });
+  }, [error]);
   return <CrashScreen error={error} reset={reset} picture={false} />;
 }

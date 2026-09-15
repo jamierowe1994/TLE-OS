@@ -38,7 +38,15 @@ export type AuditKind =
   /* A catalogue email sent to the person who asked for it, from Admin ->
      Emails. Recorded because it is the one button in the product that renders
      an arbitrary template and puts it in a real inbox. */
-  | "email_test_sent";
+  | "email_test_sent"
+  /* An area of the OS moved between hidden, look only, testers and everyone
+     (15 Sep 2026). The pilot is switched on one area at a time, so "when did
+     Leads go live, and who pressed it" is the question when something that
+     was not tested starts being used. */
+  | "area_changed"
+  /* Somebody made a tester, or stopped being one. A tester can act where
+     every other agent can only look. */
+  | "area_tester_changed";
 
 export interface AuditRow {
   id: string;

@@ -181,6 +181,9 @@ export interface Bug {
   state: string;
   context: Record<string, unknown> | null;
   createdAt: string;
+  /** How many times an automatic bug has happened while open (lib/auto-bugs). 1 for a person's report. */
+  occurrences: number;
+  lastSeenAt: string | null;
 }
 
 export async function logBug(p: {
@@ -266,10 +269,11 @@ export async function bugs(limit = 100): Promise<Bug[]> {
   const rows = await q<{
     id: string; reporter_email: string; body: string; path: string;
     kind: string; state: string; context: Record<string, unknown> | null; created_at: Date;
+    occurrences: number | null; last_seen_at: Date | null;
   }>(
-    `select id, reporter_email, body, path, kind, state, context, created_at
+    `select id, reporter_email, body, path, kind, state, context, created_at, occurrences, last_seen_at
        from os_bugs order by case state when 'open' then 0 when 'ack' then 1 else 2 end,
-       created_at desc limit $1`,
+       coalesce(last_seen_at, created_at) desc limit $1`,
     [limit]
   );
   return rows.map((r) => ({
@@ -281,6 +285,8 @@ export async function bugs(limit = 100): Promise<Bug[]> {
     state: r.state,
     context: r.context,
     createdAt: new Date(r.created_at).toISOString(),
+    occurrences: r.occurrences ?? 1,
+    lastSeenAt: r.last_seen_at ? new Date(r.last_seen_at).toISOString() : null,
   }));
 }
 

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import CrashScreen from "@/components/CrashScreen";
 import { note } from "@/lib/trail";
+import { autoReport } from "@/lib/auto-report";
 
 /**
  * Keeps the trail, and notices when the OS goes quiet on somebody.
@@ -92,6 +93,10 @@ export default function Watchdog() {
       if (!ours) return original.call(this, input as RequestInfo, init);
 
       const short = url.replace(window.location.origin, "").split("?")[0];
+      const method = (init?.method ?? (typeof input === "object" && "method" in input ? (input as Request).method : "GET")).toUpperCase();
+      /* The reporter's own call is left alone, or a failing report would
+         report itself failing. */
+      const reporting = short.startsWith("/api/bugs");
       const started = Date.now();
       const timer = window.setTimeout(() => {
         if (leaving) return;
@@ -108,6 +113,11 @@ export default function Watchdog() {
         const took = Date.now() - started;
         if (!res.ok) note("failed", `${short} came back ${res.status}`);
         else if (took > 6000) note("slow", `${short} took ${Math.round(took / 1000)}s`);
+        /* A server error behind a screen files itself (15 Sep 2026). Only
+           5xx: a 401, 404 or the look-only 423 is an answer, not a fault. */
+        if (res.status >= 500 && !reporting) {
+          autoReport({ what: `${method} ${short}`, status: res.status, message: `came back ${res.status}` });
+        }
         return res;
       } catch (err) {
         window.clearTimeout(timer);
@@ -121,6 +131,20 @@ export default function Watchdog() {
     /* Deliberately never restored. Unpatching on unmount would leave the tab
        unwatched the moment any parent re-rendered, and the patch is harmless:
        it passes everything through and only ever writes to sessionStorage. */
+
+    /* A script that throws outside React's reach - a handler, a timer, a
+       promise nobody awaited - files itself too. Crashes inside a screen land
+       on app/(os)/error.tsx, which reports them there. */
+    window.addEventListener("error", (e) => {
+      if (leaving) return;
+      autoReport({ what: "script error", message: e.message || String(e.error ?? "unknown") });
+    });
+    window.addEventListener("unhandledrejection", (e) => {
+      if (leaving) return;
+      const r = e.reason as { message?: string; name?: string } | undefined;
+      if (r?.name === "AbortError") return;
+      autoReport({ what: "promise nobody caught", message: r?.message || String(e.reason ?? "unknown") });
+    });
   }, []);
 
   if (!stuck) return null;

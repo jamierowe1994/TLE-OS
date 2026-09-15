@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { areaForPage, areaForWrite, canAct, canSee, levelOf, lockedSentence, type AreaAccess } from "@/lib/area-map";
 
 /**
  * The door.
@@ -80,12 +81,16 @@ function b64url(buf: ArrayBuffer): string {
  * a browser walks straight past this.
  */
 async function hasValidSession(token: string | undefined): Promise<boolean> {
-  const secret = process.env.AUTH_SECRET;
-  if (!token || !secret) return false;
+  return (await sessionUserId(token, process.env.AUTH_SECRET)) !== null;
+}
+
+/** The same check, answering WHO: the user id in a valid token, or null. */
+async function sessionUserId(token: string | undefined, secret: string | undefined): Promise<string | null> {
+  if (!token || !secret) return null;
   const parts = token.split(".");
-  if (parts.length !== 3) return false;
+  if (parts.length !== 3) return null;
   const [userId, exp, sig] = parts;
-  if (!Number(exp) || Number(exp) < Date.now()) return false;
+  if (!Number(exp) || Number(exp) < Date.now()) return null;
 
   const key = await crypto.subtle.importKey(
     "raw",
@@ -96,10 +101,85 @@ async function hasValidSession(token: string | undefined): Promise<boolean> {
   );
   const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${userId}.${exp}`));
   const expected = b64url(mac);
-  if (expected.length !== sig.length) return false;
+  if (expected.length !== sig.length) return null;
   let diff = 0;
   for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
-  return diff === 0;
+  return diff === 0 ? userId : null;
+}
+
+/* ── The area switches (15 Sep 2026) ───────────────────────────────────────
+
+   The pilot goes on one area at a time: hidden, look only, testers, everyone
+   (lib/area-map). This is where that is enforced, because it is the one place
+   every page visit and every write passes through - a guard in each of the
+   hundred-odd write routes would be a hundred chances to forget one.
+
+   The edge cannot reach the database, so the answer comes from
+   /api/area-access and is held for a few seconds per person. Two rules keep it
+   from ever becoming the thing that breaks the pilot:
+
+     FAIL OPEN. If the check does not answer, the request goes through. The
+     switches control a rollout; an outage in them must not lock every agent
+     out of every screen.
+
+     WRITES AND PAGES ONLY. Reads are never refused, because the dashboard
+     reads from half the areas and a hidden Finances must not blank its tiles. */
+
+/** lib/auth's development fallback, so the gate can be tried on a laptop. */
+const DEV_SECRET = "dev-only-secret-not-for-production";
+const ACCESS_TTL_MS = 15_000;
+const accessCache = new Map<string, { at: number; access: AreaAccess | null }>();
+
+async function accessOf(req: NextRequest, userId: string): Promise<AreaAccess | null> {
+  const hit = accessCache.get(userId);
+  /* A failed check is only remembered briefly, so a blip is not fifteen
+     seconds of the gate standing open. */
+  if (hit && Date.now() - hit.at < (hit.access ? ACCESS_TTL_MS : 3_000)) return hit.access;
+  let access: AreaAccess | null = null;
+  try {
+    const res = await fetch(new URL("/api/area-access", req.nextUrl.origin), {
+      headers: { cookie: req.headers.get("cookie") ?? "" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(2_500),
+    });
+    const j = res.ok ? ((await res.json()) as Partial<AreaAccess>) : null;
+    if (j && typeof j.gated === "boolean") {
+      access = { gated: j.gated, tester: Boolean(j.tester), levels: (j.levels ?? {}) as AreaAccess["levels"] };
+    }
+  } catch {
+    access = null;
+  }
+  if (accessCache.size > 2_000) accessCache.clear();
+  accessCache.set(userId, { at: Date.now(), access });
+  return access;
+}
+
+async function areaGate(req: NextRequest): Promise<NextResponse | null> {
+  const path = req.nextUrl.pathname;
+  const isApi = path.startsWith("/api/");
+  const area = isApi ? areaForWrite(path, req.method) : req.method === "GET" ? areaForPage(path) : null;
+  if (!area) return null;
+
+  const secret = process.env.AUTH_SECRET || (process.env.NODE_ENV !== "production" ? DEV_SECRET : undefined);
+  const userId = await sessionUserId(req.cookies.get("os_session")?.value, secret);
+  if (!userId) return null;
+
+  const access = await accessOf(req, userId);
+  if (!access?.gated) return null;
+
+  if (isApi) {
+    if (canAct(access, area)) return null;
+    /* 423 Locked, in the shape every screen already prints: { ok, error }. */
+    return NextResponse.json(
+      { ok: false, areaLocked: area.id, error: lockedSentence(area, levelOf(access, area.id)) },
+      { status: 423 }
+    );
+  }
+  if (canSee(access, area)) return null;
+  const url = req.nextUrl.clone();
+  url.pathname = "/dashboard";
+  url.search = `?closed=${area.id}`;
+  return NextResponse.redirect(url);
 }
 
 /**
@@ -196,6 +276,11 @@ export async function middleware(req: NextRequest) {
   if (MACHINE_ROUTES.includes(req.nextUrl.pathname)) {
     return NextResponse.next();
   }
+
+  /* Before the sign-in check, so it also runs on a laptop with no AUTH_SECRET.
+     It only ever acts on a valid session, so it can never let anybody in. */
+  const closed = await areaGate(req);
+  if (closed) return closed;
 
   /**
    * With no AUTH_SECRET the door stands open — local dev only.

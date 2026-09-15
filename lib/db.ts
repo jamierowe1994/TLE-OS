@@ -239,6 +239,17 @@ CREATE TABLE IF NOT EXISTS os_bugs (
 );
 CREATE INDEX IF NOT EXISTS os_bugs_state ON os_bugs (state, created_at DESC);
 
+-- Bugs that report THEMSELVES (15 Sep 2026). Howard: any REX call or write
+-- that fails has to raise a ticket, because REX's validation is never-ending
+-- and some of it fails silently. A failure that happens a hundred times in an
+-- outage is one bug seen a hundred times, not a hundred bugs, so a
+-- fingerprint (where + what went wrong, with the ids taken out) finds the open
+-- one and counts. kind = 'auto' for these. See lib/auto-bugs.ts.
+ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS fingerprint  TEXT;
+ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS occurrences  INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS os_bugs_fingerprint ON os_bugs (fingerprint) WHERE state = 'open';
+
 -- The screen as it looked when they reported it.
 --
 -- A separate table, not a column on os_bugs, and that is the whole point: a
@@ -884,6 +895,26 @@ CREATE TABLE IF NOT EXISTS os_switches (
   is_on          BOOLEAN NOT NULL DEFAULT FALSE,
   changed_by     TEXT NOT NULL DEFAULT '',
   changed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- How far each area of the OS is switched on, for agents (15 Sep 2026).
+-- hidden | look | testers | everyone. No row = everyone, so a fresh database,
+-- or this table arriving in a deploy, changes nothing about what anybody sees.
+-- The map of which screen and which API belongs to which area is code, in
+-- lib/area-map.ts; only the position is stored.
+CREATE TABLE IF NOT EXISTS os_area_access (
+  area           TEXT PRIMARY KEY,
+  level          TEXT NOT NULL,
+  changed_by     TEXT NOT NULL DEFAULT '',
+  changed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Who counts as a tester when an area is at testers. By email rather than
+-- user id so somebody can be named before their account exists.
+CREATE TABLE IF NOT EXISTS os_area_testers (
+  email          TEXT PRIMARY KEY,
+  added_by       TEXT NOT NULL DEFAULT '',
+  added_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- People added in the OS, and what became of them in REX.

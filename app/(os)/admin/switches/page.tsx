@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import PageHeader from "@/components/PageHeader";
 import { Pill } from "@/components/Wire";
+import AreaSwitches from "@/components/AreaSwitches";
 
 /**
  * What's armed — the page that turns sending on and off.
@@ -103,8 +104,10 @@ export default function AdminSwitches() {
     <>
       <PageHeader illustration="/illustrations/people/lending-a-hand.svg" illustrationAspect={1.0} lineBreak="none"
         title="Switches"
-        blurb="What the system is allowed to send. Nothing here is on until you turn it on."
+        blurb="Which screens agents can use, and what the system is allowed to send. Nothing that sends is on until you turn it on."
       />
+
+      <AreaSwitches />
 
       {locked && (
         <p className="fade-up mt-6 rounded-2xl border border-accent-dark/40 bg-accent-soft/40 p-4 text-[12.5px] leading-relaxed">
