@@ -73,7 +73,7 @@ export default function SignSheet({
   url,
   email,
   steps = LANDLORD_SIGNING,
-  height = "94vh",
+  height,
   closeLabel = "Finish later",
   open = true,
   onClose,
@@ -83,7 +83,12 @@ export default function SignSheet({
   email?: string | null;
   /** What they are signing, in their words. See lib/signing-steps. */
   steps?: SigningStep[];
-  /** How tall the sheet stands. The presentation leaves its booklet showing. */
+  /**
+   * How tall the sheet stands. The presentation leaves its booklet showing and
+   * passes its own; left unset it is 94vh, and the whole screen on a phone,
+   * where 6vh of dimmed portal is a strip of somewhere else on the screen with
+   * the least room and the most to read.
+   */
   height?: string;
   /** "Finish later" from the file; "Back to the presentation" under the deck. */
   closeLabel?: string;
@@ -115,6 +120,20 @@ export default function SignSheet({
    * never jumps around while this settles.
    */
   const [placed, setPlaced] = useState(false);
+  /**
+   * HOW BIG THE PAGES ARE, on a phone.
+   *
+   * An A4 page drawn 375px wide is 47% of size, which puts the clause text at
+   * about six pixels. That is not small, it is unreadable - and this is the
+   * one document in the product where "they could not read it" is a real
+   * problem rather than a nuisance. So the pages can be drawn larger than the
+   * screen and the contract scrolls sideways, the way every phone PDF reader
+   * works.
+   *
+   * It starts at "fit" because the first thing a landlord should see is a
+   * whole page they recognise as their contract. One tap makes it readable.
+   */
+  const [zoom, setZoom] = useState<"fit" | "read">("fit");
 
   /* Mounted shut, opened a frame later, so the rise has somewhere to come
      from. Rendered straight at rest there is no arrival. */
@@ -131,6 +150,10 @@ export default function SignSheet({
   }, []);
 
   const split = vw >= SPLIT_MIN;
+  const phone = vw > 0 && vw < 640;
+  /* A caller that asked for a height gets it - the presentation wants its
+     booklet showing under the contract. Only the default changes. */
+  const tall = height ?? (phone ? "100dvh" : "94vh");
   /* With a column beside it the contract gives up the room the column needs,
      rather than the pair running off the edge of the screen. On a phone it
      takes the whole width - 24px of dark either side of a contract is 24px
@@ -209,8 +232,14 @@ export default function SignSheet({
      * an improvement on that, never a precondition for signing.
      */
     const lift = ".form-container { bottom: 60px !important; }";
-    el.textContent = lift + (split ? column : "") + (started ? "" : hide);
-  }, [root, split, started, paperW]);
+    /* Wider than the screen on purpose - the scroller around it takes the
+       sideways scroll, and the white paper behind stays under the strip that
+       is actually in view. */
+    const big = phone && zoom === "read"
+      ? "\n.scrollbox { width: " + Math.round(paperW * 1.7) + "px !important; }"
+      : "";
+    el.textContent = lift + (split ? column : "") + big + (started ? "" : hide);
+  }, [root, split, started, paperW, phone, zoom]);
 
   /**
    * WHERE THEIR PANEL SITS, MEASURED RATHER THAN ASSUMED.
@@ -363,7 +392,7 @@ export default function SignSheet({
       }));
 
   return (
-    <div className="relative flex w-full justify-center" style={{ height }} onClick={onClose}>
+    <div className="relative flex w-full justify-center" style={{ height: tall }} onClick={onClose}>
       <div
         className="relative"
         style={{
@@ -410,6 +439,23 @@ export default function SignSheet({
            */
           className="absolute inset-0 overflow-y-auto"
         />
+
+        {/* READ IT LARGER. Phone only: on anything wider the page already
+            draws at a size the clauses survive. */}
+        {phone && (
+          <button
+            type="button"
+            onClick={() => setZoom((z) => (z === "fit" ? "read" : "fit"))}
+            className="absolute left-4 top-4 z-20 flex items-center gap-1.5 rounded-full bg-white/85 px-3 py-2 text-[12px] font-semibold text-muted shadow-sm backdrop-blur transition hover:text-ink"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2}>
+              <circle cx="11" cy="11" r="7" />
+              <path strokeLinecap="round" d="M20 20l-3.5-3.5" />
+              {zoom === "fit" && <path strokeLinecap="round" d="M11 8v6M8 11h6" />}
+            </svg>
+            {zoom === "fit" ? "Read it larger" : "Fit the page"}
+          </button>
+        )}
 
         {/* Close floats over the paper - nothing takes a strip off the top of
             the contract. */}
