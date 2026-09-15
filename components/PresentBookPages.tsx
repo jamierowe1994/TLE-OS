@@ -59,10 +59,6 @@ function FootLeft({ deck }: { deck: Deck }) {
 }
 
 /** The foot of a right-hand page: the line. */
-function FootRight() {
-  return <p className="absolute bottom-[56px] right-[440px] text-[10.5px] uppercase tracking-[0.3em] text-black/55">People &middot; Homes &middot; Relationships</p>;
-}
-
 /** Page: WELCOME. The plan, the three promises, the vase on the sideboard. */
 export function BookWelcome({ deck }: { deck: Deck }) {
   return (
@@ -173,18 +169,6 @@ export function BookAgenda() {
   );
 }
 
-/** The foot of a left-hand page when it is a strap rather than the address. */
-function FootStrap({ lines }: { lines: string[] }) {
-  return (
-    <div className="absolute bottom-[56px] left-[96px]">
-      <span aria-hidden className="mb-3 block h-px w-[40px]" style={{ background: CLAY }} />
-      {lines.map((l) => (
-        <p key={l} className="text-[10.5px] uppercase leading-[1.9] tracking-[0.3em] text-black/55">{l}</p>
-      ))}
-    </div>
-  );
-}
-
 /**
  * Page: MEET YOUR AGENT. The print on a sage disc with the note on its top
  * corner and the review on its bottom corner - and nothing else in the
@@ -212,12 +196,6 @@ export function BookAgent({ deck }: { deck: Deck }) {
           </div>
         )}
       </div>
-      {/* THE NOTE on the print's top corner. */}
-      <div className="absolute left-[1000px] top-[120px] w-[210px] rounded-[4px] px-5 py-4 shadow-[0_18px_40px_-22px_rgba(0,0,0,0.45)]" style={{ background: "#fbf6ec", transform: "rotate(3deg)" }}>
-        <p className="text-[21px] leading-[1.15] text-black/75" style={{ fontFamily: "var(--font-shantell), cursive" }}>
-          Here to help you get the most from your property. <span style={{ color: CLAY }}>&hearts;</span>
-        </p>
-      </div>
       {/* THE REVIEW, on the print's bottom corner - James: "move the pink box
           down to the bottom right-hand corner of the Polaroid". */}
       {t?.quote && (
@@ -234,19 +212,17 @@ export function BookAgent({ deck }: { deck: Deck }) {
           <span style={{ color: CLAY }}>{first || "We"}</span>
           {first ? " is looking" : " are looking"}
           <br />
-          after your
-          <br />
-          property.
+          after you.
         </h1>
         <span aria-hidden className="mt-4 block h-[3px] w-[150px] rounded-full" style={{ background: CLAY, opacity: 0.8 }} />
-        <p className="mt-8 text-[16px] leading-[1.6] text-black/70">Property isn&rsquo;t just a job to {first || "us"}, it&rsquo;s personal.</p>
-        <div className="mt-5 space-y-4">
+        {/* No line between the heading and the bio: the bio is the agent's own
+            and some of them run long, so the room goes to it. */}
+        <div className="mt-8 space-y-4">
           {paragraphs.map((para, i) => (
             <p key={i} className="text-[15px] leading-[1.7] text-black/60">{para}</p>
           ))}
         </div>
       </div>
-      <FootStrap lines={["Local expertise.", "A more personal approach."]} />
     </div>
   );
 }
@@ -264,8 +240,7 @@ export function BookApproach() {
           way to <span style={{ color: CLAY }}>let.</span>
         </h1>
         <span aria-hidden className="mt-4 block h-[3px] w-[240px] rounded-full" style={{ background: CLAY, opacity: 0.8 }} />
-        <p className="mt-7 max-w-[560px] text-[16px] leading-[1.6] text-black/65">{APPROACH.standfirst}</p>
-        <div className="mt-10 grid grid-cols-2" style={{ width: 1080 }}>
+        <div className="mt-12 grid grid-cols-2" style={{ width: 1080 }}>
           {cols.map((items, c) => (
             <ol key={c} className={c === 1 ? "border-l pl-10" : "pr-10"} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
               {items.map((a, i) => (
@@ -288,7 +263,6 @@ export function BookApproach() {
         <br />
         Relationships
       </p>
-      <p className="absolute bottom-[56px] left-1/2 -translate-x-1/2 text-[10.5px] uppercase tracking-[0.3em] text-black/55">More than just a letting agent.</p>
     </div>
   );
 }
@@ -336,19 +310,6 @@ export function BookProperty({ deck }: { deck: Deck }) {
       {/* THE HOUSE, in its own soft shape. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/brand/photo/book-property-cut.webp" alt={p.address} className="pointer-events-none absolute max-w-none" style={{ width: 1000, left: 96, bottom: 112 }} />
-      {/* The handwritten aside, and the arrow down to the house. */}
-      <div className="pointer-events-none absolute left-[1110px] top-[330px] w-[200px]">
-        <p className="text-[24px] leading-[1.15] text-black/60" style={{ fontFamily: "var(--font-shantell), cursive", transform: "rotate(-14deg)" }}>
-          Let&rsquo;s see
-          <br />
-          <span className="ml-3">what it could</span>
-          <br />
-          <span className="ml-1">achieve.</span>
-        </p>
-        <svg viewBox="0 0 60 60" aria-hidden className="ml-[70px] mt-2 h-[52px] w-[52px]">
-          <path d="M40 4C44 20 36 36 16 50M16 50L20 36M16 50L30 46" fill="none" stroke={INK} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
-        </svg>
-      </div>
 
       <div className="absolute left-[96px] top-[84px] w-[1200px]">
         <EyebrowRule>Your property</EyebrowRule>
@@ -360,7 +321,6 @@ export function BookProperty({ deck }: { deck: Deck }) {
         )}
         {facts.length > 0 && <p className="mt-2 text-[15px] tracking-[0.02em] text-black/50">{facts.join("  ·  ")}</p>}
       </div>
-      <FootStrap lines={["Your property. The right plan."]} />
     </div>
   );
 }
@@ -500,7 +460,6 @@ export function BookListings({ deck }: { deck: Deck }) {
           </div>
         )}
       </div>
-      <FootStrap lines={["Your property. The right plan."]} />
     </div>
   );
 }
@@ -695,18 +654,6 @@ export function BookMarketing() {
       {/* THE FLAT in its soft shape, off the right. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/brand/photo/marketing-flat-cut.webp" alt="" aria-hidden className="pointer-events-none absolute max-w-none" style={{ height: 590, right: -130, top: 190 }} />
-      <div className="pointer-events-none absolute right-[70px] top-[70px] w-[200px]">
-        <p className="text-[21px] leading-[1.15] text-black/70" style={{ fontFamily: "var(--font-shantell), cursive", transform: "rotate(-8deg)" }}>
-          Great tenants
-          <br />
-          start with great
-          <br />
-          marketing.
-        </p>
-        <svg viewBox="0 0 60 60" aria-hidden className="ml-[120px] mt-1 h-[48px] w-[48px]">
-          <path d="M6 6C26 12 40 26 44 50M44 50L34 42M44 50L48 38" fill="none" stroke={INK} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
-        </svg>
-      </div>
 
       <div className="absolute left-[96px] top-[84px] w-[600px]">
         <Eyebrow>Marketing</Eyebrow>
@@ -969,18 +916,6 @@ export function BookSocial() {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/brand/photo/book-phone.webp" alt="" aria-hidden className="h-full w-full object-cover" />
       </div>
-      <div className="pointer-events-none absolute right-[470px] top-[76px] w-[200px] text-right">
-        <p className="text-[21px] leading-[1.2] text-black/70" style={{ fontFamily: "var(--font-shantell), cursive", transform: "rotate(-8deg)" }}>
-          Right people.
-          <br />
-          Right places.
-          <br />
-          Right time.
-        </p>
-        <svg viewBox="0 0 60 60" aria-hidden className="ml-auto mr-[10px] mt-1 h-[44px] w-[44px]">
-          <path d="M14 6C22 22 30 34 48 46M48 46L34 44M48 46L44 32" fill="none" stroke={INK} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
-        </svg>
-      </div>
 
       <div className="absolute left-[96px] top-[100px]" style={{ width: 1100 }}>
         <Eyebrow>Social advertising</Eyebrow>
@@ -1113,14 +1048,6 @@ function Soft({ src, style, radius = "62% 38% 54% 46% / 48% 56% 44% 52%" }: { sr
   );
 }
 
-function Hand({ children, className = "", style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
-  return (
-    <p className={`pointer-events-none absolute text-[21px] leading-[1.2] text-black/70 ${className}`} style={{ fontFamily: "var(--font-shantell), cursive", ...style }}>
-      {children}
-    </p>
-  );
-}
-
 /** Page 9L: HOW WE FIND AND SCREEN EVERY TENANT - the four paragraphs, two a side. */
 export function BookScreening() {
   const [a, b] = [SCREENING.paragraphs.slice(0, 2), SCREENING.paragraphs.slice(2)];
@@ -1146,7 +1073,6 @@ export function BookScreening() {
           ))}
         </div>
       </div>
-      <FootStrap lines={["People \u00b7 Properties \u00b7 Longer futures"]} />
     </div>
   );
 }
@@ -1157,11 +1083,6 @@ export function BookManagement() {
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <Blob d="M1460 600 C 1400 560, 1340 660, 1260 650 C 1180 640, 1150 580, 1070 610 C 990 640, 980 740, 900 780 C 840 810, 800 860, 780 920 L1460 920 Z" />
-      <Hand className="right-[130px] top-[700px] w-[220px] text-right" style={{ transform: "rotate(-10deg)" }}>
-        Your property
-        <br />
-        in safe hands.
-      </Hand>
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>Management and support</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
@@ -1539,7 +1460,6 @@ export function BookFees({ deck }: { deck: Deck }) {
           <p className="mt-10 text-[17px] text-black/55">Our fee schedule will sit here.</p>
         )}
       </div>
-      <FootRight />
     </div>
   );
 }
@@ -1604,9 +1524,6 @@ export function BookQuestions({ deck }: { deck: Deck }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/brand/photo/close-door.webp" alt="" aria-hidden className="h-full w-full object-cover" />
       </div>
-      <Hand className="right-[150px] top-[680px] w-[300px]" style={{ transform: "rotate(-6deg)", color: SAGE_INK, fontSize: 27 }}>
-        Let&rsquo;s get going.
-      </Hand>
       {/* The words, centred on the page's height. */}
       <div className="absolute left-[96px] top-0 flex h-full w-[760px] flex-col justify-center">
         <EyebrowRule>Any questions</EyebrowRule>

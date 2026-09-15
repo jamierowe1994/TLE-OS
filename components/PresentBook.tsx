@@ -141,12 +141,6 @@ function CoverFace({ deck }: { deck: Deck }) {
           {[deck.property.address, deck.property.postcode].filter(Boolean).join(", ")}
         </p>
       )}
-      {/* In the script face, not the marker: "some nice handwritten text". */}
-      <p className="absolute bottom-[56px] right-[110px] w-[340px] text-right text-[34px] leading-[1.1] text-black/70" style={{ fontFamily: "var(--font-script), 'Snell Roundhand', cursive", transform: "rotate(-5deg)" }}>
-        More than
-        <br />
-        just a letting agent.
-      </p>
       {/* THE SPINE. A hardback's ridge down the left edge - the board turns
           in and the cloth rounds over it: a dark line where it folds, a
           highlight where the light catches, and a soft band of shadow
