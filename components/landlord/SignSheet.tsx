@@ -42,7 +42,13 @@ import { LANDLORD_SIGNING, type SigningStep } from "@/lib/signing-steps";
  * draw if they are not there. What never depends on it is the signing itself.
  */
 
-const COL_W = 360;
+/**
+ * Wide enough for the signature. Their drawing canvas is the column's width
+ * less padding, at a 3:1 ratio they fix themselves - so the only way to give
+ * somebody more room to sign is to give the column more room. 360 made it
+ * 294x98; this makes it ~354x118. See the note in DocusealEmbed.
+ */
+const COL_W = 420;
 const GAP = 24;
 const PAPER_MAX = 1040;
 /** Under this there is no dark left to put a column in, so the panel stays theirs. */
@@ -69,6 +75,7 @@ export default function SignSheet({
   steps = LANDLORD_SIGNING,
   height = "94vh",
   closeLabel = "Finish later",
+  open = true,
   onClose,
   onDone,
 }: {
@@ -80,6 +87,12 @@ export default function SignSheet({
   height?: string;
   /** "Finish later" from the file; "Back to the presentation" under the deck. */
   closeLabel?: string;
+  /**
+   * Set false to send it back down. The caller keeps it mounted for the length
+   * of the fall and then unmounts - which is how the presentation gets its
+   * contract to drop away before the booklet slides back in.
+   */
+  open?: boolean;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -117,7 +130,10 @@ export default function SignSheet({
   /* Half the column, so the CONTRACT is centred before signing starts and
      slides off centre by exactly the room the column needs. */
   const shift = split ? (GAP + COL_W) / 2 : 0;
-  const colTop = 16 + listH + 14;
+  /* The column starts level with the top of the paper. James, 15 Sep: the top
+     box "should be aligned with the top of the popout because it's currently
+     slightly below". */
+  const colTop = listH + 12;
 
   /* ── what they have done, read off their form ── */
   useEffect(() => {
@@ -233,7 +249,7 @@ export default function SignSheet({
           height: "100%",
           /* Square. James, 15 Sep: "the edges aren't rounded over ... it should
              have squared-off corners." */
-          transform: "translate(" + (up && started ? 0 : shift) + "px, " + (up ? "0" : "104%") + ")",
+          transform: "translate(" + (up && started ? 0 : shift) + "px, " + (up && open ? "0" : "104%") + ")",
           transition: "transform 620ms cubic-bezier(0.22, 1, 0.36, 1)",
         }}
         onClick={(e) => e.stopPropagation()}
@@ -292,18 +308,24 @@ export default function SignSheet({
             >
               All done
             </button>
-          ) : started ? (
-            <button type="button" onClick={onClose} className="shrink-0 text-[12px] text-muted underline transition hover:text-ink">
-              {closeLabel}
-            </button>
           ) : (
-            <button
-              type="button"
-              onClick={() => setStarted(true)}
-              className="shrink-0 rounded-full bg-accent-dark px-6 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
-            >
-              Start signing <span aria-hidden>→</span>
-            </button>
+            <>
+              {/* The way back is offered before they start as well as after.
+                  Reading a contract and deciding not to sign it today is a
+                  perfectly good outcome and should not need the Escape key. */}
+              <button type="button" onClick={onClose} className="shrink-0 text-[12px] text-muted underline transition hover:text-ink">
+                {closeLabel}
+              </button>
+              {!started && (
+                <button
+                  type="button"
+                  onClick={() => setStarted(true)}
+                  className="shrink-0 rounded-full bg-accent-dark px-6 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+                >
+                  Start signing <span aria-hidden>→</span>
+                </button>
+              )}
+            </>
           )}
         </div>
 
@@ -311,7 +333,7 @@ export default function SignSheet({
             being asked for, and their panel underneath it. */}
         {split && (
           <div
-            className="absolute right-0 top-4 z-20"
+            className="absolute right-0 top-0 z-20"
             style={{
               width: COL_W,
               opacity: started ? 1 : 0,

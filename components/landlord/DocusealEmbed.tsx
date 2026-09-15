@@ -90,6 +90,38 @@ const CUSTOM_CSS = `
   .field-area:focus, .field-area:focus-visible {
     outline-color: ${BROWN} !important;
   }
+  /**
+   * THEIR MINIMISE BUTTON, GONE.
+   *
+   * The small chevron in the panel's top corner collapses .form-container to
+   * nothing - and once the panel is fixed into our column it collapses to a
+   * 0x0 box at the top left of the screen with no way back. James, 15 Sep:
+   * "the second box is invisible to sign." That was one stray click on an
+   * 18px icon costing a landlord the ability to sign their contract.
+   *
+   * It earns its place in their layout, where the panel lies across the
+   * document and sometimes has to be got out of the way. Beside the document
+   * it has nothing to get out of the way of.
+   */
+  .minimize-form-button { display: none !important; }
+
+  /**
+   * NOTHING SETS THE CANVAS HEIGHT HERE, AND THAT IS DELIBERATE.
+   *
+   * James, 15 Sep: "the signatures look a bit weird ... we need to make it a
+   * little bit longer." The drawing box IS a 3:1 letterbox and he is right
+   * about how it looks - but a CSS height on .draw-canvas is the wrong way to
+   * fix it. Their backing store is fixed at width x DPR by 98 x DPR when the
+   * signature step mounts, and it is NOT recomputed on resize (checked: a
+   * resize event leaves it at 882x294 while the box reads 294x190). Stretching
+   * the box therefore stretches every stroke on its way into the saved image,
+   * and a distorted signature on a contract is worse than a short one.
+   *
+   * The room comes from the COLUMN being wider instead (SignSheet's COL_W),
+   * which grows the canvas at its own ratio. If the letterbox itself has to
+   * go, it is DocuSeal's to change.
+   */
+
   /* THE FIELD PANEL. Theirs, and it moves to the right-hand column when there
      is room (components/landlord/SignSheet). Their label is text-2xl, which is
      sized for a panel lying across the full width of a document; in a 360px
@@ -129,6 +161,19 @@ export default function DocusealEmbed({
   const host = useRef<HTMLDivElement | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
 
+  /**
+   * The callbacks are held in refs and kept OUT of the effect below.
+   *
+   * With them in the dependency list, a caller passing an inline arrow rebuilds
+   * the <docuseal-form> on every render - which throws away a half-drawn
+   * signature and a part-filled form. Nothing today does that, and nothing
+   * should be able to.
+   */
+  const completed = useRef(onCompleted);
+  const rooted = useRef(onRoot);
+  completed.current = onCompleted;
+  rooted.current = onRoot;
+
   useEffect(() => {
     let gone = false;
     void loadEmbed().then((ok) => {
@@ -156,7 +201,7 @@ export default function DocusealEmbed({
       el.setAttribute("data-completed-message-title", "That is signed, thank you.");
       el.setAttribute("data-completed-message-body", "Your copy is on its way to your file. You can close this.");
       if (email) el.setAttribute("data-email", email);
-      if (onCompleted) el.addEventListener("completed", onCompleted);
+      el.addEventListener("completed", () => completed.current?.());
       host.current.replaceChildren(el);
       setState("ready");
       /* The shadow root is attached in their connectedCallback, which has not
@@ -164,21 +209,19 @@ export default function DocusealEmbed({
          50ms is a second, after which there is nothing to hand over and the
          caller simply gets no root - the form still works, it is only the
          column beside it that cannot be drawn. */
-      if (onRoot) {
-        let tries = 0;
-        const look = () => {
-          if (gone) return;
-          if (el.shadowRoot) return onRoot(el.shadowRoot);
-          if (tries++ < 20) setTimeout(look, 50);
-        };
-        look();
-      }
+      let tries = 0;
+      const look = () => {
+        if (gone) return;
+        if (el.shadowRoot) return rooted.current?.(el.shadowRoot);
+        if (tries++ < 20) setTimeout(look, 50);
+      };
+      look();
     });
     return () => {
       gone = true;
-      onRoot?.(null);
+      rooted.current?.(null);
     };
-  }, [url, email, onCompleted, onRoot]);
+  }, [url, email]);
 
   return (
     <div className={className} style={style}>

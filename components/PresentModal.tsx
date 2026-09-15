@@ -46,7 +46,24 @@ export default function PresentModal({
   onClose: () => void;
 }) {
   const pages = slidesFor(deck).map((s) => s.id);
+  /**
+   * THE BOOKLET GETS OUT OF THE WAY. James, 15 Sep 2026: "when we're on the
+   * presentation and they click Sign, we should swipe the presentation off the
+   * screen ... the contract will pop up in its place, and we should have a
+   * Back to Presentation button. It will then work in reverse."
+   *
+   * Which is right: a contract rising over a booklet left two documents on the
+   * screen at once, one of them half visible behind the other, and the reason
+   * the flipbook was ruled out for the contract was exactly that - two things
+   * stacked read as a glitch.
+   *
+   * Two pieces of state, because a thing that leaves has to be animated on the
+   * way out as well as in. `signOpen` is what was ASKED for and drives both
+   * transitions; `signUp` keeps the sheet mounted until it has finished
+   * falling.
+   */
   const [signOpen, setSignOpen] = useState(false);
+  const [signUp, setSignUp] = useState(false);
   const [page, setPage] = useState({ at: -1, of: 0 });
   const [api, setApi] = useState<{ go: (dir: 1 | -1) => void } | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
@@ -59,6 +76,18 @@ export default function PresentModal({
   const signUrl = signing;
   const canSign = Boolean(sign?.appraisalId || sign?.url || deck.terms?.signUrl);
 
+  const openSign = useCallback(() => {
+    setSignUp(true);
+    setSignOpen(true);
+    void mint();
+  }, [mint]);
+  /* Down first, then gone: unmounting on the click would cut the fall off at
+     the first frame and the booklet would slide back in behind nothing. */
+  const closeSign = useCallback(() => {
+    setSignOpen(false);
+    window.setTimeout(() => setSignUp(false), 640);
+  }, []);
+
   useEffect(() => {
     const measure = () => setRoom({ w: window.innerWidth, h: window.innerHeight });
     measure();
@@ -69,12 +98,12 @@ export default function PresentModal({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (signOpen) setSignOpen(false);
+      if (signOpen) closeSign();
       else onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [signOpen, onClose]);
+  }, [signOpen, closeSign, onClose]);
 
   /* The open spread fits the room with air round it. */
   const fit = room.w ? Math.min((room.w - 140) / (PAGE_W * 2), (room.h - 230) / PAGE_H) : 0.4;
@@ -92,7 +121,7 @@ export default function PresentModal({
   return (
     <DeckStyleCtx.Provider value={asStyle(deck.style)}>
       <div
-        className="fixed inset-0 z-[80] flex flex-col items-center justify-center"
+        className="fixed inset-0 z-[80] flex flex-col items-center justify-center overflow-hidden"
         style={{
           ...themeVars(asStyle(deck.style)),
           color: INK,
@@ -124,29 +153,36 @@ export default function PresentModal({
           </svg>
         </button>
 
-        {/* THE BOOKLET, folding out onto the table. */}
+        {/* THE BOOKLET AND ITS FOOT, which travel together.
+            The swipe is on THIS wrapper and the fold-out stays on the inner
+            one: a CSS animation beats an inline transform, so the two cannot
+            share an element. */}
         {room.w > 0 && (
+          <div
+            className="flex flex-col items-center"
+            style={{
+              transform: signOpen ? "translateX(-118vw)" : "translateX(0)",
+              transition: "transform 620ms cubic-bezier(0.5, 0, 0.18, 1)",
+              pointerEvents: signOpen ? "none" : undefined,
+            }}
+            aria-hidden={signOpen}
+          >
           <div className="relative z-[84]" style={{ transformOrigin: "50% 100%", animation: "present-fold 820ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both" }}>
-            <BookActionsCtx.Provider value={{ sign: () => { setSignOpen(true); void mint(); } }}>
+            <BookActionsCtx.Provider value={{ sign: openSign }}>
               <PresentBook deck={deck} pages={pages} fit={fit} onSpread={onSpread} onApi={setApi} />
             </BookActionsCtx.Provider>
           </div>
-        )}
 
-        {/* THE FOOT, hung under the booklet itself: the way to sign centred
-            under the left-hand page, the arrows centred under the right, both
-            a small gap below the pages - James, 13 Sep 2026. */}
-        {room.w > 0 && (
+          {/* THE FOOT, hung under the booklet itself: the way to sign centred
+              under the left-hand page, the arrows centred under the right, both
+              a small gap below the pages - James, 13 Sep 2026. */}
           <div className="relative z-[86] mt-6 grid grid-cols-2" style={{ width: PAGE_W * 2 * fit }}>
             <div className="flex items-center justify-center">
               {open && (
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => {
-                    setSignOpen(true);
-                    void mint();
-                  }}
+                  onClick={openSign}
                   className="inline-flex h-[48px] items-center gap-3 rounded-full px-7 text-[14px] font-semibold text-white shadow-[0_18px_40px_-18px_rgba(0,0,0,0.6)] transition-transform hover:scale-[1.03]"
                   style={{ background: "#cfa096" }}
                 >
@@ -181,10 +217,12 @@ export default function PresentModal({
               })}
             </div>
           </div>
+          </div>
         )}
 
-        {/* CONTACT, above the booklet, only while the agent's page is showing. */}
-        {onAgent && (
+        {/* CONTACT, above the booklet, only while the agent's page is showing.
+            It goes with the booklet when the contract takes the screen. */}
+        {onAgent && !signOpen && (
           <div className="absolute left-1/2 top-6 z-[87] flex -translate-x-1/2 flex-col items-center gap-3" style={{ animation: "present-dim 360ms ease-out both" }}>
             <button
               type="button"
@@ -216,15 +254,16 @@ export default function PresentModal({
         {/* THE CONTRACT, rising over the booklet. The same sheet the landlord
             gets from their file - square, no masthead, the signing beside the
             paper rather than over it. */}
-        {signOpen && (
+        {signUp && (
           <div className="absolute inset-0 z-[88] flex items-end justify-center">
             {signUrl ? (
               <SignSheet
                 url={signUrl}
+                open={signOpen}
                 height="calc(100% - 56px)"
                 closeLabel="Back to the presentation"
-                onClose={() => setSignOpen(false)}
-                onDone={() => setSignOpen(false)}
+                onClose={closeSign}
+                onDone={closeSign}
               />
             ) : (
               <div
@@ -245,7 +284,7 @@ export default function PresentModal({
                 </p>
                 <button
                   type="button"
-                  onClick={() => setSignOpen(false)}
+                  onClick={closeSign}
                   className="mt-6 rounded-full border px-5 py-2 text-[13px] font-semibold"
                   style={{ borderColor: "rgba(0,0,0,0.14)" }}
                 >
