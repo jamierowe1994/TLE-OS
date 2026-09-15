@@ -2,7 +2,7 @@
 
 import { INK, Line } from "@/components/present-kit";
 import { APPRAISAL_PROMISES, defaultBio, type PresentDeck as Deck } from "@/lib/present";
-import { AGENDA, APPROACH, COMPLIANCE, LEGAL_CAVEAT, LEGAL_ITEMS, MANAGEMENT, MARKETING_POINTS, MAX_PRICE, NEXT_STEPS, PORTALS_COPY, REGULATED, REGULATED_INTRO, RENT_COLLECTION, RENT_LEGAL, SCREENING, SERVICE_LEVELS, SERVICE_LEVELS_INTRO, SERVICE_ROWS, WHAT_WE_OFFER } from "@/lib/present-copy";
+import { AGENDA, AGENDA_INTRO, APPROACH, COMPLIANCE, LEGAL_CAVEAT, LEGAL_ITEMS, MANAGEMENT, MARKETING_POINTS, MAX_PRICE, NEXT_STEPS, PORTALS_COPY, REGULATED, REGULATED_INTRO, RENT_COLLECTION, RENT_LEGAL, SCREENING, SERVICE_LEVELS, SERVICE_LEVELS_INTRO, SERVICE_ROWS, WHAT_WE_OFFER } from "@/lib/present-copy";
 import { FROM_US, FROM_YOU } from "@/components/PresentDeck";
 import { createContext, useContext } from "react";
 
@@ -75,9 +75,9 @@ export function BookWelcome({ deck }: { deck: Deck }) {
           "Good People Great Moves" was here; he took it out - "a bit too
           feminine".) */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/brand/photo/book-plant-photo.webp" alt="" aria-hidden className="pointer-events-none absolute max-w-none" style={{ height: 980, right: -215, bottom: -150 }} />
+      <img src="/brand/photo/book-plant-photo.webp" alt="" aria-hidden className="pointer-events-none absolute max-w-none" style={{ height: 980, right: -330, bottom: -150 }} />
 
-      <div className="absolute left-[96px] top-[84px] w-[760px]">
+      <div className="absolute left-[96px] top-[84px] w-[880px]">
         <Eyebrow>Welcome</Eyebrow>
         <h1 className="mt-8 text-[72px] leading-[1.04]" style={SERIF}>
           Let&rsquo;s make
@@ -90,15 +90,24 @@ export function BookWelcome({ deck }: { deck: Deck }) {
         <p className="mt-8 max-w-[620px] text-[21px] leading-[1.5] text-black/60">
           We&rsquo;ll look at the market, what your property could achieve and the clearest route to getting it let.
         </p>
-        {/* Three SQUARES, everything centred in them - as the mock-up. */}
-        <ul className="mt-10 grid grid-cols-3 gap-5" style={{ width: 760 }}>
+        {/* No boxes. One hairline between them instead, so they read as three
+            parts of one row - and every disc is the same 64px whatever the
+            title under it does. */}
+        <ul className="mt-10 grid grid-cols-3 gap-x-9" style={{ width: 880 }}>
           {APPRAISAL_PROMISES.map((b, n) => (
-            <li key={b.title} className="flex flex-col items-center justify-center rounded-[22px] border px-5 text-center" style={{ height: 240, borderColor: "rgba(0,0,0,0.07)", background: "rgba(255,255,255,0.6)" }}>
-              <span className="flex h-[68px] w-[68px] items-center justify-center rounded-full" style={n === 1 ? { background: "var(--p-tint)", color: INK } : { background: SAGE_WASH, color: SAGE_INK }}>
+            <li
+              key={b.title}
+              className={n > 0 ? "border-l pl-9" : ""}
+              style={{ borderColor: "rgba(0,0,0,0.09)" }}
+            >
+              <span
+                className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-full"
+                style={n === 1 ? { background: "var(--p-tint)", color: INK } : { background: SAGE_WASH, color: SAGE_INK }}
+              >
                 <Line name={b.icon} size={24} />
               </span>
-              <span className="mt-5 block text-[17px] font-semibold leading-snug">{b.title}</span>
-              <span className="mt-2 block text-[13px] leading-[1.5] text-black/55">{b.body}</span>
+              <span className="mt-5 block text-[18px] font-semibold leading-snug">{b.title}</span>
+              <span className="mt-2 block text-[13.5px] leading-[1.55] text-black/55">{b.body}</span>
             </li>
           ))}
         </ul>
@@ -121,17 +130,19 @@ export function BookAgenda() {
       <img src="/brand/photo/book-table.webp" alt="" aria-hidden className="pointer-events-none absolute max-w-none" style={{ width: 440, right: -70, bottom: -90 }} />
 
       <div className="absolute left-[96px] top-[84px] w-[1040px]">
-        <Eyebrow>What we&rsquo;ll cover</Eyebrow>
+        <Eyebrow>What we covered</Eyebrow>
         <h1 className="mt-8 text-[72px] leading-[1.04]" style={SERIF}>
           Here&rsquo;s what
           <br />
-          we&rsquo;ll go through
-          <br />
-          <span style={{ color: CLAY }}>today.</span>
+          we <span style={{ color: CLAY }}>went through.</span>
         </h1>
         <Stroke className="mt-2" width={220} color={CLAY} />
-        {/* THE GRID: two columns, two parts each, very faint lines between. */}
-        <div className="mt-12 grid grid-cols-2" style={{ width: 1000 }}>
+        <p className="mt-7 max-w-[620px] text-[17px] leading-[1.5] text-black/60">{AGENDA_INTRO.sent}</p>
+        {/* THE GRID: two columns, two parts each, very faint lines between.
+            930 rather than 1000: the right-hand column ran to x=1096 and the
+            table photograph starts at x=1070, so the last twenty-six pixels of
+            every line in it were printed on a photograph of some keys. */}
+        <div className="mt-9 grid grid-cols-2" style={{ width: 930 }}>
           {cols.map((items, c) => (
             <ol key={c} className={`${c === 1 ? "border-l pl-10" : "pr-10"}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
               {items.map((a, i) => (
@@ -158,7 +169,6 @@ export function BookAgenda() {
         {/* Not quite the width of "journey". */}
         <span aria-hidden className="mt-3 block h-px w-[56px]" style={{ background: CLAY }} />
       </div>
-      <FootRight />
     </div>
   );
 }
@@ -185,7 +195,7 @@ function FootStrap({ lines }: { lines: string[] }) {
 export function BookAgent({ deck }: { deck: Deck }) {
   const a = deck.agent;
   const first = a.firstName || "";
-  const paragraphs = (a.bio.trim() || defaultBio(first)).split(/\n{2,}/);
+  const paragraphs = (a.bio.trim() || defaultBio(first, true)).split(/\n{2,}/);
   const t = deck.testimonial;
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
@@ -219,13 +229,14 @@ export function BookAgent({ deck }: { deck: Deck }) {
       )}
 
       <div className="absolute left-[96px] top-[84px] w-[520px]">
-        <Eyebrow>Meet your agent</Eyebrow>
+        <Eyebrow>Your letting expert</Eyebrow>
         <h1 className="mt-8 text-[72px] leading-[1.04]" style={SERIF}>
-          You&rsquo;ll be
+          <span style={{ color: CLAY }}>{first || "We"}</span>
+          {first ? " is looking" : " are looking"}
           <br />
-          dealing with
+          after your
           <br />
-          <span style={{ color: CLAY }}>{first || "us"}.</span>
+          property.
         </h1>
         <span aria-hidden className="mt-4 block h-[3px] w-[150px] rounded-full" style={{ background: CLAY, opacity: 0.8 }} />
         <p className="mt-8 text-[16px] leading-[1.6] text-black/70">Property isn&rsquo;t just a job to {first || "us"}, it&rsquo;s personal.</p>
@@ -294,12 +305,11 @@ function EyebrowRule({ children }: { children: React.ReactNode }) {
 
 /** A word in the pink italic, with the bowed stroke under it. */
 function Ital({ children, width = 200 }: { children: React.ReactNode; width?: number }) {
-  return (
-    <span className="relative inline-block">
-      <span style={{ color: CLAY, fontStyle: "italic", fontWeight: 400 }}>{children}</span>
-      <Stroke width={width} color={CLAY} className="absolute -bottom-[10px] left-0" />
-    </span>
-  );
+  /* `width` is still taken so every caller reads the same - it sized the rule
+     under the word, and the rule has gone. James, 15 Sep 2026: "we are using
+     underlines way too much ... they are literally everywhere." */
+  void width;
+  return <span style={{ color: CLAY, fontStyle: "italic", fontWeight: 400 }}>{children}</span>;
 }
 
 /**

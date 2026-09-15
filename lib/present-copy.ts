@@ -43,6 +43,19 @@
  * scrolling a thirty-slide deck needs to know early that it ends. Each entry
  * names the section divider it points at, so the two can never drift.
  */
+/**
+ * The line under the contents, in the tense the deck is being read in.
+ *
+ * The appraisal deck is presented on the day and the post-appraisal one is
+ * posted afterwards, and until now both said "nothing needs deciding today"
+ * about a meeting one of them had already had. James, 15 Sep 2026: "they're
+ * not going through it today. They've already been through it."
+ */
+export const AGENDA_INTRO = {
+  live: "Four simple parts. Stop us at any point and ask anything you like - nothing needs deciding today.",
+  sent: "The four parts we went through, all here to read again - on your own time, and as many times as you want.",
+};
+
 export const AGENDA: { title: string; body: string }[] = [
   {
     title: "Your property",

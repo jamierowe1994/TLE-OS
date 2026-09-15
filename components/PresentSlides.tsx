@@ -2,6 +2,7 @@
 
 import {
   AGENDA,
+  AGENDA_INTRO,
   APPROACH,
   BROCHURE_COPY,
   COMPLIANCE,
@@ -196,21 +197,31 @@ function Blocks({
  * is the one page where the order IS the content.
  */
 export function Agenda({ deck, show }: { deck: Deck; show: boolean }) {
+  /* Presented on the day, or posted afterwards. The sent one is describing a
+     meeting that has already happened - James, 15 Sep 2026: "they're not
+     going through it today. They've already been through it." */
+  const sent = deckKind(deck) === "post-appraisal";
   return (
     <CreamSlide id="agenda">
       <div className="mx-auto grid w-full max-w-[1340px] items-center gap-10 lg:grid-cols-[0.85fr_1.15fr] lg:gap-16">
         <div className="max-w-[520px]">
-          <HandHead eyebrow="What we&rsquo;ll cover" show={show} lines={2}>
+          <HandHead eyebrow={sent ? "What we covered" : "What we\u2019ll cover"} show={show} lines={2}>
             Here&rsquo;s what
             <br />
-            we&rsquo;ll go through{" "}
-            <Emphasis show={show}>today</Emphasis>
+            {sent ? (
+              <>
+                we <Emphasis show={show}>went through</Emphasis>
+              </>
+            ) : (
+              <>
+                we&rsquo;ll go through <Emphasis show={show}>today</Emphasis>
+              </>
+            )}
           </HandHead>
 
           <Rise show={show} i={2}>
             <p className="mt-7 max-w-[420px] text-[15.5px] font-light leading-[1.6] text-black/60">
-              Four simple parts. Stop us at any point and ask anything you like - nothing
-              needs deciding today.
+              {sent ? AGENDA_INTRO.sent : AGENDA_INTRO.live}
             </p>
           </Rise>
 

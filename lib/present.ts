@@ -484,8 +484,18 @@ export const AGENT_CHIPS: { icon: "pin" | "chat" | "heart"; title: string; body:
  * from a name is exactly the kind of thing that goes wrong in front of a
  * customer.
  */
-export function defaultBio(firstName: string): string {
+export function defaultBio(firstName: string, sent = false): string {
   const who = firstName || "Your agent";
+  /* THE SENT DECK IS ABOUT A VISIT THAT HAPPENED. James, 15 Sep 2026: the
+     deck posted afterwards still said "at the appointment {who} will walk
+     round the property with you" to somebody who had already walked round it
+     with them, which reads as though nobody looked at it before it went. */
+  if (sent) {
+    return [
+      `${who} looks after lettings across the area, and is the one person you deal with - the valuation, the marketing, and the call when there's an offer.`,
+      `Everything you went through together is in here: what the property should let for and why, what happens next, and where to find ${who} when you want to ask something.`,
+    ].join("\n\n");
+  }
   return [
     `${who} looks after lettings across the area, and will be the one person you deal with - the valuation, the marketing, and the call when there's an offer.`,
     `At the appointment ${who} will walk round the property with you, talk through what it should let for and why, answer anything you want to ask, and set out exactly what happens next.`,

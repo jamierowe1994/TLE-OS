@@ -828,7 +828,11 @@ function AgentAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
   const SCRIPT = { fontFamily: "var(--font-shantell), cursive" } as const;
   const CLAY = "#cfa096", SAGE_WASH = "#f1f4ec";
   const first = a.firstName || "";
-  const paragraphs = (a.bio.trim() || defaultBio(first)).split(/\n{2,}/);
+  /* Presented on the day, or posted afterwards. The second one is talking to
+     somebody who has already met them - James, 15 Sep 2026: "it just seems a
+     little strange because they've already met that person". */
+  const sent = deckKind(deck) === "post-appraisal";
+  const paragraphs = (a.bio.trim() || defaultBio(first, sent)).split(/\n{2,}/);
   const reviews = (deck.testimonials?.length ? deck.testimonials : deck.testimonial?.quote ? [deck.testimonial] : []).filter((r) => r.quote);
   const district = deck.property.postcode?.split(" ")[0];
   const body = (
@@ -836,20 +840,30 @@ function AgentAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
       <header className={fx ? "h-[124px]" : "h-[60px]"} />
       <div className={`relative z-[2] flex flex-1 flex-col ${fx ? "justify-start px-[100px] pb-10 pr-[900px]" : "justify-center px-6 pb-10 pt-4 sm:px-12"}`}>
         <Rise show={show} i={0}>
-          <Eyebrow>Who you&rsquo;ll be meeting</Eyebrow>
+          <Eyebrow>{sent ? "Your letting expert" : "Who you\u2019ll be meeting"}</Eyebrow>
           <span aria-hidden className="mt-4 block h-[3px] w-[120px] rounded-full" style={{ background: TINTS[0] }} />
         </Rise>
         <Rise show={show} i={1}>
           <h2 className={`mt-9 leading-[1.02] ${fx ? "text-[68px]" : "text-[36px] sm:text-[50px]"}`} style={HEAD}>
-            You&rsquo;ll be
-            <br />
-            dealing with
-            <br />
-            <span style={{ color: CLAY }}>{first || "us"}.</span>
+            {sent ? (
+              <>
+                <span style={{ color: CLAY }}>{first || "We"}</span>
+                {first ? " is looking" : " are looking"}
+                <br />
+                after your
+                <br />
+                property.
+              </>
+            ) : (
+              <>
+                You&rsquo;ll be
+                <br />
+                dealing with
+                <br />
+                <span style={{ color: CLAY }}>{first || "us"}.</span>
+              </>
+            )}
           </h2>
-          <svg viewBox="0 0 200 12" aria-hidden className="mt-1 h-[12px] w-[180px]">
-            <path d="M2 8C50 2 120 2 198 6" fill="none" stroke={CLAY} strokeWidth="3" strokeLinecap="round" opacity="0.9" />
-          </svg>
           {(a.title || district) && (
             <p className="mt-5 text-[15px] text-black/45">
               {a.title || "Lettings Expert"}

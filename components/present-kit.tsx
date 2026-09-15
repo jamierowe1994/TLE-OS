@@ -620,40 +620,21 @@ export function CreamSlide({
  * supporting face, and those need the extra size a smaller x-height asks for.
  */
 export function Emphasis({ show, children }: { show: boolean; children: React.ReactNode }) {
+  /* `show` is still taken so every caller reads the same - the word used to
+     draw its rule in on arrival and no longer draws one at all. */
+  void show;
   return (
-    <span className="relative inline-block">
-      <span
-        className="relative"
-        style={{
-          fontFamily: FLOW_EM,
-          color: CORAL,
-          fontSize: "var(--p-script-em, 1.22em)",
-          lineHeight: "var(--p-script-lh, 1)",
-          paddingRight: "0.06em",
-        }}
-      >
-        {children}
-      </span>
-      <svg
-        viewBox="0 0 200 14"
-        preserveAspectRatio="none"
-        aria-hidden
-        className="absolute inset-x-0 -bottom-[0.06em] h-[0.16em] w-full overflow-visible"
-      >
-        <path
-          d="M3 9.5C34 4.5 74 3 104 4.2C134 5.4 168 8 197 5"
-          fill="none"
-          stroke={CORAL}
-          strokeWidth={4}
-          strokeLinecap="round"
-          pathLength={1}
-          style={{
-            strokeDasharray: 1,
-            strokeDashoffset: show ? 0 : 1,
-            transition: "stroke-dashoffset 700ms cubic-bezier(0.22,1,0.36,1) 520ms",
-          }}
-        />
-      </svg>
+    <span
+      className="relative"
+      style={{
+        fontFamily: FLOW_EM,
+        color: CORAL,
+        fontSize: "var(--p-script-em, 1.22em)",
+        lineHeight: "var(--p-script-lh, 1)",
+        paddingRight: "0.06em",
+      }}
+    >
+      {children}
     </span>
   );
 }
