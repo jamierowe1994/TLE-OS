@@ -1,7 +1,9 @@
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
 import AgentCard from "@/components/landlord/AgentCard";
+import AgentTab from "@/components/landlord/AgentTab";
 import Spine from "@/components/landlord/Spine";
+import SpinePhone from "@/components/landlord/SpinePhone";
 import { HeroAction, StepRow, pickHero } from "@/components/landlord/StepAction";
 import { STAGE_COPY, fullJourney, type Stop } from "@/lib/landlord-journey";
 import type { LandlordView } from "@/lib/landlord-view";
@@ -24,6 +26,22 @@ const eyebrow = "text-[10.5px] font-semibold uppercase tracking-[0.14em] text-mu
 const SAGE_INK = "#56634a";
 const SAGE_WASH = "#f1f4ec";
 
+/**
+ * The same stage in one word, for a phone. James, 15 Sep 2026: "get rid of the
+ * icon ... and then just say Current Stage, or instead of Current Stage, maybe
+ * Signing." A 30px "Signing your instruction" over a 64px icon is most of a
+ * phone screen spent saying where they are before anything says what to do.
+ */
+const SHORT: Record<string, string> = {
+  valuation: "Valuation",
+  instruction: "Signing",
+  compliance: "Compliance",
+  marketing: "Marketing",
+  viewings: "Viewings",
+  let: "Let agreed",
+  management: "Managed",
+};
+
 /** The current-stage card's title, in words that read as a sentence. */
 const TITLE: Record<string, string> = {
   valuation: "Valuation in progress",
@@ -43,35 +61,48 @@ export default function JourneyView({ view: v, homeHref }: { view: LandlordView;
 
   return (
     <div className="space-y-6">
-      {/* ── title and the agent ── */}
+      {/* ── title and the agent ──
+          A phone gets the title and nothing else above their journey; the
+          agent is on the tab down the side, as on the home page. */}
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_auto]">
-        <div className="pt-2">
-          <h1 className="text-[44px] leading-[1.05]">Your letting journey</h1>
-          <p className="mt-3 max-w-xl text-[14.5px] text-muted">Track where you are, what&rsquo;s next, and what we need from you.</p>
+        <div className="sm:pt-2">
+          <h1 className="text-[30px] leading-[1.05] sm:text-[44px]">Your letting journey</h1>
+          <p className="mt-3 hidden max-w-xl text-[14.5px] text-muted sm:block">Track where you are, what&rsquo;s next, and what we need from you.</p>
         </div>
-        <AgentCard v={v} />
+        <div className="hidden sm:block">
+          <AgentCard v={v} />
+        </div>
       </div>
+      <AgentTab v={v} />
 
       {/* ── where they are, and what they can do ── */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
-        <section className="relative overflow-hidden rounded-[22px] bg-accent-soft/80 p-7" data-search>
+        <section className="relative overflow-hidden rounded-[22px] bg-accent-soft/80 p-5 sm:p-7" data-search>
           <span aria-hidden className="pointer-events-none absolute -bottom-28 -right-16 h-72 w-72 rounded-full bg-accent/15" />
           <span aria-hidden className="pointer-events-none absolute -bottom-40 right-28 h-72 w-72 rounded-full bg-white/40" />
-          <div className="relative flex flex-col gap-6 md:flex-row">
-            <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/70 text-accent-dark">
+          <div className="relative flex flex-col gap-4 sm:gap-6 md:flex-row">
+            {/* No icon on a phone. */}
+            <span className="hidden h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/70 text-accent-dark sm:flex">
               <DoodleIcon name={copy.icon} size={24} />
             </span>
             <div className="min-w-0 flex-1">
               <p className={eyebrow}>Current stage</p>
-              <h2 className="mt-2 text-[30px] leading-tight">{TITLE[current.id] ?? current.label}</h2>
-              <p className="mt-2 max-w-md text-[14px] leading-relaxed text-muted">{copy.long}</p>
+              <h2 className="mt-1.5 text-[24px] leading-tight sm:mt-2 sm:text-[30px]">
+                <span className="sm:hidden">{SHORT[current.id] ?? current.label}</span>
+                <span className="hidden sm:inline">{TITLE[current.id] ?? current.label}</span>
+              </h2>
+              <p className="mt-1.5 max-w-md text-[13px] leading-relaxed text-muted sm:mt-2 sm:text-[14px]">{copy.long}</p>
               {hero && (
-                <div className="mt-6">
+                <div className="mt-5 sm:mt-6">
                   <HeroAction s={hero} v={v} anchorBase={homeHref} />
                 </div>
               )}
             </div>
-            <div className="md:w-[32%] md:border-l md:border-accent/30 md:pl-6">
+            {/* "Why this matters" is desktop only. On a phone it is a second
+                paragraph explaining something the heading has just said, and
+                James is right that nobody needs telling why a contract wants
+                signing. */}
+            <div className="hidden sm:block md:w-[32%] md:border-l md:border-accent/30 md:pl-6">
               <p className={eyebrow}>Why this matters</p>
               <p className="mt-2 text-[13px] leading-relaxed text-muted">{copy.why}</p>
             </div>
@@ -98,24 +129,36 @@ export default function JourneyView({ view: v, homeHref }: { view: LandlordView;
       </div>
 
       {/* ── the spine ── */}
-      <section className={`${card} p-6`} data-search>
-        <h2 className="text-[18px]">Your journey at a glance</h2>
-        <div className="mt-7">
-          <Spine stops={stops} />
+      <section data-search>
+        <div className="sm:hidden">
+          <h2 className="mb-3 text-[16px]">Your journey at a glance</h2>
+          <SpinePhone stops={stops} />
+        </div>
+        <div className={`hidden ${card} p-6 sm:block`}>
+          <h2 className="text-[18px]">Your journey at a glance</h2>
+          <div className="mt-7">
+            <Spine stops={stops} />
+          </div>
         </div>
       </section>
 
       {/* ── a card per stop: who does what ──
           One row of seven that scrolls sideways when the window is too narrow
-          for them, rather than wrapping into an uneven second row. */}
-      <div className="grid auto-cols-[minmax(150px,1fr)] grid-flow-col gap-3 overflow-x-auto pb-1" data-search>
+          for them, rather than wrapping into an uneven second row.
+
+          NOT ON A PHONE: that is the wheel's job, where tapping a stop says
+          what it is. Here it would be a second scrolling axis through a
+          screen's worth of small print. */}
+      <div className="hidden auto-cols-[minmax(150px,1fr)] grid-flow-col gap-3 overflow-x-auto pb-1 sm:grid" data-search>
         {stops.map((s) => (
           <StageCard key={s.id} s={s} />
         ))}
       </div>
 
       {/* ── after the let ── */}
-      <section className="flex flex-wrap items-center gap-5 rounded-[22px] p-6" style={{ background: SAGE_WASH }} data-search>
+      {/* Hidden on a phone - James, 15 Sep: "after your property is live, I
+          think we can hide that box, so we're keeping this super simple." */}
+      <section className="hidden flex-wrap items-center gap-5 rounded-[22px] p-6 sm:flex" style={{ background: SAGE_WASH }} data-search>
         <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/80" style={{ color: SAGE_INK }}>
           <DoodleIcon name="home" size={18} />
         </span>
