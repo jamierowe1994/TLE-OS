@@ -263,11 +263,11 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
       lng: geo?.ok ? geo.at.lng : null,
     },
     steps: stepsForStage(stage, {
-      presentation: { id: "presentation", label: "View presentation", sub: latest ? `${deckLabel}, from ${latest.authorName || agentName || "your agent"}` : "Lands here before the visit", href: latest ? `/present/${latest.token}` : null, icon: "analytics", external: true },
+      presentation: { id: "presentation", label: "View your presentation", sub: latest ? `${deckLabel}, from ${latest.authorName || agentName || "your agent"}` : "Lands here before the visit", href: latest ? `/present/${latest.token}` : null, icon: "analytics", external: true },
       /* Signed: off the list. Not yet: the tile opens the signing here. */
       sign: { id: "sign", label: "Sign your contract", sub: a.valuation != null ? "Review and sign your management terms" : "Follows the valuation", href: null, icon: "pencil", action: "sign", done: signed },
       /* Everything in: off the list. */
-      compliance: { id: "compliance", label: "Upload compliance documents", sub: `${required.length - have} of ${required.length} still to send`, href: "/landlord/documents", icon: "upload", done: allIn },
+      compliance: { id: "compliance", label: "Upload your compliance documents", sub: `${required.length - have} of ${required.length} still to send`, href: "/landlord/documents", icon: "upload", done: allIn },
       message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: null, icon: "message", action: "message" },
       listing: { id: "listing", label: "See your listing", sub: marketing?.live ? `Live on ${marketing.portals.map((p) => p.name).join(", ") || "the portals"}` : "Once marketing starts", href: marketing ? "#listing" : null, icon: "home" },
       viewings: { id: "viewings", label: "Viewings and offers", sub: offersSub, href: offers.length ? "#offers" : viewings.length ? "#viewings" : null, icon: "key" },
@@ -347,7 +347,7 @@ async function managedView(p: ManagedProperty, first: string, comp: LandlordComp
       lng: p.lng,
     },
     steps: stepsForStage("managed", {
-      presentation: { id: "presentation", label: "View presentation", sub: "From when we valued it", href: null, icon: "analytics" },
+      presentation: { id: "presentation", label: "View your presentation", sub: "From when we valued it", href: null, icon: "analytics" },
       sign: { id: "sign", label: "Your contract", sub: "Coming to this file", href: null, icon: "pencil" },
       compliance: { id: "compliance", label: "Certificates", sub: certsSub, href: comp ? "/landlord/documents" : null, icon: "shield" },
       message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: null, icon: "message", action: "message" },

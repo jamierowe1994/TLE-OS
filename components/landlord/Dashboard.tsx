@@ -3,7 +3,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import AgentCard from "@/components/landlord/AgentCard";
 import Spine from "@/components/landlord/Spine";
-import { HeroAction, pickHero } from "@/components/landlord/StepAction";
+import { HeroAction, pickHero, signSource } from "@/components/landlord/StepAction";
 import PresentTile from "@/components/landlord/PresentTile";
 import SignTile from "@/components/landlord/SignTile";
 import { fullJourney } from "@/lib/landlord-journey";
@@ -147,7 +147,7 @@ export default function LandlordDashboard({
                   <span>Also:</span>
                   {others.map((s) =>
                     s.action === "presentation" && v.presentation ? (
-                      <PresentTile key={s.id} variant="link" deck={v.presentation} label={s.label} sub={s.sub} icon={s.icon} />
+                      <PresentTile key={s.id} variant="link" deck={v.presentation} sign={signSource(v)} label={s.label} sub={s.sub} icon={s.icon} />
                     ) : s.action === "sign" && (v.appraisalId || s.href) ? (
                       /* The "Also:" line too. A contract that opens in a modal
                          from the big button and in a new tab from the small

@@ -176,6 +176,14 @@ export interface LandlordView {
   /** The OS appraisal this file is about, for the tiles that act on it. */
   appraisalId?: string | null;
   /**
+   * Their contract, when it exists as a link rather than something to mint -
+   * the harness's drafted one. Kept OUTSIDE the steps because the button
+   * under the presentation must work at the valuation stop, where the sign
+   * step is deliberately held back until the deck has been read: the deck is
+   * exactly where we want them to sign from.
+   */
+  contractUrl?: string | null;
+  /**
    * The post-appraisal deck, when one has been sent, for the "View
    * presentation" step to open as a book here (components/PresentModal)
    * rather than linking away. The sample carries the showroom deck; the
@@ -266,8 +274,26 @@ export function stepsForStage(
   const holdSign =
     opts.presentationOpened === false && (stage === "valuation" || stage === "instruction");
 
+  /**
+   * SIGNED, SO THE DECK COMES OFF TOO.
+   *
+   * James, 15 Sep 2026: "as soon as they sign the contract ... the View
+   * presentation, Sign contract button will disappear, and then the next
+   * button will be Upload your compliance document and Message your agent."
+   *
+   * Which is the whole point of a list that empties. The presentation is what
+   * persuaded them; once they have signed it has done its work, and leaving it
+   * at the top of a landlord's file says we still have something to sell them.
+   * It does not disappear - it stays in their documents, where a thing you want
+   * to look at again lives.
+   */
+  const signed = all.sign?.done === true;
+
   return order[stage]
     .map((id) => all[id])
-    .filter((s): s is ViewStep => Boolean(s) && !s.done && !(holdSign && s.id === "sign"))
+    .filter(
+      (s): s is ViewStep =>
+        Boolean(s) && !s.done && !(holdSign && s.id === "sign") && !(signed && s.id === "presentation")
+    )
     .slice(0, 4);
 }

@@ -79,7 +79,7 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
 
   /* ── the steps, every one a real place to go ── */
   const all: Record<ViewStep["id"], ViewStep> = {
-    presentation: { id: "presentation", label: "View presentation", sub: "See how we'll let your property for you", href: "#", icon: "analytics", action: "presentation" },
+    presentation: { id: "presentation", label: "View your presentation", sub: "See how we'll let your property for you", href: "#", icon: "analytics", action: "presentation" },
     /**
      * THE REAL CONTRACT, filled in, so it can actually be looked at.
      *
@@ -101,7 +101,7 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
     sign: { id: "sign", label: "Sign your contract", sub: "Review and sign your management terms", href: DEMO_CONTRACT, icon: "pencil", action: "sign", done: done("instruction") },
     compliance: {
       id: "compliance",
-      label: "Upload compliance documents",
+      label: "Upload your compliance documents",
       sub: done("compliance") ? "Everything we need is in" : stage === "compliance" ? "3 of 5 still to send" : "Add EICR, EPC and other essentials",
       href: "/landlord/demo/documents",
       icon: "upload",
@@ -157,6 +157,8 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
 
   const view: LandlordView = {
     greeting: "Hello, Raj",
+    /* The drafted contract, reachable from the booklet as well as the file. */
+    contractUrl: DEMO_CONTRACT,
     /* The showroom deck as the post-appraisal, so "View presentation" opens
        the book here. A real landlord's view will carry their own deck. */
     presentation: { ...SAMPLE_DECK, kind: "post-appraisal", style: "house" },

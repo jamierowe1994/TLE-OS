@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 
 /**
  * DocuSeal's signing form, rendered into OUR page, wearing our clothes.
@@ -90,18 +90,41 @@ const CUSTOM_CSS = `
   .field-area:focus, .field-area:focus-visible {
     outline-color: ${BROWN} !important;
   }
+  /* THE FIELD PANEL. Theirs, and it moves to the right-hand column when there
+     is room (components/landlord/SignSheet). Their label is text-2xl, which is
+     sized for a panel lying across the full width of a document; in a 360px
+     column it wraps a field name over three lines. */
+  .form-container .steps-form label {
+    font-size: 15px !important;
+    line-height: 1.35 !important;
+    font-weight: 600 !important;
+    padding-bottom: 6px !important;
+  }
+  .form-container .steps-form .base-input {
+    font-size: 16px !important;
+  }
 `;
 
 export default function DocusealEmbed({
   url,
   email,
   onCompleted,
+  onRoot,
   className = "",
+  style,
 }: {
   url: string;
   email?: string | null;
   onCompleted?: () => void;
+  /**
+   * Their shadow root, once it exists, so the surface around this can read
+   * which step the signer is on and put the panel where it belongs. Nothing
+   * here depends on it - a caller that does not pass it gets the form as it
+   * has always been.
+   */
+  onRoot?: (root: ShadowRoot | null) => void;
   className?: string;
+  style?: CSSProperties;
 }) {
   const host = useRef<HTMLDivElement | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
@@ -136,14 +159,29 @@ export default function DocusealEmbed({
       if (onCompleted) el.addEventListener("completed", onCompleted);
       host.current.replaceChildren(el);
       setState("ready");
+      /* The shadow root is attached in their connectedCallback, which has not
+         necessarily run by the time replaceChildren returns. Twenty tries at
+         50ms is a second, after which there is nothing to hand over and the
+         caller simply gets no root - the form still works, it is only the
+         column beside it that cannot be drawn. */
+      if (onRoot) {
+        let tries = 0;
+        const look = () => {
+          if (gone) return;
+          if (el.shadowRoot) return onRoot(el.shadowRoot);
+          if (tries++ < 20) setTimeout(look, 50);
+        };
+        look();
+      }
     });
     return () => {
       gone = true;
+      onRoot?.(null);
     };
-  }, [url, email, onCompleted]);
+  }, [url, email, onCompleted, onRoot]);
 
   return (
-    <div className={className}>
+    <div className={className} style={style}>
       <div ref={host} />
       {state === "loading" ? (
         <p className="px-4 py-12 text-center text-[13px] text-muted">Opening your contract…</p>

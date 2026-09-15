@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import SignModal from "@/components/landlord/SignModal";
+import { useSigning } from "@/lib/use-signing";
 
 /**
  * "Sign your contract", live. Asks the OS for a signing session for this
@@ -40,48 +40,14 @@ export default function SignTile({
    *  "link": the quiet one on the "Also:" line. */
   variant?: "tile" | "button" | "row" | "link";
 }) {
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
-  const [signing, setSigning] = useState<string | null>(null);
-
-  async function open() {
-    if (busy) return;
-    /* Already have one: straight into the modal, no session to mint. */
-    if (url) {
-      setSigning(url);
-      return;
-    }
-    if (!appraisalId) {
-      setNote("There is no contract on this file yet.");
-      return;
-    }
-    setBusy(true);
-    setNote(null);
-    try {
-      const r = await fetch("/api/landlord/sign", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ appraisalId }),
-      });
-      const j = (await r.json()) as { ok?: boolean; url?: string; error?: string };
-      if (j.ok && j.url) {
-        setSigning(j.url);
-      } else {
-        setNote(j.error ?? "Couldn't open the terms just now.");
-      }
-    } catch {
-      setNote("Couldn't open the terms just now. Try again in a moment.");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const { open, close, signing, busy, note } = useSigning({ appraisalId, url });
 
   const modal = signing ? (
     <SignModal
       url={signing}
-      onClose={() => setSigning(null)}
+      onClose={close}
       onDone={() => {
-        setSigning(null);
+        close();
         /* The webhook files it; this only makes the page behind agree. */
         window.location.reload();
       }}

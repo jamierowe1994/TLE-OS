@@ -17,12 +17,17 @@ import type { PresentDeck } from "@/lib/present";
 export default function PresentTile({
   variant,
   deck,
+  sign,
   label,
   sub,
   icon,
 }: {
   variant: "button" | "row" | "link";
   deck: PresentDeck;
+  /** This landlord's contract, for the "Sign your contract" button along the
+   *  booklet's foot. See PresentModal - the deck's own signUrl is null until a
+   *  deck is looked up per landlord, and the portal knows better. */
+  sign?: { appraisalId?: string | null; url?: string | null };
   label: string;
   sub: string;
   icon: string;
@@ -54,7 +59,7 @@ export default function PresentTile({
       {/* Portalled to the body: the link form sits inside a <p>, and a
           dialog inside a paragraph is invalid HTML that React refuses to
           hydrate. */}
-      {open && typeof document !== "undefined" && createPortal(<PresentModal deck={deck} onClose={() => setOpen(false)} />, document.body)}
+      {open && typeof document !== "undefined" && createPortal(<PresentModal deck={deck} sign={sign} onClose={() => setOpen(false)} />, document.body)}
     </>
   );
 }

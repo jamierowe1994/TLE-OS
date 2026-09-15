@@ -20,6 +20,16 @@ export const CTA =
 
 const hrefOf = (s: ViewStep, anchorBase: string) => (s.href && s.href.startsWith("#") ? `${anchorBase}${s.href}` : s.href);
 
+/**
+ * Where this landlord's contract is, for the button under the presentation.
+ * The live portal mints against the appraisal; the harness already holds a
+ * drafted one on the sign step. Both end up in the same sheet.
+ */
+export const signSource = (v: LandlordView) => ({
+  appraisalId: v.appraisalId ?? null,
+  url: v.appraisalId ? null : (v.contractUrl ?? v.steps.find((s) => s.id === "sign")?.href ?? null),
+});
+
 /** The one next step: signing when there is a contract to sign, else the first in the stage's order. */
 export function pickHero(v: LandlordView): ViewStep | null {
   return v.steps.find((s) => s.id === "sign" && ((s.action === "sign" && v.appraisalId) || s.href)) ?? v.steps[0] ?? null;
@@ -39,7 +49,7 @@ export function HeroAction({ s, v, anchorBase = "", label }: { s: ViewStep; v: L
     );
   }
   if (s.action === "presentation" && v.presentation) {
-    return <PresentTile variant="button" deck={v.presentation} label={text} sub={s.sub} icon={s.icon} />;
+    return <PresentTile variant="button" deck={v.presentation} sign={signSource(v)} label={text} sub={s.sub} icon={s.icon} />;
   }
   const href = hrefOf(s, anchorBase);
   if (!href) return null;
@@ -65,7 +75,7 @@ export function StepRow({ s, v, anchorBase = "" }: { s: ViewStep; v: LandlordVie
     );
   }
   if (s.action === "presentation" && v.presentation) {
-    return <PresentTile variant="row" deck={v.presentation} label={s.label} sub={s.sub} icon={s.icon} />;
+    return <PresentTile variant="row" deck={v.presentation} sign={signSource(v)} label={s.label} sub={s.sub} icon={s.icon} />;
   }
   const inner = (
     <>

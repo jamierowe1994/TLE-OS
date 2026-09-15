@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import DocusealEmbed from "@/components/landlord/DocusealEmbed";
+import SignSheet from "@/components/landlord/SignSheet";
+import { useSigning } from "@/lib/use-signing";
 import PresentBook, { PAGE_H, PAGE_W } from "@/components/PresentBook";
 import { DeckStyleCtx, themeVars, INK } from "@/components/present-kit";
 import { asStyle, slidesFor, type PresentDeck as Deck } from "@/lib/present";
@@ -27,9 +28,21 @@ import { BookActionsCtx } from "@/components/PresentBookPages";
  */
 export default function PresentModal({
   deck,
+  sign,
   onClose,
 }: {
   deck: Deck;
+  /**
+   * This landlord's contract, from the portal that opened the booklet.
+   *
+   * The button along the foot used to read the DECK's own signUrl, which is
+   * null until a deck is looked up per landlord - so on the harness and on
+   * every real portal it rose an empty panel. James, 15 Sep 2026: "we have a
+   * Sign your contract button, and that is not working. It's not putting up
+   * the contract still." The portal knows where the contract is; the deck does
+   * not have to.
+   */
+  sign?: { appraisalId?: string | null; url?: string | null };
   onClose: () => void;
 }) {
   const pages = slidesFor(deck).map((s) => s.id);
@@ -38,7 +51,13 @@ export default function PresentModal({
   const [api, setApi] = useState<{ go: (dir: 1 | -1) => void } | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
   const [room, setRoom] = useState({ w: 0, h: 0 });
-  const signUrl = deck.terms?.signUrl ?? null;
+  /* The portal's contract first, the deck's own as the fallback. */
+  const { open: mint, signing, busy, note } = useSigning({
+    appraisalId: sign?.appraisalId ?? null,
+    url: sign?.url ?? deck.terms?.signUrl ?? null,
+  });
+  const signUrl = signing;
+  const canSign = Boolean(sign?.appraisalId || sign?.url || deck.terms?.signUrl);
 
   useEffect(() => {
     const measure = () => setRoom({ w: window.innerWidth, h: window.innerHeight });
@@ -108,7 +127,7 @@ export default function PresentModal({
         {/* THE BOOKLET, folding out onto the table. */}
         {room.w > 0 && (
           <div className="relative z-[84]" style={{ transformOrigin: "50% 100%", animation: "present-fold 820ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both" }}>
-            <BookActionsCtx.Provider value={{ sign: () => setSignOpen(true) }}>
+            <BookActionsCtx.Provider value={{ sign: () => { setSignOpen(true); void mint(); } }}>
               <PresentBook deck={deck} pages={pages} fit={fit} onSpread={onSpread} onApi={setApi} />
             </BookActionsCtx.Provider>
           </div>
@@ -123,11 +142,15 @@ export default function PresentModal({
               {open && (
                 <button
                   type="button"
-                  onClick={() => setSignOpen(true)}
+                  disabled={busy}
+                  onClick={() => {
+                    setSignOpen(true);
+                    void mint();
+                  }}
                   className="inline-flex h-[48px] items-center gap-3 rounded-full px-7 text-[14px] font-semibold text-white shadow-[0_18px_40px_-18px_rgba(0,0,0,0.6)] transition-transform hover:scale-[1.03]"
                   style={{ background: "#cfa096" }}
                 >
-                  Sign your contract
+                  {busy ? "Opening…" : "Sign your contract"}
                   <svg viewBox="0 0 24 24" aria-hidden className="h-[16px] w-[16px]">
                     <path d="M12 19V5M6 11l6-6 6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
@@ -190,37 +213,48 @@ export default function PresentModal({
           </div>
         )}
 
-        {/* THE CONTRACT, rising over the booklet. */}
-        <div
-          className="absolute inset-x-0 bottom-0 z-[88] flex flex-col overflow-hidden rounded-t-[32px] bg-white shadow-[0_-30px_80px_-30px_rgba(0,0,0,0.35)]"
-          style={{ height: "calc(100% - 56px)", transform: signOpen ? "translateY(0)" : "translateY(104%)", transition: "transform 620ms cubic-bezier(0.22, 1, 0.36, 1)" }}
-          aria-hidden={!signOpen}
-        >
-          <div className="flex items-center justify-between border-b px-8 py-4" style={{ borderColor: "rgba(0,0,0,0.08)" }}>
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.3em] text-black/45">Your agreement</p>
-              <p className="mt-1 text-[17px]" style={{ fontFamily: "var(--p-display)", fontWeight: 800 }}>Sign to get started</p>
-            </div>
-            <button type="button" onClick={() => setSignOpen(false)} className="rounded-full border px-5 py-2 text-[13px] font-semibold" style={{ borderColor: "rgba(0,0,0,0.14)" }}>
-              Back to the presentation
-            </button>
+        {/* THE CONTRACT, rising over the booklet. The same sheet the landlord
+            gets from their file - square, no masthead, the signing beside the
+            paper rather than over it. */}
+        {signOpen && (
+          <div className="absolute inset-0 z-[88] flex items-end justify-center">
+            {signUrl ? (
+              <SignSheet
+                url={signUrl}
+                height="calc(100% - 56px)"
+                closeLabel="Back to the presentation"
+                onClose={() => setSignOpen(false)}
+                onDone={() => setSignOpen(false)}
+              />
+            ) : (
+              <div
+                className="flex w-full max-w-[1040px] flex-col items-center justify-center bg-white px-8 text-center"
+                style={{ height: "calc(100% - 56px)" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <p className="max-w-[520px] text-[17px] leading-[1.6] text-black/65">
+                  {busy
+                    ? "Opening your contract\u2026"
+                    : note
+                      ? note
+                      : canSign
+                        ? "Opening your contract\u2026"
+                        : "Your terms are being prepared. " +
+                          (deck.agent.firstName || "Your agent") +
+                          " will send them across shortly, and they will appear here ready to sign."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setSignOpen(false)}
+                  className="mt-6 rounded-full border px-5 py-2 text-[13px] font-semibold"
+                  style={{ borderColor: "rgba(0,0,0,0.14)" }}
+                >
+                  Back to the presentation
+                </button>
+              </div>
+            )}
           </div>
-          {signUrl ? (
-            /* WAS AN IFRAME, and it was blank every time: docuseal.eu answers
-               x-frame-options SAMEORIGIN, so the button under the presentation
-               opened a panel with nothing in it while the one on the file
-               worked. James, 14 Sep: "that one doesn't currently work. Can you
-               make sure that they're both linked?" Same embed as the file's
-               modal now, so there is one of it. */
-            <DocusealEmbed url={signUrl} className="min-h-0 flex-1 overflow-y-auto" />
-          ) : (
-            <div className="flex flex-1 flex-col items-center justify-center px-8 text-center">
-              <p className="max-w-[520px] text-[17px] leading-[1.6] text-black/65">
-                Your terms are being prepared. {deck.agent.firstName || "Your agent"} will send them across shortly, and they will appear here ready to sign.
-              </p>
-            </div>
-          )}
-        </div>
+        )}
       </div>
     </DeckStyleCtx.Provider>
   );
