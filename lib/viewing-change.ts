@@ -35,6 +35,8 @@ export interface ViewingChangeInput {
   applicantName: string;
   applicantEmail: string | null;
   address: string;
+  /** Nobody from us is going, so the moved email must not promise an agent. */
+  unaccompanied?: boolean;
 }
 
 const pretty = (iso: string) =>
@@ -105,6 +107,9 @@ export async function changeViewing(me: OsUser, p: ViewingChangeInput): Promise<
           oldWhen: pretty(p.oldStartsAt),
           whenPretty: pretty(p.newStartsAt),
           agentName,
+          meetLine: p.unaccompanied
+            ? `It is still unaccompanied, so nobody from us will be there - ${agentName} will send you how to get in.`
+            : `${agentName} will meet you there.`,
         });
         const ics = icsFile({
           uid: `viewing-${p.viewingId}`,

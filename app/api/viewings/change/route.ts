@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
     applicantName: str("applicantName") || "The applicant",
     applicantEmail: str("applicantEmail") || null,
     address: str("address") || "the property",
+    unaccompanied: b.unaccompanied === true,
   });
   return NextResponse.json({ ok: true, ...out });
 }

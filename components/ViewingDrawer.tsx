@@ -264,6 +264,7 @@ export default function ViewingDrawer({
           applicantName: appt.who ?? "",
           applicantEmail: appt.contact?.email ?? null,
           address: appt.where ?? "",
+          unaccompanied: Boolean(appt.unaccompanied),
         }),
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; said?: string };

@@ -1038,7 +1038,7 @@ export const VIEWING_MOVED = {
     H("vm1", "Your viewing has a new time"),
     T(
       "vm2",
-      "Hi {{firstName}},<br><br>Your viewing at <strong>{{address}}</strong> has moved from {{oldWhen}} to <strong>{{whenPretty}}</strong>. {{agentName}} will meet you there."
+      "Hi {{firstName}},<br><br>Your viewing at <strong>{{address}}</strong> has moved from {{oldWhen}} to <strong>{{whenPretty}}</strong>. {{meetLine}}"
     ),
     T("vm3", "The new time is attached as a calendar file, so you can add it in one tap. If it doesn't suit, just reply and we'll sort another."),
     SP("vm4", 8),

@@ -703,6 +703,7 @@ The Letting Experts`
           oldWhen: "Thursday 4 September at 5:30pm",
           whenPretty: "Friday 5 September at 12:30pm",
           agentName: "Rhiannon Dodge",
+          meetLine: "Rhiannon Dodge will meet you there.",
         })
       )(),
   },
