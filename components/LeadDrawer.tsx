@@ -19,6 +19,7 @@ import { EMPTY_PROPERTY, type PropertyFactsData } from "@/lib/lead-facts-shape";
 import ReferToAgent, { isSalesIntent, SALES_TAGS } from "@/components/ReferToAgent";
 import SignaturePanel, { type Signer } from "@/components/SignaturePanel";
 import ViewingBooker from "@/components/ViewingBooker";
+import MailThread from "@/components/MailThread";
 import TenantPropertySearch from "@/components/TenantPropertySearch";
 import LogTouch, { type LogMode } from "@/components/LogTouch";
 import { ATTEMPT_KINDS, touchIcon, touchSentence, whenAgo, type LeadTouch, type Spine, type SpineId } from "@/lib/lead-spine";
@@ -1773,10 +1774,9 @@ export default function LeadDrawer({
                         </li>
                       ))}
                     </ul>
-                    <p className="mt-4 border-t border-line/70 pt-3 text-[10.5px] text-muted">
-                      Emails in and out will thread here — REX AuditLogs already records
-                      field-level changes with actor and timestamp, so the history is real.
-                    </p>
+                    {/* Emails in and out, read live from the agent's own Outlook
+                        (15 Sep 2026) - the reply to a confirmation belongs on the lead. */}
+                    <MailThread email={contact.email || lead.email} firstName={(lead.name || "them").split(" ")[0]} />
                   </>
   );
 
