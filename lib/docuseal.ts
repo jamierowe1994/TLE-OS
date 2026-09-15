@@ -462,6 +462,116 @@ export async function everybodySigned(submissionId: number | null): Promise<bool
   }
 }
 
+/** One side of a contract, as DocuSeal currently holds it. */
+export interface TermsParty {
+  role: "agent" | "landlord";
+  submitterId: number;
+  name: string | null;
+  email: string;
+  slug: string;
+  embedSrc: string;
+  /** "awaiting", "sent", "opened", "completed", "declined". */
+  status: string;
+  /** When DocuSeal emailed them. Null means it never has. */
+  sentAt: string | null;
+  openedAt: string | null;
+  completedAt: string | null;
+}
+
+/**
+ * Both sides of one appraisal's contract, read from DocuSeal rather than
+ * remembered here.
+ *
+ * Nothing about who has signed, who has been emailed or who has opened it is
+ * stored on our side, and that is deliberate: DocuSeal is the system of record
+ * for a signature, and a second copy of that state is a second thing to be
+ * wrong. Every one of these fields is theirs - sent_at, opened_at,
+ * completed_at - so the file cannot claim a contract is signed when it is not.
+ *
+ * Newest first, so a contract re-sent after a correction wins over the one it
+ * replaced.
+ */
+export async function termsParties(externalId: string): Promise<TermsParty[]> {
+  const raw = await ds<{
+    data?: Array<{
+      id?: number;
+      slug?: string;
+      name?: string | null;
+      email?: string;
+      embed_src?: string;
+      status?: string;
+      role?: string;
+      sent_at?: string | null;
+      opened_at?: string | null;
+      completed_at?: string | null;
+    }>;
+  }>(`/submitters?external_id=${encodeURIComponent(externalId)}&limit=20`).catch(() => null);
+
+  const rows = [...(raw?.data ?? [])].reverse();
+  const base = signingBase(baseUrl() ?? "");
+  const pick = (role: "agent" | "landlord"): TermsParty | null => {
+    const r = rows.find((x) => (x.role ?? "").toLowerCase() === role && x.slug);
+    if (!r?.slug) return null;
+    return {
+      role,
+      submitterId: Number(r.id),
+      name: r.name ?? null,
+      email: r.email ?? "",
+      slug: r.slug,
+      embedSrc: r.embed_src || `${base}/s/${r.slug}`,
+      status: r.status ?? "awaiting",
+      sentAt: r.sent_at ?? null,
+      openedAt: r.opened_at ?? null,
+      completedAt: r.completed_at ?? null,
+    };
+  };
+  return [pick("agent"), pick("landlord")].filter((x): x is TermsParty => x !== null);
+}
+
+/**
+ * PUT the landlord's own copy into their inbox - the send, and every reminder
+ * after it.
+ *
+ * ── This is the line that emails a real landlord ──────────────────────────
+ *
+ * One primitive for both, because they ARE both: DocuSeal's
+ * `PUT /submitters/:id { send_email: true }` sends the invitation if it has
+ * never gone and sends it again if it has. Writing them as two things would
+ * mean two places for the send lock to be got wrong.
+ *
+ * Today an agent who wants to chase an unsigned contract has to find somebody
+ * with a DocuSeal login (James, 15 Sep 2026: "every time they need to send a
+ * nudge, they have to go to someone with a DocuSign account"). This is the
+ * whole of that, on the file, for the agent whose deal it is.
+ *
+ * Locked exactly like sendForSignature: no lock, no send. Sandbox addresses
+ * are refused here as well as there, because a guarantee enforced in one
+ * place is not a guarantee.
+ */
+export async function emailTerms(party: TermsParty): Promise<void> {
+  if (!docusealConfigured()) {
+    throw new DocusealBlocked("DocuSeal isn't connected on this environment.");
+  }
+  if (!docusealSendUnlocked()) {
+    throw new DocusealBlocked(
+      'Sending is locked on this environment. Set DOCUSEAL_ALLOW_SEND="yes" to unlock it — and send the first one to a colleague, not a landlord.'
+    );
+  }
+  const email = (party.email ?? "").trim();
+  if (!email.includes("@")) {
+    throw new DocusealBlocked(`"${email || "(blank)"}" isn't an email address.`);
+  }
+  if (email.toLowerCase().endsWith(`@${SANDBOX_EMAIL_DOMAIN}`)) {
+    throw new DocusealBlocked("That's a sandbox address — sandbox records can't be sent contracts.");
+  }
+  await ds(`/submitters/${party.submitterId}`, {
+    method: "PUT",
+    /* Stated, never inherited. The whole file's rule, and this is the one call
+       where getting it wrong is an email nobody meant to send. */
+    body: { send_email: true },
+  });
+}
+
 export async function findLandlordSigning(externalId: string): Promise<SigningSession | null> {
   const raw = await ds<{ data?: Array<{ id?: number; slug?: string; embed_src?: string; status?: string; role?: string; external_id?: string }> }>(
     `/submitters?external_id=${encodeURIComponent(externalId)}&limit=20`

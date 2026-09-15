@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
-import TermsSigning from "@/components/TermsSigning";
+import TermsCard from "@/components/appraisal/TermsCard";
 import ValuationSteps from "@/components/appraisal/ValuationSteps";
 import WelcomeVideoRecorder from "@/components/WelcomeVideoRecorder";
 import { mintPreAppraisalDeck } from "@/components/DeckRail";
@@ -22,7 +22,7 @@ import { effectiveStage, needsValuation, type MarketAppraisal } from "@/lib/mark
  *
  * It is the OS's first green card: the palette's sage, the way the landlord
  * portal uses it for "what comes after". It is also kept SHORT - one
- * question at a time for the valuation, the signing panel behind a button -
+ * question at a time for the valuation, the contract on its own screen -
  * because whatever height this box takes, the two cards beside it are
  * stretched to match.
  */
@@ -59,7 +59,6 @@ export default function NextUp({
   const refId = ma.leadId ?? ma.id;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [signing, setSigning] = useState(false);
 
   const latest = (kind: string) => decks?.find((s) => s.kind === kind) ?? null;
   const pre = latest("pre-appraisal");
@@ -249,17 +248,19 @@ export default function NextUp({
       ),
     };
   } else if (ma.valuation != null && post && !termsSigned) {
+    /* PREPARE, CHECK, SIGN, SEND - and then chase. The card decides which of
+       those it is from DocuSeal's own state; it used to drop the agent
+       straight into a signing panel with no sight of what the landlord would
+       be reading. James, 15 Sep 2026: "it will say Prepare presentation and
+       sign ... they would then prepare everything". */
     card = {
       icon: "file-contract",
-      title: "Get the terms signed",
-      sub: post.opens > 0 ? `The post-appraisal deck has been opened ${post.opens} time${post.opens === 1 ? "" : "s"}.` : "The post-appraisal deck is made and not yet opened.",
-      body: signing ? (
-        <TermsSigning appraisalId={ma.id} landlord={ma.landlord} onSigned={() => onDecksChanged?.()} />
-      ) : (
-        <button type="button" onClick={() => setSigning(true)} className={primary}>
-          Send the terms for signature <span aria-hidden>→</span>
-        </button>
-      ),
+      title: "Prepare the presentation and sign",
+      sub:
+        post.opens > 0
+          ? `The post-appraisal deck has been opened ${post.opens} time${post.opens === 1 ? "" : "s"}.`
+          : "Check it through as they will see it, sign your half, then send it.",
+      body: <TermsCard appraisalId={ma.id} landlord={ma.landlord} primary={primary} ghost={ghost} />,
     };
   } else if (!pre) {
     card = ma.appointmentAt && new Date(ma.appointmentAt) > new Date()

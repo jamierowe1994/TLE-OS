@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import SignSheet from "@/components/landlord/SignSheet";
+import type { SigningStep } from "@/lib/signing-steps";
 
 /**
  * The contract, signed WITHOUT leaving The Letting Experts.
@@ -20,11 +21,16 @@ import SignSheet from "@/components/landlord/SignSheet";
 export default function SignModal({
   url,
   email,
+  steps,
+  closeLabel,
   onClose,
   onDone,
 }: {
   url: string;
   email?: string | null;
+  /** Whose boxes these are. The agent's five differ from the landlord's. */
+  steps?: SigningStep[];
+  closeLabel?: string;
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -45,7 +51,7 @@ export default function SignModal({
       style={{ animation: "sign-dim 460ms ease-out both" }}
     >
       <style>{"@keyframes sign-dim { from { opacity: 0 } to { opacity: 1 } }"}</style>
-      <SignSheet url={url} email={email} onClose={onClose} onDone={onDone} />
+      <SignSheet url={url} email={email} steps={steps} closeLabel={closeLabel} onClose={onClose} onDone={onDone} />
     </div>
   );
 }
