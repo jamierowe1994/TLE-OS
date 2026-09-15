@@ -83,6 +83,8 @@ const CSS = `
   #os-print-report table.f td { vertical-align: top; padding: 5pt 6pt 5pt 0; border-bottom: 1px solid #ccc; break-inside: avoid; }
   #os-print-report .item { font-weight: 700; }
   #os-print-report .m { color: #555; font-size: 9.5pt; }
+  #os-print-report .shots { margin-top: 5pt; display: flex; flex-wrap: wrap; gap: 4pt; }
+  #os-print-report .shots img { width: 38mm; height: 28mm; object-fit: cover; border: 1px solid #ccc; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   #os-print-report footer { margin-top: 20pt; padding-top: 6pt; border-top: 1px solid #000; color: #555; font-size: 9pt; }
 }
 `;
@@ -184,6 +186,21 @@ export default function ReportSheet({
                     <td>
                       <span className="item">{f.item || "Noted"}</span>
                       {f.note && <div className="m">{f.note}</div>}
+                      {/* The pictures, on the page. A deposit is argued over
+                          what a room looked like, and a report that holds the
+                          photographs but prints only the sentence sends the
+                          landlord the weaker half. Printers default to
+                          dropping background images, so these are real <img>
+                          elements - and print-color-adjust keeps them from
+                          being washed out. */}
+                      {(f.photos ?? []).length > 0 && (
+                        <div className="shots">
+                          {(f.photos ?? []).map((ph) => (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img key={ph.key} src={`/api/r2/file?key=${encodeURIComponent(ph.key)}`} alt={ph.name} />
+                          ))}
+                        </div>
+                      )}
                     </td>
                     <td>{CONDITION_SHORT[f.condition] ?? f.condition}</td>
                     <td>

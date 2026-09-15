@@ -256,7 +256,9 @@ export const SCREENS: Record<AgentRoute, ScreenDoc> = {
       "The Due list needs REX for the managed book. Where REX is not connected the screen says so rather than showing an empty board.",
       /* The printable report landed 14 Sep - Print the report on a written-up
          visit. Photographs on a finding are still open. */
-      "No photographs on a finding yet. The report prints from the visit once it is written up, and the landlord also gets it by email.",
+      /* Photographs landed 14-15 Sep. The one real gap left is the emailed
+         copy, whose template is text - see INSPECTION_LANDLORD_REPORT. */
+      "Photographs go on a finding and come out on the printed report. The emailed copy is still words only, so send the print when the pictures are the point.",
     ],
   },
 

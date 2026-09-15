@@ -524,6 +524,72 @@ function Now({ step, inspection, busy, onMove }: { step: StepId; inspection: Ins
 }
 
 /**
+ * PHOTOGRAPHS ON A FINDING.
+ *
+ * "No photographs on a finding yet" was the last line of the Inspections
+ * caveat, and it is the one that costs money: a deposit is argued over what a
+ * room looked like, and "the extractor had heavy grease on it" is a sentence
+ * against a photograph.
+ *
+ * Nothing new was needed to store them. `photos` has been on the finding since
+ * the table was written, and /api/r2/upload already takes a scope and a ref
+ * and hands back a key - the same route the listing photos and the compliance
+ * certificates go through, which means the server decides what may be stored
+ * rather than the browser. They are filed under the INSPECTION's ref, so every
+ * picture from one visit sits under one prefix.
+ */
+function FindingPhotos({ finding, busy, onMove }: { finding: Finding; busy: boolean; onMove: (b: unknown) => void }) {
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const photos = finding.photos ?? [];
+
+  async function add(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    setErr(null);
+    try {
+      const added: { key: string; name: string }[] = [];
+      for (const file of Array.from(files)) {
+        const body = new FormData();
+        body.set("scope", "photo");
+        body.set("ref", `inspection-${finding.inspectionId}`);
+        body.set("file", file);
+        const j = await fetch("/api/r2/upload", { method: "POST", body }).then((r) => r.json());
+        if (!j.ok) throw new Error(j.error ?? "That picture would not upload.");
+        added.push({ key: j.key, name: file.name });
+      }
+      /* Saved through the finding's own save, so one picture cannot end up in
+         storage with nothing on the record pointing at it. */
+      onMove({ finding: { ...finding, photos: [...photos, ...added] } });
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "That picture would not upload.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return (
+    <div className="mt-1.5">
+      {photos.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {photos.map((p) => (
+            <a key={p.key} href={`/api/r2/file?key=${encodeURIComponent(p.key)}`} target="_blank" rel="noreferrer" title={p.name}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/api/r2/file?key=${encodeURIComponent(p.key)}`} alt={p.name} className="h-14 w-14 rounded-lg border border-line/60 object-cover" />
+            </a>
+          ))}
+        </div>
+      )}
+      <label className={`mt-1.5 inline-block text-[11px] ${busy || uploading ? "text-muted" : "cursor-pointer text-accent-dark underline"}`}>
+        {uploading ? "Uploading…" : photos.length ? "Add another photo" : "Add a photo"}
+        <input type="file" accept="image/*" multiple disabled={busy || uploading} onChange={(e) => void add(e.target.files)} className="hidden" />
+      </label>
+      {err && <p className="mt-1 text-[11px] text-accent-dark">{err}</p>}
+    </div>
+  );
+}
+
+/**
  * The one control that turns a finding into a job.
  *
  * The screen used to say "Raise it on Maintenance and it carries from there",
@@ -605,6 +671,8 @@ function Findings({ inspection, findings, busy, onMove }: { inspection: Inspecti
                 <span className="text-[11px] text-muted">{ACTIONS.find((a) => a.id === f.action)?.label}</span>
               </span>
             </div>
+            {/* What it looked like. */}
+            <FindingPhotos finding={f} busy={busy} onMove={onMove} />
             {/* A finding that asked for work, and the job it became - or the
                 one control that makes it one. */}
             {f.action === "works_order" && <RaiseWorksOrder finding={f} busy={busy} onMove={onMove} />}
