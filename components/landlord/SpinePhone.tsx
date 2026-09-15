@@ -54,7 +54,7 @@ export default function SpinePhone({ stops }: { stops: Stop[] }) {
   const s = stops[shown];
 
   return (
-    <div className="lg:hidden">
+    <div className="sm:hidden">
       {/* THE BUBBLE, above the wheel and pointing at it. */}
       <div className="px-1">
         <div className="relative rounded-[16px] bg-accent-soft/80 px-4 py-3">

@@ -50,7 +50,7 @@ export default function AgentTab({ v }: { v: LandlordView }) {
     "flex w-full items-center justify-center gap-2.5 rounded-full px-4 py-3 text-[13.5px] font-semibold";
 
   return (
-    <div className="lg:hidden">
+    <div className="sm:hidden">
       {/* The dark, so a tap anywhere else shuts it. */}
       <div
         onClick={() => setOpen(false)}

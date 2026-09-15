@@ -67,11 +67,11 @@ export default function LandlordDashboard({
           Everything from lg up is exactly as it was. */}
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_auto]">
         {/* Just "Hello, Raj" - the "Good afternoon" above it read oddly (James, 11 Sep). */}
-        <div className="lg:pt-2">
+        <div className="sm:pt-2">
           <h1 className="text-[32px] leading-[1.05] sm:text-[44px]">{v.greeting}</h1>
-          <p className="mt-3 hidden max-w-xl text-[14.5px] text-muted lg:block">{v.intro}</p>
+          <p className="mt-3 hidden max-w-xl text-[14.5px] text-muted sm:block">{v.intro}</p>
         </div>
-        <div className="hidden lg:block">
+        <div className="hidden sm:block">
           <AgentCard v={v} />
         </div>
       </div>
@@ -137,24 +137,24 @@ export default function LandlordDashboard({
         {/* ON A PHONE this is tightened right down. James, 15 Sep 2026: "a very
             large box for a very small thing" - 30px of heading, a 64px icon and
             28px of padding for one sentence and one button. Same card from lg. */}
-        <section className="relative overflow-hidden rounded-[22px] bg-accent-soft/80 p-5 lg:p-7" data-search>
+        <section className="relative overflow-hidden rounded-[22px] bg-accent-soft/80 p-5 sm:p-7" data-search>
           {/* The soft curves bottom right: the palette's clay and pink, low. */}
           <span aria-hidden className="pointer-events-none absolute -bottom-24 -right-16 h-72 w-72 rounded-full bg-accent/15" />
           <span aria-hidden className="pointer-events-none absolute -bottom-36 right-24 h-72 w-72 rounded-full bg-white/40" />
           <p className={`${eyebrow} relative`}>Your next step</p>
           {hero ? (
-            <div className="relative mt-4 lg:mt-5">
-              <div className="flex items-start gap-4 lg:gap-5">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/70 text-accent-dark lg:h-16 lg:w-16">
-                  <DoodleIcon name={hero.icon} size={18} className="lg:hidden" />
-                  <DoodleIcon name={hero.icon} size={24} className="hidden lg:block" />
+            <div className="relative mt-4 sm:mt-5">
+              <div className="flex items-start gap-4 sm:gap-5">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/70 text-accent-dark sm:h-16 sm:w-16">
+                  <DoodleIcon name={hero.icon} size={18} className="sm:hidden" />
+                  <DoodleIcon name={hero.icon} size={24} className="hidden sm:block" />
                 </span>
                 <div className="min-w-0">
-                  <h2 className="text-[21px] leading-tight lg:text-[30px]">{hero.label}</h2>
-                  <p className="mt-1.5 max-w-md text-[13px] leading-relaxed text-muted lg:mt-2 lg:text-[14px]">{hero.sub}</p>
+                  <h2 className="text-[21px] leading-tight sm:text-[30px]">{hero.label}</h2>
+                  <p className="mt-1.5 max-w-md text-[13px] leading-relaxed text-muted sm:mt-2 sm:text-[14px]">{hero.sub}</p>
                 </div>
               </div>
-              <div className="mt-5 lg:mt-7">
+              <div className="mt-5 sm:mt-7">
                 <HeroAction s={hero} v={v} />
               </div>
               {others.length > 0 && (
@@ -191,14 +191,19 @@ export default function LandlordDashboard({
           A phone gets the wheel, and no box around it: seven equal dots in a
           scrolling row is a diagram of our process at the size of a diagram.
           See SpinePhone. */}
-      <section id="journey" className="lg:hidden" data-search>
-        <h2 className="mb-3 text-[16px]">Your letting journey</h2>
-        <SpinePhone stops={fullJourney(v)} />
-      </section>
-      <section className={`hidden ${card} p-6 lg:block`} data-search>
-        <h2 className="text-[18px]">Your letting journey</h2>
-        <div className="mt-7">
-          <Spine stops={fullJourney(v)} />
+      <section id="journey" data-search>
+        {/* A PHONE gets the wheel; everything from sm up is the row in its box,
+            exactly as it was. One id, so the anchor never points at the hidden
+            one of the pair. */}
+        <div className="sm:hidden">
+          <h2 className="mb-3 text-[16px]">Your letting journey</h2>
+          <SpinePhone stops={fullJourney(v)} />
+        </div>
+        <div className={`hidden ${card} p-6 sm:block`}>
+          <h2 className="text-[18px]">Your letting journey</h2>
+          <div className="mt-7">
+            <Spine stops={fullJourney(v)} />
+          </div>
         </div>
       </section>
 
