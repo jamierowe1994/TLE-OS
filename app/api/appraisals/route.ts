@@ -10,6 +10,7 @@ import { queueVideoChase } from "@/lib/video-chase";
 import { publicOrigin } from "@/lib/origin";
 import { sendBookingConfirmation, type ConfirmationResult } from "@/lib/appraisal-confirm";
 
+import { putAppraisalInRexDiary, type DiaryOutcome } from "@/lib/rex-diary-write";
 /**
  * The appraisals the OS has booked.
  *
@@ -86,6 +87,7 @@ export async function POST(req: NextRequest) {
        booking is safe (James, 6 Sep 2026: it was written and never wired).
        Same rule as the nudge: it must never cost the appointment. */
     let confirmation: ConfirmationResult | null = null;
+    let rexDiary: DiaryOutcome | null = null;
     if (appraisal.appointmentAt) {
       const userId = verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value);
       const me = userId ? await findUserById(userId).catch(() => null) : null;
@@ -101,11 +103,18 @@ export async function POST(req: NextRequest) {
         } catch {
           videoChase = { queued: false, reason: "Couldn't queue the video nudge." };
         }
+        /* Into the agent's own REX diary (lib/rex-diary-write, 15 Sep 2026).
+           Behind the REX allow-list, and never the reason a booking fails. */
+        try {
+          rexDiary = await putAppraisalInRexDiary({ ma: appraisal, userId: me.id });
+        } catch (e) {
+          rexDiary = { ok: false, reason: "refused", detail: e instanceof Error ? e.message : "Couldn't reach REX." };
+        }
       } else {
         confirmation = { sent: false, reason: "Not signed in, so the confirmation could not go out in anybody's name." };
       }
     }
-    return NextResponse.json({ appraisal, videoChase, confirmation });
+    return NextResponse.json({ appraisal, videoChase, confirmation, rexDiary });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Could not save the appraisal." },
