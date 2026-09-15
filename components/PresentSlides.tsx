@@ -207,8 +207,8 @@ export function Agenda({ deck, show }: { deck: Deck; show: boolean }) {
 
           <Rise show={show} i={2}>
             <p className="mt-7 max-w-[420px] text-[15.5px] font-light leading-[1.6] text-black/60">
-              Four parts, and you can stop us at any of them. Nothing here needs deciding
-              today - the last one is the only one with a question in it.
+              Four simple parts. Stop us at any point and ask anything you like - nothing
+              needs deciding today.
             </p>
           </Rise>
 
@@ -290,9 +290,9 @@ export function Approach({ show }: { show: boolean }) {
       <div className="mx-auto w-full max-w-[1180px]">
         <div className="max-w-[720px]">
           <HandHead eyebrow={APPROACH.eyebrow} show={show} lines={2}>
-            Why landlords
+            A more personal
             <br />
-            choose <Emphasis show={show}>us</Emphasis>
+            way to <Emphasis show={show}>let</Emphasis>
           </HandHead>
           <Rise show={show} i={2}>
             <p className="mt-6 max-w-[560px] text-[15px] font-light leading-[1.6] text-black/55">
@@ -341,7 +341,7 @@ export function Approach({ show }: { show: boolean }) {
  * Your property. James, 13 Sep 2026, from his reference: the eyebrow and
  * the heading centred, the address and the facts under it, and then THEIR
  * HOUSE, big - a landscape photograph in a rounded frame on a sage shape,
- * a handwritten "A place with potential" beside its foot, and a strapline
+ * a handwritten "Let's see what it could achieve." beside its foot, and a strapline
  * under it. Laid out on the stage so it frames the same at every size.
  *
  * The photograph is the property's own (`property.image`, from the dossier
@@ -388,7 +388,7 @@ export function PropertyDivider({ deck, show }: { deck: Deck; show: boolean }) {
         </Rise>
         <Rise show={show} i={1}>
           <h2 className={`mt-5 leading-[1.04] ${fx ? "text-[62px]" : "text-[34px] sm:text-[48px]"}`} style={HEAD}>
-            Right then. Let&rsquo;s talk about <Emphasis show={show}>yours</Emphasis>
+            Right then. Let&rsquo;s talk about <Emphasis show={show}>yours</Emphasis>.
           </h2>
         </Rise>
         {(p.address || facts.length > 0) && (
@@ -405,14 +405,14 @@ export function PropertyDivider({ deck, show }: { deck: Deck; show: boolean }) {
           {frame}
           {fx && (
             <p className="pointer-events-none absolute -right-[205px] bottom-[140px] w-[185px] text-left text-[26px] leading-[1.1] text-black/60" style={{ ...SCRIPT, transform: "rotate(-12deg)" }}>
-              A place
+              Let&rsquo;s see what
               <br />
-              <span className="ml-3">with potential</span>
+              <span className="ml-3">it could achieve.</span>
             </p>
           )}
         </Rise>
         <Rise show={show} i={4}>
-          <p className="mt-7 text-[11px] uppercase tracking-[0.3em] text-black/45">Same great spaces. A brighter tomorrow.</p>
+          <p className="mt-7 text-[11px] uppercase tracking-[0.3em] text-black/45">Your property. The right plan.</p>
         </Rise>
       </div>
       {fx && (
@@ -437,7 +437,7 @@ export function PropertyDivider({ deck, show }: { deck: Deck; show: boolean }) {
 }
 
 /**
- * What we have on record.
+ * Your property details.
  *
  * The slide exists to be CORRECTED, which is why the empty values are shown as
  * empty rather than quietly dropped. Material information is the landlord's to
@@ -463,15 +463,15 @@ export function Material({ deck, show }: { deck: Deck; show: boolean }) {
     <CreamSlide id="material">
       <div className="mx-auto w-full max-w-[1180px]">
         <div className="max-w-[640px]">
-          <HandHead eyebrow="What we have on record" show={show} lines={2}>
-            Have a look. Tell us
+          <HandHead eyebrow="Your property details" show={show} lines={2}>
+            Let&rsquo;s make sure everything
             <br />
-            what we have <Emphasis show={show}>wrong</Emphasis>
+            is <Emphasis show={show}>up to date</Emphasis>
           </HandHead>
           <Rise show={show} i={2}>
             <p className="mt-6 max-w-[520px] text-[15px] font-light leading-[1.6] text-black/55">
-              This is what goes on the listing, so it is quicker to correct now than after a
-              tenant has read it.
+              These are the details we&rsquo;ll use to prepare your property for market. We&rsquo;ll
+              check them together before anything goes live.
             </p>
           </Rise>
         </div>
@@ -490,7 +490,7 @@ export function Material({ deck, show }: { deck: Deck; show: boolean }) {
                     className="text-right text-[14px]"
                     style={{ fontFamily: HAND, fontWeight: 700, color: CORAL }}
                   >
-                    we need this
+                    to confirm
                   </dd>
                 ) : (
                   <dd className="text-right text-[14.5px] font-medium">{r.value}</dd>
@@ -506,8 +506,8 @@ export function Material({ deck, show }: { deck: Deck; show: boolean }) {
               className="mt-6 text-[14px] text-black/55"
               style={{ fontFamily: HAND }}
             >
-              {missing === 1 ? "One thing" : `${missing} things`} we still need from you. Tell
-              your agent and we will fill {missing === 1 ? "it" : "them"} in.
+              {missing === 1 ? "One detail" : `${missing} details`} still to confirm. Your agent
+              can update {missing === 1 ? "this" : "these"} with you.
             </p>
           </Rise>
         )}
@@ -577,8 +577,8 @@ export function Listings({ deck, show }: { deck: Deck; show: boolean }) {
           </HandHead>
           <Rise show={show} i={2}>
             <p className="mt-6 max-w-[560px] text-[15px] font-light leading-[1.6] text-black/55">
-              A tenant looking at your street is looking at these at the same time. Tap any of
-              them for the photographs, the asking rent and who it is with.
+              These are the properties tenants are currently seeing alongside yours. Tap any
+              one to see the photography, asking rent and agent.
             </p>
           </Rise>
         </div>
@@ -689,8 +689,8 @@ export function Listings({ deck, show }: { deck: Deck; show: boolean }) {
             <p className="mt-5 text-[14px] text-black/55" style={{ fontFamily: HAND }}>
               {ours > 0 && (
                 <>
-                  {ours === 1 ? "One of these is ours." : `${ours} of these are ours.`} The rest are
-                  what a tenant sees beside yours.
+                  {ours === 1 ? "One of these is ours." : `${ours} of these are ours.`} The others
+                  give us a useful view of the local market.
                 </>
               )}
               {shown.length < rows.length && (

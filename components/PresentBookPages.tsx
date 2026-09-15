@@ -88,7 +88,7 @@ export function BookWelcome({ deck }: { deck: Deck }) {
         </h1>
         <Stroke className="mt-2" />
         <p className="mt-8 max-w-[620px] text-[21px] leading-[1.5] text-black/60">
-          We&rsquo;ll walk through the market, what your property could achieve and the clearest route to getting it let.
+          We&rsquo;ll look at the market, what your property could achieve and the clearest route to getting it let.
         </p>
         {/* Three SQUARES, everything centred in them - as the mock-up. */}
         <ul className="mt-10 grid grid-cols-3 gap-5" style={{ width: 760 }}>
@@ -246,11 +246,11 @@ export function BookApproach() {
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       <div className="absolute left-[96px] top-[84px] w-[1100px]">
-        <Eyebrow>A clearer approach to lettings</Eyebrow>
+        <Eyebrow>A different approach to lettings</Eyebrow>
         <h1 className="mt-8 text-[72px] leading-[1.04]" style={SERIF}>
-          Why landlords
+          A more personal
           <br />
-          choose <span style={{ color: CLAY }}>us.</span>
+          way to <span style={{ color: CLAY }}>let.</span>
         </h1>
         <span aria-hidden className="mt-4 block h-[3px] w-[240px] rounded-full" style={{ background: CLAY, opacity: 0.8 }} />
         <p className="mt-7 max-w-[560px] text-[16px] leading-[1.6] text-black/65">{APPROACH.standfirst}</p>
@@ -306,7 +306,7 @@ function Ital({ children, width = 200 }: { children: React.ReactNode; width?: nu
  * Page: YOUR PROPERTY. James's mock-up, 13 Sep 2026: the heading on one
  * line with "yours" in the pink italic, the address and the facts under
  * it, the house in its own soft shape (his cut-out) on a sage shape, the
- * handwritten "A place with potential" with an arrow, the strap in the
+ * handwritten "Let's see what it could achieve." with an arrow, the strap in the
  * foot. The house is the property's own photograph on a real deck; the
  * sample's is the stand-in cottage.
  */
@@ -329,11 +329,11 @@ export function BookProperty({ deck }: { deck: Deck }) {
       {/* The handwritten aside, and the arrow down to the house. */}
       <div className="pointer-events-none absolute left-[1110px] top-[330px] w-[200px]">
         <p className="text-[24px] leading-[1.15] text-black/60" style={{ fontFamily: "var(--font-shantell), cursive", transform: "rotate(-14deg)" }}>
-          A place
+          Let&rsquo;s see
           <br />
-          <span className="ml-3">with</span>
+          <span className="ml-3">what it could</span>
           <br />
-          <span className="ml-1">potential</span>
+          <span className="ml-1">achieve.</span>
         </p>
         <svg viewBox="0 0 60 60" aria-hidden className="ml-[70px] mt-2 h-[52px] w-[52px]">
           <path d="M40 4C44 20 36 36 16 50M16 50L20 36M16 50L30 46" fill="none" stroke={INK} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity="0.6" />
@@ -343,21 +343,21 @@ export function BookProperty({ deck }: { deck: Deck }) {
       <div className="absolute left-[96px] top-[84px] w-[1200px]">
         <EyebrowRule>Your property</EyebrowRule>
         <h1 className="mt-6 text-[64px] leading-[1.1]" style={SERIF}>
-          Right then. Let&rsquo;s talk about <Ital width={190}>yours</Ital>
+          Right then. Let&rsquo;s talk about <Ital width={190}>yours</Ital>.
         </h1>
         {(p.address || p.postcode) && (
           <p className="mt-6 text-[24px] leading-[1.3]" style={SERIF}>{[p.address, p.postcode].filter(Boolean).join(", ")}</p>
         )}
         {facts.length > 0 && <p className="mt-2 text-[15px] tracking-[0.02em] text-black/50">{facts.join("  ·  ")}</p>}
       </div>
-      <FootStrap lines={["Same great spaces. A brighter tomorrow."]} />
+      <FootStrap lines={["Your property. The right plan."]} />
     </div>
   );
 }
 
 /**
  * Page: WHAT WE HAVE ON RECORD. The facts in two columns with hairlines,
- * a missing one marked "we need this" in the pink, and the line under
+ * a missing one marked "to confirm" in the pink, and the line under
  * the table that says how many we still need - the deck's own rule.
  */
 export function BookMaterial({ deck }: { deck: Deck }) {
@@ -371,14 +371,14 @@ export function BookMaterial({ deck }: { deck: Deck }) {
       {/* THE PINK, off the top-right corner. */}
       <div className="pointer-events-none absolute -right-[260px] -top-[240px] h-[560px] w-[560px] rounded-full" style={{ background: "var(--p-tint)", opacity: 0.9 }} />
       <div className="absolute left-[96px] top-[84px] w-[1040px]">
-        <EyebrowRule>What we have on record</EyebrowRule>
+        <EyebrowRule>Your property details</EyebrowRule>
         <h1 className="mt-6 text-[64px] leading-[1.1]" style={SERIF}>
-          Have a look. Tell us
+          Let&rsquo;s make sure everything
           <br />
-          what we have <Ital width={230}>wrong</Ital>
+          is <Ital width={230}>up to date</Ital>
         </h1>
         <p className="mt-8 max-w-[640px] text-[17px] leading-[1.6] text-black/65">
-          This is what goes on the listing, so it is quicker to correct now than after a tenant has read it.
+          These are the details we&rsquo;ll use to prepare your property for market. We&rsquo;ll check them together before anything goes live.
         </p>
         <div className="mt-8 grid grid-cols-2" style={{ width: 1000 }}>
           {cols.map((items, c) => (
@@ -387,7 +387,7 @@ export function BookMaterial({ deck }: { deck: Deck }) {
                 <div key={r.label} className="flex items-baseline justify-between gap-6 border-b py-4" style={{ borderColor: "rgba(0,0,0,0.08)" }}>
                   <dt className="text-[14px] text-black/50">{r.label}</dt>
                   <dd className="text-right text-[15px]" style={blank(r.value) ? { color: CLAY, fontWeight: 600 } : undefined}>
-                    {blank(r.value) ? "we need this" : r.value}
+                    {blank(r.value) ? "to confirm" : r.value}
                   </dd>
                 </div>
               ))}
@@ -398,7 +398,7 @@ export function BookMaterial({ deck }: { deck: Deck }) {
           <div className="mt-8 flex items-center gap-4 border-t pt-6" style={{ borderColor: "rgba(0,0,0,0.1)" }}>
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold text-white" style={{ background: "rgba(0,0,0,0.35)" }}>i</span>
             <p className="text-[14px] text-black/60">
-              {missing === 1 ? "One thing" : `${missing} things`} we still need from you. Tell your agent and we will fill {missing === 1 ? "it" : "them"} in.
+              {missing === 1 ? "One detail" : `${missing} details`} still to confirm. Your agent can update {missing === 1 ? "this" : "these"} with you.
             </p>
           </div>
         )}
@@ -460,7 +460,7 @@ export function BookListings({ deck }: { deck: Deck }) {
           near you <Ital width={190}>today</Ital>
         </h1>
         <p className="mt-7 max-w-[820px] text-[17px] leading-[1.6] text-black/65">
-          A tenant looking at your street is comparing all of these at the same time. These are the homes competing for their attention.
+          These are the properties tenants are currently seeing alongside yours.
         </p>
         <ul className="mt-6" style={{ width: 1200 }}>
           {rows.map((r, n) => (
@@ -485,12 +485,12 @@ export function BookListings({ deck }: { deck: Deck }) {
         </ul>
         {ours > 0 && (
           <div className="mt-6 flex items-center gap-6" style={{ width: 1200 }}>
-            <p className="text-[15px] text-black/65">{ours === 1 ? "One of these is ours." : `${ours} of these are ours.`} The rest are what a tenant sees beside yours.</p>
+            <p className="text-[15px] text-black/65">{ours === 1 ? "One of these is ours." : `${ours} of these are ours.`} The others give us a useful view of the local market.</p>
             <span aria-hidden className="block h-px flex-1" style={{ background: "rgba(0,0,0,0.12)" }} />
           </div>
         )}
       </div>
-      <FootStrap lines={["Same great spaces. A brighter tomorrow."]} />
+      <FootStrap lines={["Your property. The right plan."]} />
     </div>
   );
 }
@@ -515,7 +515,7 @@ export function BookComparables({ deck }: { deck: Deck }) {
           <span className="ml-4 text-[28px] text-black/60" style={SERIF}>pcm</span>
         </p>
         <p className="mt-6 max-w-[760px] text-[17px] leading-[1.6] text-black/65">
-          Based on {c.basedOn} {c.basedOn === 1 ? "property" : "properties"} we are letting near you. These examples help show where the market is right now.
+          Based on {c.basedOn} comparable {c.basedOn === 1 ? "property" : "properties"} letting nearby. We&rsquo;ll use the evidence to agree the right figure together.
         </p>
         <ul className="mt-7 rounded-[18px] border bg-white/70 px-5" style={{ width: 1080, borderColor: "rgba(0,0,0,0.07)" }}>
           {rows.map((r, n) => (

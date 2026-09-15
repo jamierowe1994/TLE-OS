@@ -46,19 +46,19 @@
 export const AGENDA: { title: string; body: string }[] = [
   {
     title: "Your property",
-    body: "What we hold on record, what is advertised near you, and what has actually let.",
+    body: "What we know about it, what's available nearby and what similar properties are letting for.",
   },
   {
     title: "Marketing",
-    body: "How we put it in front of the right tenants, and how that turns into a higher rent.",
+    body: "How we'll present it, where it appears and how we reach the right tenants.",
   },
   {
-    title: "The next steps",
-    body: "Compliance, the three service levels, and what protects your income if a tenant stops paying.",
+    title: "Managing your property",
+    body: "Compliance, legislation, service options and the support available throughout the tenancy.",
   },
   {
     title: "Getting started",
-    body: "What it costs, and how to begin.",
+    body: "What it costs and what happens if you'd like to go ahead.",
   },
 ];
 
@@ -80,23 +80,23 @@ export const AGENDA: { title: string; body: string }[] = [
 export const APPROACH = {
   eyebrow: "A different approach to lettings",
   standfirst:
-    "There are cheaper agents and there are bigger ones. What follows is what you get here that you do not get from either.",
+    "You get a local expert who knows your market, backed by the systems, compliance support and professional network of The Letting Experts.",
   points: [
     {
-      title: "One person, personally responsible",
-      body: "Your Letting Expert runs an independent local business and owns the outcome. That is a different arrangement from the high-street model, where responsibility is split across departments and nobody quite carries it.",
+      title: "One person, start to finish",
+      body: "Your Letting Expert runs their own local business and takes personal responsibility for your property. From valuation to tenancy, you know exactly who you're dealing with.",
     },
     {
-      title: "A national business behind them",
-      body: "The systems, the training, the compliance framework and the operational support all come from the group. Local knowledge, with an established professional network standing behind it.",
+      title: "Backed by a national business",
+      body: "Behind your local expert sits the systems, training, compliance framework and operational support of The Letting Experts.",
     },
     {
-      title: "Ahead of the law, not behind it",
-      body: "Legislation and tenant expectations keep changing, and every update makes guidance worth more. Our job is to tell you what is coming, rather than explain it after it has cost you something.",
+      title: "Keeping you up to date",
+      body: "Lettings legislation continues to evolve. We'll keep you informed, explain what applies to your property and help make sure the right steps are taken at the right time.",
     },
     {
       title: "One property or a portfolio",
-      body: "The priority does not change with the size of it: protect the investment, and support a tenancy that runs quietly enough that you rarely hear from us.",
+      body: "Whether you have one property or several, the approach stays the same: good tenants, strong management and clear communication.",
     },
   ],
 };

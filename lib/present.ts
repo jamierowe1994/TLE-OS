@@ -410,17 +410,17 @@ export const APPRAISAL_PROMISES: { icon: "pin" | "home" | "chart"; title: string
   {
     icon: "pin",
     title: "Local market",
-    body: "Clear, up-to-date insight into demand, rents and opportunities.",
+    body: "A clear view of demand, rents and what's happening nearby.",
   },
   {
     icon: "home",
     title: "Your property",
-    body: "A tailored view of what your home could achieve in today's market.",
+    body: "What your home could realistically achieve in today's market.",
   },
   {
     icon: "chart",
     title: "The plan",
-    body: "A clear strategy to get you the best result, with less hassle.",
+    body: "A clear strategy to get it let and managed with confidence.",
   },
 ];
 
@@ -616,7 +616,7 @@ export const SECTIONS: { id: SectionId; label: string }[] = [
   { id: "opening", label: "" },
   { id: "property", label: "Your property" },
   { id: "marketing", label: "Marketing" },
-  { id: "next", label: "The next steps" },
+  { id: "next", label: "Managing your property" },
   { id: "close", label: "Getting started" },
 ];
 
@@ -633,7 +633,7 @@ export const SLIDES: { id: SlideId; title: string; removable: boolean; section: 
   /* Your property. The divider earns its slide: it is the moment the deck
      stops talking about us and starts talking about them. */
   { id: "property", title: "Your property", removable: true, section: "property" },
-  { id: "material", title: "What we have on record", removable: true, section: "property" },
+  { id: "material", title: "Your property details", removable: true, section: "property" },
 
   /* The current market. Named properties first, then the area they sit in —
      the specific earns the attention the general then spends. */

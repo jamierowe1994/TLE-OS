@@ -328,7 +328,7 @@ function WelcomeAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
           </Rise>
           <Rise show={show} i={2}>
             <p className="mt-6 max-w-[560px] text-[17px] leading-[1.6] text-black/60">
-              We&rsquo;ll walk through the market, what your property could achieve and the clearest
+              We&rsquo;ll look at the market, what your property could achieve and the clearest
               route to getting it let.
             </p>
           </Rise>
@@ -1014,8 +1014,9 @@ function Comparables({ deck, show }: { deck: Deck; show: boolean }) {
           </Rise>
           <Rise show={show} i={2}>
             <p className="mt-4 max-w-[540px] text-[15px] font-light leading-[1.6] text-black/55">
-              Based on {c.basedOn} propert{c.basedOn === 1 ? "y" : "ies"} we are letting near you.
-              Tap any of them to see it. We&rsquo;ll land on the figure together on the day.
+              Based on {c.basedOn} comparable propert{c.basedOn === 1 ? "y" : "ies"} letting nearby.
+              Tap any one to take a closer look. We&rsquo;ll use the evidence to agree the right
+              figure together.
             </p>
           </Rise>
         </div>
@@ -1260,7 +1261,7 @@ function Market({ deck, show }: { deck: Deck; show: boolean }) {
                       {m.marketDays} days
                     </p>
                     <p className="mt-1.5 text-[12px] font-light leading-snug text-black/50">
-                      How long the average property on the market in {m.area} has been advertised.
+                      Average time properties in {m.area} have been advertised.
                     </p>
                   </div>
                 )}
