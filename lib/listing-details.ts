@@ -98,8 +98,10 @@ const num = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? v.trim() : null);
-/** REX's value-list fields come back as { id, text }. */
-const text = (v: unknown): string | null => (v && typeof v === "object" ? str((v as Obj).text) : str(v));
+/** REX's value-list fields come back as { id, text }, or a LIST of them for
+ *  the multi-value ones (electricity, broadband): the first is the answer. */
+const text = (v: unknown): string | null =>
+  Array.isArray(v) ? text(v[0]) : v && typeof v === "object" ? str((v as Obj).text) : str(v);
 const yesNo = (v: unknown): string | null => (v === "yes" || v === true || v === 1 ? "Yes" : v === "no" || v === false || v === 0 ? "No" : text(v));
 /** REX hands back protocol-relative CDN addresses. */
 const abs = (u: unknown): string | null => {
@@ -316,15 +318,18 @@ export async function planListingWrite(id: number, edit: ListingEdit): Promise<{
   /* Material information, by REX's value-list ids (read off
      SystemValues/getCategoryValues, 15 Sep 2026: property_parking_type,
      property_water_supply, property_sewerage_supply,
-     property_electricity_supply, property_broadband_value_list). The _id
-     suffix is REX's convention for a value-list field on update; not yet
-     proven on a live save. */
+     property_electricity_supply, property_broadband_value_list). Single
+     lists take <field>_id - water, sewerage and parking proven on the first
+     live save, 15 Sep 2026. */
   if (edit.councilTaxBand !== undefined) prop.meta_tax_band = edit.councilTaxBand === "Exempt" ? null : edit.councilTaxBand;
   if (edit.parking !== undefined) prop.attr_parking_type_id = edit.parking ? rexValueId(edit.parking) : null;
-  if (edit.electricity !== undefined) prop.attr_primary_electricity_supply_id = edit.electricity ? rexValueId(edit.electricity) : null;
+  /* Electricity and broadband are multi-value lists: a bare _id is accepted
+     and silently ignored (first live save, 15 Sep 2026). They take
+     [{ id }], proven the same evening on 4 Williams Court. */
+  if (edit.electricity !== undefined) prop.attr_primary_electricity_supply = edit.electricity ? [{ id: rexValueId(edit.electricity) }] : [];
   if (edit.water !== undefined) prop.attr_primary_water_supply_id = edit.water ? rexValueId(edit.water) : null;
   if (edit.sewerage !== undefined) prop.attr_primary_sewerage_id = edit.sewerage ? rexValueId(edit.sewerage) : null;
-  if (edit.broadband !== undefined) prop.attr_broadband_id = edit.broadband && edit.broadband !== "None" ? rexValueId(edit.broadband) : null;
+  if (edit.broadband !== undefined) prop.attr_broadband = edit.broadband && edit.broadband !== "None" ? [{ id: rexValueId(edit.broadband) }] : [];
 
   return {
     listing: Object.keys(data).length > 1 ? data : null,

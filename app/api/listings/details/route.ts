@@ -145,6 +145,21 @@ export async function PATCH(req: NextRequest) {
     const outcome: { listing?: string; rooms?: string } = {};
     let failed = false;
 
+    /* The property FIRST. REX sends a listing to the portals when the
+       listing changes, reading the property as it stands at that moment: on
+       the first live save the rooms went in a few seconds after the listing,
+       and the portals never heard about them. */
+    if (plan.property) {
+      if (rexWritesLocked("Properties", "update")) {
+        /* Owner-only diagnostics say which permission; nobody else needs to. */
+        outcome.rooms = actor.role === "owner" ? "Rooms and utilities are kept here; sending them on needs Properties/update on REX_ALLOW_WRITES." : "Kept here; they will reach the portals once switched on.";
+      } else {
+        const r = await rexCall("Properties", "update", { data: plan.property }, token);
+        outcome.rooms = r.ok ? "Saved." : actor.role === "owner" ? `REX refused the property half: ${r.error ?? r.status}` : "The rooms and services are kept here, and did not reach the portals yet.";
+        failed ||= !r.ok;
+      }
+    }
+
     if (plan.listing) {
       if (rexWritesLocked("Listings", "update")) {
         outcome.listing = actor.role === "owner" ? "Locked here: REX_ALLOW_WRITES needs Listings/update." : "Saving the advert is not switched on yet.";
@@ -158,17 +173,6 @@ export async function PATCH(req: NextRequest) {
         failed ||= !r.ok;
       }
     }
-    if (plan.property) {
-      if (rexWritesLocked("Properties", "update")) {
-        /* Owner-only diagnostics say which permission; nobody else needs to. */
-        outcome.rooms = actor.role === "owner" ? "Rooms and utilities are kept here; sending them on needs Properties/update on REX_ALLOW_WRITES." : "Kept here; they will reach the portals once switched on.";
-      } else {
-        const r = await rexCall("Properties", "update", { data: plan.property }, token);
-        outcome.rooms = r.ok ? "Saved." : actor.role === "owner" ? `REX refused the property half: ${r.error ?? r.status}` : "The rooms and services are kept here, and did not reach the portals yet.";
-        failed ||= !r.ok;
-      }
-    }
-
     await invalidateListingBook();
     await record({
       kind: "listing_edited",
