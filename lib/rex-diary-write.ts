@@ -160,19 +160,19 @@ export async function putAppraisalInRexDiary(p: {
 
 /* ── Viewings (15 Sep 2026) ────────────────────────────────────────────────
  *
- * James: a viewing booked in the OS goes straight into REX's diary, and REX
- * confirms it to the applicant AND the landlord exactly as it does when an
- * agent books in REX - the OS's own viewing emails are off for the pilot, so
- * this is how people hear, and nobody hears twice.
+ * A viewing booked in the OS is copied into the agent's REX diary as a
+ * "TLE Accompanied Viewing" (953), linked to the listing and the applicant's
+ * REX contact - the mirror, so REX's own records and reports still see it.
  *
- * Measured on James's calendar before any of it was written:
- *   · type 953 "TLE Accompanied Viewing" sends SMS and email to guests and
- *     vendors - but only when asked. CREATING the event sends nothing.
- *   · records [{service:"Contacts"}, {service:"Listings"}] attach correctly;
- *     REX works the landlord out from the listing.
- *   · sendConfirmationMessages {id, guest_confirmations, vendor_confirmations}
- *     is the send. REX refuses the SMS half unless the AGENT has a mobile on
- *     their REX user settings, and says so; the email half still goes.
+ * REX SENDS NOTHING. James, 15 Sep: the confirmations are ours
+ * (lib/viewing-confirm) and REX's are being turned off. Creating an event
+ * never sends (measured); sendConfirmationMessages is the send, and it is
+ * deliberately never called from here.
+ *
+ * The agent's own diary is Outlook (lib/outlook-calendar), not this.
+ *
+ * Measured on James's calendar: records attach as {service, id}; the API
+ * refuses an empty title, so it is written in REX's own form.
  *
  * One booking, one event: the same lead, listing and start is recognised
  * (os_case_state 'rex-viewing') and never written twice.
@@ -181,7 +181,7 @@ export async function putAppraisalInRexDiary(p: {
 export const TLE_VIEWING_TYPE_ID = 953;
 
 export type ViewingOutcome =
-  | { ok: true; eventId: string; duplicate: boolean; confirmed: "sent" | "not_sent"; confirmDetail: string }
+  | { ok: true; eventId: string; duplicate: boolean }
   | { ok: false; reason: "write_locked" | "no_rex_session" | "no_calendar" | "refused" | "no_listing"; detail: string };
 
 export async function putViewingInRexDiary(p: {
@@ -202,7 +202,7 @@ export async function putViewingInRexDiary(p: {
       [key]
     ).catch(() => []);
     if (seen[0]?.payload?.eventId) {
-      return { ok: true, eventId: seen[0].payload.eventId, duplicate: true, confirmed: "not_sent", confirmDetail: "Already in REX from the first time this was booked." };
+      return { ok: true, eventId: seen[0].payload.eventId, duplicate: true };
     }
   }
   if (rexWritesLocked("CalendarEvents", "create")) {
@@ -252,34 +252,5 @@ export async function putViewingInRexDiary(p: {
     [key, JSON.stringify({ eventId, calendarId, listingId: p.listingId, contactId: p.contactId }), p.userId]
   ).catch(() => null);
 
-  /* REX's own confirmations, to the applicant and the landlord. */
-  let confirmed: "sent" | "not_sent" = "not_sent";
-  let confirmDetail = "";
-  if (!p.contactId) {
-    confirmDetail = `${p.applicantName} is not a REX contact yet, so REX had nobody to confirm to. Tell them yourself.`;
-  } else if (rexWritesLocked("CalendarEvents", "sendConfirmationMessages")) {
-    confirmDetail = "REX's confirmations are not switched on from the OS yet, so nobody was told. Send the confirmation from the event in REX.";
-  } else {
-    const sent = await rexCall(
-      "CalendarEvents",
-      "sendConfirmationMessages",
-      { id: eventId, guest_confirmations: true, vendor_confirmations: true },
-      token
-    );
-    /* "OK" is not "sent". REX answers 200 with sent_totals of nought when it
-       refuses the batch - measured 15 Sep 2026: an SMS-and-email type with no
-       mobile on the sending REX user sends NEITHER, and still says OK. */
-    const totals = (sent.result as { guests?: { sent_totals?: { email?: number; sms?: number } }; vendors?: { sent_totals?: { email?: number; sms?: number } } } | null) ?? null;
-    const count = (t?: { email?: number; sms?: number }) => Number(t?.email ?? 0) + Number(t?.sms ?? 0);
-    const out = count(totals?.guests?.sent_totals) + count(totals?.vendors?.sent_totals);
-    if (sent.ok && out > 0) {
-      confirmed = "sent";
-      confirmDetail = "REX sent its confirmation to the applicant and the landlord.";
-    } else if (sent.ok) {
-      confirmDetail = "In your diary, but REX sent no confirmation - usually because your REX user has no mobile number in its settings. Add one in REX, then send the confirmation from the event.";
-    } else {
-      confirmDetail = `In the diary, but REX did not send the confirmations: ${sent.error ?? sent.status}`;
-    }
-  }
-  return { ok: true, eventId, duplicate: false, confirmed, confirmDetail };
+  return { ok: true, eventId, duplicate: false };
 }

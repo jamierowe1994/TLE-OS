@@ -2857,16 +2857,16 @@ export default function LeadDrawer({
               property: v.property,
               locality: v.locality,
               outcome: "Booked",
-              ...(bookMode === "viewing" && v.listingId ? { rex: "Putting it in your REX diary…" } : {}),
+              ...(bookMode === "viewing" ? { rex: "Putting it in your calendar and confirming…" } : {}),
             },
             ...cur,
           ]);
-          /* INTO REX'S DIARY (15 Sep 2026). A viewing booked here used to live
-             only on this screen - two were booked and neither reached REX. It
-             goes into the agent's REX diary now, and REX confirms it to the
-             applicant and the landlord (lib/rex-diary-write). The row says
-             what actually happened, not what we hoped. */
-          if (bookMode === "viewing" && v.listingId && v.startsAt) {
+          /* EVERYWHERE IT NEEDS TO BE (15 Sep 2026). A viewing booked here used
+             to live only on this screen - two were booked and neither reached
+             REX. Now /api/viewings/book puts it in the agent's Outlook, copies
+             it to REX silently, and sends OUR confirmations to the applicant
+             and the agent. The row says what actually happened. */
+          if (bookMode === "viewing" && v.startsAt) {
             fetch("/api/viewings/book", {
               method: "POST",
               headers: { "content-type": "application/json" },
@@ -2875,18 +2875,18 @@ export default function LeadDrawer({
                 listingId: v.listingId,
                 contactId: lead.contactId ?? null,
                 applicantName: lead.name,
+                applicantEmail: contact.email || lead.email || null,
                 address: v.property,
                 startsAt: v.startsAt,
                 minutes: v.minutes,
               }),
             })
               .then((r) => r.json())
-              .then((j: { ok?: boolean; detail?: string; confirmDetail?: string }) => {
-                const rex = j.ok ? `In your REX diary. ${j.confirmDetail ?? ""}`.trim() : `Not in REX: ${j.detail ?? "REX did not take it."}`;
-                setBooked((cur) => cur.map((b) => (b.id === bookedId ? { ...b, rex } : b)));
+              .then((j: { ok?: boolean; said?: string }) => {
+                setBooked((cur) => cur.map((b) => (b.id === bookedId ? { ...b, rex: j.said ?? "Booked." } : b)));
               })
               .catch(() => {
-                setBooked((cur) => cur.map((b) => (b.id === bookedId ? { ...b, rex: "Not in REX: couldn't reach it. Add it in REX." } : b)));
+                setBooked((cur) => cur.map((b) => (b.id === bookedId ? { ...b, rex: "Couldn't reach the server: check your calendar and tell the applicant yourself." } : b)));
               });
           }
           /* The appraisal remembers its own appointment. Without this the
