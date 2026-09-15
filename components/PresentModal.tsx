@@ -5,6 +5,7 @@ import SignSheet from "@/components/landlord/SignSheet";
 import { useSigning } from "@/lib/use-signing";
 import PresentBook, { PAGE_H, PAGE_W } from "@/components/PresentBook";
 import PresentPages from "@/components/PresentPages";
+import SwipeHint from "@/components/SwipeHint";
 import { CREAM, DeckStyleCtx, themeVars, INK } from "@/components/present-kit";
 import { asStyle, slidesFor, type PresentDeck as Deck, type SlideId } from "@/lib/present";
 import { BookActionsCtx } from "@/components/PresentBookPages";
@@ -231,6 +232,9 @@ export default function PresentModal({
               count. */}
           {phone ? (
             <div className="relative z-[86] mt-4 w-full px-4 pb-1">
+              {/* Slide one has no action, so the slot carries the hint
+                  instead: on a phone nothing else says the deck swipes. */}
+              {phone && open && page.at === 0 && !askHere && <SwipeHint />}
               {askHere && (
                 <button
                   type="button"

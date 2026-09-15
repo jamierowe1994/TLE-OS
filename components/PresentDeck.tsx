@@ -277,7 +277,7 @@ function WelcomeAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
   const HANDWRITING = { fontFamily: "var(--font-shantell), cursive" } as const;
   const body = (
     <>
-      <header className="h-[60px]" />
+      <header className={fx ? "h-[60px]" : "h-[16px] sm:h-[60px]"} />
       {fx && (
         <>
           {/* THE PINK, under the photograph and out past the bottom-left corner. */}
@@ -321,7 +321,7 @@ function WelcomeAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
           </Rise>
         </>
       )}
-      <div className={`relative z-[2] flex flex-1 flex-col justify-center ${fx ? "pb-10 pl-[712px] pr-[44px]" : "px-6 pb-10 pt-4 sm:px-12"}`}>
+      <div className={`relative z-[2] flex flex-1 flex-col ${fx ? "justify-center pb-10 pl-[712px] pr-[44px]" : "justify-start px-6 pb-10 pt-6 sm:justify-center sm:pt-4 sm:px-12"}`}>
         <div className={`relative ${fx ? "pr-[210px]" : ""}`}>
           <Rise show={show} i={1}>
             <h1 className={`leading-[1.04] ${fx ? "text-[64px]" : "text-[40px] sm:text-[56px]"}`} style={HEAD}>
@@ -347,21 +347,23 @@ function WelcomeAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
           </Rise>
           {(property.address || recipientName) && (
             <Rise show={show} i={3}>
-              <p className="mt-4 text-[13px] text-black/45">
-                {/* Their name, not "Prepared for" and then their name: they
-                    know it was prepared for them, they are holding it. */}
-                {recipientName || "Your property"}
+              {/* ON A PHONE: the address alone, bigger and bolder. They know
+                  their own name; the address is the thing worth checking, and
+                  it is the line that tells them this deck is about their
+                  house rather than a brochure. Wider screens keep both. */}
+              <p className={`mt-4 ${fx ? "text-[13px] text-black/45" : "text-[16px] font-semibold text-black/70 sm:text-[13px] sm:font-normal sm:text-black/45"}`}>
+                <span className={fx ? "" : "hidden sm:inline"}>
+                  {recipientName || "Your property"}
+                  {property.address ? " \u00b7 " : ""}
+                </span>
                 {property.address && (
-                  <>
-                    {" · "}
-                    <span className="text-black/70">{property.address}</span>
-                  </>
+                  <span className={fx ? "text-black/70" : "sm:text-black/70"}>{property.address}</span>
                 )}
               </p>
             </Rise>
           )}
         </div>
-        <Rise show={show} i={4}>
+        <Rise show={show} i={4} className={fx ? "" : "mt-auto sm:mt-0"}>
           {/* Three white cards on the stage and from sm up. ON A PHONE they
               are a centred row at the foot: no card, a 44px disc, the title
               and nothing else. Stacked they took 690px of an 812px screen for
@@ -402,7 +404,11 @@ function WelcomeAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
     <section
       ref={host}
       data-slide="welcome"
-      className="relative flex min-h-full w-full shrink-0 items-center justify-center overflow-hidden"
+      /* items-STRETCH on a phone so the slide body fills the screen and the
+         three promises can sit at the foot of it. Centred, the body was 476px
+         floating in a 652px screen and mt-auto had no slack to work with.
+         Wider screens and the stage are centred as they were. */
+      className={`relative flex min-h-full w-full shrink-0 justify-center overflow-hidden ${fx ? "items-center" : "items-stretch sm:items-center"}`}
       style={{ background: CREAM, color: INK }}
     >
       <Stage fit={fit}>{body}</Stage>
