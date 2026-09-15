@@ -250,6 +250,19 @@ ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS occurrences  INTEGER NOT NULL DEFAU
 ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS os_bugs_fingerprint ON os_bugs (fingerprint) WHERE state = 'open';
 
+-- The bug bot (15 Sep 2026, James: prepare the fix, I approve). Every hour it
+-- takes open bugs off the queue, works out the cause and writes the fix on its
+-- own branch; nothing goes live until James merges it. What it concluded is
+-- kept here, beside the bug, in words:
+--   bot_state  '' (not looked at) | looking | fix_ready | needs_you | not_a_bug
+-- told_at is when the person who reported it was told it is fixed, once.
+ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS bot_state  TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS bot_note   TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS bot_branch TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS bot_pr     TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS bot_at     TIMESTAMPTZ;
+ALTER TABLE os_bugs ADD COLUMN IF NOT EXISTS told_at    TIMESTAMPTZ;
+
 -- The screen as it looked when they reported it.
 --
 -- A separate table, not a column on os_bugs, and that is the whole point: a

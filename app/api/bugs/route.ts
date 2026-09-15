@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { whoIs } from "@/lib/admin";
 import { requireOwner } from "@/lib/admin";
 import { logBug, bugs, setBugState, attachShot } from "@/lib/pilot";
+import { tellReporter } from "@/lib/bug-bot";
+import { publicOrigin } from "@/lib/origin";
 
 /**
  * Reporting something broken, and reading what's been reported.
@@ -92,5 +94,8 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Bad request." }, { status: 400 });
   }
   await setBugState(id, state!);
-  return NextResponse.json({ ok: true });
+  /* Fixed means live (15 Sep 2026): the person who reported it is told once,
+     so they can try it again. Never fails the change of state. */
+  const told = state === "fixed" ? await tellReporter(id, publicOrigin(req)).catch(() => false) : false;
+  return NextResponse.json({ ok: true, told });
 }

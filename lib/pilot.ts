@@ -184,6 +184,11 @@ export interface Bug {
   /** How many times an automatic bug has happened while open (lib/auto-bugs). 1 for a person's report. */
   occurrences: number;
   lastSeenAt: string | null;
+  /** What the bug bot concluded (lib/bug-bot). Empty until it has looked. */
+  botState: string;
+  botNote: string;
+  botPr: string;
+  botAt: string | null;
 }
 
 export async function logBug(p: {
@@ -270,8 +275,10 @@ export async function bugs(limit = 100): Promise<Bug[]> {
     id: string; reporter_email: string; body: string; path: string;
     kind: string; state: string; context: Record<string, unknown> | null; created_at: Date;
     occurrences: number | null; last_seen_at: Date | null;
+    bot_state: string | null; bot_note: string | null; bot_pr: string | null; bot_at: Date | null;
   }>(
-    `select id, reporter_email, body, path, kind, state, context, created_at, occurrences, last_seen_at
+    `select id, reporter_email, body, path, kind, state, context, created_at, occurrences, last_seen_at,
+            bot_state, bot_note, bot_pr, bot_at
        from os_bugs order by case state when 'open' then 0 when 'ack' then 1 else 2 end,
        coalesce(last_seen_at, created_at) desc limit $1`,
     [limit]
@@ -287,6 +294,10 @@ export async function bugs(limit = 100): Promise<Bug[]> {
     createdAt: new Date(r.created_at).toISOString(),
     occurrences: r.occurrences ?? 1,
     lastSeenAt: r.last_seen_at ? new Date(r.last_seen_at).toISOString() : null,
+    botState: r.bot_state ?? "",
+    botNote: r.bot_note ?? "",
+    botPr: r.bot_pr ?? "",
+    botAt: r.bot_at ? new Date(r.bot_at).toISOString() : null,
   }));
 }
 
