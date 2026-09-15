@@ -72,7 +72,7 @@ const CUSTOM_CSS = `
     border-color: ${BROWN} !important;
     background-color: transparent !important;
   }
-  /* THE SEE-THROUGH BOX. `.field-area` is the real class - read off the live
+  /* THE SEE-THROUGH BOX. .field-area is the real class - read off the live
      element in the shadow root, not guessed, after a guess at [data-field]
      and .signature-step matched nothing.
 
