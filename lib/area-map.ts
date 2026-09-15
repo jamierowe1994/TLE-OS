@@ -77,8 +77,8 @@ export const AREA_DEFS: AreaDef[] = [
      floor plans uploaded from the OS. Its own switch so the first saves can
      run with testers before every agent can change a live advert. */
   {
-    id: "listing-edit", label: "Edit the advert into REX", phase: 1, parent: "listings",
-    pages: [], apis: ["/api/listings/details", "/api/listings/media"], canHide: true,
+    id: "listing-edit", label: "Edit the advert", phase: 1, parent: "listings",
+    pages: [], apis: ["/api/listings/details", "/api/listings/media", "/api/listings/autofill"], canHide: true,
   },
   { id: "viewings", label: "Viewings", phase: 1, pages: ["/viewings"], apis: ["/api/viewings", "/api/appointments"], canHide: true },
   {
@@ -179,8 +179,8 @@ export function canAct(access: AreaAccess | null, area: AreaDef): boolean {
 export function lockedSentence(area: AreaDef, level: AreaLevel): string {
   if (area.parent) {
     return level === "testers"
-      ? `"${area.label}" is with the testers for now - do it in REX until it is switched on for you.`
-      : `"${area.label}" is not switched on for you yet - do it in REX for now.`;
+      ? `"${area.label}" is with the testers for now.`
+      : `"${area.label}" is not switched on for you yet.`;
   }
   return level === "hidden"
     ? `${area.label} is not switched on for you yet.`

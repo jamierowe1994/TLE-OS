@@ -147,7 +147,7 @@ export default function PortalPreview({ portal, details, draft, setDraft, canEdi
         // eslint-disable-next-line @next/next/no-img-element
         <img src={main.url} alt="" className="absolute inset-0 h-full w-full object-cover" />
       ) : (
-        <div className="flex h-full items-center justify-center text-[13px] text-[#6b6b76]">No photos - REX will not publish without one</div>
+        <div className="flex h-full items-center justify-center text-[13px] text-[#6b6b76]">No photos yet</div>
       )}
       {tag}
       {canEdit && (
@@ -273,8 +273,8 @@ export default function PortalPreview({ portal, details, draft, setDraft, canEdi
                 <div>{editable("deposit", "deposit", <><dt className="text-[#6b6b76]">Deposit:</dt><dd className="font-bold">{money(draft.deposit) ?? ASK}</dd></>, numberEditor("deposit", depositHint))}</div>
                 <div><dt className="text-[#6b6b76]">Min. Tenancy:</dt><dd className="font-bold">{ASK}</dd></div>
                 <div><dt className="text-[#6b6b76]">Let type:</dt><dd className="font-bold">{details.letType ?? ASK}</dd></div>
-                <div><dt className="text-[#6b6b76]">Furnish type:</dt><dd className="font-bold">{ASK}</dd></div>
-                <div><dt className="text-[#6b6b76]">Council Tax:</dt><dd className={`font-bold ${askMark(details.councilTaxBand)}`}>{details.councilTaxBand ? `Band ${details.councilTaxBand}` : ASK}</dd></div>
+                <div><dt className="text-[#6b6b76]">Furnish type:</dt><dd className={`font-bold ${askMark(draft.furnishing)}`}>{orAsk(draft.furnishing)}</dd></div>
+                <div><dt className="text-[#6b6b76]">Council Tax:</dt><dd className={`font-bold ${askMark(draft.councilTaxBand)}`}>{draft.councilTaxBand ? (draft.councilTaxBand === "Exempt" ? "Exempt" : `Band ${draft.councilTaxBand}`) : ASK}</dd></div>
               </dl>
             </section>
             {editable(
@@ -312,12 +312,13 @@ export default function PortalPreview({ portal, details, draft, setDraft, canEdi
               <h3 className="text-[18px] font-bold">Utilities, rights and restrictions</h3>
               <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-2 text-[13px]">
                 {[
-                  ["Electricity", details.material.electricity],
-                  ["Water", details.material.water],
-                  ["Heating", details.material.gas === "No" ? "No gas supply" : details.material.gas === "Yes" ? "Gas" : null],
-                  ["Sewerage", details.material.sewerage],
-                  ["Broadband", details.material.broadband],
-                  ["Parking", details.parking],
+                  ["Electricity", draft.electricity],
+                  ["Water", draft.water],
+                  ["Heating", draft.heating],
+                  ["Sewerage", draft.sewerage],
+                  ["Broadband", draft.broadband],
+                  ["Parking", draft.parking],
+                  ["Garden", draft.outsideSpace],
                 ].map(([k, v]) => (
                   <div key={k as string}><dt className="text-[#6b6b76]">{k}</dt><dd className={`font-bold ${askMark(v)}`}>{orAsk(v)}</dd></div>
                 ))}
@@ -395,11 +396,13 @@ export default function PortalPreview({ portal, details, draft, setDraft, canEdi
               <dl className="mt-2 divide-y divide-[#eee7e1] text-[13px]">
                 {[
                   ["Deposit", money(draft.deposit)],
-                  ["Council tax band", details.councilTaxBand],
-                  ["Parking", details.parking],
-                  ["Broadband", details.material.broadband],
-                  ["Water", details.material.water],
-                  ["Sewerage", details.material.sewerage],
+                  ["Council tax band", draft.councilTaxBand],
+                  ["Furnishing", draft.furnishing],
+                  ["Parking", draft.parking],
+                  ["Heating", draft.heating],
+                  ["Broadband", draft.broadband],
+                  ["Water", draft.water],
+                  ["Sewerage", draft.sewerage],
                 ].map(([k, v]) => (
                   <div key={k as string} className="flex justify-between py-1.5">
                     <dt>{k}</dt>
@@ -483,12 +486,14 @@ export default function PortalPreview({ portal, details, draft, setDraft, canEdi
             <h3 className="text-[17px] font-bold">Material information</h3>
             <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-2 text-[13px]">
               {[
-                ["Council tax", details.councilTaxBand ? `Band ${details.councilTaxBand}` : null],
-                ["Electricity", details.material.electricity],
-                ["Water", details.material.water],
-                ["Sewerage", details.material.sewerage],
-                ["Broadband", details.material.broadband],
-                ["Parking", details.parking],
+                ["Council tax", draft.councilTaxBand ? (draft.councilTaxBand === "Exempt" ? "Exempt" : `Band ${draft.councilTaxBand}`) : null],
+                ["Furnishing", draft.furnishing],
+                ["Heating", draft.heating],
+                ["Electricity", draft.electricity],
+                ["Water", draft.water],
+                ["Sewerage", draft.sewerage],
+                ["Broadband", draft.broadband],
+                ["Parking", draft.parking],
                 ["EPC rating", details.epc.rating],
               ].map(([k, v]) => (
                 <div key={k as string}><dt className="text-[#5d5a78]">{k}</dt><dd className={`font-semibold ${askMark(v)}`}>{orAsk(v)}</dd></div>

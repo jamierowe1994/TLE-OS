@@ -4,6 +4,8 @@ import { record } from "@/lib/audit";
 import { MAX_HIGHLIGHTS, planListingWrite, readListingDetails, type ListingEdit } from "@/lib/listing-details";
 import { gateListingWrite } from "@/lib/listing-gate";
 import { invalidateListingBook } from "@/lib/listings-cache";
+import { saveMarketingFacts, type MarketingFacts } from "@/lib/listing-marketing-store";
+import { OPTIONS } from "@/lib/listing-requirements";
 import { isExpiredToken, rexCall, rexConfigured, rexWritesLocked } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
 
@@ -34,7 +36,7 @@ const listingId = (v: unknown): number | null => {
 };
 
 export async function GET(req: NextRequest) {
-  if (!rexConfigured()) return NextResponse.json({ ok: false, error: "REX isn't connected on this environment." }, { status: 503 });
+  if (!rexConfigured()) return NextResponse.json({ ok: false, error: "The listings are not connected on this environment." }, { status: 503 });
   const { actor } = await whoIs(req);
   if (!actor) return NextResponse.json({ ok: false, error: "Sign in first." }, { status: 401 });
   const id = listingId(req.nextUrl.searchParams.get("id"));
@@ -46,7 +48,7 @@ export async function GET(req: NextRequest) {
       { headers: { "cache-control": "private, no-store" } }
     );
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "REX did not answer." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: "The listing did not answer. Try again in a minute." }, { status: 502 });
   }
 }
 
@@ -64,7 +66,7 @@ const money = (v: unknown): number | null | undefined => {
 };
 
 export async function PATCH(req: NextRequest) {
-  if (!rexConfigured()) return NextResponse.json({ ok: false, error: "REX isn't connected on this environment." }, { status: 503 });
+  if (!rexConfigured()) return NextResponse.json({ ok: false, error: "The listings are not connected on this environment." }, { status: 503 });
   const gate = await gateListingWrite(req, "listing-edit");
   if ("refuse" in gate) return gate.refuse;
   const { actor } = gate;
@@ -107,11 +109,37 @@ export async function PATCH(req: NextRequest) {
     if (Array.isArray(b.imageOrder) && b.imageOrder.every((x) => typeof x === "string" || typeof x === "number")) edit.imageOrder = (b.imageOrder as unknown[]).map(String);
     else bad.push("imageOrder");
   }
+  /* The material information: each one must be a value off its list. All
+     of them are kept by the OS; the ones the listing has a field for are
+     sent on as well (planListingWrite). */
+  const facts: MarketingFacts = {};
+  for (const key of Object.keys(OPTIONS) as (keyof typeof OPTIONS)[]) {
+    const raw = b[key];
+    if (raw === undefined) continue;
+    if (raw === null || raw === "") facts[key] = null;
+    else if (typeof raw === "string" && (OPTIONS[key] as readonly string[]).includes(raw)) facts[key] = raw;
+    else bad.push(key);
+  }
+  if (b.floorAreaSqft !== undefined) {
+    const n = Number(b.floorAreaSqft);
+    if (b.floorAreaSqft === null || (Number.isFinite(n) && n > 0 && n < 100_000)) facts.floorAreaSqft = b.floorAreaSqft === null ? null : Math.round(n);
+    else bad.push("floorAreaSqft");
+  }
+  if (b.sources && typeof b.sources === "object") facts.sources = b.sources as MarketingFacts["sources"];
+  for (const key of ["councilTaxBand", "parking", "electricity", "water", "sewerage", "broadband"] as const) {
+    if (facts[key] !== undefined) edit[key] = facts[key];
+  }
   if (bad.length) return NextResponse.json({ ok: false, error: `These did not look right: ${bad.join(", ")}.` }, { status: 400 });
 
   try {
+    /* The OS's own copy first, so nothing typed is lost to a refused write. */
+    const factKeys = Object.keys(facts).filter((k) => k !== "sources");
+    if (factKeys.length) await saveMarketingFacts(String(id), facts, actor.email);
     const plan = await planListingWrite(id, edit);
-    if (!plan.listing && !plan.property) return NextResponse.json({ ok: true, id, note: "Nothing to change." });
+    if (!plan.listing && !plan.property) {
+      const details = factKeys.length ? await readListingDetails(id).catch(() => null) : null;
+      return NextResponse.json({ ok: true, id, note: factKeys.length ? "Saved." : "Nothing to change.", details });
+    }
 
     const token = await rexTokenFor(actor.id);
     const outcome: { listing?: string; rooms?: string } = {};
@@ -119,24 +147,24 @@ export async function PATCH(req: NextRequest) {
 
     if (plan.listing) {
       if (rexWritesLocked("Listings", "update")) {
-        outcome.listing = "Locked here: REX_ALLOW_WRITES needs Listings/update.";
+        outcome.listing = actor.role === "owner" ? "Locked here: REX_ALLOW_WRITES needs Listings/update." : "Saving the advert is not switched on yet.";
         failed = true;
       } else {
         const r = await rexCall("Listings", "update", { data: plan.listing }, token);
         if (!r.ok && token && isExpiredToken(r)) {
           return NextResponse.json({ ok: false, error: "Your REX sign-in has lapsed - reconnect it in your profile and try again.", reconnect: true }, { status: 401 });
         }
-        outcome.listing = r.ok ? "Saved." : `REX refused it: ${r.error ?? r.status}`;
+        outcome.listing = r.ok ? "Saved." : actor.role === "owner" ? `REX refused it: ${r.error ?? r.status}` : "The advert did not save. Try again in a minute.";
         failed ||= !r.ok;
       }
     }
     if (plan.property) {
       if (rexWritesLocked("Properties", "update")) {
-        outcome.rooms = "Locked here: REX_ALLOW_WRITES needs Properties/update.";
-        failed = true;
+        /* Owner-only diagnostics say which permission; nobody else needs to. */
+        outcome.rooms = actor.role === "owner" ? "Rooms and utilities are kept here; sending them on needs Properties/update on REX_ALLOW_WRITES." : "Kept here; they will reach the portals once switched on.";
       } else {
         const r = await rexCall("Properties", "update", { data: plan.property }, token);
-        outcome.rooms = r.ok ? "Saved." : `REX refused it: ${r.error ?? r.status}`;
+        outcome.rooms = r.ok ? "Saved." : actor.role === "owner" ? `REX refused the property half: ${r.error ?? r.status}` : "The rooms and services are kept here, and did not reach the portals yet.";
         failed ||= !r.ok;
       }
     }
@@ -153,6 +181,6 @@ export async function PATCH(req: NextRequest) {
     const details = await readListingDetails(id).catch(() => null);
     return NextResponse.json({ ok: !failed, id, outcome, details, error: failed ? [outcome.listing, outcome.rooms].filter((x) => x && x !== "Saved.").join(" ") : undefined });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "REX did not answer." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: "The listing did not answer. Try again in a minute." }, { status: 502 });
   }
 }

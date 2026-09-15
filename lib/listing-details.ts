@@ -1,5 +1,6 @@
 import "server-only";
 import { rexCall } from "@/lib/rex";
+import { readMarketingFacts, type FactSource } from "@/lib/listing-marketing-store";
 
 /**
  * ONE LISTING, AS THE PORTALS WILL SEE IT - read live from REX, and written
@@ -71,6 +72,21 @@ export interface ListingDetails {
   epc: { rating: string | null; expiry: string | null; chartUrl: string | null; fileUrl: string | null };
   material: { electricity: string | null; water: string | null; sewerage: string | null; broadband: string | null; gas: string | null };
   agent: { name: string | null; phone: string | null; email: string | null };
+  /** The Marketing form's facts: the listing's own where it has them, else what the OS holds. */
+  facts: {
+    councilTaxBand: string | null;
+    parking: string | null;
+    electricity: string | null;
+    water: string | null;
+    sewerage: string | null;
+    broadband: string | null;
+    heating: string | null;
+    furnishing: string | null;
+    pets: string | null;
+    outsideSpace: string | null;
+    floorAreaSqft: number | null;
+  };
+  sources: Partial<Record<string, FactSource>>;
   blockers: { publish: string[]; portals: string[] };
   modifiedAt: string | null;
 }
@@ -105,6 +121,17 @@ function media(rows: unknown, thumbSize: string): ListingMedia[] {
     .sort((a, b) => a.priority - b.priority);
 }
 
+/** REX's broadband list says "CABLE"; the form says "Cable". It may hold several. */
+function broadbandLabel(v: unknown): string | null {
+  const first = Array.isArray(v) ? v[0] : v;
+  const t = text(first);
+  if (!t) return null;
+  return t.length <= 4 ? t.toUpperCase() : t.charAt(0).toUpperCase() + t.slice(1).toLowerCase();
+}
+
+/** "No parking" -> "no_parking", the id REX's value lists use. */
+export const rexValueId = (label: string) => label.trim().toLowerCase().replace(/\s+/g, "_");
+
 function messages(v: unknown): string[] {
   if (Array.isArray(v)) return v.map(String);
   if (v && typeof v === "object") return Object.values(v as Obj).flatMap((x) => (Array.isArray(x) ? x.map(String) : [String(x)]));
@@ -119,10 +146,11 @@ export async function readListingDetails(id: number): Promise<ListingDetails> {
   const embedded = (l.property ?? {}) as Obj;
   const propertyId = embedded.id != null ? String(embedded.id) : l.property_id != null ? String(l.property_id) : null;
 
-  const [propRes, pubErr, upErr] = await Promise.all([
+  const [propRes, pubErr, upErr, held] = await Promise.all([
     propertyId ? rexCall("Properties", "read", { id: Number(propertyId) }) : Promise.resolve(null),
     rexCall("ListingPublication", "getErrorsPreventingPublication", { listing_id: id }),
     rexCall("ListingPortalUploads", "getErrorsPreventingUpload", { listing_id: id }),
+    readMarketingFacts(String(id)).catch(() => ({}) as Awaited<ReturnType<typeof readMarketingFacts>>),
   ]);
   const p = ((propRes?.ok ? propRes.result : null) ?? embedded) as Obj;
 
@@ -183,6 +211,20 @@ export async function readListingDetails(id: number): Promise<ListingDetails> {
       gas: yesNo(p.attr_has_gas),
     },
     agent: { name: str(agent.name), phone: str(agent.phone_mobile) ?? str(agent.phone_direct), email: str(agent.email_address) },
+    facts: {
+      councilTaxBand: str(p.meta_tax_band) ?? str(p.meta_rates_council) ?? held.councilTaxBand ?? null,
+      parking: text(p.attr_parking_type) ?? held.parking ?? null,
+      electricity: text(p.attr_primary_electricity_supply) ?? held.electricity ?? null,
+      water: text(p.attr_primary_water_supply) ?? held.water ?? null,
+      sewerage: text(p.attr_primary_sewerage) ?? held.sewerage ?? null,
+      broadband: broadbandLabel(p.attr_broadband) ?? held.broadband ?? null,
+      heating: held.heating ?? (p.attr_has_gas === "yes" ? "Gas central heating" : null),
+      furnishing: held.furnishing ?? null,
+      pets: held.pets ?? null,
+      outsideSpace: held.outsideSpace ?? null,
+      floorAreaSqft: held.floorAreaSqft ?? null,
+    },
+    sources: held.sources ?? {},
     blockers: {
       publish: pubErr.ok ? messages(pubErr.result) : [],
       portals: upErr.ok ? messages(upErr.result) : [],
@@ -204,6 +246,12 @@ export interface ListingEdit {
   beds?: number | null;
   baths?: number | null;
   receptions?: number | null;
+  councilTaxBand?: string | null;
+  parking?: string | null;
+  electricity?: string | null;
+  water?: string | null;
+  sewerage?: string | null;
+  broadband?: string | null;
 }
 
 export const MAX_HIGHLIGHTS = 10;
@@ -265,6 +313,18 @@ export async function planListingWrite(id: number, edit: ListingEdit): Promise<{
   if (edit.beds !== undefined) prop.attr_bedrooms = edit.beds;
   if (edit.baths !== undefined) prop.attr_bathrooms = edit.baths;
   if (edit.receptions !== undefined) prop.attr_living_areas = edit.receptions;
+  /* Material information, by REX's value-list ids (read off
+     SystemValues/getCategoryValues, 15 Sep 2026: property_parking_type,
+     property_water_supply, property_sewerage_supply,
+     property_electricity_supply, property_broadband_value_list). The _id
+     suffix is REX's convention for a value-list field on update; not yet
+     proven on a live save. */
+  if (edit.councilTaxBand !== undefined) prop.meta_tax_band = edit.councilTaxBand === "Exempt" ? null : edit.councilTaxBand;
+  if (edit.parking !== undefined) prop.attr_parking_type_id = edit.parking ? rexValueId(edit.parking) : null;
+  if (edit.electricity !== undefined) prop.attr_primary_electricity_supply_id = edit.electricity ? rexValueId(edit.electricity) : null;
+  if (edit.water !== undefined) prop.attr_primary_water_supply_id = edit.water ? rexValueId(edit.water) : null;
+  if (edit.sewerage !== undefined) prop.attr_primary_sewerage_id = edit.sewerage ? rexValueId(edit.sewerage) : null;
+  if (edit.broadband !== undefined) prop.attr_broadband_id = edit.broadband && edit.broadband !== "None" ? rexValueId(edit.broadband) : null;
 
   return {
     listing: Object.keys(data).length > 1 ? data : null,

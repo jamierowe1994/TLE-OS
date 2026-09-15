@@ -30,6 +30,7 @@ import { saveLabel, useCaseState } from "@/lib/case-state";
 import { AREA_DEFS, canAct, levelOf, lockedSentence, type AreaAccess } from "@/lib/area-map";
 import ListingMarketing, { type Locks } from "@/components/listing/ListingMarketing";
 import type { ListingDetails } from "@/lib/listing-details";
+import { inputFromDetails, missing as missingForPortals } from "@/lib/listing-requirements";
 import { useListingTerms } from "@/lib/use-listing-terms";
 
 /**
@@ -292,11 +293,11 @@ export default function ListingDrawer({
         body: JSON.stringify({ id: listing.id, action }),
       });
       const j = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; status?: string | null; onPortals?: boolean };
-      if (!j.ok) return { ok: false, error: j.error ?? "REX did not take it." };
+      if (!j.ok) return { ok: false, error: j.error ?? "The portals did not take it." };
       setPub((cur) => ({ status: j.status ?? null, onPortals: Boolean(j.onPortals), blockers: cur?.blockers ?? [] }));
       return { ok: true };
     } catch {
-      return { ok: false, error: "The connection dropped. Check REX before trying again." };
+      return { ok: false, error: "The connection dropped. Check the listing before trying again." };
     }
   }
 
@@ -306,7 +307,7 @@ export default function ListingDrawer({
     setPushing(0);
     const res = await portalCall("publish");
     if (res.ok) setPushOk(true);
-    else setPushError(res.error ?? "REX did not take it.");
+    else setPushError(res.error ?? "The portals did not take it.");
   }
 
   async function flipPortals(action: "off" | "on") {
@@ -320,7 +321,7 @@ export default function ListingDrawer({
         ? action === "off"
           ? "Taken off. It leaves Rightmove, OnTheMarket and Zoopla within about 10 minutes."
           : "Back on. It shows on Rightmove, OnTheMarket and Zoopla within about 10 minutes."
-        : res.error ?? "REX did not take it."
+        : res.error ?? "The portals did not take it."
     );
   }
   /* The certificates on the property, for the legal minimum before the
@@ -645,15 +646,21 @@ export default function ListingDrawer({
   ];
 
   /**
-   * THE LEGAL MINIMUM before "Push to the portals" lights up (James, 11 Sep
-   * 2026): photographs, a description, the EPC, the gas safety and the
-   * electrical certificate. A standard re-let; an HMO's extra duties come
-   * later. "No gas at the property" satisfies gas.
+   * WHAT HAS TO BE IN before "Push to the portals" lights up: the certificates
+   * (James, 11 Sep 2026: EPC, gas safety, EICR; "No gas at the property"
+   * satisfies gas) and the Marketing tab complete - every field in
+   * lib/listing-requirements, which the push route checks again on the server
+   * (15 Sep 2026, replacing the photos-and-description pair).
    */
   const certOk = (t: string) => certs != null && ["valid", "expiring", "not-required"].includes(certs[t] ?? "");
+  const marketingToGo = live ? missingForPortals(inputFromDetails(live)).length : null;
   const requirements: { id: string; label: string; done: boolean; fix: () => void }[] = [
-    { id: "photos", label: "Photographs on", done: photos.length > 0, fix: () => setDrop("photos") },
-    { id: "description", label: "Description written", done: Boolean(shownBody), fix: () => setTab("marketing") },
+    {
+      id: "marketing",
+      label: marketingToGo == null ? "Marketing" : marketingToGo === 0 ? "Marketing complete" : `Marketing · ${marketingToGo} to go`,
+      done: marketingToGo === 0,
+      fix: () => setTab("marketing"),
+    },
     /* Or on the listing itself, which is where REX keeps an EPC entered with
        the advert and what its own pre-publish check reads (15 Sep 2026: 4
        Williams Court had rating C on the listing and no compliance entry). */
@@ -982,7 +989,7 @@ export default function ListingDrawer({
                           onClick={() => void flipPortals(pub.onPortals ? "off" : "on")}
                           className="rounded-full bg-[var(--brown)] px-2.5 py-0.5 font-semibold text-white disabled:opacity-60"
                         >
-                          {portalBusy ? "Telling REX…" : pub.onPortals ? "Yes, take it off" : "Yes, put it back"}
+                          {portalBusy ? "Telling the portals…" : pub.onPortals ? "Yes, take it off" : "Yes, put it back"}
                         </button>
                       </span>
                     ) : (
@@ -1104,7 +1111,7 @@ export default function ListingDrawer({
                 </p>
                 <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[12px] md:grid-cols-4 xl:grid-cols-2">
                   {(() => {
-                    const wait = live ? null : liveFailed ? "REX did not answer" : "Reading…";
+                    const wait = live ? null : liveFailed ? "Did not load" : "Reading…";
                     const set = (v: string | number | null | undefined) => wait ?? (v == null || v === "" ? "Not set" : String(v));
                     const availableFrom = live ? live.availableFrom : listing.availableFrom;
                     return [
@@ -1118,7 +1125,7 @@ export default function ListingDrawer({
                   })().map(([k, v]) => (
                     <div key={k} className="min-w-0">
                       <dt className="text-[10.5px] text-muted">{k}</dt>
-                      <dd className={`truncate font-semibold ${v === "Not set" || v === "Not recorded" || v === "Reading…" || v === "REX did not answer" ? "font-normal text-muted" : ""}`}>{v}</dd>
+                      <dd className={`truncate font-semibold ${v === "Not set" || v === "Not recorded" || v === "Reading…" || v === "Did not load" ? "font-normal text-muted" : ""}`}>{v}</dd>
                     </div>
                   ))}
                 </dl>
@@ -1236,7 +1243,7 @@ export default function ListingDrawer({
                       {r.done ? (
                         <span>{r.label}</span>
                       ) : (
-                        <button type="button" onClick={r.fix} className="text-left font-semibold hover:underline">{r.label.replace(/ on file$| on$| filed$| written$/, "")} · add it</button>
+                        <button type="button" onClick={r.fix} className="text-left font-semibold hover:underline">{r.id === "marketing" ? r.label : `${r.label.replace(/ on file$| on$| filed$| written$/, "")} · add it`}</button>
                       )}
                     </li>
                   ))}
@@ -1252,7 +1259,7 @@ export default function ListingDrawer({
                         : `On the portals${listing.publishedAt ? ` since ${new Date(listing.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}.`}
                     </p>
                   ) : publishHidden ? (
-                    <p className="text-[11.5px] leading-snug text-muted">Push it live from REX for now.</p>
+                    <p className="text-[11.5px] leading-snug text-muted">Pushing to the portals is not switched on for you yet.</p>
                   ) : (
                     <>
                       {/* Full colour, never greyed. Hover it and it says what
@@ -1277,8 +1284,8 @@ export default function ListingDrawer({
                           >
                             Can&apos;t push it live until{" "}
                             {(() => {
-                              const words: Record<string, string> = { photos: "the photographs are on", description: "the description is written", epc: "the EPC is filed", gas: "the gas safety is on file", eicr: "the EICR is on file" };
-                              const m = [...requirements.filter((r) => !r.done).map((r) => words[r.id] ?? r.label), ...(pub?.blockers ?? []).map((b) => `REX's "${b}" is sorted`)];
+                              const words: Record<string, string> = { marketing: "the Marketing tab is complete", epc: "the EPC is filed", gas: "the gas safety is on file", eicr: "the EICR is on file" };
+                              const m = [...requirements.filter((r) => !r.done).map((r) => words[r.id] ?? r.label), ...(pub?.blockers.length && requirements.every((r) => r.done) ? ["the portals' own checks pass"] : [])];
                               return m.length > 1 ? `${m.slice(0, -1).join(", ")} and ${m[m.length - 1]}` : m[0] ?? "the certificates are read";
                             })()}.
                             <span aria-hidden className="absolute left-5 top-full h-0 w-0 border-x-[6px] border-t-[6px] border-x-transparent border-t-ink" />
@@ -1286,7 +1293,7 @@ export default function ListingDrawer({
                         )}
                       </span>
                       {readyToGoLive && publishCanPress && (
-                        <span className="text-[11px] leading-snug text-muted">Goes to Rightmove, OnTheMarket and Zoopla through REX.</span>
+                        <span className="text-[11px] leading-snug text-muted">Goes to Rightmove, OnTheMarket and Zoopla.</span>
                       )}
                       {!publishCanPress && portalNote && (
                         <span className="text-[11px] leading-snug text-muted">{portalNote}</span>

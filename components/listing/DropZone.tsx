@@ -88,7 +88,7 @@ export default function DropZone({
     kind === "photos"
       ? { title: "Add the photographs", drop: "Drop the photos here", sub: "JPEG, PNG or HEIC. As many as you like, in one go.", icon: "folder" }
       : kind === "floorplan"
-        ? { title: "Add the floor plan", drop: "Drop the floor plan here", sub: "An image - JPEG or PNG. REX takes up to five on a listing.", icon: "home" }
+        ? { title: "Add the floor plan", drop: "Drop the floor plan here", sub: "An image - JPEG or PNG. Up to five on a listing.", icon: "home" }
         : { title: "File the EPC", drop: "Drop your EPC here", sub: "The certificate as a PDF or a photograph of it. We read the rating and the dates off it.", icon: "shield" };
 
   /** One file up, with a progress bar the whole way. */
@@ -125,7 +125,7 @@ export default function DropZone({
           q.map((r, k) =>
             k === i
               ? j.ok
-                ? { ...r, pct: 100, done: true, url: String(j.url), note: afterUpload ? "Sending it to REX…" : undefined }
+                ? { ...r, pct: 100, done: true, url: String(j.url), note: afterUpload ? "Adding it to the listing…" : undefined }
                 : { ...r, pct: 100, done: true, error: String(j.error ?? "The upload did not land.") }
               : r
           )
@@ -134,7 +134,7 @@ export default function DropZone({
           const landed = { name: f.name, url: String(j.url), key: typeof j.key === "string" ? j.key : undefined };
           onLanded?.(landed);
           if (afterUpload) {
-            const note = await afterUpload(landed).catch(() => "It is saved here, and did not reach REX.");
+            const note = await afterUpload(landed).catch(() => "Saved here, and not yet on the listing.");
             setQueue((q) => q.map((r, k) => (k === i ? { ...r, note } : r)));
           }
         }

@@ -4,6 +4,8 @@ import { accessFor } from "@/lib/area-access";
 import { AREA_DEFS, canAct, levelOf, lockedSentence } from "@/lib/area-map";
 import { record } from "@/lib/audit";
 import { invalidateListingBook } from "@/lib/listings-cache";
+import { readListingDetails } from "@/lib/listing-details";
+import { inputFromDetails, missing } from "@/lib/listing-requirements";
 import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
 import { rexTokenFor } from "@/lib/rex-user";
 
@@ -136,15 +138,26 @@ export async function POST(req: NextRequest) {
       if (was.status === "published") {
         return NextResponse.json({ ok: false, error: "It is already published. Use Put back on the portals if it has been taken off." }, { status: 409 });
       }
-      /* REX's own list of what stops it, asked first, so the agent reads
-         "needs a photo" rather than a refusal from deep in REX. */
+      /* Our own required fields first (lib/listing-requirements) - the same
+         rule the Marketing tab counts down - so a button pressed from a stale
+         screen still cannot put a half-filled advert on Rightmove. */
+      const details = await readListingDetails(id);
+      const gaps = missing(inputFromDetails(details));
+      if (gaps.length) {
+        return NextResponse.json(
+          { ok: false, error: `Finish the Marketing tab first: ${gaps.map((g) => g.label.toLowerCase()).join(", ")}.`, missing: gaps.map((g) => g.id) },
+          { status: 422 }
+        );
+      }
+      /* Then the portals' own list, so the agent reads "needs a photo" rather
+         than a refusal from deep in the feed. */
       const [errs, upload] = await Promise.all([
         rexCall("ListingPublication", "getErrorsPreventingPublication", { listing_id: id }),
         rexCall("ListingPortalUploads", "getErrorsPreventingUpload", { listing_id: id }),
       ]);
       const blockers = [...new Set([...(Array.isArray(errs.result) ? errs.result.map(String) : []), ...(upload.ok ? portalMessages(upload.result) : [])])];
       if (blockers.length) {
-        return NextResponse.json({ ok: false, error: `REX will not publish it yet: ${blockers.join("; ")}`, blockers }, { status: 422 });
+        return NextResponse.json({ ok: false, error: `The portals will not take it yet: ${blockers.join("; ")}`, blockers }, { status: 422 });
       }
     } else if (was.status !== "published") {
       return NextResponse.json({ ok: false, error: "It is not published yet, so there is nothing to take off." }, { status: 409 });

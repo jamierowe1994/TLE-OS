@@ -16,7 +16,20 @@ export interface Draft {
   beds: number | null;
   baths: number | null;
   receptions: number | null;
+  councilTaxBand: string | null;
+  parking: string | null;
+  electricity: string | null;
+  water: string | null;
+  sewerage: string | null;
+  broadband: string | null;
+  heating: string | null;
+  furnishing: string | null;
+  pets: string | null;
+  outsideSpace: string | null;
+  floorAreaSqft: number | null;
 }
+
+export type FactField = "councilTaxBand" | "parking" | "electricity" | "water" | "sewerage" | "broadband" | "heating" | "furnishing" | "pets" | "outsideSpace";
 
 export const draftFrom = (d: ListingDetails): Draft => ({
   rent: d.rent,
@@ -29,6 +42,17 @@ export const draftFrom = (d: ListingDetails): Draft => ({
   beds: d.beds,
   baths: d.baths,
   receptions: d.receptions,
+  councilTaxBand: d.facts.councilTaxBand,
+  parking: d.facts.parking,
+  electricity: d.facts.electricity,
+  water: d.facts.water,
+  sewerage: d.facts.sewerage,
+  broadband: d.facts.broadband,
+  heating: d.facts.heating,
+  furnishing: d.facts.furnishing,
+  pets: d.facts.pets,
+  outsideSpace: d.facts.outsideSpace,
+  floorAreaSqft: d.facts.floorAreaSqft,
 });
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -55,6 +79,17 @@ export const CHANGE_WORDS: Record<keyof Draft, string> = {
   beds: "bedrooms",
   baths: "bathrooms",
   receptions: "receptions",
+  councilTaxBand: "council tax",
+  parking: "parking",
+  electricity: "electricity",
+  water: "water",
+  sewerage: "sewerage",
+  broadband: "broadband",
+  heating: "heating",
+  furnishing: "furnishing",
+  pets: "pets",
+  outsideSpace: "outside space",
+  floorAreaSqft: "floor area",
 };
 
 export const money = (n: number | null | undefined) => (n == null ? null : `£${n.toLocaleString("en-GB")}`);

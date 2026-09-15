@@ -33,7 +33,7 @@ export const runtime = "nodejs";
 const REX_LIMIT = { photo: 50, floorplan: 5 } as const;
 
 export async function POST(req: NextRequest) {
-  if (!rexConfigured()) return NextResponse.json({ ok: false, error: "REX isn't connected on this environment." }, { status: 503 });
+  if (!rexConfigured()) return NextResponse.json({ ok: false, error: "The listings are not connected on this environment." }, { status: 503 });
   const gate = await gateListingWrite(req, "listing-edit");
   if ("refuse" in gate) return gate.refuse;
   const { actor } = gate;
@@ -54,20 +54,20 @@ export async function POST(req: NextRequest) {
     const now = await readListingDetails(id);
     const held = kind === "photo" ? now.images : now.floorplans;
     if (held.length >= REX_LIMIT[kind]) {
-      return NextResponse.json({ ok: false, error: `REX takes ${REX_LIMIT[kind]} ${kind === "photo" ? "photos" : "floor plans"} on a listing, and this one has them all.` }, { status: 409 });
+      return NextResponse.json({ ok: false, error: `A listing takes ${REX_LIMIT[kind]} ${kind === "photo" ? "photos" : "floor plans"}, and this one has them all.` }, { status: 409 });
     }
 
     const { getSignedUrl } = await import("@aws-sdk/s3-request-presigner");
     const url = await withR2((client) => getSignedUrl(client, new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }), { expiresIn: 900 }));
     const up = await rexCall("Upload", "uploadFileFromUrl", { url });
     const uri = (up.result as { uri?: string } | undefined)?.uri;
-    if (!up.ok || !uri) return NextResponse.json({ ok: false, error: `REX would not take the file: ${up.error ?? "no uri came back"}` }, { status: 502 });
+    if (!up.ok || !uri) return NextResponse.json({ ok: false, error: "That file would not upload. Try a JPEG or PNG." }, { status: 502 });
 
     const token = await rexTokenFor(actor.id);
     const collection = kind === "photo" ? "listing_images" : "listing_floorplans";
     const priority = (held.at(-1)?.priority ?? held.length) + 1;
     const res = await rexCall("Listings", "update", { data: { id, related: { [collection]: [{ uri, priority }] } } }, token);
-    if (!res.ok) return NextResponse.json({ ok: false, error: `REX refused it: ${res.error ?? res.status}` }, { status: 502 });
+    if (!res.ok) return NextResponse.json({ ok: false, error: "It did not go on the listing. Try again in a minute." }, { status: 502 });
 
     await invalidateListingBook();
     await record({ kind: "listing_edited", actorId: actor.id, actorEmail: actor.email, detail: `${id}: ${kind} added from ${key}` });
@@ -75,8 +75,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, id, kind, details });
   } catch (e) {
     if (e instanceof RexWriteBlocked) {
-      return NextResponse.json({ ok: false, locked: true, error: "Locked here: REX_ALLOW_WRITES needs Upload/uploadFileFromUrl and Listings/update." }, { status: 423 });
+      return NextResponse.json({ ok: false, locked: true, error: "Adding photos is not switched on yet." }, { status: 423 });
     }
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "REX did not answer." }, { status: 502 });
+    return NextResponse.json({ ok: false, error: "It did not go on the listing. Try again in a minute." }, { status: 502 });
   }
 }
