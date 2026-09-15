@@ -1345,6 +1345,24 @@ CREATE TABLE IF NOT EXISTS os_listing_archive (
   at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- A listing somebody found in REX and asked the OS to carry.
+--
+-- James, 15 Sep 2026: rather than copying REX wholesale, let somebody search
+-- it and pull a record in when they click one, so the data arrives a record at
+-- a time driven by what people actually look for.
+--
+-- This holds the INTENT, not a copy: the id, who asked and when. The book
+-- fetches the listing itself from REX with everything else, so there is still
+-- one source of truth and no second copy to go stale. Storing the record
+-- itself is the bigger read-through job, and that one waits on the staleness
+-- rule being decided.
+CREATE TABLE IF NOT EXISTS os_pulled_listings (
+  listing_id TEXT PRIMARY KEY,                -- REX listing id
+  address    TEXT,                            -- what it was called when pulled, for the log
+  by_user    TEXT,
+  at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS os_leads (
   id             TEXT PRIMARY KEY,            -- rex-<lead id>
   received_at    TIMESTAMPTZ,

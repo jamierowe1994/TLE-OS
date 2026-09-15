@@ -371,6 +371,26 @@ export async function fetchRetiredListings(rexUserId?: string | null): Promise<O
   return (await searchListings("withdrawn", rexUserId)).map(toListing);
 }
 
+/**
+ * The pulled listings that are not already in the book, read from REX by id.
+ *
+ * One call for all of them. Scoping is not re-checked here: it was checked
+ * when the pull was made, against REX's own agent filter, and a listing that
+ * has since changed hands is a listing the agent who pulled it can still see
+ * the address of - which is what was already true when they found it.
+ */
+async function pulledIntoBook(have: string[], rexUserId?: string | null): Promise<OsListing[]> {
+  const { pulledListingIds } = await import("@/lib/pulled-listings");
+  const wanted = (await pulledListingIds()).filter((id) => !have.includes(id));
+  if (wanted.length === 0) return [];
+  const res = await rexCall("Listings", "search", {
+    criteria: [{ name: "id", type: "in", value: wanted }],
+    limit: Math.min(wanted.length, 100),
+  }).catch(() => null);
+  if (!res?.ok) return [];
+  return rexRows(res.result).map((r) => toListing(r as unknown as RexListing));
+}
+
 export async function fetchListingBook(rexUserId?: string | null): Promise<ListingBook> {
   if (!rexConfigured()) {
     return {
@@ -381,6 +401,16 @@ export async function fetchListingBook(rexUserId?: string | null): Promise<Listi
   }
 
   const listings = (await searchListings("current", rexUserId)).map(toListing);
+
+  /* Anything somebody pulled in from the REX search joins the book here.
+     REX hands us `current` residential rentals and nothing else, so a let
+     property, or one in another category, is invisible to the OS however
+     well an agent remembers it. A pull says "carry this one too", and this is
+     where it is carried - fetched from REX with everything else rather than
+     stored, so there is still one source of truth. See lib/pulled-listings. */
+  const extra = await pulledIntoBook(listings.map((l) => String(l.id)), rexUserId);
+  listings.push(...extra);
+
   return {
     listings,
     counts: {

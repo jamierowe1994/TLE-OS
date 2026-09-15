@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
+import type { RexHit } from "@/app/api/search/rex/route";
 
 /**
  * The search bar on every page, made real.
@@ -31,6 +32,12 @@ export default function GlobalSearch({ placeholder = "Search properties, tenants
   const [hits, setHits] = useState<Hit[] | null>(null);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  /* The REX half. Asked for by a button, never by typing: a REX listing
+     search costs about a third of a second and a keystroke cannot. */
+  const [rexHits, setRexHits] = useState<RexHit[] | null>(null);
+  const [rexBusy, setRexBusy] = useState(false);
+  const [rexNote, setRexNote] = useState<string | null>(null);
+  const [pulling, setPulling] = useState<string | null>(null);
   const box = useRef<HTMLLabelElement | null>(null);
   const [anchor, setAnchor] = useState<{ top: number; left: number; width: number } | null>(null);
   const seq = useRef(0);
@@ -53,6 +60,8 @@ export default function GlobalSearch({ placeholder = "Search properties, tenants
 
   useEffect(() => {
     const needle = q.trim();
+    setRexHits(null);
+    setRexNote(null);
     if (needle.length < 2) {
       setHits(null);
       return;
@@ -76,6 +85,41 @@ export default function GlobalSearch({ placeholder = "Search properties, tenants
     }, 250);
     return () => clearTimeout(t);
   }, [q]);
+
+  async function lookInRex() {
+    const needle = q.trim();
+    if (needle.length < 2) return;
+    setRexBusy(true);
+    setRexNote(null);
+    const j = await fetch(`/api/search/rex?q=${encodeURIComponent(needle)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null);
+    setRexHits(j?.hits ?? []);
+    setRexNote(j?.note ?? null);
+    setRexBusy(false);
+  }
+
+  /** Bring one in, then go to it. The board is rebuilt server-side first, so
+      it is there when they arrive rather than a beat later. */
+  async function pull(h: RexHit) {
+    setPulling(h.id);
+    const j = await fetch("/api/listings/pull", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: h.id }),
+    })
+      .then((r) => r.json())
+      .catch(() => null);
+    setPulling(null);
+    if (!j?.ok) {
+      setRexNote(j?.error ?? "That did not come through. Try again in a moment.");
+      return;
+    }
+    setOpen(false);
+    setQ("");
+    setHits(null);
+    router.push(j.href as string);
+  }
 
   function go(h: Hit) {
     setOpen(false);
@@ -138,6 +182,57 @@ export default function GlobalSearch({ placeholder = "Search properties, tenants
                   </li>
                 ))}
               </ul>
+
+              {/* ── What the OS does not hold ──────────────────────────────
+                  The list above is our own copies, which is what makes it
+                  instant. REX holds more - a let property, or one in another
+                  category, is invisible to the OS however well somebody
+                  remembers it. James, 15 Sep 2026: let them search REX and
+                  pull a record in when they click it, so the data arrives one
+                  record at a time. A button, not a keystroke: REX answers a
+                  listing search in about a third of a second, which is too
+                  slow to type into and quick enough to ask for. */}
+              <div className="border-t border-line/60 bg-page/60 px-4 py-2.5">
+                {rexHits == null ? (
+                  <button
+                    type="button"
+                    onClick={() => void lookInRex()}
+                    disabled={rexBusy}
+                    className="flex items-center gap-2 text-[11.5px] font-semibold text-accent-dark hover:underline disabled:opacity-60"
+                  >
+                    <DoodleIcon name="search" size={12} />
+                    {rexBusy ? "Looking in REX…" : "Not here? Look in REX"}
+                  </button>
+                ) : (
+                  <>
+                    <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">In REX, not in the OS</p>
+                    {rexHits.length === 0 ? (
+                      <p className="mt-1 text-[11.5px] text-muted">{rexNote ?? "Nothing in REX either."}</p>
+                    ) : (
+                      <ul className="mt-1.5 space-y-1">
+                        {rexHits.map((h) => (
+                          <li key={h.id} className="flex items-center gap-3">
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[12px] font-semibold">{h.address}</span>
+                              <span className="block truncate text-[10.5px] text-muted">{h.why}</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => void pull(h)}
+                              disabled={pulling === h.id}
+                              className="shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold text-white disabled:opacity-60"
+                              style={{ background: "var(--accent-dark)" }}
+                            >
+                              {pulling === h.id ? "Bringing it in…" : "Bring it in"}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {rexNote && rexHits.length > 0 && <p className="mt-1.5 text-[11px] text-[#9d4340]">{rexNote}</p>}
+                  </>
+                )}
+              </div>
             </div>
           </>,
           document.body
