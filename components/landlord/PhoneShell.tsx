@@ -75,6 +75,17 @@ export default function PhoneShell({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  /**
+   * THE PINK ONLY EXISTS WHILE THE DRAWER IS OPEN.
+   *
+   * James, 15 Sep 2026: "the background on the phone has changed. Where the
+   * camera cutout is, it is now pink ... I want it all white." He read it
+   * exactly right - the menu was fixed behind the page at all times, so an
+   * iOS rubber-band at the top pulled the page away and showed it. Mounted
+   * only from the moment it opens until the page has finished sliding back,
+   * the canvas is white whenever the drawer is not in use.
+   */
+  const [mounted, setMounted] = useState(false);
   const path = usePathname() ?? "/landlord";
   const params = useSearchParams();
   const base = path.startsWith("/landlord/demo") ? "/landlord/demo" : "/landlord";
@@ -87,21 +98,32 @@ export default function PhoneShell({
   const q = keep.size ? `?${keep.toString()}` : "";
 
   /* A link closes it, and so does landing anywhere new. */
-  useEffect(() => setOpen(false), [path]);
+  useEffect(() => {
+    setOpen(false);
+    const t = window.setTimeout(() => setMounted(false), 500);
+    return () => window.clearTimeout(t);
+  }, [path]);
 
   /* And so does growing past a phone. The button is sm:hidden, so a window
      dragged wider while the drawer is open would otherwise leave the page
      shrunk with nothing on screen able to put it back. */
   useEffect(() => {
     const onResize = () => {
-      if (window.innerWidth >= 640) setOpen(false);
+      if (window.innerWidth >= 640) {
+        setOpen(false);
+        setMounted(false);
+      }
     };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      window.setTimeout(() => setMounted(false), 500);
+    };
     window.addEventListener("keydown", onKey);
     const had = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -124,8 +146,26 @@ export default function PhoneShell({
   ];
 
   return (
-    <Ctx.Provider value={{ open, toggle: () => setOpen((o) => !o) }}>
-      {/* THE MENU, behind the page. Pink, and only ever built on a phone. */}
+    <Ctx.Provider
+      value={{
+        open,
+        toggle: () => {
+          if (open) {
+            setOpen(false);
+            /* Kept until the page has finished sliding back over it, or the
+               pink vanishes from under a page still on its way home. */
+            window.setTimeout(() => setMounted(false), 500);
+          } else {
+            setMounted(true);
+            /* A frame later, so the menu is painted before the page moves off
+               it and there is never a white gap behind the slide. */
+            requestAnimationFrame(() => setOpen(true));
+          }
+        },
+      }}
+    >
+      {/* THE MENU, behind the page. Pink, on a phone, and only while wanted. */}
+      {mounted && (
       <nav
         className="fixed inset-0 z-0 flex flex-col justify-center bg-accent-soft px-7 pb-10 pt-24 sm:hidden"
         aria-hidden={!open}
@@ -150,11 +190,19 @@ export default function PhoneShell({
           </li>
         </ul>
       </nav>
+      )}
 
       {/* THE PAGE, which slides off to the left and casts a shadow over it. */}
       <div
         className="relative z-[1] min-h-screen bg-white sm:!transform-none"
-        onClick={open ? () => setOpen(false) : undefined}
+        onClick={
+          open
+            ? () => {
+                setOpen(false);
+                window.setTimeout(() => setMounted(false), 500);
+              }
+            : undefined
+        }
         style={{
           transform: open ? "scale(0.84) translateX(-64%)" : undefined,
           transformOrigin: "center",

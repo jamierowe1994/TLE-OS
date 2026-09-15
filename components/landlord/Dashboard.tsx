@@ -7,6 +7,7 @@ import Spine from "@/components/landlord/Spine";
 import SpinePhone from "@/components/landlord/SpinePhone";
 import { HeroAction, pickHero, signSource } from "@/components/landlord/StepAction";
 import PresentTile from "@/components/landlord/PresentTile";
+import PropertySheet from "@/components/landlord/PropertySheet";
 import SignTile from "@/components/landlord/SignTile";
 import { fullJourney } from "@/lib/landlord-journey";
 import { isLet, type LandlordView } from "@/lib/landlord-view";
@@ -97,8 +98,13 @@ export default function LandlordDashboard({
             </div>
             <div className="flex min-w-0 flex-1 flex-col py-1">
               <h2 className="text-[26px] leading-tight">{v.property.address}</h2>
+              {/* ON A PHONE the card says WHICH HOUSE and nothing else; the
+                  facts, both figures and the snapshot are in the sheet behind
+                  "View property details" (PropertySheet). James, 15 Sep 2026:
+                  "it should literally just say the house, and then we should
+                  have a View Property Details button." */}
               {v.property.facts.length > 0 && (
-                <p className="mt-3 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-muted">
+                <p className="mt-3 hidden flex-wrap items-center gap-x-2.5 gap-y-1 text-[13px] text-muted sm:flex">
                   <DoodleIcon name="home" size={14} />
                   {v.property.facts.map((f, i) => (
                     <span key={f} className="flex items-center gap-2.5">
@@ -108,8 +114,8 @@ export default function LandlordDashboard({
                   ))}
                 </p>
               )}
-              <div className="my-5 h-px bg-line/50" />
-              <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
+              <div className="my-5 hidden h-px bg-line/50 sm:block" />
+              <div className="hidden flex-wrap items-end gap-x-8 gap-y-4 sm:flex">
                 <div>
                   <p className="text-[12px] text-muted">{v.property.rent.caption}</p>
                   <p className="figures mt-1 text-[30px] leading-none">
@@ -124,9 +130,10 @@ export default function LandlordDashboard({
                   </div>
                 )}
               </div>
+              <PropertySheet v={v} />
               <a
                 href="#snapshot"
-                className="mt-6 inline-flex items-center gap-2 self-start rounded-full border border-line/70 px-4 py-2 text-[12.5px] font-semibold transition-colors hover:border-ink/40 sm:mt-auto sm:self-end"
+                className="mt-6 hidden items-center gap-2 self-start rounded-full border border-line/70 px-4 py-2 text-[12.5px] font-semibold transition-colors hover:border-ink/40 sm:mt-auto sm:inline-flex sm:self-end"
               >
                 View property details <span aria-hidden>→</span>
               </a>
@@ -429,7 +436,10 @@ export default function LandlordDashboard({
           <div className="mt-auto pt-4">{upload}</div>
         </section>
 
-        <section className={`${card} p-6`} id="snapshot" data-search>
+        {/* Folded into the property sheet on a phone - it is the same question
+            as "view property details", and two cards asking a landlord to
+            remember which held which number is one card too many. */}
+        <section className={`hidden ${card} p-6 sm:block`} id="snapshot" data-search>
           <h2 className="flex items-center gap-2.5 text-[18px]">
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-accent-soft text-accent-dark">
               <DoodleIcon name="home" size={14} />
