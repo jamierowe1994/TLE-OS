@@ -67,9 +67,19 @@ export default function PropertySheet({ v }: { v: LandlordView }) {
       />
 
       <div
-        className="fixed inset-x-0 bottom-0 z-[58] max-h-[86vh] overflow-y-auto rounded-t-[26px] bg-white px-5 pt-3 shadow-[0_-24px_60px_-28px_rgba(40,25,20,0.55)]"
+        className="fixed inset-x-0 bottom-0 z-[58] max-h-[86vh] overflow-y-auto rounded-t-[26px] bg-white px-5 pt-3"
         style={{
           transform: open ? "translateY(0)" : "translateY(106%)",
+          /**
+           * THE SHADOW ONLY EXISTS WHEN THE SHEET DOES.
+           *
+           * It is cast UPWARDS, and the sheet parks just below the fold - so a
+           * closed sheet was painting a band of shadow back across the bottom
+           * of the screen. James, 15 Sep 2026: "where the phone cuts off, the
+           * bottom section seems to have a bit of a shadow on the bottom,
+           * which looks a little bit silly."
+           */
+          boxShadow: open ? "0 -24px 60px -28px rgba(40, 25, 20, 0.55)" : "none",
           transition: "transform 460ms cubic-bezier(0.22, 1, 0.36, 1)",
           paddingBottom: "calc(28px + env(safe-area-inset-bottom))",
         }}

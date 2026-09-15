@@ -153,9 +153,10 @@ export default function LandlordDashboard({
           {hero ? (
             <div className="relative mt-4 sm:mt-5">
               <div className="flex items-start gap-4 sm:gap-5">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/70 text-accent-dark sm:h-16 sm:w-16">
-                  <DoodleIcon name={hero.icon} size={18} className="sm:hidden" />
-                  <DoodleIcon name={hero.icon} size={24} className="hidden sm:block" />
+                {/* No icon on a phone, at any stage. James, 15 Sep 2026:
+                    "no icon, no matter the stage, just to save on space." */}
+                <span className="hidden h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/70 text-accent-dark sm:flex">
+                  <DoodleIcon name={hero.icon} size={24} />
                 </span>
                 <div className="min-w-0">
                   <h2 className="text-[21px] leading-tight sm:text-[30px]">{hero.label}</h2>
@@ -412,9 +413,18 @@ export default function LandlordDashboard({
           the widest content (the upload picker), and the page scrolled
           sideways by 19px. */}
       <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-3">
-        <section className={`${card} flex flex-col p-6`} id="documents" data-search>
-          <h2 className="text-[18px]">Your documents</h2>
-          <ul className="mt-4 divide-y divide-line/50">
+        <section className={`${card} flex flex-col p-5 sm:p-6`} id="documents" data-search>
+          <h2 className="text-[16px] sm:text-[18px]">Your documents</h2>
+
+          {/* ON A PHONE: the count, and the way to fix it. James, 15 Sep 2026 -
+              "that seems a bit over the top. What we should show is how many
+              documents they've got uploaded compared to how many they need."
+              Six rows of certificate names is a list a landlord reads once;
+              "2 of 6" is the only line most of them ever need, and the page
+              behind it holds the detail. */}
+          <DocsSummary v={v} />
+
+          <ul className="mt-4 hidden divide-y divide-line/50 sm:block">
             {v.documents.map((d) => (
               <li key={d.title} className="flex items-center gap-3 py-3">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-line/60 text-muted">
@@ -439,7 +449,7 @@ export default function LandlordDashboard({
               </li>
             ))}
           </ul>
-          <div className="mt-auto pt-4">{upload}</div>
+          <div className="mt-auto hidden pt-4 sm:block">{upload}</div>
         </section>
 
         {/* Folded into the property sheet on a phone - it is the same question
@@ -535,6 +545,48 @@ export default function LandlordDashboard({
 }
 
 /** The readiness ring, the figure inside it. */
+/**
+ * The documents, in one line, on a phone: how many are in against how many a
+ * let needs, and the way to send the rest.
+ *
+ * Counted from the same rows the list shows, so the two can never disagree -
+ * a summary with its own arithmetic is a summary that goes wrong quietly.
+ */
+function DocsSummary({ v }: { v: LandlordView }) {
+  const total = v.documents.length;
+  const inHand = v.documents.filter((d) => d.state === "uploaded").length;
+  const left = total - inHand;
+  const href = v.steps.find((s) => s.id === "compliance")?.href ?? "/landlord/documents";
+  return (
+    <div className="mt-3 flex items-center gap-4 sm:hidden">
+      <div className="min-w-0 flex-1">
+        <p className="text-[21px] font-bold leading-none">
+          {inHand} <span className="text-[14px] font-normal text-muted">of {total} in</span>
+        </p>
+        <p className="mt-1.5 text-[12px] leading-snug text-muted">
+          {left === 0 ? "Everything we need is on your file." : `${left} still to send.`}
+        </p>
+        <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-line/60">
+          <span
+            className="block h-full rounded-full bg-accent-dark"
+            style={{ width: `${total ? (inHand / total) * 100 : 0}%`, transition: "width 500ms cubic-bezier(0.22,1,0.36,1)" }}
+          />
+        </div>
+      </div>
+      {left > 0 && (
+        <Link
+          href={href}
+          className="shrink-0 rounded-full bg-accent-dark px-4 py-2.5 text-center text-[12.5px] font-semibold leading-tight text-white"
+        >
+          Upload
+          <br />
+          the rest
+        </Link>
+      )}
+    </div>
+  );
+}
+
 function Ring({ pct }: { pct: number }) {
   const p = Math.max(0, Math.min(100, Math.round(pct)));
   const r = 40;
