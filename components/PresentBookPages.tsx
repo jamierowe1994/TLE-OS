@@ -255,13 +255,6 @@ export function BookApproach() {
           ))}
         </div>
       </div>
-      <p className="absolute right-[120px] top-[96px] text-[11px] uppercase leading-[1.8] tracking-[0.3em] text-black/55">
-        People
-        <br />
-        Homes
-        <br />
-        Relationships
-      </p>
     </div>
   );
 }
@@ -1116,27 +1109,27 @@ export function BookLevels({ deck }: { deck: Deck }) {
             hard against the page's right margin with no air at all, which is
             what reads as running off the page - measured, the page itself has
             164px to spare at the foot. */}
-        <h1 className="mt-4 max-w-[900px] text-[46px] leading-[1.1]" style={TITLE}>
+        <h1 className="mt-4 max-w-[820px] text-[40px] leading-[1.1]" style={TITLE}>
           Three levels. Choose the
           <br />
           support that <Ital width={190}>suits you.</Ital>
         </h1>
-        <p className="mt-3 max-w-[760px] text-[13.5px] leading-[1.55] text-black/60">{SERVICE_LEVELS_INTRO}</p>
+        <p className="mt-3 max-w-[760px] text-[13px] leading-[1.55] text-black/60">{SERVICE_LEVELS_INTRO}</p>
         <table className="mt-4 w-full border-collapse text-left" style={{ width: 1240 }}>
           <thead>
             <tr className="border-b" style={{ borderColor: "rgba(0,0,0,0.14)" }}>
-              <th className="pb-3 pr-4 text-[10.5px] font-normal uppercase tracking-[0.22em] text-black/50">What each level includes</th>
+              <th className="pb-2.5 pr-4 text-[10px] font-normal uppercase tracking-[0.22em] text-black/50">What each level includes</th>
               {SERVICE_LEVELS.map((l, n) => (
-                <th key={l} className="w-[150px] pb-3 text-center text-[12.5px] font-semibold" style={{ color: n === 0 ? "var(--p-accent)" : "rgba(0,0,0,0.6)" }}>{l}</th>
+                <th key={l} className="w-[140px] pb-2.5 text-center text-[12px] font-semibold" style={{ color: n === 0 ? "var(--p-accent)" : "rgba(0,0,0,0.6)" }}>{l}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.service} className="border-b" style={{ borderColor: "rgba(0,0,0,0.07)" }}>
-                <td className="py-[4px] pr-4 text-[12.5px] text-black/75">{r.service}</td>
+                <td className="py-[3px] pr-4 text-[12px] text-black/75">{r.service}</td>
                 {r.included.map((on, n) => (
-                  <td key={n} className="py-[4px] text-center">
+                  <td key={n} className="py-[3px] text-center">
                     {on ? (
                       <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full" style={{ background: SAGE_WASH, color: SAGE_INK }}>
                         <Line name="check" size={10} />
@@ -1185,7 +1178,6 @@ export function BookCollection() {
             </li>
           ))}
         </ul>
-        <p className="mt-8 text-[10.5px] uppercase tracking-[0.3em] text-black/55">People &middot; Homes &middot; Relationships</p>
       </div>
     </div>
   );
@@ -1282,12 +1274,14 @@ export function BookWhy() {
           <br />
           <Ital width={280}>expect from us</Ital>
         </h1>
-        <div className="mt-12 grid grid-cols-2 gap-6 text-left" style={{ width: 1160 }}>
+        {/* 1248 is the page less its own 96px margins. The cards were 1160,
+            which left 44px of unused paper either side while the sentences
+            inside them wrapped. */}
+        <div className="mt-12 grid grid-cols-2 gap-7 text-left" style={{ width: 1248 }}>
           {card("What to expect from us", FROM_US, "var(--p-tint)")}
           {card("What helps us deliver the best result", FROM_YOU, SAGE_WASH)}
         </div>
       </div>
-      <p className="absolute bottom-[56px] left-1/2 -translate-x-1/2 text-[10.5px] uppercase tracking-[0.3em] text-black/55">Clear advice, good communication, a service built round your property</p>
     </div>
   );
 }
@@ -1314,7 +1308,6 @@ export function BookTestimonial({ deck }: { deck: Deck }) {
           <p className="mt-10 text-[17px] text-black/55">What our landlords say about us will sit here.</p>
         )}
       </div>
-      <p className="absolute bottom-[56px] left-1/2 -translate-x-1/2 text-[10.5px] uppercase tracking-[0.3em] text-black/55">People &middot; Homes &middot; Relationships</p>
     </div>
   );
 }
@@ -1406,15 +1399,19 @@ export function BookFees({ deck }: { deck: Deck }) {
         </h1>
         {f ? (
           <>
-            <div className="mt-8 grid grid-cols-[1fr_440px] items-start gap-x-14">
+            {/* The rate and what it is for on ONE line - at 56px in a column
+                this wide "Fully managed" dropped under the figure - and the
+                paragraph beside it starting on the same line rather than
+                above it. */}
+            <div className="mt-12 grid grid-cols-[1fr_420px] items-start gap-x-14">
               <div>
                 {f.headline && (
-                  <p className="leading-none">
-                    <span className="text-[56px]" style={{ ...TITLE, color: "var(--p-accent)" }}>{f.headline}</span>
-                    {f.headlineFor && <span className="ml-4 text-[18px] text-black/55">{f.headlineFor}</span>}
+                  <p className="flex flex-wrap items-baseline gap-x-4 leading-none">
+                    <span className="text-[46px]" style={{ ...TITLE, color: "var(--p-accent)" }}>{f.headline}</span>
+                    {f.headlineFor && <span className="text-[18px] text-black/55">{f.headlineFor}</span>}
                   </p>
                 )}
-                <dl className="mt-8">
+                <dl className="mt-10">
                   {f.rows.map((r) => (
                     <div key={r.label} className="grid grid-cols-[1fr_auto] items-baseline gap-x-8 border-t py-4" style={{ borderColor: "rgba(0,0,0,0.1)" }}>
                       <dt>
@@ -1429,12 +1426,12 @@ export function BookFees({ deck }: { deck: Deck }) {
                   ))}
                 </dl>
               </div>
-              <p className="pt-3 text-[16px] leading-[1.65] text-black/65">
+              <p className="text-[16px] leading-[1.65] text-black/65">
                 One percentage of the rent we collect, and it covers the tenancy from start to finish. Nothing is added later that is not on this page, and what is not included is written here too.
               </p>
             </div>
             {rent != null && (
-              <div className="mt-8 rounded-[22px] px-8 py-6" style={{ background: "var(--p-tint)", width: 1200 }}>
+              <div className="mt-10 rounded-[22px] px-8 py-6" style={{ background: "var(--p-tint)", width: 1248 }}>
                 <p className="text-[11px] uppercase tracking-[0.3em] text-black/55">At {gbp(rent)} a month, that is</p>
                 <p className="mt-3 text-[19px] leading-[1.6] text-black/80" style={TITLE}>
                   {f.rows
