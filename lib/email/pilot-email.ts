@@ -40,8 +40,11 @@ export function pilotInviteEmail(link: string, firstName?: string): VerifyEmail 
     "",
     link,
     "",
-    "Nothing to prepare. Have a look around when it suits you, and say so when",
-    "something feels wrong. The link works once and lasts 24 hours.",
+    "Have your REX sign-in to hand. It is the first thing we ask for, and the",
+    "OS has nothing to show you until it is connected.",
+    "",
+    "Then have a look around when it suits you, and say so when something",
+    "feels wrong. The link works once and lasts 24 hours.",
   ].join("\n");
 
   return {
@@ -60,8 +63,14 @@ export function pilotInviteEmail(link: string, firstName?: string): VerifyEmail 
         "Welcome to TLE OS. We're building it now, and you're one of the first through the door - what you tell us over the next few weeks is what shapes it for everybody else.",
       button: "Set up your account",
       link,
+      /* "Nothing to prepare" until 14 Sep 2026, which was not true: setup asks
+         for their REX sign-in on the second screen and will not go past it, by
+         design (the argument is in lib/setup.ts). An agent who opens this at a
+         desk without their REX password gets two screens in and stops, and the
+         first thing the pilot learns about the OS is that it lied in the
+         doorway. */
       footnote:
-        "Nothing to prepare. Have a look around when it suits you, and say so when something feels wrong.",
+        "Have your REX sign-in to hand: it is the first thing we ask for. Then have a look around when it suits you, and say so when something feels wrong.",
     }),
   };
 }

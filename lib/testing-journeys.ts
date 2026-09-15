@@ -696,11 +696,19 @@ export const JOURNEYS: Journey[] = [
       {
         id: "setup",
         title: "The five setup steps",
-        what: "Password, REX, email, how the pre-launch works, and light or dark. Each one skippable except the choices, and each says plainly what skipping costs.",
-        how: ["Walk all five. Skip REX and the mailbox on purpose and check it still finishes.", "Finish, then Take me in: the dashboard should be theirs, not a demo."],
+        what: "Password, REX, email, how the pre-launch works, and light or dark. The MAILBOX is the only one that can be passed over; REX is required, and the screen says why.",
+        how: [
+          "Walk all five. The REX screen has one control and it is Connect - have the agent's REX email and password to hand before you start, or the walk stops here.",
+          "Skip the mailbox on purpose, on the Email screen, and check the rest still finishes.",
+          "Finish, then Take me in: the dashboard should be theirs, not a demo.",
+        ],
         where: "/setup",
         state: "built",
-        since: "2026-09-12",
+        since: "2026-09-14",
+        notes: [
+          "Corrected 14 Sep 2026, after a walk. This step used to say \"skip REX and the mailbox on purpose\" and that cannot be done: the skip on the REX screen renders only in the public preview, so a real agent sees Connect and nothing else, and the rail above it is not clickable. The product is right and the instruction was wrong - see the argument in lib/setup.ts: an agent who skips REX lands on a dashboard of empty tiles and reports the OS as broken, which is the one bug report a pilot cannot afford.",
+          "THE OPERATIONAL CONSEQUENCE, for Monday 21 September: an agent without their REX password to hand cannot get past screen 2 of 5. Nobody starts the pilot without it.",
+        ],
       },
       {
         id: "rex",
@@ -710,7 +718,10 @@ export const JOURNEYS: Journey[] = [
         where: "/profile",
         state: "built",
         since: "2026-09-06",
-        notes: ["Kirstie's link is by REX id rather than by email, because REX holds her old surname. Auto-linking matches on email, so anybody whose two addresses differ has to be linked by hand."],
+        notes: [
+          "Kirstie's link is by REX id rather than by email, because REX holds her old surname. Auto-linking matches on email, so anybody whose two addresses differ has to be linked by hand.",
+          "\"Or later from Profile\" is true of RECONNECTING, not of the first time: setup will not let anybody past the REX screen without it (14 Sep 2026). Deliberate, and the reason is in lib/setup.ts.",
+        ],
       },
       {
         id: "mailbox",
