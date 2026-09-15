@@ -15,6 +15,8 @@ import {
 import { geocode } from "@/lib/geocode";
 import { DECK_KINDS } from "@/lib/present";
 import { STAGES, stepsForStage, type LandlordView, type Stage, type ViewOffer } from "@/lib/landlord-view";
+import { readAnswers } from "@/lib/property-answers-store";
+import { progress as answerProgress } from "@/lib/property-questions";
 import type { ManagedProperty } from "@/lib/portfolio-types";
 
 /**
@@ -174,6 +176,9 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
   const property = latest?.deck.property ?? null;
   const signUrl = post?.deck.terms?.signUrl ?? null;
   const signed = j.signed.length > 0;
+  /* Only asked for once they have signed, so only read then - a questionnaire
+     nobody has been offered has nothing to report. */
+  const answered = signed ? answerProgress(await readAnswers(a.id)) : { done: 0, of: 0, pct: 0 };
   const agentName = a.agent ?? deckAgent?.name ?? null;
   const stage = stageOf(j, offers);
   const at = STAGES.findIndex((s) => s.id === stage);
@@ -266,6 +271,17 @@ async function appraisalView(j: AppraisalJourney, first: string, docs: LandlordD
       presentation: { id: "presentation", label: "View your presentation", sub: latest ? `${deckLabel}, from ${latest.authorName || agentName || "your agent"}` : "Lands here before the visit", href: latest ? `/present/${latest.token}` : null, icon: "analytics", external: true },
       /* Signed: off the list. Not yet: the tile opens the signing here. */
       sign: { id: "sign", label: "Sign your contract", sub: a.valuation != null ? "Review and sign your management terms" : "Follows the valuation", href: null, icon: "pencil", action: "sign", done: signed },
+      /* The things only they know. Held back until the contract is signed by
+         stepsForStage; counted in screens, because that is the unit the
+         questionnaire itself uses. */
+      questions: {
+        id: "questions",
+        label: "Tell us about the property",
+        sub: answered.done === 0 ? "Seven short screens - it saves as you go" : `${answered.done} of ${answered.of} done`,
+        href: "/landlord/questions",
+        icon: "key",
+        done: answered.done >= answered.of,
+      },
       /* Everything in: off the list. */
       compliance: { id: "compliance", label: "Upload your compliance documents", sub: `${required.length - have} of ${required.length} still to send`, href: "/landlord/documents", icon: "upload", done: allIn },
       message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: null, icon: "message", action: "message" },
@@ -349,6 +365,7 @@ async function managedView(p: ManagedProperty, first: string, comp: LandlordComp
     steps: stepsForStage("managed", {
       presentation: { id: "presentation", label: "View your presentation", sub: "From when we valued it", href: null, icon: "analytics" },
       sign: { id: "sign", label: "Your contract", sub: "Coming to this file", href: null, icon: "pencil" },
+      questions: { id: "questions", label: "About the property", sub: "What you told us at the start", href: "/landlord/questions", icon: "key", done: true },
       compliance: { id: "compliance", label: "Certificates", sub: certsSub, href: comp ? "/landlord/documents" : null, icon: "shield" },
       message: { id: "message", label: "Message your agent", sub: "Ask questions or share information", href: null, icon: "message", action: "message" },
       listing: { id: "listing", label: "Your listing", sub: "Let", href: null, icon: "home" },

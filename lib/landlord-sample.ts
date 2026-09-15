@@ -99,6 +99,17 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
      * than a hash.
      */
     sign: { id: "sign", label: "Sign your contract", sub: "Review and sign your management terms", href: DEMO_CONTRACT, icon: "pencil", action: "sign", done: done("instruction") },
+    /* The showroom's questionnaire: unanswered at the compliance stop, so the
+       screen James asked for is the one the sample opens on, and done by the
+       time the property is marketed. */
+    questions: {
+      id: "questions",
+      label: "Tell us about the property",
+      sub: marketing ? "Answered, thank you" : "Seven short screens - it saves as you go",
+      href: "/landlord/demo/questions",
+      icon: "key",
+      done: marketing,
+    },
     compliance: {
       id: "compliance",
       label: "Upload your compliance documents",

@@ -45,7 +45,18 @@ export interface JourneyStop {
 }
 
 export interface ViewStep {
-  id: "presentation" | "sign" | "compliance" | "message" | "listing" | "viewings" | "maintenance" | "renewal" | "certificates" | "tenancy";
+  id:
+    | "presentation"
+    | "sign"
+    | "questions"
+    | "compliance"
+    | "message"
+    | "listing"
+    | "viewings"
+    | "maintenance"
+    | "renewal"
+    | "certificates"
+    | "tenancy";
   label: string;
   sub: string;
   href: string | null;
@@ -262,8 +273,13 @@ export function stepsForStage(
 ): ViewStep[] {
   const order: Record<Stage, ViewStep["id"][]> = {
     valuation: ["presentation", "message", "compliance", "sign"],
-    instruction: ["presentation", "sign", "compliance", "message"],
-    compliance: ["compliance", "presentation", "message", "sign"],
+    instruction: ["presentation", "sign", "questions", "compliance", "message"],
+    /* THE QUESTIONS COME FIRST once the contract is signed. James, 15 Sep
+       2026: "once they've signed this, we'll say, Brilliant, signed. Now we
+       just need you to answer some questions about your property." They are
+       also the only thing on the list nobody else can do for them - we can
+       chase a certificate, we cannot guess where the stopcock is. */
+    compliance: ["questions", "compliance", "presentation", "message", "sign"],
     marketing: ["listing", "compliance", "message", "presentation"],
     viewings: ["viewings", "listing", "message", "compliance"],
     let: ["tenancy", "viewings", "message", "compliance"],
@@ -293,7 +309,14 @@ export function stepsForStage(
     .map((id) => all[id])
     .filter(
       (s): s is ViewStep =>
-        Boolean(s) && !s.done && !(holdSign && s.id === "sign") && !(signed && s.id === "presentation")
+        Boolean(s) &&
+        !s.done &&
+        !(holdSign && s.id === "sign") &&
+        !(signed && s.id === "presentation") &&
+        /* Asked only of somebody who has actually instructed us. Before that
+           it is a stranger's form about a house they have not agreed to let
+           through us. */
+        !(!signed && s.id === "questions")
     )
     .slice(0, 4);
 }
