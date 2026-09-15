@@ -8,6 +8,7 @@ import SpinePhone from "@/components/landlord/SpinePhone";
 import { HeroAction, pickHero, signSource } from "@/components/landlord/StepAction";
 import PresentTile from "@/components/landlord/PresentTile";
 import PropertySheet from "@/components/landlord/PropertySheet";
+import MoreActions from "@/components/landlord/MoreActions";
 import SignTile from "@/components/landlord/SignTile";
 import { fullJourney } from "@/lib/landlord-journey";
 import { isLet, type LandlordView } from "@/lib/landlord-view";
@@ -164,8 +165,13 @@ export default function LandlordDashboard({
               <div className="mt-5 sm:mt-7">
                 <HeroAction s={hero} v={v} />
               </div>
+              {/* ON A PHONE the "Also:" line becomes one button that unfolds
+                  the list in place - James, 15 Sep 2026: "just one button
+                  saying See more actions", and explicitly not another bottom
+                  sheet. */}
+              <MoreActions v={v} others={others} />
               {others.length > 0 && (
-                <p className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-muted">
+                <p className="mt-5 hidden flex-wrap items-center gap-x-4 gap-y-1 text-[12.5px] text-muted sm:flex">
                   <span>Also:</span>
                   {others.map((s) =>
                     s.action === "presentation" && v.presentation ? (
