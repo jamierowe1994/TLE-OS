@@ -70,6 +70,7 @@ import {
   INSPECTION_LANDLORD_REPORT,
   INVOICE_SENT,
   LANDLORD_CONTRACT_PACK,
+  LANDLORD_QUESTIONS_CHASE,
   SITE,
   type EmailDoc } from "@/lib/email/tle-documents";
 
@@ -594,6 +595,28 @@ export const TLE_EMAILS: CatalogEntry[] = [
           agentName: "Rhiannon Dodge",
           deckLink: `${SITE}/present/example`,
           link: `${SITE}/landlord/enter?token=example`,
+        })
+      )(),
+  },
+  {
+    id: "landlord-questions-chase",
+    group: "Market appraisals",
+    name: "Signed - A Few Questions Left",
+    audience: "landlord",
+    trigger: "Two, five and nine days after a landlord signs, while their property questions are not finished. Never once they are",
+    fires: "Wired 15 Sep 2026. os-cron-daily → POST /api/landlord/property-answers/chase → lib/property-answers-chase.ts, on the public sender.",
+    to: "The landlord who signed",
+    summary:
+      "Susan, 14 Sep: the questionnaire keeps emailing them until it is finished. Says how far they got, lands them on the questions rather than their home page, and stops at three - a chase that never ends is one that gets filtered.",
+    doc: LANDLORD_QUESTIONS_CHASE,
+    render: (o) =>
+      blocksAs("landlord")(
+        withSample(o ?? LANDLORD_QUESTIONS_CHASE, {
+          firstName: "Helen",
+          address: "12 Chorlton Road, Manchester M15 4AZ",
+          left: "three short parts",
+          leftCap: "Three short parts",
+          link: `${SITE}/landlord/enter?token=example&next=/landlord/questions`,
         })
       )(),
   },

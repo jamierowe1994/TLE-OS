@@ -968,3 +968,37 @@ export const LANDLORD_CONTRACT_PACK = {
   ],
   branding: { showSignoff: false },
 } as const;
+
+/**
+ * Landlord: signed, but the property questions are not finished (15 Sep 2026).
+ *
+ * Susan's call, 14 Sep: the questionnaire "keeps emailing them until it is
+ * finished". Three of these at most - two, five and nine days after they
+ * signed - and none once the last screen is done. It says how much is left,
+ * because "three short parts left" is a reason to finish and "please
+ * complete your questionnaire" is a reason to delete.
+ */
+export const LANDLORD_QUESTIONS_CHASE = {
+  subject: "A few questions about {{address}}, then you're done",
+  preheader: "{{leftCap}} to go, and it picks up where you left off.",
+  mode: "blocks",
+  blocks: [
+    H("lqc1", "Nearly there"),
+    T(
+      "lqc2",
+      "Hi {{firstName}},<br><br>Thank you again for signing with us for <strong>{{address}}</strong>. There are just a few things about the property that only you know - where the stopcock is, how many sets of keys there are, how you'd like pet requests handled - and there are <strong>{{left}}</strong> left to go."
+    ),
+    T(
+      "lqc3",
+      "It picks up exactly where you left off, and each part takes a minute or two. We use the answers to get the home ready to let, so finishing them is what lets us get going."
+    ),
+    SP("lqc4", 8),
+    BTN("lqc5", "Carry on with the questions", "{{link}}"),
+    T("lqc6", "That button signs you straight in. It works once and lasts 24 hours."),
+    SP("lqc7", 8),
+    T("lqc8", "If anything is unclear, just reply to this email and we'll help."),
+    T("lqc9", "The Letting Experts"),
+    FOOT("lqc10", "You're getting this because you signed terms of business with The Letting Experts and your property questions aren't finished yet."),
+  ],
+  branding: { showSignoff: false },
+} as const;

@@ -224,6 +224,7 @@ const MACHINE_ROUTES = [
   "/api/lettings-capture/run",        // the daily market sweep
   "/api/leads/scan",                  // the lead ledger, every five minutes
   "/api/bugs/bot",                    // the bug bot: takes bugs, records its fixes (cron key)
+  "/api/landlord/property-answers/chase", // signed but questions unfinished: 2, 5, 9 days
   "/api/viewings/sweep",              // the viewings ledger, nightly
   "/api/maintenance/snapshot",        // the maintenance board's figures, daily
   "/api/radar/run",                   // Landlord Radar: sweep the patch, rescore, digest

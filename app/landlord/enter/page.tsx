@@ -28,7 +28,13 @@ function Enter() {
       .then((j: { ok?: boolean; first?: boolean; error?: string }) => {
         if (gone) return;
         if (j.ok) {
-          router.replace(j.first ? "/landlord/welcome" : "/landlord");
+          /* Somewhere in their own file, if the email said where (the
+             questions chase lands on the questions). Only ever a path under
+             /landlord/: a link that could send them anywhere is a link that
+             can be used to send them somewhere that is not us. */
+          const next = params.get("next") ?? "";
+          const safe = /^\/landlord\/[a-z0-9/-]*$/i.test(next) ? next : null;
+          router.replace(j.first ? "/landlord/welcome" : safe ?? "/landlord");
           router.refresh();
         } else {
           setFailed(j.error ?? "That link isn't valid. Ask for a new one.");

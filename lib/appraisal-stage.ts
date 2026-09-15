@@ -10,6 +10,8 @@ import { getComplianceItemsFor } from "@/lib/business/rex-stats";
 import { listVault } from "@/lib/vault";
 import { pendingKeyFor } from "@/lib/property-match";
 import { PRE_APPRAISAL_LEAD_DAYS } from "@/lib/appraisal-email";
+import { readAnswers } from "@/lib/property-answers-store";
+import { allDone, progress } from "@/lib/property-questions";
 
 /**
  * Where an appraisal is, worked out from what has happened.
@@ -25,8 +27,11 @@ import { PRE_APPRAISAL_LEAD_DAYS } from "@/lib/appraisal-email";
  *   lost / won        the agent said so (the only two hand moves)
  *   won               a listing exists in REX for the property picked at
  *                     booking - the instruction became a listing
- *   aml               terms signed AND the landlord has put ID and proof of
- *                     ownership on their portal
+ *   aml               terms signed, the property questions answered AND the
+ *                     landlord has put ID and proof of ownership on their
+ *                     portal (the questions gate added 15 Sep 2026: Susan,
+ *                     "the property does not move through the process until
+ *                     it is done")
  *   takeon            terms signed - the next visit is the photographs
  *   post_appraisal    a figure recorded (the rule that already existed)
  *   appraisal         the visit has happened and no figure yet
@@ -61,6 +66,8 @@ export interface AppraisalFacts {
   valued: boolean;
   termsSigned: boolean;
   landlordDocs: boolean;
+  /** Every screen of the property questionnaire answered (lib/property-questions). */
+  answered: boolean;
   listed: boolean;
 }
 
@@ -68,7 +75,8 @@ export function deriveAppraisalStage(ma: MarketAppraisal, f: AppraisalFacts): { 
   if (ma.stage === "lost") return { stage: "lost", why: "Marked lost." };
   if (ma.stage === "won") return { stage: "won", why: "Marked won." };
   if (f.listed) return { stage: "won", why: "The property is listed in REX." };
-  if (f.termsSigned && f.landlordDocs) return { stage: "aml", why: "Terms signed and the landlord's ID and proof of ownership are on the portal." };
+  if (f.termsSigned && f.answered && f.landlordDocs) return { stage: "aml", why: "Terms signed, the property questions answered, and the landlord's ID and proof of ownership are on the portal." };
+  if (f.termsSigned && !f.answered) return { stage: "takeon", why: "Terms signed. The landlord still has property questions to answer - they are chased by email until they do." };
   if (f.termsSigned) return { stage: "takeon", why: "Terms signed. Next is the take-on visit and photographs." };
   if (f.valued) return { stage: "post_appraisal", why: "A figure has been recorded." };
   if (f.visitPassed) return { stage: "appraisal", why: "The visit has happened. No figure recorded yet." };
@@ -113,7 +121,7 @@ const dayWords = (v: string | null) => (v ? new Date(v).toLocaleDateString("en-G
 
 async function signalsFor(ma: MarketAppraisal, listedIds: Set<string>, now: Date): Promise<Signals> {
   const refs = [...new Set([ma.leadId, ma.id].filter((r): r is string => Boolean(r)))];
-  const [decks, signed, account, sends, esign, certs] = await Promise.all([
+  const [decks, signed, account, sends, esign, certs, answers] = await Promise.all([
     Promise.all(refs.map((r) => presentationsFor(r).catch(() => []))).then((d) => d.flat()),
     signedFor(ma.id).catch(() => []),
     ma.landlordEmail ? landlordAccountByEmail(ma.landlordEmail).catch(() => null) : Promise.resolve(null),
@@ -127,6 +135,7 @@ async function signalsFor(ma: MarketAppraisal, listedIds: Set<string>, now: Date
       ? q<{ created_at: string; completed_at: string | null }>(`SELECT created_at, completed_at FROM os_esign_watch WHERE ref = ANY($1) ORDER BY created_at DESC LIMIT 5`, [refs]).catch(() => [])
       : Promise.resolve([]),
     certificatesFor(ma),
+    readAnswers(ma.id).catch(() => ({})),
   ]);
   const docs = account ? await landlordDocuments(account.id).catch(() => []) : [];
   const kinds = new Set(docs.map((d) => d.kind));
@@ -145,6 +154,7 @@ async function signalsFor(ma: MarketAppraisal, listedIds: Set<string>, now: Date
     valued: ma.valuation != null,
     termsSigned: Boolean(signedDoc),
     landlordDocs: kinds.has("id") && kinds.has("ownership"),
+    answered: allDone(answers),
     listed,
   };
 
@@ -190,6 +200,10 @@ async function signalsFor(ma: MarketAppraisal, listedIds: Set<string>, now: Date
   tick("post_appraisal", "post-opened", "Opened by the landlord", Boolean(post && post.opens > 0), iso(post?.firstOpenedAt ?? null), post && post.opens > 1 ? `opened ${post.opens} times` : undefined);
   tick("post_appraisal", "terms-sent", "Terms sent for signature", Boolean(termsSentAt), termsSentAt);
   tick("post_appraisal", "terms-signed", "Terms signed", Boolean(signedDoc), iso(signedDoc?.completed_at ?? null), signedDoc ? `by ${signedDoc.signer_name}` : undefined);
+
+  /* take-on: what only the landlord knows, asked once they have signed */
+  const asked = progress(answers);
+  tick("takeon", "questions", "Property questions answered", facts.answered, null, signedDoc && !facts.answered ? `${asked.done} of ${asked.of} parts done, chased by email` : undefined);
 
   /* aml */
   tick("aml", "id", "ID on the landlord portal", kinds.has("id"), iso(docs.find((d) => d.kind === "id")?.uploadedAt ?? null));
