@@ -349,19 +349,19 @@ export type PresentDeck = {
 export const VISIT_STEPS: { title: string; body: string }[] = [
   {
     title: "A proper walk round",
-    body: "Every room, the outside, and the bits people forget - the boiler, the meters, the parking. Ten minutes of it tells us more than any form.",
+    body: "We'll look at the rooms, outside space and practical details that help us understand the property properly.",
   },
   {
-    title: "What it should let for",
-    body: "A real figure, with the reasoning behind it. Not the highest number we can say out loud to win the instruction.",
+    title: "What it could let for",
+    body: "A realistic rental figure, with the local evidence and reasoning behind it.",
   },
   {
-    title: "How quickly, and to whom",
-    body: "Who rents in your street, what they'll pay, and what the last few near you actually went for.",
+    title: "The local market",
+    body: "Who's renting nearby, what similar homes are achieving and what demand currently looks like.",
   },
   {
-    title: "What's worth doing first",
-    body: "Sometimes nothing. Sometimes one afternoon's work puts fifty pounds a month on it - we'll tell you which.",
+    title: "Preparing it to let",
+    body: "We'll talk through presentation, timing and any compliance requirements to make sure you're clear on what happens next.",
   },
 ];
 
@@ -373,25 +373,25 @@ export const VISIT_STEPS: { title: string; body: string }[] = [
 export const BANNER: { icon: "people" | "shield" | "chart"; title: string; body: string }[] = [
   {
     icon: "people",
-    title: "Local experts",
+    title: "Local knowledge",
     // These used to be cut to ONE line each, because they sat in a third of a
     // banner across the foot of a photograph. James's 4 Sep entrance moves
     // them into the body of the slide with a tinted badge above each, where
     // two lines is the shape that looks right — so the first one goes back to
     // the fuller sentence it wanted in the first place.
-    body: "People who know your area inside out.",
+    body: "People who understand your area and its rental market.",
   },
   {
     icon: "shield",
-    title: "Maximum protection",
-    body: "Your property and income, safe.",
+    title: "Clear advice",
+    body: "Straight answers backed by local evidence.",
   },
   {
     // A bar chart, not a trend arrow. An arrow going up beside the words
     // "better returns" is a promise about performance we have not made.
     icon: "chart",
-    title: "Better returns",
-    body: "Smarter strategy, stronger rent.",
+    title: "Expert support",
+    body: "Guidance from valuation through to tenancy.",
   },
 ];
 
@@ -428,8 +428,8 @@ export const APPRAISAL_PROMISES: { icon: "pin" | "home" | "chart"; title: string
 export const BRING_ALONG: string[] = [
   "The EPC, if you already have one",
   "Any gas safety or electrical certificate",
-  "Rough dates for when you'd want it available",
-  "Anything you already know needs doing",
+  "An idea of when you'd like the property available",
+  "Anything you'd like us to know about the property",
 ];
 
 /**
@@ -438,20 +438,20 @@ export const BRING_ALONG: string[] = [
  */
 export const WHY_TLE: { title: string; body: string }[] = [
   {
-    title: "Lettings is all we do",
-    body: "Not a sales agency with a lettings desk at the back. Every person you deal with here works on rented property all day, which is why the compliance side never surprises us.",
+    title: "Lettings is our focus",
+    body: "Our business is built around rented property and the people who own and live in it.",
   },
   {
     title: "One person, start to finish",
-    body: "The agent who values it is the agent who markets it and the agent who rings you when there's an offer. You won't be handed to a department.",
+    body: "The agent who values your property remains closely involved throughout the process.",
   },
   {
-    title: "Priced on evidence",
-    body: "We'll show you what let nearby, at what price, and how long it took. If our number is lower than someone else's, you'll see exactly why.",
+    title: "Advice backed by evidence",
+    body: "We'll show you what has let nearby, at what rent and how the local market supports our recommendation.",
   },
   {
-    title: "Straight about the fee",
-    body: "One percentage, what it covers, and what it doesn't. Everything else is quoted before it happens, never after.",
+    title: "Clear on costs",
+    body: "What the service costs and what it includes are explained before you make a decision.",
   },
 ];
 
@@ -670,7 +670,7 @@ export const SLIDES: { id: SlideId; title: string; removable: boolean; section: 
   /* Protecting the income. */
   { id: "protection", title: "Protecting your income", removable: true, section: "next" },
   { id: "rentlegal", title: "Rent and legal protection", removable: true, section: "next" },
-  { id: "regulated", title: "Regulated and protected", removable: true, section: "next" },
+  { id: "regulated", title: "Professional standards", removable: true, section: "next" },
   { id: "network", title: "The Experts Group", removable: true, section: "next" },
 
   /* The close. */

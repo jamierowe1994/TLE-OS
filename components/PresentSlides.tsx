@@ -14,6 +14,7 @@ import {
   PORTALS_COPY,
   PROTECTION,
   REGULATED,
+  REGULATED_INTRO,
   RENT_COLLECTION,
   RENT_LEGAL,
   SCREENING,
@@ -1704,9 +1705,9 @@ export function Collection({ show }: { show: boolean }) {
       <div className="mx-auto w-full max-w-[1080px]">
         <div className="max-w-[680px]">
           <HandHead eyebrow="Rent collection" show={show} lines={2}>
-            Rent collection, without
+            Rent collection,
             <br />
-            the <Emphasis show={show}>chasing</Emphasis>
+            made <Emphasis show={show}>simple</Emphasis>
           </HandHead>
           <Rise show={show} i={2}>
             <p className="mt-6 max-w-[560px] text-[15px] font-light leading-[1.6] text-black/55">
@@ -1801,9 +1802,9 @@ export function RentLegal({ show }: { show: boolean }) {
       <div className="mx-auto w-full max-w-[1180px]">
         <div className="max-w-[760px]">
           <HandHead eyebrow={RENT_LEGAL.eyebrow} show={show} lines={2}>
-            More than management.
+            Extra reassurance,
             <br />
-            Real <Emphasis show={show}>protection</Emphasis>
+            <Emphasis show={show}>included</Emphasis>
           </HandHead>
           <Rise show={show} i={2}>
             <p className="mt-5 max-w-[680px] text-[14.5px] font-light leading-[1.6] text-black/55">
@@ -1812,9 +1813,9 @@ export function RentLegal({ show }: { show: boolean }) {
           </Rise>
         </div>
 
-        <div className="mt-7 grid gap-x-10 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-7 grid gap-x-10 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
           {RENT_LEGAL.points.map((p, n) => (
-            <Rise key={p.title} show={show} i={3 + Math.floor(n / 4)}>
+            <Rise key={p.title} show={show} i={3 + Math.floor(n / 3)}>
               <div className="border-t border-black/10 pt-3">
                 <h3
                   className="text-[13.5px] leading-snug"
@@ -1859,15 +1860,14 @@ export function Regulated({ show }: { show: boolean }) {
     <CreamSlide id="regulated">
       <div className="mx-auto w-full max-w-[1180px]">
         <div className="max-w-[720px]">
-          <HandHead eyebrow="Regulated and protected" show={show} lines={2}>
-            Who we answer to when
+          <HandHead eyebrow="Professional standards" show={show} lines={2}>
+            Professional standards
             <br />
-            you have a <Emphasis show={show}>complaint</Emphasis>
+            you can <Emphasis show={show}>rely on</Emphasis>
           </HandHead>
           <Rise show={show} i={2}>
             <p className="mt-5 max-w-[600px] text-[14.5px] font-light leading-[1.6] text-black/55">
-              Every one of these is somebody you can go to about us, or a scheme that holds your
-              money where we cannot reach it.
+              {REGULATED_INTRO}
             </p>
           </Rise>
         </div>
@@ -2055,9 +2055,9 @@ export function Fees({ deck, show }: { deck: Deck; show: boolean }) {
                 not the schedule - and once the second column arrived it was
                 introducing a price list as a list of inclusions. */}
             <p className="mt-3 text-[14.5px] font-light text-black/55">
-              on {f.headlineFor}. The whole schedule is below
-              {priced.length > 0 ? ", and what each one comes to on your rent" : ""}
-              {f.excluded.length > 0 ? ", with what it does not cover." : "."}
+              for {f.headlineFor}. Below is the full schedule
+              {priced.length > 0 ? ", with examples based on your proposed rent" : ""}
+              {f.excluded.length > 0 ? ", and what it does not cover." : "."}
             </p>
           </Rise>
         )}
@@ -2132,7 +2132,7 @@ export function Fees({ deck, show }: { deck: Deck; show: boolean }) {
                       Deferring in one line is honest; a net figure computed on
                       the wrong side of it would be out by a fifth. */}
                   <p className="mt-4 text-[11px] font-light leading-relaxed text-black/40">
-                    VAT and any set-up fee are set out in the terms of business.
+                    VAT and any applicable set-up fee are shown clearly in the terms of business.
                   </p>
                 </div>
               </Rise>

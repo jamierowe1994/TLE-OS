@@ -2,7 +2,7 @@
 
 import { INK, Line } from "@/components/present-kit";
 import { APPRAISAL_PROMISES, defaultBio, type PresentDeck as Deck } from "@/lib/present";
-import { AGENDA, APPROACH, COMPLIANCE, LEGAL_CAVEAT, LEGAL_ITEMS, MANAGEMENT, MARKETING_POINTS, MAX_PRICE, NEXT_STEPS, PORTALS_COPY, PROTECTION, REGULATED, RENT_COLLECTION, RENT_LEGAL, SCREENING, SERVICE_LEVELS, SERVICE_LEVELS_INTRO, SERVICE_ROWS, WHAT_WE_OFFER } from "@/lib/present-copy";
+import { AGENDA, APPROACH, COMPLIANCE, LEGAL_CAVEAT, LEGAL_ITEMS, MANAGEMENT, MARKETING_POINTS, MAX_PRICE, NEXT_STEPS, PORTALS_COPY, REGULATED, REGULATED_INTRO, RENT_COLLECTION, RENT_LEGAL, SCREENING, SERVICE_LEVELS, SERVICE_LEVELS_INTRO, SERVICE_ROWS, WHAT_WE_OFFER } from "@/lib/present-copy";
 import { FROM_US, FROM_YOU } from "@/components/PresentDeck";
 import { createContext, useContext } from "react";
 
@@ -1239,7 +1239,7 @@ export function BookCollection() {
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
           Rent collection,
           <br />
-          without the <Ital width={200}>chasing</Ital>
+          made <Ital width={140}>simple</Ital>
         </h1>
         <p className="mt-8 max-w-[600px] text-[16px] leading-[1.6] text-black/65">{RENT_COLLECTION.body}</p>
         <ul className="mt-8" style={{ width: 620 }}>
@@ -1258,7 +1258,7 @@ export function BookCollection() {
   );
 }
 
-/** Page 11L: RENT & LEGAL PROTECTION - eight points, compact, the disclaimer under. */
+/** Page 11L: RENT & LEGAL PROTECTION - six points, compact, the disclaimer under. */
 export function BookRentLegal({ deck }: { deck: Deck }) {
   const half = Math.ceil(RENT_LEGAL.points.length / 2);
   const cols = [RENT_LEGAL.points.slice(0, half), RENT_LEGAL.points.slice(half)];
@@ -1267,9 +1267,9 @@ export function BookRentLegal({ deck }: { deck: Deck }) {
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>{RENT_LEGAL.eyebrow}</EyebrowRule>
         <h1 className="mt-6 text-[52px] leading-[1.1]" style={SERIF}>
-          More than management.
+          Extra reassurance,
           <br />
-          Real protection for your <Ital width={190}>income</Ital>
+          <Ital width={190}>included</Ital>
         </h1>
         <p className="mt-6 max-w-[900px] text-[14.5px] leading-[1.6] text-black/65">{RENT_LEGAL.standfirst}</p>
         <div className="mt-6 grid grid-cols-2 gap-x-12" style={{ width: 1200 }}>
@@ -1296,20 +1296,20 @@ export function BookRentLegal({ deck }: { deck: Deck }) {
   );
 }
 
-/** Page 11R: REGULATED AND PROTECTED - the eight bodies, and a roofline. */
+/** Page 11R: PROFESSIONAL STANDARDS - the eight bodies, and a roofline. */
 export function BookRegulated() {
   return (
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/brand/photo/book-plant-corner.webp" alt="" aria-hidden className="pointer-events-none absolute max-w-none" style={{ width: 360, right: -50, top: -60 }} />
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
-        <EyebrowRule>Regulated and protected</EyebrowRule>
+        <EyebrowRule>Professional standards</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
-          Regulated, insured
+          Professional standards
           <br />
-          and <Ital width={270}>accountable</Ital>
+          you can <Ital width={210}>rely on</Ital>
         </h1>
-        <p className="mt-6 max-w-[640px] text-[15px] leading-[1.6] text-black/65">{PROTECTION.paragraphs[2]}</p>
+        <p className="mt-6 max-w-[760px] text-[15px] leading-[1.6] text-black/65">{REGULATED_INTRO}</p>
         <div className="mt-7 grid grid-cols-2 gap-x-12" style={{ width: 1100 }}>
           {REGULATED.map((r, i) => (
             <div key={r.name} className={`py-3 ${i >= 2 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
@@ -1349,14 +1349,14 @@ export function BookWhy() {
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={SERIF}>
           Four things you can
           <br />
-          hold us <Ital width={90}>to.</Ital>
+          <Ital width={280}>expect from us</Ital>
         </h1>
         <div className="mt-12 grid grid-cols-2 gap-6 text-left" style={{ width: 1160 }}>
           {card("What to expect from us", FROM_US, "var(--p-tint)")}
-          {card("What we need from you", FROM_YOU, SAGE_WASH)}
+          {card("What helps us deliver the best result", FROM_YOU, SAGE_WASH)}
         </div>
       </div>
-      <p className="absolute bottom-[56px] left-1/2 -translate-x-1/2 text-[10.5px] uppercase tracking-[0.3em] text-black/55">A clear, honest service from start to finish</p>
+      <p className="absolute bottom-[56px] left-1/2 -translate-x-1/2 text-[10.5px] uppercase tracking-[0.3em] text-black/55">Clear advice, good communication, a service built round your property</p>
     </div>
   );
 }
@@ -1542,9 +1542,9 @@ export function BookTerms({ deck }: { deck: Deck }) {
       <div className="absolute left-[96px] top-[84px] w-[1250px]">
         <EyebrowRule>Getting started</EyebrowRule>
         <h1 className="mt-6 text-[64px] leading-[1.1]" style={SERIF}>
-          Three steps,
+          Ready when
           <br />
-          and we&rsquo;re <Ital width={140}>away</Ital>
+          <Ital width={190}>you are</Ital>
         </h1>
         <ol className="mt-10" style={{ width: 1000 }}>
           {NEXT_STEPS.map((st, i) => (

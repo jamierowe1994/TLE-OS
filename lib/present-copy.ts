@@ -325,11 +325,11 @@ export const SERVICE_LEVELS_INTRO =
   "Three levels, and the difference between them is how much of the tenancy you want to run yourself. Whichever you choose, you get all of the above.";
 
 export const RENT_COLLECTION = {
-  heading: "Rent collection, without the chasing",
-  body: "We run rent through PayProp, which reconciles payments the day they land rather than at the end of the month.",
+  heading: "Rent collection, made simple",
+  body: "We use PayProp to reconcile rent as payments land, giving you a clear, up-to-date view of your rental income.",
   points: [
-    "Rent paid out the same day it clears",
-    "Arrears chased automatically, from the first day it is late",
+    "Rent paid out when it clears",
+    "Payment follow-up from the first day anything becomes overdue",
     "Every payment and statement visible as it happens",
     "A landlord portal you can check at any time",
   ],
@@ -348,41 +348,33 @@ export const PROTECTION = {
 
 export const RENT_LEGAL = {
   eyebrow: "Experts Management Service",
-  heading: "More than management - real protection for your income",
+  heading: "Extra reassurance, included",
   standfirst:
-    "Rent & Legal Protection is included as standard on the Experts Management Service, at no extra cost. It covers the two things landlords actually lose sleep over: a tenant who stops paying, and the cost of getting the property back.",
+    "Rent & Legal Protection is included as standard with the Experts Management Service, subject to the policy terms, giving you additional support around rental income and eligible legal costs.",
   points: [
     {
-      title: "Full vacant possession rent cover",
-      body: "Rent keeps being paid until you have the property back, not until a claim limit runs out.",
+      title: "Rent protection",
+      body: "Cover designed to support your rental income in qualifying circumstances.",
     },
     {
       title: "Up to £100,000 legal expenses",
-      body: "Court fees, eviction costs and enforcement, covered.",
+      body: "Support with eligible court, possession and enforcement costs.",
     },
     {
-      title: "Claims that start quickly",
-      body: "Rent payments begin within 30 days of a claim being accepted.",
+      title: "Claims handled promptly",
+      body: "Eligible rent payments can begin within 30 days of an accepted claim.",
     },
     {
-      title: "Built for Section 8",
-      body: "Designed around extended arrears periods rather than tidy ones.",
-    },
-    {
-      title: "Rent after possession",
-      body: "Up to three months' rent covered even once you have the property back.",
+      title: "Support after possession",
+      body: "Up to three months' additional rent protection after possession, subject to the policy.",
     },
     {
       title: "Tenant damage cover",
-      body: "Additional protection where the property itself has been damaged.",
+      body: "Additional protection for eligible damage to the property.",
     },
     {
-      title: "The eviction handled for you",
-      body: "We run the process. You are not the one filing at court.",
-    },
-    {
-      title: "No gaps between the two",
-      body: "The insurance and the legal support run as one thing, so neither waits for the other.",
+      title: "Legal support included",
+      body: "Professional support through an eligible possession process.",
     },
   ],
   /**
@@ -405,15 +397,18 @@ export const RENT_LEGAL = {
  * than no logo at all but a better one than a broken tile.
  */
 export const REGULATED: { name: string; caption: string; logo: string | null }[] = [
-  { name: "Propertymark", caption: "Regulated member of the industry's leading professional body", logo: null },
-  { name: "Client Money Protection", caption: "Your rent and deposit funds protected under an approved scheme", logo: null },
-  { name: "The Property Redress Scheme", caption: "An independent route to resolve a dispute with us", logo: null },
-  { name: "ICO", caption: "Registered for the secure handling of landlord and tenant data", logo: null },
-  { name: "Tenancy Deposit Scheme", caption: "Deposits protected in England and Wales", logo: null },
-  { name: "mydeposits Scotland", caption: "Deposits protected in Scotland", logo: null },
-  { name: "Rent Smart Wales", caption: "Licensed for lettings activity in Wales", logo: null },
-  { name: "Scottish Letting Agent Register", caption: "Registered with the relevant Scottish authorities", logo: null },
+  { name: "Propertymark", caption: "Professional standards, training and industry guidance", logo: null },
+  { name: "Client Money Protection", caption: "Protection for qualifying client funds held as part of the service", logo: null },
+  { name: "The Property Redress Scheme", caption: "Independent consumer protection and redress", logo: null },
+  { name: "ICO", caption: "Registered for the responsible handling of landlord and tenant information", logo: null },
+  { name: "Tenancy Deposit Scheme", caption: "Approved deposit protection in England and Wales", logo: null },
+  { name: "mydeposits Scotland", caption: "Deposit protection for eligible Scottish tenancies", logo: null },
+  { name: "Rent Smart Wales", caption: "Licensed for relevant lettings activity in Wales", logo: null },
+  { name: "Scottish Letting Agent Register", caption: "Registered for relevant lettings activity in Scotland", logo: null },
 ];
+
+export const REGULATED_INTRO =
+  "Our memberships, registrations and protection schemes give you an additional layer of reassurance around your property, your money and the service you receive.";
 
 export const NETWORK = {
   heading: "The Experts Group network",
@@ -437,15 +432,15 @@ export const NETWORK = {
  */
 export const NEXT_STEPS: { title: string; body: string }[] = [
   {
-    title: "Sign the terms",
-    body: "Everything above, in writing, with the rent and the fee on it. It takes a couple of minutes and can be done on your phone.",
+    title: "Confirm the details",
+    body: "The service, recommended rent and fees are set out clearly in writing.",
   },
   {
     title: "We get it ready",
-    body: "Photography, video, floor plan and the compliance paperwork. We tell you if anything needs doing before it goes live.",
+    body: "Photography, video, floor plan and the relevant compliance requirements are prepared for launch.",
   },
   {
     title: "It goes live",
-    body: "Across every portal on the same day, with viewings booked as the enquiries land.",
+    body: "Your property launches across the portals, with enquiries and viewings managed from day one.",
   },
 ];

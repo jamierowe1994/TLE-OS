@@ -147,17 +147,18 @@ function WelcomeHouse({ deck, show }: { deck: Deck; show: boolean }) {
                 fourth, so it is held on one line and the size is set to fit
                 the column at that width. */}
             <h1 className={`mt-5 leading-[1.04] ${fx ? "text-[62px]" : "text-[40px] sm:text-[56px]"}`} style={HEAD}>
-              Let&rsquo;s get
+              Let&rsquo;s get your
               <br />
-              you <Emphasis show={show}>more</Emphasis>
+              property <Emphasis show={show}>ready</Emphasis>
               <br />
-              <span className={fx ? "whitespace-nowrap" : ""}>from your property.</span>
+              <span className={fx ? "whitespace-nowrap" : ""}>to let.</span>
             </h1>
           </Rise>
           <Rise show={show} i={2}>
             <p className="mt-7 max-w-[560px] text-[17px] leading-[1.6] text-black/60">
-              We&rsquo;re The Letting Experts. A local team with the tools, experience and market
-              insight to help you get the most from your investment.
+              We&rsquo;re The Letting Experts. Local lettings specialists with the market
+              knowledge, professional support and compliance expertise to help you let with
+              confidence.
             </p>
           </Rise>
           {(property.address || recipientName) && (
@@ -174,9 +175,17 @@ function WelcomeHouse({ deck, show }: { deck: Deck; show: boolean }) {
             </Rise>
           )}
           <Rise show={show} i={4}>
-            <ul className={`mt-12 grid grid-cols-3 ${fx ? "max-w-[760px]" : ""}`}>
+            <ul className={`mt-12 grid gap-7 ${fx ? "max-w-[760px] grid-cols-3 gap-0" : "grid-cols-1 sm:grid-cols-3 sm:gap-0"}`}>
               {BANNER.map((b, n) => (
-                <li key={b.title} className={`pr-6 ${n > 0 ? "border-l pl-6" : ""}`} style={{ borderColor: "rgba(59,59,60,0.14)" }}>
+                <li
+                  key={b.title}
+                  className={
+                    fx
+                      ? `pr-6 ${n > 0 ? "border-l pl-6" : ""}`
+                      : `sm:pr-6 ${n > 0 ? "sm:border-l sm:pl-6" : ""}`
+                  }
+                  style={{ borderColor: "rgba(59,59,60,0.14)" }}
+                >
                   {/* Pink, sage, pink: the green sits in the middle of the row. */}
                   <span
                     className="flex h-[76px] w-[76px] items-center justify-center rounded-full"
@@ -461,10 +470,17 @@ function AgentHouse({ deck, show }: { deck: Deck; show: boolean }) {
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-[26px] leading-none" style={{ color: "var(--p-accent)", fontFamily: HAND }}>&ldquo;</span>
               <span className="min-w-0 flex-1">
                 <span className="block text-[14.5px] leading-[1.6] text-black/75">&ldquo;{t.quote}&rdquo;</span>
-                <span className="mt-2 block text-[12px] text-black/45">{t.author}</span>
+                <span className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <span className="text-[12px] text-black/45">{t.author}</span>
+                  {t.rating != null && (
+                    <span className="text-[15px] tracking-[0.15em] sm:hidden" style={{ color: "var(--p-accent)" }} aria-label={`${t.rating} out of 5`}>
+                      {"★".repeat(Math.max(0, Math.min(5, Math.round(t.rating))))}
+                    </span>
+                  )}
+                </span>
               </span>
               {t.rating != null && (
-                <span className="shrink-0 text-[15px] tracking-[0.15em]" style={{ color: "var(--p-accent)" }} aria-label={`${t.rating} out of 5`}>
+                <span className="hidden shrink-0 text-[15px] tracking-[0.15em] sm:block" style={{ color: "var(--p-accent)" }} aria-label={`${t.rating} out of 5`}>
                   {"★".repeat(Math.max(0, Math.min(5, Math.round(t.rating))))}
                 </span>
               )}
@@ -472,9 +488,13 @@ function AgentHouse({ deck, show }: { deck: Deck; show: boolean }) {
           </Rise>
         )}
         <Rise show={show} i={5}>
-          <ul className="mt-8 grid max-w-[660px] grid-cols-3 border-t pt-6" style={{ borderColor: "rgba(59,59,60,0.14)" }}>
+          <ul className="mt-8 grid max-w-[660px] grid-cols-1 gap-5 border-t pt-6 sm:grid-cols-3 sm:gap-0" style={{ borderColor: "rgba(59,59,60,0.14)" }}>
             {AGENT_CHIPS.map((c, i) => (
-              <li key={c.title} className={`flex gap-3 pr-4 ${i > 0 ? "border-l pl-5" : ""}`} style={{ borderColor: "rgba(59,59,60,0.14)" }}>
+              <li
+                key={c.title}
+                className={`flex gap-3 sm:pr-4 ${i > 0 ? "sm:border-l sm:pl-5" : ""}`}
+                style={{ borderColor: "rgba(59,59,60,0.14)" }}
+              >
                 <span className="mt-0.5 shrink-0" style={{ color: "var(--p-accent)" }}>
                   <Line name={c.icon} size={20} />
                 </span>
@@ -643,9 +663,9 @@ function AppointmentHouse({ deck, show }: { deck: Deck; show: boolean }) {
             <Rise show={show} i={1}>
               <h2 className={`mt-4 leading-[1.06] ${fx ? "text-[48px]" : "text-[34px] sm:text-[44px]"}`} style={HEAD}>
                 <span className="block">About {minutes} minutes,</span>
-                <span className="block">and you&rsquo;ll know</span>
+                <span className="block">and a much</span>
                 <span className="block whitespace-nowrap">
-                  what it <Emphasis show={show}>lets</Emphasis> for.
+                  <Emphasis show={show}>clearer</Emphasis> picture.
                 </span>
               </h2>
             </Rise>
@@ -695,10 +715,10 @@ function AppointmentHouse({ deck, show }: { deck: Deck; show: boolean }) {
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-[14px] font-semibold">You don&rsquo;t need to prepare anything</span>
-                <span className="mt-0.5 block text-[12.5px] text-black/55">Just make sure we can get in, and have any paperwork to hand if you already have it.</span>
+                <span className="mt-0.5 block text-[12.5px] text-black/55">Just make sure we can get in. If you already have any property paperwork, it&rsquo;s useful to have nearby - but don&rsquo;t worry if you don&rsquo;t.</span>
               </span>
               <span className="hidden text-[12.5px] leading-snug text-black/50 sm:block sm:max-w-[240px] sm:border-l sm:pl-4" style={{ fontFamily: DISPLAY, fontStyle: "italic", borderColor: "rgba(59,59,60,0.14)" }}>
-                None of it is essential. If you haven&rsquo;t got it, we&rsquo;ll sort it afterwards.
+                We can help work through what&rsquo;s needed afterwards.
               </span>
             </div>
           </Rise>
@@ -751,7 +771,7 @@ function AppointmentHouse({ deck, show }: { deck: Deck; show: boolean }) {
             ))}
           </ul>
           <p className="mt-5 text-[12.5px] leading-relaxed text-black/50" style={{ fontFamily: DISPLAY, fontStyle: "italic" }}>
-            None of it is essential. If you haven&rsquo;t got it, we&rsquo;ll sort it afterwards.
+            None of it is essential. We can help work through what&rsquo;s needed afterwards.
           </p>
         </aside>
       </Rise>
@@ -1529,13 +1549,8 @@ function Valuation({ deck, show }: { deck: Deck; show: boolean }) {
                     the agent's note at the foot of the slide; this only states
                     the relationship, which is a fact rather than a defence. */}
                 <p className="mt-4 text-[11.5px] font-light leading-[1.5] text-black/45">
-                  The range that {c!.basedOn || c!.rows.length} comparable properties nearby actually let
-                  at.{" "}
-                  {v.rent > band.high
-                    ? "Your figure sits above it."
-                    : v.rent < band.low
-                      ? "Your figure sits below it."
-                      : "Your figure sits inside it."}
+                  The range achieved by {c!.basedOn || c!.rows.length} comparable properties nearby,
+                  with your recommended rent shown alongside the evidence.{" "}
                   {c?.caveat ? ` ${c.caveat}` : ""}
                 </p>
               </div>
@@ -1582,7 +1597,7 @@ function Terms({ deck, show }: { deck: Deck; show: boolean }) {
           <Rise show={show} i={2}>
             <p className="mt-6 max-w-[560px] text-[15px] font-light leading-[1.65] text-black/60">
               {t.summary ??
-                "The terms of business set out what we do, what it costs and how either of us can bring it to an end. Nothing starts until they are signed."}
+                "The terms of business confirm the service, fees and responsibilities clearly, so you know exactly how everything works before we begin."}
             </p>
           </Rise>
         </div>
@@ -1599,9 +1614,8 @@ function Terms({ deck, show }: { deck: Deck; show: boolean }) {
           ) : (
             /* No dead button. The sentence does the job the link would. */
             <p className="mt-7 max-w-[560px] text-[14px] font-light leading-relaxed text-black/65">
-              {first} will send the terms of business across to sign electronically - it takes a
-              couple of minutes and nothing needs printing. Reply to this and we&rsquo;ll get them
-              straight over.
+              {first} will send everything electronically. It only takes a couple of minutes and
+              can all be completed on your phone.
             </p>
           )}
         </Rise>
@@ -1652,18 +1666,18 @@ function Why({ deck, show }: { deck: Deck; show: boolean }) {
    a card this wide and the fourth item fell off the stage. Same four
    titles, same claims, each cut to a line and a half. */
 export const FROM_US: { title: string; body: string }[] = [
-  { title: "Lettings is all we do", body: "Not a sales agency with a lettings desk at the back. Rented property, all day, every day." },
-  { title: "One person, start to finish", body: "The agent who values it markets it, and rings you when there's an offer." },
-  { title: "Priced on evidence", body: "What let nearby, at what rent, and how long it took - you'll see exactly why." },
-  { title: "Straight about the fee", body: "One percentage, what it covers and what it doesn't. Quoted before, never after." },
+  { title: "Lettings is our focus", body: "Our business is built around rented property and the people who own and live in it." },
+  { title: "One person, start to finish", body: "The agent who values your property remains closely involved throughout the process." },
+  { title: "Advice backed by evidence", body: "What has let nearby, at what rent, and how the local market supports our recommendation." },
+  { title: "Clear on costs", body: "What the service costs and what it includes, explained before you make a decision." },
 ];
 
 /** What we ask of the landlord in return - the right-hand card. */
 export const FROM_YOU: { title: string; body: string }[] = [
-  { title: "Access and information", body: "A way in when we need one, and anything you already know about the property." },
-  { title: "Timely decisions", body: "A quick yes or no on offers and tenants keeps the momentum, and the rent." },
-  { title: "Honesty", body: "What you want from it, and anything that worries you, so we can plan round it." },
-  { title: "A trusted partnership", body: "Work with us openly - the best lets come when we are on the same side." },
+  { title: "Access and information", body: "Anything you can tell us about the property helps us prepare it properly." },
+  { title: "Timely decisions", body: "Keeping decisions moving helps us maintain momentum with suitable applicants." },
+  { title: "Your priorities", body: "Tell us what matters to you so we can shape the service around it." },
+  { title: "Open communication", body: "Good communication helps us make good decisions together." },
 ];
 
 /**
@@ -1726,18 +1740,18 @@ function WhyHouse({ deck, show }: { deck: Deck; show: boolean }) {
           <h2 className={`mt-3 leading-[1.06] ${fx ? "text-[48px]" : "text-[34px] sm:text-[46px]"}`} style={HEAD}>
             Four things you can
             <br />
-            <Emphasis show={show}>hold us to</Emphasis>.
+            <Emphasis show={show}>expect from us</Emphasis>
           </h2>
         </Rise>
         <Rise show={show} i={2}>
           <p className="mt-3 max-w-[620px] text-[14.5px] leading-relaxed text-black/60">
-            A clear, honest service from start to finish. Here&rsquo;s what you can expect from us,
-            and what we&rsquo;ll need from you.
+            Clear advice, good communication and a service designed around your property from
+            start to finish.
           </p>
         </Rise>
         <div className={`mt-5 grid gap-5 ${fx ? "grid-cols-2" : "sm:grid-cols-2"}`}>
           {card("pink", "heart", <>What to expect<br />from us</>, FROM_US, 3)}
-          {card("sage", "person", <>What we need<br />from you</>, FROM_YOU, 4)}
+          {card("sage", "person", <>What helps us deliver<br />the best result</>, FROM_YOU, 4)}
         </div>
       </div>
 
@@ -1752,9 +1766,9 @@ function WhyHouse({ deck, show }: { deck: Deck; show: boolean }) {
             <Line name="check" size={20} />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block text-[17px]" style={HEAD}>If you&rsquo;re happy to go ahead</span>
+            <span className="block text-[17px]" style={HEAD}>If you&rsquo;d like to go ahead</span>
             <span className="mt-0.5 block max-w-[640px] text-[13px] leading-relaxed text-black/55">
-              Once you&rsquo;re happy with everything we&rsquo;ve covered, we&rsquo;ll confirm the details, agree the next steps and get everything in motion. It&rsquo;s that simple.
+              Once you&rsquo;re happy with everything we&rsquo;ve covered, we&rsquo;ll confirm the details, agree the next steps and get things moving.
             </span>
           </span>
           <span className="flex shrink-0 flex-col items-center gap-2.5 sm:border-l sm:pl-7" style={{ borderColor: "rgba(59,59,60,0.12)" }}>
@@ -1839,9 +1853,9 @@ function QuestionsHouse({ deck, show }: { deck: Deck; show: boolean }) {
           <h2 className={`mt-4 leading-[1.04] ${fx ? "text-[62px]" : "text-[36px] sm:text-[50px]"}`} style={HEAD}>
             {post ? (
               <>
-                Shall we get it on
+                Ready to get
                 <br />
-                the <Emphasis show={show}>market</Emphasis>?
+                <Emphasis show={show}>started</Emphasis>?
               </>
             ) : kind === "appraisal" ? (
               <>
@@ -1851,9 +1865,9 @@ function QuestionsHouse({ deck, show }: { deck: Deck; show: boolean }) {
               </>
             ) : (
               <>
-                Anything you want
+                Anything you&rsquo;d
                 <br />
-                to <Emphasis show={show}>ask first</Emphasis>?
+                like to <Emphasis show={show}>ask first</Emphasis>?
               </>
             )}
           </h2>
@@ -1862,9 +1876,10 @@ function QuestionsHouse({ deck, show }: { deck: Deck; show: boolean }) {
           <p className="mt-6 max-w-[540px] text-[15.5px] leading-[1.65] text-black/65">
             {post ? (
               <>
-                You have the figure, what it costs and what we do for it. Sign the terms and{" "}
-                {first || "your agent"} will get the photographs booked this week - or ring
-                first if there is anything you want to go over again.
+                You now have the recommended rent, your service options and the costs. If
+                you&rsquo;re ready, {first || "your agent"} can send everything across and start
+                arranging the next steps. If you&rsquo;d like to talk anything through first,
+                we&rsquo;re here.
               </>
             ) : kind === "appraisal" ? (
               <>
@@ -1874,9 +1889,9 @@ function QuestionsHouse({ deck, show }: { deck: Deck; show: boolean }) {
               </>
             ) : (
               <>
-                If something comes to mind before {deck.whenPretty ? "we meet" : "the visit"} -
-                about the rent, the paperwork, or what the market&rsquo;s doing -{" "}
-                {first || "your agent"} would much rather hear it now than on the doorstep.
+                If anything comes to mind before {deck.whenPretty ? "we meet" : "the visit"} -
+                the rent, the property, the paperwork or the local market - send{" "}
+                {first || "your agent"} a message. We&rsquo;re happy to talk it through.
               </>
             )}
           </p>
