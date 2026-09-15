@@ -872,12 +872,12 @@ export function BookPortals() {
             )
           )}
         </ul>
-        {/* Under the figures, in their column. It sat at the left margin, over
-            the books and the plant, where it could not be read at all. */}
-        <div className="ml-auto mt-5 text-right text-[11px] leading-[1.45] text-black/40" style={{ width: 593 }}>
-          <p>{statClaim(PORTAL_STATS).who}</p>
-          <p className="mt-0.5">{statClaim(PORTAL_STATS).when}</p>
-        </div>
+      </div>
+      {/* Provenance, not argument: the foot of the page rather than hanging
+          off the logos. Right here, left on the facing page. */}
+      <div className="absolute bottom-[56px] right-[96px] max-w-[560px] text-right text-[11px] leading-[1.45] text-black/40">
+        <p>{statClaim(PORTAL_STATS).who}</p>
+        <p className="mt-0.5">{statClaim(PORTAL_STATS).when}</p>
       </div>
     </div>
   );
@@ -912,18 +912,18 @@ export function BookSocial() {
           Portal search reaches people already actively looking. Paid social helps us extend that reach locally and introduce your property to potential tenants beyond the traditional property portals.
         </p>
         <p className="mt-10 text-[11px] uppercase tracking-[0.32em] text-black/55">Why wider reach matters</p>
-        <div className="mt-8 grid grid-cols-3 gap-x-14" style={{ width: 1060 }}>
+        <div className="mt-8 grid grid-cols-3 gap-x-8" style={{ width: 880 }}>
           {DEMAND_STATS.map((st, n) => (
-            <div key={st.value} className={n > 0 ? "border-l pl-12" : ""} style={{ borderColor: "rgba(0,0,0,0.12)" }}>
+            <div key={st.value} className={n > 0 ? "border-l pl-8" : ""} style={{ borderColor: "rgba(0,0,0,0.12)" }}>
               <p className="text-[56px] leading-none" style={{ ...TITLE, color: "var(--p-accent)" }}>{st.value}</p>
               <p className="mt-4 max-w-[250px] text-[14.5px] leading-[1.55] text-black/60">{st.label}</p>
             </div>
           ))}
         </div>
-        <div className="mt-10 max-w-[900px] text-[11px] leading-[1.45] text-black/40">
-          <p>{statClaim(DEMAND_STATS).who}</p>
-          <p className="mt-0.5">{statClaim(DEMAND_STATS).when}</p>
-        </div>
+      </div>
+      <div className="absolute bottom-[56px] left-[96px] max-w-[560px] text-[11px] leading-[1.45] text-black/40">
+        <p>{statClaim(DEMAND_STATS).who}</p>
+        <p className="mt-0.5">{statClaim(DEMAND_STATS).when}</p>
       </div>
     </div>
   );
@@ -1044,7 +1044,7 @@ export function BookScreening() {
       {/* The sage as a wave along the foot: down off the left, back up, and
           down again to finish over the strap - James, 13 Sep 2026. */}
       <Blob d="M-20 520 C 40 620, 90 720, 200 700 C 290 690, 320 676, 400 700 C 470 722, 500 772, 620 802 C 700 822, 760 868, 780 920 L-20 920 Z" />
-      <div className="absolute left-[96px] top-[84px] w-[1200px]">
+      <div className="absolute left-[96px] top-[150px] w-[1200px]">
         <EyebrowRule>{SCREENING.eyebrow}</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={TITLE}>
           A thorough process
@@ -1072,8 +1072,8 @@ export function BookManagement() {
     <div className="relative overflow-hidden" style={{ width: PAGE_W, height: PAGE_H, background: PAPER, color: INK }}>
       {/* Pink in the top corner instead of sage along the foot, and the words
           sit in the middle of the page rather than hanging from the top. */}
-      <div className="pointer-events-none absolute -right-[170px] -top-[190px] h-[580px] w-[580px] rounded-full" style={{ background: "var(--p-tint)" }} />
-      <div className="absolute left-[96px] top-0 flex h-full w-[1250px] flex-col justify-center">
+      <div className="pointer-events-none absolute -right-[210px] -top-[260px] h-[580px] w-[580px] rounded-full" style={{ background: "var(--p-tint)" }} />
+      <div className="absolute left-[96px] top-[150px] w-[1250px]">
         <EyebrowRule>Management and support</EyebrowRule>
         <h1 className="mt-6 text-[60px] leading-[1.1]" style={TITLE}>
           Choose how involved
@@ -1196,17 +1196,19 @@ export function BookRentLegal({ deck }: { deck: Deck }) {
           <br />
           Real protection for your <Ital width={190}>income</Ital>
         </h1>
-        <p className="mt-6 max-w-[900px] text-[14.5px] leading-[1.6] text-black/65">{RENT_LEGAL.standfirst}</p>
-        <div className="mt-6 grid grid-cols-2 gap-x-12" style={{ width: 1200 }}>
+        <p className="mt-8 max-w-[900px] text-[16px] leading-[1.6] text-black/65">{RENT_LEGAL.standfirst}</p>
+        {/* Bigger, and further down. Six points in half a page left the
+            bottom third of the paper empty. */}
+        <div className="mt-10 grid grid-cols-2 gap-x-12" style={{ width: 1200 }}>
           {cols.map((items, c) => (
             <ul key={c}>
               {items.map((pt, i) => (
-                <li key={pt.title} className={`flex items-start gap-4 py-[10px] ${i > 0 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
-                  <span className="mt-[3px] flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full" style={{ background: "var(--p-tint)", color: "var(--p-accent)" }}>
-                    <Line name="shield" size={12} />
+                <li key={pt.title} className={`flex items-start gap-5 py-[18px] ${i > 0 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+                  <span className="mt-[3px] flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full" style={{ background: "var(--p-tint)", color: "var(--p-accent)" }}>
+                    <Line name="shield" size={15} />
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-[14.5px] font-semibold leading-snug">{pt.title}</span>
+                    <span className="block text-[17px] font-semibold leading-snug">{pt.title}</span>
                     <span className="mt-1 block text-[12.5px] leading-[1.5] text-black/55">{pt.body}</span>
                   </span>
                 </li>
@@ -1233,12 +1235,12 @@ export function BookRegulated() {
           <br />
           you can <Ital width={210}>rely on</Ital>
         </h1>
-        <p className="mt-6 max-w-[760px] text-[15px] leading-[1.6] text-black/65">{REGULATED_INTRO}</p>
-        <div className="mt-7 grid grid-cols-2 gap-x-12" style={{ width: 1100 }}>
+        <p className="mt-8 max-w-[820px] text-[16px] leading-[1.6] text-black/65">{REGULATED_INTRO}</p>
+        <div className="mt-9 grid grid-cols-2 gap-x-14" style={{ width: 1180 }}>
           {REGULATED.map((r, i) => (
-            <div key={r.name} className={`py-3 ${i >= 2 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
-              <p className="text-[14.5px] font-semibold leading-snug">{r.name}</p>
-              <p className="mt-1 text-[12.5px] leading-[1.5] text-black/55">{r.caption}</p>
+            <div key={r.name} className={`py-5 ${i >= 2 ? "border-t" : ""}`} style={{ borderColor: "rgba(0,0,0,0.08)" }}>
+              <p className="text-[17px] font-semibold leading-snug">{r.name}</p>
+              <p className="mt-1.5 text-[14px] leading-[1.5] text-black/55">{r.caption}</p>
             </div>
           ))}
         </div>
@@ -1342,7 +1344,7 @@ export function BookValuation({ deck }: { deck: Deck }) {
           what comes <Ital width={180}>with it</Ital>
         </h1>
         {v ? (
-          <div className="mt-8 grid grid-cols-[520px_1fr] gap-x-16">
+          <div className="mt-14 grid grid-cols-[520px_1fr] gap-x-16">
             <div>
               <p className="leading-none">
                 <span className="text-[104px]" style={{ ...TITLE, color: "var(--p-accent)" }}>{gbp(v.rent)}</span>
