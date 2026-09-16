@@ -94,14 +94,24 @@ export function portalStageOf(rawStatusKey: string): string {
   return PROPOLY_TO_PORTAL[rawStatusKey] ?? rawStatusKey;
 }
 
-export const PROPOLY_APP_URL = "https://prod.propoly.com";
+/**
+ * TLE's own Propoly, which is NOT the address their API lives behind.
+ *
+ * Kirstie's "the Propoly button doesn't work" survived the 14 Sep fix because
+ * the link still pointed at prod.propoly.com: a real Propoly, a different
+ * sign-in, so she landed on a sign-in page that her session could never
+ * satisfy (James, 15 Sep 2026 - "the sign in link is
+ * https://tle.propoly.com/users/sign_in"). Every agency gets its own
+ * subdomain, so it is a setting rather than a constant.
+ */
+export const PROPOLY_APP_URL = (process.env.NEXT_PUBLIC_PROPOLY_APP_URL ?? "https://tle.propoly.com").replace(/\/$/, "");
 
 /**
  * The deal's own page in Propoly.
  *
  * Link to the ROOT and Propoly answers /users/sign_in to anyone whose browser
  * has no session with them — which is what Kirstie hit on 14 Sep and read as a
- * broken button. We hold no user session with Propoly (our client authenticates
+ * broken button. On the right subdomain she signs in once and it stops. We hold no user session with Propoly (our client authenticates
  * server-side with an api key, see lib/business/propoly.ts), so the sign-in is
  * theirs to ask for and hers to satisfy once. What we owe her is a link that
  * lands on the deal afterwards rather than on their front door.
