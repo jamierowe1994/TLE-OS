@@ -30,6 +30,7 @@ import Compliance from "@/app/(os)/company-figures/tabs/compliance";
 import AssistantTab from "@/app/(os)/company-figures/tabs/assistant";
 import Diagnostics from "@/app/(os)/company-figures/tabs/diagnostics";
 import PickOne from "@/components/PickOne";
+import { fetchMe } from "@/lib/me";
 
 /* ------------------------------- tabs ------------------------------- */
 
@@ -132,9 +133,8 @@ export default function AdminPage() {
     let cancelled = false;
     /* Who the OS thinks we are. Only used to put a name and initials in the
        ported chrome — the permission decision is not made here. */
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { user?: { name?: string; email?: string } } | null) => {
+    fetchMe()
+      .then((j) => {
         if (cancelled) return;
         setUser({
           name: j?.user?.name ?? "",

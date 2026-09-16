@@ -16,6 +16,7 @@ import WeekGrid from "@/components/viewings/WeekGrid";
 import { card, dateOfOffset, fmtFull, fmtShort, groupByDay, nearLabel } from "@/components/viewings/shared";
 import { KIND_META, minutesOf, type Appt, type ApptKind } from "@/lib/diary";
 import { useDiary } from "@/lib/diary-store";
+import { fetchMe } from "@/lib/me";
 
 /**
  * Viewings: one screen, one person's diary.
@@ -79,9 +80,8 @@ export default function Viewings() {
      mailbox rather than the name - see Appt.agentEmail. */
   const [me, setMe] = useState<{ name: string; email: string } | null>(null);
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { user?: { name?: string; email?: string } } | null) =>
+    fetchMe()
+      .then((j) =>
         setMe({ name: j?.user?.name ?? "", email: (j?.user?.email ?? "").toLowerCase() })
       )
       .catch(() => setMe({ name: "", email: "" }));

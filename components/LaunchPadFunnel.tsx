@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import type { Funnel, LeadBucket, LeadDetail, MirroredLead } from "@/lib/launchpad";
+import { fetchMe } from "@/lib/me";
 
 /**
  * The Launch Pad funnel, worked from inside the OS.
@@ -442,9 +443,8 @@ export default function LaunchPadFunnel() {
   useEffect(fetchFunnel, [fetchFunnel]);
 
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { viewingAs?: boolean } | null) => setReadOnly(Boolean(j?.viewingAs)))
+    fetchMe()
+      .then((j) => setReadOnly(Boolean(j?.viewingAs)))
       .catch(() => {});
   }, []);
 

@@ -5,6 +5,7 @@ import BentoDash from "@/components/BentoDash";
 import PageHeader from "@/components/PageHeader";
 import QuickLinks from "@/components/QuickLinks";
 import { DASH_TRAY_GROUPS, DEFAULT_LAYOUT, WIDGETS } from "@/components/widgets";
+import { fetchMe } from "@/lib/me";
 
 /**
  * The dashboard is now a bento board the agent owns. The DEFAULT layout is
@@ -46,9 +47,8 @@ export default function Dashboard() {
   const [name, setName] = useState("");
   useEffect(() => {
     let gone = false;
-    fetch("/api/auth/me", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { user?: { name?: string } | null } | null) => {
+    fetchMe()
+      .then((j) => {
         const first = (j?.user?.name ?? "").trim().split(/\s+/)[0] ?? "";
         if (!gone) setName(first);
       })

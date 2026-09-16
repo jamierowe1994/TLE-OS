@@ -9,6 +9,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import Segmented from "@/components/Segmented";
 import { fillFrontCompose, getOpenListing, getOpenSurfaces } from "@/lib/open-record";
 import { whenAgo } from "@/lib/lead-spine";
+import { fetchMe } from "@/lib/me";
 
 /**
  * The character in the corner, and what he says.
@@ -340,9 +341,8 @@ export default function HelpDock() {
   const landed = useRef(false);
 
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { user?: unknown; hasDb?: boolean } | null) =>
+    fetchMe()
+      .then((j) =>
         /* Signed in, OR there is no database at all - which on this codebase
            means a developer's laptop and nothing else. `hasDb()` is false only
            when DATABASE_URL is unset, and it is always set in production, so

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fetchMe } from "@/lib/me";
 
 /**
  * The band across the top that says whose eyes you are looking through.
@@ -18,9 +19,8 @@ export default function ViewAsBar() {
   const [as, setAs] = useState<{ name: string; email: string } | null>(null);
 
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { viewingAs?: boolean; subject?: { name: string; email: string } } | null) => {
+    fetchMe()
+      .then((j) => {
         if (j?.viewingAs && j.subject) setAs(j.subject);
       })
       .catch(() => {});

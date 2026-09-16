@@ -18,6 +18,7 @@ import {
   type MarketAppraisal,
   type MaStage,
 } from "@/lib/market-appraisal";
+import { fetchMe } from "@/lib/me";
 
 /**
  * Market Appraisals — the landlord side, from booked to won.
@@ -515,9 +516,8 @@ function BookPanel({ onClose, onBooked }: { onClose: () => void; onBooked: (id: 
   /* Whoever is signed in, as the agent on the booking. Prefilled rather than
      asked: the agent booking it is the agent going, nine times in ten. */
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { user?: { name?: string } } | null) => setAgent((j?.user?.name ?? "").trim()))
+    fetchMe()
+      .then((j) => setAgent((j?.user?.name ?? "").trim()))
       .catch(() => {});
   }, []);
 

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import WorkspaceRail from "@/components/WorkspaceRail";
 import { workspacesFor } from "@/lib/nav";
 import { can, type Capability } from "@/lib/roles";
+import { fetchMe } from "@/lib/me";
 
 /**
  * Admin's own rail — the SAME panel as the agent sidebar, different contents.
@@ -173,9 +174,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     let gone = false;
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { role?: string | null } | null) => {
+    fetchMe()
+      .then((j) => {
         if (!gone) setRole(j?.role ?? null);
       })
       .catch(() => {

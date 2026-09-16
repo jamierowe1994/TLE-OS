@@ -43,6 +43,7 @@ import { EMPTY_CASE, type AppraisalCase } from "@/lib/appraisal";
 import { saveLabel, useCaseState } from "@/lib/case-state";
 import { isStalled, NURTURE_BRANCH, startingStep, trackFor } from "@/lib/journey";
 import rexSample from "@/lib/rex-sample.json";
+import { fetchMe } from "@/lib/me";
 
 /**
  * The lead record, as a sheet that slides in from the right over a scrim.
@@ -571,8 +572,7 @@ export default function LeadDrawer({
   useEffect(() => {
     if (!lead) return;
     let live = true;
-    fetch("/api/auth/me", { cache: "no-store" })
-      .then((r) => r.json())
+    fetchMe()
       .then((j) => { if (live && j?.user) setMe({ name: j.user.name, email: j.user.email }); })
       .catch(() => { /* the drawer works without it */ });
     return () => { live = false; };
@@ -814,7 +814,7 @@ export default function LeadDrawer({
     setCampaign(null);
     fetch(`/api/leads/${encodeURIComponent(leadId)}/touches`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((j: { ok?: boolean; touches?: LeadTouch[]; spine?: Spine | null; campaign?: typeof campaign } | null) => {
+      .then((j) => {
         if (gone || !j?.ok) return;
         setTouches(j.touches ?? []);
         if (j.spine) setSpine(j.spine);

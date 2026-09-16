@@ -8,6 +8,7 @@ import { Pill } from "@/components/Wire";
 import { loadAdmin, when, type AdminData, type Person } from "@/lib/admin-client";
 import { ROLES, ROLE_LABEL, ROLE_BLURB } from "@/lib/roles";
 import PickOne from "@/components/PickOne";
+import { fetchMe } from "@/lib/me";
 
 /**
  * The list, filtered and ordered. Pure, so the rules are readable in one
@@ -110,9 +111,8 @@ export default function AdminPeople() {
   const [mayManage, setMayManage] = useState(false);
   useEffect(() => {
     let gone = false;
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { role?: string | null } | null) => {
+    fetchMe()
+      .then((j) => {
         if (!gone) setMayManage(can(j?.role, "manage:people"));
       })
       .catch(() => {});

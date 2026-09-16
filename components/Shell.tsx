@@ -8,6 +8,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import { readTheme, type ThemeChoice } from "@/lib/theme";
 import { FRONT, BACK, railFor, type NavItem } from "@/lib/nav";
 import { AREA_DEFS, areaForPage, canAct, canSee, levelOf, lockedSentence, type AreaAccess } from "@/lib/area-map";
+import { fetchMe } from "@/lib/me";
 
 /**
  * The OS chrome. The rail is its own encapsulated card — a thin outline the
@@ -245,9 +246,8 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const [me, setMe] = useState<{ name?: string; email?: string; photo?: string | null } | null>(null);
 
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { role?: string | null; subjectRole?: string | null; user?: { name?: string; email?: string; photo?: string | null } } | null) => {
+    fetchMe()
+      .then((j) => {
         setRole(j?.role ?? null);
         setSubjectRole(j?.subjectRole ?? null);
         /* The SUBJECT, not the actor — while viewing as somebody, the foot

@@ -16,6 +16,7 @@ import {
   readDarkStep, writeDarkStep,
   type ThemeChoice,
 } from "@/lib/theme";
+import { fetchMe, invalidateMe } from "@/lib/me";
 
 /**
  * The profile: who this agent is, how their OS looks, what keeps THEM legal,
@@ -280,9 +281,8 @@ export default function ProfilePage() {
      because a person editing their own name means it. */
   useEffect(() => {
     let alive = true;
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { user?: { name?: string; photo?: string | null } } | null) => {
+    fetchMe()
+      .then((j) => {
         if (!alive || !j?.user) return;
         setProfile((p) => ({
           ...p,
@@ -318,6 +318,10 @@ export default function ProfilePage() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name: next.name, photo: next.photo ?? null }),
     }).catch(() => {});
+    /* The only thing on this machine that changes who /api/auth/me says you
+       are without a page load, so it is the only thing that has to say so —
+       otherwise the sidebar keeps yesterday's headshot for half a minute. */
+    invalidateMe();
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1600);
   }

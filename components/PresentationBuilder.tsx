@@ -37,6 +37,7 @@ import {
 import type { MaResearch, MarketListing } from "@/lib/ma-research";
 import { knownCompliance, OUTSTANDING_AT_APPRAISAL } from "@/lib/appraisal-compliance";
 import { listingKey } from "@/lib/listing-key";
+import { fetchMe } from "@/lib/me";
 
 /**
  * Build the presentation.
@@ -421,9 +422,8 @@ export default function PresentationBuilder({
   const [me, setMe] = useState<PresentAgent | null>(null);
   useEffect(() => {
     let gone = false;
-    fetch("/api/auth/me", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { user?: { name?: string; email?: string; photo?: string | null } | null } | null) => {
+    fetchMe()
+      .then((j) => {
         const u = j?.user;
         if (gone || !u) return;
         const name = u.name ?? "";

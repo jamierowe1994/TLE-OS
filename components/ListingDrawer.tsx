@@ -32,6 +32,7 @@ import ListingMarketing, { type Locks } from "@/components/listing/ListingMarket
 import type { ListingDetails } from "@/lib/listing-details";
 import { inputFromDetails, missing as missingForPortals } from "@/lib/listing-requirements";
 import { useListingTerms } from "@/lib/use-listing-terms";
+import { fetchMe } from "@/lib/me";
 
 /**
  * The property record — the leads drawer's shape, aimed at a thing instead of
@@ -346,10 +347,9 @@ export default function ListingDrawer({
   }, [listing, drop]);
   const [me, setMe] = useState<string>("The Letting Experts");
   useEffect(() => {
-    fetch("/api/auth/me", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((j: { user?: { name?: string }; name?: string }) => {
-        const n = j.user?.name ?? j.name;
+    fetchMe()
+      .then((j) => {
+        const n = j?.user?.name;
         if (n) setMe(n);
       })
       .catch(() => {});
@@ -361,7 +361,7 @@ export default function ListingDrawer({
     let off = false;
     fetch(`/api/r2/list?scope=photo&ref=${encodeURIComponent(`listing-${id}`)}`)
       .then((r) => r.json())
-      .then((j: { ok?: boolean; files?: { key: string; url: string }[] }) => {
+      .then((j) => {
         if (!off && j.ok && Array.isArray(j.files)) setUploaded(j.files);
       })
       .catch(() => {});

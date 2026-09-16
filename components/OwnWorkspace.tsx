@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import WorkspaceRail, { type RailGroup } from "@/components/WorkspaceRail";
 import { can, type Capability } from "@/lib/roles";
 import { workspacesFor } from "@/lib/nav";
+import { fetchMe } from "@/lib/me";
 
 /**
  * A workspace owns the whole window.
@@ -64,9 +65,8 @@ export default function OwnWorkspace({
 
   useEffect(() => {
     let gone = false;
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { role?: string | null } | null) => {
+    fetchMe()
+      .then((j) => {
         if (!gone) setRole(j?.role ?? null);
       })
       .catch(() => {

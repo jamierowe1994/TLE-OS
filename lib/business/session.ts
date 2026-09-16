@@ -5,6 +5,7 @@
 // render cache, always repopulated from server responses.
 
 import type { UserProfile } from "@/lib/business/types";
+import { fetchMe } from "@/lib/me";
 
 const USER_KEY = "tle_user";
 
@@ -45,13 +46,11 @@ function clearUser(): void {
 /** Re-validate the session with the server; null = signed out. */
 export async function refreshUser(): Promise<UserProfile | null> {
   try {
-    const res = await fetch("/api/auth/me", { cache: "no-store" });
-    if (!res.ok) {
-      clearUser();
-      return null;
-    }
-    const data = (await res.json()) as { user: UserProfile | null };
-    if (!data.user) {
+    /* Shares the in-flight request with every other "who am I" on the page —
+       see lib/me. A failure comes back as null, which is the same signed-out
+       path the non-ok response took. */
+    const data = (await fetchMe()) as { user: UserProfile | null } | null;
+    if (!data?.user) {
       clearUser();
       return null;
     }

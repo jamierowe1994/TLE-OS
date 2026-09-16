@@ -46,6 +46,7 @@ import { stageEvidence } from "@/lib/business/stage-evidence";
 import { dealAlerts, type DealAlert } from "@/lib/business/deal-alerts";
 import WorkspaceLoading from "@/components/WorkspaceLoading";
 import PreTenancyHero from "@/components/pretenancy/Hero";
+import { fetchMe } from "@/lib/me";
 
 /* ------------------------------- data shapes ------------------------------- */
 
@@ -304,9 +305,8 @@ export default function PreTenancyPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/auth/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: { user?: { name?: string; email?: string } } | null) => {
+    fetchMe()
+      .then((j) => {
         if (cancelled) return;
         setUser({
           name: j?.user?.name ?? "",
