@@ -18,13 +18,13 @@ import type { RexHit, RexPerson } from "@/app/api/search/rex/route";
  */
 
 interface Hit {
-  kind: "property" | "lead" | "application" | "deal" | "compliance";
+  kind: "property" | "lead" | "application" | "deal" | "compliance" | "person";
   title: string;
   sub: string;
   href: string;
 }
 
-const ICON: Record<Hit["kind"], string> = { property: "home", lead: "target", application: "checklist", deal: "key", compliance: "shield" };
+const ICON: Record<Hit["kind"], string> = { property: "home", lead: "target", application: "checklist", deal: "key", compliance: "shield", person: "user" };
 
 export default function GlobalSearch({ placeholder = "Search properties, tenants…" }: { placeholder?: string }) {
   const router = useRouter();

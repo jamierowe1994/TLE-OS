@@ -1461,6 +1461,33 @@ CREATE INDEX IF NOT EXISTS os_leads_received_idx ON os_leads (received_at DESC);
 CREATE INDEX IF NOT EXISTS os_leads_listing_idx ON os_leads (listing_id);
 CREATE INDEX IF NOT EXISTS os_leads_assignee_idx ON os_leads (assignee_id, received_at DESC);
 
+-- PEOPLE WE HAVE ALREADY PULLED OUT OF REX (16 Sep 2026).
+--
+-- The first read-through store, and the shape the rest will follow: nothing is
+-- copied in bulk, but anything a person actually searched for is kept with its
+-- REX id and WHEN IT WAS READ, so the second time anybody looks for that name
+-- it answers from here in milliseconds instead of the 2.8 to 6.0 seconds REX
+-- takes on a common surname.
+--
+-- read_at is the whole point. lib/staleness decides what may be done with a
+-- copy of this age: a contact is believed for three days, shown with its age
+-- for a fortnight, and never shown at all after that - a fourteen-day-old
+-- phone number is worse than admitting we do not have one.
+--
+-- It holds what a search needs to show a row and nothing else. No addresses,
+-- no notes, no relationships: REX is still the record, this is a memory of
+-- having looked.
+CREATE TABLE IF NOT EXISTS os_rex_people (
+  rex_id         TEXT PRIMARY KEY,
+  name           TEXT NOT NULL DEFAULT '',
+  email          TEXT NOT NULL DEFAULT '',
+  phone          TEXT NOT NULL DEFAULT '',
+  read_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  first_read_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_rex_people_name ON os_rex_people (lower(name));
+CREATE INDEX IF NOT EXISTS os_rex_people_email ON os_rex_people (lower(email));
+
 CREATE TABLE IF NOT EXISTS os_cache (
   key            TEXT PRIMARY KEY,
   payload        JSONB NOT NULL,

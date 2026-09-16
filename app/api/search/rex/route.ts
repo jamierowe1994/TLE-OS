@@ -4,6 +4,7 @@ import { scopeFor } from "@/lib/scope";
 import { bookFor } from "@/lib/listings-cache";
 import { rexCall, rexConfigured, rexRows } from "@/lib/rex";
 import { rexContactUrl } from "@/lib/business/rex-links";
+import { rememberPeople } from "@/lib/rex-people-store";
 
 /**
  * GET /api/search/rex?q=… → properties REX has and the OS does not.
@@ -176,6 +177,7 @@ export async function GET(req: NextRequest) {
      handful and REX holds the book, so almost every name would survive it and
      the check would cost more than it saved. */
   const people: RexPerson[] = [];
+  const seen: { id: string; name: string; email: string; phone: string }[] = [];
   const pres = await peopleWork;
   if (pres?.ok) {
     for (const r of rexRows(pres.result)) {
@@ -186,8 +188,14 @@ export async function GET(req: NextRequest) {
       const email = String(row.email_address ?? "").trim();
       const phone = String(row.phone_number ?? "").trim();
       people.push({ id, name, reach: email || phone || "No email or phone on the record", href: rexContactUrl(id) });
+      seen.push({ id, name, email, phone });
     }
   }
+
+  /* Keep what REX just told us, so the next person typing this name does not
+     wait 2.8 seconds for it again (lib/rex-people-store). Not awaited and
+     never able to fail the search: remembering is a bonus, answering is not. */
+  void rememberPeople(seen);
 
   return NextResponse.json({ ok: true, hits, people });
 }

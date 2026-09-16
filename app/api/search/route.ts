@@ -8,6 +8,7 @@ import { getComplianceBook } from "@/lib/compliance-cache";
 import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
 import { getApplications } from "@/lib/applications";
 import type { Lead } from "@/lib/leads-sample";
+import { peopleLike } from "@/lib/rex-people-store";
 
 /**
  * GET /api/search?q=… → the one search bar, made real (5 Sep 2026).
@@ -28,7 +29,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export interface Hit {
-  kind: "property" | "lead" | "application" | "deal" | "compliance";
+  kind: "property" | "lead" | "application" | "deal" | "compliance" | "person";
   title: string;
   sub: string;
   href: string;
@@ -66,13 +67,18 @@ export async function GET(req: NextRequest) {
   const scope = await scopeFor(req);
   const rexUserId = scope.unlinked ? null : scope.rexUserId;
 
-  const [book, managed, leads, compliance, deals, applications] = await Promise.all([
+  const [book, managed, leads, compliance, deals, applications, known] = await Promise.all([
     bookFor(rexUserId).catch(() => null),
     managedBookFor(rexUserId).then((m) => m.book).catch(() => null),
     cachedLeads(rexUserId),
     getComplianceBook().catch(() => null),
     getAllPropolyDeals().catch(() => null),
     getApplications(200, rexUserId).catch(() => []),
+    /* People we have already pulled out of REX. They cost nothing to include -
+       it is our own table - and they are the difference between a name found
+       in milliseconds and one that needed a button and three seconds of
+       waiting (lib/rex-people-store, 16 Sep 2026). */
+    peopleLike(needle).catch(() => []),
   ]);
 
   const hits: Hit[] = [];
@@ -122,6 +128,22 @@ export async function GET(req: NextRequest) {
     if (matches(needle, p.name, p.locality) || idMatch(needle, p.id)) {
       hits.push({ kind: "compliance", title: p.name, sub: `${p.locality} · certificates`, href: `/compliance?open=${encodeURIComponent(p.id)}` });
     }
+  }
+
+  /* Last, because a person we merely remember is weaker than a lead, an
+     application or a deal that lives here - but far better than nothing while
+     REX is asked. Anything past a fortnight never reaches this list; anything
+     older than three days says how old it is, so nobody rings a stale number
+     believing it is current. */
+  for (const p of known) {
+    if (!cap(130)) break;
+    const reach = [p.email, p.phone].filter(Boolean).join(" · ") || "no email or phone on the record";
+    hits.push({
+      kind: "person",
+      title: p.name,
+      sub: `person · ${reach}${p.age ? ` · read ${p.age}` : ""}`,
+      href: `/leads?person=${encodeURIComponent(p.id)}`,
+    });
   }
 
   return NextResponse.json({ ok: true, hits: hits.slice(0, 40) });
