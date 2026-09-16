@@ -5,6 +5,9 @@ import { propolyConfigured, propolyGet, propolyPatch, propolyPost } from "@/lib/
 import { getAllPropolyDeals } from "@/lib/business/propoly-deals";
 import { switchOn } from "@/lib/switches";
 import { handoffFor, type Handoff } from "@/lib/deal-handoff";
+import { findUserById } from "@/lib/users";
+import { renderTleEmail } from "@/lib/email/tle-emails";
+import { sendAsAgent } from "@/lib/send-as-agent";
 
 /**
  * The offer-accepted handover, run by the OS.
@@ -72,9 +75,6 @@ const str = (v: unknown): string | null => (typeof v === "string" && v.trim() ? 
 const norm = (v: unknown) => (str(v) ?? "").toLowerCase().replace(/\s+/g, "");
 
 /* Howard's constants, from the flow definition. */
-const LANDLORD_TEMPLATE = "10978";
-const TENANT_TEMPLATE = "10979";
-const MERGE_LOCATION_ID = "394";
 const PROPERTY_UUID_FIELD = "api.propolyPropertyUUID";
 /** How far to page Propoly's properties when matching by address. 25 a page. */
 const MAX_PROPERTY_PAGES = 60;
@@ -165,7 +165,7 @@ class Recorder {
  */
 export async function runHandover(
   applicationId: string,
-  opts: { by: string; mode?: HandoverMode; force?: boolean }
+  opts: { by: string; byId?: string | null; mode?: HandoverMode; force?: boolean }
 ): Promise<HandoverRun> {
   if (!hasDb()) throw new Error("No database on this environment, so a handover has nowhere to be recorded.");
   const switchMode = await handoverMode();
@@ -443,46 +443,73 @@ export async function runHandover(
       status = "failed";
     }
 
-    /* 7 and 8. The accepted emails, through REX, from the listing's owner user. */
-    const fromUserId = str((listing.system_owner_user as Row | null)?.id);
+    /* 7 and 8. The accepted emails - ours now, from the agent's own mailbox.
+
+       They were REX merge templates 10978 and 10979, sent by MailMerge. James,
+       16 Sep 2026: copy the words across as they are, reword them later. So the
+       wording is Howard's, the letterhead is ours, and REX is not asked to send
+       anything - which also takes MailMerge/createAndSend off the write lock. */
     const scotland = str((listing.agreement_type as Row | null)?.id) === "153279";
-    const targets = [
-      ...(packet.landlord?.contactId ? [{ id: "email-landlord", who: `landlord ${packet.landlord.name}`, contactId: packet.landlord.contactId, template: LANDLORD_TEMPLATE, subject: "Application Accepted" }] : []),
-      ...packet.tenants.filter((t) => t.contactId).map((t) => ({ id: `email-tenant:${t.contactId}`, who: `tenant ${t.name}`, contactId: t.contactId as string, template: TENANT_TEMPLATE, subject: "Congratulations, your application has been accepted!" })),
+    const sender = opts.byId ? await findUserById(opts.byId).catch(() => null) : null;
+    const address = [packet.property, packet.locality].filter(Boolean).join(", ");
+    const money = (p: number | null) => (p == null ? null : `£${p.toLocaleString("en-GB")} pcm`);
+    const day = (iso: string | null) =>
+      iso ? new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }) : null;
+    /* Only what the application actually holds. Howard's template printed eight
+       lines whether or not REX had them; a row saying "Conditions:" and nothing
+       else is worse than no row. */
+    const detailsList = [
+      ["Offer amount", money(packet.rentPcm)],
+      ["Start date", day(packet.startDate)],
+      ["Length of tenancy", packet.agreementMonths ? `${packet.agreementMonths} months` : null],
+      ["Date accepted", day(packet.acceptedOn)],
+      ["Tenant names", packet.tenants.map((t) => t.name).filter(Boolean).join(", ") || null],
+    ]
+      .filter(([, v]) => v)
+      .map(([k, v]) => `${k}: <strong>${v}</strong>`)
+      .join("<br>");
+    const agentPhone = "0161 883 2525";
+
+    const targets: { id: string; who: string; to: string | null; name: string; email: string }[] = [
+      ...(packet.landlord?.email
+        ? [{ id: "email-landlord", who: `landlord ${packet.landlord.name}`, to: packet.landlord.email, name: packet.landlord.name, email: "application-accepted-landlord" }]
+        : []),
+      ...packet.tenants
+        .filter((t) => t.email)
+        .map((t) => ({ id: `email-tenant:${t.contactId ?? t.name}`, who: `tenant ${t.name}`, to: t.email, name: t.name, email: "application-accepted-tenant" })),
     ];
+
     for (const t of targets) {
-      const mergeObject = {
-        contact_id: t.contactId,
-        property_id: str(property.id) ?? str(listing.property_id),
-        listing_id: packet.listingId,
-        tenancy_application_id: packet.applicationId,
-      };
-      const request = { mail_merge_template_id: t.template, location_id: MERGE_LOCATION_ID, connection_id: -1, send_from_user_id: fromUserId, merge_object: mergeObject, subject: t.subject, scotland };
-      if (!fromUserId) {
-        await rec.add({ id: t.id, label: `Email to ${t.who}`, state: "failed", detail: "The listing has no owner user to send from.", request });
-        status = "failed";
-        continue;
-      }
+      const vars: Record<string, string> =
+        t.email === "application-accepted-landlord"
+          ? { landlordName: t.name, address, detailsList, agentName: sender?.name ?? packet.agent ?? "The Letting Experts", agentPhone, agentEmail: sender?.email ?? "" }
+          : {
+              tenantName: t.name,
+              address,
+              detailsList,
+              /* Scotland has no holding deposit, so the sentence that names one
+                 must not go there. REX held no Scottish template - this wording
+                 is ours and wants checking by somebody who knows. */
+              payLine: scotland
+                ? "You will now receive an invite from Propoly to complete your referencing information."
+                : "You will now receive an invite from Propoly to pay the holding fee, if applicable, and to complete your referencing information.",
+              agentName: sender?.name ?? packet.agent ?? "The Letting Experts",
+              agentPhone,
+              agentEmail: sender?.email ?? "",
+            };
+      const { subject, html } = renderTleEmail(t.email, vars);
       if (!live) {
-        /* Render Howard's template against the real objects so the rehearsal shows the words. */
-        let preview: unknown = null;
-        try {
-          const r = await rexCall("MailMerge", "getMergedStringSet", { mail_merge_template_id: t.template, merge_objects: [mergeObject] });
-          preview = r.ok ? r.result : { unavailable: r.error };
-        } catch (e) {
-          preview = { unavailable: (e as Error).message };
-        }
-        await rec.add({ id: t.id, label: `Email to ${t.who}`, state: "would", detail: `Would send REX template ${t.template} ("${t.subject}") from user ${fromUserId}${scotland ? ", Scottish wording" : ""}.`, request, response: preview });
+        await rec.add({ id: t.id, label: `Email to ${t.who}`, state: "would", detail: `Would email ${t.to} - "${subject}"${scotland ? ", Scottish wording" : ""}.`, request: { to: t.to, subject, email: t.email } });
         continue;
       }
-      try {
-        const res = await rexCall("MailMerge", "createAndSend", request);
-        await rec.add({ id: t.id, label: `Email to ${t.who}`, state: res.ok ? "ok" : "failed", detail: res.ok ? "Sent through REX." : "REX refused.", request, response: res.ok ? res.result : res.error });
-        if (!res.ok) status = "failed";
-      } catch (e) {
+      if (!sender) {
+        await rec.add({ id: t.id, label: `Email to ${t.who}`, state: "failed", detail: "Nobody is signed in to send this as, so it was not sent.", request: { to: t.to, subject } });
         status = "failed";
-        await rec.add({ id: t.id, label: `Email to ${t.who}`, state: "failed", detail: (e as Error).message, request });
+        continue;
       }
+      const out = await sendAsAgent({ me: sender, to: t.to as string, toName: t.name, subject, html });
+      await rec.add({ id: t.id, label: `Email to ${t.who}`, state: out.sent ? "ok" : "failed", detail: out.detail, request: { to: t.to, subject } });
+      if (!out.sent) status = "failed";
     }
   } catch (e) {
     if (!(e instanceof Stop)) {
@@ -535,7 +562,7 @@ export async function ensureHandoverTodos(): Promise<number> {
     {
       title: "Handover: allow the three REX writes",
       detail:
-        "Add Listings/update, CustomFields/setFieldValues and MailMerge/createAndSend to REX_ALLOW_WRITES on the TLE-OS service. Until then the live handover cannot touch REX even with the switch on.",
+        "Add Listings/update and CustomFields/setFieldValues to REX_ALLOW_WRITES on the TLE-OS service. Until then the live handover cannot touch REX even with the switch on. The accepted emails no longer need it - they are ours now.",
     },
     {
       title: "Handover: compare the rehearsals with Howard's flow, then switch it on",

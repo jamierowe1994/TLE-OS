@@ -73,6 +73,8 @@ import {
   LANDLORD_QUESTIONS_CHASE,
   VIEWING_CANCELLED,
   VIEWING_MOVED,
+  APPLICATION_ACCEPTED_LANDLORD,
+  APPLICATION_ACCEPTED_TENANT,
   SITE,
   type EmailDoc } from "@/lib/email/tle-documents";
 
@@ -664,6 +666,54 @@ The Letting Experts`
      sent to a colleague from Admin -> Emails. That is exactly what they are
      for today: reading the words, and deciding what the screens behind them
      have to deliver. ── */
+  {
+    id: "application-accepted-landlord",
+    group: "Doorways",
+    name: "Application Accepted (landlord)",
+    audience: "landlord",
+    trigger: "An offer is accepted and the handover runs",
+    fires: "Wired 16 Sep 2026. lib/handover.ts, from the agent's own mailbox (lib/send-as-agent). Howard's REX template 10978, carried across word for word - still to be rewritten and styled.",
+    to: "The landlord whose property it is",
+    summary: "Tells the landlord the application is accepted, lists what was agreed, and says references are starting. Howard's wording, not ours yet.",
+    doc: APPLICATION_ACCEPTED_LANDLORD,
+    render: (o) =>
+      blocksAs("landlord")(
+        withSample(o ?? APPLICATION_ACCEPTED_LANDLORD, {
+          landlordName: "Mr Raj Patel",
+          address: "Flat 2, Mercer Street, Manchester M4 1SL",
+          detailsList:
+            "Offer amount: £1,250 pcm<br>Start date: 01/10/2026<br>Length of tenancy: 12 months<br>Conditions: none<br>Date received: 16/09/2026<br>Has pets: No<br>Number of occupants: 2<br>Tenant names: Sophie Clark, Daniel Clark",
+          agentName: "Rhiannon Dodge",
+          agentPhone: "0161 883 2525",
+          agentEmail: "rhiannon@thelettingexperts.co.uk",
+        })
+      )(),
+  },
+  {
+    id: "application-accepted-tenant",
+    group: "Doorways",
+    name: "Application Accepted (tenant)",
+    audience: "tenant",
+    trigger: "An offer is accepted and the handover runs",
+    fires: "Wired 16 Sep 2026. lib/handover.ts, from the agent's own mailbox (lib/send-as-agent). Howard's REX template 10979, carried across word for word - still to be rewritten and styled.",
+    to: "Each tenant on the application",
+    summary: "Tells the tenant the landlord has accepted, subject to references and contracts, lists what was agreed and what to do next. The holding-fee sentence changes in Scotland and that wording is a placeholder.",
+    doc: APPLICATION_ACCEPTED_TENANT,
+    render: (o) =>
+      blocksAs("tenant")(
+        withSample(o ?? APPLICATION_ACCEPTED_TENANT, {
+          tenantName: "Sophie Clark",
+          address: "Flat 2, Mercer Street, Manchester M4 1SL",
+          detailsList:
+            "Offer amount: £1,250 pcm<br>Start date: 01/10/2026<br>Length of tenancy: 12 months<br>Conditions: none<br>Date received: 16/09/2026<br>Has pets: No<br>Number of occupants: 2<br>Tenant names: Sophie Clark, Daniel Clark",
+          payLine:
+            "You will now receive an invite from Propoly to pay the holding fee, if applicable, and to complete your referencing information.",
+          agentName: "Rhiannon Dodge",
+          agentPhone: "0161 883 2525",
+          agentEmail: "rhiannon@thelettingexperts.co.uk",
+        })
+      )(),
+  },
   {
     id: "viewing-cancelled",
     group: "Doorways",

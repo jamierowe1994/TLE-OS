@@ -75,6 +75,9 @@ export async function POST(req: NextRequest) {
     const me = await who(req);
     const run = await runHandover(body.applicationId, {
       by: me?.name || me?.email || "unknown",
+      /* The accepted emails go out from this person's own mailbox, so the
+         handover needs the id and not just the name (16 Sep 2026). */
+      byId: me?.id ?? null,
       mode: body.rehearse ? "shadow" : undefined,
       force: body.force === true,
     });

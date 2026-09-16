@@ -1047,3 +1047,62 @@ export const VIEWING_MOVED = {
   ],
   branding: { showSignoff: false },
 } as const;
+
+/* ── The offer is accepted ────────────────────────────────────────────────
+
+   James, 16 Sep 2026: "I'm happy to copy their emails, and then we can reword
+   them and put them in our own thing." So these two are Howard's REX merge
+   templates 10978 and 10979, carried across word for word into our own
+   letterhead - not rewritten, on purpose. Rewriting them and styling them is
+   its own job on the tracker; what this buys today is that the handover stops
+   needing REX to send, and the wording does not change under anybody's feet
+   while it happens.
+
+   One difference from REX, and it needs James: REX holds no Scottish version
+   of either - the only "scotland" in the handover is a flag our own code sets
+   from the listing's agreement type. The tenant email therefore takes its
+   holding-fee sentence as a variable, and the Scottish wording below is a
+   placeholder until somebody who knows Scottish lettings law confirms it. */
+
+export const APPLICATION_ACCEPTED_LANDLORD = {
+  subject: "New application accepted - {{address}}",
+  preheader: "The application on your property has been accepted. Here are the details.",
+  mode: "blocks",
+  blocks: [
+    H("aal1", "Application accepted"),
+    T(
+      "aal2",
+      "Dear {{landlordName}},<br><br>Congratulations. The following application has now been accepted on your property at <strong>{{address}}</strong>:"
+    ),
+    T("aal3", "{{detailsList}}"),
+    T("aal4", "I will now begin the reference checks on the tenants, and will update you in due course with our findings."),
+    SP("aal5", 8),
+    T("aal6", "{{agentName}}<br>{{agentPhone}}<br>{{agentEmail}}<br>The Letting Experts"),
+    FOOT("aal7", "You're getting this because an application has been accepted on a property we let for you."),
+  ],
+  branding: { showSignoff: false },
+} as const;
+
+export const APPLICATION_ACCEPTED_TENANT = {
+  subject: "Congratulations - your application has been accepted",
+  preheader: "Subject to references and contracts. Here is what happens next.",
+  mode: "blocks",
+  blocks: [
+    H("aat1", "Your application has been accepted"),
+    T(
+      "aat2",
+      "Dear {{tenantName}},<br><br>Congratulations, the landlord has accepted your application for <strong>{{address}}</strong>, subject to references and contracts. Please find the agreed details below:"
+    ),
+    T("aat3", "{{detailsList}}"),
+    T("aat4", "{{payLine}}"),
+    T(
+      "aat5",
+      "Please do this as a matter of urgency: until the payment is made and the references are returned, the landlord reserves the right to progress another application."
+    ),
+    T("aat6", "If you have any questions, please get in touch."),
+    SP("aat7", 8),
+    T("aat8", "{{agentName}}<br>{{agentPhone}}<br>{{agentEmail}}<br>The Letting Experts"),
+    FOOT("aat9", "You're getting this because you applied for a property through The Letting Experts."),
+  ],
+  branding: { showSignoff: false },
+} as const;
