@@ -1,6 +1,7 @@
 import "server-only";
 import { fetchComplianceBook, type ComplianceBook } from "@/lib/rex-compliance";
 import { hasDb, q } from "@/lib/db";
+import { RULES } from "./staleness";
 
 /**
  * The compliance book, cached — and cached HARD.
@@ -31,8 +32,11 @@ import { hasDb, q } from "@/lib/db";
    v3 blob has none, so every let-only home would read as an ordinary managed
    one and be counted as a gap again (7 Sep 2026). */
 const CACHE_KEY = "compliance:v6";
-export const FRESH_MS = 60 * 60 * 1000;
-export const STALE_MS = 24 * 60 * 60 * 1000;
+/* From lib/staleness, where every kind's window lives with the reason for it.
+   An hour to READ a certificate is fine; approving a pack on one is not, and
+   that path asks REX itself rather than coming through here. */
+export const FRESH_MS = RULES["compliance"].freshMs;
+export const STALE_MS = RULES["compliance"].keepMs;
 
 export interface CachedBook {
   book: ComplianceBook;

@@ -1,5 +1,6 @@
 import { fetchListingBook, fetchRetiredListings, type ListingBook, type OsListing } from "./rex-listings";
 import { hasDb, q } from "./db";
+import { RULES } from "./staleness";
 
 /**
  * The rental book's cache, owned here rather than inside the route.
@@ -35,8 +36,12 @@ const CACHE_KEY_BASE = "listings:v4";
 export const cacheKeyFor = (rexUserId: string | null) =>
   rexUserId ? `${CACHE_KEY_BASE}:agent:${rexUserId}` : `${CACHE_KEY_BASE}:all`;
 
-export const FRESH_MS = 10 * 60 * 1000;
-export const STALE_MS = 6 * 60 * 60 * 1000;
+/* The two windows are the rule's, not this file's (16 Sep 2026). Nine caches
+   each picked their own and nobody could read the list; lib/staleness holds
+   them all with the cost of being wrong written beside each. The numbers here
+   are unchanged - they were right - they are simply no longer a secret. */
+export const FRESH_MS = RULES["listing-book"].freshMs;
+export const STALE_MS = RULES["listing-book"].keepMs;
 
 export interface Cached {
   book: ListingBook;
@@ -153,7 +158,7 @@ export async function invalidateListingBook(): Promise<void> {
  */
 
 const RETIRED_KEY_BASE = "listings:retired:v1";
-const RETIRED_FRESH_MS = 12 * 60 * 60 * 1000;
+const RETIRED_FRESH_MS = RULES["retired-listings"].freshMs;
 
 const retiredMemory = new Map<string, { listings: OsListing[]; at: number }>();
 
