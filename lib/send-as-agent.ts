@@ -1,7 +1,7 @@
 import "server-only";
 import type { OsUser } from "@/lib/users";
 import { MailboxNotConnected, msConnectionFor, msSendMail } from "@/lib/microsoft";
-import { archiveSentCopy, sendEmail } from "@/lib/resend";
+import { archiveSentCopy, ResendBlocked, sendEmail } from "@/lib/resend";
 import { isInternalAddress } from "@/lib/email-policy";
 import { sendingLocked, switchOn } from "@/lib/switches";
 
@@ -60,6 +60,11 @@ export interface AgentSendResult {
   /** One sentence, written for the agent reading the screen. */
   detail: string;
   /**
+   * Why it did not go, for a caller that has to decide what happens next: a
+   * cron retries what the environment stopped and never retries a bad address.
+   */
+  reason?: "no_address" | "switched_off" | "refused";
+  /**
    * BCC'd to their REX email dropbox, so it filed itself against the contact
    * over there. Only a send from their own mailbox can do that, and only when
    * their REX user is known - so it answers the question the old MailMerge
@@ -71,7 +76,7 @@ export interface AgentSendResult {
 export async function sendAsAgent(p: AgentSend): Promise<AgentSendResult> {
   const to = p.to.trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
-    return { sent: false, via: null, timeline: false, detail: "There is no usable email address on their record, so nobody was written to." };
+    return { sent: false, via: null, timeline: false, reason: "no_address", detail: "There is no usable email address on their record, so nobody was written to." };
   }
 
   /* Our own address is a test (Admin, Testing): the tester stands in for the
@@ -83,6 +88,7 @@ export async function sendAsAgent(p: AgentSend): Promise<AgentSendResult> {
       sent: false,
       via: null,
       timeline: false,
+      reason: "switched_off",
       detail: "Email to landlords and tenants is switched off on Admin, Switches, so nothing was sent.",
     };
   }
@@ -124,6 +130,7 @@ export async function sendAsAgent(p: AgentSend): Promise<AgentSendResult> {
       sent: false,
       via: null,
       timeline: false,
+      reason: e instanceof ResendBlocked ? "switched_off" : "refused",
       detail: `It did not send: ${e instanceof Error ? e.message.replace(/\.$/, "") : "unknown"}. Tell them yourself.`,
     };
   }

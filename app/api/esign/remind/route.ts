@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertNotViewingAs, ViewingAsRefused, VIEW_AS_COOKIE } from "@/lib/view-as";
-import { isExpiredToken, rexCall, rexConfigured, RexWriteBlocked } from "@/lib/rex";
-import { sendMerge } from "@/lib/rex-mailmerge";
+import { sendAsAgent } from "@/lib/send-as-agent";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth";
 import { findUserById } from "@/lib/users";
-import { rexTokenFor } from "@/lib/rex-user";
 import { renderPlain } from "@/lib/campaign-mail";
 
 /**
@@ -23,9 +21,9 @@ import { renderPlain } from "@/lib/campaign-mail";
  *
  * So this is what it says it is: a short note from the agent, in their name,
  * pointing at the DocuSign email already sitting in the landlord's inbox and
- * offering to send it again. It lands on the REX timeline like every other
- * send, which means the next person to open that landlord can see the chase
- * happened.
+ * offering to send it again. It goes from their own mailbox, so the reply is
+ * theirs, and the drop-box copy still files it against the landlord in REX -
+ * the next person to open them can see the chase happened.
  */
 
 export const dynamic = "force-dynamic";
@@ -69,10 +67,6 @@ export async function POST(req: NextRequest) {
     }
     throw e;
   }
-  if (!rexConfigured()) {
-    return NextResponse.json({ ok: false, error: "REX isn't connected here." }, { status: 503 });
-  }
-
   let body: {
     to?: string;
     contactId?: string;
@@ -112,49 +106,25 @@ export async function POST(req: NextRequest) {
   });
 
   try {
+    /* From the agent who is chasing, so the landlord's reply reaches them and
+       not a shared inbox - the same road as every other customer email here
+       (lib/send-as-agent). It went through REX's mailer until 16 Sep, which
+       needed a REX contact id and told the agent to "open them in REX first"
+       when there wasn't one; the timeline is kept by the drop-box copy. */
     const mail = renderPlain(mailText.subject, mailText.text);
-    const actor = await rexTokenFor(userId);
-    // By RECORD — that is what puts the send on the landlord's REX timeline.
-    // Without a contact id there is no record to hang it on.
-    if (!body.contactId) {
-      return NextResponse.json(
-        { ok: false, error: `No REX contact record for ${to}, so a chaser would land nowhere. Open them in REX first.` },
-        { status: 400 }
-      );
-    }
-    const sent = await sendMerge(
-      { contactId: String(body.contactId) },
-      { subject: mail.subject, body: mail.html },
-      actor
-    );
-
-    if (!sent.ok) {
-      const res = { ok: false as const, status: 502, result: null, error: sent.error };
-      if (actor && isExpiredToken(res)) {
-        return NextResponse.json(
-          { ok: false, error: "Your REX sign-in has lapsed — reconnect it in your profile.", reconnect: true },
-          { status: 401 }
-        );
-      }
-      return NextResponse.json(
-        { ok: false, error: res.error ?? `REX refused it (${res.status}).` },
-        { status: 502 }
-      );
+    const sent = await sendAsAgent({
+      me,
+      to,
+      toName: (body.landlordName ?? "").trim() || undefined,
+      subject: mail.subject,
+      html: mail.html,
+    });
+    if (!sent.sent) {
+      return NextResponse.json({ ok: false, error: sent.detail }, { status: sent.reason === "no_address" ? 400 : 502 });
     }
 
-    return NextResponse.json({ ok: true, to });
+    return NextResponse.json({ ok: true, to, via: sent.via, onTimeline: sent.timeline });
   } catch (e) {
-    if (e instanceof RexWriteBlocked) {
-      return NextResponse.json(
-        {
-          ok: false,
-          locked: true,
-          error:
-            'Chasing is locked here. Set REX_ALLOW_WRITES="MailMerge/queueMergeUsingObjects" to unlock it — and send the first one to a colleague, not a landlord.',
-        },
-        { status: 423 }
-      );
-    }
     return NextResponse.json(
       { ok: false, error: e instanceof Error ? e.message : "That didn't send." },
       { status: 500 }
