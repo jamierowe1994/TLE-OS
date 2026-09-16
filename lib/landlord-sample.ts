@@ -133,7 +133,7 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
     },
     tenancy: { id: "tenancy", label: "Sign the tenancy agreement", sub: "Sophie has signed. Your signature completes it", href: "#", icon: "file-contract", external: true },
     maintenance: { id: "maintenance", label: "Maintenance", sub: "1 job waiting on you, 2 in hand", href: "/landlord/demo/maintenance", icon: "setting" },
-    renewal: { id: "renewal", label: "Tenancy renewal", sub: "Due 30 September 2026 - we'll be in touch in July", href: "#tenancy", icon: "calendar" },
+    renewal: { id: "renewal", label: "Tenancy renewal", sub: "Due 30 September 2026 - we'll be in touch before it turns", href: "#tenancy", icon: "calendar" },
     certificates: { id: "certificates", label: "Certificates", sub: "Gas safety due in 40 days - renewal being arranged", href: "/landlord/demo/documents", icon: "shield" },
   };
 
