@@ -50,7 +50,49 @@ export interface Failure {
   who?: string;
 }
 
+/**
+ * ── WHAT IS NOT A BUG (16 Sep 2026) ──────────────────────────────────────
+ *
+ * The first day of this list, 27 tickets: 21 were the Propoly page of the
+ * wiring sheet in Admin asking Propoly for things it does not allow - a
+ * refusal is that page's ANSWER - including one ticket for the path it asks
+ * about precisely because it does not exist. Three were one afternoon's bulk
+ * pull being throttled, filed three times over because a timeout, a gateway
+ * error and a rate limit fingerprint separately. Two were the seconds during a
+ * deploy when the old instance has gone and the new one is not up.
+ *
+ * Not one was a defect, and on Monday twelve agents start reporting real ones.
+ * A list that cries wolf is worse than no list: nobody reads the twelfth
+ * ticket, and the bug bot spends its hour on the noise. So two rules here, and
+ * the third - a probe's refusal - sits with the probe, which is the only place
+ * that knows it is one.
+ */
+
 const THROTTLE_MS = 60_000;
+
+/** Slow, busy or briefly broken: worth knowing once, not worth three tickets. */
+const TRANSIENT = new Set([408, 429, 502, 503, 504]);
+
+/**
+ * A DEPLOY IS NOT A FAULT.
+ *
+ * Railway swaps instances by stopping one and starting the next; for a few
+ * seconds in between, a screen that asks for anything gets a 502 from the edge
+ * and reports it. The report reaches the NEW instance, which has just started,
+ * so its own uptime is the tell.
+ *
+ * A gateway error that is really ours does not stop when the deploy finishes:
+ * it files as soon as one arrives more than two minutes after boot, and a
+ * sustained one is on the Watchdog and in Railway's logs regardless.
+ */
+function duringADeploy(f: Failure): boolean {
+  return f.source === "Screen" && TRANSIENT.has(f.status ?? 0) && process.uptime() < 120;
+}
+
+/** Propoly timing out and Propoly rate limiting us are one thing: it was busy. */
+function wasBusy(f: Failure): boolean {
+  return f.source !== "Screen" && f.status != null && TRANSIENT.has(f.status);
+}
 /** Occurrences held back by the throttle, added to the count when the minute is up. */
 const pending = new Map<string, { n: number; at: number; flush: ReturnType<typeof setTimeout> | null }>();
 
@@ -80,10 +122,19 @@ const normalise = (m: string) =>
     .slice(0, 140);
 
 export function fingerprintOf(f: Failure): string {
+  /* One bucket for "it was busy", per place we call. Keeping the endpoint keeps
+     the useful half - that it is the deals list that struggles - while a
+     timeout, a 429 and a 502 on the same call stop being three tickets about
+     one bad afternoon. */
+  if (wasBusy(f)) return [f.source, f.what, "busy"].join("|");
   return [f.source, f.what, f.status ?? "", normalise(f.message)].join("|");
 }
 
 function sentence(f: Failure): string {
+  /* Worded without the status, because this one row will be counted against
+     every kind of busy; the latest is in the context. And never "refused the
+     read" for a timeout - the caller's message is written for the one case. */
+  if (wasBusy(f)) return `${f.source} ${f.what} was slow or busy - it timed out or turned us away`.slice(0, 900);
   const verb = f.source === "Screen" ? "went wrong on the screen" : "failed";
   return `${f.source} ${f.what} ${verb}${f.status ? ` (${f.status})` : ""}: ${f.message}`.slice(0, 900);
 }
@@ -91,6 +142,7 @@ function sentence(f: Failure): string {
 export async function logFailure(f: Failure): Promise<void> {
   try {
     if (!hasDb()) return;
+    if (duringADeploy(f)) return;
     const fp = fingerprintOf(f);
     const now = Date.now();
     const held = pending.get(fp);
