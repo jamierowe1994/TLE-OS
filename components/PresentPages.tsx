@@ -116,8 +116,15 @@ export default function PresentPages({
                * dvh rather than vh so the browser's own chrome is counted -
                * vh on iOS is the height WITHOUT the address bar, which is the
                * one measurement that is never on screen.
+               *
+               * 116, down from 140, because the Back and Next buttons left
+               * the foot on 15 Sep - and then the home indicator's own strip
+               * on top, which is screen no element may draw in. The foot in
+               * PresentModal pads by the same env() so the two agree: the
+               * tallest foot is the swipe control (16 + 54 + 24) with the
+               * page count under it (18) and 4 below.
                */
-              height: "calc(100dvh - 140px)",
+              height: "calc(100dvh - 116px - env(safe-area-inset-bottom, 0px))",
               scrollSnapAlign: "start",
               background: CREAM,
             }}

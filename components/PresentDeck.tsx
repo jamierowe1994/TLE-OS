@@ -909,12 +909,25 @@ function AgentAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
             </p>
           )}
         </Rise>
+        {/* THE BIO IS THE SLIDE. It was hidden below sm on 15 Sep when the
+            phone's job here was a sentence and a button - James, the same
+            evening: "you seem to have removed the description, or it's just
+            not showing, but your description should be in there ... it'll be
+            his bio that will automatically be pulled through." So it is back
+            on the phone, first paragraph open and the rest behind Read more,
+            because the whole bio plus the profile button is two screenfuls
+            and the button has to stay reachable without scrolling. */}
         <Rise show={show} i={2}>
           <div className={`mt-6 max-w-[500px] space-y-4 ${fx ? "" : "hidden sm:block"}`}>
             {paragraphs.map((para, i) => (
               <p key={i} className="text-[15.5px] leading-[1.65] text-black/65">{para}</p>
             ))}
           </div>
+          {!fx && (
+            <div className="mt-5 sm:hidden">
+              <MoreText paragraphs={paragraphs} />
+            </div>
+          )}
         </Rise>
         <Rise show={show} i={3}>
           <p className="mt-8 text-[11px] uppercase tracking-[0.3em] text-black/50">Same person. Every step of the way.</p>
@@ -988,6 +1001,62 @@ function AgentAppraisal({ deck, show }: { deck: Deck; show: boolean }) {
     >
       <Stage fit={fit}>{body}</Stage>
     </section>
+  );
+}
+
+/**
+ * A paragraph or two, with the rest behind a word.
+ *
+ * The first paragraph is always open - a bio that starts collapsed is a bio
+ * nobody expands. What "Read more" adds is the remaining paragraphs and, when
+ * the first one is long on its own, the rest of that one: it is clamped to
+ * five lines while closed, so the control is never offering something the
+ * reader can already see.
+ *
+ * It pushes the slide down rather than opening a panel. The slide's cell
+ * scrolls (see PresentPages), so the foot button simply moves with it, which
+ * is what James asked for: "then it should push it down".
+ */
+function MoreText({ paragraphs }: { paragraphs: string[] }) {
+  const [open, setOpen] = useState(false);
+  const first = useRef<HTMLParagraphElement | null>(null);
+  const [clipped, setClipped] = useState(false);
+
+  useEffect(() => {
+    const el = first.current;
+    if (el) setClipped(el.scrollHeight > el.clientHeight + 2);
+  }, [paragraphs]);
+
+  const more = paragraphs.length > 1 || clipped;
+  return (
+    <>
+      <p
+        ref={first}
+        className="text-[15px] leading-[1.6] text-black/65"
+        style={open ? undefined : { display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 5, overflow: "hidden" }}
+      >
+        {paragraphs[0]}
+      </p>
+      {open &&
+        paragraphs.slice(1).map((para, i) => (
+          <p key={i} className="mt-3.5 text-[15px] leading-[1.6] text-black/65">
+            {para}
+          </p>
+        ))}
+      {more && (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          className="mt-2.5 inline-flex items-center gap-1.5 text-[13.5px] font-semibold"
+          style={{ color: "#cfa096" }}
+        >
+          {open ? "Read less" : "Read more"}
+          <svg viewBox="0 0 24 24" aria-hidden className="h-[14px] w-[14px]" style={{ transform: open ? "rotate(180deg)" : undefined }}>
+            <path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      )}
+    </>
   );
 }
 
@@ -1099,6 +1168,15 @@ function Comparables({ deck, show }: { deck: Deck; show: boolean }) {
             {shown.map((r, n) => {
               const gallery = galleryOf(r);
               const openable = gallery.length > 0;
+              /* What it is, if we know. REX carries beds and type on some let
+                 properties and not others, so this falls through to the
+                 LOCALITY rather than back to the name: "Liverpool L34 5SN" is
+                 short enough to read whole, where "Apartment 28, 21 Wheatsheaf
+                 Court" truncates to nothing either way. */
+              const what = [r.beds != null ? `${r.beds} bed` : null, r.type?.toLowerCase()]
+                .filter(Boolean)
+                .join(" ");
+              const took = r.letAgreed && r.days != null ? `let in ${r.days} days` : null;
               return (
                 <li
                   key={`${r.name}-${r.rent}`}
@@ -1124,17 +1202,41 @@ function Comparables({ deck, show }: { deck: Deck; show: boolean }) {
                         style={{ background: TINTS[0] }}
                       />
                     )}
+                    {/* WHAT IT IS ON A PHONE, NOT WHERE IT IS.
+                        James, 15 Sep 2026: "rather than having the property
+                        names, because the property names are so long you
+                        can't see them ... it should just say the amount of
+                        bedrooms and what kind of property it is at the top
+                        instead of the property address, because it's
+                        literally impossible to try and see the full address,
+                        so there's no point." Truncated to 180px between a
+                        thumbnail and a rent, "Flat 2, 14 St Michaels Road" is
+                        "Flat 2, 14 St Mi..." - a label that identifies
+                        nothing. "2 bed terraced house" beside £1,095 is the
+                        comparison the slide exists to make, and the address
+                        is on the card a tap away. */}
                     <span className="min-w-0 flex-1">
                       <span
-                        className="block truncate text-[15px] leading-snug sm:text-[16px]"
+                        className="block truncate text-[15px] leading-snug sm:hidden"
+                        style={{ fontFamily: HAND, fontWeight: 700 }}
+                      >
+                        {what || r.locality || r.name}
+                      </span>
+                      <span
+                        className="hidden truncate text-[15px] leading-snug sm:block sm:text-[16px]"
                         style={{ fontFamily: HAND, fontWeight: 700 }}
                       >
                         {r.name}
                       </span>
                       <span className="mt-0.5 block truncate text-[12.5px] font-light text-black/45">
-                        {[r.locality, r.beds != null ? `${r.beds} bed` : null, r.type]
-                          .filter(Boolean)
-                          .join("  ·  ")}
+                        <span className="sm:hidden">
+                          {[what ? r.locality : null, took].filter(Boolean).join("  ·  ")}
+                        </span>
+                        <span className="hidden sm:inline">
+                          {[r.locality, r.beds != null ? `${r.beds} bed` : null, r.type]
+                            .filter(Boolean)
+                            .join("  ·  ")}
+                        </span>
                       </span>
                     </span>
                     <span className="flex shrink-0 items-center gap-4">
@@ -1362,7 +1464,7 @@ function Market({ deck, show }: { deck: Deck; show: boolean }) {
             off the bottom. Stacked on phones, where vertical space is
             expected. */}
         <Rise show={show} i={3}>
-          <div className="mt-7 grid gap-x-12 gap-y-5 sm:grid-cols-2">
+          <div className="mt-5 grid gap-x-12 gap-y-4 sm:mt-7 sm:gap-y-5 sm:grid-cols-2">
             {m.bands && m.bands.length > 0 && (
               <Block title="How long it has been on the market">
                 {m.bands.map((b) => (
@@ -1402,28 +1504,51 @@ function Market({ deck, show }: { deck: Deck; show: boolean }) {
               </Block>
             )}
 
+            {/* WHO IS LETTING HERE COMES OFF ON A PHONE.
+                James, 15 Sep 2026, on this slide: "just make sure it's not
+                scrollable ... if you can't get over one page and still look
+                good", and he named this block as the one to lose. He is
+                right that it is the one: the other three blocks are about
+                the MARKET - how long things sit, what they ask, what is
+                competing - and a landlord weighs their rent against those.
+                A league table of which agency has the most boards up is the
+                only block on the slide that answers a question they did not
+                ask. It stays on every wider screen. */}
             {m.agents && m.agents.length > 0 && (
-              <Block title={`Who is letting in ${m.area}`}>
-                {/* Five is the cap on a slide. The panel shows six; the sixth
-                    is always the smallest and costs a row of height the layout
-                    does not have. */}
-                {m.agents.slice(0, 5).map((a) => (
-                  <Row key={a.agent} label={a.agent} n={a.n} max={agentMax} right={`${pct(a.n)}%`} wide />
-                ))}
-              </Block>
+              <div className="hidden sm:block">
+                <Block title={`Who is letting in ${m.area}`}>
+                  {/* Five is the cap on a slide. The panel shows six; the
+                      sixth is always the smallest and costs a row of height
+                      the layout does not have. */}
+                  {m.agents.slice(0, 5).map((a) => (
+                    <Row key={a.agent} label={a.agent} n={a.n} max={agentMax} right={`${pct(a.n)}%`} wide />
+                  ))}
+                </Block>
+              </div>
             )}
           </div>
         </Rise>
 
+        {/* THE PROVENANCE, THREE LINES OR ONE.
+            James, 15 Sep 2026: "remove the figures we're taking from NN5
+            taken on 31st, blah blah blah. They know these are live records."
+            What goes on a phone is the SENTENCE, not the attribution - the
+            area and the date are the whole reason the numbers are allowed on
+            the page, and a figure with no date on it is a figure a landlord
+            cannot tell is a month old. So the phone keeps the area and the
+            day on one line and drops the two clauses explaining how it was
+            counted, which is where the three lines came from. */}
         <Rise show={show} i={4}>
-          <p className="mt-5 text-[11px] font-light leading-relaxed text-black/40">
-            Figures for {m.area} taken on{" "}
+          <p className="mt-4 text-[11px] font-light leading-relaxed text-black/40 sm:mt-5">
+            {m.area}, taken{" "}
             {new Date(m.pulledAt).toLocaleDateString("en-GB", {
               day: "numeric",
               month: "long",
               year: "numeric",
             })}
-            , from the live record of what is advertised. Withdrawn listings are not counted.
+            <span className="hidden sm:inline">
+              , from the live record of what is advertised. Withdrawn listings are not counted.
+            </span>
           </p>
         </Rise>
       </div>

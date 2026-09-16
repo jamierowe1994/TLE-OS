@@ -32,7 +32,7 @@ import {
   statFooter,
   type NationalStat,
 } from "@/lib/present-stats";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { deckKind, feeOnRent, money, type PresentDeck as Deck } from "@/lib/present";
 import {
   CORAL,
@@ -140,6 +140,55 @@ function Tick({ on }: { on: boolean }) {
     // a hyphen at this size reads as a speck of dust.
     <span className="text-black/22" aria-label="Not included">
       &ndash;
+    </span>
+  );
+}
+
+/**
+ * "There is more below", on the one slide long enough to need it.
+ *
+ * The scroller is the phone deck's own cell (see PresentPages), not anything
+ * this slide owns - so the hint finds it rather than assuming it, and simply
+ * does not appear where there is nothing to scroll. It goes the moment they
+ * move: a hint that survives being obeyed is a decoration.
+ */
+function ScrollOn() {
+  const [on, setOn] = useState(false);
+  const peg = useRef<HTMLSpanElement | null>(null);
+
+  useEffect(() => {
+    let box: HTMLElement | null = peg.current?.parentElement ?? null;
+    while (box && box.scrollHeight <= box.clientHeight + 4) box = box.parentElement;
+    if (!box) return;
+    setOn(true);
+    const el = box;
+    const onScroll = () => {
+      if (el.scrollTop > 24) {
+        setOn(false);
+        el.removeEventListener("scroll", onScroll);
+      }
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  return (
+    <span ref={peg} aria-hidden className="contents">
+      <span
+        className={`pointer-events-none sticky bottom-1 z-[3] mx-auto mt-5 flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full sm:hidden ${
+          on ? "tle-more" : "opacity-0"
+        }`}
+        style={{ background: "rgba(255,255,255,0.92)", boxShadow: "0 8px 20px -10px rgba(40,25,20,0.5)", transition: "opacity 260ms ease" }}
+      >
+        <style>{`
+          @keyframes tle-more { 0%, 100% { transform: translateY(0) } 55% { transform: translateY(5px) } }
+          .tle-more { animation: tle-more 1800ms cubic-bezier(0.4, 0, 0.2, 1) infinite }
+          @media (prefers-reduced-motion: reduce) { .tle-more { animation: none } }
+        `}</style>
+        <svg viewBox="0 0 24 24" className="h-[16px] w-[16px]" style={{ color: CORAL }}>
+          <path d="M6 10l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </span>
     </span>
   );
 }
@@ -414,8 +463,15 @@ export function PropertyDivider({ deck, show }: { deck: Deck; show: boolean }) {
             {p.address && (
               <p className="mt-5 text-[17px] text-black/70">{[p.address, p.postcode].filter(Boolean).join(", ")}</p>
             )}
+            {/* THE FACTS COME OFF ON A PHONE. James, 15 Sep 2026: "we would
+                have been through this, so it'll be like 'Let's talk about
+                your property', then the address name, and then just the
+                photo." Type, beds, baths, EPC are all on Your property
+                details two slides later; here they were a row of small grey
+                text between the address and the photograph, costing the
+                photograph the room to be a photograph. */}
             {facts.length > 0 && (
-              <p className="mt-1.5 text-[15px] text-black/50">{facts.join(" · ")}</p>
+              <p className="mt-1.5 hidden text-[15px] text-black/50 sm:block">{facts.join(" · ")}</p>
             )}
           </Rise>
         )}
@@ -430,7 +486,7 @@ export function PropertyDivider({ deck, show }: { deck: Deck; show: boolean }) {
           )}
         </Rise>
         <Rise show={show} i={4}>
-          <p className="mt-7 text-[11px] uppercase tracking-[0.3em] text-black/45">Your property. The right plan.</p>
+          <p className="mt-7 hidden text-[11px] uppercase tracking-[0.3em] text-black/45 sm:block">Your property. The right plan.</p>
         </Rise>
       </div>
       {fx && (
@@ -486,8 +542,12 @@ export function Material({ deck, show }: { deck: Deck; show: boolean }) {
             <br />
             is <Emphasis show={show}>up to date</Emphasis>
           </HandHead>
+          {/* The standfirst is a phone screen's worth of a slide whose whole
+              content is the list under it - and the list says the same thing
+              by being a list. James, 15 Sep 2026: "if you need to remove the
+              subtext, you can bump everything up." */}
           <Rise show={show} i={2}>
-            <p className="mt-6 max-w-[520px] text-[15px] font-light leading-[1.6] text-black/55">
+            <p className="mt-6 hidden max-w-[520px] text-[15px] font-light leading-[1.6] text-black/55 sm:block">
               These are the details we&rsquo;ll use to prepare your property for market. We&rsquo;ll
               check them together before anything goes live.
             </p>
@@ -495,7 +555,7 @@ export function Material({ deck, show }: { deck: Deck; show: boolean }) {
         </div>
 
         <Rise show={show} i={3}>
-          <dl className="mt-9 grid gap-x-16 sm:grid-cols-2 lg:mt-10">
+          <dl className="mt-6 grid gap-x-16 sm:mt-9 sm:grid-cols-2 lg:mt-10">
             {rows.map((r) => (
               <div
                 key={r.label}
@@ -926,10 +986,16 @@ export function MarketingDivider({ deck, show }: { deck: Deck; show: boolean }) 
           <span aria-hidden className="mt-3 block h-[3px] w-[56px] rounded-full" style={{ background: TINTS[0] }} />
         </Rise>
         <Rise show={show} i={1}>
+          {/* James, 15 Sep 2026: "the right tenant should be in pink, not in
+              purple." The deck's accent is #56423e, a dark brown that at
+              headline size beside cream reads closer to aubergine - and the
+              agent slide two pages earlier already sets the landlord's name
+              in the clay. This is the same word doing the same job, so it
+              takes the same colour. */}
           <h2 className={`mt-6 leading-[1.02] ${fx ? "text-[68px]" : "text-[36px] sm:text-[50px]"}`} style={HEAD}>
             Now, let&rsquo;s find
             <br />
-            the <Emphasis show={show}>right tenant.</Emphasis>
+            the <Emphasis show={show} tone="clay">right tenant.</Emphasis>
           </h2>
         </Rise>
         <Rise show={show} i={2}>
@@ -1016,27 +1082,36 @@ export function Offer({ show }: { show: boolean }) {
     <CreamSlide id="offer">
       <div className="mx-auto w-full max-w-[1120px]">
         <div className="max-w-[680px]">
+          {/* The composed break costs a fourth line on a phone, where both
+              halves wrap on their own - and the four items' worth of air
+              James asked for below has to come from somewhere. */}
           <HandHead eyebrow="What we do" show={show} lines={2}>
             Everything that happens
-            <br />
+            <br className="hidden sm:inline" />{" "}
             before a tenant <Emphasis show={show}>moves in</Emphasis>
           </HandHead>
         </div>
 
-        <ul className="mt-9 grid gap-x-14 gap-y-3 sm:grid-cols-2 lg:mt-10">
+        {/* TWO COLUMNS SET THE RULE, AND A PHONE HAS ONE.
+            The old rule was "no line above the first TWO", which is right
+            for a two-column grid and wrong for the single column a phone
+            gets: it left the first two items run together. James, 15 Sep
+            2026: "professional photography and videography doesn't have a
+            line under it ... add a line between them and add a little bit of
+            nicer spacing." So the second item keeps its rule until there is
+            a second column to be the top of. */}
+        <ul className="mt-6 grid gap-x-14 gap-y-[13px] sm:mt-9 sm:gap-y-3 sm:grid-cols-2 lg:mt-10">
           {WHAT_WE_OFFER.map((w, n) => (
             <Rise key={w} show={show} i={2 + Math.floor(n / 4)}>
               <li
-                className="flex items-start gap-3"
-                style={{
-                  borderTop: n < 2 ? "none" : "1px solid rgba(0,0,0,0.07)",
-                  paddingTop: n < 2 ? 0 : 12,
-                }}
+                className={`flex items-start gap-3 border-t border-black/[0.07] pt-[13px] sm:pt-3 ${
+                  n === 0 ? "border-t-0 pt-0" : ""
+                } ${n === 1 ? "sm:border-t-0 sm:pt-0" : ""}`}
               >
                 <span className="mt-[3px] shrink-0" style={{ color: CORAL }}>
                   <Line name="check" size={16} />
                 </span>
-                <span className="text-[14px] font-light leading-[1.5]">{w}</span>
+                <span className="text-[13.5px] font-light leading-[1.45] sm:text-[14px] sm:leading-[1.5]">{w}</span>
               </li>
             </Rise>
           ))}
@@ -1064,17 +1139,22 @@ export function MaxPrice({ show }: { show: boolean }) {
     <CreamSlide id="maxprice">
       <div className="mx-auto w-full max-w-[1180px]">
         <div className="max-w-[880px]">
+          {/* The break is composed for a wide screen. On a phone both halves
+              already wrap, so the forced one only adds a line. James, 15 Sep
+              2026: "we can bind that into one tile so we don't have to do the
+              line break in that, which should result in it being a line
+              shorter." */}
           <HandHead eyebrow={MAX_PRICE.eyebrow} show={show} lines={2}>
             Marketing finds the tenant.
-            <br />
+            <br className="hidden sm:inline" />{" "}
             Strategy gets the best <Emphasis show={show}>result.</Emphasis>
           </HandHead>
         </div>
 
-        <ol className="mt-9 grid gap-x-14 gap-y-6 sm:grid-cols-2 lg:mt-10">
+        <ol className="mt-6 grid gap-x-14 gap-y-[13px] sm:mt-9 sm:gap-y-6 sm:grid-cols-2 lg:mt-10">
           {MAX_PRICE.points.map((p, n) => (
             <Rise key={p.title} show={show} i={2 + Math.floor(n / 2)}>
-              <li className="flex gap-5">
+              <li className="flex gap-4 sm:gap-5">
                 <span
                   className="shrink-0 text-[24px] leading-none"
                   style={{ fontFamily: HAND, fontWeight: 700, color: CORAL, opacity: 0.32 }}
@@ -1088,7 +1168,7 @@ export function MaxPrice({ show }: { show: boolean }) {
                   >
                     {p.title}
                   </span>
-                  <span className="mt-1.5 block text-[13px] font-light leading-[1.6] text-black/60">
+                  <span className="mt-1 block text-[12.5px] font-light leading-[1.5] text-black/60 sm:mt-1.5 sm:text-[13px] sm:leading-[1.6]">
                     {p.body}
                   </span>
                 </span>
@@ -1239,17 +1319,17 @@ export function Brochure({ show }: { show: boolean }) {
 function Stats({ stats, show, from, cols = 3 }: { stats: NationalStat[]; show: boolean; from: number; cols?: 2 | 3 }) {
   return (
     <>
-      <div className={`grid gap-x-8 gap-y-7 ${cols === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+      <div className={`grid gap-x-8 gap-y-5 sm:gap-y-7 ${cols === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
         {stats.map((st, n) => (
           <Rise key={st.value + st.label} show={show} i={from + n}>
-            <div className="border-t pt-4" style={{ borderColor: "rgba(0,0,0,0.12)" }}>
+            <div className="border-t pt-3 sm:pt-4" style={{ borderColor: "rgba(0,0,0,0.12)" }}>
               <span
-                className="block text-[34px] leading-none sm:text-[40px]"
+                className="block text-[31px] leading-none sm:text-[40px]"
                 style={{ fontFamily: HAND, fontWeight: 700, color: CORAL }}
               >
                 {st.value}
               </span>
-              <span className="mt-2.5 block text-[13px] font-light leading-[1.5] text-black/60">
+              <span className="mt-2 block text-[12.5px] font-light leading-[1.45] text-black/60 sm:mt-2.5 sm:text-[13px] sm:leading-[1.5]">
                 {st.label}
               </span>
             </div>
@@ -1271,7 +1351,46 @@ export function Portals({ show }: { show: boolean }) {
     Zoopla: "/brand/zoopla.png",
     /* James's, 13 Sep 2026, white ground keyed out. */
     OnTheMarket: "/brand/onthemarket.png",
+    /* Ours, in the coral. Only on the phone row, where the names are gone
+       and a portal with no mark would be a hole in a row of four. */
+    "thelettingexperts.co.uk": "/brand/tle-logo-coral.png",
   };
+
+  /* THE MARKS ALONE, for the phone. Four names at 21px wrapped to three rows
+     at 375px and were the tallest thing on the slide; the marks say the same
+     in one. The three portal files are square-ish app icons rather than
+     wordmarks, so they are set by height and ours is cropped to its drop -
+     the file is the full 869x465 wordmark whose only empty columns are
+     272-306, so at 40px tall the mark ends at 272 x (40/465) = 23.4px. */
+  const marks = (
+    <ul className="flex items-center justify-between gap-3">
+      {PORTALS_COPY.portals.map((name) =>
+        name === "thelettingexperts.co.uk" ? (
+          <li key={name} className="block h-[40px] w-[25px] shrink-0 overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={LOGOS[name]} alt={name} className="h-full w-auto max-w-none object-left opacity-90" />
+          </li>
+        ) : (
+          <li key={name} className="flex items-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={LOGOS[name]} alt={name} className="h-[40px] w-auto shrink-0 opacity-90" />
+          </li>
+        )
+      )}
+    </ul>
+  );
+
+  /**
+   * ONE FIGURE ON A PHONE, and it is the one that decides something.
+   *
+   * James, 15 Sep 2026: "we can get rid of all of the stats and maybe just
+   * keep one, the biggest impact one ... probably the biggest one is 4 in 5."
+   * Four figures stacked one under another on a 375px screen is a column a
+   * landlord scrolls past; one is a fact they keep. The other three are still
+   * on the slide on anything wider, where they sit as a two-by-two.
+   */
+  const one = PORTAL_STATS.find((st) => st.value === "4 in 5") ?? PORTAL_STATS[0];
+
   return (
     <CreamSlide id="portals">
       {/* James, 13 Sep 2026: the heading and its paragraph on the left, the
@@ -1294,19 +1413,43 @@ export function Portals({ show }: { show: boolean }) {
               </p>
             </Rise>
           </div>
-          <div className="lg:pt-4">
+          <div className="hidden lg:block lg:pt-4">
             <Stats stats={PORTAL_STATS} show={show} from={3} cols={2} />
           </div>
         </div>
 
-        {/* The names, across the foot. The mark AND the name, never the mark
-            on its own: the two files we hold are app icons rather than
-            wordmarks, and a green square beside three words is not a list. */}
+        {/* THE PHONE'S ORDER, which is not the wide screen's.
+            James, 15 Sep 2026: "we can add the logos before the figures, and
+            then the figures will set, so it will be the title, the subtext,
+            and then we should then go to the logos after that." Where a
+            landlord is being told their property goes everywhere, the proof
+            is the row of places - the figure argues for the row rather than
+            the other way round. */}
+        <div className="sm:hidden">
+          <Rise show={show} i={3}>
+            <div className="mt-8 border-t pt-7" style={{ borderColor: "rgba(0,0,0,0.09)" }}>
+              {marks}
+            </div>
+          </Rise>
+          <Rise show={show} i={4}>
+            <div className="mt-8 border-t pt-5" style={{ borderColor: "rgba(0,0,0,0.12)" }}>
+              <span className="block text-[44px] leading-none" style={{ fontFamily: HAND, fontWeight: 700, color: CORAL }}>
+                {one.value}
+              </span>
+              <span className="mt-3 block text-[14px] font-light leading-[1.5] text-black/60">{one.label}</span>
+            </div>
+          </Rise>
+        </div>
+
+        {/* The names, across the foot, from sm up. The mark AND the name,
+            never the mark on its own: the two files we hold are app icons
+            rather than wordmarks, and a green square beside three words is
+            not a list. */}
         <Rise show={show} i={8}>
-          <ul className="mt-12 flex flex-wrap items-center justify-between gap-x-8 gap-y-5 border-t pt-8" style={{ borderColor: "rgba(0,0,0,0.09)" }}>
+          <ul className="mt-12 hidden flex-wrap items-center justify-between gap-x-8 gap-y-5 border-t pt-8 sm:flex" style={{ borderColor: "rgba(0,0,0,0.09)" }}>
             {PORTALS_COPY.portals.map((p) => (
               <li key={p} className="flex items-center">
-                {LOGOS[p] && (
+                {LOGOS[p] && p !== "thelettingexperts.co.uk" && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={LOGOS[p]} alt="" aria-hidden className="mr-3.5 h-7 w-auto shrink-0 opacity-90" />
                 )}
@@ -1317,6 +1460,12 @@ export function Portals({ show }: { show: boolean }) {
             ))}
           </ul>
         </Rise>
+        {/* The tablet keeps all four figures, under the names rather than
+            beside the heading: at 640-1024 the two-column head has already
+            stacked, so a right-hand column would be a second stack. */}
+        <div className="mt-10 hidden sm:block lg:hidden">
+          <Stats stats={PORTAL_STATS} show={show} from={3} cols={2} />
+        </div>
       </div>
     </CreamSlide>
   );
@@ -1345,9 +1494,17 @@ export function Social({ show }: { show: boolean }) {
             uncomfortable half of the market report: it is why reaching past
             the search results matters in 2026 in a way it did not in 2022.
             Sourced and dated on the page - see lib/present-stats. */}
-        <div className="mt-11 border-t pt-9" style={{ borderColor: "rgba(0,0,0,0.09)" }}>
+        {/* "WHY WIDER REACH MATTERS" IS NOT A FOURTH FIGURE, and on a phone
+            that is exactly what it looked like: a line of type sitting above
+            a stacked column of three, in the same rhythm, with no number on
+            it. James, 15 Sep 2026: "it looks like a box, so I'm a little bit
+            confused with that one ... if it's meant to be a title, just get
+            rid of it and then get rid of the line, and then we can just have
+            the three stats." It earns its place on a wide screen, where the
+            rule runs the full width and the figures sit in a row beneath it. */}
+        <div className="mt-5 sm:mt-11 sm:border-t sm:pt-9" style={{ borderColor: "rgba(0,0,0,0.09)" }}>
           <Rise show={show} i={3}>
-            <p className="mb-7 text-[12.5px] font-light text-black/45">
+            <p className="mb-7 hidden text-[12.5px] font-light text-black/45 sm:block">
               Why wider reach matters
             </p>
           </Rise>
@@ -1379,25 +1536,30 @@ export function Compliance({ show }: { show: boolean }) {
             <br />
             compliant and <Emphasis show={show}>up to date</Emphasis>
           </HandHead>
+          {/* James, 15 Sep 2026: "get rid of the subtext on this one and then
+              get rid of the line underneath it, and then we can just have the
+              four points." The four blocks each carry their own rule, so on a
+              phone the standfirst's was a fifth line doing nothing but
+              pushing the last block off the screen. */}
           <Rise show={show} i={2}>
-            <p className="mt-6 max-w-[560px] text-[15px] font-light leading-[1.6] text-black/55">
+            <p className="mt-6 hidden max-w-[560px] text-[15px] font-light leading-[1.6] text-black/55 sm:block">
               Lettings comes with a growing number of responsibilities. Our role is to help you
               understand what applies, what needs doing and when.
             </p>
           </Rise>
         </div>
 
-        <div className="mt-9 grid gap-x-14 gap-y-7 sm:grid-cols-2 lg:mt-10">
+        <div className="mt-5 grid gap-x-14 gap-y-4 sm:mt-9 sm:gap-y-7 sm:grid-cols-2 lg:mt-10">
           {COMPLIANCE.map((c, n) => (
             <Rise key={c.title} show={show} i={3 + Math.floor(n / 2)}>
-              <div className="border-t border-black/10 pt-4">
+              <div className="border-t border-black/10 pt-3 sm:pt-4">
                 <h3
-                  className="text-[15.5px] leading-snug sm:text-[16px]"
+                  className="text-[15px] leading-snug sm:text-[16px]"
                   style={{ fontFamily: HAND, fontWeight: 700 }}
                 >
                   {c.title}
                 </h3>
-                <p className="mt-2 text-[13px] font-light leading-[1.6] text-black/60">{c.body}</p>
+                <p className="mt-1.5 text-[12.5px] font-light leading-[1.5] text-black/60 sm:mt-2 sm:text-[13px] sm:leading-[1.6]">{c.body}</p>
               </div>
             </Rise>
           ))}
@@ -1426,7 +1588,7 @@ export function Legal({ show }: { show: boolean }) {
         <div className="max-w-[700px]">
           <HandHead eyebrow="Your landlord responsibilities" show={show} lines={2}>
             The essentials we help
-            <br />
+            <br className="hidden sm:inline" />{" "}
             you stay <Emphasis show={show}>on top of</Emphasis>
           </HandHead>
           <Rise show={show} i={2}>
@@ -1440,12 +1602,13 @@ export function Legal({ show }: { show: boolean }) {
         <div className="mt-7 grid gap-x-14 gap-y-3 sm:grid-cols-2 lg:mt-8">
           {LEGAL_ITEMS.map((l, n) => (
             <Rise key={l.title} show={show} i={3 + Math.floor(n / 4)}>
+              {/* The same two-column rule as the offer slide, and the same
+                  correction: on a phone there is one column, so only the
+                  first item has nothing above it. */}
               <div
-                className="flex gap-3"
-                style={{
-                  borderTop: n < 2 ? "none" : "1px solid rgba(0,0,0,0.07)",
-                  paddingTop: n < 2 ? 0 : 11,
-                }}
+                className={`flex gap-3 border-t border-black/[0.07] pt-[11px] ${
+                  n === 0 ? "border-t-0 pt-0" : ""
+                } ${n === 1 ? "sm:border-t-0 sm:pt-0" : ""}`}
               >
                 <span className="mt-[3px] shrink-0" style={{ color: CORAL }}>
                   <Line name="shield" size={16} />
@@ -1472,6 +1635,16 @@ export function Legal({ show }: { show: boolean }) {
           </p>
         </Rise>
       </div>
+
+      {/* THE ONE SLIDE THAT DOES NOT FIT, and is allowed not to.
+          James, 15 Sep 2026: "the one page that we're not going to be able to
+          get around is Your Landlord Responsibilities, because these are
+          things that are really required. You might have to keep this page as
+          a scroll, and maybe you could have a little arrow that points down
+          to say 'Scroll more'." Eight legal duties, each paired with what we
+          do about it, is the one list in the deck that cannot be made shorter
+          without changing what it says. */}
+      <ScrollOn />
     </CreamSlide>
   );
 }
@@ -1530,7 +1703,7 @@ export function Management({ show }: { show: boolean }) {
           </HandHead>
         </div>
 
-        <div className="mt-9 grid gap-x-14 gap-y-7 sm:grid-cols-2 lg:mt-10">
+        <div className="mt-7 grid gap-x-14 gap-y-5 sm:mt-9 sm:gap-y-7 sm:grid-cols-2 lg:mt-10">
           {MANAGEMENT.map((c, n) => (
             <Rise key={c.title} show={show} i={2 + Math.floor(n / 2)}>
               <div className="border-t border-black/10 pt-4">
@@ -1589,9 +1762,11 @@ export function Levels({ show }: { show: boolean }) {
     <CreamSlide id="levels">
       <div className="mx-auto w-full max-w-[1180px]">
         <div className="max-w-[700px]">
+          {/* The break leaves "the" alone on a line at 375px, and a fourth
+              line on the tallest slide in the deck. */}
           <HandHead eyebrow="Service levels" show={show} lines={2}>
             Three levels. Choose the
-            <br />
+            <br className="hidden sm:inline" />{" "}
             support that <Emphasis show={show}>suits you.</Emphasis>
           </HandHead>
         </div>
@@ -1606,7 +1781,7 @@ export function Levels({ show }: { show: boolean }) {
             pink box was "about half the height of all of the boxes" beside
             the table - so it fills the row now, with a bigger title and the
             items spaced down it rather than bunched at the top. */}
-        <div className="mt-6 grid items-stretch gap-x-12 gap-y-6 lg:mt-7 lg:grid-cols-[0.78fr_1.22fr]">
+        <div className="mt-6 hidden items-stretch gap-x-12 gap-y-6 sm:grid lg:mt-7 lg:grid-cols-[0.78fr_1.22fr]">
           {every.length > 0 && (
             <Rise show={show} i={2} className="flex">
               <div className="flex w-full flex-col rounded-2xl px-6 py-6" style={{ background: TINTS[0] }}>
@@ -1669,41 +1844,77 @@ export function Levels({ show }: { show: boolean }) {
           </Rise>
         </div>
 
-        <div className="mt-6 space-y-3 sm:hidden">
-          {SERVICE_LEVELS.map((s, n) => {
-            const adds = differs.filter((r) => r.included[n]);
-            return (
-              <Rise key={s} show={show} i={3 + n}>
-                <div className="rounded-2xl border border-black/10 p-4">
-                  <h3
-                    className="text-[14.5px]"
-                    style={{ fontFamily: HAND, fontWeight: 700, color: n === 0 ? CORAL : undefined }}
-                  >
-                    {s}
-                  </h3>
-                  {adds.length === 0 ? (
-                    <p className="mt-1 text-[12px] font-light text-black/50">
-                      Everything above, with the ongoing tenancy remaining with you.
-                    </p>
-                  ) : (
-                    <ul className="mt-2 space-y-1.5">
-                      {adds.map((r) => (
-                        <li key={r.service} className="flex items-start gap-2">
-                          <span className="mt-[3px] shrink-0" style={{ color: CORAL }}>
-                            <Line name="check" size={13} />
-                          </span>
-                          <span className="text-[12px] font-light leading-snug">{r.service}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </Rise>
-            );
-          })}
-        </div>
+        <LevelsPhone rows={rows} show={show} />
       </div>
     </CreamSlide>
+  );
+}
+
+/**
+ * THE THREE LEVELS ON A PHONE: one at a time, tapped.
+ *
+ * James, 15 Sep 2026: "the biggest problem that we have is that we can't
+ * display the grid in this one because it won't fit. We either need to make
+ * our own grid, or we need to explain what they get in each service level."
+ *
+ * Fourteen rows against three columns cannot be made to fit 375px and still
+ * be a grid: every service label wraps to two lines, which leaves the ticks
+ * floating a line and a half from the thing they are ticking. So the phone
+ * stops comparing and answers the question the comparison was for - pick a
+ * level, read what you get. Every line is what that level INCLUDES, ticked,
+ * in full. Nothing absent, nothing to work out from a dash.
+ *
+ * The stacked cards it replaces did the opposite: each one listed only what
+ * that level adds, so the cheapest read as an empty box and the standard
+ * seven were in a pink panel two screens further up.
+ *
+ * Tapped rather than swiped, deliberately. The deck itself moves on a
+ * horizontal swipe, and a second horizontal gesture nested inside that one is
+ * a coin toss for the landlord and a scroll-chaining fight for the browser.
+ */
+function LevelsPhone({ rows, show }: { rows: typeof SERVICE_ROWS; show: boolean }) {
+  const [at, setAt] = useState(0);
+  const gets = rows.filter((r) => r.included[at]);
+
+  return (
+    <div className="mt-6 sm:hidden">
+      <Rise show={show} i={2}>
+        <div role="tablist" aria-label="Service levels" className="flex gap-1.5">
+          {SERVICE_LEVELS.map((s, n) => (
+            <button
+              key={s}
+              type="button"
+              role="tab"
+              aria-selected={n === at}
+              onClick={() => setAt(n)}
+              className="flex-1 rounded-[14px] px-1.5 py-2.5 text-[11.5px] font-semibold leading-[1.25] transition-colors"
+              style={
+                n === at
+                  ? { background: CORAL, color: "#fff" }
+                  : { background: TINTS[0], color: "rgba(59,59,60,0.65)" }
+              }
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </Rise>
+      <Rise show={show} i={3}>
+        <p className="mt-5 text-[12.5px] font-light text-black/45">
+          What the {SERVICE_LEVELS[at]} service includes
+        </p>
+        <ul className="mt-3 space-y-1">
+          {gets.map((r) => (
+            <li key={r.service} className="flex items-start gap-2.5">
+              <span className="mt-[2px] shrink-0" style={{ color: CORAL }}>
+                <Line name="check" size={14} />
+              </span>
+              <span className="text-[12.5px] font-light leading-[1.45]">{r.service}</span>
+            </li>
+          ))}
+        </ul>
+      </Rise>
+    </div>
   );
 }
 
@@ -1732,15 +1943,18 @@ export function Collection({ show }: { show: boolean }) {
           </Rise>
         </div>
 
-        <ul className="mt-9 grid gap-x-14 gap-y-3 sm:grid-cols-2 lg:mt-10">
+        {/* Four short lines on a tall screen. James, 15 Sep 2026: "we can add
+            a bit more padding between each bit because this one is a little
+            bit short. Also, it doesn't have a line between the first and the
+            second point" - the same two-column rule leaking onto a phone as
+            on the offer slide. */}
+        <ul className="mt-9 grid gap-x-14 gap-y-6 sm:gap-y-3 sm:grid-cols-2 lg:mt-10">
           {RENT_COLLECTION.points.map((p, n) => (
             <Rise key={p} show={show} i={3 + Math.floor(n / 2)}>
               <li
-                className="flex items-start gap-3"
-                style={{
-                  borderTop: n < 2 ? "none" : "1px solid rgba(0,0,0,0.07)",
-                  paddingTop: n < 2 ? 0 : 12,
-                }}
+                className={`flex items-start gap-3 border-t border-black/[0.07] pt-6 sm:pt-3 ${
+                  n === 0 ? "border-t-0 pt-0" : ""
+                } ${n === 1 ? "sm:border-t-0 sm:pt-0" : ""}`}
               >
                 <span className="mt-[3px] shrink-0" style={{ color: CORAL }}>
                   <Line name="check" size={16} />

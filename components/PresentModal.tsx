@@ -7,7 +7,7 @@ import PresentBook, { PAGE_H, PAGE_W } from "@/components/PresentBook";
 import PresentPages from "@/components/PresentPages";
 import SwipeToRead from "@/components/SwipeToRead";
 import AgentSheet from "@/components/AgentSheet";
-import { CREAM, DeckStyleCtx, themeVars, INK } from "@/components/present-kit";
+import { CREAM, DeckStyleCtx, THEMES, themeVars, INK } from "@/components/present-kit";
 import { asStyle, slidesFor, type PresentDeck as Deck, type SlideId } from "@/lib/present";
 import { BookActionsCtx } from "@/components/PresentBookPages";
 
@@ -117,6 +117,49 @@ export default function PresentModal({
    * them open it on a phone. See PresentPages.
    */
   const phone = room.w > 0 && room.w < 760;
+
+  /**
+   * THE GROUND UNDER THE DECK, for as long as the deck is up.
+   *
+   * James, 15 Sep 2026: "we're having a black bar appear across the bottom
+   * occasionally. I'm not sure what that is."
+   *
+   * This is: the overlay is `fixed inset-0`, and on a phone that is the SMALL
+   * viewport - the one measured with the address bar showing. The moment the
+   * browser hides or shows its chrome the visible area changes, and for the
+   * length of that transition the strip the overlay does not reach shows the
+   * DOCUMENT behind it. In the dark theme the document is #363432, a warm
+   * charcoal, which at the foot of a cream screen reads as a black bar. A
+   * rubber-band at the bottom of the strip does the same thing.
+   *
+   * Chasing the viewport with dvh cannot win that race - the gap exists
+   * during the transition whatever the element measures. So the document
+   * itself is painted the deck's own ground while the deck is open, and any
+   * gap the browser opens is simply more of the same cream. Overscroll is
+   * pinned at the same time so nothing can be dragged into view either.
+   *
+   * Phone only: on a desktop the deck sits on a deliberately dimmed, blurred
+   * portal, and that page is meant to show through.
+   */
+  useEffect(() => {
+    if (!phone) return;
+    const root = document.documentElement;
+    const body = document.body;
+    /* THE THEME'S REAL GROUND, not CREAM: that constant is var(--p-ground),
+       and the variable is stamped on the overlay by themeVars - so on <html>
+       it resolves to nothing and paints transparent, which is the bug this
+       effect exists to fix, silently reintroduced. */
+    const ground = (THEMES[asStyle(deck.style)] ?? THEMES.house).ground;
+    const was = [root.style.background, root.style.overscrollBehavior, body.style.background];
+    root.style.background = ground;
+    root.style.overscrollBehavior = "none";
+    body.style.background = ground;
+    return () => {
+      root.style.background = was[0];
+      root.style.overscrollBehavior = was[1];
+      body.style.background = was[2];
+    };
+  }, [phone, deck.style]);
   const onSpread = useCallback((at: number, of: number) => setPage({ at, of }), []);
   /* The phone has no cover to open, so page one is page one - where the
      booklet reports -1 until the cover is turned. */
@@ -234,7 +277,13 @@ export default function PresentModal({
               375px the button wrapped onto two lines and sat on top of the
               count. */}
           {phone ? (
-            <div className="relative z-[86] mt-4 w-full px-4 pb-1">
+            <div
+              className="relative z-[86] mt-4 w-full px-4"
+              /* The home indicator's strip is real screen the deck cannot
+                 use. Counted here and subtracted from the slide's height in
+                 PresentPages, so the two always agree. */
+              style={{ paddingBottom: "calc(4px + env(safe-area-inset-bottom, 0px))" }}
+            >
               {/* Slide one has no action, so the slot carries the swipe
                   instead: on a phone nothing else says the deck moves, and a
                   control that DOES the thing teaches it better than a hint
@@ -256,38 +305,17 @@ export default function PresentModal({
                   </svg>
                 </button>
               )}
-              {/* Back on the left, Next on the right, the count between them -
-                  where a thumb expects each of them to be. */}
-              <div className="flex items-center gap-3">
-                {(() => {
-                  const arrow = (label: "Back" | "Next", dir: 1 | -1) => {
-                    const can = dir < 0 ? page.at > 0 : page.at < page.of - 1;
-                    return (
-                      <button
-                        type="button"
-                        aria-label={label}
-                        disabled={!can}
-                        onClick={() => api?.go(dir)}
-                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border"
-                        style={{ opacity: can ? 1 : 0.3, background: "#fff", borderColor: "rgba(0,0,0,0.12)", color: INK }}
-                      >
-                        <svg viewBox="0 0 24 24" aria-hidden className="h-[18px] w-[18px]" style={{ transform: dir < 0 ? "scaleX(-1)" : undefined }}>
-                          <path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      </button>
-                    );
-                  };
-                  return (
-                    <>
-                      {arrow("Back", -1)}
-                      <p className="flex-1 text-center text-[12.5px]" style={{ color: "rgba(59,59,60,0.55)" }}>
-                        {page.at + 1} of {page.of}
-                      </p>
-                      {arrow("Next", 1)}
-                    </>
-                  );
-                })()}
-              </div>
+              {/* HOW FAR THROUGH, and nothing else.
+                  James, 15 Sep 2026: "I think we can also remove the left and
+                  right arrows. It's fairly obvious that we need to swipe, so
+                  we might as well just get rid of the arrows, and that will
+                  give us a little bit more space to work with." Two 48px
+                  buttons and their row were 60px of every screen spent
+                  duplicating the gesture the phone already has. The count
+                  stays: a deck this long has to say where it ends. */}
+              <p className="text-center text-[12.5px]" style={{ color: "rgba(59,59,60,0.55)" }}>
+                {page.at + 1} of {page.of}
+              </p>
             </div>
           ) : (
             /* Hung under the booklet itself: the way to sign centred under the

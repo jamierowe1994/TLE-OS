@@ -599,7 +599,12 @@ export function CreamSlide({
          with the length of whatever was under them: 204px to 323px down on a
          desktop, and worse on a phone where the slides differ most in
          height. A slide taller than the window still scrolls in its cell. */
-      className="relative flex min-h-full w-full shrink-0 flex-col justify-start px-6 pb-8 pt-14 sm:px-10 sm:pb-20 sm:pt-20 lg:px-14 lg:pt-[150px]"
+      /* pb-4 on a phone, pb-20 above it. The 32px was air under the last
+         line on a screen that has 16px of its own gap below the cell and
+         then the foot - on the slides that are fighting for a single screen
+         it was half a list item. The TOP padding is untouched on purpose:
+         it is what makes every heading start at the same height. */
+      className="relative flex min-h-full w-full shrink-0 flex-col justify-start px-6 pb-4 pt-14 sm:px-10 sm:pb-20 sm:pt-20 lg:px-14 lg:pt-[150px]"
       style={{ background: CREAM, color: INK }}
     >
       {children}
@@ -620,7 +625,24 @@ export function CreamSlide({
  * The brand looks still set it in Lora Italic, which is the guidelines' own
  * supporting face, and those need the extra size a smaller x-height asks for.
  */
-export function Emphasis({ show, children }: { show: boolean; children: React.ReactNode }) {
+export function Emphasis({
+  show,
+  tone,
+  children,
+}: {
+  show: boolean;
+  /**
+   * "clay" for the pink, where the accent's brown is doing the wrong job.
+   *
+   * James, 15 Sep 2026, on the marketing divider: "the right tenant should be
+   * in pink, not in purple." The house accent is #56423e - brown on paper,
+   * but at 50px on cream it goes plum, and the agent slide already sets the
+   * landlord's own agent's name in the clay. One caller, named rather than
+   * hard-coded on the slide, so the next one reads as the same decision.
+   */
+  tone?: "clay";
+  children: React.ReactNode;
+}) {
   /* `show` is still taken so every caller reads the same - the word used to
      draw its rule in on arrival and no longer draws one at all. */
   void show;
@@ -629,7 +651,7 @@ export function Emphasis({ show, children }: { show: boolean; children: React.Re
       className="relative"
       style={{
         fontFamily: FLOW_EM,
-        color: CORAL,
+        color: tone === "clay" ? "#cfa096" : CORAL,
         fontSize: "var(--p-script-em, 1.22em)",
         lineHeight: "var(--p-script-lh, 1)",
         paddingRight: "0.06em",
