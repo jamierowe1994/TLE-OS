@@ -135,10 +135,30 @@ function idFrom(result: unknown): string | null {
   return o?.id != null ? String(o.id) : null;
 }
 
-/** Their REX user id, which the listing is filed under as the agent. */
+/**
+ * Their REX user id, which the listing is filed under as the agent.
+ *
+ * Held on the account, looked up and stored the first time (ensureRexLink).
+ * James had a live REX sign-in and no id on his row - the two are stored
+ * separately - so a first attempt at adding a listing told him to connect an
+ * account he had already connected (16 Sep 2026). The last resort is the
+ * email REX itself gave us when he signed in, which is the one that matches
+ * their user record when it differs from the OS one.
+ */
 async function rexUserIdFor(userId: string | null): Promise<string | null> {
   if (!userId) return null;
-  const { findUserById } = await import("@/lib/users");
+  const { findUserById, ensureRexLink, linkRexUser } = await import("@/lib/users");
   const user = await findUserById(userId).catch(() => null);
-  return user?.rexUserId ? String(user.rexUserId) : null;
+  if (!user) return null;
+  const known = await ensureRexLink(user).catch(() => null);
+  if (known) return String(known);
+
+  const { rexSessionFor } = await import("@/lib/rex-user");
+  const session = await rexSessionFor(userId).catch(() => null);
+  if (!session?.email) return null;
+  const { agentByEmail } = await import("@/lib/rex-agents");
+  const agent = await agentByEmail(session.email).catch(() => null);
+  if (!agent?.id) return null;
+  await linkRexUser(user.id, agent.id).catch(() => {});
+  return String(agent.id);
 }
