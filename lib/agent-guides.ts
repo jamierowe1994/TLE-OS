@@ -204,9 +204,9 @@ export const AGENT_GUIDES: Guide[] = [
         title: "How Your Best-Price Guide Is Worked Out",
         body: "The best-price guide is three figures: a low, a middle and a high monthly rent. It is worked out from homes we let ourselves rather than from adverts, so every figure in it rests on a property you can name and talk about with confidence.",
         image: img("ma-build-guide"),
-        caption: "The guide as the Market step shows it. The deck works it out again from the homes you ticked.",
+        caption: "On the Market step: the guide going in the presentation, from the homes you ticked, and underneath it the guide from everything found.",
         how: "The chosen homes are put in rent order, and the guide takes the rents a quarter, half and three quarters of the way up the list. That is the middle half of real rents, so one expensive penthouse cannot drag the figure up. The search starts in the same postcode sector and widens to the district, then the whole postcode area, until it has at least four homes to work from.",
-        why: "Always read the line under the figure before you quote it. 'Only 2 comparables nearby, indicative' means treat it as a starting point. 'Across the wider area' means it is background, not evidence. 'The local spread is very wide' means quote from the named homes rather than the range.",
+        why: "Always read the line under the figure before you quote it. It says how far the homes reach, such as '1 in NN1 4, 2 further out', and warns you when to be careful. 'Only 3 comparables, so treat this as indicative' means it is a starting point. 'Across the wider area' means it is background, not evidence. 'The spread is very wide' means quote from the named homes rather than the range.",
       },
       {
         title: "The Local Market",
@@ -217,9 +217,9 @@ export const AGENT_GUIDES: Guide[] = [
       },
       {
         title: "Review, Then Create",
-        body: "Review lists the pages of the deck on the left and shows the real presentation on the right, exactly as the landlord will see it. Read it through, and when it reads right, press Create presentation.",
+        body: "Review lists every page of the deck on the left, grouped the way the deck is, and shows the real presentation on the right, exactly as the landlord will see it. Switch off any page you want to leave out. Read it through, and when it reads right, press Create presentation.",
         image: img("ma-build-review"),
-        how: "The rent guide and the homes behind it only go in the deck when at least three of ours are ticked on Recently let. With fewer, the page is left out, because two homes make a landlord think we do not know their street. If it is missing from the preview, go back and tick more.",
+        how: "A greyed-out page tells you what it is waiting for. The rent guide and the homes behind it only go in when at least three of ours are ticked on Recently let, because two homes make a landlord think we do not know their street. What's on the market needs properties picked, and the local market needs a block put on a slide.",
         sends:
           "Nothing yet. Creating the presentation makes it and a private link to it, which you present from View presentation on the file on the day. The link lasts 14 days after the visit, and the file shows you each time the landlord opens it.",
       },
