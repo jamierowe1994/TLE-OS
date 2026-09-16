@@ -38,7 +38,7 @@ export default function PreviewPlc({
   /* The invented case and the four faked actions, shared with the practice
      runs in Knowledge so that "what Approve does when nothing is real" has
      exactly one definition. See lib/plc-sandbox. */
-  const { side, setSide, loaded, scanning, perform, restart, run } = usePlcSandbox();
+  const { side, setSide, loaded, scanning, perform, restart, run, agentCase, handIn, reopen } = usePlcSandbox();
 
   return (
     /* No horizontal padding on the main element.
@@ -135,6 +135,9 @@ export default function PreviewPlc({
                 setError(null);
                 restart();
               },
+              existing: agentCase,
+              onSubmitted: handIn,
+              onReopen: reopen,
             }}
           />
         ) : (

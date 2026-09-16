@@ -126,7 +126,7 @@ export async function prefillFor(opts: {
     const shaped = shape(latest);
     if (on.length > 1) {
       shaped.warnings.push(
-        `There are ${on.length} applications on this listing. This is the most recent one — check it is the right one.`
+        `There are ${on.length} applications on this listing. This is the most recent one, so check it is the right one.`
       );
     }
     return shaped;

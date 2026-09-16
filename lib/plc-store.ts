@@ -6,7 +6,9 @@ import { hasDb, q } from "@/lib/db";
 import { DATA_DIR } from "@/lib/business/data-dir";
 import {
   canMove,
+  caseIdFor,
   checkById,
+  noteAsSent,
   gateFor,
   type CheckId,
   type Finding,
@@ -250,7 +252,7 @@ export async function createCase(input: NewCase): Promise<PlcCase> {
   if (!applicationRef) throw new PlcRefused("A handover has to come from an application.");
   if (!address) throw new PlcRefused("A handover needs the property address.");
 
-  const id = `plc-${applicationRef.replace(/[^\w-]+/g, "-")}`;
+  const id = caseIdFor(applicationRef);
   const existing = await getCase(id);
   if (existing) return existing;
 
@@ -373,14 +375,14 @@ export async function submitCase(id: string): Promise<PlcCase> {
     if (!canMove(c.state, "submitted")) {
       throw new PlcRefused(
         c.state === "deferred"
-          ? "This came back to you — reopen it before submitting again."
+          ? "This came back to you. Press Reopen and fix it before sending it again."
           : "This has already been submitted."
       );
     }
     if (!c.moveInDate) {
       /* Not pedantry: every date check is "in date ON the move-in date", so
          without one the scan cannot answer the only question it is good at. */
-      throw new PlcRefused("Add the move-in date first — the date checks are measured against it.");
+      throw new PlcRefused("Add the move-in date first. The date checks are measured against it.");
     }
     /* THE GATE. There is no force any more. A required slot cannot be talked
        past, and a conditional one needs its reason recorded first (see
@@ -399,11 +401,9 @@ export async function submitCase(id: string): Promise<PlcCase> {
       ...c,
       state: "submitted",
       submittedAt: new Date().toISOString(),
-      agentNote: c.waivers.length
-        ? `${c.agentNote}${c.agentNote ? "\n\n" : ""}Not needed: ${c.waivers
-            .map((w) => `${checkById(w.checkId)?.label ?? w.checkId} (${w.reason})`)
-            .join("; ")}.`.trim()
-        : c.agentNote,
+      /* Rebuilt from the agent's own words each time, so a pack that comes
+         back and goes again does not carry the waiver line twice. */
+      agentNote: noteAsSent(c),
     };
   });
 }

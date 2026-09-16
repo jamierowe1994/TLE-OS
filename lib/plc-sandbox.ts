@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { missingDocuments, PLC_CHECKS, type PlcCase } from "@/lib/plc";
+import { missingDocuments, noteAsSent, PLC_CHECKS, scanSummary, type PlcCase } from "@/lib/plc";
 import type { Loaded } from "@/components/PlcReview";
-import { DEMO_SCANNED, DEMO_SUBMITTED, DEMO_SUMMARY } from "@/lib/plc-demo";
+import { DEMO_FINDINGS, DEMO_SUBMITTED, DEMO_SUMMARY } from "@/lib/plc-demo";
 
 /**
  * The PLC handover with the network taken out, so it can be walked.
@@ -58,6 +58,23 @@ export interface PlcSandbox {
   run: number;
   /** Has a decision been made? The last beat of the walk. */
   decided: boolean;
+  /**
+   * The agent's side sent its own pack. From then on compliance read what
+   * was actually attached and written, not the invented full pack.
+   */
+  handedIn: boolean;
+  /** The wizard's Send, answered locally: its pack becomes the one in the queue. */
+  handIn: (c: PlcCase) => void;
+  /** The wizard's Reopen and fix it, answered locally. */
+  reopen: () => PlcCase;
+  /**
+   * What the agent's screen should resume from, or null for a fresh start.
+   *
+   * Null until the agent has sent something or compliance have decided, so
+   * the walk still opens on an empty wizard even though the queue starts with
+   * the invented pack already in it.
+   */
+  agentCase: PlcCase | null;
 }
 
 export function usePlcSandbox(): PlcSandbox {
@@ -65,18 +82,21 @@ export function usePlcSandbox(): PlcSandbox {
   const [kase, setKase] = useState<PlcCase>(DEMO_SUBMITTED);
   const [scanning, setScanning] = useState(false);
   const [run, setRun] = useState(0);
+  const [handedIn, setHandedIn] = useState(false);
 
   const loaded: Loaded = useMemo(
     () => ({
       case: kase,
       checks: PLC_CHECKS,
       missing: missingDocuments(kase).map((c) => c.id),
-      summary: kase.scannedAt ? DEMO_SUMMARY : null,
+      /* The written summary describes the invented pack. A pack the agent
+         assembled themselves gets the product's own one-liner instead. */
+      summary: kase.scannedAt ? (handedIn ? scanSummary(kase.findings) : DEMO_SUMMARY) : null,
       /* True, so the panel offers the reading rather than explaining that it
          is switched off. The reading itself is faked below. */
       scanConfigured: true,
     }),
-    [kase]
+    [kase, handedIn]
   );
 
   /**
@@ -93,7 +113,18 @@ export function usePlcSandbox(): PlcSandbox {
         setScanning(true);
         await new Promise((r) => setTimeout(r, SCAN_MS));
         setScanning(false);
-        setKase(DEMO_SCANNED);
+        /* The invented reading, kept to the checks this pack has a file for
+           and pinned to the file that is actually there. A finding about a
+           gas certificate nobody attached would teach the wrong thing. */
+        setKase((k) => ({
+          ...k,
+          state: "reviewing",
+          scannedAt: new Date().toISOString(),
+          findings: DEMO_FINDINGS.flatMap((f) => {
+            const doc = k.documents.find((d) => d.checkId === f.checkId);
+            return doc ? [{ ...f, documentName: doc.name }] : [];
+          }),
+        }));
         return;
       }
       if (action === "skip-scan") {
@@ -102,24 +133,56 @@ export function usePlcSandbox(): PlcSandbox {
       }
       if (action === "decide") {
         const decision = String(extra.decision ?? "approved");
+        /* The same refusal the store makes, so the practice teaches the rule. */
+        if (decision !== "approved" && !String(extra.note ?? "").trim()) {
+          throw new Error(
+            decision === "deferred"
+              ? "Say what's missing. The agent only sees this note."
+              : "A decline needs a reason on the record."
+          );
+        }
         setKase((k) => ({
           ...k,
           state: decision as PlcCase["state"],
           decidedAt: new Date().toISOString(),
           decidedBy: "You, in the practice run",
-          decisionNote: String(extra.note ?? ""),
+          decisionNote: String(extra.note ?? "").trim(),
         }));
       }
     },
     []
   );
 
+  const handIn = useCallback((c: PlcCase) => {
+    setKase({
+      ...c,
+      state: "submitted",
+      submittedAt: new Date().toISOString(),
+      agentNote: noteAsSent(c),
+      findings: [],
+      scannedAt: null,
+    });
+    setHandedIn(true);
+  }, []);
+
+  /* Returned as well as stored: the wizard carries on with the reopened pack
+     straight away, without waiting for this state to come back round. */
+  const reopen = useCallback((): PlcCase => {
+    const reopened: PlcCase = { ...kase, state: "assembling", findings: [], scannedAt: null };
+    setKase(reopened);
+    setHandedIn(true);
+    return reopened;
+  }, [kase]);
+
   const restart = useCallback(() => {
     setKase(DEMO_SUBMITTED);
+    setHandedIn(false);
     setSide("agent");
     setScanning(false);
     setRun((n) => n + 1);
   }, []);
+
+  const decided = kase.state === "approved" || kase.state === "deferred" || kase.state === "declined";
 
   return {
     side,
@@ -130,6 +193,10 @@ export function usePlcSandbox(): PlcSandbox {
     perform,
     restart,
     run,
-    decided: kase.state === "approved" || kase.state === "deferred" || kase.state === "declined",
+    decided,
+    handedIn,
+    handIn,
+    reopen,
+    agentCase: handedIn || decided ? kase : null,
   };
 }

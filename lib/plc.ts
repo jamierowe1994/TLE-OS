@@ -442,6 +442,33 @@ export function gateFor(c: Pick<PlcCase, "documents" | "waivers">): {
 export const waiverFor = (c: Pick<PlcCase, "waivers">, id: CheckId): Waiver | null =>
   (c.waivers ?? []).find((w) => w.checkId === id) ?? null;
 
+/**
+ * The case id for an application. One pack per application, so the wizard can
+ * ask whether one already exists before it offers to start another.
+ */
+export const caseIdFor = (applicationRef: string) =>
+  `plc-${applicationRef.trim().replace(/[^\w-]+/g, "-")}`;
+
+/**
+ * The agent's note, without the "Not needed: ..." line a send adds to it.
+ *
+ * The waivers are written onto the note at the moment the pack goes, so that
+ * compliance read them in one place. A pack that comes back and goes again
+ * would otherwise carry that line twice, and the agent would see it in their
+ * own note box as if they had typed it.
+ */
+export const agentOwnNote = (note: string) => note.replace(/(?:\n\n)?Not needed: [^\n]*$/, "").trim();
+
+/** The note as it goes to compliance: the agent's words, then the waivers. */
+export function noteAsSent(c: Pick<PlcCase, "agentNote" | "waivers">): string {
+  const own = agentOwnNote(c.agentNote);
+  if (!(c.waivers ?? []).length) return own;
+  const line = `Not needed: ${c.waivers
+    .map((w) => `${checkById(w.checkId)?.label ?? w.checkId} (${w.reason})`)
+    .join("; ")}.`;
+  return own ? `${own}\n\n${line}` : line;
+}
+
 /** Blockers first, then queries. What Kirstie should read in order. */
 export function sortFindings(f: Finding[]): Finding[] {
   const rank: Record<FindingLevel, number> = { blocker: 0, query: 1, ok: 2 };

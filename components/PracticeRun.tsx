@@ -330,6 +330,11 @@ export default function PracticeRun({
               prefill: DEMO_PREFILL,
               onSeeCompliance: () => setSide("compliance"),
               onRestart: startOver,
+              /* The loop closes here: what the agent sends is what compliance
+                 read, and what compliance send back is what the agent opens. */
+              existing: sandbox.agentCase,
+              onSubmitted: sandbox.handIn,
+              onReopen: sandbox.reopen,
             }}
           />
         ) : (

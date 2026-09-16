@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import DoodleIcon from "@/components/DoodleIcon";
 import { DoneTick } from "@/components/Bits";
 import {
+  agentOwnNote,
+  caseIdFor,
   CHECK_GROUPS,
   guessCheck,
   PLC_CHECKS,
@@ -16,6 +18,7 @@ import {
 } from "@/lib/plc";
 import type { Prefill } from "@/lib/plc-prefill";
 import { demoCase } from "@/lib/plc-demo";
+import { prettyWhen } from "@/components/PlcReview";
 
 /**
  * Starting a PLC check.
@@ -48,11 +51,20 @@ import { demoCase } from "@/lib/plc-demo";
  * this screen and closing it again leaves nothing behind, because a list full
  * of empty half-started handovers is indistinguishable from a list of real
  * work.
+ *
+ * ── A pack that already exists is shown, not restarted ─────────────────────
+ *
+ * One pack per application. When the agent comes back to one that compliance
+ * sent back, or that is still with them, the wizard says so before anything
+ * else: a sent-back pack shows what compliance wrote and offers Reopen and fix
+ * it, and only then does it become editable again. Without this the screens
+ * looked editable, every attach was refused, and the only reopen button lived
+ * on the dry-run harness at /plc.
  */
 
 /* ─────────────────────────────── plumbing ─────────────────────────────── */
 
-type Step = "gathering" | "details" | "landlord" | "tenant" | "review" | "sending" | "done";
+type Step = "gathering" | "details" | "landlord" | "tenant" | "review" | "sending" | "done" | "returned";
 
 const ORDER: Step[] = ["gathering", "details", "landlord", "tenant", "review", "sending", "done"];
 
@@ -441,6 +453,16 @@ export default function PlcWizard({
      */
     onSeeCompliance?: () => void;
     onRestart?: () => void;
+    /**
+     * The pack as the practice left it, when there is one: sent, decided or
+     * reopened. Read once, when the wizard opens, the same moment the real
+     * one asks the API whether a pack already exists.
+     */
+    existing?: PlcCase | null;
+    /** Send, answered by the sandbox, so compliance's side reads this pack. */
+    onSubmitted?: (c: PlcCase) => void;
+    /** Reopen and fix it, answered by the sandbox. Returns the reopened pack. */
+    onReopen?: () => PlcCase;
   };
 }) {
   const router = useRouter();
@@ -454,6 +476,15 @@ export default function PlcWizard({
   const [why, setWhy] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [fixing, setFixing] = useState(false);
+  /** What the agent wants compliance to know. Optional. */
+  const [note, setNote] = useState("");
+  /* The demo seam is a fresh object on every render of whatever mounts this.
+     Held in a ref so re-rendering the page around the wizard (ticking a
+     practice step, say) never re-runs the opening read and yanks the agent
+     back to the first screen. */
+  const demoRef = useRef(demo);
+  demoRef.current = demo;
+  const isDemo = !!demo;
 
   /* Advance with the panel sliding out before the next one slides in, so the
      two are never on screen together. */
@@ -474,17 +505,31 @@ export default function PlcWizard({
     (async () => {
       let got: Prefill | null = null;
       let failed: string | null = null;
-      if (demo) {
+      let existing: PlcCase | null = null;
+      const d = demoRef.current;
+      if (d) {
         /* The theatre below still runs. It is not decoration: the pause is
            what makes "we went and got this for you" legible, and skipping it
            in the preview would show a faster product than the real one. */
-        got = demo.prefill;
+        got = d.prefill;
+        existing = d.existing ?? null;
       } else {
         try {
           const res = await api<{ prefill: Prefill }>(`/api/plc/prefill?${params}`);
           got = res.prefill;
         } catch (e) {
           failed = (e as Error).message;
+        }
+        /* Is there already a pack for this application? A 404 is the normal
+           answer. Any other failure is treated the same, because Continue
+           asks again and lands on the right screen either way. */
+        if (got) {
+          try {
+            const res = await api<{ case: PlcCase }>(`/api/plc/${caseIdFor(got.applicationRef)}`);
+            existing = res.case;
+          } catch {
+            existing = null;
+          }
         }
       }
       /* The floor, never a ceiling: a read that took longer than the theatre
@@ -493,23 +538,36 @@ export default function PlcWizard({
       window.setTimeout(() => {
         if (!alive) return;
         setPrefill(got);
-        setMoveIn(got?.moveInDate ?? "");
+        setMoveIn(existing?.moveInDate ?? got?.moveInDate ?? "");
         setError(failed);
-        go("details");
+        if (existing) setKase(existing);
+        go(existing && existing.state !== "assembling" ? "returned" : "details");
       }, wait);
     })();
 
     return () => {
       alive = false;
     };
-  }, [applicationId, listingId, go, demo]);
+  }, [applicationId, listingId, go, isDemo]);
+
+  /* The note box starts from what is on the pack, whenever a different pack
+     or a different state of it arrives (opened, reopened). */
+  useEffect(() => {
+    setNote(agentOwnNote(kase?.agentNote ?? ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kase?.id, kase?.state]);
 
   const startAndContinue = async () => {
     if (!prefill) return;
     if (demo) {
       /* No case is created. The pack lives in this component's state for as
-         long as the tab is open and then it is gone. */
-      setKase(demoCase({ moveInDate: moveIn || null, documents: [] }));
+         long as the tab is open and then it is gone. A reopened practice pack
+         carries on from where it was. */
+      setKase(
+        kase && kase.state === "assembling"
+          ? { ...kase, moveInDate: moveIn || null }
+          : demoCase({ moveInDate: moveIn || null, documents: [], agentNote: "" })
+      );
       go("landlord");
       return;
     }
@@ -525,6 +583,13 @@ export default function PlcWizard({
         }),
       });
       let current = made.case;
+      /* Already sent, or sent back, since this screen opened. Show that
+         rather than a set of screens that will refuse every change. */
+      if (current.state !== "assembling") {
+        setKase(current);
+        go("returned");
+        return;
+      }
       /* createCase is idempotent on the application, so re-entering the wizard
          returns the pack already started. It deliberately does not overwrite
          anything - which means a move-in date corrected on this screen has to
@@ -545,12 +610,40 @@ export default function PlcWizard({
     }
   };
 
+  /** Save the note if it has changed. Throws on a refusal. */
+  const saveNote = async (): Promise<PlcCase | null> => {
+    if (!kase || note.trim() === agentOwnNote(kase.agentNote)) return kase;
+    if (demo) {
+      const next = { ...kase, agentNote: note.trim() };
+      setKase(next);
+      return next;
+    }
+    const res = await api<{ case: PlcCase }>(`/api/plc/${kase.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ agentNote: note.trim() }),
+    });
+    setKase(res.case);
+    return res.case;
+  };
+
   const submit = async () => {
     if (!kase) return;
-    go("sending");
     setError(null);
+    /* The note first, so what compliance read is what is in the box, even
+       when Send is pressed straight from typing it. */
+    let current: PlcCase | null;
+    try {
+      current = await saveNote();
+    } catch (e) {
+      setError((e as Error).message);
+      return;
+    }
+    if (!current) return;
+    go("sending");
     if (demo) {
-      setKase({ ...kase, state: "submitted", submittedAt: new Date().toISOString() });
+      const sent: PlcCase = { ...current, state: "submitted", submittedAt: new Date().toISOString() };
+      setKase(sent);
+      demo.onSubmitted?.(sent);
       window.setTimeout(() => setStep("done"), 1400);
       return;
     }
@@ -574,6 +667,30 @@ export default function PlcWizard({
         /* keep what we had */
       }
       go("review");
+    }
+  };
+
+  /** Compliance sent it back: make it the agent's again, then show the lot. */
+  const reopen = async () => {
+    if (!kase) return;
+    setError(null);
+    if (demo) {
+      setKase(demo.onReopen ? demo.onReopen() : { ...kase, state: "assembling", findings: [], scannedAt: null });
+      go("review");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await api<{ case: PlcCase }>(`/api/plc/${kase.id}`, {
+        method: "POST",
+        body: JSON.stringify({ action: "reopen" }),
+      });
+      setKase(res.case);
+      go("review");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -816,6 +933,15 @@ export default function PlcWizard({
               </p>
             )}
 
+            {/* A pack that came back keeps what compliance wrote in view while
+                it is being put right, instead of on a screen already left. */}
+            {kase.decidedAt && kase.decisionNote && (
+              <div className="mt-4 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-sm text-orange-900">
+                <p className="font-medium">What compliance asked for</p>
+                <p className="mt-0.5 whitespace-pre-wrap text-orange-800">{kase.decisionNote}</p>
+              </div>
+            )}
+
             {/* ── The £60 rule, said once ──
                 A pack that reaches the check short of a document fails it,
                 and the failed check is charged again. So the empty slot is
@@ -912,6 +1038,28 @@ export default function PlcWizard({
               </p>
             )}
 
+            {/* ── The note ──
+                Optional, and the one place to tell compliance what the files
+                cannot: a landlord abroad, a certificate booked for Tuesday.
+                Saved when the box is left and again on Send. */}
+            <label className="mt-6 block">
+              <span className="text-sm text-ink">Anything compliance should know</span>
+              <span className="ml-2 text-xs text-muted">optional</span>
+              <textarea
+                rows={3}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                onBlur={() => {
+                  void saveNote().catch((e: Error) => setError(e.message));
+                }}
+                placeholder="e.g. The landlord is abroad until the 20th, so anything needing a signature will take a couple of days."
+                className="mt-1.5 w-full rounded-lg border border-line bg-white px-3 py-2 text-sm outline-none focus:border-ink"
+              />
+              <span className="mt-1 block text-xs text-muted">
+                Goes with the pack, exactly as you write it.
+              </span>
+            </label>
+
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <button
                 type="button"
@@ -942,6 +1090,126 @@ export default function PlcWizard({
               <Ellipsis />
             </p>
             <p className="mt-2 text-sm text-muted">Each document is read for its dates first. A minute, usually.</p>
+          </div>
+        )}
+
+        {/* ── A pack that already exists ──
+            Reached when the application already has a pack that is not the
+            agent's to change: sent, sent back, approved or declined. The copy
+            matches the agent guide (lib/agent-guides, agent-plc). */}
+        {step === "returned" && kase && (
+          <div>
+            {kase.state === "deferred" ? (
+              <>
+                <h1 className="text-2xl tracking-normal text-ink">Compliance Sent This Back</h1>
+                <p className="mt-2 text-sm text-muted">{kase.address}</p>
+                <div className="mt-6 rounded-xl border border-orange-200 bg-orange-50 p-4">
+                  <p className="whitespace-pre-wrap text-sm text-orange-900">
+                    {kase.decisionNote || "No reason was written. Ask compliance what they need."}
+                  </p>
+                  <p className="mt-2 text-xs text-orange-700">
+                    {kase.decidedBy} · {prettyWhen(kase.decidedAt)}
+                  </p>
+                </div>
+                <p className="mt-4 text-sm text-muted">
+                  Reopen it to put right what they asked for, then send it again. It goes back into
+                  their queue.
+                </p>
+              </>
+            ) : kase.state === "approved" ? (
+              <>
+                <h1 className="text-2xl tracking-normal text-ink">This Pack Is Approved</h1>
+                <p className="mt-2 text-sm text-muted">{kase.address}</p>
+                <div className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                  <p>
+                    Approved by {kase.decidedBy} · {prettyWhen(kase.decidedAt)}
+                  </p>
+                  {kase.decisionNote && <p className="mt-1 text-emerald-800">{kase.decisionNote}</p>}
+                </div>
+                <p className="mt-4 text-sm text-muted">
+                  Next: finish the deal in Propoly. Open the application and use its link to the deal.
+                </p>
+              </>
+            ) : kase.state === "declined" ? (
+              <>
+                <h1 className="text-2xl tracking-normal text-ink">This Pack Was Declined</h1>
+                <p className="mt-2 text-sm text-muted">{kase.address}</p>
+                <div className="mt-6 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+                  <p>
+                    Declined by {kase.decidedBy} · {prettyWhen(kase.decidedAt)}
+                  </p>
+                  {kase.decisionNote && <p className="mt-1 text-rose-800">{kase.decisionNote}</p>}
+                </div>
+              </>
+            ) : (
+              <>
+                <h1 className="text-2xl tracking-normal text-ink">This Is With the Compliance Team</h1>
+                <p className="mt-2 text-sm text-muted">{kase.address}</p>
+                <p className="mt-6 text-sm text-muted">
+                  Sent {prettyWhen(kase.submittedAt)}. They usually come back within 48 hours, and the
+                  pack stays locked until they do.
+                </p>
+              </>
+            )}
+
+            {error && (
+              <p className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+                {error}
+              </p>
+            )}
+
+            <div className="mt-8 flex flex-wrap items-center gap-3">
+              {kase.state === "deferred" && (
+                <button
+                  type="button"
+                  onClick={reopen}
+                  disabled={busy}
+                  className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white transition hover:bg-box disabled:opacity-40"
+                >
+                  {busy ? "One moment…" : "Reopen and fix it"}
+                </button>
+              )}
+              {demo ? (
+                kase.state === "deferred" ? null : (kase.state === "submitted" ||
+                  kase.state === "scanning" ||
+                  kase.state === "reviewing") && demo.onSeeCompliance ? (
+                  <button
+                    type="button"
+                    onClick={demo.onSeeCompliance}
+                    className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white"
+                  >
+                    See what compliance sees
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={demo.onRestart}
+                    className="rounded-lg border border-line px-4 py-2.5 text-sm"
+                  >
+                    Run it again
+                  </button>
+                )
+              ) : (
+                <>
+                  {kase.state === "approved" && prefill && (
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/applications?open=${prefill.applicationId}`)}
+                      className="rounded-lg border border-ink bg-ink px-4 py-2.5 text-sm text-white"
+                    >
+                      Open the application
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => router.push("/applications")}
+                    className="rounded-lg border border-line px-4 py-2.5 text-sm transition hover:bg-box"
+                  >
+                    Back to applications
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         )}
 
