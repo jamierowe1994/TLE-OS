@@ -1270,15 +1270,30 @@ export default function ViewingBooker({
                   ? `${sentCount} message${sentCount === 1 ? "" : "s"} sent. In the diary and on the record.`
                   : VIEWING_SENDS_LIVE
                     ? "In the diary and on the record. Nobody was told."
-                    : "In the diary here. Not in REX yet."}
+                    : "Booked, and going into your Outlook calendar."}
               </p>
               {!toLandlord && !VIEWING_SENDS_LIVE && chosen && (
                 <div className="mt-6 w-full max-w-md rounded-2xl border border-line/60 bg-card p-4 text-left">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Confirm it with {chosen.name.split(" ")[0]}</p>
+                  {/* The booking route sends the confirmation itself (lib/viewing-confirm),
+                      from the agent's mailbox where it is connected. This box used to
+                      say sending was not on yet and to confirm from Outlook, which on
+                      live meant a second confirmation (16 Sep 2026). What actually went
+                      is written on the lead's activity once the booking returns. */}
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Confirmation to {chosen.name.split(" ")[0]}</p>
                   <p className="mt-1.5 text-[12.5px]">
-                    To <span className="font-semibold">{chosen.email || "no email on this lead"}</span>: {property?.name}, {whenPretty}.
+                    {chosen.email ? (
+                      <>
+                        To <span className="font-semibold">{chosen.email}</span>: {property?.name}, {whenPretty}.
+                      </>
+                    ) : (
+                      <>No email on this lead, so nothing can be sent. Ring them to confirm.</>
+                    )}
                   </p>
-                  <p className="mt-2 text-[11.5px] text-muted">Sending from the OS switches on once it goes through your own mailbox. Until then, confirm from Outlook as usual and it stays on this record.</p>
+                  {chosen.email ? (
+                    <p className="mt-2 text-[11.5px] text-muted">
+                      Sent for you, with a calendar invite and their tenant passport link. No need to confirm it again. The lead shows it once it has gone.
+                    </p>
+                  ) : null}
                 </div>
               )}
             </div>

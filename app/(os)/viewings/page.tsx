@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import DoodleIcon from "@/components/DoodleIcon";
 import PageHeader from "@/components/PageHeader";
+import GuideButton from "@/components/GuideButton";
 import PickOne from "@/components/PickOne";
 import Segmented from "@/components/Segmented";
 import FeedbackReport from "@/components/viewings/FeedbackReport";
@@ -242,6 +243,10 @@ export default function Viewings() {
                   onChange={setFKind}
                 />
               )}
+              <GuideButton
+                id="viewings"
+                className="flex items-center gap-1.5 rounded-full border border-line/80 px-3.5 py-2 text-[12px] font-semibold text-muted transition-colors hover:border-ink/40 hover:text-ink"
+              />
             </div>
           </div>
         }

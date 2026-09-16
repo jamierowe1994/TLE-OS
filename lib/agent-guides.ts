@@ -245,6 +245,97 @@ export const AGENT_GUIDES: Guide[] = [
       },
     ],
   },
+  {
+    id: "viewings",
+    title: "Booking and Running Viewings",
+    blurb:
+      "How a viewing is booked from the applicant's lead, what the applicant receives the moment you press Book it, and how your day, your week and the feedback all come together on Viewings.",
+    icon: "calendar",
+    href: "/viewings",
+    minutes: 8,
+    cover: img("v-screen"),
+    coverCaption: "Viewings: your day, the week around it, and what is still owed feedback.",
+    intro:
+      "A viewing is the moment a lead becomes a likely tenant, and most of what happens around it now happens for you. You book it from the applicant's lead in a few clicks. It goes into your Outlook calendar, the applicant gets their confirmation and a head start on their application, and afterwards the feedback you record is kept together, property by property, ready for the landlord. This is how it fits together.",
+    steps: [
+      {
+        title: "Where a Viewing Is Booked",
+        body: "Every viewing starts from the applicant's lead. Open the lead and press Book a viewing, which sits under their enquiry. The same button appears as the next step on the lead's track, and again as Book another viewing once one is in.",
+        image: img("v-lead-hero"),
+        why: "Booking from the lead is what ties the viewing to a person with a phone number and an email address. That is how the confirmation can go out, and how the lead's track moves on without anyone updating it.",
+        how: "For now, viewings are not booked from a listing. The listing screen says so and points you to the applicant's lead.",
+      },
+      {
+        title: "Find the Property",
+        body: "The first screen is every home on the market. The one they enquired about comes first, then anything on their shortlist, then everything else that is not let agreed. Type a street, an area or a postcode to narrow it, and pick the home they are going to see.",
+        image: img("v-find"),
+      },
+      {
+        title: "This One?",
+        body: "A quick check before the diary: the photo, the address and the rent. Yes, pick a time carries on; Not this one takes you back to the list.",
+        image: img("v-thisone"),
+        why: "Two flats in the same building can sit side by side in the list. A viewing booked at the wrong one sends the applicant to the wrong door.",
+      },
+      {
+        title: "Pick a Time",
+        body: "The week is laid out half-hour by half-hour, with the appointments already in the diary drawn in. Click an empty half-hour to place the viewing, and drag the bar at its foot if it needs longer than thirty minutes. Leave One of us will be there ticked for an accompanied viewing, or untick it when the applicant is letting themselves in.",
+        image: img("v-time"),
+        how: "Nothing stops you booking on top of another appointment, so look before you click: anything already booked is drawn in the same columns. Past days cannot be picked. An unaccompanied viewing shows in its own colour on the diary and is marked free rather than busy in Outlook.",
+      },
+      {
+        title: "What Happens When You Press Book It",
+        body: "Book it does three things at once. The viewing goes into your Outlook calendar, with the address and the applicant, and a reminder thirty minutes before. The applicant is sent their confirmation. And you are sent a short note of what was booked. The lead's activity then records what went, so you can see at a glance that the confirmation left.",
+        image: img("v-email"),
+        caption: "The confirmation the applicant receives, shown here on sample details.",
+        why: "The confirmation is sent for you, so there is no need to confirm from Outlook as well. Two confirmations with slightly different wording is how applicants turn up at the wrong time.",
+        sends:
+          "To the applicant: 'Your viewing is booked. Next, your tenant passport', with the address, the time, a calendar invite, and a link to start their tenant passport. It comes from your own mailbox where that is connected, or from The Letting Experts where it is not, and either way their reply comes straight to you. To you: 'Viewing booked' with the address and time. Nothing goes to the landlord, and there are no texts yet. If the lead has no email address, nothing can be sent, so ring them.",
+      },
+      {
+        title: "Your Day on Viewings",
+        body: "Viewings, the screen pictured at the top, is where your appointments live once they are booked. The five tiles count what is coming up, what is on today, the next seven days, the viewings that have happened with no feedback yet, and the ones where feedback is in. Below them, the month sits beside the day you are looking at; click any date to see that day in order, and Print for a run sheet to take with you.",
+        why: "Feedback due is the tile to keep at zero. It counts every viewing in the last fortnight where nobody has written down what was said, and that is exactly what a landlord will ring to ask about.",
+      },
+      {
+        title: "The Week Ahead",
+        body: "Press Next 7 days and the week opens beneath the month, hour by hour, starting today rather than on Monday. Every block is an appointment; click one to see what it is.",
+        image: img("v-week"),
+        how: "Viewings, appraisals and take-ons all share the one diary, in their own colours, so you can see where travel is tight before the day arrives.",
+      },
+      {
+        title: "A Quick Look Before You Go",
+        body: "Click any appointment and a quick look opens at the side: where it is, with a link to open it in Maps, who is coming, how you get in (keys, whether anyone lives there, any arrangement with the landlord), and the confirmations. Open the viewing file takes you to everything else.",
+        image: img("v-quicklook"),
+        why: "The access section is the one to read before you set off. A viewing at an occupied home, or with keys that are not in the office, is the one that goes wrong on the doorstep.",
+      },
+      {
+        title: "The Viewing File",
+        body: "The viewing file holds the whole of one viewing: the property and its access, who is coming, the confirmations, your notes, where the applicant is up to, and the activity so far. Reschedule and Cancel viewing sit at the top.",
+        image: img("v-file"),
+        sends:
+          "Reschedule sends the applicant 'New time for your viewing' with a fresh calendar invite and moves the entry in your Outlook. Cancel sends 'Your viewing is cancelled' and takes it out of your calendar. Both need the applicant's email address on the viewing; where there is none, the screen tells you, and it is a phone call.",
+      },
+      {
+        title: "After the Viewing: Did They Turn Up?",
+        body: "Once a viewing has happened, its quick look offers Open the viewing and record feedback, and the file asks the first question: did they turn up? Press They showed to carry on, or No-show, which is recorded straight away.",
+        image: img("v-showed"),
+        why: "A no-show is feedback too. A landlord who hears that three people did not turn up learns something about the listing, and so do you.",
+      },
+      {
+        title: "How Did It Land?",
+        body: "Then choose how it went: Loved it, offer expected; Offer received; Thinking about it; or Not for them. Write what they actually said, in their words, and press Save feedback. The viewing leaves Feedback due and moves into Feedback in.",
+        image: img("v-land"),
+        how: "Where feedback was already recorded against the viewing elsewhere, the file shows that instead of the form, so nothing is written twice.",
+      },
+      {
+        title: "Feedback for the Landlord",
+        body: "The Feedback tab gathers every viewing that has happened, property by property, with what was said and which ones are still owed a write-up. Only where there is feedback hides the gaps, and Copy for the landlord puts a clean summary of a property's viewings on your clipboard, with the applicants' names taken out, ready to paste into an email.",
+        image: img("v-feedback-tab"),
+        why: "Landlords judge us on how quickly they hear what people thought. A short, honest summary the day after a run of viewings keeps them onside, especially when the answer is not the one they wanted.",
+        sends: "Nothing on its own. Feedback is not sent to the landlord automatically, and it does not appear on their portal yet, so Copy for the landlord is how it reaches them.",
+      },
+    ],
+  },
 ];
 
 export const agentGuideById = (id: string | null | undefined) => AGENT_GUIDES.find((g) => g.id === id) ?? null;
