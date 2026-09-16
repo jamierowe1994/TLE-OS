@@ -125,7 +125,7 @@ export default function ComplianceDrawer({
   const title = house ? house.name : p.name;
   const sub = house
     ? lets
-      ? `${house.locality} · ${house.rooms.length} lets on record in REX`
+      ? `${house.locality} · ${house.rooms.length} lets on record`
       : `${house.locality} · shared house · ${house.rooms.length} ${house.rooms.length === 1 ? "room" : "rooms"}`
     : p.locality;
 
@@ -155,7 +155,7 @@ export default function ComplianceDrawer({
                 {sub}
                 {p.hmo && <span className="ml-1.5 font-semibold text-accent-dark">HMO</span>}
                 {!p.hasGas && " · no gas at the property"}
-                {p.onRex === false && " · not on REX"}
+                {p.onRex === false && " · not on the book"}
               </p>
             </div>
             <button type="button" onClick={onClose} aria-label="Close" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-line/80 text-[13px] text-muted transition-colors hover:text-ink">
@@ -198,7 +198,7 @@ export default function ComplianceDrawer({
             {people === null ? (
               <p className="mt-2 text-[12px] text-muted">Reading the property…</p>
             ) : !people.landlord && people.tenants.length === 0 ? (
-              <p className="mt-2 text-[12px] text-muted">Nobody on record in REX for this home.</p>
+              <p className="mt-2 text-[12px] text-muted">Nobody on record for this home.</p>
             ) : (
               <div className="mt-2 grid gap-x-6 gap-y-3 sm:grid-cols-2">
                 <div>

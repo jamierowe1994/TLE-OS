@@ -195,7 +195,7 @@ export default function EmailProperties({
                   className="mt-2 w-full rounded-xl border border-line/80 bg-transparent px-3 py-2 text-[12.5px] outline-none focus:border-ink"
                 />
                 {book === null && !bookFailed && <p className="mt-3 text-[12px] text-muted">Loading the live book…</p>}
-                {bookFailed && <p className="mt-3 text-[12px] text-muted">REX did not answer, so only the shortlist can be sent just now.</p>}
+                {bookFailed && <p className="mt-3 text-[12px] text-muted">We could not read the wider list just now, so only the shortlist can be sent.</p>}
                 {book && (
                   <ul className="mt-3 space-y-2">
                     {results.map((p) => (

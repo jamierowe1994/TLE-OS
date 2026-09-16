@@ -73,7 +73,7 @@ export default function ListingDocuments({
       </div>
 
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">Contracts</p>
-      {terms.status === "loading" && <p className="text-[12px] text-muted">Asking REX…</p>}
+      {terms.status === "loading" && <p className="text-[12px] text-muted">Looking…</p>}
 
       {terms.status === "off" && (
         <p className="text-[12px] text-muted">

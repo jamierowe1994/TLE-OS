@@ -101,9 +101,9 @@ export default function OutstandingTermsWidget({ w, h }: { w: number; h: number 
           )}
         </span>
 
-        {state === "loading" && <span className="mt-3 text-[12px] text-muted">Asking REX…</span>}
+        {state === "loading" && <span className="mt-3 text-[12px] text-muted">Looking…</span>}
         {state === "off" && (
-          <span className="mt-3 text-[12px] text-muted">REX isn&rsquo;t connected here.</span>
+          <span className="mt-3 text-[12px] text-muted">We can&rsquo;t read the contracts just now.</span>
         )}
 
         {state === "ready" && rows.length === 0 && (
@@ -324,7 +324,7 @@ function OutstandingTermsModal({
                 {signer?.email
                   ? /* Said before it goes, not after. An agent pressing this
                        expects DocuSign to fire again, and it cannot. */
-                    `A short note to ${signer.email} pointing at the DocuSign email already in their inbox — REX can't re-fire the original.`
+                    `A short note to ${signer.email} pointing at the DocuSign email already in their inbox — the signing system can't re-fire the original.`
                   : chosen
                     ? "No email address on that signer, so there's nowhere to send a chase."
                     : "Pick who to chase."}

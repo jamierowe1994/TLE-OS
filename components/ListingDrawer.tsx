@@ -414,12 +414,12 @@ export default function ListingDrawer({
       .then((r) => r.json())
       .then((j: { ok?: boolean; landlord?: Landlord | null; problem?: string }) => {
         if (gone) return;
-        if (!j.ok) setLandlord({ status: "problem", says: j.problem ?? "REX didn't answer." });
+        if (!j.ok) setLandlord({ status: "problem", says: j.problem ?? "We could not look the landlord up just now." });
         else if (j.landlord) setLandlord({ status: "known", landlord: j.landlord });
         else setLandlord({ status: "none" });
       })
       .catch(() => {
-        if (!gone) setLandlord({ status: "problem", says: "Couldn't reach REX to look the landlord up." });
+        if (!gone) setLandlord({ status: "problem", says: "We could not look the landlord up just now." });
       });
     return () => {
       gone = true;
@@ -646,16 +646,11 @@ export default function ListingDrawer({
   ];
 
   /**
-   * WHAT HAS TO BE IN before "Push to the portals" lights up: the Marketing
-   * tab complete (lib/listing-requirements, checked again on the server) and
-   * THE EPC.
-   *
-   * The EPC and nothing else, James 16 Sep 2026: an EPC is required to
-   * advertise a home, while the gas safety and the electrical certificate are
-   * required before anybody moves in. Holding a listing off the portals for
-   * those two stopped lettings that are perfectly legal to advertise. They are
-   * still offered here, and they still BLOCK the move-in - lib/deal-handoff
-   * keeps all three as blockers on the handover.
+   * WHAT HAS TO BE IN before "Push to the portals" lights up: the certificates
+   * (James, 11 Sep 2026: EPC, gas safety, EICR; "No gas at the property"
+   * satisfies gas) and the Marketing tab complete - every field in
+   * lib/listing-requirements, which the push route checks again on the server
+   * (15 Sep 2026, replacing the photos-and-description pair).
    */
   const certOk = (t: string) => certs != null && ["valid", "expiring", "not-required"].includes(certs[t] ?? "");
   const marketingToGo = live ? missingForPortals(inputFromDetails(live)).length : null;
@@ -669,13 +664,9 @@ export default function ListingDrawer({
     /* Or on the listing itself, which is where REX keeps an EPC entered with
        the advert and what its own pre-publish check reads (15 Sep 2026: 4
        Williams Court had rating C on the listing and no compliance entry). */
-    { id: "epc", label: "EPC filed", done: certOk("epc") || Boolean((live?.epc.expiry ?? listing.epcExpiry) && (live?.epc.expiry ?? listing.epcExpiry)! >= new Date().toISOString().slice(0, 10)) || Boolean(live?.epc.rating), fix: () => setDrop("epc") },
-  ];
-  /* Offered, never required to advertise - and the move-in will not go
-     without them. */
-  const beforeMoveIn: { id: string; label: string; done: boolean; fix: () => void }[] = [
-    { id: "gas", label: "Gas safety", done: certOk("gas_safety"), fix: () => setTab("compliance") },
-    { id: "eicr", label: "Electrical certificate (EICR)", done: certOk("eicr"), fix: () => setTab("compliance") },
+    { id: "epc", label: "EPC filed", done: certOk("epc") || Boolean(listing.epcExpiry && listing.epcExpiry >= new Date().toISOString().slice(0, 10)), fix: () => setDrop("epc") },
+    { id: "gas", label: "Gas safety on file", done: certOk("gas_safety"), fix: () => setTab("compliance") },
+    { id: "eicr", label: "Electrical certificate (EICR) on file", done: certOk("eicr"), fix: () => setTab("compliance") },
   ];
   const readyToGoLive = certs != null && requirements.every((r) => r.done) && !(pub?.blockers.length);
   const isLive = pub ? pub.status === "published" : listing.publicationStatus === "published";
@@ -1048,7 +1039,7 @@ export default function ListingDrawer({
                             since: listing.archivedSince ?? null,
                             ageDays: listing.archiveAgeDays ?? null,
                           })}{" "}
-                          It is out of the Draft tab, still searchable, and unchanged in REX.
+                          It is out of the Draft tab, still searchable, and the listing itself is unchanged.
                         </>
                       ) : (
                         <>
@@ -1257,17 +1248,6 @@ export default function ListingDrawer({
                     </li>
                   ))}
                   {certs === null && <li className="text-[11px] text-muted">Reading the certificates…</li>}
-                  {/* Not needed to advertise; needed before anyone moves in. */}
-                  <li className="pt-1.5 text-[11px] leading-snug text-muted">
-                    {beforeMoveIn.every((r) => r.done)
-                      ? "Gas safety and the EICR are both on file."
-                      : `Before anyone moves in: ${beforeMoveIn.filter((r) => !r.done).map((r) => r.label).join(" and ")}.`}
-                    {beforeMoveIn.some((r) => !r.done) && (
-                      <button type="button" onClick={() => setTab("compliance")} className="ml-1.5 font-semibold text-accent-dark hover:underline">
-                        Add {beforeMoveIn.filter((r) => !r.done).length > 1 ? "them" : "it"} now
-                      </button>
-                    )}
-                  </li>
                 </ul>
               )}
               <div className="relative mt-auto flex flex-wrap items-center gap-2.5 pt-4">
@@ -1304,7 +1284,7 @@ export default function ListingDrawer({
                           >
                             Can&apos;t push it live until{" "}
                             {(() => {
-                              const words: Record<string, string> = { marketing: "the Marketing tab is complete", epc: "the EPC is filed" };
+                              const words: Record<string, string> = { marketing: "the Marketing tab is complete", epc: "the EPC is filed", gas: "the gas safety is on file", eicr: "the EICR is on file" };
                               const m = [...requirements.filter((r) => !r.done).map((r) => words[r.id] ?? r.label), ...(pub?.blockers.length && requirements.every((r) => r.done) ? ["the portals' own checks pass"] : [])];
                               return m.length > 1 ? `${m.slice(0, -1).join(", ")} and ${m[m.length - 1]}` : m[0] ?? "the certificates are read";
                             })()}.
@@ -1321,7 +1301,7 @@ export default function ListingDrawer({
                     </>
                   )
                 ) : here.action === "viewing" && !LISTING_BOOKER_LIVE ? (
-                  <p className="text-[11.5px] leading-snug text-muted">Book viewings from the applicant&apos;s lead, or in REX, for now.</p>
+                  <p className="text-[11.5px] leading-snug text-muted">Book viewings from the applicant&apos;s lead for now.</p>
                 ) : (
                   <PressButton
                     onClick={fire}
@@ -1480,13 +1460,13 @@ export default function ListingDrawer({
               <ViewTitle title="Applications" sub="Who has enquired and who has offered. Start an application from anybody here, and put the offers to the landlord when the viewings stop." wash="blush" art="/brand/art/keys-handover.png" />
             )}
             {tab === "viewings" && (
-              <ViewTitle title="Viewings" sub="Everything in the diary for this property, out of REX. Ask for access against a viewing, and mark it granted when they say yes." wash="sage" art="/brand/art/viewing.png" />
+              <ViewTitle title="Viewings" sub="Everything in the diary for this property. Ask for access against a viewing, and mark it granted when they say yes." wash="sage" art="/brand/art/viewing.png" />
             )}
             {tab === "marketing" && (
               <ViewTitle title="Marketing" sub="The property's facts, the advert the portals show, and the photographs. What a tenant sees, all in one place." wash="blush" art="/brand/art/marketing-desk.png" />
             )}
             {tab === "compliance" && (
-              <ViewTitle title="Compliance" sub="Every certificate the property needs, where it stands in REX, and the files on hand. Drop a certificate and it is read and filed." />
+              <ViewTitle title="Compliance" sub="Every certificate the property needs, where it stands, and the files on hand. Drop a certificate and it is read and filed." />
             )}
             {tab === "documents" && (
               <ViewTitle title="Documents" sub="How we get into the property, the terms of business, and everything signed or filed against this listing." />
@@ -1753,7 +1733,7 @@ export default function ListingDrawer({
               {[
                 ["Property", listing.name],
                 ["Rent agreed", `£${listing.rent?.toLocaleString("en-GB")} pcm`],
-                ["Landlord", landlord.status === "known" ? [landlord.landlord.name, landlord.landlord.phone].filter(Boolean).join(" · ") : "Not recorded in REX"],
+                ["Landlord", landlord.status === "known" ? [landlord.landlord.name, landlord.landlord.phone].filter(Boolean).join(" · ") : "Not recorded"],
                 ["Applicant", "From the accepted offer"],
                 ["Available from", listing.availableFrom ?? "Not set"],
               ].map(([k, v]) => (

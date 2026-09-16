@@ -134,7 +134,7 @@ export default function ContractsPanel({
           <h3 className="text-[14px]">Terms of business</h3>
           <p className="text-[11.5px] text-muted">
             {state === "loading"
-              ? "Asking REX…"
+              ? "Looking…"
               : requests.length > 0
                 ? `${signed.length} signed · ${outstanding.length} outstanding`
                 : docs.length > 0
@@ -250,7 +250,7 @@ export default function ContractsPanel({
         {!contactId && (
           <span className="text-[11px] text-muted">
             No REX contact on this record{landlordName ? ` for ${landlordName}` : ""} — the landlord
-            has to exist in REX to be a signer.
+            has to be on the record to be a signer.
           </span>
         )}
       </div>

@@ -232,15 +232,15 @@ export default function GlobalSearch({ placeholder = "Search properties, tenants
                      whole difference between waiting and being stuck. */
                   <p className="flex items-center gap-2 text-[11.5px] text-muted">
                     <span aria-hidden className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-line border-t-accent-dark" />
-                    {rexSlow ? "Checking REX - pulling records across…" : "Checking REX…"}
+                    {rexSlow ? "Still looking - pulling records across…" : "Still looking…"}
                   </p>
                 ) : rexHits == null ? (
-                  <p className="text-[11.5px] text-muted">{rexNote ?? "Only what the OS holds so far."}</p>
+                  <p className="text-[11.5px] text-muted">{rexNote ?? "Only what we hold here so far."}</p>
                 ) : (
                   <>
                     {rexHits.length > 0 && (
                       <>
-                        <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">In REX, not in the OS</p>
+                        <p className="text-[9.5px] font-bold uppercase tracking-wider text-muted">On the book, not opened here yet</p>
                         <ul className="mt-1.5 space-y-1">
                           {rexHits.map((h) => (
                             <li key={h.id} className="flex items-center gap-3">
@@ -294,7 +294,7 @@ export default function GlobalSearch({ placeholder = "Search properties, tenants
                     )}
 
                     {rexHits.length === 0 && (rexPeople?.length ?? 0) === 0 && (
-                      <p className="text-[11.5px] text-muted">{rexNote ?? "Nothing in REX either."}</p>
+                      <p className="text-[11.5px] text-muted">{rexNote ?? "Nothing anywhere else either."}</p>
                     )}
                     {rexNote && (rexHits.length > 0 || (rexPeople?.length ?? 0) > 0) && (
                       <p className="mt-1.5 text-[11px] text-[#9d4340]">{rexNote}</p>
