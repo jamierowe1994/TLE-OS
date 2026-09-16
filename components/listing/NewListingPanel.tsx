@@ -40,6 +40,8 @@ export default function NewListingPanel({ onClose, onCreated }: Props) {
   const [typeId, setTypeId] = useState("");
   const [rent, setRent] = useState("");
   const [deposit, setDeposit] = useState("");
+  /* Typed over? Then the rent stops filling it in. */
+  const [depositByHand, setDepositByHand] = useState(false);
   const [availableFrom, setAvailableFrom] = useState("");
   const [letType, setLetType] = useState("long_term");
   const [serviceLevel, setServiceLevel] = useState("managed");
@@ -88,6 +90,12 @@ export default function NewListingPanel({ onClose, onCreated }: Props) {
   }, [query, picked, fresh]);
 
   const suggested = fiveWeeks(Number(rent) || null);
+  /* Five weeks, filled in rather than only suggested: it is a required field
+     before the listing can go live, and it is five weeks nearly every time
+     (16 Sep 2026 - the first one made in the OS went in with no deposit). */
+  useEffect(() => {
+    if (!depositByHand) setDeposit(suggested == null ? "" : String(suggested));
+  }, [suggested, depositByHand]);
   const ready = Boolean((picked || (fresh?.streetName && fresh.town && fresh.postcode)) && typeId && Number(rent) > 0);
 
   async function create() {
@@ -214,7 +222,7 @@ export default function NewListingPanel({ onClose, onCreated }: Props) {
                 Deposit
                 <div className="relative mt-1">
                   <span className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[13.5px] text-muted">£</span>
-                  <input type="number" min={0} value={deposit} onChange={(e) => setDeposit(e.target.value)} placeholder={suggested ? String(suggested) : ""} className={`${field} pl-7`} />
+                  <input type="number" min={0} value={deposit} onChange={(e) => { setDepositByHand(true); setDeposit(e.target.value); }} className={`${field} pl-7`} />
                 </div>
               </label>
               <label className={label}>
@@ -234,8 +242,10 @@ export default function NewListingPanel({ onClose, onCreated }: Props) {
                 </select>
               </label>
             </div>
-            {suggested != null && deposit === "" && (
-              <p className="mt-2 text-[11px] text-muted">Five weeks&apos; rent is {money(suggested)}, the most a deposit can be.</p>
+            {suggested != null && (
+              <p className="mt-2 text-[11px] text-muted">
+                {Number(deposit) === suggested ? `Five weeks' rent, the most a deposit can be.` : `Five weeks' rent is ${money(suggested)}, the most a deposit can be.`}
+              </p>
             )}
           </section>
 
