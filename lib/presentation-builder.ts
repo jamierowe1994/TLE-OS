@@ -40,86 +40,23 @@ export const BUILD_STEPS = [
   { id: "available", label: "On the market", blurb: "What a tenant is choosing between right now." },
   { id: "let", label: "Recently let", blurb: "What actually let nearby, and how long it took." },
   { id: "market", label: "Market", blurb: "Rents, pace, size and competition. Tick what goes to the landlord." },
-  { id: "review", label: "Review", blurb: "What goes in the presentation, and in what order." },
+  { id: "review", label: "Review", blurb: "Which pages go in the presentation." },
 ] as const;
 
 export type BuildStepId = (typeof BUILD_STEPS)[number]["id"];
 
-/* ── the sections a deck can carry ────────────────────────────────────────── */
+/* ── the pages a deck carries ─────────────────────────────────────────────────
 
-export interface DeckSection {
-  id: string;
-  label: string;
-  /** Some pages carry the brand and cannot be switched off. */
-  always: boolean;
-  /** Off by default when we cannot usually stand it up with real data. */
-  onByDefault: boolean;
-  blurb: string;
-}
+   There used to be a DECK_SECTIONS list here, with switches and up/down
+   arrows on the Review step. Removed 16 Sep 2026: nothing read it. The plan
+   it built never reached the preview or the deck, and its eight "sections"
+   were not the deck's slides anyway. The Review step now lists the real
+   slides from lib/present (slidesInKind) and switches write
+   PresentDeck.hidden, which slidesFor honours.
 
-export const DECK_SECTIONS: DeckSection[] = [
-  { id: "welcome", label: "Welcome", always: true, onByDefault: true, blurb: "The opening. Always included." },
-  { id: "agent", label: "Your agent", always: false, onByDefault: true, blurb: "Who is coming, and how to reach them." },
-  { id: "guide", label: "The rent guide", always: false, onByDefault: true, blurb: "The range, and what it rests on." },
-  { id: "comparables", label: "What's letting nearby", always: false, onByDefault: true, blurb: "Named properties with rents and days to let." },
-  /* Off by default, and it stays off by default now that it is real: the
-     Market step's ticks are what turn it on, per appraisal. A section that
-     appeared automatically would put the whole area picture in front of a
-     landlord the agent had not yet chosen to show it to. */
-  { id: "market", label: "The local market", always: false, onByDefault: false, blurb: "Pace, rent by size, mix and competition — whatever is ticked on the Market step." },
-  { id: "service", label: "How we let it", always: false, onByDefault: true, blurb: "What we do, and what it costs." },
-  { id: "compliance", label: "Getting it legal", always: false, onByDefault: true, blurb: "The certificates a let needs — the bit landlords underestimate." },
-  { id: "next", label: "What happens next", always: true, onByDefault: true, blurb: "The close. Always included." },
-];
-
-export interface DeckPlan {
-  /** Section ids, IN ORDER. Reordering is the agent's, within the rules. */
-  order: string[];
-  /** Which are switched on. `always` sections are ignored here. */
-  enabled: Record<string, boolean>;
-}
-
-export function defaultPlan(): DeckPlan {
-  return {
-    order: DECK_SECTIONS.map((s) => s.id),
-    enabled: Object.fromEntries(DECK_SECTIONS.map((s) => [s.id, s.always || s.onByDefault])),
-  };
-}
-
-/**
- * The pages that will actually be produced.
- *
- * `always` wins over `enabled`, so a section that carries the brand cannot be
- * switched off by accident — and the UI shows it as fixed rather than as a
- * toggle that silently does nothing.
- */
-export function pagesIn(plan: DeckPlan): DeckSection[] {
-  const by = new Map(DECK_SECTIONS.map((s) => [s.id, s]));
-  return plan.order
-    .map((id) => by.get(id))
-    .filter((s): s is DeckSection => Boolean(s))
-    .filter((s) => s.always || plan.enabled[s.id]);
-}
-
-/**
- * Move a section, refusing moves that would break the deck.
- *
- * Welcome stays first and the close stays last. Not for tidiness: a deck whose
- * first page is a rent table opens with a number before it has said who is
- * speaking, and the landlord's first impression is a spreadsheet.
- */
-export function reorder(plan: DeckPlan, id: string, delta: number): DeckPlan {
-  const section = DECK_SECTIONS.find((s) => s.id === id);
-  if (!section || section.always) return plan;
-
-  const order = [...plan.order];
-  const from = order.indexOf(id);
-  const to = from + delta;
-  // Index 0 and the last slot belong to the fixed pages.
-  if (from < 0 || to < 1 || to > order.length - 2) return plan;
-  order.splice(to, 0, ...order.splice(from, 1));
-  return { ...plan, order };
-}
+   Reordering went with it on purpose. The deck's order IS its argument, and
+   the agenda slide promises those chapters in that order - an agent moving
+   the fees ahead of the evidence would break the promise on page two. */
 
 /* ── choosing comparables ─────────────────────────────────────────────────── */
 

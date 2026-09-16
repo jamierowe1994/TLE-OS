@@ -340,6 +340,13 @@ export type PresentDeck = {
   startsAt: string | null;
   minutes: number;
   agent: PresentAgent;
+  /**
+   * Slides the agent switched off on the builder's Review step. Only
+   * `removable` slides can be hidden - slidesFor ignores anything else here,
+   * so a stored deck can never lose its welcome or its close. Absent on every
+   * deck minted before 16 Sep 2026, which then shows everything, as it did.
+   */
+  hidden?: SlideId[] | null;
   createdAt: string;
 };
 
@@ -886,50 +893,65 @@ export function deckKind(deck: PresentDeck): DeckKind {
   return DECK_KINDS.some((k) => k.id === deck.kind) ? deck.kind : "pre-appraisal";
 }
 
+/** Every slide this kind of deck can carry, in order, before any data gate. */
+export function slidesInKind(kind: DeckKind): typeof SLIDES {
+  const allowed = SLIDES_BY_KIND[kind];
+  return SLIDES.filter((s) => allowed.includes(s.id));
+}
+
+/**
+ * Whether this deck has what the slide needs to be worth showing.
+ *
+ * Split out of slidesFor so the builder's Review step can say WHY a slide is
+ * missing ("tick three comparables") rather than leaving it off the list.
+ */
+export function slideHasContent(deck: PresentDeck, id: SlideId): boolean {
+  if (id === "comparables") {
+    /* Three comparables is the floor. Below it the slide argues AGAINST us:
+       a landlord counting two properties concludes we do not know their
+       street, and the rest of the deck inherits that doubt. Absent is better. */
+    const c = deck.comparables;
+    return Boolean(c && c.rows.length >= 3);
+  }
+  /* The market slide is opt-in per appraisal — the agent ticks blocks on the
+     Market step and nothing is included by default. An unticked deck must not
+     carry an empty "Your local market" heading with nothing underneath it. */
+  if (id === "market") return Boolean(deck.market);
+  /* Everything else that renders a DATA set rather than standing copy. Each
+     is dropped rather than shown empty, for the reason comparables is: a
+     heading over nothing does not read as "we had no data", it reads as a
+     broken page, and it costs us the slide either way. */
+  if (id === "listings") return Boolean(deck.listings?.length);
+  if (id === "history") return Boolean(deck.history?.points?.length);
+  if (id === "material") return Boolean(deck.material?.length);
+  if (id === "testimonial") return Boolean(deck.testimonial?.quote);
+  /* `video` is NOT gated on having a film, and used to be. The film is made
+     after the instruction and this deck is what wins the instruction, so the
+     argument for filming a property is worth making to precisely the person
+     who has not signed yet. The slide shows a frame saying what will go in
+     it; see components/PresentSlides. */
+  /* The fee page needs a fee. An agent who has not set one yet gets no slide
+     rather than a page of dashes — and the builder can then tell them so. */
+  if (id === "fees") return Boolean(deck.fees && (deck.fees.rows.length || deck.fees.headline));
+  /* No rent, no offer slide. A "What we'd put it on at" heading above a dash
+     is the worst thing on any of these decks: the landlord opened it for
+     exactly that number. */
+  if (id === "valuation") return Boolean(deck.valuation?.rent);
+  /* The terms slide survives a null signUrl — it explains what happens next
+     instead — but not a missing valuation. Asking somebody to sign up before
+     telling them the figure is the wrong way round. */
+  if (id === "terms") return Boolean(deck.terms && deck.valuation?.rent);
+  return true;
+}
+
 export function slidesFor(deck: PresentDeck): typeof SLIDES {
-  const allowed = SLIDES_BY_KIND[deckKind(deck)];
-  return SLIDES.filter((s) => {
-    /* The kind decides membership FIRST. A pre-appraisal deck that happened to
-       be minted with comparables on it must still not show them — the rule is
-       about what this deck is for, not about what data reached it. */
-    if (!allowed.includes(s.id)) return false;
-    if (s.id === "comparables") {
-      /* Three comparables is the floor. Below it the slide argues AGAINST us:
-         a landlord counting two properties concludes we do not know their
-         street, and the rest of the deck inherits that doubt. Absent is better. */
-      const c = deck.comparables;
-      return Boolean(c && c.rows.length >= 3);
-    }
-    /* The market slide is opt-in per appraisal — the agent ticks blocks on the
-       Market step and nothing is included by default. An unticked deck must not
-       carry an empty "Your local market" heading with nothing underneath it. */
-    if (s.id === "market") return Boolean(deck.market);
-    /* Everything else that renders a DATA set rather than standing copy. Each
-       is dropped rather than shown empty, for the reason comparables is: a
-       heading over nothing does not read as "we had no data", it reads as a
-       broken page, and it costs us the slide either way. */
-    if (s.id === "listings") return Boolean(deck.listings?.length);
-    if (s.id === "history") return Boolean(deck.history?.points?.length);
-    if (s.id === "material") return Boolean(deck.material?.length);
-    if (s.id === "testimonial") return Boolean(deck.testimonial?.quote);
-    /* `video` is NOT gated on having a film, and used to be. The film is made
-       after the instruction and this deck is what wins the instruction, so the
-       argument for filming a property is worth making to precisely the person
-       who has not signed yet. The slide shows a frame saying what will go in
-       it; see components/PresentSlides. */
-    /* The fee page needs a fee. An agent who has not set one yet gets no slide
-       rather than a page of dashes — and the builder can then tell them so. */
-    if (s.id === "fees") return Boolean(deck.fees && (deck.fees.rows.length || deck.fees.headline));
-    /* No rent, no offer slide. A "What we'd put it on at" heading above a dash
-       is the worst thing on any of these decks: the landlord opened it for
-       exactly that number. */
-    if (s.id === "valuation") return Boolean(deck.valuation?.rent);
-    /* The terms slide survives a null signUrl — it explains what happens next
-       instead — but not a missing valuation. Asking somebody to sign up before
-       telling them the figure is the wrong way round. */
-    if (s.id === "terms") return Boolean(deck.terms && deck.valuation?.rent);
-    return true;
-  });
+  /* The kind decides membership FIRST. A pre-appraisal deck that happened to
+     be minted with comparables on it must still not show them — the rule is
+     about what this deck is for, not about what data reached it. */
+  const hidden = deck.hidden ?? [];
+  return slidesInKind(deckKind(deck)).filter(
+    (s) => slideHasContent(deck, s.id) && !(s.removable && hidden.includes(s.id))
+  );
 }
 
 /**

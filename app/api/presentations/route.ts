@@ -5,6 +5,7 @@ import { presentAgentFor } from "@/lib/rex-agents";
 import { createPresentation, presentationsFor } from "@/lib/present-store";
 import {
   DECK_KINDS,
+  SLIDES,
   STANDARD_FEES,
   firstNameOf,
   type DeckKind,
@@ -16,6 +17,7 @@ import {
   type PresentMaterialRow,
   type PresentTerms,
   type PresentValuation,
+  type SlideId,
 } from "@/lib/present";
 import { hasDb, q } from "@/lib/db";
 import { publicOrigin } from "@/lib/origin";
@@ -63,6 +65,8 @@ type Body = {
   /** Post-appraisal only — the agreed figure, and the terms to sign. */
   valuation?: PresentValuation | null;
   terms?: PresentTerms | null;
+  /** Slides switched off on the builder's Review step. See PresentDeck.hidden. */
+  hidden?: string[] | null;
   /** Overrides the agent's profile headshot for this deck only. */
   agentPhoto?: string | null;
   recipientName?: string;
@@ -232,6 +236,12 @@ export async function POST(req: NextRequest) {
        telling them the number is the wrong way round. */
     valuation: body.valuation?.rent ? body.valuation : null,
     terms: body.valuation?.rent && body.terms ? body.terms : null,
+    /* Only ids that name a removable slide survive. The body is the browser's
+       word, and a stored deck missing its welcome or its close would be a
+       landlord opening a page that starts mid-sentence. */
+    hidden: Array.isArray(body.hidden)
+      ? SLIDES.filter((sl) => sl.removable && body.hidden!.includes(sl.id)).map((sl): SlideId => sl.id)
+      : null,
     createdAt: new Date().toISOString(),
   };
 
