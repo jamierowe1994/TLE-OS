@@ -2730,6 +2730,32 @@ CREATE TABLE IF NOT EXISTS os_test_kits (
 );
 CREATE INDEX IF NOT EXISTS os_test_kits_by ON os_test_kits (created_by, created_at DESC);
 
+-- EVERY RUN, NOT THE LAST ONE (16 Sep 2026). James, 13 Sep: testers "mark the
+-- occasions they run something, especially the first real run". os_test_marks
+-- has one row per step, so the second run overwrote the first and the pilot
+-- would have ended with a board of last states and no record of what happened
+-- on the day - including the failure that was fixed, which is the half worth
+-- keeping. This table is append-only; the mark shown on the page is simply the
+-- newest row for that step. The old marks are copied in once so nothing that
+-- Howard and Kirstie already ticked is lost.
+CREATE TABLE IF NOT EXISTS os_test_runs (
+  id       TEXT PRIMARY KEY,
+  journey  TEXT NOT NULL,
+  step     TEXT NOT NULL,
+  result   TEXT NOT NULL,
+  by_id    TEXT,
+  by_name  TEXT NOT NULL DEFAULT '',
+  at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  note     TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS os_test_runs_step ON os_test_runs (journey, step, at DESC);
+CREATE INDEX IF NOT EXISTS os_test_runs_at ON os_test_runs (at DESC);
+INSERT INTO os_test_runs (id, journey, step, result, by_name, at, note)
+SELECT md5(m.journey || '/' || m.step || '/' || m.at::text), m.journey, m.step, m.result, m.by_name, m.at, m.note
+  FROM os_test_marks m
+ WHERE NOT EXISTS (SELECT 1 FROM os_test_runs r WHERE r.journey = m.journey AND r.step = m.step AND r.at = m.at)
+    ON CONFLICT (id) DO NOTHING;
+
 -- A contact made by Create a test. Never pushed to REX, never on the list of
 -- people waiting to be pushed, and cleared with the rest of the test.
 ALTER TABLE os_contacts ADD COLUMN IF NOT EXISTS is_test BOOLEAN NOT NULL DEFAULT false;

@@ -15,6 +15,7 @@ import {
   type Light,
   type TestAreaId,
   type TestMark,
+  type TestRun,
   type TestStep,
   type TestWho,
 } from "@/lib/testing-journeys";
@@ -53,6 +54,8 @@ interface Payload {
   error?: string;
   journeys?: Journey[];
   marks?: TestMark[];
+  /** Every occasion anybody walked a step, newest first. The marks are the newest of these. */
+  runs?: TestRun[];
   switches?: Record<string, { on: boolean; label: string }>;
 }
 
@@ -102,6 +105,84 @@ function Who({ who }: { who: TestWho }) {
     <span className={`inline-flex items-center rounded-full border px-2 py-[1px] text-[10.5px] leading-4 ${WHO_TONE[who]}`}>
       {WHO_WORDS[who]}
     </span>
+  );
+}
+
+/**
+ * WHAT HAPPENED ON THIS STEP, EVERY TIME.
+ *
+ * The newest run is already on the row above as the mark, so this starts at
+ * the second: the point of it is the run BEFORE the one showing - the failure
+ * that got fixed, or the person who could not make it work when somebody else
+ * could. One run and there is nothing to add, so it draws nothing.
+ */
+function History({ runs }: { runs: TestRun[] }) {
+  if (runs.length < 2) return null;
+  const older = runs.slice(1);
+  return (
+    <div className="mt-4 border-t border-line/60 pt-3">
+      <p className="text-[11px] uppercase tracking-wide text-muted">
+        Walked {runs.length} times · before this
+      </p>
+      <ul className="mt-1.5 space-y-1">
+        {older.map((r) => (
+          <li key={r.id} className="flex flex-wrap items-baseline gap-x-2 text-[12px]">
+            <span className={r.result === "fail" ? "font-semibold text-rose-700" : "font-semibold text-emerald-700"}>
+              {r.result === "pass" ? "OK" : "Failed"}
+            </span>
+            <span className="text-muted">
+              {r.by}, {when(r.at)}
+            </span>
+            {r.note && <span className="min-w-0 basis-full text-muted">&ldquo;{r.note}&rdquo;</span>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * WHAT THE TESTERS FOUND, in the order they found it.
+ *
+ * The board answers "where are we"; this answers "what came out of it", which
+ * is the question after a testing session and the one a board of last states
+ * could never answer. Failures only, newest first: an OK needs no follow-up.
+ */
+function Found({ runs, journeys, onOpen }: { runs: TestRun[]; journeys: Journey[]; onOpen: (key: string) => void }) {
+  const fails = runs.filter((r) => r.result === "fail").slice(0, 40);
+  if (fails.length === 0) return null;
+  const titleOf = (r: TestRun) => {
+    const j = journeys.find((x) => x.id === r.journey);
+    return { journey: j?.title ?? r.journey, step: j?.steps.find((s) => s.id === r.step)?.title ?? r.step };
+  };
+  return (
+    <section className="mb-6 rounded-2xl border border-rose-200 bg-rose-50/60 p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <h2 className="text-[14px]">What the testers found</h2>
+        <span className="text-[11.5px] tabular-nums text-rose-900">{fails.length} reported, newest first</span>
+      </div>
+      <ul className="mt-2.5 space-y-2">
+        {fails.map((r) => {
+          const t = titleOf(r);
+          return (
+            <li key={r.id} className="text-[12.5px]">
+              <button
+                type="button"
+                onClick={() => onOpen(`${r.journey}/${r.step}`)}
+                className="text-left font-semibold underline-offset-2 hover:underline"
+              >
+                {t.step}
+              </button>
+              <span className="text-muted">
+                {" "}
+                · {t.journey} · {r.by}, {when(r.at)}
+              </span>
+              {r.note && <p className="text-rose-900">&ldquo;{r.note}&rdquo;</p>}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
@@ -169,6 +250,19 @@ export default function TestingPage() {
     return m;
   }, [data?.marks]);
 
+  /* Every occasion a step was walked, newest first, so a step can say "run
+     three times" and show all three rather than only the survivor. */
+  const runsByStep = useMemo(() => {
+    const m = new Map<string, TestRun[]>();
+    for (const r of data?.runs ?? []) {
+      const key = `${r.journey}/${r.step}`;
+      const held = m.get(key);
+      if (held) held.push(r);
+      else m.set(key, [r]);
+    }
+    return m;
+  }, [data?.runs]);
+
   const rows: Row[] = useMemo(
     () => journeys.flatMap((j) => j.steps.map((s) => ({ journey: j, step: s, ...placeOf(j.id, s.id) }))),
     [journeys]
@@ -198,7 +292,7 @@ export default function TestingPage() {
       });
       const body = (await res.json()) as Payload;
       if (!body.ok) throw new Error(body.error ?? "Could not save.");
-      setData((d) => (d ? { ...d, marks: body.marks ?? d.marks } : d));
+      setData((d) => (d ? { ...d, marks: body.marks ?? d.marks, runs: body.runs ?? d.runs } : d));
       setNote((n) => ({ ...n, [key]: "" }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save.");
@@ -320,6 +414,8 @@ export default function TestingPage() {
       {error && <p className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[12.5px] text-rose-900">{error}</p>}
 
       {!data && !error && <p className="mb-4 text-[12.5px] text-muted">Reading the marks…</p>}
+
+      <Found runs={data?.runs ?? []} journeys={journeys} onOpen={setOpen} />
 
       {kits.length > 0 && (
         <section className="mb-6 rounded-2xl border border-line/70 bg-card p-4">
@@ -525,10 +621,14 @@ export default function TestingPage() {
                                     onClick={() => void mark(r, "clear")}
                                     className="text-[11.5px] text-muted underline-offset-2 hover:underline disabled:opacity-50"
                                   >
-                                    Clear the mark
+                                    Take back my mark
                                   </button>
                                 )}
                               </div>
+
+                              {/* Every time it was walked, not just the last. A step
+                                  somebody fixed shows the failure it used to have. */}
+                              <History runs={runsByStep.get(key) ?? []} />
                             </>
                           )}
                         </div>

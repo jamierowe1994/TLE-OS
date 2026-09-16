@@ -971,6 +971,17 @@ export interface TestMark {
   note: string;
 }
 
+/**
+ * One occasion somebody walked a step.
+ *
+ * The same shape as a mark, because a mark IS the newest run - but a run is
+ * never overwritten. Monday's pilot has twelve people walking the same
+ * journeys, and "Dan found the diary empty at ten and Rhiannon found it fine
+ * at two" is the record; a board showing only the last state loses the half
+ * that was worth having (James, 13 Sep 2026).
+ */
+export type TestRun = TestMark & { id: string };
+
 export function lightFor(step: TestStep, mark: TestMark | null): { light: Light; stale: boolean } {
   if (step.state === "blocked") return { light: "red", stale: false };
   if (step.state === "notbuilt") return { light: "grey", stale: false };
