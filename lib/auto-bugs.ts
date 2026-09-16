@@ -48,6 +48,11 @@ export interface Failure {
   path?: string;
   /** Who hit it, when there is a person. */
   who?: string;
+  /**
+   * We gave up waiting. There is no status on one of these - nobody answered -
+   * so `status` cannot say it and the caller has to.
+   */
+  timedOut?: boolean;
 }
 
 /**
@@ -89,9 +94,18 @@ function duringADeploy(f: Failure): boolean {
   return f.source === "Screen" && TRANSIENT.has(f.status ?? 0) && process.uptime() < 120;
 }
 
-/** Propoly timing out and Propoly rate limiting us are one thing: it was busy. */
+/**
+ * Propoly timing out and Propoly rate limiting us are one thing: it was busy.
+ *
+ * `timedOut` is here because the timeout - the first case this rule was written
+ * for - was the one it missed. We abort the call ourselves, so there is no
+ * status to match against TRANSIENT, and "no answer after 20s" went on filing
+ * its own ticket beside the 429 it belongs with. REX Leads/search, overnight on
+ * 16 Sep.
+ */
 function wasBusy(f: Failure): boolean {
-  return f.source !== "Screen" && f.status != null && TRANSIENT.has(f.status);
+  if (f.source === "Screen") return false;
+  return f.timedOut === true || (f.status != null && TRANSIENT.has(f.status));
 }
 /** Occurrences held back by the throttle, added to the count when the minute is up. */
 const pending = new Map<string, { n: number; at: number; flush: ReturnType<typeof setTimeout> | null }>();

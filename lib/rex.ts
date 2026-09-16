@@ -322,11 +322,15 @@ export async function rexCall(
     }
   } catch (e) {
     const name = (e as Error)?.name ?? "";
+    const gaveUpWaiting = name === "AbortError";
     noteFailure({
       source: "REX",
       what: path,
       status: null,
-      message: name === "AbortError" ? `no answer after ${Math.round(CALL_TIMEOUT_MS / 1000)}s` : (e as Error)?.message || "did not answer",
+      /* Said so plainly: REX being slow and REX turning us away are one bug,
+         and without this the abort has no status to say it with. */
+      timedOut: gaveUpWaiting,
+      message: gaveUpWaiting ? `no answer after ${Math.round(CALL_TIMEOUT_MS / 1000)}s` : (e as Error)?.message || "did not answer",
     });
     throw e;
   }
