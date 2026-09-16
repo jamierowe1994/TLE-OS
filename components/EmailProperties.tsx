@@ -60,6 +60,14 @@ export default function EmailProperties({
     };
   }, [open, book]);
   const [stage, setStage] = useState<"pick" | "review" | "sent">("pick");
+  /* THE REAL SEND (16 Sep 2026). This modal used to move to "Sent" without a
+     request leaving the browser. Now Review renders the email the server will
+     send, and Send reports what actually happened - including "switched off". */
+  const [preview, setPreview] = useState<{ subject: string; html: string } | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sentSaid, setSentSaid] = useState<string>("");
 
   // Seeded on OPEN only — `properties` is built inline by the caller, so
   // depending on it would silently re-tick everything mid-edit.
@@ -73,6 +81,9 @@ export default function EmailProperties({
     setExtra([]);
     setFind("");
     setStage("pick");
+    setPreview(null);
+    setSendError(null);
+    setSentSaid("");
   }, [open]);
 
   useEffect(() => {
@@ -91,11 +102,47 @@ export default function EmailProperties({
     .filter((l) => !all.some((p) => p.id === l.id))
     .filter((l) => !needle || `${l.name} ${l.locality}`.toLowerCase().includes(needle))
     .slice(0, needle ? 30 : 8);
-  const first = lead.name.split(" ")[0];
-  const subject =
-    picked.length === 1
-      ? `A property for you — ${picked[0].name}`
-      : `${picked.length} properties for you`;
+  const homes = picked.map((p) => ({ name: p.name, locality: p.locality, rent: p.rent }));
+
+  async function openReview() {
+    setStage("review");
+    setPreview(null);
+    setPreviewError(null);
+    try {
+      const r = await fetch("/api/leads/email-properties", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: lead.name, email: lead.email, homes, preview: true }),
+      });
+      const j = (await r.json()) as { ok?: boolean; subject?: string; html?: string; said?: string };
+      if (j.ok && j.html) setPreview({ subject: j.subject ?? "", html: j.html });
+      else setPreviewError(j.said ?? "The email could not be drawn.");
+    } catch {
+      setPreviewError("The email could not be drawn.");
+    }
+  }
+
+  async function send() {
+    if (!picked.length || sending) return;
+    setSending(true);
+    setSendError(null);
+    try {
+      const r = await fetch("/api/leads/email-properties", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: lead.name, email: lead.email, homes }),
+      });
+      const j = (await r.json()) as { ok?: boolean; said?: string };
+      if (j.ok) {
+        setSentSaid(j.said ?? "");
+        setStage("sent");
+      } else setSendError(j.said ?? "It did not send.");
+    } catch {
+      setSendError("It did not send - the OS could not be reached.");
+    } finally {
+      setSending(false);
+    }
+  }
 
   return (
     <div className="fixed inset-0 z-[140] flex items-center justify-center p-4">
@@ -133,9 +180,7 @@ export default function EmailProperties({
               <p className="hand mt-5 text-[20px]">
                 {picked.length} propert{picked.length === 1 ? "y" : "ies"} on their way
               </p>
-              <p className="mt-1.5 text-[12.5px] text-muted">
-                Logged against {first}&apos;s record under Activity.
-              </p>
+              {sentSaid && <p className="mt-1.5 max-w-sm text-[12.5px] text-muted">{sentSaid}</p>}
             </div>
           )}
 
@@ -228,40 +273,24 @@ export default function EmailProperties({
           )}
 
           {stage === "review" && (
-            /* A rendering of the email, not a rich editor — the point of the
-               review step is to check, and checking is a read. */
-            <div className="rounded-2xl border border-line/70 bg-card p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Subject</p>
-              <p className="mt-1 text-[14px] font-semibold">{subject}</p>
-
-              <div className="mt-5 space-y-3 border-t border-line/60 pt-4 text-[13px] leading-relaxed">
-                <p>Hi {first},</p>
-                <p>
-                  Following our conversation, here {picked.length === 1 ? "is" : "are"}{" "}
-                  {picked.length === 1 ? "a property" : `${picked.length} properties`} I think
-                  would suit you.
-                </p>
-                <ul className="space-y-2.5 py-1">
-                  {picked.map((p) => (
-                    <li key={p.id} className="flex items-center gap-3 rounded-xl border border-line/60 p-2.5">
-                      <PropertyPhoto src={p.image} className="h-11 w-14 shrink-0 rounded-lg" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-semibold">{p.name}</span>
-                        <span className="block truncate text-[11.5px] text-muted">{p.locality}</span>
-                      </span>
-                      <span className="figures shrink-0">
-                        £{p.rent?.toLocaleString("en-GB")}
-                        <span className="text-[10px] text-muted"> pcm</span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                <p>
-                  Just reply to this email or give me a ring if you&apos;d like to arrange a
-                  viewing on any of them.
-                </p>
-                <p className="text-muted">Kind regards,<br />The Letting Experts</p>
-              </div>
+            /* The email itself, as the server renders it - not a paragraph
+               written to look like it. Checking is a read. */
+            <div>
+              {preview ? (
+                <>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Subject</p>
+                  <p className="mt-1 text-[14px] font-semibold">{preview.subject}</p>
+                  <iframe
+                    title="The email"
+                    srcDoc={preview.html}
+                    className="mt-3 h-[480px] w-full rounded-2xl border border-line/70 bg-white"
+                  />
+                </>
+              ) : previewError ? (
+                <p className="text-[12.5px] text-accent-dark">{previewError}</p>
+              ) : (
+                <p className="text-[12.5px] text-muted">Drawing the email&hellip;</p>
+              )}
             </div>
           )}
         </div>
@@ -270,22 +299,22 @@ export default function EmailProperties({
           <div className="flex shrink-0 items-center justify-between gap-3 border-t border-line/70 px-6 py-4">
             <button
               type="button"
-              onClick={() => setStage(stage === "review" ? "pick" : "review")}
+              onClick={() => (stage === "review" ? setStage("pick") : openReview())}
               disabled={!picked.length}
               className="rounded-full border border-line/80 px-4 py-2.5 text-[12.5px] font-medium transition-colors hover:border-ink/40 disabled:opacity-40"
             >
               {stage === "review" ? "← Back" : "Review email"}
             </button>
+            {sendError && <p className="min-w-0 flex-1 text-right text-[12px] leading-snug text-accent-dark">{sendError}</p>}
             <PressButton
-              onClick={() => picked.length && setStage("sent")}
+              onClick={send}
               className={`rounded-full px-6 py-2.5 text-[13px] font-semibold ${
                 picked.length ? "bg-ink text-page" : "cursor-not-allowed bg-ink/30 text-page/60"
               }`}
             >
               <span className="flex items-center gap-2">
                 <DoodleIcon name="mail" size={15} />
-                Send {picked.length ? `${picked.length} ` : ""}
-                {picked.length === 1 ? "property" : "properties"}
+                {sending ? "Sending…" : <>Send {picked.length ? `${picked.length} ` : ""}{picked.length === 1 ? "property" : "properties"}</>}
               </span>
             </PressButton>
           </div>

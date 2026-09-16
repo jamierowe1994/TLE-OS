@@ -1023,6 +1023,18 @@ ALTER TABLE os_tenant_passports ADD COLUMN IF NOT EXISTS agent_id TEXT;
 -- When and by whom the invite email went (4 Sep 2026). Null = minted, never sent.
 ALTER TABLE os_tenant_passports ADD COLUMN IF NOT EXISTS invited_at TIMESTAMPTZ;
 ALTER TABLE os_tenant_passports ADD COLUMN IF NOT EXISTS invited_by TEXT;
+-- Every timed tenant email that has gone, keyed so it can never go twice
+-- (16 Sep 2026, lib/tenant-reminders.ts): "passport-nudge-1:<token>",
+-- "viewing-reminder:<viewing id>:<email>". A row is written only once the
+-- send is settled - sent, or refused for a reason a retry cannot fix.
+CREATE TABLE IF NOT EXISTS os_tenant_email_log (
+  key        TEXT PRIMARY KEY,
+  email_id   TEXT NOT NULL,
+  sent_to    TEXT,
+  outcome    TEXT NOT NULL,
+  detail     TEXT,
+  sent_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- Who is on which campaign.
 --

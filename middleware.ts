@@ -267,6 +267,7 @@ const MACHINE_ROUTES = [
      have complained. Meets the precondition: with no CRON_SECRET the key
      comparison fails and the route answers 401, so the redirect was never
      what protected it. */
+  "/api/tenant/reminders/run",        // passport nudges and the morning viewing reminder, hourly
   "/api/reminders/run",
 ];
 

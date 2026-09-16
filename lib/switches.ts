@@ -171,6 +171,23 @@ export const SWITCHES: Switch[] = [
   },
   {
     /**
+     * The tenant reminders that go without anybody pressing a button (16 Sep
+     * 2026): the passport nudges at two and seven days, and the morning-of
+     * viewing reminder. Their own switch because nothing else on the list
+     * writes to a TENANT on a timer - every other tenant email follows an
+     * agent's action on a screen. Customer email must be on as well.
+     */
+    key: "tenant_reminders",
+    label: "Tenant reminders",
+    what: "Emails tenants on a timer: a nudge two days and a week after a passport invite that nobody has started, and a reminder from 7am on the day of a TLE viewing. Each goes once.",
+    who: "TENANTS, from the agent's own Outlook where that is armed and connected, otherwise from the Letting Experts sender. Email to landlords and tenants must be on as well.",
+    confirm: "REMIND TENANTS",
+    /* No old variable: this never existed before. Unset means off. */
+    legacyEnv: "TENANT_REMINDERS",
+    legacyOn: "on",
+  },
+  {
+    /**
      * Creating a PROPERTY in REX — the first time this OS would bring a record
      * into existence in the live system six businesses share, rather than
      * reading one or editing one that already exists.

@@ -1184,22 +1184,30 @@ export const TENANT_PASSPORT_NUDGE_2 = {
   branding: { showSignoff: false },
 } as const;
 
-/** The homes that fit. {{count}} {{homesList}} */
+/**
+ * The homes that fit. {{count}} {{homesList}} {{link}} = their passport.
+ *
+ * Sent for real from a lead's Email properties (16 Sep 2026). The button is
+ * the PASSPORT, not "see the homes": there is no public page for a listing
+ * and a lead has no account, so a button to the tenant area would have been a
+ * sign-in wall. Choosing is done by reply, which lands with the agent.
+ */
 export const TENANT_MATCHES = {
   subject: "{{count}} homes that fit what you're after",
   preheader: "Picked for your budget, your area and when you want to move.",
   mode: "blocks",
   blocks: [
     H("tm1", "Homes that fit"),
-    T("tm2", "Hi {{firstName}},<br><br>Here are the homes on with us right now that match what you told us."),
+    T("tm2", "Hi {{firstName}},<br><br>{{introLine}}"),
     T("tm3", "{{homesList}}"),
-    SP("tm4", 8),
-    BTN("tm5", "See the homes", "{{link}}"),
-    SP("tm6", 8),
-    T("tm7", "Tell us which you'd like to see, by replying or from the page, and I'll book it in. Homes like these tend to let within a couple of weeks, so the sooner the better."),
-    SP("tm8", 8),
-    T("tm9", "{{agentName}}<br>{{agentPhone}}<br>The Letting Experts"),
-    FOOT("tm10", "You're getting this because you're looking for a home with The Letting Experts."),
+    T("tm4", "Reply with the ones you'd like to see and I'll book them in. Homes like these tend to let within a couple of weeks, so the sooner the better."),
+    H2("tm5", "Ready to apply the day you find it"),
+    T("tm6", "Your tenant passport holds the details every landlord asks for. Fill it in once, and if one of these is the one, your application goes in the same day. Nothing in it is shared unless you apply."),
+    SP("tm7", 8),
+    BTN("tm8", "Start my passport", "{{link}}"),
+    SP("tm9", 8),
+    T("tm10", "{{agentName}}<br>The Letting Experts"),
+    FOOT("tm11", "You're getting this because you're looking for a home with The Letting Experts."),
   ],
   branding: { showSignoff: false },
 } as const;
@@ -1225,7 +1233,7 @@ export const TENANT_MATCHES_AGAIN = {
   branding: { showSignoff: false },
 } as const;
 
-/** 7am on the day. {{timePretty}} {{meetLine}} {{mapLink}} */
+/** 7am on the day. {{timePretty}} {{meetLine}} {{contactLine}} {{mapLink}} */
 export const VIEWING_REMINDER = {
   subject: "Your viewing today at {{timePretty}}",
   preheader: "{{address}}. Everything you need for this morning.",
@@ -1237,7 +1245,7 @@ export const VIEWING_REMINDER = {
     BTN("vr4", "Open it on a map", "{{mapLink}}"),
     SP("vr5", 8),
     T("vr6", "Bring some photo ID, and any questions about the home or the landlord."),
-    T("vr7", "Running late, or can't make it? Call {{agentName}} on <strong>{{agentPhone}}</strong> or reply to this email, and we'll move it."),
+    T("vr7", "Running late, or can't make it? {{contactLine}}"),
     SP("vr8", 8),
     T("vr9", "The Letting Experts"),
     FOOT("vr10", "You're getting this because you booked a viewing with The Letting Experts."),

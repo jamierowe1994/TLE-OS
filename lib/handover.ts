@@ -7,6 +7,7 @@ import { switchOn } from "@/lib/switches";
 import { handoffFor, type Handoff } from "@/lib/deal-handoff";
 import { findUserById } from "@/lib/users";
 import { renderTleEmail } from "@/lib/email/tle-emails";
+import { HOLDING_FEE_WORDING, SITE, WEEK_AHEAD_LINES } from "@/lib/email/tle-documents";
 import { sendAsAgent } from "@/lib/send-as-agent";
 
 /**
@@ -469,6 +470,18 @@ export async function runHandover(
       .map(([k, v]) => `${k}: <strong>${v}</strong>`)
       .join("<br>");
     const agentPhone = "0161 883 2525";
+    /* One week's rent, and never a penny over: the Tenant Fees Act caps a
+       holding deposit at a week, so this rounds DOWN to the penny rather than
+       to the nearest pound. */
+    const holdingFee =
+      packet.rentPcm && packet.rentPcm > 0
+        ? (() => {
+            const pence = Math.floor(((packet.rentPcm * 12) / 52) * 100);
+            return pence % 100 === 0
+              ? `£${(pence / 100).toLocaleString("en-GB")}`
+              : `£${(pence / 100).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+          })()
+        : null;
 
     const targets: { id: string; who: string; to: string | null; name: string; email: string }[] = [
       ...(packet.landlord?.email
@@ -476,7 +489,7 @@ export async function runHandover(
         : []),
       ...packet.tenants
         .filter((t) => t.email)
-        .map((t) => ({ id: `email-tenant:${t.contactId ?? t.name}`, who: `tenant ${t.name}`, to: t.email, name: t.name, email: "application-accepted-tenant" })),
+        .map((t) => ({ id: `email-tenant:${t.contactId ?? t.name}`, who: `tenant ${t.name}`, to: t.email, name: t.name, email: "application-its-yours" })),
     ];
 
     for (const t of targets) {
@@ -484,15 +497,20 @@ export async function runHandover(
         t.email === "application-accepted-landlord"
           ? { landlordName: t.name, address, detailsList, agentName: sender?.name ?? packet.agent ?? "The Letting Experts", agentPhone, agentEmail: sender?.email ?? "" }
           : {
-              tenantName: t.name,
+              /* OUR OWN WORDS NOW (16 Sep 2026). Howard's REX template 10979
+                 was carried across word for word on the 16th and replaced the
+                 same day with The Landlord Has Said Yes, once James had read
+                 it: the holding fee explained, then every step to the keys.
+                 Scotland takes no holding deposit, so it gets its own line
+                 (HOLDING_FEE_WORDING) - still wants checking by somebody who
+                 knows Scottish lettings. */
+              firstName: t.name.trim().split(/\s+/)[0] || "there",
               address,
-              detailsList,
-              /* Scotland has no holding deposit, so the sentence that names one
-                 must not go there. REX held no Scottish template - this wording
-                 is ours and wants checking by somebody who knows. */
-              payLine: scotland
-                ? "You will now receive an invite from Propoly to complete your referencing information."
-                : "You will now receive an invite from Propoly to pay the holding fee, if applicable, and to complete your referencing information.",
+              holdingFeeLine: scotland
+                ? HOLDING_FEE_WORDING.scotland.accepted()
+                : HOLDING_FEE_WORDING.england.accepted(holdingFee ?? "one week's rent"),
+              weekAheadList: WEEK_AHEAD_LINES,
+              link: `${SITE}/tenant/tenancy`,
               agentName: sender?.name ?? packet.agent ?? "The Letting Experts",
               agentPhone,
               agentEmail: sender?.email ?? "",
