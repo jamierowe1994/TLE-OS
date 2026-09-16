@@ -237,14 +237,21 @@ export default function Leads() {
     return () => { gone = true; };
   }, [openId]);
 
-  const ALL = useMemo(
-    () =>
-      [...ours, ...source.leads].filter((l) => !removed.has(l.id) && !hiddenIds.includes(l.id)).map((l) => {
-        const label = spines[l.id]?.label;
-        return label ? { ...l, spineLabel: label } : l;
-      }),
-    [ours, source.leads, spines, removed, hiddenIds]
-  );
+  const ALL = useMemo(() => {
+    /* The people added here arrive TWICE - once from /api/contacts, and again
+       from the lead book, which folds them in server-side (16 Sep 2026: React
+       was warning about duplicate keys, and a lead shown twice can be worked
+       twice). The book's copy wins: it carries the spine and the enquiry. */
+    const seen = new Set<string>();
+    const out: Lead[] = [];
+    for (const l of [...source.leads, ...ours]) {
+      if (seen.has(l.id) || removed.has(l.id) || hiddenIds.includes(l.id)) continue;
+      seen.add(l.id);
+      const label = spines[l.id]?.label;
+      out.push(label ? { ...l, spineLabel: label } : l);
+    }
+    return out;
+  }, [ours, source.leads, spines, removed, hiddenIds]);
 
   // The dropdowns offer what the book actually contains — no imagined values.
   const sources = useMemo(() => [...new Set(ALL.map((l) => l.source))].sort(), [ALL]);
