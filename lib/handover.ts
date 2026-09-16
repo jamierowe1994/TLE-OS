@@ -464,10 +464,15 @@ export async function runHandover(
         continue;
       }
       if (!live) {
-        /* Render Howard's template against the real objects so the rehearsal shows the words. */
+        /* Render Howard's template against the real objects so the rehearsal shows the words.
+           In the shape getMergedStringSet actually has, proven 29 Aug and kept in
+           lib/rex-mailmerge: merge_type is required, and the render takes ONE
+           merge_object, not the merge_objects array the send takes. Without them
+           REX answered "The argument 'merge_type' is not optional" every hour and
+           the rehearsal showed no words at all. */
         let preview: unknown = null;
         try {
-          const r = await rexCall("MailMerge", "getMergedStringSet", { mail_merge_template_id: t.template, merge_objects: [mergeObject] });
+          const r = await rexCall("MailMerge", "getMergedStringSet", { merge_type: "email", mail_merge_template_id: t.template, merge_object: mergeObject });
           preview = r.ok ? r.result : { unavailable: r.error };
         } catch (e) {
           preview = { unavailable: (e as Error).message };
