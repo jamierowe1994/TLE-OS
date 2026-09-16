@@ -2,6 +2,8 @@ import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import DoodleIcon from "@/components/DoodleIcon";
 import { GUIDES, GUIDE_SECTIONS } from "@/lib/guides";
+import { AGENT_GUIDES } from "@/lib/agent-guides";
+import GuideButton from "@/components/GuideButton";
 
 /**
  * The shelf.
@@ -31,6 +33,32 @@ export default function GuidesPage() {
            cannot keep. */
         search={false}
       />
+
+      {/* Step by step: these pop up over the screen rather than opening a page,
+          the same as they do from Steve's Guides tab. */}
+      <section className="fade-up mt-8">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">How it works</p>
+        <div className="mt-3 flex flex-col gap-3">
+          {AGENT_GUIDES.map((g) => (
+            <GuideButton
+              key={g.id}
+              id={g.id}
+              icon={false}
+              className="block-pop block w-full rounded-2xl border border-line/80 bg-panel p-5 text-left"
+            >
+              <span className="flex flex-wrap items-baseline gap-2.5">
+                <DoodleIcon name={g.icon} size={18} className="self-center text-accent-dark" />
+                <span className="hand text-[17px]">{g.title}</span>
+                <span className="text-[10.5px] text-muted">
+                  {g.steps.length} steps · {g.minutes} min
+                </span>
+                <span className="ml-auto text-muted">→</span>
+              </span>
+              <span className="mt-1.5 block max-w-2xl text-[12px] leading-relaxed text-muted">{g.blurb}</span>
+            </GuideButton>
+          ))}
+        </div>
+      </section>
 
       {sections.map((section) => (
         <section key={section.name} className="fade-up mt-8">

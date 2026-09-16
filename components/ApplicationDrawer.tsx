@@ -8,6 +8,7 @@ import PropertyFile from "@/components/PropertyFile";
 import { Pill } from "@/components/Wire";
 import { rexContactUrl } from "@/lib/business/rex-links";
 import { type SpineStop } from "@/components/StageSpine";
+import GuideButton from "@/components/GuideButton";
 import { eventSentence, eventTone, type DealEvent } from "@/lib/business/deal-events";
 
 type JourneyAction = { id: string; label: string; detail: string; href: string | null; who: "you" | "kirstie" | "landlord" | "tenant" };
@@ -514,6 +515,13 @@ export default function ApplicationDrawer({
                             <a href="/plc/practice" className="self-center text-[12px] text-muted underline transition-colors hover:text-ink">
                               Never done one? Practise it first
                             </a>
+                            <GuideButton
+                              id="agent-plc"
+                              icon={false}
+                              className="self-center text-[12px] text-muted underline transition-colors hover:text-ink"
+                            >
+                              How it works
+                            </GuideButton>
                           </>
                         )}
                         {!plc && forYou[0]?.href && (

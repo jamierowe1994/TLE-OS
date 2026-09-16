@@ -153,7 +153,7 @@ const AGENT: RigStep[] = [
     id: "warnings",
     title: "Read the warnings",
     act: "Look for anything flagged before you start.",
-    see: "A warning that Right to Rent is not recorded in REX for every adult applicant.",
+    see: "A warning that Right to Rent is not recorded for every adult applicant.",
     why: "These are the things REX already knows are thin. They are cheaper to fix now than after compliance sends the pack back.",
     side: "agent",
   },

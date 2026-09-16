@@ -99,7 +99,7 @@ export const DEMO_PREFILL: Prefill = {
   rentPcm: 1100,
   /* One real warning, because the wizard shows them and a demo where the
      panel is always empty never explains what it is for. */
-  warnings: ["Right to Rent is not recorded in REX for every adult applicant."],
+  warnings: ["Right to Rent is not recorded for every adult applicant. Compliance will ask."],
 };
 
 /** A full pack, as it looks once the agent has attached everything. */

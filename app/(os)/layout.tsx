@@ -7,6 +7,7 @@ import HelpDock from "@/components/HelpDock";
 import SetupGate from "@/components/SetupGate";
 import Tour from "@/components/Tour";
 import DocumentSheet from "@/components/DocumentSheet";
+import GuideLayer from "@/components/GuideLayer";
 import Watchdog from "@/components/Watchdog";
 
 export default function OsLayout({ children }: { children: React.ReactNode }) {
@@ -43,6 +44,11 @@ export default function OsLayout({ children }: { children: React.ReactNode }) {
         {/* The certificate viewer, up from the bottom of whichever page a
             file was opened on. Drawers slide aside for it (lib/doc-sheet). */}
         <DocumentSheet />
+        {/* An agent guide, popped over whichever screen asked for it (Steve's
+            Guides tab, a How this works button, or ?walkthrough=<id>). */}
+        <Suspense fallback={null}>
+          <GuideLayer />
+        </Suspense>
         {/* Keeps the trail of what somebody did, and notices a call that
             never comes back. Renders nothing until something goes wrong. */}
         <Watchdog />

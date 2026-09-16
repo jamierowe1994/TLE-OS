@@ -3,6 +3,7 @@
 import { use, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import DoodleIcon from "@/components/DoodleIcon";
+import GuideButton from "@/components/GuideButton";
 import RexPropertyPicker from "@/components/RexPropertyPicker";
 import PropertyFile from "@/components/PropertyFile";
 import VideoChaseControl from "@/components/VideoChaseControl";
@@ -199,6 +200,7 @@ export default function AppraisalFile({ params }: { params: Promise<{ id: string
         <button type="button" onClick={openFile} className={pill}>
           <DoodleIcon name="folder" size={13} className="text-accent-dark" /> Property file
         </button>
+        <GuideButton id="appraisals" className={pill} />
       </div>
 
       {/* ── 1. the hero ─────────────────────────────────────────────────── */}

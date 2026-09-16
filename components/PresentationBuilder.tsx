@@ -38,6 +38,7 @@ import { buildGuide, guideReach } from "@/lib/ma-guide";
 import { knownCompliance, OUTSTANDING_AT_APPRAISAL } from "@/lib/appraisal-compliance";
 import { listingKey } from "@/lib/listing-key";
 import { fetchMe } from "@/lib/me";
+import GuideButton from "@/components/GuideButton";
 
 /**
  * Build the presentation.
@@ -1366,6 +1367,12 @@ export default function PresentationBuilder({
               On the title line they cost nothing — the line was already there
               and half empty — and the map gets the height back. */}
           <div className="flex shrink-0 items-center gap-2">
+            {/* The best-price guide explained, over this screen, so an agent
+                does not lose their ticks going to read it. */}
+            <GuideButton
+              id="appraisals"
+              className="mr-1 flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[12px] font-semibold text-muted transition-colors hover:text-ink"
+            />
             {walk}
             {onClose && (
               <button type="button" onClick={onClose} className="ml-1 text-[18px] leading-none text-muted hover:text-ink">
