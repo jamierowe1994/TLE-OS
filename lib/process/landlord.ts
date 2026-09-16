@@ -75,9 +75,8 @@ export const LANDLORD_PROCESS: ProcessMap = {
 
     /* ── The appraisal ───────────────────────────────────────────────── */
     n({ id: "booked", kind: "trigger", lane: "spine", col: 4, status: "live", title: "Appraisal booked", blurb: "Booked from the lead: the diary shows the day around it and how far it is from the last appointment. The record becomes a market appraisal from here.", trigger: { on: "appraisal.booked" }, href: "/market-appraisals" }),
-    n({ id: "confirm-email", kind: "email", lane: "spine", col: 5, status: "live", title: "Appointment confirmed", blurb: "Straight away: when, who is coming, how long it takes and what to have to hand. This one genuinely sends.", emailId: "appraisal-confirm", trigger: { on: "appraisal.booked", after: "straight away" } }),
-    n({ id: "portal-invite", kind: "email", lane: "side", col: 5, row: -1, status: "built", title: "Open your property file", blurb: "Their way into the landlord portal, sent with the booking. Built; nobody has ever signed in.", emailId: "landlord-deck-invite", trigger: { on: "appraisal.booked", after: "straight away" } }),
-    n({ id: "pre-deck", kind: "email", lane: "spine", col: 6, status: "live", title: "Before the visit", blurb: "The day before: a short deck so they know who is turning up and what we do. Runs on the daily sweep.", emailId: "appraisal-pre", trigger: { on: "appraisal.tomorrow", after: "1 day before" } }),
+    n({ id: "confirm-email", kind: "email", lane: "spine", col: 5, status: "live", title: "Appointment confirmed", blurb: "Straight away, however it was booked: the date, time, address and agent in bold on their own lines, with the calendar invite attached. One of only two emails before the visit (James, 16 Sep).", emailId: "appraisal-confirm", trigger: { on: "appraisal.booked", after: "straight away" } }),
+    n({ id: "pre-deck", kind: "email", lane: "spine", col: 6, status: "live", title: "Before the visit", blurb: "The day before: a button straight to their pre-presentation - who is coming, what happens, how long it takes. Opens without an account; the portal waits until after the valuation. Runs on the daily sweep.", emailId: "appraisal-pre", trigger: { on: "appraisal.tomorrow", after: "1 day before" } }),
     n({ id: "video", kind: "email", lane: "side", col: 6, row: -1, status: "live", title: "Record a video", blurb: "To the AGENT, not the landlord: scan the code and record a hello on your phone, and it goes out with the deck.", emailId: "appraisal-video-chase", trigger: { on: "appraisal.booked", after: "1 day before" } }),
 
     n({ id: "visit", kind: "trigger", lane: "spine", col: 7, status: "live", title: "The visit", blurb: "The agent walks the property with the deck on a tablet. Comparables, what has let nearby, the market data.", trigger: { on: "appraisal.visited" }, href: "/market-appraisals" }),
@@ -158,7 +157,6 @@ export const LANDLORD_PROCESS: ProcessMap = {
 
     { from: "answered", to: "booked", kind: "main", label: "yes, come round" },
     { from: "booked", to: "confirm-email", kind: "main" },
-    { from: "booked", to: "portal-invite", kind: "branch" },
     { from: "confirm-email", to: "pre-deck", kind: "main" },
     { from: "booked", to: "video", kind: "branch", label: "to the agent" },
     { from: "pre-deck", to: "visit", kind: "main" },

@@ -49,7 +49,6 @@ import {
   CERTIFICATE_SHARED_TENANT,
   CERTIFICATE_SHARED_CONTRACTOR,
   TENANT_PASSPORT_INVITE,
-  LANDLORD_DECK_INVITE,
   LANDLORD_SIGN_IN,
   TENANT_SIGN_IN,
   WORKS_CONTRACTOR_ORDER,
@@ -520,7 +519,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
     fires: "components/AppraisalTrack.tsx → lib/appraisal-email.ts → confirmBodyFor()",
     to: "The landlord",
     summary:
-      "Short, sent while the phone call is still warm. Puts the time in writing and carries the calendar invite. The detail has its own email nearer the visit.",
+      "Short, sent the moment it is booked, however it was booked. The date, time, address and agent on their own lines in bold, and the calendar invite attached. One of only two emails before the visit: this, and the pre-presentation the day before.",
     render: () =>
       renderPlain(confirmSubjectFor(SAMPLE_INVITE), confirmBodyFor(SAMPLE_INVITE)),
   },
@@ -533,7 +532,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
     fires: "components/AppraisalTrack.tsx, or the queue in app/api/scheduled-sends/run",
     to: "The landlord",
     summary:
-      "What happens on the day, how long it takes, what to have to hand, and a link to their own pre-appraisal page with the agent's photo on it.",
+      "The day before. A button straight to their pre-presentation - who is coming, what happens on the day, how long it takes - which opens without an account. Nothing to set up until after the valuation.",
     render: () => renderPlain(subjectFor(SAMPLE_INVITE), bodyFor(SAMPLE_INVITE)),
   },
   {
@@ -574,7 +573,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
     trigger: "The agent presses Send the follow-up on the Post-appraisal step",
     fires: "components/AppraisalTrack.tsx → lib/appraisal-email.ts → postBodyFor()",
     to: "The landlord",
-    summary: "The figure given, the fee quoted, and what happens next.",
+    summary: "The same for every landlord: the suggested rent, the fee, a button to their presentation and terms, and let me know what you think. Never the agent's own notes.",
     render: () =>
       renderPlain(postSubjectFor(SAMPLE_INVITE), postBodyFor(SAMPLE_INVITE, {
         valuation: 1250,
@@ -582,6 +581,7 @@ export const TLE_EMAILS: CatalogEntry[] = [
         feePercent: 10,
         availableFrom: null,
         summary: "Wants it on the market before Christmas. Weighing us against one other agent.",
+        fileUrl: `${SITE}/landlord/enter?token=example`,
       })),
   },
 
@@ -818,29 +818,6 @@ The Letting Experts`
         withSample(o ?? TENANT_SIGN_IN, {
           firstName: "Sophie",
           link: `${SITE}/tenant/enter?token=sample`,
-        })
-      )(),
-  },
-  {
-    id: "landlord-deck-invite",
-    group: "Doorways",
-    name: "Appraisal Booked - Open Your Property File",
-    audience: "landlord",
-    trigger: "A market appraisal is booked for a landlord",
-    fires: "NOT WIRED YET - no send path, and the landlord file is a wireframe",
-    to: "The landlord who booked the appraisal",
-    draft: true,
-    summary:
-      "Turns a booked appraisal into an account. The pitch is not 'make an account' but 'we have already gathered what is on record for your property, correct it before we arrive' - which is worth more to them than to us, and is true. Also sets up the file as the place the valuation, terms and certificates will live afterwards.",
-    doc: LANDLORD_DECK_INVITE,
-    render: (o) =>
-      blocksAs("landlord")(
-        withSample(o ?? LANDLORD_DECK_INVITE, {
-          firstName: "Helen",
-          address: "12 Chorlton Road, Manchester M15 4AZ",
-          whenPretty: "Tuesday 20 October at 2:00pm",
-          agentName: "Rhiannon Dodge",
-          link: `${SITE}/landlord/welcome`,
         })
       )(),
   },

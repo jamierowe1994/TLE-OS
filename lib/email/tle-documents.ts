@@ -33,8 +33,11 @@ const H2 = (id: string, text: string): Block => ({
   type: "heading", id, text, align: "left", color: "", size: 19, lineHeight: 1.3,
 });
 const T = (id: string, text: string): Block => ({ type: "text", id, text, bg: "" });
+/* Taller and a touch narrower than the renderer's 11px x 24px (James, 16 Sep
+   2026: "very thin on the page"). */
+const BTN_PAD = { t: 16, r: 22, b: 16, l: 22 };
 const BTN = (id: string, text: string, url: string, align: "left" | "center" = "left"): Block => ({
-  type: "button", id, text, url, color: "", align,
+  type: "button", id, text, url, color: "", align, pad: BTN_PAD,
 });
 const H2C = (id: string, text: string): Block => ({
   type: "heading", id, text, align: "center", color: "#3b3b3c", size: 17, lineHeight: 1.35,
@@ -561,40 +564,6 @@ export const TENANT_SIGN_IN = {
   branding: { showSignoff: false },
 } as const;
 
-export const LANDLORD_DECK_INVITE = {
-  subject: "Your appraisal is booked. Here is your property file",
-  preheader: "See what we already know about the property, and correct it before we visit.",
-  mode: "blocks",
-  blocks: [
-    H("ld1", "You're booked in"),
-    T(
-      "ld2",
-      "Hi {{firstName}},<br><br>{{agentName}} is visiting <strong>{{address}}</strong> on <strong>{{whenPretty}}</strong> to value it for letting."
-    ),
-    SP("ld3", 8),
-    DIV("ld4"),
-    H2("ld5", "Your property file"),
-    T(
-      "ld6",
-      "We've already pulled together what is on record for the property: its size, its EPC, what it and its neighbours have let for, and how long they took. It is all in one place for you to look through before we come."
-    ),
-    T(
-      "ld7",
-      "Some of it will be out of date, and some of it we simply cannot see from the outside - what you've had done, how the heating is, whether it is furnished. Putting that right in the file means the figure we give you on the day is based on the real property rather than the one on paper."
-    ),
-    SP("ld8", 8),
-    BTN("ld9", "Open your property file", "{{link}}"),
-    SP("ld10", 8),
-    T(
-      "ld11",
-      "It is also where your valuation, your terms and your certificates will live afterwards, so there is one place to look rather than a thread of emails."
-    ),
-    SP("ld12", 8),
-    T("ld13", "The Letting Experts"),
-    FOOT("ld14", "You're getting this because you booked a market appraisal with The Letting Experts."),
-  ],
-  branding: { showSignoff: false },
-} as const;
 
 /* ──────────────── Maintenance: the contractor, the tenant, the landlord ──────────────── */
 

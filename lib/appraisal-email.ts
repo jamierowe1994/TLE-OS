@@ -32,45 +32,65 @@ export type AppraisalInvite = {
 
 const first = (name: string) => (name || "there").trim().split(/\s+/)[0];
 
-export function subjectFor(i: AppraisalInvite): string {
-  return `Your market appraisal - ${i.address}${i.whenPretty ? `, ${i.whenPretty}` : ""}`;
+/**
+ * The day and the time apart, so each can sit on its own line. From the ISO
+ * start where there is one, pinned to UK time so a browser elsewhere cannot
+ * move it; otherwise split out of whenPretty, which reads "Tuesday 20 October
+ * at 2:00pm".
+ */
+function dayAndTime(i: AppraisalInvite): { day: string; time: string } {
+  const start = i.startsAt ? new Date(i.startsAt) : null;
+  if (start && !Number.isNaN(start.valueOf())) {
+    const day = start.toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long" });
+    const time = start
+      .toLocaleTimeString("en-GB", { timeZone: "Europe/London", hour: "numeric", minute: "2-digit", hour12: true })
+      .replace(/\s/g, "")
+      .toLowerCase();
+    return { day, time };
+  }
+  const [day, time] = (i.whenPretty || "").split(/\s+at\s+/);
+  return { day: day || "", time: time || "" };
 }
 
+/** "See you on Tuesday" - the weekday alone, capitalised as a name is. */
+const weekdayOf = (i: AppraisalInvite) => dayAndTime(i).day.split(" ")[0] || "";
+
+export function subjectFor(i: AppraisalInvite): string {
+  return `Before your valuation - ${i.address}`;
+}
+
+/**
+ * The day before. Generic on purpose (James, 16 Sep 2026): nothing about a
+ * phone call or "today", because the booking may have come any way at all.
+ *
+ * The pre-presentation is a BUTTON straight to /present/<token>, which opens
+ * without an account - a landlord has nothing to set up until after the
+ * valuation. The marks are renderPlain's: [Label](url) and **bold**.
+ */
 export function bodyFor(i: AppraisalInvite): string {
-  /**
-   * The deck link, placed HIGH — directly under the appointment and above the
-   * list of things to dig out. It is the one thing in this email we actually
-   * want clicked, and a link at the bottom of a paragraph about certificates
-   * is a link nobody sees.
-   *
-   * Written as a sentence with the URL on its own line rather than as a bare
-   * URL: the email goes out through REX's mailer as HTML over our letterhead,
-   * and a lone URL on a line survives both that and a plain-text client.
-   */
+  const { day, time } = dayAndTime(i);
+  const when = day ? ` on **${day}${time ? ` at ${time}` : ""}**` : "";
+  const weekday = weekdayOf(i);
+
   const deck = i.presentationUrl
-    ? `\nBefore we meet, I've put a short page together for you - who's coming, what happens on the day, and how long it takes. Two minutes:\n\n${i.presentationUrl}\n`
-    : "";
+    ? `Before we meet, I've put together a short pre-presentation for you. It covers who's coming, what happens on the day, how long it takes, and a few things that might help with any questions you have about the valuation.
+
+[View your pre-presentation](${i.presentationUrl})
+
+It opens straight away, there's nothing to sign up for.`
+    : `It usually takes about ${i.minutes} minutes. I'll walk round with you, take a few notes, and we'll talk through what it should let for and how quickly.`;
 
   return `Hi ${first(i.landlordName)},
 
-Thanks for your time on the phone. I'm looking forward to seeing ${i.address}${
-    i.whenPretty ? ` on ${i.whenPretty}` : ""
-  }.
+I'm looking forward to seeing you at **${i.address}**${when}.
+
 ${deck}
-It usually takes about ${i.minutes} minutes. I'll walk round the property, take a few notes, and we'll talk through what it should let for, how quickly, and what - if anything - is worth doing first.
 
-To make the most of it, it helps to have to hand:
+If you have your EPC or any gas and electrical certificates to hand, they help, but none of it is essential.
 
-  • the EPC, if you already have one
-  • any gas safety or electrical certificates
-  • rough dates for when you'd want it available
-  • anything you already know needs doing
+If the time no longer works, just reply to this email${i.agentPhone ? ` or ring me on ${i.agentPhone}` : ""} and we'll move it.
 
-None of it is essential - if you haven't got it, we'll sort it afterwards.
-
-If the time no longer works, just reply to this email or ring me on ${i.agentPhone} and we'll move it.
-
-See you ${i.whenPretty ? i.whenPretty.split(" ")[0].toLowerCase() : "soon"},
+${weekday ? `See you on ${weekday},` : "See you soon,"}
 ${i.agentName}
 The Letting Experts`;
 }
@@ -152,69 +172,52 @@ export type AppraisalOutcomeFacts = {
 
 const pcm = (n: number | null) => (n == null ? null : `£${n.toLocaleString("en-GB")} pcm`);
 
+/** UK VAT, the one rate a lettings fee carries. */
+export const VAT_RATE = 0.2;
+
+/** A rate before VAT as the landlord pays it: 10 -> "12", 12 -> "14.4". */
+export const incVat = (pct: number) => String(Math.round(pct * (1 + VAT_RATE) * 100) / 100);
+
 export function postSubjectFor(i: AppraisalInvite): string {
   return `Your appraisal - ${i.address}`;
 }
 
+/**
+ * The same email for every landlord (James, 16 Sep 2026): the price, the fee,
+ * the presentation, let me know. Nothing that only fits one conversation - no
+ * "you were hoping for", no availability date, and never the agent's own notes,
+ * which are written for the agent and once read "weighing us against one other
+ * agent" to the landlord. askingRent, availableFrom and summary are still
+ * passed in by the callers and deliberately not used.
+ */
 export function postBodyFor(i: AppraisalInvite, f: AppraisalOutcomeFacts): string {
   const figure = pcm(f.valuation);
-  const asked = pcm(f.askingRent);
-  const lines: string[] = [
-    `Hi ${first(i.landlordName)},`,
-    "",
-    `Thanks for your time today, and for showing me round ${i.address}.`,
-    "",
-  ];
+  const facts = [
+    figure && `Suggested rent: **${figure}**`,
+    /* The figure a landlord actually pays, VAT in (James, 16 Sep 2026: "always
+       include the figure inclusive of that, not excluding it"). The file holds
+       the rate before VAT, as the terms of business do. */
+    f.feePercent != null && `Our fee: **${incVat(f.feePercent)}% of the rent, including VAT**`,
+  ].filter(Boolean) as string[];
 
-  if (figure) {
-    lines.push(
-      asked && asked !== figure
-        ? `In writing, as promised: I'd put it on the market at ${figure}. You mentioned you were hoping for ${asked} - that's not far off, and it's worth a conversation about what would close the gap.`
-        : `In writing, as promised: I'd put it on the market at ${figure}.`
-    );
-  } else {
-    lines.push("In writing, as promised - here's where we got to.");
-  }
-  lines.push("");
+  const lines: string[] = [`Hi ${first(i.landlordName)},`, "", `Thanks for showing me round ${i.address}.`, ""];
 
-  if (f.summary.trim()) {
-    lines.push(f.summary.trim(), "");
-  }
-  if (f.feePercent != null) {
-    lines.push(
-      `Our fee would be ${f.feePercent}% of the rent, which covers the marketing, the viewings, the referencing and the paperwork.`,
-      ""
-    );
-  }
-  if (f.availableFrom) {
-    lines.push(`You said you'd want it available from ${f.availableFrom}.`, "");
-  }
+  if (facts.length) lines.push("Here's where we landed:", "", facts.join("\n"), "");
 
-  /* The link goes ABOVE the close, not under the signature. It is the one
-     thing in this email we want opened, and a link below "Kind regards" is a
-     link nobody sees. */
   if (f.fileUrl) {
     lines.push(
-      "Everything from today is in one place for you:",
+      "Everything we went through is in your presentation, with our terms of business alongside it, so you can read it at your own pace.",
       "",
-      f.fileUrl,
+      `[View your presentation](${f.fileUrl})`,
       "",
-      "That is the full presentation I took you through, and the terms of business alongside it. Have a read at your own pace, and if anything raises a question just reply to this or give me a ring.",
+      "Have a look and let me know what you think. If you have any questions, just reply to this email.",
       ""
     );
+  } else {
+    lines.push("Have a think and let me know what you'd like to do. If you have any questions, just reply to this email.", "");
   }
 
-  lines.push(
-    f.fileUrl
-      ? "If you'd like to go ahead, the terms are in there ready to sign and we can get the photographs booked. If you're still weighing it up, that is completely fine - tell me what would help and I will get it to you."
-      : "If you'd like to go ahead, I'll send the terms over and we can get the photos booked. If you're still weighing it up, that's completely fine - tell me what would help and I'll get it to you.",
-    "",
-    `Either way, ring me on ${i.agentPhone} if anything's easier said than written.`,
-    "",
-    "Kind regards,",
-    i.agentName,
-    "The Letting Experts"
-  );
+  lines.push("Kind regards,", i.agentName, "The Letting Experts");
   return lines.join("\n");
 }
 
@@ -222,8 +225,9 @@ export function postBodyFor(i: AppraisalInvite, f: AppraisalOutcomeFacts): strin
  * The confirmation, sent the moment it is booked.
  *
  * A DIFFERENT email from the pre-appraisal, and the split is the point. This
- * one exists to put the appointment in writing while the phone call is still
- * warm — they agreed a time verbally, and verbal is what gets forgotten. It
+ * one exists to put the appointment in writing the moment it is booked -
+ * however it was booked, so it never assumes a phone call (James, 16 Sep
+ * 2026). It
  * is short on purpose: a confirmation that runs to six paragraphs is a
  * confirmation nobody reads to the end of, and the detail has its own email
  * the day before.
@@ -255,19 +259,24 @@ export function confirmSubjectFor(i: AppraisalInvite): string {
 }
 
 export function confirmBodyFor(i: AppraisalInvite): string {
+  const { day, time } = dayAndTime(i);
+  const rows = [
+    day && `Date: **${day}**`,
+    time && `Time: **${time}**`,
+    `Where: **${i.address}**`,
+    `With: **${i.agentName}**`,
+  ].filter(Boolean);
   return `Hi ${first(i.landlordName)},
 
-Thanks for your time on the phone just now. Putting it in writing so you have it:
+Thanks for booking in. Putting this in writing so you have it:
 
-  ${i.whenPretty || "The time we agreed"}
-  ${i.address}
-  With ${i.agentName}, about ${i.minutes} minutes
+${rows.join("\n")}
 
-I've attached a calendar invite so it lands in your diary.
+It takes about ${i.minutes} minutes, and the calendar invite is attached so it goes straight in your diary.
 
-Nothing to prepare at this stage. I'll send you a bit more detail nearer the time - what happens on the day and the handful of documents worth digging out.
+There's nothing you need to do before then. ${PRE_APPRAISAL_LEAD_WORDS.replace(/^./, (c) => c.toUpperCase())}, I'll send you a short pre-presentation so you know who's coming and what happens on the day.
 
-If that time stops working, just ${i.agentPhone ? `reply or ring me on ${i.agentPhone}` : "reply to this email"} and we'll move it.
+If the time stops working, just ${i.agentPhone ? `reply or ring me on ${i.agentPhone}` : "reply to this email"} and we'll move it.
 
 Kind regards,
 ${i.agentName}

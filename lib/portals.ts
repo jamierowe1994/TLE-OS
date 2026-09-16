@@ -184,14 +184,6 @@ export const PORTAL_FOLDERS: PortalFolder[] = [
         emailId: "appraisal-post",
       },
       {
-        kind: "email",
-        id: "landlord-invite",
-        name: "Opening their property file",
-        blurb: "The invitation into the landlord portal, sent once terms of business come back signed.",
-        emailId: "landlord-deck-invite",
-        caveat: "Written and rendering, but no send path is wired yet.",
-      },
-      {
         kind: "open",
         id: "landlord-sign-in",
         name: "Signing in",

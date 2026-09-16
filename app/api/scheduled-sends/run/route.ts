@@ -5,7 +5,7 @@ import { hasDb, q } from "@/lib/db";
 import { RexWriteBlocked } from "@/lib/rex";
 import { findUserById } from "@/lib/users";
 import { sendAsAgent } from "@/lib/send-as-agent";
-import { renderPlain } from "@/lib/campaign-mail";
+import { plainTextOf, renderPlain } from "@/lib/campaign-mail";
 import { getAppraisal } from "@/lib/appraisal-store";
 import { ResendBlocked, sendEmail } from "@/lib/resend";
 import { VIDEO_CHASE_KIND, videoRecorded } from "@/lib/video-chase";
@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
           continue;
         }
         const mail = row.html ? { subject: row.subject, html: row.html } : renderPlain(row.subject, row.body);
-        await sendEmail({ to: row.to_email, subject: mail.subject, html: mail.html, text: row.body });
+        await sendEmail({ to: row.to_email, subject: mail.subject, html: mail.html, text: plainTextOf(row.body) });
         await q(
           `UPDATE os_scheduled_sends SET state = 'sent', sent_at = NOW(), error = NULL WHERE id = $1`,
           [row.id]

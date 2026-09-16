@@ -52,8 +52,8 @@ export type EmailAudience = "partner" | "landlord" | "tenant" | "contractor" | "
  * The TLE letterhead, for one audience (James, 11 Sep 2026).
  *
  * Landlords and tenants get the extended palette, the same mix their own
- * portal pages run: a dark brown button and headings for contrast on a pale
- * pink ground. The team and the trades keep the red off the logo. Everyone
+ * portal pages run: a dark brown button and headings, on WHITE since 16 Sep
+ * 2026 - James swapped the pale pink ground out. The team and the trades keep the red off the logo. Everyone
  * gets the type: Manrope headings, Inter body, for the clients that load web
  * fonts (Apple Mail, iOS); Gmail and Outlook read the fallback stack.
  *
@@ -67,12 +67,32 @@ export function tleBrand(audience: EmailAudience = "landlord") {
     companyName: "The Letting Experts",
     signatureName: "The Letting Experts",
     website: "https://thelettingexperts.co.uk",
-    logo: origin ? `${origin}/brand/tle-logo.png` : "",
+    /* Customers get the pink mark their portal and presentations carry; the
+       team and the trades keep the red (James, 16 Sep 2026). */
+    logo: origin ? `${origin}/brand/${customer ? "tle-logo-coral.png" : "tle-logo.png"}` : "",
     headingFont: "manrope",
     bodyFont: "inter",
     buttonFont: "inter",
     ...(customer
-      ? { accentColor: "#56423e", headingColor: "#56423e", bgColor: "#fdefec" }
+      ? {
+          accentColor: "#56423e",
+          headingColor: "#56423e",
+          bgColor: "#ffffff",
+          /* The footer's icon row (James, 16 Sep 2026): Instagram, Facebook,
+             LinkedIn, website, plain brown icons, in that order. Links are the
+             ones on thelettingexperts.co.uk's own footer. */
+          instagram: "https://www.instagram.com/thelettingexperts.co.uk",
+          facebook: "https://www.facebook.com/thelettingexpertscouk",
+          linkedin: "https://www.linkedin.com/company/the-letting-experts",
+          socialImages: origin
+            ? {
+                instagram: `${origin}/email/social/instagram.png`,
+                facebook: `${origin}/email/social/facebook.png`,
+                linkedin: `${origin}/email/social/linkedin.png`,
+                website: `${origin}/email/social/website.png`,
+              }
+            : undefined,
+        }
       : // The red off the logo itself: an email to the team or a trade is
         // still the company, just not the customer-facing palette.
         { accentColor: "#e31f36", bgColor: "#f6f4f2" }),
@@ -190,6 +210,22 @@ export function renderStep(
   return html ? { subject, html } : null;
 }
 
+const BUTTON_LINE = /^\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)$/;
+
+/**
+ * The same words for a plain-text part: the marks renderPlain draws taken back
+ * out, so a text-only client reads "Label: https://..." and no asterisks.
+ */
+export function plainTextOf(text: string): string {
+  return text
+    .split(/(\n{2,})/)
+    .map((p) => {
+      const button = p.trim().match(BUTTON_LINE);
+      return button ? `${button[1]}: ${button[2]}` : p.replace(/\*\*(.+?)\*\*/g, "$1");
+    })
+    .join("");
+}
+
 /**
  * An email an agent typed, put on the letterhead.
  *
@@ -204,10 +240,22 @@ export function renderPlain(subject: string, text: string): { subject: string; h
     .map((p) => p.trim())
     .filter(Boolean);
   const blocks: Record<string, unknown>[] = [
-    ...paras.map((p) => ({ type: "text", id: id(), text: p, bg: "" })),
-    footerBlock(false),
+    ...paras.map((p) => {
+      /* Two marks an agent can type and read in the composer (James, 16 Sep
+         2026): a paragraph that is only [Label](https://...) becomes a button,
+         and **words** go bold - the date, the address, who is coming. */
+      const button = p.match(BUTTON_LINE);
+      if (button) {
+        return { type: "button", id: id(), text: button[1], url: button[2], align: "left", color: "", pad: { t: 16, r: 22, b: 16, l: 22 } };
+      }
+      return { type: "text", id: id(), text: p.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>"), bg: "" };
+    }),
+    /* The icon row under the words, like the block emails; and no second
+       "- The Letting Experts" under the footer, because the agent's own
+       sign-off is already in the text. */
+    { ...footerBlock(false), showSocial: true },
   ];
-  const brand = tleBrand();
+  const brand = { ...tleBrand(), showSignoff: false };
   const out = renderTemplate({ name: subject, subject, blocks }, { brand, mergeCtx: mergeContextFor({}, brand) });
   const raw = typeof out === "string" ? out : (out?.html ?? "");
   return { subject, html: renderTokens(raw, mergeContextFor({}, brand)) };

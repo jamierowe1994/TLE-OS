@@ -2,6 +2,7 @@
 
 import { INK, Line } from "@/components/present-kit";
 import { APPRAISAL_PROMISES, defaultBio, type PresentDeck as Deck } from "@/lib/present";
+import { incVat, VAT_RATE } from "@/lib/appraisal-email";
 import { AGENDA, AGENDA_INTRO, APPROACH, COMPLIANCE, LEGAL_CAVEAT, LEGAL_ITEMS, MANAGEMENT, MARKETING_POINTS, MAX_PRICE, NEXT_STEPS, PORTALS_COPY, REGULATED, REGULATED_INTRO, RENT_COLLECTION, RENT_LEGAL, SCREENING, SERVICE_LEVELS, SERVICE_LEVELS_INTRO, SERVICE_ROWS, WHAT_WE_OFFER } from "@/lib/present-copy";
 import { FROM_US, FROM_YOU } from "@/components/PresentDeck";
 import { createContext, useContext } from "react";
@@ -1330,8 +1331,9 @@ export function BookValuation({ deck }: { deck: Deck }) {
   const lines = v
     ? ([
         v.serviceLevel ? ["Service", v.serviceLevel] : null,
-        v.feePct != null ? ["Fee", `${v.feePct}% of rent, ${gbp(Math.round((v.rent * v.feePct) / 100))} a month at this rent`] : null,
-        v.setupFee != null ? ["Set-up", `${gbp(v.setupFee)} one-off`] : null,
+        /* VAT in, the figure the landlord pays (James, 16 Sep 2026). */
+        v.feePct != null ? ["Fee", `${incVat(v.feePct)}% of rent including VAT, ${gbp(Math.round((v.rent * v.feePct * (1 + VAT_RATE)) / 100))} a month at this rent`] : null,
+        v.setupFee != null ? ["Set-up", `${gbp(Math.round(v.setupFee * (1 + VAT_RATE)))} one-off, including VAT`] : null,
       ].filter(Boolean) as [string, string][])
     : [];
   return (

@@ -19,7 +19,7 @@ import {
 } from "@/lib/present";
 import { NEXT_STEPS } from "@/lib/present-copy";
 import PresentEntrance, { ENTRANCE_FLY_MS } from "@/components/PresentEntrance";
-import { icsFor } from "@/lib/appraisal-email";
+import { icsFor, incVat, VAT_RATE } from "@/lib/appraisal-email";
 
 /**
  * The pre-appraisal deck, as the landlord sees it.
@@ -1579,8 +1579,10 @@ function Valuation({ deck, show }: { deck: Deck; show: boolean }) {
      question it fails to answer. */
   const terms = [
     v.serviceLevel ? { label: "Our service", value: v.serviceLevel } : null,
-    v.feePct != null ? { label: "Management fee", value: `${v.feePct}% of rent` } : null,
-    v.setupFee != null ? { label: "Set-up fee", value: `${money(v.setupFee)} one-off` } : null,
+    /* VAT in: the figure the landlord actually pays (James, 16 Sep 2026). The
+       file holds both before VAT, as the terms of business do. */
+    v.feePct != null ? { label: "Management fee", value: `${incVat(v.feePct)}% of rent, including VAT` } : null,
+    v.setupFee != null ? { label: "Set-up fee", value: `${money(Math.round(v.setupFee * (1 + VAT_RATE)))} one-off, including VAT` } : null,
   ].filter(Boolean) as { label: string; value: string }[];
 
   /**

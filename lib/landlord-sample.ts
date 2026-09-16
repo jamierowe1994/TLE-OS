@@ -291,14 +291,14 @@ export function rajAt(stage: Stage): { view: LandlordView; docs: DocsView; maint
             ["Rent", "£850 / month"],
             ["Service", "Fully managed"],
             ["Tenant since", "1 Oct 2025"],
-            ["Management fee", "8% of rent"],
+            ["Management fee", "9.6% of rent, including VAT"],
             ["Next visit", "24 Sep 2026"],
           ]
         : [
             ["Asking rent", "£850 / month"],
             ["Service", "Rent collection"],
-            ["Management fee", "8% of rent"],
-            ["Set-up fee", "£300"],
+            ["Management fee", "9.6% of rent, including VAT"],
+            ["Set-up fee", "£360, including VAT"],
             ["Marketing", "Included"],
           ],
     },
