@@ -92,10 +92,35 @@ export async function takeQueue(limit = 3): Promise<QueuedBug[]> {
 
 export class BotRefused extends Error {}
 
-/** Owners, on our own domain: who is told a fix is waiting. */
+/**
+ * Who is told a fix is waiting.
+ *
+ * ── Not every owner (James, 16 Sep 2026) ──────────────────────────────────
+ *
+ * This asked os_users for role = 'owner', which is James AND Susan. So every
+ * prepared fix mailed them both, and Susan cannot do anything with one: the
+ * mail asks you to open a pull request and merge it, or to tell Claude Code
+ * to push it. She has neither. Her half of the bug bot's output was a mail
+ * she could only read and file.
+ *
+ * Approving a fix is a DEVELOPER's job, not an owner's, and the OS has no
+ * role for that - so it is named here rather than inferred from a role that
+ * means something else. BUG_BOT_APPROVERS overrides it without a deploy when
+ * somebody else starts merging these.
+ *
+ * The internal-domain filter stays: this is the last gate before a send, and
+ * a typo in an environment variable must not be what puts the OS domain in
+ * front of somebody outside (lib/email-policy).
+ */
+const BUG_BOT_APPROVERS = ["james@therecruitmentexperts.co.uk"] as const;
+
 async function approvers(): Promise<string[]> {
-  const rows = await q<{ email: string }>(`SELECT email FROM os_users WHERE role = 'owner'`).catch(() => []);
-  return rows.map((r) => r.email).filter((e) => isInternalAddress(e));
+  const configured = (process.env.BUG_BOT_APPROVERS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  const list = configured.length ? configured : [...BUG_BOT_APPROVERS];
+  return list.filter((e) => e.includes("@") && isInternalAddress(e));
 }
 
 export async function record(
