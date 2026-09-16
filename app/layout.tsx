@@ -111,6 +111,14 @@ export const metadata: Metadata = {
      Install app; Safari: Add to Dock) and it pings her when a deal moves -
      the desktop app she asked for on 4 Sep, without the unsigned download. */
   manifest: "/manifest.webmanifest",
+  /* The tab mark. Without this every page asked for /favicon.ico, got a 404
+     and showed a blank square - on the first screen a pilot agent ever sees.
+     The icons were already here for the installed app; nothing said to use
+     them in a browser tab (16 Sep 2026). */
+  icons: {
+    icon: [{ url: "/icons/app/icon-192.png", type: "image/png", sizes: "192x192" }],
+    apple: [{ url: "/icons/app/icon-512.png", type: "image/png", sizes: "512x512" }],
+  },
 };
 
 export default function RootLayout({
