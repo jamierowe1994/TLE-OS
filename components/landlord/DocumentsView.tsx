@@ -1,6 +1,8 @@
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import AgentCard from "@/components/landlord/AgentCard";
+import AgentCall from "@/components/landlord/AgentCall";
+import QrHandoff from "@/components/landlord/QrHandoff";
 import UploadDoc from "@/components/landlord/UploadDoc";
 import type { DocRow, DocsView } from "@/lib/landlord-documents-view";
 import type { LandlordView } from "@/lib/landlord-view";
@@ -26,13 +28,27 @@ export default function DocumentsView({ view: v, docs: d, sample = false }: { vi
   const allIn = d.needed.length === 0;
   return (
     <div className="space-y-6">
-      {/* ── title and the agent ── */}
+      {/* ── title and the agent ──
+          On a PHONE the head is one line and the agent is a call button in the
+          corner beside it. James, 16 Sep 2026: "put the contact number for Sam
+          in the top-right corner. The first thing they should see is what they
+          still need to do." The 44px title, its paragraph and a full agent card
+          were 280px of preamble above the only thing on the page that asks
+          anything of them. The whole card is still there on a desktop, where
+          there is a column to put it in. */}
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[1fr_auto]">
-        <div className="pt-2">
-          <h1 className="text-[44px] leading-[1.05]">Your documents</h1>
-          <p className="mt-3 max-w-xl text-[14.5px] text-muted">Everything we hold on your file, and what we still need from you.</p>
+        <div className="flex items-start justify-between gap-4 pt-2 lg:block">
+          <div className="min-w-0">
+            <h1 className="text-[30px] leading-[1.08] sm:text-[44px] sm:leading-[1.05]">Your documents</h1>
+            <p className="mt-2 hidden max-w-xl text-[14.5px] text-muted sm:mt-3 sm:block">
+              Everything we hold on your file, and what we still need from you.
+            </p>
+          </div>
+          <AgentCall v={v} />
         </div>
-        <AgentCard v={v} />
+        <div className="hidden lg:block">
+          <AgentCard v={v} />
+        </div>
       </div>
 
       {/* ── what we need, and what they have sent ── */}
@@ -65,18 +81,32 @@ export default function DocumentsView({ view: v, docs: d, sample = false }: { vi
                 </p>
               </div>
             </div>
+            {/* THE DESK HAS NO CAMERA. A landlord at a computer with the
+                certificate in their hand is one scan away from the phone in
+                their pocket - see QrHandoff. Hidden on a phone, which IS the
+                camera and has the sheet instead. */}
+            {d.needed.length > 0 && (
+              <div className="mt-5 hidden sm:block">
+                <QrHandoff sample={sample} />
+              </div>
+            )}
             {d.needed.length > 0 && (
               <ul className="mt-6 divide-y divide-accent-dark/10">
                 {d.needed.map((r) => (
-                  <li key={r.title} className="flex flex-wrap items-center gap-4 py-3.5">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/70 text-accent-dark">
+                  <li key={r.title} className="flex flex-wrap items-center gap-3 py-3.5 sm:gap-4">
+                    {/* The tile goes on a phone. Between it and the Send
+                        button the title had about 180px, so "Energy
+                        Performance Certificate (EPC)" came out as four lines
+                        of two words - and the row already says it is a
+                        document by being in the list of documents. */}
+                    <span className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/70 text-accent-dark sm:flex">
                       <DoodleIcon name="doc" size={15} />
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block text-[14px] font-semibold">{r.title}</span>
                       <span className="block text-[12px] text-muted">{r.sub}</span>
                     </span>
-                    <UploadDoc kind={r.kind ?? "other"} appraisalId={d.appraisalId} sample={sample} />
+                    <UploadDoc kind={r.kind ?? "other"} title={r.title} appraisalId={d.appraisalId} sample={sample} />
                   </li>
                 ))}
               </ul>
@@ -97,7 +127,7 @@ export default function DocumentsView({ view: v, docs: d, sample = false }: { vi
           )}
           <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-5">
             <p className="text-[12.5px] text-muted">Something else for the file?</p>
-            <UploadDoc kind="other" appraisalId={d.appraisalId} sample={sample} label="Add a document" tone="light" />
+            <UploadDoc kind="other" title="Something else" appraisalId={d.appraisalId} sample={sample} label="Add a document" tone="light" />
           </div>
         </section>
       </div>
@@ -197,7 +227,7 @@ function Row({ r, upload }: { r: DocRow; upload?: { appraisalId: string | null; 
         <span className="block truncate text-[13.5px] font-semibold">{r.title}</span>
         <span className={`block truncate text-[12px] ${missing ? "text-accent-dark" : "text-muted"}`}>{r.sub}</span>
       </span>
-      {upload && r.kind && r.state !== "uploaded" && <UploadDoc kind={r.kind} appraisalId={upload.appraisalId} sample={upload.sample} label="Send the new one" tone="light" />}
+      {upload && r.kind && r.state !== "uploaded" && <UploadDoc kind={r.kind} title={r.title} appraisalId={upload.appraisalId} sample={upload.sample} label="Send the new one" tone="light" />}
       {r.href && (
         <a
           href={r.href}

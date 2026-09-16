@@ -976,6 +976,17 @@ CREATE TABLE IF NOT EXISTS os_contacts (
 );
 CREATE INDEX IF NOT EXISTS os_contacts_state ON os_contacts (rex_state, created_at DESC);
 
+-- The welcome and privacy notice a tenant is sent when they are registered
+-- (15 Sep 2026). Kept ON the contact rather than in a log, because the question
+-- asked of it is always about one person: "was she told how we hold her
+-- details, and when?" - and a UK GDPR notice is a duty, so that answer has to
+-- be findable. sent | skipped | failed, the reason in words, and when.
+-- The same address is only ever told once, however many times it is entered:
+-- lib/tenant-welcome checks every contact row for that email before sending.
+ALTER TABLE os_contacts ADD COLUMN IF NOT EXISTS welcome_state  TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_contacts ADD COLUMN IF NOT EXISTS welcome_detail TEXT NOT NULL DEFAULT '';
+ALTER TABLE os_contacts ADD COLUMN IF NOT EXISTS welcome_at     TIMESTAMPTZ;
+
 -- The tenant passport: their details, filled in once.
 --
 -- Keyed on a TOKEN, not on an account, because there is no tenant sign-in yet
@@ -2540,6 +2551,42 @@ CREATE TABLE IF NOT EXISTS os_tenant_documents (
 );
 CREATE INDEX IF NOT EXISTS os_tenant_documents_account
   ON os_tenant_documents (account_id, uploaded_at DESC);
+
+-- ── SENDING DOCUMENTS FROM A PHONE, added 16 Sep 2026 ────────────────────
+--
+-- A landlord at a desktop has the certificates in their hand and no scanner.
+-- So the desktop draws a QR code, they photograph it, and their phone opens
+-- straight onto the camera - no sign-in, because a landlord who has to type a
+-- password on a phone while holding a gas certificate does neither.
+--
+-- That link is therefore a BEARER CREDENTIAL, and anybody who photographs the
+-- screen over their shoulder has it. The protection is not secrecy; it is
+-- what the token can do:
+--
+--   * it only ever adds. The page it opens can send a file and read the names
+--     of what is outstanding. It cannot open a document, a statement, the
+--     contract or anything else on the file.
+--   * it dies. HANDOFF_MINUTES from the moment the desktop drew it - long
+--     enough to photograph four certificates, short enough that a screenshot
+--     forwarded to somebody is worthless by the time they open it.
+--   * it is stored HASHED, like any other credential. A dump of this table
+--     lets nobody upload anything.
+--
+-- Multi-use inside the window rather than single-use, on purpose: a landlord
+-- with three certificates must not have to rescan between each one. uses is
+-- kept so the table can say how a document arrived.
+CREATE TABLE IF NOT EXISTS os_doc_handoffs (
+  id           TEXT PRIMARY KEY,
+  token_hash   TEXT NOT NULL UNIQUE,
+  account_id   TEXT NOT NULL,
+  appraisal_id TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at   TIMESTAMPTZ NOT NULL,
+  uses         INTEGER NOT NULL DEFAULT 0,
+  last_used_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS os_doc_handoffs_expiry
+  ON os_doc_handoffs (expires_at);
 
 -- A message is stored first and emailed second, so a refused or failed email
 -- never loses what the landlord wrote. emailed_at / email_error say which.
