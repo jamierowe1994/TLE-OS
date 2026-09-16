@@ -78,7 +78,7 @@ export const AREA_DEFS: AreaDef[] = [
      run with testers before every agent can change a live advert. */
   {
     id: "listing-edit", label: "Edit the advert", phase: 1, parent: "listings",
-    pages: [], apis: ["/api/listings/details", "/api/listings/media", "/api/listings/autofill"], canHide: true,
+    pages: [], apis: ["/api/listings/details", "/api/listings/media", "/api/listings/autofill", "/api/listings/create"], canHide: true,
   },
   { id: "viewings", label: "Viewings", phase: 1, pages: ["/viewings"], apis: ["/api/viewings", "/api/appointments"], canHide: true },
   {

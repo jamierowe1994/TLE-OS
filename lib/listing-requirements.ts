@@ -49,6 +49,17 @@ export interface RequirementInput {
   furnishing: string | null | undefined;
 }
 
+/** How a rental is let, and what we do for the landlord (REX's own lists). */
+export const LET_TYPES = [
+  { id: "long_term", label: "Long term" },
+  { id: "short_term", label: "Short term" },
+];
+export const SERVICE_LEVELS = [
+  { id: "managed", label: "Managed" },
+  { id: "rent_collect", label: "Rent collect" },
+  { id: "let_only", label: "Let only" },
+];
+
 export const MIN_FEATURES = 5;
 /** How many "Fill it in for me" writes: room for the agent to add their own. */
 export const MAX_FEATURES_AI = 8;

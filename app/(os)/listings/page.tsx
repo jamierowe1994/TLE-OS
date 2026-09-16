@@ -9,6 +9,7 @@ import Segmented from "@/components/Segmented";
 import StageTabs from "@/components/StageTabs";
 import CornerSwell from "@/components/CornerSwell";
 import ListingDrawer from "@/components/ListingDrawer";
+import NewListingPanel from "@/components/listing/NewListingPanel";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import { DIARY } from "@/lib/diary";
 import { Readiness, Tag, readiness, statusOf } from "@/components/ListingTags";
@@ -353,6 +354,8 @@ export default function Listings() {
      pointed at a different house a minute later (?open=228a Chapter Road
      opened 166 Gloucester Road North, 7 Sep). */
   const [openId, setOpenId] = useState<string | null>(null);
+  /* The Add new listing panel, and the listing it just made. */
+  const [adding, setAdding] = useState(false);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<string | null>(null);
   const [rentBand, setRentBand] = useState<string | null>(null);
@@ -377,23 +380,24 @@ export default function Listings() {
     reason?: string;
   }>({ listings: FALLBACK, counts: FALLBACK_COUNTS, live: false, loading: true });
 
-  useEffect(() => {
-    let gone = false;
-    fetch("/api/listings")
-      .then((r) => r.json())
-      .then((j) => {
-        if (gone) return;
-        if (j.ok && j.live && Array.isArray(j.listings)) {
-          setBook({ listings: j.listings, counts: j.counts, live: true, loading: false });
-        } else {
-          setBook({ listings: FALLBACK, counts: FALLBACK_COUNTS, live: false, loading: false, reason: j.reason });
-        }
-      })
-      .catch(() => {
-        if (!gone) setBook((b) => ({ ...b, loading: false, reason: "REX didn't answer — showing the last static export." }));
-      });
-    return () => { gone = true; };
+  /** The book. Also called after a listing is added, so the new one is there
+   *  to open - the board holds a cached read and would not have it yet. */
+  const loadBook = useCallback(async () => {
+    try {
+      const j = await fetch("/api/listings", { cache: "no-store" }).then((r) => r.json());
+      if (j.ok && j.live && Array.isArray(j.listings)) {
+        setBook({ listings: j.listings, counts: j.counts, live: true, loading: false });
+        return true;
+      }
+      setBook({ listings: FALLBACK, counts: FALLBACK_COUNTS, live: false, loading: false, reason: j.reason });
+    } catch {
+      setBook((b) => ({ ...b, loading: false, reason: "The book didn't answer — showing the last static export." }));
+    }
+    return false;
   }, []);
+  useEffect(() => {
+    void loadBook();
+  }, [loadBook]);
 
   /* ── THE ARCHIVE, fetched on first open and not before ──────────────────
      It carries REX's 223 withdrawn rentals as well as the cold drafts, and
@@ -599,20 +603,15 @@ export default function Listings() {
                 { id: "tiles" as const, label: "Tiles" },
               ]}
             />
-            {/* Properties are still created in REX, so it opens REX's
-                listings in a new tab rather than pretending the OS can do it.
-                The new property appears here on the next read. In the brand
-                accent, like New lead. */}
-            <a
-              href="https://app.rexsoftware.com/listings/"
-              target="_blank"
-              rel="noreferrer"
-              title="Opens REX - properties are created there, and appear here once they are"
+            {/* A listing is made here now (16 Sep 2026): the address, what it
+                is and the rent, then straight into Marketing for the rest. */}
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
               className="flex items-center gap-2 rounded-full bg-accent px-5 py-2.5 text-[13px] font-semibold text-white ring-1 ring-inset ring-black/10 transition-opacity hover:opacity-90"
             >
               <span className="text-[15px] leading-none">+</span> Add new listing
-              <DoodleIcon name="link" size={12} className="opacity-70" />
-            </a>
+            </button>
           </div>
         }
       />
@@ -914,6 +913,17 @@ export default function Listings() {
           })
         }
       />
+
+      {adding && (
+        <NewListingPanel
+          onClose={() => setAdding(false)}
+          onCreated={(id) => {
+            setAdding(false);
+            /* Straight onto the new record, where Marketing fills it in. */
+            void loadBook().then(() => setOpenId(id));
+          }}
+        />
+      )}
 
       {/* The street, running off the bottom of the page. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
