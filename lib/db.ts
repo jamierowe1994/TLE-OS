@@ -1537,6 +1537,27 @@ CREATE TABLE IF NOT EXISTS os_rex_people (
 CREATE INDEX IF NOT EXISTS os_rex_people_name ON os_rex_people (lower(name));
 CREATE INDEX IF NOT EXISTS os_rex_people_email ON os_rex_people (lower(email));
 
+-- Right to Rent ID photographs taken on the phone view (16 Sep 2026).
+-- One row per check: whose ID, what it was, who saw it in person and when.
+-- The file itself sits in R2 under right-to-rent/, a prefix /api/r2/file does
+-- NOT serve - an agent guessing a key must not be able to open somebody's
+-- passport. The office's viewer is a separate, gated route.
+CREATE TABLE IF NOT EXISTS os_id_checks (
+  id               TEXT PRIMARY KEY,
+  person_name      TEXT NOT NULL,
+  property         TEXT NOT NULL DEFAULT '',
+  appt_id          TEXT,
+  doc_type         TEXT NOT NULL,
+  pages            INTEGER NOT NULL DEFAULT 1,
+  file_key         TEXT NOT NULL,
+  file_type        TEXT NOT NULL,
+  seen_in_person   BOOLEAN NOT NULL DEFAULT FALSE,
+  checked_by       TEXT NOT NULL,
+  checked_by_name  TEXT NOT NULL DEFAULT '',
+  checked_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS os_id_checks_by ON os_id_checks (checked_by, checked_at DESC);
+
 CREATE TABLE IF NOT EXISTS os_cache (
   key            TEXT PRIMARY KEY,
   payload        JSONB NOT NULL,
