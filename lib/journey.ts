@@ -250,7 +250,7 @@ export const LISTING_TRACK: JourneyStep[] = [
          figure was 62%. A track definition has no access to the live book, so
          the honest fix is to stop quoting a figure here: Listings says how
          many drafts there are, live, on the screen the agent came from. */
-      "Publish to the portals via REX. A draft earns nothing.",
+      "Get it onto Rightmove, Zoopla and OnTheMarket. A draft earns nothing.",
     action: "none", cta: "Mark as live",
   },
   /* SPLIT IN TWO, 14 Sep 2026 (Danielle, 11 Sep). This was one step called
@@ -393,4 +393,4 @@ export type Party = { name: string; email: string; phone: string };
  * only allowed here when something authoritative supplied it.
  */
 export const LANDLORD_UNKNOWN =
-  "Not recorded in REX — no landlord is held against this property.";
+  "Not recorded — no landlord is held against this property.";

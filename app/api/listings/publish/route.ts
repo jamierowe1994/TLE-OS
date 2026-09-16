@@ -60,6 +60,29 @@ function whereFrom(result: unknown): Where {
   return { status, channels, onPortals: status === "published" && channels.includes("portals") };
 }
 
+/**
+ * Is there an EPC? On the listing itself (where REX keeps one entered with
+ * the advert) or as a compliance entry on the property. "Not required" counts:
+ * a handful of homes are genuinely exempt.
+ */
+async function hasEpc(details: Awaited<ReturnType<typeof readListingDetails>>): Promise<boolean> {
+  const today = new Date().toISOString().slice(0, 10);
+  if (details.epc.rating || (details.epc.expiry && details.epc.expiry >= today)) return true;
+  if (!details.propertyId) return false;
+  try {
+    const { certificatesFor } = await import("@/lib/rex-compliance");
+    const book = await certificatesFor([
+      { propertyId: details.propertyId, name: details.address, locality: details.town, epcExpiry: details.epc.expiry, service: details.service },
+    ]);
+    const state = book.properties[0]?.certs?.epc;
+    return Boolean(state && (state.expires == null ? state.attached : state.expires >= 0 || state.notRequired));
+  } catch {
+    /* A check that cannot be made must not stop a legitimate publish: the
+       screen has already shown the agent what is missing. */
+    return true;
+  }
+}
+
 /** getErrorsPreventingUpload answers a list, or messages keyed by portal. */
 function portalMessages(v: unknown): string[] {
   if (Array.isArray(v)) return v.map(String);
@@ -142,7 +165,11 @@ export async function POST(req: NextRequest) {
          rule the Marketing tab counts down - so a button pressed from a stale
          screen still cannot put a half-filled advert on Rightmove. */
       const details = await readListingDetails(id);
+      /* The EPC, and only the EPC (James, 16 Sep 2026): it is what the law
+         needs to ADVERTISE. Gas and the EICR are needed before anyone moves
+         in and block the handover instead (lib/deal-handoff). */
       const gaps = missing(inputFromDetails(details));
+      if (!(await hasEpc(details))) gaps.push({ id: "epc" as never, label: "EPC", ok: () => false });
       if (gaps.length) {
         return NextResponse.json(
           { ok: false, error: `Finish the Marketing tab first: ${gaps.map((g) => g.label.toLowerCase()).join(", ")}.`, missing: gaps.map((g) => g.id) },
