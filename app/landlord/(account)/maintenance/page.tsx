@@ -10,9 +10,11 @@ export const metadata = { title: "Maintenance · The Letting Experts" };
  * we look after for them, from the maintenance board and the inspections
  * book, and a way to report something themselves.
  */
-export default async function LandlordMaintenancePage() {
+export default async function LandlordMaintenancePage({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
   const me = (await currentLandlord())!;
-  const [{ view, first }, m] = await Promise.all([loadLandlordHome(me), loadLandlordMaintenance(me)]);
+  /* Which property, from the address bar. See PlacePicker. */
+  const { p } = await searchParams;
+  const [{ view, first }, m] = await Promise.all([loadLandlordHome(me, p), loadLandlordMaintenance(me)]);
   if (!view) {
     return (
       <div className="pt-4">

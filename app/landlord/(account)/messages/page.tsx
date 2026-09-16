@@ -5,9 +5,11 @@ import { loadLandlordHome } from "@/lib/landlord-home-view";
 export const metadata = { title: "Messages · The Letting Experts" };
 
 /** The landlord's messages, live: the thread with their agent, from the same view the home page reads. */
-export default async function LandlordMessagesPage() {
+export default async function LandlordMessagesPage({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
   const me = (await currentLandlord())!;
-  const { view, first } = await loadLandlordHome(me);
+  /* Which property, from the address bar. See PlacePicker. */
+  const { p } = await searchParams;
+  const { view, first } = await loadLandlordHome(me, p);
   if (!view) {
     return (
       <div className="pt-4">

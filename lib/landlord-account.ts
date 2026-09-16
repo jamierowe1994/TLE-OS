@@ -457,6 +457,67 @@ function beatFor(stage: MaStage, a: MarketAppraisal, signed: SignedTerms[], now:
   return "visit";
 }
 
+/* ------------------------------------------------------- the portfolio -- */
+
+/**
+ * EVERY PLACE THIS LANDLORD HAS WITH US, as a list to choose from.
+ *
+ * James, 16 Sep 2026: "if a landlord has multiple properties ... when we click
+ * the navigation bar ... it will show the name of the property. They can click
+ * that if they have multiple, and then it will give a dropdown."
+ *
+ * Deliberately the CHEAP read. landlordJourneys looks up the presentations and
+ * the signed terms for every appraisal, which is right for a page that draws a
+ * journey and wrong for the shell, which needs nothing but names and runs on
+ * every single page. Both of the reads below are the cached ones the portal is
+ * already making, so a landlord with one property pays nothing for this.
+ *
+ * The key is prefixed because the two halves come from different places and
+ * their ids can collide: "a:" is a market appraisal, "m:" a managed property.
+ * Nothing outside this file should take one apart - pass it back to
+ * loadLandlordHome and let that resolve it.
+ */
+export interface LandlordPlace {
+  key: string;
+  /** "Flat 3, 12 High Street". */
+  name: string;
+  /** "Filton BS34 7QA", under it. */
+  locality: string;
+  /** Being set up, or one we look after. */
+  kind: "appraisal" | "managed";
+}
+
+/** For deduping: a let that began as an appraisal can be on both lists. */
+const sameAddress = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+export async function landlordPlaces(a: LandlordAccount): Promise<LandlordPlace[]> {
+  const email = normaliseEmail(a.email);
+  const [appraisals, managed] = await Promise.all([
+    appraisalsFor(email).catch(() => [] as MarketAppraisal[]),
+    managedFor(email, a.contactIds).catch(() => [] as ManagedProperty[]),
+  ]);
+
+  const out: LandlordPlace[] = [];
+  const seen = new Set<string>();
+
+  /* Appraisals first, because that is the order the portal itself picks in:
+     an open one is what loadLandlordHome shows before anything managed. */
+  for (const ap of appraisals) {
+    if (!ap.address) continue;
+    const at = sameAddress(ap.address);
+    if (seen.has(at)) continue;
+    seen.add(at);
+    out.push({ key: `a:${ap.id}`, name: ap.address, locality: ap.postcode ?? "", kind: "appraisal" });
+  }
+  for (const p of managed) {
+    const at = sameAddress(p.address || p.name);
+    if (seen.has(at)) continue;
+    seen.add(at);
+    out.push({ key: `m:${p.propertyId ?? p.listingId}`, name: p.name, locality: p.locality, kind: "managed" });
+  }
+  return out;
+}
+
 export async function landlordJourneys(a: LandlordAccount): Promise<AppraisalJourney[]> {
   const appraisals = await appraisalsFor(normaliseEmail(a.email));
   const now = new Date();

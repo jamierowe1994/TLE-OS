@@ -9,9 +9,11 @@ export const metadata = { title: "Your letting journey · The Letting Experts" }
  * (lib/landlord-home-view), laid out as where they are, what they can do,
  * and who does what at every stop.
  */
-export default async function LandlordJourney() {
+export default async function LandlordJourney({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
   const me = (await currentLandlord())!;
-  const { view, first } = await loadLandlordHome(me);
+  /* Which property, from the address bar. See PlacePicker. */
+  const { p } = await searchParams;
+  const { view, first } = await loadLandlordHome(me, p);
   if (!view) {
     return (
       <div className="pt-4">

@@ -9,9 +9,11 @@ export const metadata = { title: "Your documents · The Letting Experts" };
  * The landlord's documents, live: what we need, what they have sent, what
  * came from us, and the certificates on every property we look after.
  */
-export default async function LandlordDocumentsPage() {
+export default async function LandlordDocumentsPage({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
   const me = (await currentLandlord())!;
-  const [{ view, first }, docs] = await Promise.all([loadLandlordHome(me), loadLandlordDocuments(me)]);
+  /* Which property, from the address bar. See PlacePicker. */
+  const { p } = await searchParams;
+  const [{ view, first }, docs] = await Promise.all([loadLandlordHome(me, p), loadLandlordDocuments(me)]);
   if (!view) {
     return (
       <div className="pt-4">

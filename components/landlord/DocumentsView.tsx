@@ -1,7 +1,7 @@
 import DoodleIcon from "@/components/DoodleIcon";
 import PropertyPhoto from "@/components/PropertyPhoto";
 import AgentCard from "@/components/landlord/AgentCard";
-import AgentCall from "@/components/landlord/AgentCall";
+import AgentSheet from "@/components/landlord/AgentSheet";
 import QrHandoff from "@/components/landlord/QrHandoff";
 import UploadDoc from "@/components/landlord/UploadDoc";
 import type { DocRow, DocsView } from "@/lib/landlord-documents-view";
@@ -44,7 +44,11 @@ export default function DocumentsView({ view: v, docs: d, sample = false }: { vi
               Everything we hold on your file, and what we still need from you.
             </p>
           </div>
-          <AgentCall v={v} />
+          {/* Their agent's face and name, and every way to reach them behind
+              it - the same sheet the home page uses, so the gesture is one
+              they have already learnt. A number printed in the corner was a
+              thing to read; this is a thing to press. */}
+          <AgentSheet v={v} trigger="inline" />
         </div>
         <div className="hidden lg:block">
           <AgentCard v={v} />

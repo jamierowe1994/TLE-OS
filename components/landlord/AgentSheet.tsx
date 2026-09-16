@@ -12,6 +12,14 @@ import type { LandlordView } from "@/lib/landlord-view";
  * right-hand bottom tab where they can click it, and it'll pop out as a bottom
  * sheet offering all of the details for the agent."
  *
+ * On the documents page it is the same sheet behind a pill in the HEADER
+ * rather than a floating button - James, 16 Sep 2026: "we should just have the
+ * agent's name and photo, please, like we have on the homepage. When they
+ * click it, it'll pull up a bottom bar with all the actions." One component
+ * owns the sheet either way; `trigger` only decides where the thing that
+ * opens it sits. Two copies of a bottom sheet is two sets of Escape handling,
+ * two scroll locks and eventually two different sets of buttons.
+ *
  * Better than the side tab it replaces, and for a reason worth writing down:
  * the bottom right of a phone is where a thumb already rests, and a sheet
  * rising from the bottom is the gesture every app on the device uses. The side
@@ -30,7 +38,14 @@ import type { LandlordView } from "@/lib/landlord-view";
  * read. The ones that cannot work are not shown - no number, no Call - rather
  * than offered and dead.
  */
-export default function AgentSheet({ v }: { v: LandlordView }) {
+export default function AgentSheet({
+  v,
+  trigger = "float",
+}: {
+  v: LandlordView;
+  /** "float" pins it bottom right; "inline" sits it where it is written. */
+  trigger?: "float" | "inline";
+}) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -69,13 +84,18 @@ export default function AgentSheet({ v }: { v: LandlordView }) {
 
   return (
     <div className="sm:hidden">
-      {/* THE BUTTON, where the thumb already is. */}
+      {/* THE BUTTON. Floating, where the thumb already is - or in the flow,
+          for a page that wants the agent up in its own header. */}
       <button
         type="button"
         onClick={() => setOpen(true)}
         aria-label={`Your agent, ${v.agent.name}`}
-        className="fixed bottom-5 right-4 z-[54] flex items-center gap-2 rounded-full border border-line/60 bg-white py-1.5 pl-1.5 pr-4 shadow-[0_14px_34px_-12px_rgba(40,25,20,0.5)]"
-        style={{ marginBottom: "env(safe-area-inset-bottom)" }}
+        className={
+          trigger === "inline"
+            ? "flex shrink-0 items-center gap-2 rounded-full border border-line/60 bg-white py-1.5 pl-1.5 pr-4"
+            : "fixed bottom-5 right-4 z-[54] flex items-center gap-2 rounded-full border border-line/60 bg-white py-1.5 pl-1.5 pr-4 shadow-[0_14px_34px_-12px_rgba(40,25,20,0.5)]"
+        }
+        style={trigger === "inline" ? undefined : { marginBottom: "env(safe-area-inset-bottom)" }}
       >
         {avatar(38, "text-[15px]")}
         <span className="text-[12.5px] font-semibold">{first}</span>

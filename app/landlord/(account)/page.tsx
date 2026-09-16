@@ -10,9 +10,11 @@ import type { ManagedProperty } from "@/lib/portfolio-types";
  * The landlord's home, live. The view is built in lib/landlord-home-view
  * (shared with the journey page); this file only lays it out.
  */
-export default async function LandlordHome() {
+export default async function LandlordHome({ searchParams }: { searchParams: Promise<{ p?: string }> }) {
   const me = (await currentLandlord())!;
-  const { view, open, rest, compliance, docs, first } = await loadLandlordHome(me);
+  /* Which property, from the address bar. See PlacePicker. */
+  const { p } = await searchParams;
+  const { view, open, rest, compliance, docs, first } = await loadLandlordHome(me, p);
 
   if (!view) {
     return (

@@ -17,6 +17,8 @@ export default function SideNav({ variant, letHere = false }: { variant: "side" 
   const keep = new URLSearchParams();
   if (params?.get("stage")) keep.set("stage", params.get("stage")!);
   if (params?.get("from") === "admin") keep.set("from", "admin");
+  /* And which property they are in - see PlacePicker. */
+  if (params?.get("p")) keep.set("p", params.get("p")!);
   const q = keep.size ? `?${keep.toString()}` : "";
   const onJourney = path.endsWith("/journey");
   const onDocuments = path.endsWith("/documents");

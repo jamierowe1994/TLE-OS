@@ -6,7 +6,7 @@ import DoodleIcon from "@/components/DoodleIcon";
 import FileSearch from "@/components/landlord/FileSearch";
 import SideNav from "@/components/landlord/SideNav";
 import PhoneShell, { PhoneNavButton } from "@/components/landlord/PhoneShell";
-import { currentLandlord, landlordProperties } from "@/lib/landlord-account";
+import { currentLandlord, landlordPlaces, landlordProperties } from "@/lib/landlord-account";
 
 /**
  * The landlord portal's shell (James's mock, 11 Sep 2026): light, airy and
@@ -45,8 +45,28 @@ export default async function LandlordLayout({ children }: { children: React.Rea
    * anyway this costs nothing, and on the others it is a cache hit.
    */
   const letHere = me ? await landlordProperties(me).then((p) => p.length > 0).catch(() => false) : false;
+  /**
+   * Every property they have with us, for the menu's chooser.
+   *
+   * Read here for the same reason letHere is: the shell draws on every page,
+   * and a page that forgot to pass it would silently lose the chooser. It is
+   * the cheap read - names off the two caches the portal is already holding -
+   * rather than landlordJourneys, which looks up presentations and signed
+   * terms per appraisal and has no business running for a menu.
+   *
+   * A layout cannot read searchParams in the App Router, so it does not try
+   * to say which one is current: PlacePicker takes that off the address bar
+   * itself and falls back to the first in the list, which is the same one
+   * loadLandlordHome picks when there is no ?p=.
+   */
+  const places = me ? await landlordPlaces(me).catch(() => []) : [];
   return (
-    <PhoneShell signedIn={Boolean(me)} letHere={letHere} signOut={<LandlordSignOut variant="drawer" />}>
+    <PhoneShell
+      signedIn={Boolean(me)}
+      letHere={letHere}
+      places={places}
+      signOut={<LandlordSignOut variant="drawer" />}
+    >
     <div data-surface="landlord" id="top" className="min-h-screen bg-white text-ink lg:flex">
       {/* ── the sidebar, from lg up ── */}
       <aside className="sticky top-0 hidden h-screen w-[212px] shrink-0 flex-col border-r border-line/50 px-4 py-7 lg:flex">

@@ -3,6 +3,8 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import PlacePicker from "@/components/landlord/PlacePicker";
+import type { LandlordPlace } from "@/lib/landlord-account";
 
 /**
  * THE PHONE'S NAVIGATION: a drawer the page slides off to reveal.
@@ -65,11 +67,14 @@ export function PhoneNavButton() {
 export default function PhoneShell({
   signedIn,
   letHere,
+  places = [],
   signOut,
   children,
 }: {
   signedIn: boolean;
   letHere: boolean;
+  /** Every property this landlord has with us. Fewer than two draws nothing. */
+  places?: LandlordPlace[];
   /** LandlordSignOut, passed in so this stays free of the session. */
   signOut: React.ReactNode;
   children: React.ReactNode;
@@ -95,6 +100,10 @@ export default function PhoneShell({
   const keep = new URLSearchParams();
   if (params?.get("stage")) keep.set("stage", params.get("stage")!);
   if (params?.get("from") === "admin") keep.set("from", "admin");
+  /* Which property they are in survives every move around the menu. Without
+     it, tapping Documents from the Bristol flat would land on whichever one
+     the portal picks by default. */
+  if (params?.get("p")) keep.set("p", params.get("p")!);
   const q = keep.size ? `?${keep.toString()}` : "";
 
   /* A link closes it, and so does landing anywhere new. */
@@ -171,6 +180,9 @@ export default function PhoneShell({
         aria-hidden={!open}
         style={{ pointerEvents: open ? "auto" : "none" }}
       >
+        {/* Which property, above the four views of it. Nothing at all for a
+            landlord with one, which is most of them. */}
+        <PlacePicker places={places} />
         <ul className="ml-auto w-[62%] space-y-1 text-right">
           {links.map((l) => (
             <li key={l.label}>

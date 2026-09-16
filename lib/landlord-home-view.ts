@@ -110,7 +110,20 @@ const dayLong = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" }) : null;
 
 
-export async function loadLandlordHome(me: Me) {
+/**
+ * WHICH PROPERTY THEY ARE LOOKING AT.
+ *
+ * `pick` is a key from landlordPlaces - "a:<appraisalId>" or "m:<propertyId>"
+ * - and it comes off the address bar (?p=). A query param rather than a cookie
+ * on purpose: the back button, a reload and a link all then say the same
+ * thing, where a hidden server-side choice means a landlord who sent their
+ * spouse a link would be sending them a different property.
+ *
+ * An unknown or missing pick falls back to what the portal always did - the
+ * newest open appraisal, else the first managed property - so a landlord with
+ * one property never sees any of this, and a stale link never dead-ends.
+ */
+export async function loadLandlordHome(me: Me, pick?: string | null) {
   const [journeys, managed, docs, msgs] = await Promise.all([
     landlordJourneys(me),
     landlordProperties(me),
@@ -120,29 +133,45 @@ export async function loadLandlordHome(me: Me) {
   /* The three slow reads - certificates, offers, the deal - side by side
      rather than one after another. Each is REX or Propoly; in series the
      page took seven seconds, which is a landlord closing the tab. */
-  const open = journeys
+  const all = journeys
     .filter((j) => j.stage !== "lost")
     .sort((a, b) => Number(a.stage === "won") - Number(b.stage === "won") || b.appraisal.createdAt.localeCompare(a.appraisal.createdAt));
 
+  /* The chosen one to the front of its own list, so everything below - which
+     reads [0] throughout - simply works on it. */
+  const wantA = pick?.startsWith("a:") ? pick.slice(2) : null;
+  const wantM = pick?.startsWith("m:") ? pick.slice(2) : null;
+  const chosenA = wantA ? all.find((j) => j.appraisal.id === wantA) ?? null : null;
+  const chosenM = wantM ? managed.find((p) => (p.propertyId ?? p.listingId) === wantM) ?? null : null;
+
+  /* Picking a MANAGED property has to empty the appraisal list, not reorder
+     it: everything downstream prefers open[0] over managed[0], so leaving an
+     open appraisal in place would quietly show that one instead. */
+  const open = chosenM ? [] : chosenA ? [chosenA, ...all.filter((j) => j !== chosenA)] : all;
+  const book = chosenM ? [chosenM, ...managed.filter((p) => p !== chosenM)] : managed;
+
   const lead = open[0] ?? null;
   const [compliance, offers, progress] = await Promise.all([
-    landlordCompliance(managed),
+    landlordCompliance(book),
     landlordOffers(
-      lead ? [lead.appraisal.rexPropertyId] : managed[0] ? [managed[0].propertyId] : [],
-      lead ? [] : managed[0] ? [managed[0].listingId] : []
+      lead ? [lead.appraisal.rexPropertyId] : book[0] ? [book[0].propertyId] : [],
+      lead ? [] : book[0] ? [book[0].listingId] : []
     ),
-    landlordProgress(me.email, lead ? [lead.appraisal.address] : managed[0] ? [managed[0].name] : []),
+    landlordProgress(me.email, lead ? [lead.appraisal.address] : book[0] ? [book[0].name] : []),
   ]);
   const first = me.name.split(/\s+/)[0] || me.name;
   const base = open[0]
     ? await appraisalView(open[0], first, docs, msgs, offers)
-    : managed[0]
-      ? await managedView(managed[0], first, compliance.get(managed[0].propertyId ?? "") ?? null, offers)
+    : book[0]
+      ? await managedView(book[0], first, compliance.get(book[0].propertyId ?? "") ?? null, offers)
       : null;
   const view = base ? { ...base, progress } : null;
-  const rest = open[0] ? managed : managed.slice(1);
+  const rest = open[0] ? book : book.slice(1);
+  /* Which one this actually resolved to, so the shell can light the right row
+     in the dropdown even when ?p= was absent or stale. */
+  const at = open[0] ? `a:${open[0].appraisal.id}` : book[0] ? `m:${book[0].propertyId ?? book[0].listingId}` : null;
 
-  return { view, open, rest, compliance, docs, first };
+  return { view, open, rest, compliance, docs, first, at };
 }
 
 /* --------------------------------------------------------- the feeders -- */
